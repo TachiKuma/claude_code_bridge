@@ -28,11 +28,11 @@ def _check_background_mode() -> bool:
         return True
     if os.environ.get("CCB_ALLOW_FOREGROUND") in ("1", "true", "yes"):
         return True
-    # Claude Code's run_in_background captures stdout via file or Unix socket.
+    # Claude Code's run_in_background captures stdout via file, socket, or FIFO/pipe.
     try:
         import stat
         mode = os.fstat(sys.stdout.fileno()).st_mode
-        return stat.S_ISREG(mode) or stat.S_ISSOCK(mode)
+        return stat.S_ISREG(mode) or stat.S_ISSOCK(mode) or stat.S_ISFIFO(mode)
     except Exception:
         return False
 
