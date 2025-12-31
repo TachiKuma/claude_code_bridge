@@ -279,4 +279,13 @@ Once started, collaborate naturally. Claude will detect when to delegate tasks.
 
 **Windows fully supported** (WSL + Native via WezTerm)
 
+---
+
+**Join our community**
+
+📧 Email: bfly123@126.com
+💬 WeChat: seemseam-com
+
+<img src="assets/wechat.jpg" alt="WeChat Group" width="300">
+
 </div>
