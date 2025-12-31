@@ -338,6 +338,6 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zprofile
 📧 Email: bfly123@126.com
 💬 WeChat: seemseam-com
 
-<img src="assets/wechat.png" alt="微信群" width="300">
+<img src="assets/wechat.jpg" alt="微信群" width="300">
 
 </div>
