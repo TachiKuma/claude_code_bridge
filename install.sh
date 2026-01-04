@@ -662,6 +662,26 @@ install_claude_skills() {
   echo "Updated Claude skills directory: $skills_dst"
 }
 
+install_codex_skills() {
+  local skills_src="$REPO_ROOT/codex_skills"
+  local skills_dst="${CODEX_HOME:-$HOME/.codex}/skills"
+
+  if [[ ! -d "$skills_src" ]]; then
+    return
+  fi
+
+  mkdir -p "$skills_dst"
+  for skill_dir in "$skills_src"/*/; do
+    [[ -d "$skill_dir" ]] || continue
+    local skill_name
+    skill_name=$(basename "$skill_dir")
+    rm -rf "$skills_dst/$skill_name"
+    cp -r "$skill_dir" "$skills_dst/$skill_name"
+    echo "  Installed Codex skill: $skill_name"
+  done
+  echo "Updated Codex skills directory: $skills_dst"
+}
+
 CCB_START_MARKER="<!-- CCB_CONFIG_START -->"
 CCB_END_MARKER="<!-- CCB_CONFIG_END -->"
 LEGACY_RULE_MARKER="## Codex 协作规则"
@@ -913,6 +933,7 @@ install_all() {
   ensure_path_configured
   install_claude_commands
   install_claude_skills
+  install_codex_skills
   install_claude_md_config
   install_settings_permissions
   echo "OK: Installation complete"
