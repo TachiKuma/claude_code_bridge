@@ -479,7 +479,7 @@ class OpenCodeLogReader:
         return parts
 
     @staticmethod
-    def _extract_text(parts: List[dict]) -> str:
+    def _extract_text(parts: List[dict], allow_reasoning_fallback: bool = True) -> str:
         def _collect(types: set[str]) -> str:
             out: list[str] = []
             for part in parts:
@@ -496,7 +496,9 @@ class OpenCodeLogReader:
             return text
 
         # Fallback: some OpenCode runs only emit reasoning parts without a separate "text" part.
-        return _collect({"reasoning"})
+        if allow_reasoning_fallback:
+            return _collect({"reasoning"})
+        return ""
 
     def capture_state(self) -> Dict[str, Any]:
         session_entry = self._get_latest_session()
@@ -559,9 +561,9 @@ class OpenCodeLogReader:
         # If assistant is still streaming, wait (prefer completed reply).
         if completed_i is None:
             # Fallback: some OpenCode builds may omit completed timestamps.
-            # If the message already contains the completion marker, treat it as complete.
+            # If the message already contains a completion marker, treat it as complete.
             parts = self._read_parts(str(latest_id))
-            text = self._extract_text(parts)
+            text = self._extract_text(parts, allow_reasoning_fallback=False)
             completion_marker = (os.environ.get("CCB_EXECUTION_COMPLETE_MARKER") or "--- EXECUTION COMPLETE ---").strip() or "--- EXECUTION COMPLETE ---"
             if text and completion_marker in text:
                 completed_i = int(time.time() * 1000)
@@ -573,7 +575,11 @@ class OpenCodeLogReader:
             return None
 
         parts = self._read_parts(str(latest_id))
-        return self._extract_text(parts) or None
+        # Prefer text content; if empty and completed, fallback to reasoning
+        text = self._extract_text(parts, allow_reasoning_fallback=False)
+        if not text and completed_i is not None:
+            text = self._extract_text(parts, allow_reasoning_fallback=True)
+        return text or None
 
     def _read_since(self, state: Dict[str, Any], timeout: float, block: bool) -> Tuple[Optional[str], Dict[str, Any]]:
         deadline = time.time() + timeout
