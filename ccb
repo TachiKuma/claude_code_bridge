@@ -1084,6 +1084,12 @@ exec tmux attach -t "$TMUX_SESSION"
             return 1
 
         cmd = [claude_cmd]
+
+        # If CCA (Claude Code Autoflow) is installed, start Claude in plan mode
+        cca_path, _ = _detect_cca()
+        if cca_path:
+            cmd.extend(["--permission-mode", "plan"])
+
         if self.auto:
             cmd.append("--dangerously-skip-permissions")
         if self.resume:
