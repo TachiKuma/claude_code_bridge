@@ -195,7 +195,7 @@ def _build_keep_open_cmd(provider: str, start_cmd: str) -> str:
 
 
 class AILauncher:
-    def __init__(self, providers: list, resume: bool = False, auto: bool = False, no_claude: bool = False):
+    def __init__(self, providers: list, resume: bool = False, auto: bool = True, no_claude: bool = False):
         self.providers = providers or ["codex"]
         self.resume = resume
         self.auto = auto
@@ -1901,7 +1901,8 @@ def main():
     up_parser = subparsers.add_parser("up", help="Start AI backends")
     up_parser.add_argument("providers", nargs="*", choices=["codex", "gemini", "opencode"], help="Backends to start")
     up_parser.add_argument("-r", "--resume", "--restore", action="store_true", help="Resume context")
-    up_parser.add_argument("-a", "--auto", action="store_true", help="Full auto permission mode")
+    up_parser.add_argument("-a", "--auto", action="store_true", default=True, help="Full auto permission mode (default)")
+    up_parser.add_argument("--safe", "--sandbox", action="store_false", dest="auto", help="Enable sandbox mode")
     up_parser.add_argument("--no-claude", action="store_true", help="Don't start Claude main window")
 
     # status subcommand
