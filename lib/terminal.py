@@ -472,15 +472,57 @@ class TmuxBackend(TerminalBackend):
         """
         if not pane_id:
             raise ValueError("pane_id is required")
-        user_shell = os.environ.get("SHELL") or _default_shell()[0]
-        cmd_body = cmd or ""
-        if cwd and cwd not in (".", ""):
-            cmd_body = f"cd {shlex.quote(cwd)} && {cmd_body}"
+
+        cmd_body = (cmd or "").strip()
+        if not cmd_body:
+            raise ValueError("cmd is required")
+
+        start_dir = (cwd or "").strip()
+        if start_dir in ("", "."):
+            start_dir = ""
+
         if stderr_log_path:
-            log_dir = str(Path(stderr_log_path).expanduser().resolve().parent)
-            cmd_body = f"mkdir -p {shlex.quote(log_dir)} && {cmd_body} 2>> {shlex.quote(stderr_log_path)}"
-        full = f"{user_shell} -ilc {shlex.quote(cmd_body)}"
-        self._tmux_run(["respawn-pane", "-k", "-t", pane_id, full], check=True)
+            log_path = str(Path(stderr_log_path).expanduser().resolve())
+            Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+            cmd_body = f"{cmd_body} 2>> {shlex.quote(log_path)}"
+
+        shell = (os.environ.get("CCB_TMUX_SHELL") or "").strip()
+        if not shell:
+            # Prefer tmux's configured default shell when available.
+            try:
+                cp = self._tmux_run(["show-option", "-gqv", "default-shell"], capture=True, timeout=1.0)
+                shell = (cp.stdout or "").strip()
+            except Exception:
+                shell = ""
+        if not shell:
+            shell = (os.environ.get("SHELL") or "").strip()
+        if not shell:
+            shell = _default_shell()[0]
+
+        flags_raw = (os.environ.get("CCB_TMUX_SHELL_FLAGS") or "").strip()
+        if flags_raw:
+            flags = shlex.split(flags_raw)
+        else:
+            shell_name = Path(shell).name.lower()
+            # Avoid assuming bash-style combined flags on shells like fish.
+            if shell_name in {"bash", "zsh", "ksh"}:
+                flags = ["-l", "-i", "-c"]
+            elif shell_name == "fish":
+                flags = ["-l", "-i", "-c"]
+            elif shell_name in {"sh", "dash"}:
+                flags = ["-c"]
+            else:
+                # Unknown shell: keep it minimal for compatibility.
+                flags = ["-c"]
+
+        full_argv = [shell, *flags, cmd_body]
+        full = " ".join(shlex.quote(a) for a in full_argv)
+
+        tmux_args = ["respawn-pane", "-k", "-t", pane_id]
+        if start_dir:
+            tmux_args.extend(["-c", start_dir])
+        tmux_args.append(full)
+        self._tmux_run(tmux_args, check=True)
         if remain_on_exit:
             self._tmux_run(["set-option", "-p", "-t", pane_id, "remain-on-exit", "on"], check=False)
 
