@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import heapq
 import json
 import os
 import threading
@@ -22,7 +23,7 @@ from ccb_protocol import (
 )
 from caskd_session import CodexProjectSession, compute_session_key, find_project_session_file, load_project_session
 from terminal import is_windows
-from codex_comm import CodexLogReader, CodexCommunicator
+from codex_comm import CodexLogReader, CodexCommunicator, SESSION_ID_PATTERN, SESSION_ROOT
 from terminal import get_backend_for_session
 from askd_runtime import state_file_path, log_path, write_log, random_token
 import askd_rpc
@@ -50,6 +51,206 @@ def _tail_state_for_log(log_path: Optional[Path], *, tail_bytes: int) -> dict:
         size = 0
     offset = max(0, int(size) - int(tail_bytes))
     return {"log_path": log_path, "offset": offset}
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except Exception:
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except Exception:
+        return default
+
+
+def _realpath_norm(value: str) -> Optional[str]:
+    try:
+        return os.path.normcase(os.path.realpath(os.path.expanduser(value or ""))).rstrip("\\/")
+    except Exception:
+        return None
+
+
+def _path_within(child: str, parent: str) -> bool:
+    child_norm = _realpath_norm(child)
+    parent_norm = _realpath_norm(parent)
+    if not child_norm or not parent_norm:
+        return False
+    if child_norm == parent_norm:
+        return True
+    parent_prefix = parent_norm + os.sep
+    return child_norm.startswith(parent_prefix)
+
+
+def _extract_session_id_from_start_cmd(start_cmd: str) -> Optional[str]:
+    if not start_cmd:
+        return None
+    match = SESSION_ID_PATTERN.search(start_cmd)
+    if not match:
+        return None
+    return match.group(0)
+
+
+def _find_latest_log_for_session_id(session_id: str, *, session_root: Path = SESSION_ROOT) -> Optional[Path]:
+    root = Path(session_root).expanduser()
+    if not session_id or not root.exists():
+        return None
+    latest: Optional[Path] = None
+    latest_mtime = -1.0
+    try:
+        pattern = f"**/*{session_id}*.jsonl"
+        for p in root.glob(pattern):
+            if not p.is_file():
+                continue
+            try:
+                mtime = p.stat().st_mtime
+            except OSError:
+                continue
+            if mtime >= latest_mtime:
+                latest = p
+                latest_mtime = mtime
+    except Exception:
+        return None
+    return latest
+
+
+def _read_session_meta(log_path: Path) -> tuple[Optional[str], Optional[str]]:
+    """
+    Best-effort read of session_meta for (cwd, session_id).
+
+    Codex logs usually have session_meta on the first line, but we scan a few lines to be robust.
+    """
+    try:
+        with log_path.open("r", encoding="utf-8", errors="ignore") as handle:
+            for _ in range(30):
+                line = handle.readline()
+                if not line:
+                    break
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except Exception:
+                    continue
+                if not isinstance(entry, dict) or entry.get("type") != "session_meta":
+                    continue
+                payload = entry.get("payload") if isinstance(entry.get("payload"), dict) else {}
+                cwd = payload.get("cwd")
+                sid = payload.get("id")
+                cwd_str = str(cwd).strip() if isinstance(cwd, str) else None
+                sid_str = str(sid).strip() if isinstance(sid, str) else None
+                return cwd_str or None, sid_str or None
+    except OSError:
+        return None, None
+    return None, None
+
+
+def _scan_latest_log_for_work_dir(
+    work_dir: Path, *, session_root: Path = SESSION_ROOT, scan_limit: int
+) -> tuple[Optional[Path], Optional[str]]:
+    """
+    Scan ~/.codex/sessions and find the latest log whose session_meta.cwd is within work_dir.
+
+    Uses a bounded heap so we only inspect the N most recently modified logs.
+    """
+    root = Path(session_root).expanduser()
+    if not root.exists():
+        return None, None
+
+    work_dir_str = str(work_dir)
+
+    heap: list[tuple[float, str]] = []
+    try:
+        for p in root.glob("**/*.jsonl"):
+            if not p.is_file():
+                continue
+            try:
+                mtime = p.stat().st_mtime
+            except OSError:
+                continue
+            item = (mtime, str(p))
+            if len(heap) < scan_limit:
+                heapq.heappush(heap, item)
+            else:
+                if item[0] > heap[0][0]:
+                    heapq.heapreplace(heap, item)
+    except Exception:
+        return None, None
+
+    candidates = sorted(heap, key=lambda x: x[0], reverse=True)
+    for _, path_str in candidates:
+        path = Path(path_str)
+        cwd, sid = _read_session_meta(path)
+        if not cwd:
+            continue
+        if _path_within(cwd, work_dir_str):
+            return path, sid
+    return None, None
+
+
+def _should_overwrite_binding(current: Optional[Path], candidate: Path) -> bool:
+    if not current:
+        return True
+    if not current.exists():
+        return True
+    try:
+        return candidate.stat().st_mtime > current.stat().st_mtime
+    except OSError:
+        return True
+
+
+def _refresh_codex_log_binding(
+    session: CodexProjectSession,
+    *,
+    session_root: Path = SESSION_ROOT,
+    scan_limit: int,
+    force_scan: bool,
+) -> bool:
+    """
+    Refresh .codex-session codex_session_id/codex_session_path.
+
+    Priority:
+      1) Parse session_id from start_cmd and bind to its log (preferred).
+      2) Fallback scan latest log by work_dir (only when forced or when (1) fails).
+    """
+    current_log = Path(session.codex_session_path).expanduser() if session.codex_session_path else None
+
+    intended_sid = _extract_session_id_from_start_cmd(session.start_cmd)
+    intended_log: Optional[Path] = None
+    if intended_sid:
+        intended_log = _find_latest_log_for_session_id(intended_sid, session_root=session_root)
+        if intended_log and intended_log.exists():
+            if _should_overwrite_binding(current_log, intended_log) or session.codex_session_id != intended_sid:
+                session.update_codex_log_binding(log_path=str(intended_log), session_id=intended_sid)
+                return True
+            return False
+
+    need_scan = bool(force_scan or (not intended_sid) or (intended_sid and not intended_log))
+    if not need_scan:
+        return False
+
+    candidate_log, candidate_sid = _scan_latest_log_for_work_dir(
+        Path(session.work_dir), session_root=session_root, scan_limit=scan_limit
+    )
+    if not candidate_log or not candidate_log.exists():
+        return False
+
+    if _should_overwrite_binding(current_log, candidate_log) or (
+        candidate_sid and candidate_sid != session.codex_session_id
+    ):
+        session.update_codex_log_binding(log_path=str(candidate_log), session_id=candidate_sid)
+        return True
+    return False
 
 
 @dataclass
@@ -302,6 +503,8 @@ class _SessionEntry:
     file_mtime: float
     last_check: float
     valid: bool = True
+    next_bind_refresh: float = 0.0
+    bind_backoff_s: float = 0.0
 
 
 class SessionRegistry:
@@ -374,6 +577,8 @@ class SessionRegistry:
             file_mtime=mtime,
             last_check=time.time(),
             valid=valid,
+            next_bind_refresh=0.0,
+            bind_backoff_s=0.0,
         )
         self._sessions[str(work_dir)] = entry
         return entry if entry.valid else None
@@ -397,26 +602,127 @@ class SessionRegistry:
             self._check_all_sessions()
 
     def _check_all_sessions(self) -> None:
+        now = time.time()
+        refresh_interval_s = _env_float("CCB_CASKD_BIND_REFRESH_INTERVAL", 60.0)
+        scan_limit = max(50, min(20000, _env_int("CCB_CASKD_BIND_SCAN_LIMIT", _env_int("CCB_CODEX_SCAN_LIMIT", 400))))
+
         with self._lock:
-            keys_to_remove = []
-            for key, entry in self._sessions.items():
-                if not entry.valid:
-                    continue
-                if entry.session_file and not entry.session_file.exists():
-                    write_log(log_path(CASKD_SPEC.log_file_name), f"[WARN] Session file deleted: {entry.work_dir}")
-                    entry.valid = False
-                    continue
-                if entry.session:
-                    ok, _ = entry.session.ensure_pane()
-                    if not ok:
-                        write_log(log_path(CASKD_SPEC.log_file_name), f"[WARN] Session pane invalid: {entry.work_dir}")
-                        entry.valid = False
-                entry.last_check = time.time()
+            snapshot = [(key, entry.work_dir) for key, entry in self._sessions.items() if entry.valid]
+
+        for key, work_dir in snapshot:
+            try:
+                self._check_one(key, work_dir, now=now, refresh_interval_s=refresh_interval_s, scan_limit=scan_limit)
+            except Exception:
+                # Never let monitor crash the daemon.
+                continue
+
+        # Cleanup invalid entries.
+        with self._lock:
+            keys_to_remove: list[str] = []
             for key, entry in list(self._sessions.items()):
-                if not entry.valid and time.time() - entry.last_check > 300:
+                if not entry.valid and now - entry.last_check > 300:
                     keys_to_remove.append(key)
             for key in keys_to_remove:
                 del self._sessions[key]
+
+    def _check_one(self, key: str, work_dir: Path, *, now: float, refresh_interval_s: float, scan_limit: int) -> None:
+        # Reload on session file changes (mtime) so we can pick up start_cmd/session_id changes.
+        session_file = find_project_session_file(work_dir) or (work_dir / ".ccb_config" / ".codex-session")
+        try:
+            exists = session_file.exists()
+        except Exception:
+            exists = False
+
+        if not exists:
+            with self._lock:
+                entry = self._sessions.get(key)
+                if entry and entry.valid:
+                    write_log(log_path(CASKD_SPEC.log_file_name), f"[WARN] Session file deleted: {work_dir}")
+                    entry.valid = False
+                    entry.last_check = now
+            return
+
+        try:
+            current_mtime = session_file.stat().st_mtime
+        except Exception:
+            current_mtime = 0.0
+
+        session: Optional[CodexProjectSession] = None
+        file_changed = False
+
+        with self._lock:
+            entry = self._sessions.get(key)
+            if not entry or not entry.valid:
+                return
+            file_changed = bool((entry.session_file != session_file) or (entry.file_mtime != current_mtime))
+            if file_changed or (entry.session is None):
+                session = load_project_session(work_dir)
+                entry.session = session
+                entry.session_file = session_file
+                entry.file_mtime = current_mtime
+            else:
+                session = entry.session
+
+        if not session:
+            with self._lock:
+                entry2 = self._sessions.get(key)
+                if entry2 and entry2.valid:
+                    entry2.valid = False
+                    entry2.last_check = now
+            return
+
+        # Ensure pane is still alive.
+        try:
+            ok, _ = session.ensure_pane()
+        except Exception:
+            ok = False
+        if not ok:
+            with self._lock:
+                entry2 = self._sessions.get(key)
+                if entry2 and entry2.valid:
+                    write_log(log_path(CASKD_SPEC.log_file_name), f"[WARN] Session pane invalid: {work_dir}")
+                    entry2.valid = False
+                    entry2.last_check = now
+            return
+
+        # Refresh codex log binding periodically, and immediately after session file changes.
+        with self._lock:
+            entry3 = self._sessions.get(key)
+            if not entry3 or not entry3.valid:
+                return
+            due = now >= (entry3.next_bind_refresh or 0.0)
+            if not due and not file_changed:
+                entry3.last_check = now
+                return
+            backoff = entry3.bind_backoff_s or refresh_interval_s
+
+        force_scan = bool(file_changed)  # if session file changed, make a best-effort full refresh
+        updated = False
+        try:
+            updated = _refresh_codex_log_binding(
+                session,
+                session_root=SESSION_ROOT,
+                scan_limit=scan_limit,
+                force_scan=force_scan,
+            )
+        except Exception:
+            updated = False
+
+        with self._lock:
+            entry4 = self._sessions.get(key)
+            if not entry4 or not entry4.valid:
+                return
+            if updated:
+                entry4.bind_backoff_s = refresh_interval_s
+            else:
+                entry4.bind_backoff_s = min(600.0, max(refresh_interval_s, backoff * 2.0))
+            entry4.next_bind_refresh = now + entry4.bind_backoff_s
+            # Refresh session_file mtime after potential write-back.
+            try:
+                entry4.file_mtime = session_file.stat().st_mtime
+            except Exception:
+                pass
+            entry4.last_check = now
 
     def get_status(self) -> dict:
         with self._lock:
