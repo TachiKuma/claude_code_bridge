@@ -499,42 +499,12 @@ function Install-ClaudeConfig {
 
   $codexRules = @"
 <!-- CCB_CONFIG_START -->
-## Collaboration Rules (Codex / Gemini / OpenCode)
-Codex, Gemini, and OpenCode are other AI assistants running in separate terminal sessions (WezTerm or tmux).
+## AI Collaboration
+Use ``/ask <provider>`` to consult other AI assistants (codex/gemini/opencode/droid).
+Use ``/ping <provider>`` to check connectivity.
+Use ``/pend <provider>`` to view latest replies.
 
-### Common Rules (all assistants)
-Trigger (any match):
-- User explicitly asks to consult one of them (e.g. "ask codex ...", "let gemini ...")
-- User uses an assistant prefix (see table)
-- User asks about that assistant's status (e.g. "is codex alive?")
-
-Fast path (minimize latency):
-- If the user message starts with a prefix: treat the rest as the question and dispatch immediately.
-- If the user message is only the prefix (no question): ask a 1-line clarification for what to send.
-
-Actions:
-- Ask a question (default) -> ``Bash(`$env:CCB_CALLER='claude'; ask <provider> <<'EOF' ... EOF)``, tell user "PROVIDER processing...", then END your turn
-- Check connectivity -> run ``ping <provider>``
-- Use "show previous reply" commands ONLY if the user explicitly requests them
-
-Important restrictions:
-- After starting a background ask, do NOT poll for results; wait for ``bash-notification``
-- Do NOT use ``pend`` unless the user explicitly requests
-
-### Command Map (Unified Commands)
-| Assistant | Prefixes | ASK (background) | PING_CMD | Explicit-request-only |
-|---|---|---|---|---|
-| Codex | ``@codex``, ``codex:``, ``ask codex``, ``let codex`` | ``CCB_CALLER=claude ask codex <<'EOF' ... EOF`` | ``ping codex`` | ``pend codex`` |
-| Gemini | ``@gemini``, ``gemini:``, ``ask gemini``, ``let gemini`` | ``CCB_CALLER=claude ask gemini <<'EOF' ... EOF`` | ``ping gemini`` | ``pend gemini`` |
-| OpenCode | ``@opencode``, ``opencode:``, ``ask opencode``, ``let opencode`` | ``CCB_CALLER=claude ask opencode <<'EOF' ... EOF`` | ``ping opencode`` | ``pend opencode`` |
-| Droid | ``@droid``, ``droid:``, ``ask droid``, ``let droid`` | ``CCB_CALLER=claude ask droid <<'EOF' ... EOF`` | ``ping droid`` | ``pend droid`` |
-
-Examples:
-- ``codex: review this code`` -> ``Bash(CCB_CALLER=claude ask codex <<'EOF'
-review this code
-EOF
-)``, END turn
-- ``is gemini alive?`` -> ``ping gemini``
+Providers: ``codex``, ``gemini``, ``opencode``, ``droid``, ``claude``
 <!-- CCB_CONFIG_END -->
 "@
 
