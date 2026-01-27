@@ -34,7 +34,7 @@ from pane_registry import upsert_registry
 from project_id import compute_ccb_project_id
 from providers import CASK_CLIENT_SPEC, GASK_CLIENT_SPEC, OASK_CLIENT_SPEC, LASK_CLIENT_SPEC, DASK_CLIENT_SPEC
 from process_lock import ProviderLock
-from askd_rpc import shutdown_daemon
+from askd_rpc import shutdown_daemon, read_state
 from askd_runtime import state_file_path
 from i18n import t
 
@@ -801,7 +801,9 @@ class AILauncher:
             kwargs["start_new_session"] = True
 
         try:
-            subprocess.Popen([sys.executable, str(daemon_script)], **kwargs)
+            env = os.environ.copy()
+            env["CCB_PARENT_PID"] = str(os.getpid())
+            subprocess.Popen([sys.executable, str(daemon_script)], env=env, **kwargs)
         except Exception as exc:
             print(f"⚠️ Failed to start {spec.daemon_bin_name}: {exc}")
             return
@@ -3431,7 +3433,7 @@ def cmd_kill(args):
         else:
              print(f"ℹ️  {provider}: No active session file found")
 
-        # 2. Kill background daemon (graceful shutdown)
+        # 2. Kill background daemon (graceful shutdown, then force kill)
         spec = specs.get(provider)
         if spec:
             daemon_name = spec.daemon_bin_name
@@ -3440,6 +3442,15 @@ def cmd_kill(args):
             try:
                 if shutdown_daemon(spec.protocol_prefix, 1.0, st_file):
                     print(f"✅ {daemon_name} daemon shutdown requested")
+                else:
+                    # Graceful shutdown failed, try force kill using PID from state file
+                    st = read_state(st_file)
+                    if st and st.get("pid"):
+                        pid = int(st["pid"])
+                        if _kill_pid(pid, force=True):
+                            print(f"✅ {daemon_name} daemon force killed (pid={pid})")
+                        else:
+                            print(f"⚠️ {daemon_name} daemon could not be killed (pid={pid})")
             except Exception:
                 pass
 
