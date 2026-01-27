@@ -27,6 +27,7 @@ from askd_runtime import state_file_path, log_path, write_log, random_token
 import askd_rpc
 from askd_server import AskDaemonServer
 from providers import DASKD_SPEC
+from completion_hook import notify_completion
 
 
 def _now_ms() -> int:
@@ -265,6 +266,17 @@ class _SessionWorker(BaseSessionWorker[_QueuedTask, DaskdResult]):
             f"anchor={result.anchor_seen} done={result.done_seen} fallback={result.fallback_scan} "
             f"anchor_ms={result.anchor_ms or ''} done_ms={result.done_ms or ''}"
         )
+
+        # Notify caller via completion hook (async)
+        notify_completion(
+            provider="droid",
+            output_file=req.output_path,
+            reply=final_reply,
+            req_id=task.req_id,
+            done_seen=done_seen,
+            caller=req.caller,
+        )
+
         return result
 
 
