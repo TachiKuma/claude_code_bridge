@@ -1,6 +1,6 @@
 # All Plan
 
-Collaborative planning with all mounted CLIs (Claude, Codex, Gemini, OpenCode) for comprehensive solution design.
+Collaborative planning with selected mounted CLIs for comprehensive solution design. Codex serves as the primary coordinator.
 
 **Usage**: For complex features or architectural decisions requiring diverse perspectives.
 
@@ -15,6 +15,32 @@ From `$ARGUMENTS`:
 ---
 
 ## Execution Flow
+
+### Phase 0: Participant Selection (Required)
+
+Before any clarification, determine which CLIs will participate and who is the final decider.
+
+1) **Check mounted CLIs** using the `mounted` skill.
+2) **Ask the user to choose**:
+   - Which AIs to include (subset of mounted CLIs)
+   - Which AI is the final judge/arbiter
+3) **Proceed only after explicit user selection.**
+
+Record as:
+```
+participants: [list of chosen AIs]
+arbiter: [chosen AI]
+```
+
+Define helper:
+```
+dispatch_to_participants(prompt, label):
+  for each provider in participants:
+    ask <provider> <<'EOF'
+    [prompt]
+    EOF
+  save each response as "{provider}_{label}"
+```
 
 ### Phase 1: Requirement Refinement & Project Analysis
 
@@ -38,9 +64,10 @@ Use the **5-Dimension Planning Readiness Model** to ensure comprehensive require
 ROUND 1:
   1. Parse initial requirement
   2. Identify 2 lowest-confidence dimensions (use Priority order for ties)
-  3. Ask 2 questions using AskUserQuestion (1 per dimension)
-  4. Update dimension scores based on answers
-  5. Display Scorecard to user
+  3. Present 2 questions with options (1 per dimension)
+  4. User selects options
+  5. Update dimension scores based on answers
+  6. Display Scorecard to user
 
 IF readiness_score >= 80: Skip Round 2, proceed to 1.2
 ELSE:
@@ -155,6 +182,30 @@ Proceeding to project analysis...
 
 Save as `clarification_summary`.
 
+**1.1.1 Optional Web Research (Smart Clarification)**
+
+Use web research when the requirement depends on:
+- external products/services/pricing
+- latest APIs/standards
+- domain norms/benchmarks
+
+Search prompt template:
+```
+Goal: Identify realistic options, constraints, and unknowns for the user's requirement.
+Return:
+- 3-5 viable approaches (with sources)
+- Critical constraints/limitations
+- Common pitfalls or tradeoffs
+```
+
+Summarize findings into `clarification_summary` as:
+```
+Research Findings:
+- Options: ...
+- Constraints: ...
+- Risks: ...
+```
+
 **1.2 Analyze Project Context**
 
 Use available tools to understand:
@@ -207,16 +258,76 @@ Research Findings: [if applicable]
 
 Save as `design_brief`.
 
+**1.5 Participant Clarification Round (Required)**
+
+Send the current context to **all selected participants** and ask for clarification needs.
+
+Prompt template:
+```
+You are a planning partner. Based on the requirement and current context:
+
+KNOWN:
+[known_facts]
+
+UNKNOWN / AMBIGUOUS:
+[unknowns]
+
+CONSTRAINTS:
+[constraints]
+
+Provide:
+1) 3-5 MUST-ASK clarification questions (each with 1-sentence rationale)
+2) Optional assumptions (if user won't answer)
+3) Risks if assumptions are wrong
+
+Be specific. Avoid generic or boilerplate questions.
+```
+
+Use `dispatch_to_participants(prompt, "clarify_round_1")`.
+
+**1.6 Codex Synthesis & User Questions**
+
+Codex merges all participant questions, de-duplicates, and asks the user a short prioritized list (3-7 items). Save as `clarification_questions_round_1`.
+
 ---
 
-### Phase 2: Parallel Independent Design
+### Phase 2: Iterative Clarification Loop (Multi-round)
 
-Send the design brief to all other mounted CLIs for independent design.
+Repeat until requirements are sufficiently clear.
 
-**2.1 Dispatch to Codex**
+For each round:
+1) Incorporate user answers into `clarification_summary`.
+2) Send updated context to **all selected participants** for additional clarification needs.
+3) Codex merges and asks the next set of prioritized questions (3-5).
+4) If user says "proceed", mark remaining gaps as assumptions and exit the loop.
+
+Use `dispatch_to_participants(prompt, "clarify_round_N")` each round.
+
+**Clarification Round Template (Codex → User)**
+```
+TOP QUESTIONS (please answer):
+1) [question] (why it matters: ...)
+2) [question] (why it matters: ...)
+3) [question] (why it matters: ...)
+
+If you want to proceed now, say: "Proceed with assumptions".
+```
+
+**Clarification Loop Stop Criteria**
+- Requirements are actionable
+- No blocking unknowns remain
+- Remaining unknowns are recorded as assumptions
+
+---
+
+### Phase 3: Parallel Independent Design (All Participants)
+
+Send the design brief to **all selected participants** for independent design.
+
+**3.1 Dispatch to Claude**
 
 ```bash
-Bash(cask <<'EOF'
+ask claude <<'EOF'
 Design a solution for this requirement:
 
 [design_brief]
@@ -231,13 +342,14 @@ Provide:
 
 Be specific and concrete.
 EOF
-, run_in_background=true)
 ```
 
-**2.2 Dispatch to Gemini**
+Save response as `claude_design` (only if Claude is selected).
+
+**3.2 Dispatch to Gemini**
 
 ```bash
-Bash(gask <<'EOF'
+ask gemini <<'EOF'
 Design a solution for this requirement:
 
 [design_brief]
@@ -252,13 +364,14 @@ Provide:
 
 Be specific and concrete.
 EOF
-, run_in_background=true)
 ```
 
-**2.3 Dispatch to OpenCode**
+Wait for response. Save as `gemini_design` (only if Gemini is selected).
+
+**3.3 Dispatch to OpenCode**
 
 ```bash
-Bash(oask <<'EOF'
+ask opencode <<'EOF'
 Design a solution for this requirement:
 
 [design_brief]
@@ -273,10 +386,11 @@ Provide:
 
 Be specific and concrete.
 EOF
-, run_in_background=true)
 ```
 
-**2.4 Claude's Independent Design**
+Wait for response. Save as `opencode_design` (only if OpenCode is selected).
+
+**3.4 Codex's Independent Design**
 
 While waiting for responses, create YOUR own design (do not look at others yet):
 - Goal (1 sentence)
@@ -286,22 +400,23 @@ While waiting for responses, create YOUR own design (do not look at others yet):
 - Potential risks
 - Acceptance criteria (max 3)
 
-Save as `claude_design`.
+Save as `codex_design`.
 
 ---
 
-### Phase 3: Collect & Analyze All Designs
+### Phase 4: Collect & Analyze All Designs
 
-**3.1 Wait for All Responses**
+**4.1 Collect All Responses**
 
-Use `TaskOutput` to wait for all background tasks:
-- Codex design → save as `codex_design`
-- Gemini design → save as `gemini_design`
-- OpenCode design → save as `opencode_design`
+Gather designs for the selected participants:
+- Claude design → `claude_design` (if selected)
+- Gemini design → `gemini_design` (if selected)
+- OpenCode design → `opencode_design` (if selected)
+- Codex design → `codex_design`
 
-**3.2 Comparative Analysis**
+**4.2 Comparative Analysis**
 
-Analyze all four designs (Claude, Codex, Gemini, OpenCode):
+Analyze designs from the selected participants (including Codex):
 
 Create a comparison matrix:
 ```
@@ -341,9 +456,9 @@ Save as `comparative_analysis`.
 
 ---
 
-### Phase 4: Iterative Refinement with Codex
+### Phase 5: Iterative Refinement with All Participants
 
-**4.1 Draft Merged Design**
+**5.1 Draft Merged Design**
 
 Based on comparative analysis, create initial merged design:
 ```
@@ -379,10 +494,37 @@ Open Questions:
 
 Save as `merged_design_v1`.
 
-**4.2 Discussion Round 1 - Review & Critique**
+**Merged Design Output Template (for participants)**
+```
+Goal:
+
+Layered Plan:
+Phase 1:
+  - Step 1:
+    - Subtasks:
+  - Step 2:
+    - Subtasks:
+Phase 2:
+  - Step 3:
+    - Subtasks:
+
+Dependencies:
+- ...
+
+Risks:
+- ...
+
+New Clarification Points:
+- [if any]
+```
+
+**5.2 Discussion Round 1 - Review & Critique (All Participants)**
+
+Send `comparative_analysis` + `merged_design_v1` to **all selected participants** for critique.
+Use `dispatch_to_participants(prompt, "review_round_1")`.
 
 ```bash
-Bash(cask <<'EOF'
+ask {arbiter} <<'EOF'
 Review this merged design based on all CLI inputs:
 
 COMPARATIVE ANALYSIS:
@@ -400,17 +542,16 @@ Analyze:
 
 Provide specific recommendations for improvement.
 EOF
-, run_in_background=true)
 ```
 
-Wait with `TaskOutput`. Save as `codex_review_1`.
+Save as `arbiter_review_1`.
 
-**4.3 Discussion Round 2 - Resolve & Finalize**
+**5.3 Discussion Round 2 - Resolve & Finalize (All Participants)**
 
-Based on Codex's review, refine the design:
+Based on the arbiter's review, refine the design:
 
 ```bash
-Bash(cask <<'EOF'
+ask {arbiter} <<'EOF'
 Refined design based on your feedback:
 
 MERGED DESIGN v2:
@@ -425,22 +566,21 @@ Remaining concerns:
 
 Final approval or additional suggestions?
 EOF
-, run_in_background=true)
 ```
 
-Wait with `TaskOutput`. Save as `codex_review_2`.
+Save as `arbiter_review_2`.
 
 ---
 
-### Phase 5: Final Output
+### Phase 6: Final Output
 
-**5.1 Finalize Design**
+**6.1 Finalize Design**
 
-Incorporate Codex's final feedback and create the complete solution design.
+Incorporate feedback from all participants; arbiter has final decision.
 
-**5.2 Save Plan Document**
+**6.2 Save Plan Document**
 
-Write the final plan to a markdown file using the Write tool:
+Write the final plan to a markdown file:
 
 **File path**: `plans/{feature-name}-plan.md`
 
@@ -449,7 +589,7 @@ Use this template:
 ```markdown
 # {Feature Name} - Solution Design
 
-> Generated by all-plan collaborative design process
+> Generated by all-plan collaborative design process (Codex-led)
 
 ## Overview
 
@@ -548,10 +688,10 @@ Use this template:
 
 | CLI | Key Contributions |
 |-----|-------------------|
-| Claude | [contributions] |
 | Codex | [contributions] |
-| Gemini | [contributions] |
-| OpenCode | [contributions] |
+| Claude | [contributions if selected] |
+| Gemini | [contributions if selected] |
+| OpenCode | [contributions if selected] |
 
 ---
 
@@ -564,7 +704,7 @@ Use this template:
 [Brief notes on approaches that were evaluated but not chosen]
 ```
 
-**5.3 Output to User**
+**6.3 Output to User**
 
 After saving the file, display to user:
 
@@ -590,9 +730,9 @@ Next: Review the plan and proceed with implementation when ready.
 1. **Structured Clarification**: Use option-based questions to systematically capture requirements
 2. **Readiness Scoring**: Quantify requirement completeness before proceeding
 3. **True Independence**: All CLIs design independently without seeing others' work first
-4. **Diverse Perspectives**: Leverage unique strengths of each CLI
+4. **Diverse Perspectives**: Leverage unique strengths of each selected CLI and dispatch to all participants whenever external input is needed
 5. **Evidence-Based Synthesis**: Merge based on comparative analysis, not arbitrary choices
-6. **Iterative Refinement**: Use Codex discussion to validate and improve merged design
+6. **Iterative Refinement**: Use arbiter discussion to validate and improve merged design
 7. **Concrete Deliverables**: Output actionable plan document, not just discussion notes
 8. **Attribution**: Acknowledge contributions from each CLI to maintain transparency
 9. **Research When Needed**: Don't hesitate to use WebSearch for external knowledge
@@ -605,7 +745,6 @@ Next: Review the plan and proceed with implementation when ready.
 
 - This skill is designed for complex features or architectural decisions
 - For simple tasks, use dual-design or direct implementation instead
-- All background tasks should use `run_in_background=true`
-- Always wait for task completion with `TaskOutput` before proceeding
+- Use `ask <provider>` for all providers (no extra parameters)
 - If any CLI is not available, proceed with available CLIs and note the absence
 - Plans are saved to `plans/` directory with descriptive filenames

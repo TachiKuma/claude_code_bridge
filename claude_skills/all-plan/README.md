@@ -1,6 +1,6 @@
 # All-Plan Skill
 
-Collaborative planning with all mounted CLIs (Claude, Codex, Gemini, OpenCode) for comprehensive solution design.
+Collaborative planning with selected mounted CLIs for comprehensive solution design. Codex acts as coordinator.
 
 ## Usage
 
@@ -15,20 +15,22 @@ Example:
 
 ## How It Works
 
-**5-Phase Collaborative Design Process:**
+**6-Phase Collaborative Design Process:**
 
-1. **Requirement Refinement** - Socratic questioning to uncover hidden needs
-2. **Parallel Independent Design** - Each AI designs independently (no groupthink)
-3. **Comparative Analysis** - Merge insights, detect anti-patterns
-4. **Iterative Refinement** - Cross-AI review and critique
-5. **Final Output** - Actionable implementation plan
+1. **Participant Selection** - Choose which AIs to include + final arbiter (via `mounted`)
+2. **Requirement Refinement** - Multi-round clarification, participant-driven questions
+3. **Parallel Independent Design** - All selected AIs design independently
+4. **Comparative Analysis** - Merge and compare insights from all participants
+5. **Iterative Refinement** - All participants review; arbiter decides
+6. **Final Output** - Layered, actionable implementation plan
 
 ## Key Features
 
-- **Socratic Ladder**: 7 structured questions for deep requirement mining
-- **Superpowers Lenses**: Systematic alternative exploration (10x scale, remove dependency, invert flow)
-- **Anti-pattern Detection**: Proactive risk identification across all designs
-- **True Independence**: Each AI works without seeing others' designs first
+- **Participant Selection**: User chooses participating AIs and final arbiter
+- **Multi-round Clarification**: Questions gathered from all participants, merged by Codex
+- **Optional Web Research**: Triggered when requirements depend on external info
+- **Ask-Only Dispatch**: Uses `ask <provider>` for all participants
+- **Layered Plans**: Phases → steps → subtasks with dependencies and risks
 
 ## When to Use
 
@@ -40,7 +42,7 @@ Example:
 
 A comprehensive plan including:
 - Goal and architecture with rationale
-- Step-by-step implementation plan
-- Risk management matrix
+- Layered implementation plan (phases → steps → subtasks)
+- Dependencies and risks
 - Acceptance criteria
-- Design contributors from each AI
+- Design contributors from each selected AI
