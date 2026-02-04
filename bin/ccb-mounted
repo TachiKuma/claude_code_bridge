@@ -19,19 +19,38 @@ if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
   fi
 fi
 
-# Check mounted providers using ping command
-# This works with both legacy per-provider daemons and the unified askd daemon
-MOUNTED=""
-for pair in $PROVIDERS; do
-  provider="${pair%%:*}"
-  # Check session file exists first
-  if [[ -f "$CWD/.ccb_config/.${provider}-session" ]] || [[ -f "$CWD/.${provider}-session" ]]; then
-    # Try the ping command to check if daemon is responsive
-    if "$SCRIPT_DIR/ping" "$provider" >/dev/null 2>&1; then
-      MOUNTED="$MOUNTED $provider"
+# Detect OS and get online daemons accordingly
+if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ -n "${WINDIR:-}" ]]; then
+  # Windows: use ping command to check each provider directly
+  MOUNTED=""
+  for pair in $PROVIDERS; do
+    provider="${pair%%:*}"
+    # Check session file exists first
+    if [[ -f "$CWD/.ccb_config/.${provider}-session" ]] || [[ -f "$CWD/.${provider}-session" ]]; then
+      # Try the ping command to check if daemon is responsive
+      if "$SCRIPT_DIR/ping" "$provider" >/dev/null 2>&1; then
+        MOUNTED="$MOUNTED $provider"
+      fi
     fi
-  fi
-done
+  done
+else
+  # Linux/macOS: use pgrep
+  ONLINE=$(pgrep -af "bin/[cglod]askd$" 2>/dev/null | grep -oE "[cglod]askd" | sort -u || true)
+
+  MOUNTED=""
+  for pair in $PROVIDERS; do
+    provider="${pair%%:*}"
+    daemon="${pair##*:}"
+
+    # Check session file exists
+    if [[ -f "$CWD/.ccb_config/.${provider}-session" ]] || [[ -f "$CWD/.${provider}-session" ]]; then
+      # Check daemon is online
+      if echo "$ONLINE" | grep -q "${daemon}d"; then
+        MOUNTED="$MOUNTED $provider"
+      fi
+    fi
+  done
+fi
 
 MOUNTED=$(echo $MOUNTED | xargs)  # trim
 
