@@ -22,6 +22,21 @@ class ContextFormatter:
     def __init__(self, max_tokens: int = 8000):
         self.max_tokens = max_tokens
 
+    @staticmethod
+    def _provider_label(provider: Optional[str]) -> str:
+        key = (provider or "claude").strip().lower()
+        mapping = {
+            "claude": "Claude",
+            "codex": "Codex",
+            "gemini": "Gemini",
+            "opencode": "OpenCode",
+            "droid": "Droid",
+            "auto": "Auto",
+        }
+        if key in mapping:
+            return mapping[key]
+        return provider.strip().title() if provider else "Claude"
+
     def _format_tool_input(self, name: str, inp: dict) -> str:
         """Format tool input for display."""
         if not inp:
@@ -165,13 +180,17 @@ class ContextFormatter:
 
     def format_markdown(self, context: TransferContext, detailed: bool = False) -> str:
         """Format context as markdown."""
+        provider = self._provider_label(
+            context.source_provider or context.metadata.get("provider")
+        )
         lines = [
-            "## Context Transfer from Claude Session",
+            f"## Context Transfer from {provider} Session",
             "",
-            "**IMPORTANT**: This is a context handoff from a Claude Code session.",
+            f"**IMPORTANT**: This is a context handoff from a {provider} session.",
             "The previous AI assistant completed the work described below.",
             "Please review and continue from where it left off.",
             "",
+            f"**Source Provider**: {provider}",
             f"**Source Session**: {context.source_session_id}",
             f"**Transferred**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             f"**Conversations**: {len(context.conversations)}",
@@ -201,8 +220,12 @@ class ContextFormatter:
 
     def format_plain(self, context: TransferContext) -> str:
         """Format context as plain text."""
+        provider = self._provider_label(
+            context.source_provider or context.metadata.get("provider")
+        )
         lines = [
-            "=== Context Transfer from Claude ===",
+            f"=== Context Transfer from {provider} ===",
+            f"Provider: {provider}",
             f"Session: {context.source_session_id}",
             f"Transferred: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             f"Conversations: {len(context.conversations)}",
@@ -223,7 +246,9 @@ class ContextFormatter:
 
     def format_json(self, context: TransferContext) -> str:
         """Format context as JSON."""
+        provider = (context.source_provider or context.metadata.get("provider") or "claude").strip().lower()
         data = {
+            "source_provider": provider,
             "source_session_id": context.source_session_id,
             "transferred_at": datetime.now().isoformat(),
             "token_estimate": context.token_estimate,

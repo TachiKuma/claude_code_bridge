@@ -167,6 +167,8 @@ class OpenCodeProjectSession:
         return False, f"Pane not alive: {pane_id}"
 
     def update_opencode_binding(self, *, session_id: Optional[str], project_id: Optional[str]) -> None:
+        old_id = str(self.data.get("opencode_session_id") or "").strip()
+        old_project = str(self.data.get("opencode_project_id") or "").strip()
         updated = False
         if session_id and self.data.get("opencode_session_id") != session_id:
             self.data["opencode_session_id"] = session_id
@@ -175,6 +177,26 @@ class OpenCodeProjectSession:
             self.data["opencode_project_id"] = project_id
             updated = True
         if updated:
+            new_id = str(session_id or "").strip()
+            new_project = str(project_id or "").strip()
+            if old_id and old_id != new_id:
+                self.data["old_opencode_session_id"] = old_id
+            if old_project and old_project != new_project:
+                self.data["old_opencode_project_id"] = old_project
+            if old_id or old_project:
+                self.data["old_updated_at"] = _now_str()
+                try:
+                    from ctx_transfer_utils import maybe_auto_transfer
+
+                    maybe_auto_transfer(
+                        provider="opencode",
+                        work_dir=Path(self.work_dir),
+                        session_id=old_id or None,
+                        project_id=old_project or None,
+                    )
+                except Exception:
+                    pass
+
             self.data["updated_at"] = _now_str()
             if self.data.get("active") is False:
                 self.data["active"] = True

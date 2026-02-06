@@ -50,16 +50,18 @@ class TransferContext:
     token_estimate: int
     metadata: dict = field(default_factory=dict)
     stats: Optional[SessionStats] = None
+    source_provider: str = "claude"
 
 
 @dataclass
 class SessionInfo:
-    """Information about a Claude session."""
+    """Information about a session."""
     session_id: str
     session_path: str
     project_path: Optional[str] = None
     is_sidechain: bool = False
     last_modified: Optional[float] = None
+    provider: Optional[str] = None
 
 
 class SessionNotFoundError(Exception):

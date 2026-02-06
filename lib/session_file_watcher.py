@@ -28,15 +28,16 @@ def _is_watch_file(path: Path) -> bool:
 
 
 class SessionFileHandler(FileSystemEventHandler):
-    def __init__(self, callback: Callable[[Path], None]):
+    def __init__(self, callback: Callable[[Path], None], predicate: Callable[[Path], bool] | None = None):
         self._callback = callback
+        self._predicate = predicate or _is_watch_file
         super().__init__()
 
     def _emit(self, path_value: str | None) -> None:
         if not path_value:
             return
         path = Path(path_value)
-        if not _is_watch_file(path):
+        if not self._predicate(path):
             return
         try:
             self._callback(path)
@@ -63,12 +64,19 @@ class SessionFileHandler(FileSystemEventHandler):
 
 
 class SessionFileWatcher:
-    def __init__(self, project_dir: Path, callback: Callable[[Path], None], *, recursive: bool = False):
+    def __init__(
+        self,
+        project_dir: Path,
+        callback: Callable[[Path], None],
+        *,
+        recursive: bool = False,
+        predicate: Callable[[Path], bool] | None = None,
+    ):
         self.project_dir = Path(project_dir)
         self.callback = callback
         self.recursive = bool(recursive)
         self.observer = Observer() if HAS_WATCHDOG else None
-        self.handler = SessionFileHandler(callback) if HAS_WATCHDOG else None
+        self.handler = SessionFileHandler(callback, predicate=predicate) if HAS_WATCHDOG else None
 
     def start(self) -> None:
         if not self.observer or not self.handler:

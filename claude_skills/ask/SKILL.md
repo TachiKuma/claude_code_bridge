@@ -19,20 +19,9 @@ The first argument must be the provider name, followed by the message:
 
 ## Execution (MANDATORY)
 
-**Windows Native (PowerShell/WezTerm) - USE THIS:**
 ```
 Bash(ask $PROVIDER "$MESSAGE")
 ```
-
-**Linux/macOS/WSL only:**
-```
-Bash(nohup sh -c 'CCB_CALLER=claude ask $PROVIDER <<EOF
-$MESSAGE
-EOF
-' > /dev/null 2>&1 &)
-```
-
-IMPORTANT: On Windows, just use `ask` directly. Do NOT use nohup/sh - they don't exist on native Windows!
 
 ## Rules
 
@@ -49,8 +38,5 @@ IMPORTANT: On Windows, just use `ask` directly. Do NOT use nohup/sh - they don't
 
 ## Notes
 
-<<<<<<< HEAD
 - `ask` already runs in background by default; no manual `nohup` is needed.
-=======
->>>>>>> pr-65
 - If it fails, check backend health with the corresponding ping command (`ping <provider>` (e.g., `ping gemini`)).

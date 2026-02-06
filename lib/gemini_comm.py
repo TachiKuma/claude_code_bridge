@@ -10,6 +10,7 @@ import json
 import os
 import sys
 import time
+import threading
 from pathlib import Path
 from typing import Optional, Tuple, Dict, Any, List
 
@@ -17,12 +18,19 @@ from terminal import get_backend_for_session, get_pane_id_from_session
 from ccb_config import apply_backend_env
 from i18n import t
 from session_utils import find_project_session_file
+from session_file_watcher import SessionFileWatcher, HAS_WATCHDOG
 from pane_registry import upsert_registry
 from project_id import compute_ccb_project_id
 
 apply_backend_env()
 
 GEMINI_ROOT = Path(os.environ.get("GEMINI_ROOT") or (Path.home() / ".gemini" / "tmp")).expanduser()
+
+_GEMINI_WATCHER: Optional[SessionFileWatcher] = None
+_GEMINI_WATCH_STARTED = False
+_GEMINI_WATCH_LOCK = threading.Lock()
+_GEMINI_HASH_CACHE: dict[str, list[Path]] = {}
+_GEMINI_HASH_CACHE_TS = 0.0
 
 
 def _get_project_hash(work_dir: Optional[Path] = None) -> str:
@@ -35,6 +43,123 @@ def _get_project_hash(work_dir: Optional[Path] = None) -> str:
     except Exception:
         normalized = str(path)
     return hashlib.sha256(normalized.encode()).hexdigest()
+
+
+def _iter_registry_work_dirs() -> list[Path]:
+    registry_dir = Path.home() / ".ccb" / "run"
+    if not registry_dir.exists():
+        return []
+    work_dirs: list[Path] = []
+    try:
+        paths = list(registry_dir.glob("ccb-session-*.json"))
+    except Exception:
+        paths = []
+    for path in paths:
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        wd = data.get("work_dir")
+        if isinstance(wd, str) and wd.strip():
+            try:
+                work_dirs.append(Path(wd.strip()).expanduser())
+            except Exception:
+                continue
+    return work_dirs
+
+
+def _work_dirs_for_hash(project_hash: str) -> list[Path]:
+    global _GEMINI_HASH_CACHE_TS, _GEMINI_HASH_CACHE
+    now = time.time()
+    if now - _GEMINI_HASH_CACHE_TS > 5.0:
+        _GEMINI_HASH_CACHE = {}
+        for wd in _iter_registry_work_dirs():
+            try:
+                h = _get_project_hash(wd)
+            except Exception:
+                continue
+            _GEMINI_HASH_CACHE.setdefault(h, []).append(wd)
+        _GEMINI_HASH_CACHE_TS = now
+    return _GEMINI_HASH_CACHE.get(project_hash, [])
+
+
+def _read_gemini_session_id(session_path: Path) -> str:
+    if not session_path or not session_path.exists():
+        return ""
+    for _ in range(5):
+        try:
+            payload = json.loads(session_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            time.sleep(0.05)
+            continue
+        except Exception:
+            return ""
+        if isinstance(payload, dict) and isinstance(payload.get("sessionId"), str):
+            return payload["sessionId"]
+        return ""
+    return ""
+
+
+def _gemini_watch_predicate(path: Path) -> bool:
+    return path.suffix == ".json" and path.name.startswith("session-")
+
+
+def _handle_gemini_session_event(path: Path) -> None:
+    if not path or not path.exists():
+        return
+    try:
+        project_hash = path.parent.parent.name
+    except Exception:
+        project_hash = ""
+    if not project_hash:
+        return
+    work_dirs = _work_dirs_for_hash(project_hash)
+    if not work_dirs:
+        return
+    session_id = _read_gemini_session_id(path)
+    for work_dir in work_dirs:
+        session_file = find_project_session_file(work_dir, ".gemini-session")
+        if not session_file or not session_file.exists():
+            continue
+        try:
+            from gaskd_session import load_project_session
+        except Exception:
+            return
+        session = load_project_session(work_dir)
+        if not session:
+            continue
+        try:
+            session.update_gemini_binding(session_path=path, session_id=session_id or None)
+        except Exception:
+            continue
+
+
+def _ensure_gemini_watchdog_started() -> None:
+    if not HAS_WATCHDOG:
+        return
+    global _GEMINI_WATCHER, _GEMINI_WATCH_STARTED
+    if _GEMINI_WATCH_STARTED:
+        return
+    with _GEMINI_WATCH_LOCK:
+        if _GEMINI_WATCH_STARTED:
+            return
+        if not GEMINI_ROOT.exists():
+            return
+        watcher = SessionFileWatcher(
+            GEMINI_ROOT,
+            _handle_gemini_session_event,
+            recursive=True,
+            predicate=_gemini_watch_predicate,
+        )
+        try:
+            watcher.start()
+        except Exception:
+            return
+        _GEMINI_WATCHER = watcher
+        _GEMINI_WATCH_STARTED = True
 
 
 class GeminiLogReader:
@@ -815,10 +940,14 @@ class GeminiCommunicator:
             return
 
         updated = False
+        old_path = str(data.get("gemini_session_path") or "").strip()
+        old_id = str(data.get("gemini_session_id") or "").strip()
         session_path_str = str(session_path)
+        binding_changed = False
         if data.get("gemini_session_path") != session_path_str:
             data["gemini_session_path"] = session_path_str
             updated = True
+            binding_changed = True
 
         try:
             if not (data.get("ccb_project_id") or "").strip():
@@ -847,9 +976,42 @@ class GeminiCommunicator:
         if session_id and data.get("gemini_session_id") != session_id:
             data["gemini_session_id"] = session_id
             updated = True
+            binding_changed = True
 
         if not updated:
             return
+
+        new_id = str(session_id or "").strip()
+        if not new_id and session_path_str:
+            try:
+                new_id = Path(session_path_str).stem
+            except Exception:
+                new_id = ""
+        if old_id and old_id != new_id:
+            data["old_gemini_session_id"] = old_id
+        if old_path and (old_path != session_path_str or (old_id and old_id != new_id)):
+            data["old_gemini_session_path"] = old_path
+        if (old_path or old_id) and binding_changed:
+            data["old_updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+            try:
+                from ctx_transfer_utils import maybe_auto_transfer
+
+                old_path_obj = None
+                if old_path:
+                    try:
+                        old_path_obj = Path(old_path).expanduser()
+                    except Exception:
+                        old_path_obj = None
+                wd = data.get("work_dir")
+                work_dir = Path(wd) if isinstance(wd, str) and wd else Path.cwd()
+                maybe_auto_transfer(
+                    provider="gemini",
+                    work_dir=work_dir,
+                    session_path=old_path_obj,
+                    session_id=old_id or None,
+                )
+            except Exception:
+                pass
 
         tmp_file = project_file.with_suffix(".tmp")
         try:
