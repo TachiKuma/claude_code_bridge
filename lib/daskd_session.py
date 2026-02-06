@@ -141,6 +141,8 @@ class DroidProjectSession:
         return False, f"Pane not alive: {pane_id}"
 
     def update_droid_binding(self, *, session_path: Optional[Path], session_id: Optional[str]) -> None:
+        old_path = str(self.data.get("droid_session_path") or "").strip()
+        old_id = str(self.data.get("droid_session_id") or "").strip()
         updated = False
         if session_path:
             try:
@@ -163,6 +165,37 @@ class DroidProjectSession:
                 pass
 
         if updated:
+            new_id = str(session_id or "").strip()
+            if not new_id and session_path:
+                try:
+                    new_id = Path(session_path).stem
+                except Exception:
+                    new_id = ""
+            session_path_str = str(session_path) if session_path else ""
+            if old_id and old_id != new_id:
+                self.data["old_droid_session_id"] = old_id
+            if old_path and (old_path != session_path_str or (old_id and old_id != new_id)):
+                self.data["old_droid_session_path"] = old_path
+            if old_path or old_id:
+                self.data["old_updated_at"] = _now_str()
+                try:
+                    from ctx_transfer_utils import maybe_auto_transfer
+
+                    old_path_obj = None
+                    if old_path:
+                        try:
+                            old_path_obj = Path(old_path).expanduser()
+                        except Exception:
+                            old_path_obj = None
+                    maybe_auto_transfer(
+                        provider="droid",
+                        work_dir=Path(self.work_dir),
+                        session_path=old_path_obj,
+                        session_id=old_id or None,
+                    )
+                except Exception:
+                    pass
+
             self.data["updated_at"] = _now_str()
             if self.data.get("active") is False:
                 self.data["active"] = True

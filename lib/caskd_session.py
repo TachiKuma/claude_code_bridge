@@ -141,15 +141,52 @@ class CodexProjectSession:
         return False, f"Pane not alive: {pane_id}"
 
     def update_codex_log_binding(self, *, log_path: Optional[str], session_id: Optional[str]) -> None:
+        old_path = str(self.data.get("codex_session_path") or "").strip()
+        old_id = str(self.data.get("codex_session_id") or "").strip()
+
         updated = False
-        if log_path and self.data.get("codex_session_path") != log_path:
-            self.data["codex_session_path"] = log_path
+        log_path_str = ""
+        if log_path:
+            log_path_str = str(log_path).strip()
+        if log_path_str and self.data.get("codex_session_path") != log_path_str:
+            self.data["codex_session_path"] = log_path_str
             updated = True
         if session_id and self.data.get("codex_session_id") != session_id:
             self.data["codex_session_id"] = session_id
             self.data["codex_start_cmd"] = f"codex resume {session_id}"
             updated = True
+
         if updated:
+            new_id = str(session_id or "").strip()
+            if not new_id and log_path_str:
+                try:
+                    new_id = Path(log_path_str).stem
+                except Exception:
+                    new_id = ""
+            if old_id and old_id != new_id:
+                self.data["old_codex_session_id"] = old_id
+            if old_path and (old_path != log_path_str or (old_id and old_id != new_id)):
+                self.data["old_codex_session_path"] = old_path
+            if old_path or old_id:
+                self.data["old_updated_at"] = _now_str()
+                try:
+                    from ctx_transfer_utils import maybe_auto_transfer
+
+                    old_path_obj = None
+                    if old_path:
+                        try:
+                            old_path_obj = Path(old_path).expanduser()
+                        except Exception:
+                            old_path_obj = None
+                    maybe_auto_transfer(
+                        provider="codex",
+                        work_dir=Path(self.work_dir),
+                        session_path=old_path_obj,
+                        session_id=old_id or None,
+                    )
+                except Exception:
+                    pass
+
             self.data["updated_at"] = _now_str()
             if self.data.get("active") is False:
                 self.data["active"] = True

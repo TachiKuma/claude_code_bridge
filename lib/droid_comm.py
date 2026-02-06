@@ -11,6 +11,7 @@ import heapq
 import json
 import os
 import time
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -18,6 +19,7 @@ from ccb_config import apply_backend_env
 from pane_registry import upsert_registry
 from project_id import compute_ccb_project_id
 from session_utils import find_project_session_file, safe_write_session
+from session_file_watcher import SessionFileWatcher, HAS_WATCHDOG
 from terminal import get_backend_for_session, get_pane_id_from_session
 
 apply_backend_env()
@@ -33,6 +35,10 @@ def _default_sessions_root() -> Path:
 
 
 DROID_SESSIONS_ROOT = _default_sessions_root()
+
+_DROID_WATCHER: Optional[SessionFileWatcher] = None
+_DROID_WATCH_STARTED = False
+_DROID_WATCH_LOCK = threading.Lock()
 
 
 def _normalize_path_for_match(value: str) -> str:
@@ -94,6 +100,52 @@ def read_droid_session_start(session_path: Path, *, max_lines: int = 30) -> Tupl
     except OSError:
         return None, None
     return None, None
+
+
+def _handle_droid_session_event(path: Path) -> None:
+    if not path or not path.exists() or path.suffix != ".jsonl":
+        return
+    cwd, session_id = read_droid_session_start(path)
+    if not cwd:
+        return
+    try:
+        work_dir = Path(cwd).expanduser()
+    except Exception:
+        return
+    session_file = find_project_session_file(work_dir, ".droid-session")
+    if not session_file or not session_file.exists():
+        return
+    try:
+        from daskd_session import load_project_session
+    except Exception:
+        return
+    session = load_project_session(work_dir)
+    if not session:
+        return
+    try:
+        session.update_droid_binding(session_path=path, session_id=session_id)
+    except Exception:
+        return
+
+
+def _ensure_droid_watchdog_started() -> None:
+    if not HAS_WATCHDOG:
+        return
+    global _DROID_WATCHER, _DROID_WATCH_STARTED
+    if _DROID_WATCH_STARTED:
+        return
+    with _DROID_WATCH_LOCK:
+        if _DROID_WATCH_STARTED:
+            return
+        if not DROID_SESSIONS_ROOT.exists():
+            return
+        watcher = SessionFileWatcher(DROID_SESSIONS_ROOT, _handle_droid_session_event, recursive=True)
+        try:
+            watcher.start()
+        except Exception:
+            return
+        _DROID_WATCHER = watcher
+        _DROID_WATCH_STARTED = True
 
 
 def _extract_content_text(content: Any) -> Optional[str]:
@@ -644,15 +696,20 @@ class DroidCommunicator:
             data = {}
 
         updated = False
+        old_path = str(data.get("droid_session_path") or "").strip()
+        old_id = str(data.get("droid_session_id") or "").strip()
         session_path_str = str(session_path)
+        binding_changed = False
         if data.get("droid_session_path") != session_path_str:
             data["droid_session_path"] = session_path_str
             updated = True
+            binding_changed = True
 
         _cwd, session_id = read_droid_session_start(session_path)
         if session_id and data.get("droid_session_id") != session_id:
             data["droid_session_id"] = session_id
             updated = True
+            binding_changed = True
 
         if not (data.get("ccb_project_id") or "").strip():
             try:
@@ -665,6 +722,38 @@ class DroidCommunicator:
 
         if not updated:
             return
+
+        new_id = str(session_id or "").strip()
+        if not new_id:
+            try:
+                new_id = Path(session_path_str).stem
+            except Exception:
+                new_id = ""
+        if old_id and old_id != new_id:
+            data["old_droid_session_id"] = old_id
+        if old_path and (old_path != session_path_str or (old_id and old_id != new_id)):
+            data["old_droid_session_path"] = old_path
+        if (old_path or old_id) and binding_changed:
+            data["old_updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+            try:
+                from ctx_transfer_utils import maybe_auto_transfer
+
+                old_path_obj = None
+                if old_path:
+                    try:
+                        old_path_obj = Path(old_path).expanduser()
+                    except Exception:
+                        old_path_obj = None
+                wd = data.get("work_dir")
+                work_dir = Path(wd) if isinstance(wd, str) and wd else Path.cwd()
+                maybe_auto_transfer(
+                    provider="droid",
+                    work_dir=work_dir,
+                    session_path=old_path_obj,
+                    session_id=old_id or None,
+                )
+            except Exception:
+                pass
 
         payload = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
         safe_write_session(path, payload)
@@ -708,3 +797,6 @@ class DroidCommunicator:
             "healthy": healthy,
             "status": status,
         }
+
+
+_ensure_droid_watchdog_started()

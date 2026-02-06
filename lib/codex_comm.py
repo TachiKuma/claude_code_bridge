@@ -11,6 +11,7 @@ import re
 import sys
 import time
 import shlex
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple, Dict, Any, List
@@ -20,6 +21,7 @@ from ccb_config import apply_backend_env
 from i18n import t
 from pane_registry import upsert_registry, registry_path_for_session, load_registry_by_session_id
 from session_utils import find_project_session_file
+from session_file_watcher import SessionFileWatcher, HAS_WATCHDOG
 from project_id import compute_ccb_project_id
 
 apply_backend_env()
@@ -29,6 +31,10 @@ SESSION_ID_PATTERN = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
     re.IGNORECASE,
 )
+
+_CODEX_WATCHER: Optional[SessionFileWatcher] = None
+_CODEX_WATCH_STARTED = False
+_CODEX_WATCH_LOCK = threading.Lock()
 
 
 def _env_float(name: str, default: float) -> float:
@@ -40,6 +46,74 @@ def _env_float(name: str, default: float) -> float:
     except ValueError:
         return default
     return value
+
+
+def _extract_cwd_from_log_file(log_path: Path) -> Optional[str]:
+    try:
+        with log_path.open("r", encoding="utf-8") as handle:
+            first_line = handle.readline()
+    except Exception:
+        return None
+    if not first_line:
+        return None
+    try:
+        entry = json.loads(first_line)
+    except Exception:
+        return None
+    if entry.get("type") != "session_meta":
+        return None
+    payload = entry.get("payload", {})
+    cwd = payload.get("cwd") if isinstance(payload, dict) else None
+    if isinstance(cwd, str) and cwd.strip():
+        return cwd.strip()
+    return None
+
+
+def _handle_codex_log_event(path: Path) -> None:
+    if not path or not path.exists() or path.suffix != ".jsonl":
+        return
+    cwd = _extract_cwd_from_log_file(path)
+    if not cwd:
+        return
+    try:
+        work_dir = Path(cwd).expanduser()
+    except Exception:
+        return
+    session_file = find_project_session_file(work_dir, ".codex-session")
+    if not session_file or not session_file.exists():
+        return
+    try:
+        from caskd_session import load_project_session
+    except Exception:
+        return
+    session = load_project_session(work_dir)
+    if not session:
+        return
+    session_id = CodexCommunicator._extract_session_id(path)
+    try:
+        session.update_codex_log_binding(log_path=str(path), session_id=session_id)
+    except Exception:
+        return
+
+
+def _ensure_codex_watchdog_started() -> None:
+    if not HAS_WATCHDOG:
+        return
+    global _CODEX_WATCHER, _CODEX_WATCH_STARTED
+    if _CODEX_WATCH_STARTED:
+        return
+    with _CODEX_WATCH_LOCK:
+        if _CODEX_WATCH_STARTED:
+            return
+        if not SESSION_ROOT.exists():
+            return
+        watcher = SessionFileWatcher(SESSION_ROOT, _handle_codex_log_event, recursive=True)
+        try:
+            watcher.start()
+        except Exception:
+            return
+        _CODEX_WATCHER = watcher
+        _CODEX_WATCH_STARTED = True
 
 
 class CodexLogReader:
@@ -1029,6 +1103,8 @@ class CodexCommunicator:
         path_str = str(log_path_obj)
         session_id = self._extract_session_id(log_path_obj)
         resume_cmd = f"codex resume {session_id}" if session_id else None
+        old_path = str(data.get("codex_session_path") or "").strip()
+        old_id = str(data.get("codex_session_id") or "").strip()
         updated = False
 
         started_at = data.get("started_at")
@@ -1050,12 +1126,15 @@ class CodexCommunicator:
                         )
                     return
 
+        binding_changed = False
         if data.get("codex_session_path") != path_str:
             data["codex_session_path"] = path_str
             updated = True
+            binding_changed = True
         if session_id and data.get("codex_session_id") != session_id:
             data["codex_session_id"] = session_id
             updated = True
+            binding_changed = True
         if ccb_project_id and data.get("ccb_project_id") != ccb_project_id:
             data["ccb_project_id"] = ccb_project_id
             updated = True
@@ -1071,6 +1150,37 @@ class CodexCommunicator:
             updated = True
 
         if updated:
+            new_id = str(session_id or "").strip()
+            if not new_id and path_str:
+                try:
+                    new_id = Path(path_str).stem
+                except Exception:
+                    new_id = ""
+            if old_id and old_id != new_id:
+                data["old_codex_session_id"] = old_id
+            if old_path and (old_path != path_str or (old_id and old_id != new_id)):
+                data["old_codex_session_path"] = old_path
+            if (old_path or old_id) and binding_changed:
+                data["old_updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                try:
+                    from ctx_transfer_utils import maybe_auto_transfer
+
+                    old_path_obj = None
+                    if old_path:
+                        try:
+                            old_path_obj = Path(old_path).expanduser()
+                        except Exception:
+                            old_path_obj = None
+                    wd_hint = data.get("work_dir") or self.session_info.get("work_dir")
+                    work_dir = Path(wd_hint) if isinstance(wd_hint, str) and wd_hint else Path.cwd()
+                    maybe_auto_transfer(
+                        provider="codex",
+                        work_dir=work_dir,
+                        session_path=old_path_obj,
+                        session_id=old_id or None,
+                    )
+                except Exception:
+                    pass
             tmp_file = project_file.with_suffix(".tmp")
             try:
                 with tmp_file.open("w", encoding="utf-8") as handle:
@@ -1155,6 +1265,9 @@ class CodexCommunicator:
                 if match:
                     return match.group(0)
         return None
+
+
+_ensure_codex_watchdog_started()
 
 
 def main() -> int:

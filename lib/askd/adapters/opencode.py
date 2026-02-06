@@ -133,6 +133,13 @@ class OpenCodeAdapter(BaseProviderAdapter):
             session_id_filter=session.opencode_session_id_filter,
         )
         state = log_reader.capture_state()
+        try:
+            session.update_opencode_binding(
+                session_id=state.get("session_id"),
+                project_id=str(getattr(log_reader, "project_id", "") or ""),
+            )
+        except Exception:
+            pass
 
         prompt = wrap_opencode_prompt(req.message, task.req_id)
         backend.send_text(pane_id, prompt)

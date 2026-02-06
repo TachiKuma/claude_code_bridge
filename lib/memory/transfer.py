@@ -6,6 +6,7 @@ Coordinates the full pipeline: parse -> dedupe -> truncate -> format -> send.
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from datetime import datetime
@@ -15,6 +16,7 @@ from typing import Optional
 # Default storage directory
 TRANSFERS_DIR = Path.home() / ".ccb" / "transfers"
 
+from session_utils import find_project_session_file
 from .types import ConversationEntry, TransferContext, SessionNotFoundError, SessionStats
 from .session_parser import ClaudeSessionParser
 from .deduper import ConversationDeduper
@@ -25,6 +27,16 @@ class ContextTransfer:
     """Orchestrate context transfer between providers."""
 
     SUPPORTED_PROVIDERS = ("codex", "gemini", "opencode", "droid")
+    SUPPORTED_SOURCES = ("auto", "claude", "codex", "gemini", "opencode", "droid")
+    SOURCE_SESSION_FILES = {
+        "claude": ".claude-session",
+        "codex": ".codex-session",
+        "gemini": ".gemini-session",
+        "opencode": ".opencode-session",
+        "droid": ".droid-session",
+    }
+    DEFAULT_SOURCE_ORDER = ("claude", "codex", "gemini", "opencode", "droid")
+    DEFAULT_FALLBACK_PAIRS = 50
 
     def __init__(
         self,
@@ -37,50 +49,135 @@ class ContextTransfer:
         self.deduper = ConversationDeduper()
         self.formatter = ContextFormatter(max_tokens=max_tokens)
 
+    def _normalize_provider(self, provider: Optional[str]) -> str:
+        value = (provider or "auto").strip().lower()
+        return value or "auto"
+
+    def _load_session_data(self, provider: str) -> tuple[Optional[Path], dict]:
+        filename = self.SOURCE_SESSION_FILES.get(provider)
+        if not filename:
+            return None, {}
+        session_file = find_project_session_file(self.work_dir, filename)
+        if not session_file or not session_file.exists():
+            return None, {}
+        try:
+            raw = session_file.read_text(encoding="utf-8-sig", errors="replace")
+            data = json.loads(raw)
+            if not isinstance(data, dict):
+                data = {}
+        except Exception:
+            data = {}
+        return session_file, data
+
+    def _auto_source_candidates(self) -> list[str]:
+        candidates: list[tuple[float, str]] = []
+        for provider in self.DEFAULT_SOURCE_ORDER:
+            filename = self.SOURCE_SESSION_FILES.get(provider)
+            if not filename:
+                continue
+            session_file = find_project_session_file(self.work_dir, filename)
+            if not session_file or not session_file.exists():
+                continue
+            try:
+                mtime = session_file.stat().st_mtime
+            except OSError:
+                mtime = 0.0
+            candidates.append((mtime, provider))
+        ordered = [p for _, p in sorted(candidates, key=lambda x: x[0], reverse=True)]
+        for provider in self.DEFAULT_SOURCE_ORDER:
+            if provider not in ordered:
+                ordered.append(provider)
+        return ordered
+
+    def _default_fetch_n(self) -> int:
+        return self.DEFAULT_FALLBACK_PAIRS
+
+    def _context_from_pairs(
+        self,
+        pairs: list[tuple[str, str]],
+        *,
+        provider: str,
+        session_id: str,
+        session_path: Optional[Path] = None,
+        last_n: int = 3,
+        stats: Optional[SessionStats] = None,
+    ) -> TransferContext:
+        cleaned_pairs: list[tuple[str, str]] = []
+        prev_hash: Optional[str] = None
+        for user_msg, assistant_msg in pairs:
+            cleaned_user = self.deduper.clean_content(user_msg or "")
+            cleaned_assistant = self.deduper.clean_content(assistant_msg or "")
+            if not cleaned_user and not cleaned_assistant:
+                continue
+            pair_hash = f"{hash(cleaned_user)}::{hash(cleaned_assistant)}"
+            if pair_hash == prev_hash:
+                continue
+            cleaned_pairs.append((cleaned_user, cleaned_assistant))
+            prev_hash = pair_hash
+        if last_n > 0 and len(cleaned_pairs) > last_n:
+            cleaned_pairs = cleaned_pairs[-last_n:]
+
+        cleaned_pairs = self.formatter.truncate_to_limit(cleaned_pairs, self.max_tokens)
+
+        total_text = "".join(u + a for u, a in cleaned_pairs)
+        token_estimate = self.formatter.estimate_tokens(total_text)
+
+        metadata = {"provider": provider}
+        if session_path:
+            metadata["session_path"] = str(session_path)
+
+        return TransferContext(
+            conversations=cleaned_pairs,
+            source_session_id=session_id,
+            token_estimate=token_estimate,
+            metadata=metadata,
+            stats=stats,
+            source_provider=provider,
+        )
+
     def extract_conversations(
         self,
         session_path: Optional[Path] = None,
         last_n: int = 3,
         include_stats: bool = True,
+        source_provider: str = "auto",
+        source_session_id: Optional[str] = None,
+        source_project_id: Optional[str] = None,
     ) -> TransferContext:
         """Extract and process conversations from a session."""
-        # Resolve session
-        resolved = self.parser.resolve_session(self.work_dir, session_path)
-        info = self.parser.get_session_info(resolved)
+        provider = self._normalize_provider(source_provider)
+        if provider == "auto":
+            if session_path:
+                return self._extract_from_claude(
+                    session_path=session_path,
+                    last_n=last_n,
+                    include_stats=include_stats,
+                )
+            last_error: Optional[Exception] = None
+            for candidate in self._auto_source_candidates():
+                try:
+                    return self._extract_by_provider(
+                        candidate,
+                        session_path=session_path,
+                        last_n=last_n,
+                        include_stats=include_stats,
+                        source_session_id=source_session_id,
+                        source_project_id=source_project_id,
+                    )
+                except SessionNotFoundError as exc:
+                    last_error = exc
+                    continue
+            if last_error:
+                raise last_error
+            raise SessionNotFoundError("No sessions found for any provider")
 
-        # Extract session stats
-        stats = None
-        if include_stats:
-            stats = self.parser.extract_session_stats(resolved)
-
-        # Parse entries
-        entries = self.parser.parse_session(resolved)
-
-        # Clean and dedupe
-        entries = self._clean_entries(entries)
-        entries = self.deduper.dedupe_messages(entries)
-        entries = self.deduper.collapse_tool_calls(entries)
-
-        # Build conversation pairs
-        pairs = self._build_pairs(entries)
-
-        # Take last N pairs
-        if last_n > 0 and len(pairs) > last_n:
-            pairs = pairs[-last_n:]
-
-        # Truncate to token limit
-        pairs = self.formatter.truncate_to_limit(pairs, self.max_tokens)
-
-        # Estimate tokens
-        total_text = "".join(u + a for u, a in pairs)
-        token_estimate = self.formatter.estimate_tokens(total_text)
-
-        return TransferContext(
-            conversations=pairs,
-            source_session_id=info.session_id,
-            token_estimate=token_estimate,
-            metadata={"session_path": str(resolved)},
-            stats=stats,
+        return self._extract_by_provider(
+            provider,
+            session_path=session_path,
+            last_n=last_n,
+            include_stats=include_stats,
+            source_session_id=source_session_id,
+            source_project_id=source_project_id,
         )
 
     def _clean_entries(
@@ -116,6 +213,296 @@ class ContextTransfer:
                 current_user = None
 
         return pairs
+
+    def _extract_by_provider(
+        self,
+        provider: str,
+        *,
+        session_path: Optional[Path],
+        last_n: int,
+        include_stats: bool,
+        source_session_id: Optional[str],
+        source_project_id: Optional[str],
+    ) -> TransferContext:
+        if provider == "claude":
+            return self._extract_from_claude(
+                session_path=session_path,
+                last_n=last_n,
+                include_stats=include_stats,
+            )
+        if provider == "codex":
+            return self._extract_from_codex(
+                last_n=last_n,
+                session_path=session_path,
+                session_id=source_session_id,
+            )
+        if provider == "gemini":
+            return self._extract_from_gemini(
+                last_n=last_n,
+                session_path=session_path,
+                session_id=source_session_id,
+            )
+        if provider == "opencode":
+            return self._extract_from_opencode(
+                last_n=last_n,
+                session_id=source_session_id,
+                project_id=source_project_id,
+            )
+        if provider == "droid":
+            return self._extract_from_droid(
+                last_n=last_n,
+                session_path=session_path,
+                session_id=source_session_id,
+            )
+        raise SessionNotFoundError(f"Unsupported source provider: {provider}")
+
+    def _extract_from_claude(
+        self,
+        *,
+        session_path: Optional[Path],
+        last_n: int,
+        include_stats: bool,
+    ) -> TransferContext:
+        resolved = self.parser.resolve_session(self.work_dir, session_path)
+        info = self.parser.get_session_info(resolved)
+        info.provider = "claude"
+
+        stats = None
+        if include_stats:
+            stats = self.parser.extract_session_stats(resolved)
+
+        entries = self.parser.parse_session(resolved)
+        entries = self._clean_entries(entries)
+        entries = self.deduper.dedupe_messages(entries)
+        entries = self.deduper.collapse_tool_calls(entries)
+
+        pairs = self._build_pairs(entries)
+        if last_n > 0 and len(pairs) > last_n:
+            pairs = pairs[-last_n:]
+
+        pairs = self.formatter.truncate_to_limit(pairs, self.max_tokens)
+
+        total_text = "".join(u + a for u, a in pairs)
+        token_estimate = self.formatter.estimate_tokens(total_text)
+
+        return TransferContext(
+            conversations=pairs,
+            source_session_id=info.session_id,
+            token_estimate=token_estimate,
+            metadata={"session_path": str(resolved), "provider": "claude"},
+            stats=stats,
+            source_provider="claude",
+        )
+
+    def _extract_from_codex(
+        self,
+        *,
+        last_n: int,
+        session_path: Optional[Path] = None,
+        session_id: Optional[str] = None,
+    ) -> TransferContext:
+        session_file, data = self._load_session_data("codex")
+        log_path = session_path or (
+            data.get("codex_session_path")
+            or data.get("old_codex_session_path")
+            or data.get("session_path")
+        )
+        session_id = session_id or (
+            data.get("codex_session_id")
+            or data.get("old_codex_session_id")
+            or data.get("session_id")
+            or ""
+        )
+        log_path_obj: Optional[Path] = None
+        if log_path:
+            try:
+                log_path_obj = Path(str(log_path)).expanduser()
+            except Exception:
+                log_path_obj = None
+
+        from codex_comm import CodexLogReader
+
+        log_reader = CodexLogReader(
+            log_path=log_path_obj if log_path_obj and log_path_obj.exists() else None,
+            session_id_filter=session_id or None,
+            work_dir=self.work_dir,
+        )
+        scan_path = log_reader._latest_log()
+        if not scan_path or not scan_path.exists():
+            raise SessionNotFoundError("No Codex session log found")
+
+        fetch_n = last_n if last_n > 0 else self._default_fetch_n()
+        pairs = log_reader.latest_conversations(fetch_n)
+
+        session_path = log_path_obj if log_path_obj and log_path_obj.exists() else scan_path
+        if not session_id and session_path:
+            session_id = session_path.stem
+        if not session_id:
+            session_id = "unknown"
+
+        return self._context_from_pairs(
+            pairs,
+            provider="codex",
+            session_id=session_id,
+            session_path=session_path,
+            last_n=last_n,
+        )
+
+    def _extract_from_gemini(
+        self,
+        *,
+        last_n: int,
+        session_path: Optional[Path] = None,
+        session_id: Optional[str] = None,
+    ) -> TransferContext:
+        session_file, data = self._load_session_data("gemini")
+        session_id = session_id or (
+            data.get("gemini_session_id")
+            or data.get("old_gemini_session_id")
+            or data.get("session_id")
+            or ""
+        )
+        preferred_path = session_path or (data.get("gemini_session_path") or data.get("old_gemini_session_path"))
+        preferred_path_obj: Optional[Path] = None
+        if preferred_path:
+            try:
+                preferred_path_obj = Path(str(preferred_path)).expanduser()
+            except Exception:
+                preferred_path_obj = None
+
+        from gemini_comm import GeminiLogReader
+
+        log_reader = GeminiLogReader(work_dir=self.work_dir)
+        if preferred_path_obj and preferred_path_obj.exists():
+            log_reader.set_preferred_session(preferred_path_obj)
+
+        session_path = log_reader._latest_session()
+        if not session_path or not session_path.exists():
+            raise SessionNotFoundError("No Gemini session found")
+
+        fetch_n = last_n if last_n > 0 else self._default_fetch_n()
+        pairs = log_reader.latest_conversations(fetch_n)
+
+        if not session_id and session_path:
+            session_id = session_path.stem
+        if not session_id:
+            session_id = "unknown"
+
+        return self._context_from_pairs(
+            pairs,
+            provider="gemini",
+            session_id=session_id,
+            session_path=session_path,
+            last_n=last_n,
+        )
+
+    def _extract_from_droid(
+        self,
+        *,
+        last_n: int,
+        session_path: Optional[Path] = None,
+        session_id: Optional[str] = None,
+    ) -> TransferContext:
+        session_file, data = self._load_session_data("droid")
+        session_id = session_id or (
+            data.get("droid_session_id")
+            or data.get("old_droid_session_id")
+            or data.get("session_id")
+            or ""
+        )
+        preferred_path = session_path or (data.get("droid_session_path") or data.get("old_droid_session_path"))
+        preferred_path_obj: Optional[Path] = None
+        if preferred_path:
+            try:
+                preferred_path_obj = Path(str(preferred_path)).expanduser()
+            except Exception:
+                preferred_path_obj = None
+
+        from droid_comm import DroidLogReader
+
+        log_reader = DroidLogReader(work_dir=self.work_dir)
+        if preferred_path_obj and preferred_path_obj.exists():
+            log_reader.set_preferred_session(preferred_path_obj)
+        if session_id:
+            log_reader.set_session_id_hint(session_id)
+
+        session_path = log_reader.current_session_path()
+        if not session_path or not session_path.exists():
+            raise SessionNotFoundError("No Droid session found")
+
+        fetch_n = last_n if last_n > 0 else self._default_fetch_n()
+        pairs = log_reader.latest_conversations(fetch_n)
+
+        if not session_id and session_path:
+            session_id = session_path.stem
+        if not session_id:
+            session_id = "unknown"
+
+        return self._context_from_pairs(
+            pairs,
+            provider="droid",
+            session_id=session_id,
+            session_path=session_path,
+            last_n=last_n,
+        )
+
+    def _extract_from_opencode(
+        self,
+        *,
+        last_n: int,
+        session_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+    ) -> TransferContext:
+        session_file, data = self._load_session_data("opencode")
+        session_id = session_id or (
+            data.get("opencode_session_id")
+            or data.get("old_opencode_session_id")
+            or data.get("opencode_storage_session_id")
+            or data.get("session_id")
+            or ""
+        )
+        project_id = project_id or (data.get("opencode_project_id") or data.get("old_opencode_project_id") or "")
+
+        from opencode_comm import OpenCodeLogReader
+
+        log_reader = OpenCodeLogReader(
+            work_dir=self.work_dir,
+            project_id=project_id or "global",
+            session_id_filter=session_id or None,
+        )
+        session_path = None
+        if not session_id:
+            state = log_reader.capture_state()
+            session_path = state.get("session_path")
+            session_id = state.get("session_id") or ""
+            if not session_id and session_path:
+                try:
+                    session_id = Path(session_path).stem
+                except Exception:
+                    session_id = ""
+            if not session_id:
+                raise SessionNotFoundError("No OpenCode session found")
+
+        fetch_n = last_n if last_n > 0 else self._default_fetch_n()
+        if hasattr(log_reader, "conversations_for_session") and session_id:
+            pairs = log_reader.conversations_for_session(session_id, fetch_n)
+        else:
+            pairs = log_reader.latest_conversations(fetch_n)
+
+        session_path_obj: Optional[Path] = None
+        if session_path:
+            try:
+                session_path_obj = session_path if isinstance(session_path, Path) else Path(str(session_path)).expanduser()
+            except Exception:
+                session_path_obj = None
+
+        return self._context_from_pairs(
+            pairs,
+            provider="opencode",
+            session_id=session_id or "unknown",
+            session_path=session_path_obj,
+            last_n=last_n,
+        )
 
     def format_output(
         self,

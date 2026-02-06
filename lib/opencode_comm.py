@@ -13,6 +13,7 @@ import re
 import shutil
 import sys
 import time
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -22,6 +23,7 @@ from ccb_config import apply_backend_env
 from i18n import t
 from terminal import get_backend_for_session, get_pane_id_from_session
 from session_utils import find_project_session_file, safe_write_session
+from session_file_watcher import SessionFileWatcher, HAS_WATCHDOG
 from pane_registry import upsert_registry
 from project_id import compute_ccb_project_id
 
@@ -242,7 +244,86 @@ def _default_opencode_storage_root() -> Path:
     return candidates[0]
 
 
+def _opencode_watch_predicate(path: Path) -> bool:
+    return path.suffix == ".json" and path.name.startswith("ses_")
+
+
+def _read_opencode_session_json(path: Path) -> Optional[dict]:
+    if not path or not path.exists():
+        return None
+    for _ in range(5):
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            time.sleep(0.05)
+            continue
+        except Exception:
+            return None
+    return None
+
+
+def _handle_opencode_session_event(path: Path) -> None:
+    if not path or not path.exists():
+        return
+    payload = _read_opencode_session_json(path)
+    if not isinstance(payload, dict):
+        return
+    directory = payload.get("directory")
+    if not isinstance(directory, str) or not directory.strip():
+        return
+    try:
+        work_dir = Path(directory.strip()).expanduser()
+    except Exception:
+        return
+    session_file = find_project_session_file(work_dir, ".opencode-session")
+    if not session_file or not session_file.exists():
+        return
+    session_id = payload.get("id") if isinstance(payload.get("id"), str) else None
+    project_id = path.parent.name if path.parent else ""
+    try:
+        from oaskd_session import load_project_session
+    except Exception:
+        return
+    session = load_project_session(work_dir)
+    if not session:
+        return
+    try:
+        session.update_opencode_binding(session_id=session_id, project_id=project_id)
+    except Exception:
+        return
+
+
+def _ensure_opencode_watchdog_started() -> None:
+    if not HAS_WATCHDOG:
+        return
+    global _OPENCODE_WATCHER, _OPENCODE_WATCH_STARTED
+    if _OPENCODE_WATCH_STARTED:
+        return
+    with _OPENCODE_WATCH_LOCK:
+        if _OPENCODE_WATCH_STARTED:
+            return
+        sessions_root = OPENCODE_STORAGE_ROOT / "session"
+        if not sessions_root.exists():
+            return
+        watcher = SessionFileWatcher(
+            sessions_root,
+            _handle_opencode_session_event,
+            recursive=True,
+            predicate=_opencode_watch_predicate,
+        )
+        try:
+            watcher.start()
+        except Exception:
+            return
+        _OPENCODE_WATCHER = watcher
+        _OPENCODE_WATCH_STARTED = True
+
+
 OPENCODE_STORAGE_ROOT = _default_opencode_storage_root()
+
+_OPENCODE_WATCHER: Optional[SessionFileWatcher] = None
+_OPENCODE_WATCH_STARTED = False
+_OPENCODE_WATCH_LOCK = threading.Lock()
 
 def _default_opencode_log_root() -> Path:
     env = (os.environ.get("OPENCODE_LOG_ROOT") or "").strip()
@@ -827,6 +908,64 @@ class OpenCodeLogReader:
         text = self._extract_text(parts)
         return text or None
 
+    def conversations_for_session(self, session_id: str, n: int = 1) -> List[Tuple[str, str]]:
+        """Get the latest n conversations for a specific session ID."""
+        if not isinstance(session_id, str) or not session_id:
+            return []
+        messages = self._read_messages(session_id)
+        conversations: List[Tuple[str, str]] = []
+        pending_question: Optional[str] = None
+
+        for msg in messages:
+            role = msg.get("role")
+            msg_id = msg.get("id")
+            if not isinstance(msg_id, str) or not msg_id:
+                continue
+            parts = self._read_parts(msg_id)
+            text = self._extract_text(parts)
+            if role == "user":
+                pending_question = text
+                continue
+            if role == "assistant" and text:
+                conversations.append((pending_question or "", text))
+                pending_question = None
+
+        if n <= 0:
+            return conversations
+        return conversations[-n:] if len(conversations) > n else conversations
+
+    def latest_conversations(self, n: int = 1) -> List[Tuple[str, str]]:
+        """Get the latest n conversations (question, reply) pairs."""
+        session_entry = self._get_latest_session()
+        if not session_entry:
+            return []
+        payload = session_entry.get("payload") or {}
+        session_id = payload.get("id")
+        if not isinstance(session_id, str) or not session_id:
+            return []
+
+        messages = self._read_messages(session_id)
+        conversations: List[Tuple[str, str]] = []
+        pending_question: Optional[str] = None
+
+        for msg in messages:
+            role = msg.get("role")
+            msg_id = msg.get("id")
+            if not isinstance(msg_id, str) or not msg_id:
+                continue
+            parts = self._read_parts(msg_id)
+            text = self._extract_text(parts)
+            if role == "user":
+                pending_question = text
+                continue
+            if role == "assistant" and text:
+                conversations.append((pending_question or "", text))
+                pending_question = None
+
+        if n <= 0:
+            return conversations
+        return conversations[-n:] if len(conversations) > n else conversations
+
     @staticmethod
     def _is_aborted_error(error_obj: object) -> bool:
         if not isinstance(error_obj, dict):
@@ -1231,3 +1370,6 @@ class OpenCodeCommunicator:
         except Exception as exc:
             print(f"❌ Sync ask failed: {exc}")
             return None
+
+
+_ensure_opencode_watchdog_started()
