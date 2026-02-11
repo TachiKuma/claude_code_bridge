@@ -1,6 +1,6 @@
 # All-Plan Skill
 
-Collaborative planning with all mounted CLIs (Claude, Codex, Gemini, OpenCode) for comprehensive solution design.
+Collaborative planning using abstract roles defined in CLAUDE.md Role Assignment table.
 
 ## Usage
 
@@ -15,32 +15,42 @@ Example:
 
 ## How It Works
 
-**5-Phase Collaborative Design Process:**
+**5-Phase Design Process:**
 
-1. **Requirement Refinement** - Socratic questioning to uncover hidden needs
-2. **Parallel Independent Design** - Each AI designs independently (no groupthink)
-3. **Comparative Analysis** - Merge insights, detect anti-patterns
-4. **Iterative Refinement** - Cross-AI review and critique
-5. **Final Output** - Actionable implementation plan
+1. **Requirement Clarification** - 5-Dimension readiness model, structured Q&A
+2. **Inspiration Brainstorming** - Creative ideas from `inspiration` (reference only)
+3. **Design** - `designer` creates the full plan, integrating adopted ideas
+4. **Scored Review** - `reviewer` scores using Rubric A (must pass >= 7.0)
+5. **Final Output** - Actionable plan saved to `plans/` directory
+
+## Roles Used
+
+| Role | Responsibility |
+|------|---------------|
+| `designer` | Primary planner, owns the plan |
+| `inspiration` | Creative consultant (unreliable, user decides) |
+| `reviewer` | Quality gate (Rubric A, per-dimension scoring) |
+
+Roles resolve to providers via CLAUDE.md `CCB_ROLES` table.
 
 ## Key Features
 
-- **Socratic Ladder**: 7 structured questions for deep requirement mining
-- **Superpowers Lenses**: Systematic alternative exploration (10x scale, remove dependency, invert flow)
-- **Anti-pattern Detection**: Proactive risk identification across all designs
-- **True Independence**: Each AI works without seeing others' designs first
+- **Structured Clarification**: 5-Dimension readiness scoring (100 pts)
+- **Inspiration Filter**: Adopt / Adapt / Discard with user approval
+- **Scored Quality Gate**: Dimension-level scoring, auto-correction (max 3 rounds)
+- **Optional Web Research**: Triggered when requirements depend on external info
 
 ## When to Use
 
-- Complex features requiring diverse perspectives
+- Complex features requiring thorough planning
 - Architectural decisions with multiple valid approaches
-- High-stakes implementations needing thorough validation
+- Tasks involving creative/aesthetic elements (leverages `inspiration`)
 
 ## Output
 
 A comprehensive plan including:
 - Goal and architecture with rationale
-- Step-by-step implementation plan
+- Implementation steps with dependencies
 - Risk management matrix
-- Acceptance criteria
-- Design contributors from each AI
+- Review scores (per-dimension)
+- Inspiration credits (adopted/adapted/discarded)

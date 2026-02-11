@@ -615,28 +615,21 @@ function Install-ClaudeConfig {
     }
   }
 
-  $codexRules = @"
-<!-- CCB_CONFIG_START -->
-## AI Collaboration
-Use ``/ask <provider>`` to consult other AI assistants (codex/gemini/opencode/droid).
-Use ``/ping <provider>`` to check connectivity.
-Use ``/pend <provider>`` to view latest replies.
-
-Providers: ``codex``, ``gemini``, ``opencode``, ``droid``, ``claude``
-<!-- CCB_CONFIG_END -->
-"@
+  $claudeMdTemplate = Join-Path $installPrefix "config\claude-md-ccb.md"
+  if (-not (Test-Path $claudeMdTemplate)) {
+    Write-Warning "Template not found: $claudeMdTemplate; skipping CLAUDE.md injection"
+  } else {
+    $codexRules = Get-Content -Raw $claudeMdTemplate
 
   if (Test-Path $claudeMd) {
     $content = Get-Content -Raw $claudeMd
 
     if ($content -match [regex]::Escape($script:CCB_START_MARKER)) {
-      # Replace existing CCB config block (keep rest of file intact)
       $pattern = '(?s)<!-- CCB_CONFIG_START -->.*?<!-- CCB_CONFIG_END -->'
-      $newContent = [regex]::Replace($content, $pattern, $codexRules)
+      $newContent = [regex]::Replace($content, $pattern, $codexRules.Trim())
       $newContent | Out-File -Encoding UTF8 -FilePath $claudeMd
-      Write-Host "Updated CLAUDE.md with collaboration rules"
+      Write-Host "Updated CLAUDE.md with CCB collaboration rules"
     } elseif ($content -match '##\s+(Codex|Gemini|OpenCode)\s+Collaboration Rules' -or $content -match '##\s+(Codex|Gemini|OpenCode)\s+协作规则') {
-      # Remove legacy rule blocks then append the new unified block
       $patterns = @(
         '(?s)## Codex Collaboration Rules.*?(?=\n## (?!Gemini)|\Z)',
         '(?s)## Codex 协作规则.*?(?=\n## |\Z)',
@@ -650,15 +643,16 @@ Providers: ``codex``, ``gemini``, ``opencode``, ``droid``, ``claude``
       }
       $content = ($content.TrimEnd() + "`n")
       ($content + $codexRules + "`n") | Out-File -Encoding UTF8 -FilePath $claudeMd
-      Write-Host "Updated CLAUDE.md with collaboration rules"
+      Write-Host "Updated CLAUDE.md with CCB collaboration rules"
     } else {
       Add-Content -Path $claudeMd -Value $codexRules
-      Write-Host "Updated CLAUDE.md with collaboration rules"
+      Write-Host "Updated CLAUDE.md with CCB collaboration rules"
     }
   } else {
     $codexRules | Out-File -Encoding UTF8 -FilePath $claudeMd
-    Write-Host "Created CLAUDE.md with collaboration rules"
+    Write-Host "Created CLAUDE.md with CCB collaboration rules"
   }
+  } # end claudeMdTemplate check
 
   $allowList = @(
     "Bash(ask:*)", "Bash(ping:*)", "Bash(pend:*)"
@@ -694,6 +688,46 @@ Providers: ``codex``, ``gemini``, ``opencode``, ``droid``, ``claude``
     $settings.permissions.allow = $currentAllow.ToArray()
     $settings | ConvertTo-Json -Depth 10 | Out-File -Encoding UTF8 -FilePath $settingsJson
     Write-Host "Updated settings.json with permissions"
+  }
+
+  # --- AGENTS.md injection ---
+  $agentsMdTemplate = Join-Path $installPrefix "config\agents-md-ccb.md"
+  $agentsMd = Join-Path $installPrefix "AGENTS.md"
+  if (Test-Path $agentsMdTemplate) {
+    $templateContent = Get-Content -Raw $agentsMdTemplate
+    if (Test-Path $agentsMd) {
+      $agentsContent = Get-Content -Raw $agentsMd
+      if ($agentsContent -match '<!-- CCB_ROLES_START -->' -or $agentsContent -match '<!-- REVIEW_RUBRICS_START -->') {
+        $agentsContent = [regex]::Replace($agentsContent, '(?s)<!-- CCB_ROLES_START -->.*?<!-- CCB_ROLES_END -->', '')
+        $agentsContent = [regex]::Replace($agentsContent, '(?s)<!-- REVIEW_RUBRICS_START -->.*?<!-- REVIEW_RUBRICS_END -->', '')
+        $agentsContent = $agentsContent.TrimEnd() + "`n`n" + $templateContent.Trim() + "`n"
+        $agentsContent | Out-File -Encoding UTF8 -FilePath $agentsMd
+      } else {
+        Add-Content -Path $agentsMd -Value ("`n" + $templateContent)
+      }
+    } else {
+      $templateContent | Out-File -Encoding UTF8 -FilePath $agentsMd
+    }
+    Write-Host "Updated AGENTS.md with review rubrics"
+  }
+
+  # --- .clinerules injection ---
+  $clinerulesTpl = Join-Path $installPrefix "config\clinerules-ccb.md"
+  $clinerules = Join-Path $installPrefix ".clinerules"
+  if (Test-Path $clinerulesTpl) {
+    $tplContent = Get-Content -Raw $clinerulesTpl
+    if (Test-Path $clinerules) {
+      $crContent = Get-Content -Raw $clinerules
+      if ($crContent -match '<!-- CCB_ROLES_START -->') {
+        $crContent = [regex]::Replace($crContent, '(?s)<!-- CCB_ROLES_START -->.*?<!-- CCB_ROLES_END -->', $tplContent.Trim())
+        $crContent | Out-File -Encoding UTF8 -FilePath $clinerules
+      } else {
+        Add-Content -Path $clinerules -Value ("`n" + $tplContent)
+      }
+    } else {
+      $tplContent | Out-File -Encoding UTF8 -FilePath $clinerules
+    }
+    Write-Host "Updated .clinerules with role assignments"
   }
 }
 

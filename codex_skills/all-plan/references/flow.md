@@ -1,8 +1,13 @@
 # All Plan (Codex Version)
 
-Collaborative planning with all mounted CLIs (Codex, Claude, Gemini, OpenCode) for comprehensive solution design. Codex serves as the primary coordinator.
+Planning skill using abstract roles defined in CLAUDE.md Role Assignment table.
 
-**Usage**: For complex features or architectural decisions requiring diverse perspectives.
+**Usage**: For complex features or architectural decisions requiring thorough planning.
+
+**Roles used by this skill** (resolve to providers via CLAUDE.md `CCB_ROLES`):
+- `designer` — Primary planner, owns the plan from start to finish
+- `inspiration` — Creative brainstorming consultant (unreliable, use with judgment)
+- `reviewer` — Scored quality gate, evaluates the plan using Rubric A (must pass >= 7.0)
 
 ---
 
@@ -16,7 +21,7 @@ From `$ARGUMENTS`:
 
 ## Execution Flow
 
-### Phase 1: Requirement Refinement & Project Analysis
+### Phase 1: Requirement Clarification
 
 **1.1 Structured Clarification (Option-Based)**
 
@@ -149,7 +154,6 @@ Dimensions:
 
 Assumptions & Gaps:
 - [Dimension]: [assumption or gap description]
-- [Dimension]: [assumption or gap description]
 
 Proceeding to project analysis...
 ```
@@ -174,7 +178,7 @@ If the requirement involves:
 
 Use WebSearch to gather relevant information.
 
-**1.4 Formulate Complete Brief**
+**1.4 Formulate Design Brief**
 
 Create a comprehensive design brief incorporating clarification results:
 
@@ -189,7 +193,6 @@ Context: [project context, tech stack, constraints]
 Requirements:
 - [requirement 1]
 - [requirement 2]
-- [requirement 3]
 
 Success Criteria:
 - [criterion 1]
@@ -197,11 +200,9 @@ Success Criteria:
 
 Assumptions (from clarification):
 - [assumption 1]
-- [assumption 2]
 
 Gaps to Validate:
 - [gap 1]
-- [gap 2]
 
 Research Findings: [if applicable]
 ```
@@ -210,238 +211,219 @@ Save as `design_brief`.
 
 ---
 
-### Phase 2: Parallel Independent Design
+### Phase 2: Inspiration Brainstorming
 
-Send the design brief to all other mounted CLIs for independent design.
+Send the design brief to `inspiration` for creative input. The `inspiration` provider excels at divergent thinking, aesthetic ideas, and unconventional approaches — but is often unreliable, so treat all output as **reference only**.
 
-**2.1 Dispatch to Claude**
+**2.1 Request Inspiration**
 
-```bash
-lask --sync -q <<'EOF'
-Design a solution for this requirement:
+Send to `inspiration` (via `/ask`):
 
+```
+You are a creative brainstorming partner. Based on this design brief, provide INSPIRATION and CREATIVE IDEAS — not a full implementation plan.
+
+DESIGN BRIEF:
 [design_brief]
 
 Provide:
-- Goal (1 sentence)
-- Architecture approach
-- Implementation steps (3-7 key steps)
-- Technical considerations
-- Potential risks
-- Acceptance criteria (max 3)
+1) 3-5 creative approaches or angles others might miss
+2) Naming suggestions (for features, APIs, components) if applicable
+3) UX/UI ideas or visual design inspiration if applicable
+4) Unconventional solutions worth considering
+5) Analogies from other domains that could inform the design
 
-Be specific and concrete.
-EOF
+Be bold and creative. Practical feasibility is secondary — inspiration is the goal.
 ```
 
-Save response as `claude_design`.
+Save response as `inspiration_response`.
 
-**2.2 Dispatch to Gemini**
+**2.2 The `designer` Filters Inspiration Ideas**
 
-```bash
-gask <<'EOF'
-Design a solution for this requirement:
+After receiving the response, the `designer` MUST:
 
-[design_brief]
+1. Read all suggestions critically
+2. Classify each idea:
+   - **Adopt** — genuinely improves the design, feasible within constraints
+   - **Adapt** — interesting kernel but needs reworking to be practical
+   - **Discard** — creative but impractical, off-target, or contradicts requirements
+3. Present the filtered list to the user:
 
-Provide:
-- Goal (1 sentence)
-- Architecture approach
-- Implementation steps (3-7 key steps)
-- Technical considerations
-- Potential risks
-- Acceptance criteria (max 3)
+```
+INSPIRATION FILTER
+==========================
+Adopted:
+- [idea]: [why it's valuable]
 
-Be specific and concrete.
-EOF
+Adapted:
+- [idea] → [how the `designer` will modify it]: [rationale]
+
+Discarded:
+- [idea]: [why it doesn't fit]
 ```
 
-Wait for response. Save as `gemini_design`.
+4. Ask user: "Do you agree with this selection, or want to override any decisions?"
 
-**2.3 Dispatch to OpenCode**
-
-```bash
-oask <<'EOF'
-Design a solution for this requirement:
-
-[design_brief]
-
-Provide:
-- Goal (1 sentence)
-- Architecture approach
-- Implementation steps (3-7 key steps)
-- Technical considerations
-- Potential risks
-- Acceptance criteria (max 3)
-
-Be specific and concrete.
-EOF
-```
-
-Wait for response. Save as `opencode_design`.
-
-**2.4 Codex's Independent Design**
-
-While waiting for responses, create YOUR own design (do not look at others yet):
-- Goal (1 sentence)
-- Architecture approach
-- Implementation steps (3-7 key steps)
-- Technical considerations
-- Potential risks
-- Acceptance criteria (max 3)
-
-Save as `codex_design`.
+Save filtered result as `adopted_inspiration`.
 
 ---
 
-### Phase 3: Collect & Analyze All Designs
+### Phase 3: The `designer` Creates the Plan
 
-**3.1 Collect All Responses**
+The `designer` is the sole planner. Use the design brief, project context, research findings, and adopted inspiration to create a complete implementation plan.
 
-Gather all four designs:
-- Claude design → `claude_design`
-- Gemini design → `gemini_design`
-- OpenCode design → `opencode_design`
-- Codex design → `codex_design`
+**3.1 Draft the Plan**
 
-**3.2 Comparative Analysis**
-
-Analyze all four designs (Codex, Claude, Gemini, OpenCode):
-
-Create a comparison matrix:
 ```
-DESIGN COMPARISON
-=================
+IMPLEMENTATION PLAN (Draft v1)
+==============================
+Goal: [1-sentence goal]
 
-1. Goals Alignment
-   - Common goals across all designs
-   - Unique perspectives from each
-
-2. Architecture Approaches
-   - Overlapping patterns
-   - Divergent approaches
-   - Pros/cons of each
-
-3. Implementation Steps
-   - Common steps (high confidence)
-   - Unique steps (need evaluation)
-   - Missing steps in some designs
-
-4. Technical Considerations
-   - Shared concerns
-   - Unique insights from each CLI
-   - Critical issues identified
-
-5. Risk Assessment
-   - Commonly identified risks
-   - Unique risks from each perspective
-   - Risk mitigation strategies
-
-6. Acceptance Criteria
-   - Overlapping criteria
-   - Additional criteria to consider
-```
-
-Save as `comparative_analysis`.
-
----
-
-### Phase 4: Iterative Refinement with Claude
-
-**4.1 Draft Merged Design**
-
-Based on comparative analysis, create initial merged design:
-```
-MERGED DESIGN (Draft v1)
-========================
-Goal: [synthesized goal]
-
-Architecture: [best approach from analysis]
+Architecture:
+- Approach: [chosen approach with rationale]
+- Key Components: [list]
+- Data Flow: [if applicable]
 
 Implementation Steps:
-1. [step 1]
-2. [step 2]
-3. [step 3]
-...
+1. [Step title]
+   - Actions: [specific actions]
+   - Deliverables: [what will be produced]
+   - Dependencies: [what's needed first]
+2. [Step title]
+   ...
 
 Technical Considerations:
 - [consideration 1]
 - [consideration 2]
 
 Risks & Mitigations:
-- Risk: [risk 1] → Mitigation: [mitigation 1]
-- Risk: [risk 2] → Mitigation: [mitigation 2]
+| Risk | Impact | Likelihood | Mitigation |
+|------|--------|------------|------------|
+| [risk] | H/M/L | H/M/L | [strategy] |
 
 Acceptance Criteria:
-- [criterion 1]
-- [criterion 2]
-- [criterion 3]
+- [ ] [criterion 1]
+- [ ] [criterion 2]
 
-Open Questions:
-- [question 1]
-- [question 2]
+Inspiration Credits (from `inspiration`):
+- [adopted idea and how it was integrated]
 ```
 
-Save as `merged_design_v1`.
+Save as `plan_draft_v1`.
 
-**4.2 Discussion Round 1 - Review & Critique**
+---
 
-```bash
-lask --sync -q <<'EOF'
-Review this merged design based on all CLI inputs:
+### Phase 4: Scored Review
 
-COMPARATIVE ANALYSIS:
-[comparative_analysis]
+Submit the plan to `reviewer` for scored review using Rubric A (defined in CLAUDE.md).
 
-MERGED DESIGN v1:
-[merged_design_v1]
+**4.1 Submit Plan for Review**
 
-Analyze:
-1. Does this design capture the best ideas from all perspectives?
-2. Are there any conflicts or contradictions?
-3. What's missing or unclear?
-4. Are the implementation steps logical and complete?
-5. Are risks adequately addressed?
+Send to `reviewer` (via `/ask`):
 
-Provide specific recommendations for improvement.
-EOF
+```
+[PLAN REVIEW REQUEST]
+Review the following implementation plan using Rubric A. Score EACH dimension individually with detailed feedback.
+Return your response as JSON with this exact structure:
+{
+  "review_type": "plan",
+  "dimensions": {
+    "clarity": {
+      "score": N,
+      "strengths": ["..."],
+      "weaknesses": ["..."],
+      "fix": "specific action to improve"
+    },
+    "completeness": {
+      "score": N,
+      "strengths": ["..."],
+      "weaknesses": ["..."],
+      "fix": "specific action to improve"
+    },
+    "feasibility": {
+      "score": N,
+      "strengths": ["..."],
+      "weaknesses": ["..."],
+      "fix": "specific action to improve"
+    },
+    "risk_assessment": {
+      "score": N,
+      "strengths": ["..."],
+      "weaknesses": ["..."],
+      "fix": "specific action to improve"
+    },
+    "requirement_alignment": {
+      "score": N,
+      "strengths": ["..."],
+      "weaknesses": ["..."],
+      "fix": "specific action to improve"
+    }
+  },
+  "overall": N.N,
+  "critical_issues": ["..."],
+  "summary": "one-paragraph overall assessment"
+}
+
+--- PLAN START ---
+[plan_draft_v1]
+--- PLAN END ---
 ```
 
-Save as `claude_review_1`.
+**4.2 Parse and Judge**
 
-**4.3 Discussion Round 2 - Resolve & Finalize**
+After receiving the `reviewer`'s JSON response:
 
-Based on Claude's review, refine the design:
+```
+iteration = 1
 
-```bash
-lask --sync -q <<'EOF'
-Refined design based on your feedback:
-
-MERGED DESIGN v2:
-[merged_design_v2]
-
-Changes made:
-- [change 1]
-- [change 2]
-
-Remaining concerns:
-- [concern 1 if any]
-
-Final approval or additional suggestions?
-EOF
+CHECK:
+  - If overall >= 7.0 AND no single dimension score <= 3 → PASS
+  - Otherwise → FAIL
 ```
 
-Save as `claude_review_2`.
+**4.3 Auto-Correction Loop (on FAIL)**
+
+```
+WHILE result == FAIL AND iteration <= 3:
+  1. Read each dimension's weaknesses and fix suggestions
+  2. Read critical_issues list
+  3. Revise plan_draft to address ALL issues
+  4. Save as plan_draft_v{iteration+1}
+  5. Re-submit to `reviewer` via /ask (same template)
+  6. iteration += 1
+  7. Re-check PASS/FAIL
+
+IF iteration > 3 AND still FAIL:
+  Present all review rounds to user
+  Ask: "Review did not pass after 3 rounds. How would you like to proceed?"
+```
+
+**4.4 Display Score Summary (on PASS)**
+
+```
+REVIEW: PASSED (Round [N])
+=================================
+| Dimension             | Score | Weight | Weighted |
+|-----------------------|-------|--------|----------|
+| Clarity               | X/10  | 20%    | X.XX     |
+| Completeness          | X/10  | 25%    | X.XX     |
+| Feasibility           | X/10  | 25%    | X.XX     |
+| Risk Assessment       | X/10  | 15%    | X.XX     |
+| Requirement Alignment | X/10  | 15%    | X.XX     |
+|-----------------------|-------|--------|----------|
+| OVERALL               |       |        | X.XX/10  |
+
+Key Strengths:
+- [from `reviewer` response]
+
+Addressed Issues:
+- [issues fixed during iteration, if any]
+```
 
 ---
 
 ### Phase 5: Final Output
 
-**5.1 Finalize Design**
-
-Incorporate Claude's final feedback and create the complete solution design.
-
-**5.2 Save Plan Document**
+**5.1 Save Plan Document**
 
 Write the final plan to a markdown file:
 
@@ -452,7 +434,7 @@ Use this template:
 ```markdown
 # {Feature Name} - Solution Design
 
-> Generated by all-plan collaborative design process (Codex-led)
+> Generated by all-plan (`designer` + `inspiration` + `reviewer`)
 
 ## Overview
 
@@ -460,10 +442,14 @@ Use this template:
 
 **Readiness Score**: [X]/100
 
+**Review Score**: [X.XX]/10 (passed round [N])
+
 **Generated**: [Date]
+```
 
----
+The plan document should also include these sections (continue the markdown template):
 
+```markdown
 ## Requirements Summary
 
 ### Problem Statement
@@ -475,18 +461,17 @@ Use this template:
 ### Success Criteria
 - [ ] [criterion 1]
 - [ ] [criterion 2]
-- [ ] [criterion 3]
 
 ### Constraints
 - [constraint 1]
-- [constraint 2]
 
 ### Assumptions
-- [assumption 1 from clarification]
-- [assumption 2 from clarification]
+- [assumption from clarification]
+```
 
----
+Continue the plan document with:
 
+```markdown
 ## Architecture
 
 ### Approach
@@ -498,9 +483,11 @@ Use this template:
 
 ### Data Flow
 [If applicable, describe data flow]
+```
 
----
+Continue with implementation and risk sections:
 
+```markdown
 ## Implementation Plan
 
 ### Step 1: [Title]
@@ -513,11 +500,6 @@ Use this template:
 - **Deliverables**: [what will be produced]
 - **Dependencies**: [what's needed first]
 
-### Step 3: [Title]
-- **Actions**: [specific actions]
-- **Deliverables**: [what will be produced]
-- **Dependencies**: [what's needed first]
-
 [Continue for all steps...]
 
 ---
@@ -526,7 +508,6 @@ Use this template:
 
 - [consideration 1]
 - [consideration 2]
-- [consideration 3]
 
 ---
 
@@ -544,17 +525,34 @@ Use this template:
 - [ ] [criterion 1]
 - [ ] [criterion 2]
 - [ ] [criterion 3]
+```
+
+Finish the plan document with credits and appendix:
+
+```markdown
+---
+
+## Inspiration Credits
+
+| Idea | Status | How Integrated |
+|------|--------|----------------|
+| [idea 1] | Adopted | [how it was used] |
+| [idea 2] | Adapted | [how it was modified] |
 
 ---
 
-## Design Contributors
+## Review Summary
 
-| CLI | Key Contributions |
-|-----|-------------------|
-| Codex | [contributions] |
-| Claude | [contributions] |
-| Gemini | [contributions] |
-| OpenCode | [contributions] |
+| Dimension | Score |
+|-----------|-------|
+| Clarity | X/10 |
+| Completeness | X/10 |
+| Feasibility | X/10 |
+| Risk Assessment | X/10 |
+| Requirement Alignment | X/10 |
+| **Overall** | **X.XX/10** |
+
+Review rounds: [N]
 
 ---
 
@@ -563,11 +561,14 @@ Use this template:
 ### Clarification Summary
 [Include the clarification summary from Phase 1.1]
 
+### Discarded Inspiration Ideas
+[Ideas considered but not adopted, with rationale]
+
 ### Alternative Approaches Considered
-[Brief notes on approaches that were evaluated but not chosen]
+[Brief notes on approaches evaluated but not chosen]
 ```
 
-**5.3 Output to User**
+**5.2 Output to User**
 
 After saving the file, display to user:
 
@@ -582,6 +583,8 @@ Summary:
 - Steps: [N] implementation steps
 - Risks: [N] identified with mitigations
 - Readiness: [X]/100
+- Review Score: [X.XX]/10 (round [N])
+- Inspiration Ideas: [N] adopted, [N] adapted, [N] discarded
 
 Next: Review the plan and proceed with implementation when ready.
 ```
@@ -590,25 +593,24 @@ Next: Review the plan and proceed with implementation when ready.
 
 ## Principles
 
-1. **Structured Clarification**: Use option-based questions to systematically capture requirements
-2. **Readiness Scoring**: Quantify requirement completeness before proceeding
-3. **True Independence**: All CLIs design independently without seeing others' work first
-4. **Diverse Perspectives**: Leverage unique strengths of each CLI (Codex: code, Claude: context, Gemini: analysis, OpenCode: alternatives)
-5. **Evidence-Based Synthesis**: Merge based on comparative analysis, not arbitrary choices
-6. **Iterative Refinement**: Use Claude discussion to validate and improve merged design
-7. **Concrete Deliverables**: Output actionable plan document, not just discussion notes
-8. **Attribution**: Acknowledge contributions from each CLI to maintain transparency
-9. **Research When Needed**: Don't hesitate to use WebSearch for external knowledge
-10. **Max 2 Iteration Rounds**: Avoid endless discussion; converge on practical solution
-11. **Document Output**: Always save final plan as markdown file
+1. **`designer` Owns the Design**: The `designer` is the sole planner; `inspiration` and `reviewer` are consultants
+2. **Structured Clarification**: Use option-based questions to systematically capture requirements
+3. **Readiness Scoring**: Quantify requirement completeness before proceeding
+4. **`inspiration` for Ideas Only**: Leverage creativity but never blindly follow it
+5. **User Controls Inspiration**: User decides which ideas to adopt/discard
+6. **`reviewer` as Quality Gate**: Plan must pass Rubric A (>= 7.0) before proceeding
+7. **Dimension-Level Feedback**: The `reviewer` scores each dimension individually with actionable fixes
+8. **Auto-Correction with Limits**: Max 3 review rounds; escalate to user if still failing
+9. **Concrete Deliverables**: Output actionable plan document, not just discussion notes
+10. **Research When Needed**: Use WebSearch for external knowledge when applicable
 
 ---
 
 ## Notes
 
 - This skill is designed for complex features or architectural decisions
-- For simple tasks, use dual-design or direct implementation instead
-- Codex uses `lask --sync` for synchronous communication with Claude
-- `gask` and `oask` may require waiting for async responses
-- If any CLI is not available, proceed with available CLIs and note the absence
+- For simple tasks, use direct implementation instead
+- Resolve `inspiration` and `reviewer` to providers via CLAUDE.md Role Assignment, then use `/ask <provider>`
+- If `inspiration` provider is not available, skip Phase 2 and proceed directly to Phase 3
+- If `reviewer` provider is not available, skip Phase 4 and present the plan directly to user
 - Plans are saved to `plans/` directory with descriptive filenames

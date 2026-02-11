@@ -1,12 +1,19 @@
 ---
 name: all-plan
-description: Collaborative planning with all mounted CLIs (Claude, Codex, Gemini, OpenCode) for comprehensive solution design.
+description: Collaborative planning using abstract roles (designer + inspiration + reviewer).
 metadata:
-  short-description: Collaborative planning with all CLIs
+  short-description: designer plans + inspiration brainstorms + reviewer scores
 ---
 
-# All Plan
+# All Plan (Droid Version)
 
-Collaborative planning involving all mounted CLIs with iterative refinement.
+Collaborative planning using abstract roles defined in CLAUDE.md Role Assignment table.
+
+Highlights:
+- 5-Dimension requirement clarification (retained)
+- `inspiration` brainstorming for creative/aesthetic ideas
+- `designer` creates the full plan independently
+- `reviewer` scores the plan using Rubric A (must pass >= 7.0)
+- Auto-correction loop (max 3 rounds)
 
 For full instructions, see `references/flow.md`

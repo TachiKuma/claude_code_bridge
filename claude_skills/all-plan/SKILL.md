@@ -1,19 +1,19 @@
 ---
 name: all-plan
-description: Collaborative planning with selected mounted CLIs for comprehensive solution design. Codex acts as coordinator.
+description: Collaborative planning using abstract roles (designer + inspiration + reviewer).
 metadata:
-  short-description: Collaborative planning with selected CLIs (Codex-led)
+  short-description: designer plans + inspiration brainstorms + reviewer scores
 ---
 
-# All Plan
+# All Plan (Claude Version)
 
-Collaborative planning involving selected mounted CLIs with iterative refinement. Codex serves as the primary coordinator.
+Collaborative planning using abstract roles defined in CLAUDE.md Role Assignment table.
 
 Highlights:
-- Start by selecting participants + arbiter (use `mounted`)
-- Clarification is multi-round and participant-driven
-- Optional web research for uncertain domains
-- Use `ask <provider>` for all participants
-- Layered plan output (phases → steps → subtasks)
+- 5-Dimension requirement clarification (retained)
+- `inspiration` brainstorming for creative/aesthetic ideas
+- `designer` creates the full plan independently
+- `reviewer` scores the plan using Rubric A (must pass >= 7.0)
+- Auto-correction loop (max 3 rounds)
 
 For full instructions, see `references/flow.md`

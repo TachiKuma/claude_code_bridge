@@ -962,74 +962,165 @@ except Exception as e:
 
 install_claude_md_config() {
   local claude_md="$HOME/.claude/CLAUDE.md"
+  local template="$INSTALL_PREFIX/config/claude-md-ccb.md"
   mkdir -p "$HOME/.claude"
   if ! pick_python_bin; then
     echo "ERROR: python required to update CLAUDE.md"
     return 1
   fi
 
-  # Use temp file to avoid Bash 3.2 heredoc parsing bug with single quotes
-  local ccb_tmpfile=""
-  ccb_tmpfile="$(mktemp)" || { echo "Failed to create temp file"; return 1; }
-  cat > "$ccb_tmpfile" << 'AI_RULES'
-<!-- CCB_CONFIG_START -->
-## AI Collaboration
-Use `/ask <provider>` to consult other AI assistants (codex/gemini/opencode/droid).
-Use `/ping <provider>` to check connectivity.
-Use `/pend <provider>` to view latest replies.
+  if [[ ! -f "$template" ]]; then
+    echo "WARN: Template not found: $template; skipping CLAUDE.md injection"
+    return 1
+  fi
 
-Providers: `codex`, `gemini`, `opencode`, `droid`, `claude`
-<!-- CCB_CONFIG_END -->
-AI_RULES
   local ccb_content
-  ccb_content="$(cat "$ccb_tmpfile")"
-  rm -f "$ccb_tmpfile" >/dev/null 2>&1 || true
-  ccb_tmpfile=""
+  ccb_content="$(cat "$template")"
 
   if [[ -f "$claude_md" ]]; then
     if grep -q "$CCB_START_MARKER" "$claude_md" 2>/dev/null; then
       echo "Updating existing CCB config block..."
       "$PYTHON_BIN" -c "
-import re
+import re, sys
 
-with open('$claude_md', 'r', encoding='utf-8') as f:
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
     content = f.read()
+with open(sys.argv[2], 'r', encoding='utf-8') as f:
+    new_block = f.read().strip()
 pattern = r'<!-- CCB_CONFIG_START -->.*?<!-- CCB_CONFIG_END -->'
-new_block = '''$ccb_content'''
 content = re.sub(pattern, new_block, content, flags=re.DOTALL)
-with open('$claude_md', 'w', encoding='utf-8') as f:
+with open(sys.argv[1], 'w', encoding='utf-8') as f:
     f.write(content)
-"
+" "$claude_md" "$template"
     elif grep -qE "$LEGACY_RULE_MARKER|## Codex Collaboration Rules|## Gemini|## OpenCode" "$claude_md" 2>/dev/null; then
       echo "Removing legacy rules and adding new CCB config block..."
       "$PYTHON_BIN" -c "
-import re
+import re, sys
 
-with open('$claude_md', 'r', encoding='utf-8') as f:
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
     content = f.read()
 patterns = [
-    r'## Codex Collaboration Rules.*?(?=\\n## (?!Gemini)|\\Z)',
-    r'## Codex 协作规则.*?(?=\\n## |\\Z)',
-    r'## Gemini Collaboration Rules.*?(?=\\n## |\\Z)',
-    r'## Gemini 协作规则.*?(?=\\n## |\\Z)',
-    r'## OpenCode Collaboration Rules.*?(?=\\n## |\\Z)',
-    r'## OpenCode 协作规则.*?(?=\\n## |\\Z)',
+    r'## Codex Collaboration Rules.*?(?=\n## (?!Gemini)|\Z)',
+    r'## Codex 协作规则.*?(?=\n## |\Z)',
+    r'## Gemini Collaboration Rules.*?(?=\n## |\Z)',
+    r'## Gemini 协作规则.*?(?=\n## |\Z)',
+    r'## OpenCode Collaboration Rules.*?(?=\n## |\Z)',
+    r'## OpenCode 协作规则.*?(?=\n## |\Z)',
 ]
 for p in patterns:
     content = re.sub(p, '', content, flags=re.DOTALL)
-content = content.rstrip() + '\\n'
-with open('$claude_md', 'w', encoding='utf-8') as f:
+content = content.rstrip() + '\n'
+with open(sys.argv[1], 'w', encoding='utf-8') as f:
     f.write(content)
-"
-      echo "$ccb_content" >> "$claude_md"
+" "$claude_md"
+      cat "$template" >> "$claude_md"
     else
-      echo "$ccb_content" >> "$claude_md"
+      echo "" >> "$claude_md"
+      cat "$template" >> "$claude_md"
     fi
   else
-    echo "$ccb_content" > "$claude_md"
+    cat "$template" > "$claude_md"
   fi
 
   echo "Updated AI collaboration rules in $claude_md"
+}
+
+CCB_ROLES_START_MARKER="<!-- CCB_ROLES_START -->"
+CCB_ROLES_END_MARKER="<!-- CCB_ROLES_END -->"
+CCB_RUBRICS_START_MARKER="<!-- REVIEW_RUBRICS_START -->"
+CCB_RUBRICS_END_MARKER="<!-- REVIEW_RUBRICS_END -->"
+
+install_agents_md_config() {
+  local agents_md="$INSTALL_PREFIX/AGENTS.md"
+  local template="$INSTALL_PREFIX/config/agents-md-ccb.md"
+
+  if ! pick_python_bin; then
+    echo "WARN: python required to update AGENTS.md; skipping"
+    return 1
+  fi
+  if [[ ! -f "$template" ]]; then
+    echo "WARN: Template not found: $template; skipping AGENTS.md injection"
+    return 1
+  fi
+
+  if [[ -f "$agents_md" ]]; then
+    # Replace existing CCB blocks if present
+    local updated=false
+    if grep -q "$CCB_ROLES_START_MARKER" "$agents_md" 2>/dev/null || \
+       grep -q "$CCB_RUBRICS_START_MARKER" "$agents_md" 2>/dev/null; then
+      echo "Updating existing CCB blocks in AGENTS.md..."
+      "$PYTHON_BIN" -c "
+import re, sys
+
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
+    content = f.read()
+with open(sys.argv[2], 'r', encoding='utf-8') as f:
+    new_block = f.read().strip()
+
+# Remove old roles block
+content = re.sub(
+    r'<!-- CCB_ROLES_START -->.*?<!-- CCB_ROLES_END -->',
+    '', content, flags=re.DOTALL)
+# Remove old rubrics block
+content = re.sub(
+    r'<!-- REVIEW_RUBRICS_START -->.*?<!-- REVIEW_RUBRICS_END -->',
+    '', content, flags=re.DOTALL)
+content = content.rstrip() + '\n\n' + new_block + '\n'
+with open(sys.argv[1], 'w', encoding='utf-8') as f:
+    f.write(content)
+" "$agents_md" "$template"
+      updated=true
+    fi
+    if ! $updated; then
+      echo "" >> "$agents_md"
+      cat "$template" >> "$agents_md"
+    fi
+  else
+    cat "$template" > "$agents_md"
+  fi
+
+  echo "Updated AGENTS.md: $agents_md"
+}
+
+install_clinerules_config() {
+  local clinerules="$INSTALL_PREFIX/.clinerules"
+  local template="$INSTALL_PREFIX/config/clinerules-ccb.md"
+
+  if ! pick_python_bin; then
+    echo "WARN: python required to update .clinerules; skipping"
+    return 1
+  fi
+  if [[ ! -f "$template" ]]; then
+    echo "WARN: Template not found: $template; skipping .clinerules injection"
+    return 1
+  fi
+
+  if [[ -f "$clinerules" ]]; then
+    if grep -q "$CCB_ROLES_START_MARKER" "$clinerules" 2>/dev/null; then
+      echo "Updating existing CCB roles block in .clinerules..."
+      "$PYTHON_BIN" -c "
+import re, sys
+
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
+    content = f.read()
+with open(sys.argv[2], 'r', encoding='utf-8') as f:
+    new_block = f.read().strip()
+
+content = re.sub(
+    r'<!-- CCB_ROLES_START -->.*?<!-- CCB_ROLES_END -->',
+    new_block, content, flags=re.DOTALL)
+with open(sys.argv[1], 'w', encoding='utf-8') as f:
+    f.write(content)
+" "$clinerules" "$template"
+    else
+      echo "" >> "$clinerules"
+      cat "$template" >> "$clinerules"
+    fi
+  else
+    cat "$template" > "$clinerules"
+  fi
+
+  echo "Updated .clinerules: $clinerules"
 }
 
 install_settings_permissions() {
@@ -1364,13 +1455,17 @@ install_all() {
   install_droid_skills
   install_droid_delegation
   install_claude_md_config
+  install_agents_md_config
+  install_clinerules_config
   install_settings_permissions
   install_tmux_config
   echo "OK: Installation complete"
   echo "   Project dir    : $INSTALL_PREFIX"
   echo "   Executable dir : $BIN_DIR"
   echo "   Claude commands updated"
-  echo "   Global CLAUDE.md configured with Codex/Gemini/OpenCode collaboration rules"
+  echo "   Global CLAUDE.md configured with CCB collaboration rules"
+  echo "   AGENTS.md configured with review rubrics"
+  echo "   .clinerules configured with role assignments"
   echo "   Global settings.json permissions added"
 }
 
