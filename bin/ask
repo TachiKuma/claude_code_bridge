@@ -192,7 +192,8 @@ def _default_caller() -> str:
         return "codex"
     if os.environ.get("CODEX_SESSION_ID") or os.environ.get("CODEX_RUNTIME_DIR"):
         return "codex"
-    return "claude"
+    print("[ERROR] CCB_CALLER is required. Set CCB_CALLER=<provider> (e.g. CCB_CALLER=claude).", file=sys.stderr)
+    sys.exit(1)
 
 
 def make_task_id() -> str:

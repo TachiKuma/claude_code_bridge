@@ -20,7 +20,7 @@ The first argument must be the provider name, followed by the message:
 ## Execution (MANDATORY)
 
 ```
-Bash(ask $PROVIDER "$MESSAGE")
+Bash(CCB_CALLER=claude ask $PROVIDER "$MESSAGE")
 ```
 
 ## Rules
