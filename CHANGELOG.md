@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v5.2.4 (2026-02-11)
+
+### 🔧 Bug Fixes
+
+- **Explicit CCB_CALLER**: `bin/ask` no longer defaults to `"claude"` when `CCB_CALLER` is unset; exits with an error instead
+- **SKILL.md template**: Ask skill execution template now explicitly passes `CCB_CALLER=claude`
+
 ## v5.2.3 (2026-02-09)
 
 ### 🚀 Project-Local History + Legacy Compatibility
