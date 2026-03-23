@@ -140,53 +140,38 @@ def find_wezterm_cli() -> str | None:
 
 
 def send_via_wezterm(pane_id: str, message: str, session_data: dict) -> bool:
-    """Send message to WezTerm pane using wezterm cli with stdin for large payloads."""
+    """Send message to WezTerm pane using bracketed paste + trailing newline for auto-submit."""
     try:
         wezterm = find_wezterm_cli()
         if not wezterm:
             return False
 
-        # Use bracketed paste mode (omit --no-paste) so that intermediate \n characters
-        # in the multi-line response body are treated as literal newlines within the paste
-        # block, not as individual Enter keystrokes. Sending a multi-line message with
-        # --no-paste causes each \n to arrive as a keystroke; raw-mode TUIs like Claude
-        # Code do not submit on \n (LF 0x0A) — they require a real Enter key event.
+        import time
+
+        # Bracketed paste with trailing \n: WezTerm's send-text (without --no-paste)
+        # wraps content in bracketed paste escape sequences. The trailing \n is included
+        # in the paste body as literal text. After the closing bracket, the TUI processes
+        # the pasted content and the \n triggers submission. This works across all WezTerm
+        # versions (unlike send-key which was added later).
+        payload = message if message.endswith("\n") else message + "\n"
         result = subprocess.run(
             [wezterm, "cli", "send-text", "--pane-id", pane_id],
-            input=message.encode("utf-8"),
+            input=payload.encode("utf-8"),
             capture_output=True,
             timeout=10
         )
         if result.returncode == 0:
-            # Brief pause to let the TUI process the bracketed paste before Enter.
-            import time
-            time.sleep(0.1)
-            # Send a proper Enter key event so raw-mode TUIs (e.g. Claude Code) submit
-            # the pasted content. A bare \r byte is insufficient for many TUIs.
-            # Try both CLI variants across WezTerm versions; fall back to \r byte.
-            for key_variant in ("Enter", "Return"):
-                # Variant A: --key <KeyName>
-                r = subprocess.run(
-                    [wezterm, "cli", "send-key", "--pane-id", pane_id, "--key", key_variant],
-                    capture_output=True, timeout=5
-                )
-                if r.returncode == 0:
-                    return True
-                # Variant B: positional <KeyName>
-                r = subprocess.run(
-                    [wezterm, "cli", "send-key", "--pane-id", pane_id, key_variant],
-                    capture_output=True, timeout=5
-                )
-                if r.returncode == 0:
-                    return True
-            # Final fallback: CR byte (works for readline-based panes)
-            subprocess.run(
-                [wezterm, "cli", "send-text", "--pane-id", pane_id, "--no-paste"],
-                input=b"\r",
-                capture_output=True,
-                timeout=5
-            )
             return True
+
+        # Fallback: --no-paste with \r for non-TUI panes
+        time.sleep(0.1)
+        subprocess.run(
+            [wezterm, "cli", "send-text", "--pane-id", pane_id, "--no-paste"],
+            input=(message + "\r").encode("utf-8"),
+            capture_output=True,
+            timeout=5
+        )
+        return True
     except Exception:
         pass
     return False
@@ -452,82 +437,89 @@ def main() -> int:
         status=status,
     )
 
-    # Find caller's pane_id from session file
-    session_files = {
-        "claude": ".claude-session",
-        "codex": ".codex-session",
-        "gemini": ".gemini-session",
-        "opencode": ".opencode-session",
-        "droid": ".droid-session",
-    }
-    session_filename = session_files.get(caller, ".claude-session")
-
-    # Search for session file in multiple locations (order matters - most specific first)
-    work_dir = os.environ.get("CCB_WORK_DIR", "")
-    search_paths: list[Path] = []
-    seen_paths: set[str] = set()
-    config_dirnames = (".ccb", ".ccb_config")
-
-    def add_search_path(path: Path | None) -> None:
-        if not path:
-            return
-        p = Path(path)
-        key = str(p)
-        if key in seen_paths:
-            return
-        seen_paths.add(key)
-        search_paths.append(p)
-
-    # 1. Request's work_dir (most specific), with upward lookup for nested dirs.
-    if work_dir:
-        try:
-            add_search_path(find_project_session_file(Path(work_dir), session_filename))
-        except Exception:
-            pass
-
-    # 2. Current working directory (fallback), with upward lookup.
-    cwd = os.getcwd()
-    if cwd != work_dir:
-        try:
-            add_search_path(find_project_session_file(Path(cwd), session_filename))
-        except Exception:
-            pass
-
-    # 3. User's home-based locations
-    for dirname in config_dirnames:
-        add_search_path(Path.home() / ".local" / "share" / "codex-dual" / dirname / session_filename)
-
-    # 4. On Windows, also check LOCALAPPDATA
-    if os.name == "nt":
-        localappdata = os.environ.get("LOCALAPPDATA", "")
-        if localappdata:
-            for dirname in reversed(config_dirnames):
-                p = Path(localappdata) / "codex-dual" / dirname / session_filename
-                key = str(p)
-                if key in seen_paths:
-                    continue
-                seen_paths.add(key)
-                search_paths.insert(0, p)
+    # Direct pane routing: when the caller's pane ID was captured at ask-time and
+    # threaded through the chain, use it directly. This is necessary because multiple
+    # Claude Code instances in the same project share one session file, so the session
+    # file lookup would route to whichever instance wrote last — not the one that asked.
+    direct_pane_id = os.environ.get("CCB_CALLER_PANE_ID", "").strip()
+    direct_terminal = os.environ.get("CCB_CALLER_TERMINAL", "").strip()
 
     pane_id = None
     terminal = "tmux"  # default
     session_data = {}
-    found_session_path = None
 
-    for session_path in search_paths:
-        if session_path.exists():
-            session_data = load_session_file(session_path)
-            pane_id = session_data.get("pane_id")
-            terminal = session_data.get("terminal", "tmux")
-            if pane_id:
-                found_session_path = session_path
-                # Validate: check if session's work_dir matches request's work_dir
-                session_work_dir = session_data.get("work_dir", "")
-                if work_dir and session_work_dir and not _work_dirs_compatible(str(session_work_dir), str(work_dir)):
-                    # Session file is for a different project, skip it
-                    pane_id = None
-                    continue
-                break
+    if direct_pane_id:
+        pane_id = direct_pane_id
+        terminal = direct_terminal or "tmux"
+    else:
+        # Fallback: find caller's pane_id from session file
+        session_files = {
+            "claude": ".claude-session",
+            "codex": ".codex-session",
+            "gemini": ".gemini-session",
+            "opencode": ".opencode-session",
+            "droid": ".droid-session",
+        }
+        session_filename = session_files.get(caller, ".claude-session")
+
+        work_dir = os.environ.get("CCB_WORK_DIR", "")
+        search_paths: list[Path] = []
+        seen_paths: set[str] = set()
+        config_dirnames = (".ccb", ".ccb_config")
+
+        def add_search_path(path: Path | None) -> None:
+            if not path:
+                return
+            p = Path(path)
+            key = str(p)
+            if key in seen_paths:
+                return
+            seen_paths.add(key)
+            search_paths.append(p)
+
+        # 1. Request's work_dir (most specific), with upward lookup for nested dirs.
+        if work_dir:
+            try:
+                add_search_path(find_project_session_file(Path(work_dir), session_filename))
+            except Exception:
+                pass
+
+        # 2. Current working directory (fallback), with upward lookup.
+        cwd = os.getcwd()
+        if cwd != work_dir:
+            try:
+                add_search_path(find_project_session_file(Path(cwd), session_filename))
+            except Exception:
+                pass
+
+        # 3. User's home-based locations
+        for dirname in config_dirnames:
+            add_search_path(Path.home() / ".local" / "share" / "codex-dual" / dirname / session_filename)
+
+        # 4. On Windows, also check LOCALAPPDATA
+        if os.name == "nt":
+            localappdata = os.environ.get("LOCALAPPDATA", "")
+            if localappdata:
+                for dirname in reversed(config_dirnames):
+                    p = Path(localappdata) / "codex-dual" / dirname / session_filename
+                    key = str(p)
+                    if key in seen_paths:
+                        continue
+                    seen_paths.add(key)
+                    search_paths.insert(0, p)
+
+        for session_path in search_paths:
+            if session_path.exists():
+                session_data = load_session_file(session_path)
+                pane_id = session_data.get("pane_id")
+                terminal = session_data.get("terminal", "tmux")
+                if pane_id:
+                    # Validate: check if session's work_dir matches request's work_dir
+                    session_work_dir = session_data.get("work_dir", "")
+                    if work_dir and session_work_dir and not _work_dirs_compatible(str(session_work_dir), str(work_dir)):
+                        pane_id = None
+                        continue
+                    break
 
     if not pane_id:
         # No pane_id found, try ask command
