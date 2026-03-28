@@ -9,7 +9,7 @@
 
 ### 代码分析
 
-- [ ] **ANALYSIS-01**: 扫描 CCB 代码库，识别所有硬编码文本位置
+- [x] **ANALYSIS-01**: 扫描 CCB 代码库，识别所有硬编码文本位置
 - [x] **ANALYSIS-02**: 扫描 GSD 代码库，识别所有硬编码文本位置
 - [x] **ANALYSIS-03**: 区分人类可读文本和协议字符串（命令名、环境变量、完成标记）
 - [ ] **ANALYSIS-04**: 评估现有 CCB i18n.py 的可复用性和扩展性
@@ -77,7 +77,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ANALYSIS-01 | Phase 1 | Pending |
+| ANALYSIS-01 | Phase 1 | Complete |
 | ANALYSIS-02 | Phase 1 | Complete |
 | ANALYSIS-03 | Phase 1 | Complete |
 | ANALYSIS-04 | Phase 1 | Pending |
