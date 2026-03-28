@@ -31,8 +31,8 @@
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — 扫描 CCB 代码库提取所有字符串
-- [ ] 01-02-PLAN.md — 扫描 GSD 代码库并实现分类器
+- [x] 01-01-PLAN.md — 扫描 CCB 代码库提取所有字符串
+- [x] 01-02-PLAN.md — 扫描 GSD 代码库并实现分类器
 - [ ] 01-03-PLAN.md — 评估 i18n.py 并生成分析报告
 
 ### Phase 2: 架构设计
@@ -48,8 +48,8 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — 扫描 CCB 代码库提取所有字符串
-- [ ] 01-02-PLAN.md — 扫描 GSD 代码库并实现分类器
+- [x] 01-01-PLAN.md — 扫描 CCB 代码库提取所有字符串
+- [x] 01-02-PLAN.md — 扫描 GSD 代码库并实现分类器
 - [ ] 01-03-PLAN.md — 评估 i18n.py 并生成分析报告
 
 ### Phase 3: 风险评估
@@ -91,7 +91,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. 代码库分析 | 0/3 | Not started | - |
+| 1. 代码库分析 | 2/3 | In Progress|  |
 | 2. 架构设计 | 0/0 | Not started | - |
 | 3. 风险评估 | 0/0 | Not started | - |
 | 4. 原型验证 | 0/0 | Not started | - |
