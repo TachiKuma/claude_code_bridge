@@ -418,3 +418,102 @@ class I18nCore:
 
 **设计完成日期:** 2026-03-28
 **下一步:** 创建翻译文件组织结构设计文档
+
+---
+
+## 13. 日志系统设计（补充）
+
+**修复原因:** Droid 审核指出缺少具体的错误日志机制实现细节。
+
+### 日志级别
+
+使用 Python 标准 logging 模块：
+
+| 级别 | 使用场景 |
+|------|---------|
+| ERROR | JSON 解析失败、权限错误 |
+| WARNING | 外部翻译文件不存在、键缺失回退 |
+| INFO | 语言检测结果、翻译文件加载成功 |
+| DEBUG | 详细的查找过程、回退路径 |
+
+### 实现示例
+
+```python
+import logging
+
+class I18nCore:
+    def __init__(self, namespace: str = "ccb"):
+        self.namespace = namespace
+        self.translations = {}
+        self.current_lang = None
+        self.logger = logging.getLogger(f"i18n.{namespace}")
+
+    def load_translations(self) -> None:
+        lang = self._detect_language()
+        self.current_lang = lang
+        self.logger.info(f"Detected language: {lang}")
+
+        # 加载内置翻译
+        builtin_path = Path(__file__).parent / "i18n" / self.namespace / f"{lang}.json"
+        if builtin_path.exists():
+            try:
+                with open(builtin_path, encoding="utf-8") as f:
+                    self.translations = json.load(f)
+                self.logger.info(f"Loaded builtin translations: {builtin_path}")
+            except json.JSONDecodeError as e:
+                self.logger.error(f"Failed to parse builtin translations: {e}")
+
+        # 加载外部翻译覆盖
+        external_path = Path.home() / ".ccb" / "i18n" / self.namespace / f"{lang}.json"
+        if external_path.exists():
+            try:
+                with open(external_path, encoding="utf-8") as f:
+                    external = json.load(f)
+                    self.translations.update(external)
+                self.logger.info(f"Loaded external translations: {external_path}")
+            except (OSError, json.JSONDecodeError) as e:
+                self.logger.warning(f"Failed to load external translations: {e}")
+        else:
+            self.logger.debug(f"No external translations found at {external_path}")
+
+    def t(self, key: str, **kwargs) -> str:
+        msg = self.translations.get(key)
+        if msg is None:
+            self.logger.warning(f"Translation key not found: {key}")
+            return key
+        
+        if kwargs:
+            try:
+                msg = msg.format(**kwargs)
+            except (KeyError, ValueError) as e:
+                self.logger.error(f"Failed to format translation '{key}': {e}")
+        
+        return msg
+```
+
+### 日志输出目标
+
+- **默认:** stderr（不干扰 stdout）
+- **可配置:** 通过环境变量 `CCB_LOG_FILE` 指定日志文件
+- **格式:** `%(asctime)s [%(levelname)s] %(name)s: %(message)s`
+
+### 日志配置示例
+
+```python
+# 在应用启动时配置
+import logging
+
+logging.basicConfig(
+    level=logging.WARNING,  # 默认只显示 WARNING 及以上
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.StreamHandler(),  # 输出到 stderr
+    ]
+)
+
+# 用户可通过环境变量调整级别
+log_level = os.environ.get("CCB_LOG_LEVEL", "WARNING").upper()
+logging.getLogger("i18n").setLevel(log_level)
+```
+
+---

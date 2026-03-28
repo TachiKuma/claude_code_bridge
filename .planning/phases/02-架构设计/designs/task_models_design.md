@@ -1,16 +1,19 @@
-# TaskHandle 和 TaskResult 数据结构设计
+# TaskHandle 和 TaskResult 数据结构设计 v2
 
-**设计日期:** 2026-03-28
+**设计日期:** 2026-03-28 (修订)
 **需求:** ARCH-03
 **用户决策:** D-09, D-10
+**修订原因:** 简化任务模型，使用 provider 作为任务标识
 
 ## 概述
 
 为 GSD 多 AI 协作提供结构化的任务传递机制，避免解析控制台文本，使用类型化对象传递任务状态。
 
+**关键简化:** 移除客户端生成的 task_id，直接使用 provider 作为任务标识（因为 CCB 每个 provider 同时只能有一个活跃任务）。
+
 ## 1. TaskHandle 数据结构
 
-TaskHandle 用于跟踪提交的异步任务，提供唯一标识和元数据。
+TaskHandle 用于跟踪提交的异步任务，提供提供商标识和元数据。
 
 ### 定义
 
@@ -20,28 +23,31 @@ from dataclasses import dataclass
 @dataclass
 class TaskHandle:
     """任务句柄，用于跟踪提交的任务"""
-    task_id: str          # 唯一任务标识符
-    provider: str         # AI 提供商名称
+    provider: str         # AI 提供商名称（作为任务标识）
     timestamp: float      # 提交时间戳（Unix 时间，秒）
 ```
 
 ### 字段说明
 
-**task_id: str**
-- 唯一标识符，格式: `{provider}_{timestamp_ms}`
-- 示例: `"codex_1711234567890"`
-- 生成方式: `f"{provider}_{int(time.time() * 1000)}"`
-- 用途: 关联 submit() 和 poll() 调用
-
 **provider: str**
-- AI 提供商名称
+- AI 提供商名称，同时作为任务唯一标识
 - 有效值: `["codex", "droid", "gemini", "claude"]`
-- 用途: 确定使用哪个 pend 命令（cpend, dpend, gpend）
+- 用途:
+  - 确定使用哪个 pend 命令（`pend {provider}`）
+  - 作为任务标识（CCB 每个 provider 同时只能有一个活跃任务）
 
 **timestamp: float**
 - 提交时间，Unix 时间戳（秒）
 - 生成方式: `time.time()`
 - 用途: 超时检测、日志记录、调试
+
+### 设计简化说明
+
+**为什么移除 task_id？**
+- CCB 的 `pend` 命令自动获取指定 provider 的最新回复
+- 每个 provider 同时只能有一个活跃任务
+- 客户端生成的 task_id 无法与 CCB 实际任务元数据绑定
+- 使用 provider 作为标识更简单、更可靠
 
 ## 2. TaskResult 数据结构
 
@@ -56,7 +62,7 @@ from typing import Optional
 @dataclass
 class TaskResult:
     """任务结果，包含执行状态和输出"""
-    task_id: str                    # 对应的任务 ID
+    provider: str                   # 对应的提供商名称
     status: str                     # 状态：pending, completed, error
     output: Optional[str] = None    # 成功时的输出内容
     error: Optional[str] = None     # 失败时的错误信息
@@ -64,8 +70,8 @@ class TaskResult:
 
 ### 字段说明
 
-**task_id: str**
-- 与 TaskHandle.task_id 对应
+**provider: str**
+- 与 TaskHandle.provider 对应
 - 用途: 关联任务句柄和结果
 
 **status: str**
@@ -77,28 +83,28 @@ class TaskResult:
 **output: Optional[str]**
 - AI 的回复内容
 - 仅当 status="completed" 时有值
-- 来源: pend 命令的 stdout
+- 来源: `pend {provider}` 命令的 stdout
 
 **error: Optional[str]**
 - 错误描述信息
 - 仅当 status="error" 时有值
-- 来源: pend 命令的 stderr 或返回码非 0
+- 来源: `pend {provider}` 命令的 stderr 或返回码非 0
 
 ## 3. 状态转换图
 
 ```
-[submit()] → TaskHandle(task_id, provider, timestamp)
+[submit()] → TaskHandle(provider, timestamp)
                 ↓
-[poll()]      → TaskResult(status="pending", output=None, error=None)
+[poll()]      → TaskResult(provider, status="pending", output=None, error=None)
                 ↓
-[poll()]      → TaskResult(status="completed", output="...", error=None)
+[poll()]      → TaskResult(provider, status="completed", output="...", error=None)
                 或
-[poll()]      → TaskResult(status="error", output=None, error="...")
+[poll()]      → TaskResult(provider, status="error", output=None, error="...")
 ```
 
 状态转换规则:
-- pending → completed: pend 命令返回非空 stdout
-- pending → error: pend 命令返回码非 0 或超时
+- pending → completed: `pend {provider}` 命令返回非空 stdout
+- pending → error: `pend {provider}` 命令返回码非 0 或超时
 - completed/error 为终态，不再转换
 
 ## 4. 错误处理策略（D-10）
@@ -129,13 +135,12 @@ from typing import Optional
 
 @dataclass
 class TaskHandle:
-    task_id: str
     provider: str
     timestamp: float
 
 @dataclass
 class TaskResult:
-    task_id: str
+    provider: str
     status: str
     output: Optional[str] = None
     error: Optional[str] = None
@@ -148,7 +153,6 @@ class TaskResult:
 ```python
 handle = backend.submit("codex", "Review this code")
 # TaskHandle(
-#     task_id="codex_1711234567890",
 #     provider="codex",
 #     timestamp=1711234567.89
 # )
@@ -159,7 +163,7 @@ handle = backend.submit("codex", "Review this code")
 ```python
 result = backend.poll(handle)
 # TaskResult(
-#     task_id="codex_1711234567890",
+#     provider="codex",
 #     status="pending",
 #     output=None,
 #     error=None
@@ -171,7 +175,7 @@ result = backend.poll(handle)
 ```python
 result = backend.poll(handle)
 # TaskResult(
-#     task_id="codex_1711234567890",
+#     provider="codex",
 #     status="completed",
 #     output="Code looks good. Consider adding error handling.",
 #     error=None
@@ -183,7 +187,7 @@ result = backend.poll(handle)
 ```python
 result = backend.poll(handle)
 # TaskResult(
-#     task_id="codex_1711234567890",
+#     provider="codex",
 #     status="error",
 #     output=None,
 #     error="Provider timeout"
@@ -206,10 +210,9 @@ else:
 
 | 数据结构字段 | CCB 命令 | 说明 |
 |------------|---------|------|
-| TaskHandle.provider | `ask {provider}` | 第一个参数 |
-| TaskHandle.task_id | 生成 | 客户端生成，非 CCB 返回 |
-| TaskResult.output | `{provider[0]}pend` stdout | 标准输出 |
-| TaskResult.error | `{provider[0]}pend` stderr | 标准错误或返回码非 0 |
+| TaskHandle.provider | `ask {provider} --background` | 提交任务 |
+| TaskResult.output | `pend {provider}` stdout | 标准输出 |
+| TaskResult.error | `pend {provider}` stderr | 标准错误或返回码非 0 |
 | TaskResult.status | 推断 | 根据 returncode 和 stdout 判断 |
 
 ## 8. 序列化支持
@@ -222,11 +225,11 @@ import json
 
 # 转换为字典
 handle_dict = asdict(handle)
-# {'task_id': 'codex_1711234567890', 'provider': 'codex', 'timestamp': 1711234567.89}
+# {'provider': 'codex', 'timestamp': 1711234567.89}
 
 # JSON 序列化
 json_str = json.dumps(asdict(handle))
-# '{"task_id": "codex_1711234567890", "provider": "codex", "timestamp": 1711234567.89}'
+# '{"provider": "codex", "timestamp": 1711234567.89}'
 
 # 用途: 日志记录、调试、持久化
 ```
@@ -237,7 +240,7 @@ json_str = json.dumps(asdict(handle))
 |-----|------|---------|------|
 | 数据结构类型 | dataclass | namedtuple, dict | 类型安全、IDE 支持、可扩展 |
 | 错误处理 | 返回 error 字段 | 抛出异常 | 接口一致性（D-10） |
-| task_id 格式 | `{provider}_{ms}` | UUID | 可读性、包含提供商信息 |
+| 任务标识 | provider | task_id | CCB 限制每个 provider 一个任务 |
 | status 值 | 字符串 | 枚举 | 简单、易于序列化 |
 
 ## 10. 未来扩展
@@ -252,5 +255,16 @@ json_str = json.dumps(asdict(handle))
 
 ---
 
-**设计完成:** 2026-03-28
-**下一步:** 设计 CCBCLIBackend 接口，使用这些数据结构
+## 11. 关键修复总结
+
+| 问题 | 原设计 | 修复后 |
+|------|--------|--------|
+| 任务标识 | 客户端生成 task_id | 使用 provider 作为标识 |
+| TaskHandle 字段 | task_id, provider, timestamp | provider, timestamp |
+| TaskResult 字段 | task_id, status, output, error | provider, status, output, error |
+| 任务绑定 | 无法与 CCB 实际任务绑定 | 直接使用 provider 查询 |
+
+---
+
+**设计完成:** 2026-03-28 (修订版)
+**下一步:** 与 ccb_cli_backend_design_v2.md 配合使用

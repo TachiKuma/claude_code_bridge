@@ -538,3 +538,94 @@ def validate_translations():
 **设计完成日期:** 2026-03-28
 **下一步:** Phase 3 - 风险评估
 
+
+---
+
+## 补充：增强的协议字符串保护机制
+
+**修复原因:** Codex 和 Droid 审核指出现有机制存在漏报风险。
+
+### 双层保护策略
+
+#### 第一层：值检查（现有机制）
+
+CI 检查翻译值是否在白名单中：
+
+```python
+def check_translation_values(translation_file: Path, whitelist: Set[str]) -> List[str]:
+    """检查翻译值是否为协议字符串"""
+    with open(translation_file, encoding="utf-8") as f:
+        translations = json.load(f)
+    
+    violations = []
+    for key, value in translations.items():
+        if value in whitelist:
+            violations.append(f"Key '{key}' has protocol string value: {value}")
+    
+    return violations
+```
+
+#### 第二层：静态代码扫描（新增）
+
+扫描代码中是否误用 `t()` 包装协议字符串：
+
+```python
+def scan_code_for_protocol_wrapping(code_dir: Path, whitelist: Set[str]) -> List[str]:
+    """扫描代码中是否用 t() 包装协议字符串"""
+    violations = []
+    
+    for py_file in code_dir.rglob("*.py"):
+        with open(py_file, encoding="utf-8") as f:
+            content = f.read()
+        
+        # 查找 t("...") 模式
+        import re
+        pattern = r't\(["\']([^"\']+)["\']\)'
+        matches = re.findall(pattern, content)
+        
+        for match in matches:
+            if match in whitelist:
+                violations.append(f"{py_file}:{match} - Protocol string wrapped in t()")
+    
+    return violations
+```
+
+### CI 集成
+
+```yaml
+# .github/workflows/i18n-check.yml
+name: I18n Protocol Protection
+
+on: [push, pull_request]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Check translation values
+        run: python scripts/check_protocol_strings.py --values
+      - name: Scan code for protocol wrapping
+        run: python scripts/check_protocol_strings.py --code
+```
+
+### 白名单优化
+
+**问题:** 白名单包含过于通用的词（status, main, .json）导致误报风险。
+
+**解决方案:** 使用完整协议字符串而非片段：
+
+```json
+{
+  "whitelist": [
+    "ask.request",
+    "ask.response",
+    "ccb.status.json",
+    "main.log"
+  ]
+}
+```
+
+避免单独的 `status`、`main` 等通用词。
+
+---
