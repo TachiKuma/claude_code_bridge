@@ -73,39 +73,39 @@
 
 ## Traceability
 
-需求到阶段的映射（路线图创建后填充）。
+需求到阶段的映射。
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ANALYSIS-01 | TBD | Pending |
-| ANALYSIS-02 | TBD | Pending |
-| ANALYSIS-03 | TBD | Pending |
-| ANALYSIS-04 | TBD | Pending |
-| ARCH-01 | TBD | Pending |
-| ARCH-02 | TBD | Pending |
-| ARCH-03 | TBD | Pending |
-| ARCH-04 | TBD | Pending |
-| ARCH-05 | TBD | Pending |
-| RISK-01 | TBD | Pending |
-| RISK-02 | TBD | Pending |
-| RISK-03 | TBD | Pending |
-| RISK-04 | TBD | Pending |
-| RISK-05 | TBD | Pending |
-| PROTO-01 | TBD | Pending |
-| PROTO-02 | TBD | Pending |
-| PROTO-03 | TBD | Pending |
-| PROTO-04 | TBD | Pending |
-| PROTO-05 | TBD | Pending |
-| DOC-01 | TBD | Pending |
-| DOC-02 | TBD | Pending |
-| DOC-03 | TBD | Pending |
-| DOC-04 | TBD | Pending |
+| ANALYSIS-01 | Phase 1 | Pending |
+| ANALYSIS-02 | Phase 1 | Pending |
+| ANALYSIS-03 | Phase 1 | Pending |
+| ANALYSIS-04 | Phase 1 | Pending |
+| ARCH-01 | Phase 2 | Pending |
+| ARCH-02 | Phase 2 | Pending |
+| ARCH-03 | Phase 2 | Pending |
+| ARCH-04 | Phase 2 | Pending |
+| ARCH-05 | Phase 2 | Pending |
+| RISK-01 | Phase 3 | Pending |
+| RISK-02 | Phase 3 | Pending |
+| RISK-03 | Phase 3 | Pending |
+| RISK-04 | Phase 3 | Pending |
+| RISK-05 | Phase 3 | Pending |
+| PROTO-01 | Phase 4 | Pending |
+| PROTO-02 | Phase 4 | Pending |
+| PROTO-03 | Phase 4 | Pending |
+| PROTO-04 | Phase 4 | Pending |
+| PROTO-05 | Phase 4 | Pending |
+| DOC-01 | Phase 5 | Pending |
+| DOC-02 | Phase 5 | Pending |
+| DOC-03 | Phase 5 | Pending |
+| DOC-04 | Phase 5 | Pending |
 
 **Coverage:**
 - v1 requirements: 23 total
-- Mapped to phases: 0
-- Unmapped: 23 ⚠️
+- Mapped to phases: 23
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-28*
-*Last updated: 2026-03-28 after initial definition*
+*Last updated: 2026-03-28 after roadmap creation*
