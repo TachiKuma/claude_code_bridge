@@ -62,10 +62,12 @@ Plans:
   3. 会话文件竞态条件的风险已评估，文件锁方案已确定
   4. i18n 改造的工作量已估算（代码行数、文件数、时间）
   5. 多 AI 集成的工作量和技术复杂度已估算
-**Plans:** 3 plans
-**Plans:** 3 plans
-Plans:- [ ] 03-01-PLAN.md — 协议字符串保护风险评估- [ ] 03-02-PLAN.md — 多 AI 并发风险评估- [ ] 03-03-PLAN.md — 工作量估算报告
-### Phase 4: 原型验证
+**Plans**: 3 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — 协议字符串保护风险评估
+- [ ] 03-02-PLAN.md — 多 AI 并发风险评估
+- [ ] 03-03-PLAN.md — 工作量估算报告
 Plans:- [ ] 03-01-PLAN.md — 协议字符串保护风险评估- [ ] 03-02-PLAN.md — 多 AI 并发风险评估- [ ] 03-03-PLAN.md — 工作量估算报告
 **Success Criteria** (what must be TRUE):
   1. i18n_core 最小原型已实现并验证（命名空间、t() API 工作正常）
