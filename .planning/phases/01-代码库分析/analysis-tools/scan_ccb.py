@@ -35,7 +35,7 @@ class StringExtractor(ast.NodeVisitor):
 def scan_directory(root_dir):
     """扫描目录下所有 Python 文件"""
     results = []
-    root = Path(root_dir)
+    root = Path(root_dir).resolve()
 
     for py_file in sorted(root.rglob('*.py')):
         try:
@@ -43,7 +43,9 @@ def scan_directory(root_dir):
                 content = f.read()
 
             tree = ast.parse(content, filename=str(py_file))
-            extractor = StringExtractor(py_file.relative_to(Path.cwd()))
+            # 使用相对于 root 的路径，避免中文路径问题
+            rel_path = py_file.relative_to(root.parent)
+            extractor = StringExtractor(rel_path.as_posix())
             extractor.visit(tree)
             results.extend(extractor.strings)
 
@@ -65,7 +67,8 @@ if __name__ == '__main__':
 
     strings = scan_directory(lib_dir)
 
-    # 输出 JSON 格式
-    print(json.dumps(strings, ensure_ascii=False, indent=2))
+    # 输出 JSON 格式，使用 UTF-8 编码
+    output = json.dumps(strings, ensure_ascii=False, indent=2)
+    sys.stdout.buffer.write(output.encode('utf-8'))
 
-    print(f"# Extracted {len(strings)} strings from CCB codebase", file=sys.stderr)
+    print(f"\n# Extracted {len(strings)} strings from CCB codebase", file=sys.stderr)
