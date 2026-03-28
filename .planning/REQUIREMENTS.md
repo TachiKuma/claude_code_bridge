@@ -19,7 +19,7 @@
 - [x] **ARCH-01**: 设计共享 i18n_core 模块架构（命名空间、回退机制）
 - [ ] **ARCH-02**: 设计 CCBCLIBackend 接口（submit/poll/ping/list_providers）
 - [ ] **ARCH-03**: 设计 TaskHandle/TaskResult 数据结构
-- [ ] **ARCH-04**: 设计协议字符串保护机制（CI 检查、白名单）
+- [x] **ARCH-04**: 设计协议字符串保护机制（CI 检查、白名单）
 - [x] **ARCH-05**: 设计翻译文件组织结构（ccb/, gsd/, common/）
 
 ### 风险评估
@@ -84,7 +84,7 @@
 | ARCH-01 | Phase 2 | Complete |
 | ARCH-02 | Phase 2 | Pending |
 | ARCH-03 | Phase 2 | Pending |
-| ARCH-04 | Phase 2 | Pending |
+| ARCH-04 | Phase 2 | Complete |
 | ARCH-05 | Phase 2 | Complete |
 | RISK-01 | Phase 3 | Pending |
 | RISK-02 | Phase 3 | Pending |

@@ -50,7 +50,7 @@ Plans:
 Plans:
 - [x] 02-01-PLAN.md — 设计 i18n_core 模块和翻译文件结构
 - [x] 02-02-PLAN.md — 设计 CCBCLIBackend 接口和数据结构
-- [ ] 02-03-PLAN.md — 设计协议字符串保护机制
+- [x] 02-03-PLAN.md — 设计协议字符串保护机制
 
 ### Phase 3: 风险评估
 **Goal**: 评估协议误翻译、上下文崩溃、竞态条件等风险，估算实施工作量
