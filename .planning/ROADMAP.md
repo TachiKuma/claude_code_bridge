@@ -28,7 +28,12 @@
   2. GSD 代码库中所有硬编码文本位置已被识别和分类
   3. 人类可读文本和协议字符串（命令名、环境变量、完成标记）已明确区分
   4. 现有 CCB i18n.py 的可复用性评估报告已完成
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — 扫描 CCB 代码库提取所有字符串
+- [ ] 01-02-PLAN.md — 扫描 GSD 代码库并实现分类器
+- [ ] 01-03-PLAN.md — 评估 i18n.py 并生成分析报告
 
 ### Phase 2: 架构设计
 **Goal**: 设计共享 i18n_core 模块和 CCBCLIBackend 接口，建立协议字符串保护机制
@@ -40,7 +45,12 @@
   3. TaskHandle/TaskResult 数据结构已定义（避免文本解析）
   4. 协议字符串保护机制已设计（CI 检查、白名单）
   5. 翻译文件组织结构已确定（ccb/, gsd/, common/ 目录）
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — 扫描 CCB 代码库提取所有字符串
+- [ ] 01-02-PLAN.md — 扫描 GSD 代码库并实现分类器
+- [ ] 01-03-PLAN.md — 评估 i18n.py 并生成分析报告
 
 ### Phase 3: 风险评估
 **Goal**: 评估协议误翻译、上下文崩溃、竞态条件等风险，估算实施工作量
@@ -81,7 +91,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. 代码库分析 | 0/0 | Not started | - |
+| 1. 代码库分析 | 0/3 | Not started | - |
 | 2. 架构设计 | 0/0 | Not started | - |
 | 3. 风险评估 | 0/0 | Not started | - |
 | 4. 原型验证 | 0/0 | Not started | - |
