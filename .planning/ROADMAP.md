@@ -1,8 +1,8 @@
 # Roadmap: GSD & CCB 国际化与多 AI 协作可行性研究
 
-**项目:** GSD & CCB 国际化与多 AI 协作可行性研究
-**创建日期:** 2026-03-28
-**粒度:** fine
+**项目:** GSD & CCB 国际化与多 AI 协作可行性研究  
+**创建日期:** 2026-03-28  
+**粒度:** fine  
 **总阶段数:** 5
 
 ## 核心价值
@@ -20,14 +20,14 @@
 ## Phase Details
 
 ### Phase 1: 代码库分析
-**Goal**: 识别 CCB 和 GSD 代码库中所有需要国际化的文本，区分人类可读文本和协议字符串
-**Depends on**: 无（起点阶段）
-**Requirements**: ANALYSIS-01, ANALYSIS-02, ANALYSIS-03, ANALYSIS-04
+**Goal**: 识别 CCB 和 GSD 代码库中所有需要国际化的文本，区分人类可读文本和协议字符串  
+**Depends on**: 无（起点阶段）  
+**Requirements**: ANALYSIS-01, ANALYSIS-02, ANALYSIS-03, ANALYSIS-04  
 **Success Criteria** (what must be TRUE):
   1. CCB 代码库中所有硬编码文本位置已被识别和分类
   2. GSD 代码库中所有硬编码文本位置已被识别和分类
   3. 人类可读文本和协议字符串（命令名、环境变量、完成标记）已明确区分
-  4. 现有 CCB i18n.py 的可复用性评估报告已完成
+  4. 现有 CCB i18n.py 的可复用性评估报告已完成  
 **Plans**: 3 plans
 
 Plans:
@@ -48,9 +48,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [x] 01-01-PLAN.md — 扫描 CCB 代码库提取所有字符串
-- [x] 01-02-PLAN.md — 扫描 GSD 代码库并实现分类器
-- [ ] 01-03-PLAN.md — 评估 i18n.py 并生成分析报告
+- [ ] 02-01-PLAN.md — 设计 i18n_core 模块和翻译文件结构
+- [ ] 02-02-PLAN.md — 设计 CCBCLIBackend 接口和数据结构
+- [ ] 02-03-PLAN.md — 设计协议字符串保护机制
 
 ### Phase 3: 风险评估
 **Goal**: 评估协议误翻译、上下文崩溃、竞态条件等风险，估算实施工作量
@@ -92,7 +92,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. 代码库分析 | 3/3 | Complete   | 2026-03-28 |
-| 2. 架构设计 | 0/0 | Not started | - |
+| 2. 架构设计 | 0/3 | Not started | - |
 | 3. 风险评估 | 0/0 | Not started | - |
 | 4. 原型验证 | 0/0 | Not started | - |
 | 5. 文档交付 | 0/0 | Not started | - |
