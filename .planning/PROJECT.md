@@ -66,6 +66,30 @@ GSD 架构：
 - 集成方式：模块化 i18n 框架共享
 - 关键风险：技术债务、日志分析破坏、性能影响、测试覆盖
 
+**Codex 技术方案：**
+
+i18n 架构：
+- 不要直接复制 CCB 的 i18n.py，而是提取共享的 i18n_core
+- 保持 `t(key, **kwargs)` API 契约
+- 添加命名空间（`ccb.*`, `gsd.*`）和外部目录支持
+- 区分人类可读文本和协议字符串（永不翻译协议标记）
+
+GSD-CCB 集成：
+- 添加 `MultiAIBackend` 抽象层
+- 优先实现 `CCBCLIBackend`（包装 `ask/pend/ping`）
+- 可选实现 `CCBMCPBackend`（使用 MCP 服务器）
+- 返回结构化 `TaskHandle` 而非解析控制台文本
+
+关键风险缓解：
+- 永不翻译命令名、环境变量、JSON 键、完成标记
+- 为翻译的提示添加快照测试
+- 绑定所有 CCB 调用到明确的工作区/会话文件
+- 添加 CI 检查缺失键和孤立键
+
+工作量估算：
+- MVP 可行性 PoC: 1-1.5 周
+- 生产就绪版本: 3-4 周
+
 ## Constraints
 
 - **时间**: 可行性研究阶段，不做完整实施
@@ -77,9 +101,11 @@ GSD 架构：
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| 基于 CCB 现有 i18n.py 扩展 | 已有工作基础，避免重复造轮子 | — Pending |
-| 命令行集成方式 | GSD 通过 CCB 命令行调用多 AI | — Pending |
+| 提取共享 i18n_core | Codex 建议：保持 API 契约，添加命名空间和目录支持 | — Pending |
+| CCBCLIBackend 优先 | 比 MCP 更简单，已有生产级 CLI 接口 | — Pending |
+| 区分人类文本和协议 | 永不翻译命令名、环境变量、完成标记 | — Pending |
 | 渐进式迁移策略 | 降低风险，按模块逐步国际化 | — Pending |
+| 结构化任务句柄 | 避免解析控制台文本，使用 TaskHandle/TaskResult | — Pending |
 
 ## Evolution
 
