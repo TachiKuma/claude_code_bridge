@@ -48,8 +48,8 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — 设计 i18n_core 模块和翻译文件结构
-- [ ] 02-02-PLAN.md — 设计 CCBCLIBackend 接口和数据结构
+- [x] 02-01-PLAN.md — 设计 i18n_core 模块和翻译文件结构
+- [x] 02-02-PLAN.md — 设计 CCBCLIBackend 接口和数据结构
 - [ ] 02-03-PLAN.md — 设计协议字符串保护机制
 
 ### Phase 3: 风险评估
@@ -92,7 +92,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. 代码库分析 | 3/3 | Complete   | 2026-03-28 |
-| 2. 架构设计 | 0/3 | Not started | - |
+| 2. 架构设计 | 2/3 | In Progress|  |
 | 3. 风险评估 | 0/0 | Not started | - |
 | 4. 原型验证 | 0/0 | Not started | - |
 | 5. 文档交付 | 0/0 | Not started | - |
