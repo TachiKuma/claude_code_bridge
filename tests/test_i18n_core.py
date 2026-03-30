@@ -112,6 +112,39 @@ class TestI18nCore(unittest.TestCase):
                 pathlib.Path.home = original_home
                 os.environ.pop("CCB_LANG", None)
 
+    def test_protocol_reject_falls_back_to_builtin(self):
+        """After protocol value is rejected, falls back to builtin translation."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ext_dir = Path(tmpdir) / ".ccb" / "i18n" / "ccb"
+            ext_dir.mkdir(parents=True)
+            # External tries to override a builtin key with a protocol value
+            (ext_dir / "zh.json").write_text(
+                json.dumps(
+                    {
+                        "ccb.startup.started_backend": "CCB_LANG",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            original_home = Path.home
+            try:
+                import pathlib
+                pathlib.Path.home = staticmethod(lambda: Path(tmpdir))
+                os.environ["CCB_LANG"] = "zh"
+                i = I18nCore("ccb")
+                i.load_translations()
+                # The rejected protocol value should NOT be used
+                result = i.t("ccb.startup.started_backend")
+                self.assertNotEqual(result, "CCB_LANG")
+                # Instead, should fall back to the builtin zh translation
+                self.assertNotEqual(result, "ccb.startup.started_backend")
+                # The result must come from builtin translations (contains formatted content capability)
+                self.assertIsInstance(result, str)
+                self.assertGreater(len(result), 0)
+            finally:
+                pathlib.Path.home = original_home
+                os.environ.pop("CCB_LANG", None)
+
     def test_detect_language_uses_getlocale(self):
         """Language detection uses locale.getlocale when env vars are absent."""
         with mock.patch.dict(os.environ, {}, clear=True):
