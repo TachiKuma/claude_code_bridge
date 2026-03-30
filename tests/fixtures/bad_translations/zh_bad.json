@@ -1,0 +1,6 @@
+{
+  "ccb.error.test_protocol_env": "CCB_LANG",
+  "ccb.error.test_protocol_cmd": "ask",
+  "ccb.error.test_protocol_marker": "CCB_DONE",
+  "ccb.error.normal": "这是一个正常的翻译"
+}
