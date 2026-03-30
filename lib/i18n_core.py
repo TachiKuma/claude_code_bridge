@@ -9,11 +9,14 @@ Structure: .planning/phases/02-架构设计/designs/translation_structure.md
 """
 
 import json
-import locale
 import logging
-import os
 from pathlib import Path
 from typing import Dict, List, Optional, Set
+
+try:
+    from lib.ccb_config import resolve_language_setting
+except ModuleNotFoundError:
+    from ccb_config import resolve_language_setting
 
 
 class I18nCore:
@@ -92,52 +95,8 @@ class I18nCore:
         return merged
 
     def _detect_language(self) -> str:
-        """Detect language: --lang (CCB_LANG) -> .ccb-config.json -> system locale -> default 'en'.
-
-        Priority chain matches lib/i18n.py detect_language() and ccb entry point:
-            --lang / CCB_LANG env -> .ccb-config.json Language -> locale -> 'en'
-        """
-        # 1. CCB_LANG env var (set by --lang CLI flag or user environment)
-        ccb_lang = os.environ.get("CCB_LANG", "").strip().lower()
-        if ccb_lang in ("zh", "cn", "chinese"):
-            return "zh"
-        if ccb_lang in ("en", "english"):
-            return "en"
-        if ccb_lang == "xx":
-            return "xx"
-
-        # 2. .ccb-config.json Language key (via ccb_config.get_language_setting)
-        try:
-            from ccb_config import get_language_setting
-            config_lang = get_language_setting()
-            if config_lang:
-                if config_lang in ("zh", "cn", "chinese"):
-                    return "zh"
-                if config_lang in ("en", "english"):
-                    return "en"
-                if config_lang == "xx":
-                    return "xx"
-        except Exception:
-            pass
-
-        # 3. Auto-detect from system locale
-        try:
-            lang = (
-                os.environ.get("LANG", "")
-                or os.environ.get("LC_ALL", "")
-                or os.environ.get("LC_MESSAGES", "")
-            )
-            if not lang:
-                lang, _ = locale.getlocale()
-                lang = lang or ""
-
-            lang = lang.lower()
-            if lang.startswith("zh") or "chinese" in lang:
-                return "zh"
-        except Exception:
-            pass
-
-        return "en"
+        """Detect language using the shared CCB priority chain."""
+        return resolve_language_setting()
 
     def t(self, key: str, **kwargs) -> str:
         """Translate key with optional format parameters.
