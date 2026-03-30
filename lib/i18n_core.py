@@ -92,9 +92,13 @@ class I18nCore:
         return merged
 
     def _detect_language(self) -> str:
-        """Detect language: CCB_LANG env -> system locale -> default 'en'."""
-        ccb_lang = os.environ.get("CCB_LANG", "auto").lower()
+        """Detect language: --lang (CCB_LANG) -> .ccb-config.json -> system locale -> default 'en'.
 
+        Priority chain matches lib/i18n.py detect_language() and ccb entry point:
+            --lang / CCB_LANG env -> .ccb-config.json Language -> locale -> 'en'
+        """
+        # 1. CCB_LANG env var (set by --lang CLI flag or user environment)
+        ccb_lang = os.environ.get("CCB_LANG", "").strip().lower()
         if ccb_lang in ("zh", "cn", "chinese"):
             return "zh"
         if ccb_lang in ("en", "english"):
@@ -102,7 +106,21 @@ class I18nCore:
         if ccb_lang == "xx":
             return "xx"
 
-        # Auto-detect from system locale
+        # 2. .ccb-config.json Language key (via ccb_config.get_language_setting)
+        try:
+            from ccb_config import get_language_setting
+            config_lang = get_language_setting()
+            if config_lang:
+                if config_lang in ("zh", "cn", "chinese"):
+                    return "zh"
+                if config_lang in ("en", "english"):
+                    return "en"
+                if config_lang == "xx":
+                    return "xx"
+        except Exception:
+            pass
+
+        # 3. Auto-detect from system locale
         try:
             lang = (
                 os.environ.get("LANG", "")

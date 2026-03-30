@@ -119,7 +119,7 @@ Plans:
 Plans:
 - [x] 06-01-PLAN.md — 修复 i18n_core 阻断项与弃用告警
 - [ ] 06-02-PLAN.md — 扩展 CLI 核心翻译覆盖并标准化错误消息
-- [ ] 06-03-PLAN.md — 建立语言切换、CI 守卫与测试补全
+- [x] 06-03-PLAN.md — 建立语言切换、CI 守卫与测试补全
 - [ ] 06-04-PLAN.md — 盘点 Mail/Web/TUI 文案并更新估算
 - [ ] 06-05-PLAN.md — 执行全量迁移与回归验证
 - [ ] 06-06-PLAN.md — Skill 模板双语化 + Install 脚本全量迁移 + argparse help t() 包裹 + Config 模板混合翻译

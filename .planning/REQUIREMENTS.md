@@ -104,8 +104,8 @@
 | DOC-04 | Phase 5 | Complete |
 | I18N-01 | Phase 6 | Planned |
 | I18N-02 | Phase 6 | Planned |
-| I18N-03 | Phase 6 | Planned |
-| I18N-04 | Phase 6 | Planned |
+| I18N-03 | Phase 6 | Complete |
+| I18N-04 | Phase 6 | Complete |
 | I18N-05 | Phase 6 | Planned |
 | I18N-06 | Phase 6 | Planned |
 
