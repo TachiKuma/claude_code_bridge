@@ -83,7 +83,7 @@ Plans:
 
 Plans:
 - [ ] 04-01-PLAN.md — 实现 i18n_core 核心原型（I18nCore 类 + 翻译文件 + 兼容层 + 测试）
-- [ ] 04-02-PLAN.md — 实现 CCBCLIBackend + TaskHandle/TaskResult 原型
+- [x] 04-02-PLAN.md — 实现 CCBCLIBackend + TaskHandle/TaskResult 原型
 - [ ] 04-03-PLAN.md — 实现协议字符串保护机制（CI 检查脚本 + 运行时验证）
 - [ ] 04-04-PLAN.md — 实现跨平台文件锁 FileLock 类
 
@@ -105,7 +105,7 @@ Plans:
 | 1. 代码库分析 | 3/3 | Complete   | 2026-03-28 |
 | 2. 架构设计 | 3/3 | Complete   | 2026-03-28 |
 | 3. 风险评估 | 3/3 | Complete   | 2026-03-30 |
-| 4. 原型验证 | 0/4 | Planning   | - |
+| 4. 原型验证 | 1/4 | In progress | - |
 | 5. 文档交付 | 0/0 | Not started | - |
 
 ## Coverage

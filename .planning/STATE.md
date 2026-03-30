@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-last_updated: "2026-03-30T02:15:00.000Z"
+status: in-progress
+last_updated: "2026-03-30T03:10:22.000Z"
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 9
-  completed_plans: 9
-  percent: 60
+  total_plans: 13
+  completed_plans: 10
+  percent: 65
 ---
 
 # Project State: GSD & CCB 国际化与多 AI 协作可行性研究
 
-**Last updated:** 2026-03-30T02:15:00.000Z
+**Last updated:** 2026-03-30T03:10:22.000Z
 **Project started:** 2026-03-28
 
 ## Project Reference
@@ -25,26 +25,26 @@ progress:
 
 ## Current Position
 
-Phase: 04 (原型验证) — READY TO PLAN
-Plan: Not started
-**Status:** Ready to plan
-**Progress:** [██████----] 60%
+Phase: 04 (原型验证)
+Plan: 02 (TaskHandle/TaskResult + CCBCLIBackend)
+**Status:** Executing
+**Progress:** [██████----] 65%
 
 ## Performance Metrics
 
 **Phases:**
 
 - Completed: 3
-- In progress: 0
-- Not started: 2
+- In progress: 1
+- Not started: 1
 - Total: 5
 
 **Plans:**
 
-- Completed: 9 (Phase 01: 3, Phase 02: 3, Phase 03: 3)
+- Completed: 10 (Phase 01: 3, Phase 02: 3, Phase 03: 3, Phase 04: 1)
 - In progress: 0
-- Not started: 0
-- Total: 9
+- Not started: 3
+- Total: 13
 
 **Requirements:**
 
@@ -79,6 +79,8 @@ Plan: Not started
 | Phase 02 P03 | 221 | 2 tasks | 2 files |
 | Phase 2 通过双重审核 | Droid 9.0/10, Codex 7.0/10 | 2026-03-28 |
 | CCBCLIBackend v3 退出码映射 | EXIT_OK(0)→completed, EXIT_NO_REPLY(2)→pending, EXIT_ERROR(1)→error | 2026-03-28 |
+| tests/ in .gitignore 需要 git add -f | .gitignore 中 tests/ 条目阻止了原型测试文件的正常提交 | 2026-03-30 |
+| ProviderLock 集成到 CCBCLIBackend | submit() 和 poll() 使用 ProviderLock context manager 序列化访问 | 2026-03-30 |
 
 ### Active Todos
 
@@ -89,6 +91,7 @@ Plan: Not started
 - [x] Phase 2: 架构设计（已通过审核）
 - [x] 完成 Phase 3: 风险评估
 - [ ] 启动 Phase 4: 原型验证
+- [x] Plan 04-02: TaskHandle/TaskResult + CCBCLIBackend 原型实现
 
 ### Known Blockers
 
@@ -96,6 +99,7 @@ Plan: Not started
 
 ### Recent Changes
 
+- 2026-03-30: Plan 04-02 完成 - TaskHandle/TaskResult dataclasses + CCBCLIBackend 原型，25 个 mock 测试全部通过
 - 2026-03-30: Phase 3 完成 - 风险评估与工作量估算已交付，Phase 4 可开始原型验证
 - 2026-03-28: Phase 2 完成 - 架构设计通过双重审核（Droid 9.0/10, Codex 7.0/10）
 - 2026-03-28: 交付 5 个核心设计文档（i18n_core, CCBCLIBackend v3, TaskHandle/Result, 协议保护, 翻译结构）
