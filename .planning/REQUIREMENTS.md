@@ -49,11 +49,13 @@
 
 后续完整实施阶段的需求（本研究不包含）。
 
-### i18n 完整实施
-- **I18N-01**: CCB 全模块翻译覆盖（>95%）
-- **I18N-02**: GSD 全模块翻译覆盖（>95%）
-- **I18N-03**: 外部翻译目录支持（用户自定义翻译）
-- **I18N-04**: 伪本地化测试（UI 溢出检测）
+### CCB i18n 实施
+- **I18N-01**: 修复 i18n_core 原型缺陷，使逐 key 英文回退、外部翻译协议拒绝和 locale 检测行为符合设计
+- **I18N-02**: 完成 CCB CLI 核心用户可见消息迁移，目标范围内 `t()` 覆盖率达到 ≥ 95%
+- **I18N-03**: 建立翻译守卫机制，包括协议白名单检查、翻译覆盖率检查和翻译完整性检查
+- **I18N-04**: 实现统一语言切换，支持 `CCB_LANG`、`ccb config lang` 和 `--lang`
+- **I18N-05**: 完成 Mail/Web/TUI 文案盘点并输出第二版工作量估算与迁移策略
+- **I18N-06**: 完成 CCB 全量用户可见文案迁移，并通过回归验证和伪本地化验证
 
 ### 多 AI 协作完整实施
 - **MULTI-01**: 角色专业化系统（designer/reviewer/inspiration）
@@ -100,10 +102,16 @@
 | DOC-02 | Phase 5 | Complete |
 | DOC-03 | Phase 5 | Complete |
 | DOC-04 | Phase 5 | Complete |
+| I18N-01 | Phase 6 | Planned |
+| I18N-02 | Phase 6 | Planned |
+| I18N-03 | Phase 6 | Planned |
+| I18N-04 | Phase 6 | Planned |
+| I18N-05 | Phase 6 | Planned |
+| I18N-06 | Phase 6 | Planned |
 
 **Coverage:**
-- v1 requirements: 23 total
-- Mapped to phases: 23
+- total requirements: 29
+- Mapped to phases: 29
 - Unmapped: 0 ✓
 
 ---

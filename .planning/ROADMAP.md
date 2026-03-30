@@ -3,7 +3,7 @@
 **项目:** GSD & CCB 国际化与多 AI 协作可行性研究  
 **创建日期:** 2026-03-28  
 **粒度:** fine  
-**总阶段数:** 5
+**总阶段数:** 6
 
 ## 核心价值
 
@@ -15,7 +15,8 @@
 - [x] **Phase 2: 架构设计** - 设计共享 i18n 和多 AI 协作架构 (completed 2026-03-28)
 - [x] **Phase 3: 风险评估** - 评估实施风险和工作量 (completed 2026-03-30)
 - [x] **Phase 4: 原型验证** - 验证关键技术点可行性 (completed 2026-03-30)
-- [ ] **Phase 5: 文档交付** - 编写完整技术方案和建议
+- [x] **Phase 5: 文档交付** - 编写完整技术方案和建议 (completed 2026-03-30)
+- [ ] **Phase 6: CCB i18n 实施** - 按修订实施方案完成 CCB 国际化落地
 
 ## Phase Details
 
@@ -103,6 +104,25 @@ Plans:
 - [x] 05-02-PLAN.md — 风险评估报告 + 原型验证报告
 - [x] 05-03-PLAN.md — 实施建议 + 最终审查
 
+### Phase 6: CCB i18n 实施
+**Goal**: 基于 `docs/feasibility-study/05-CCB-i18n-详细实施方案.md` 完成 CCB i18n 的阻断项修复、CLI 核心生产化、覆盖盘点和全量迁移准备
+**Depends on**: Phase 5
+**Requirements**: I18N-01, I18N-02, I18N-03, I18N-04, I18N-05, I18N-06
+**Success Criteria** (what must be TRUE):
+  1. `lib/i18n_core.py` 的逐 key 英文回退、外部翻译协议拒绝、locale 检测行为与修订方案一致
+  2. CLI 核心用户可见消息完成翻译迁移，目标范围内 `t()` 覆盖率达到 ≥ 95%
+  3. 翻译 CI 守卫、完整性检查和语言切换机制具备可执行落地方案
+  4. Mail/Web/TUI 的文案盘点和第二版工时估算已形成书面产物
+  5. CCB 全量 i18n 迁移的执行顺序、回归门禁和验证命令已明确
+**Plans**: 5 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — 修复 i18n_core 阻断项与弃用告警
+- [ ] 06-02-PLAN.md — 扩展 CLI 核心翻译覆盖并标准化错误消息
+- [ ] 06-03-PLAN.md — 建立语言切换、CI 守卫与测试补全
+- [ ] 06-04-PLAN.md — 盘点 Mail/Web/TUI 文案并更新估算
+- [ ] 06-05-PLAN.md — 执行全量迁移与回归验证
+
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -111,12 +131,13 @@ Plans:
 | 2. 架构设计 | 3/3 | Complete   | 2026-03-28 |
 | 3. 风险评估 | 3/3 | Complete   | 2026-03-30 |
 | 4. 原型验证 | 4/4 | Complete   | 2026-03-30 |
-| 5. 文档交付 | 1/3 | In Progress | - |
+| 5. 文档交付 | 3/3 | Complete   | 2026-03-30 |
+| 6. CCB i18n 实施 | 0/5 | Not Started | - |
 
 ## Coverage
 
-**Total v1 requirements:** 23
-**Mapped to phases:** 23
+**Total requirements:** 29
+**Mapped to phases:** 29
 **Unmapped:** 0 ✓
 
 ### Requirement Mapping
@@ -146,6 +167,12 @@ Plans:
 | DOC-02 | 5 | 文档交付 |
 | DOC-03 | 5 | 文档交付 |
 | DOC-04 | 5 | 文档交付 |
+| I18N-01 | 6 | 原型修复 |
+| I18N-02 | 6 | CLI 核心生产化 |
+| I18N-03 | 6 | CI 与完整性保护 |
+| I18N-04 | 6 | 语言切换 |
+| I18N-05 | 6 | 文案盘点 |
+| I18N-06 | 6 | 全量迁移与回归 |
 
 ---
 *Roadmap created: 2026-03-28*

@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-last_updated: "2026-03-30T04:06:47.875Z"
+status: planning
+last_updated: "2026-03-30T05:35:00.000Z"
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 5
-  total_plans: 16
+  total_plans: 21
   completed_plans: 16
-  percent: 100
+  percent: 76
 ---
 
 # Project State: GSD & CCB 国际化与多 AI 协作可行性研究
@@ -21,34 +21,34 @@ progress:
 
 **Core value:** 通过国际化和多 AI 协作，让 GSD 和 CCB 能够服务更广泛的用户群体，并显著提升复杂任务的执行质量
 
-**Current focus:** Phase 05 — 文档交付
+**Current focus:** Phase 06 — CCB i18n 实施
 
 ## Current Position
 
-Phase: 5 (文档交付) — EXECUTING
-Plan: 3 of 3
+Phase: 6 (CCB i18n 实施) — PLANNED
+Plan: 0 of 5
 **Status:** Ready to execute
-**Progress:** [██████████] 100%
+**Progress:** [███████░░░] 76%
 
 ## Performance Metrics
 
 **Phases:**
 
-- Completed: 2
+- Completed: 5
 - In progress: 0
-- Not started: 3
-- Total: 5
+- Not started: 1
+- Total: 6
 
 **Plans:**
 
-- Completed: 6 (Phase 01: 3, Phase 02: 3)
+- Completed: 16 (Phase 01-05)
 - In progress: 0
-- Not started: 0
-- Total: 6
+- Not started: 5
+- Total: 21
 
 **Requirements:**
 
-- Completed: 0/23
+- Completed: 23/29
 - Coverage: 100% (all mapped to phases)
 
 **Velocity:**
@@ -83,6 +83,11 @@ Plan: 3 of 3
 | Phase 05 P01 | 209 | 2 tasks | 2 files |
 | Phase 05 P02 | 171 | 2 tasks | 2 files |
 | Phase 05 P03 | 3min | 1 tasks | 1 files |
+| Phase 6 拆分为 5 个执行计划 | 先修阻断项，再做 CLI 生产化，随后盘点并迁移 Mail/Web/TUI | 2026-03-30 |
+
+### Roadmap Evolution
+
+- Phase 6 added: CCB i18n 实施
 
 ### Active Todos
 
@@ -91,7 +96,11 @@ Plan: 3 of 3
 - [x] 评估 CCB i18n.py 可复用性
 - [x] 生成 Phase 1 完整分析报告
 - [x] Phase 2: 架构设计（已通过审核）
-- [ ] 开始 Phase 3: 风险评估
+- [ ] 执行 Phase 6 Plan 01：修复 i18n_core 阻断项
+- [ ] 执行 Phase 6 Plan 02：扩展 CLI 核心翻译覆盖
+- [ ] 执行 Phase 6 Plan 03：建立语言切换和 CI 守卫
+- [ ] 执行 Phase 6 Plan 04：盘点 Mail/Web/TUI 文案面
+- [ ] 执行 Phase 6 Plan 05：全量迁移与回归验证
 
 ### Known Blockers
 
@@ -99,6 +108,7 @@ Plan: 3 of 3
 
 ### Recent Changes
 
+- 2026-03-30: Phase 06 规划完成 - 基于 `05-CCB-i18n-详细实施方案.md` 生成 5 个实施计划
 - 2026-03-30: Phase 04 Plan 04 完成 - FileLock 通用文件锁实现并验证（9 个测试通过）
 - 2026-03-28: Phase 2 完成 - 架构设计通过双重审核（Droid 9.0/10, Codex 7.0/10）
 - 2026-03-28: 交付 5 个核心设计文档（i18n_core, CCBCLIBackend v3, TaskHandle/Result, 协议保护, 翻译结构）
@@ -107,18 +117,17 @@ Plan: 3 of 3
 
 ## Session Continuity
 
-**What we're building:** 可行性研究项目 - 为 GSD 和 CCB 设计 i18n 国际化和多 AI 协作方案
+**What we're building:** 从可行性研究进入 CCB i18n 实施阶段，按修订方案推进原型修复、CLI 生产化和全量迁移准备
 
-**Where we are:** Phase 4 原型验证进行中，Plan 04 (FileLock) 已完成
+**Where we are:** Phase 6 已完成规划，等待执行 5 个实施计划
 
-**What's next:** 运行 `/gsd:plan-phase 3` 创建 Phase 3（风险评估）的详细执行计划
+**What's next:** 运行 `gsd-execute-phase 6` 或按顺序执行 06-01 至 06-05 计划
 
 **Context for next session:**
 
-- Phase 1 完成：3,402 个字符串已分类（协议 114 条，人类 2,986 条）
-- Phase 2 完成：5 个核心设计文档已交付并通过双重审核
-- 关键设计：i18n_core（命名空间+日志）、CCBCLIBackend v3（正确退出码映射）、协议保护（双层机制）
-- Phase 3 重点：评估协议误翻译、上下文崩溃、竞态条件等风险，估算实施工作量
+- 关键输入文档：`docs/feasibility-study/05-CCB-i18n-详细实施方案.md`
+- R0 阻断项已明确：逐 key 英文回退、外部翻译 reject、弃用 locale API
+- P0 目标聚焦 CLI 核心生产化，P1 先做 Mail/Web/TUI 盘点，再进入全量迁移
 
 ---
 *State initialized: 2026-03-28*
