@@ -126,6 +126,9 @@ function dashboardApp() {
             errorStartDaemon: {{ t("ccb.web.dashboard.error_start_daemon", name="{name}") | tojson }},
             errorStopDaemon: {{ t("ccb.web.dashboard.error_stop_daemon", name="{name}") | tojson }},
             errorPingProvider: {{ t("ccb.web.dashboard.error_ping_provider", name="{name}") | tojson }},
+            consoleFetchDaemonsFailed: {{ t("ccb.web.dashboard.console_fetch_daemons_failed") | tojson }},
+            consoleFetchProvidersFailed: {{ t("ccb.web.dashboard.console_fetch_providers_failed") | tojson }},
+            consoleFetchMailStatusFailed: {{ t("ccb.web.dashboard.console_fetch_mail_status_failed") | tojson }},
             successMailConnectionOk: {{ t("ccb.web.dashboard.success_mail_connection_ok") | tojson }},
             errorTestMailRequest: {{ t("ccb.web.dashboard.error_test_mail_request") | tojson }}
         },
@@ -151,7 +154,7 @@ function dashboardApp() {
                     this.daemons[d.name] = d;
                 });
             } catch (e) {
-                console.error('Failed to fetch daemons:', e);
+                console.error(this.ui.consoleFetchDaemonsFailed, e);
             }
         },
 
@@ -160,7 +163,7 @@ function dashboardApp() {
                 const res = await fetch('/api/providers');
                 this.providers = await res.json();
             } catch (e) {
-                console.error('Failed to fetch providers:', e);
+                console.error(this.ui.consoleFetchProvidersFailed, e);
             }
         },
 
@@ -169,7 +172,7 @@ function dashboardApp() {
                 const res = await fetch('/api/mail/status');
                 this.mailStatus = await res.json();
             } catch (e) {
-                console.error('Failed to fetch mail status:', e);
+                console.error(this.ui.consoleFetchMailStatusFailed, e);
             }
         },
 

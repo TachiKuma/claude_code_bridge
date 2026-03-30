@@ -102,13 +102,15 @@ class SmtpSender:
         try:
             password = get_password(self.email_addr)
             if not password:
-                raise ValueError(f"No password stored for {self.email_addr}")
+                raise ValueError(
+                    t("ccb.mail.sender.error_password_missing", email=self.email_addr)
+                )
 
             self._connection = self._create_connection()
             self._connection.login(self.email_addr, password)
             return True
         except Exception as e:
-            print(f"SMTP connection failed: {e}")
+            print(t("ccb.mail.sender.error_connection_failed", error=e))
             self._connection = None
             return False
 
@@ -164,7 +166,7 @@ class SmtpSender:
         def _send() -> tuple[bool, str]:
             if not self._connection:
                 if not self.connect():
-                    raise ConnectionError("Failed to connect to SMTP")
+                    raise ConnectionError(t("ccb.mail.sender.error_connect_failed"))
 
             # Create message
             msg = MIMEMultipart("alternative")
@@ -197,7 +199,14 @@ class SmtpSender:
             return True, msg["Message-ID"]
 
         def _on_retry(attempt: int, e: Exception) -> None:
-            print(f"[smtp] Retry {attempt}/{max_retries} after error: {e}")
+            print(
+                t(
+                    "ccb.mail.sender.retry_after_error",
+                    attempt=attempt,
+                    max_retries=max_retries,
+                    error=e,
+                )
+            )
             # Reset connection for retry
             self._connection = None
 
@@ -305,7 +314,7 @@ class SmtpSender:
         def _send() -> tuple[bool, str]:
             if not self._connection:
                 if not self.connect():
-                    raise ConnectionError("Failed to connect to SMTP")
+                    raise ConnectionError(t("ccb.mail.sender.error_connect_failed"))
 
             # Create message
             msg = MIMEMultipart("alternative")
@@ -326,7 +335,14 @@ class SmtpSender:
             return True, msg["Message-ID"]
 
         def _on_retry(attempt: int, e: Exception) -> None:
-            print(f"[smtp] Retry {attempt}/{max_retries} after error: {e}")
+            print(
+                t(
+                    "ccb.mail.sender.retry_after_error",
+                    attempt=attempt,
+                    max_retries=max_retries,
+                    error=e,
+                )
+            )
             # Reset connection for retry
             self._connection = None
 

@@ -103,11 +103,11 @@ def run_simple_wizard() -> bool:
 
     # Step 5: Default provider
     print(f"\n{t('ccb.mail_tui.simple.select_default_provider')}")
-    print("  1. Claude")
-    print("  2. Codex")
-    print("  3. Gemini")
-    print("  4. OpenCode")
-    print("  5. Droid")
+    print(f"  1. {t('ccb.provider.claude')}")
+    print(f"  2. {t('ccb.provider.codex')}")
+    print(f"  3. {t('ccb.provider.gemini')}")
+    print(f"  4. {t('ccb.provider.opencode')}")
+    print(f"  5. {t('ccb.provider.droid')}")
 
     default_choice = input(f"\n{t('ccb.mail_tui.simple.prompt_default_provider')} ").strip()
     default_map = {"1": "claude", "2": "codex", "3": "gemini", "4": "opencode", "5": "droid"}

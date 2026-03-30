@@ -64,6 +64,20 @@ class TestMailI18n(unittest.TestCase):
         self.assertIn("«", kwargs["subject"])
         self.assertIn("«", kwargs["body"])
 
+    def test_connect_failure_uses_pseudo_locale_error(self) -> None:
+        os.environ["CCB_LANG"] = "xx"
+        sender = SmtpSender(self._make_config())
+
+        with mock.patch("mail.sender.get_password", return_value=None):
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                success = sender.connect()
+
+        self.assertFalse(success)
+        output = buffer.getvalue()
+        self.assertIn("«", output)
+        self.assertIn("sender@example.com", output)
+
     def test_send_output_uses_pseudo_locale_body(self) -> None:
         os.environ["CCB_LANG"] = "xx"
         config = self._make_config()
@@ -114,6 +128,34 @@ class TestMailI18n(unittest.TestCase):
         output = buffer.getvalue()
         self.assertIn("CCB 邮件配置向导", output)
         self.assertIn("选择你的邮件服务商", output)
+
+    def test_simple_wizard_provider_list_uses_pseudo_locale(self) -> None:
+        os.environ["CCB_LANG"] = "xx"
+        config = MailConfigV3()
+
+        mock_poller = mock.Mock()
+        mock_poller.test_connection.return_value = (True, "imap ok")
+        mock_sender = mock.Mock()
+        mock_sender.test_connection.return_value = (True, "smtp ok")
+
+        with (
+            mock.patch("mail_tui.wizard.load_config", return_value=config),
+            mock.patch("mail_tui.wizard.has_password", return_value=False),
+            mock.patch("mail_tui.wizard.store_password"),
+            mock.patch("mail_tui.wizard.save_config"),
+            mock.patch("mail_tui.wizard.ImapPoller", return_value=mock_poller),
+            mock.patch("mail_tui.wizard.SmtpSender", return_value=mock_sender),
+            mock.patch("builtins.input", side_effect=["1", "user@gmail.com", "1", "1", "", "", "n"]),
+            mock.patch("getpass.getpass", return_value="secret"),
+        ):
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                result = wizard.run_simple_wizard()
+
+        self.assertTrue(result)
+        output = buffer.getvalue()
+        self.assertIn("[«Claudexx»]", output)
+        self.assertIn("[«Droidxx»]", output)
 
 
 if __name__ == "__main__":

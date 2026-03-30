@@ -80,11 +80,11 @@
                     <label class="block text-sm font-medium text-gray-700">{{ t("ccb.web.mail.field_default_provider") }}</label>
                     <select x-model="config.default_provider"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                        <option value="claude">Claude</option>
-                        <option value="codex">Codex</option>
-                        <option value="gemini">Gemini</option>
-                        <option value="opencode">OpenCode</option>
-                        <option value="droid">Droid</option>
+                        <option value="claude">{{ t("ccb.provider.claude") }}</option>
+                        <option value="codex">{{ t("ccb.provider.codex") }}</option>
+                        <option value="gemini">{{ t("ccb.provider.gemini") }}</option>
+                        <option value="opencode">{{ t("ccb.provider.opencode") }}</option>
+                        <option value="droid">{{ t("ccb.provider.droid") }}</option>
                     </select>
                 </div>
 
@@ -172,6 +172,8 @@ function mailConfigApp() {
             no: {{ t("ccb.web.mail.status_no") | tojson }},
             running: {{ t("ccb.web.mail.status_running") | tojson }},
             stopped: {{ t("ccb.web.mail.status_stopped") | tojson }},
+            consoleFetchStatusFailed: {{ t("ccb.web.mail.console_fetch_status_failed") | tojson }},
+            consoleFetchConfigFailed: {{ t("ccb.web.mail.console_fetch_config_failed") | tojson }},
             successSaved: {{ t("ccb.web.mail.success_saved") | tojson }},
             errorSaveDefault: {{ t("ccb.web.mail.error_save_default") | tojson }},
             errorSaveRequest: {{ t("ccb.web.mail.error_save_request") | tojson }},
@@ -192,7 +194,7 @@ function mailConfigApp() {
                 const res = await fetch('/api/mail/status');
                 this.status = await res.json();
             } catch (e) {
-                console.error('Failed to fetch status:', e);
+                console.error(this.ui.consoleFetchStatusFailed, e);
             }
         },
 
@@ -202,7 +204,7 @@ function mailConfigApp() {
                 const data = await res.json();
                 this.config = { ...this.config, ...data, service_password: '' };
             } catch (e) {
-                console.error('Failed to fetch config:', e);
+                console.error(this.ui.consoleFetchConfigFailed, e);
             }
         },
 
