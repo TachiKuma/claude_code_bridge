@@ -41,8 +41,8 @@
 ### 文档交付
 
 - [x] **DOC-01**: 编写技术方案文档（架构设计、实施路径）
-- [ ] **DOC-02**: 编写风险评估报告（工作量、技术风险、缓解策略）
-- [ ] **DOC-03**: 编写原型验证报告（关键技术点验证结果）
+- [x] **DOC-02**: 编写风险评估报告（工作量、技术风险、缓解策略）
+- [x] **DOC-03**: 编写原型验证报告（关键技术点验证结果）
 - [ ] **DOC-04**: 编写实施建议（阶段划分、优先级、资源需求）
 
 ## v2 Requirements
@@ -97,8 +97,8 @@
 | PROTO-04 | Phase 4 | Pending |
 | PROTO-05 | Phase 4 | Complete |
 | DOC-01 | Phase 5 | Complete |
-| DOC-02 | Phase 5 | Pending |
-| DOC-03 | Phase 5 | Pending |
+| DOC-02 | Phase 5 | Complete |
+| DOC-03 | Phase 5 | Complete |
 | DOC-04 | Phase 5 | Pending |
 
 **Coverage:**
