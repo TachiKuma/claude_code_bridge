@@ -13,8 +13,8 @@
 
 - [x] **Phase 1: 代码库分析** - 识别所有需要国际化的文本位置 (completed 2026-03-28)
 - [x] **Phase 2: 架构设计** - 设计共享 i18n 和多 AI 协作架构 (completed 2026-03-28)
-- [ ] **Phase 3: 风险评估** - 评估实施风险和工作量
-- [ ] **Phase 4: 原型验证** - 验证关键技术点可行性
+- [x] **Phase 3: 风险评估** - 评估实施风险和工作量 (completed 2026-03-30)
+- [x] **Phase 4: 原型验证** - 验证关键技术点可行性 (completed 2026-03-30)
 - [ ] **Phase 5: 文档交付** - 编写完整技术方案和建议
 
 ## Phase Details
@@ -65,17 +65,27 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — 协议字符串保护风险评估
-- [ ] 03-02-PLAN.md — 多 AI 并发风险评估
-- [ ] 03-03-PLAN.md — 工作量估算报告
-Plans:- [ ] 03-01-PLAN.md — 协议字符串保护风险评估- [ ] 03-02-PLAN.md — 多 AI 并发风险评估- [ ] 03-03-PLAN.md — 工作量估算报告
+- [x] 03-01-PLAN.md — 协议字符串保护风险评估
+- [x] 03-02-PLAN.md — 多 AI 并发风险评估
+- [x] 03-03-PLAN.md — 工作量估算报告
+
+### Phase 4: 原型验证
+**Goal**: 验证关键技术点可行性（i18n_core、CCBCLIBackend、协议保护、FileLock）
+**Depends on**: Phase 2, Phase 3
+**Requirements**: PROTO-01, PROTO-02, PROTO-03, PROTO-04, PROTO-05
 **Success Criteria** (what must be TRUE):
   1. i18n_core 最小原型已实现并验证（命名空间、t() API 工作正常）
   2. CCBCLIBackend 最小原型已实现并验证（能包装 ask/pend 命令）
   3. 协议字符串保护机制已验证（CI 检查脚本能检测误翻译）
   4. TaskHandle 结构化传递已验证（避免文本解析）
   5. 跨平台文件锁机制已验证（Windows/Linux/macOS 均可工作）
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [x] 04-01-PLAN.md — I18nCore 原型验证
+- [x] 04-02-PLAN.md — CCBCLIBackend 原型验证
+- [x] 04-03-PLAN.md — 协议字符串保护验证
+- [x] 04-04-PLAN.md — FileLock 跨平台验证
 
 ### Phase 5: 文档交付
 **Goal**: 编写完整的技术方案文档、风险评估报告、原型验证报告和实施建议
@@ -86,7 +96,12 @@ Plans:- [ ] 03-01-PLAN.md — 协议字符串保护风险评估- [ ] 03-02-PLAN.
   2. 风险评估报告已完成（工作量、技术风险、缓解策略明确）
   3. 原型验证报告已完成（关键技术点验证结果记录）
   4. 实施建议已完成（阶段划分、优先级、资源需求明确）
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [x] 05-01-PLAN.md — 执行摘要 + 技术方案文档
+- [ ] 05-02-PLAN.md — 风险评估报告 + 原型验证报告
+- [ ] 05-03-PLAN.md — 实施建议 + 最终审查
 
 ## Progress
 
@@ -94,9 +109,9 @@ Plans:- [ ] 03-01-PLAN.md — 协议字符串保护风险评估- [ ] 03-02-PLAN.
 |-------|----------------|--------|-----------|
 | 1. 代码库分析 | 3/3 | Complete   | 2026-03-28 |
 | 2. 架构设计 | 3/3 | Complete   | 2026-03-28 |
-| 3. 风险评估 | 0/0 | Not started | - |
-| 4. 原型验证 | 1/4 | In progress | 2026-03-30 |
-| 5. 文档交付 | 0/0 | Not started | - |
+| 3. 风险评估 | 3/3 | Complete   | 2026-03-30 |
+| 4. 原型验证 | 4/4 | Complete   | 2026-03-30 |
+| 5. 文档交付 | 1/3 | In Progress | - |
 
 ## Coverage
 
@@ -134,4 +149,4 @@ Plans:- [ ] 03-01-PLAN.md — 协议字符串保护风险评估- [ ] 03-02-PLAN.
 
 ---
 *Roadmap created: 2026-03-28*
-*Last updated: 2026-03-28*
+*Last updated: 2026-03-30*
