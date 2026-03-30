@@ -5,6 +5,8 @@ Language detection priority:
 1. CCB_LANG environment variable (zh/en/auto)
 2. System locale (LANG/LC_ALL/LC_MESSAGES)
 3. Default to English
+
+Backward compatible wrapper around i18n_core.
 """
 
 import os
@@ -80,7 +82,7 @@ MESSAGES = {
 
         # Install messages
         "install_complete": "Installation complete",
-        "uninstall_complete": "Uninstall complete",
+        "uninstall_complete": "Uninstallation complete",
         "python_version_old": "Python version too old: {version}",
         "requires_python": "Requires Python 3.10+",
         "missing_dependency": "Missing dependency: {dep}",
@@ -166,6 +168,87 @@ MESSAGES = {
 }
 
 
+# Mapping from old key names to new namespaced keys
+_key_mapping = {
+    # Terminal detection
+    "no_terminal_backend": "ccb.terminal.no_terminal_backend",
+    "solutions": "ccb.terminal.solutions",
+    "install_wezterm": "ccb.terminal.install_wezterm",
+    "or_install_tmux": "ccb.terminal.or_install_tmux",
+    "tmux_installed_not_inside": "ccb.terminal.tmux_installed_not_inside",
+    "or_set_ccb_terminal": "ccb.terminal.or_set_ccb_terminal",
+    "tmux_not_installed": "ccb.terminal.tmux_not_installed",
+    "install_wezterm_or_tmux": "ccb.terminal.install_wezterm_or_tmux",
+    "creating_tmux_session": "ccb.terminal.creating_tmux_session",
+    "attaching_to_tmux": "ccb.terminal.attaching_to_tmux",
+    # Startup
+    "starting_backend": "ccb.startup.starting_backend",
+    "started_backend": "ccb.startup.started_backend",
+    "unknown_provider": "ccb.startup.unknown_provider",
+    "resuming_session": "ccb.startup.resuming_session",
+    "no_history_fresh": "ccb.startup.no_history_fresh",
+    "warmup": "ccb.startup.warmup",
+    "warmup_failed": "ccb.startup.warmup_failed",
+    # Claude
+    "starting_claude": "ccb.claude.starting_claude",
+    "resuming_claude": "ccb.claude.resuming_claude",
+    "no_claude_session": "ccb.claude.no_claude_session",
+    "session_id": "ccb.claude.session_id",
+    "runtime_dir": "ccb.claude.runtime_dir",
+    "active_backends": "ccb.claude.active_backends",
+    "available_commands": "ccb.claude.available_commands",
+    "codex_commands": "ccb.claude.codex_commands",
+    "gemini_commands": "ccb.claude.gemini_commands",
+    "droid_commands": "ccb.claude.droid_commands",
+    "executing": "ccb.claude.executing",
+    "user_interrupted": "ccb.claude.user_interrupted",
+    "cleaning_up": "ccb.claude.cleaning_up",
+    "cleanup_complete": "ccb.claude.cleanup_complete",
+    # Banner
+    "banner_title": "ccb.banner.banner_title",
+    "banner_date": "ccb.banner.banner_date",
+    "banner_backends": "ccb.banner.banner_backends",
+    # Errors
+    "cannot_write_session": "ccb.error.cannot_write_session",
+    "fix_hint": "ccb.error.fix_hint",
+    "error": "ccb.error.error",
+    "execution_failed": "ccb.error.execution_failed",
+    "import_failed": "ccb.error.import_failed",
+    "module_import_failed": "ccb.error.module_import_failed",
+    # Connectivity
+    "connectivity_test_failed": "ccb.connectivity.connectivity_test_failed",
+    "no_reply_available": "ccb.connectivity.no_reply_available",
+    # Commands
+    "usage": "ccb.command.usage",
+    "sending_to": "ccb.command.sending_to",
+    "waiting_for_reply": "ccb.command.waiting_for_reply",
+    "reply_from": "ccb.command.reply_from",
+    "timeout_no_reply": "ccb.command.timeout_no_reply",
+    "session_not_found": "ccb.command.session_not_found",
+    # Install
+    "install_complete": "ccb.install.install_complete",
+    "uninstall_complete": "ccb.install.uninstall_complete",
+    "python_version_old": "ccb.install.python_version_old",
+    "requires_python": "ccb.install.requires_python",
+    "missing_dependency": "ccb.install.missing_dependency",
+    "detected_env": "ccb.install.detected_env",
+    "confirm_continue": "ccb.install.confirm_continue",
+    "cancelled": "ccb.install.cancelled",
+}
+
+from lib.i18n_core import I18nCore
+
+_core = I18nCore("ccb")
+_core_loaded = False
+
+
+def _ensure_loaded():
+    global _core_loaded
+    if not _core_loaded:
+        _core.load_translations()
+        _core_loaded = True
+
+
 def detect_language() -> str:
     """Detect language from environment.
 
@@ -215,25 +298,15 @@ def set_lang(lang: str) -> None:
 def t(key: str, **kwargs) -> str:
     """Get translated message by key.
 
+    Supports both old key names (backward compatible) and new namespaced keys.
     Args:
-        key: Message key
+        key: Message key (old format or namespaced format)
         **kwargs: Format arguments
 
     Returns:
         Translated and formatted message
     """
-    lang = get_lang()
-    messages = MESSAGES.get(lang, MESSAGES["en"])
-
-    msg = messages.get(key)
-    if msg is None:
-        # Fallback to English
-        msg = MESSAGES["en"].get(key, key)
-
-    if kwargs:
-        try:
-            msg = msg.format(**kwargs)
-        except (KeyError, ValueError):
-            pass
-
-    return msg
+    _ensure_loaded()
+    # Map old key to namespaced key
+    namespaced_key = _key_mapping.get(key, key)
+    return _core.t(namespaced_key, **kwargs)

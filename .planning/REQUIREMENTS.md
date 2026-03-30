@@ -12,23 +12,23 @@
 - [x] **ANALYSIS-01**: 扫描 CCB 代码库，识别所有硬编码文本位置
 - [x] **ANALYSIS-02**: 扫描 GSD 代码库，识别所有硬编码文本位置
 - [x] **ANALYSIS-03**: 区分人类可读文本和协议字符串（命令名、环境变量、完成标记）
-- [ ] **ANALYSIS-04**: 评估现有 CCB i18n.py 的可复用性和扩展性
+- [x] **ANALYSIS-04**: 评估现有 CCB i18n.py 的可复用性和扩展性
 
 ### 架构设计
 
 - [x] **ARCH-01**: 设计共享 i18n_core 模块架构（命名空间、回退机制）
-- [ ] **ARCH-02**: 设计 CCBCLIBackend 接口（submit/poll/ping/list_providers）
-- [ ] **ARCH-03**: 设计 TaskHandle/TaskResult 数据结构
+- [x] **ARCH-02**: 设计 CCBCLIBackend 接口（submit/poll/ping/list_providers）
+- [x] **ARCH-03**: 设计 TaskHandle/TaskResult 数据结构
 - [x] **ARCH-04**: 设计协议字符串保护机制（CI 检查、白名单）
 - [x] **ARCH-05**: 设计翻译文件组织结构（ccb/, gsd/, common/）
 
 ### 风险评估
 
-- [ ] **RISK-01**: 评估协议字符串误翻译的影响和缓解策略
-- [ ] **RISK-02**: 评估多 AI 上下文崩溃的风险和解决方案
-- [ ] **RISK-03**: 评估会话文件竞态条件的风险和文件锁方案
-- [ ] **RISK-04**: 估算 i18n 改造的工作量（代码行数、文件数）
-- [ ] **RISK-05**: 估算多 AI 集成的工作量和技术复杂度
+- [x] **RISK-01**: 评估协议字符串误翻译的影响和缓解策略
+- [x] **RISK-02**: 评估多 AI 上下文崩溃的风险和解决方案
+- [x] **RISK-03**: 评估会话文件竞态条件的风险和文件锁方案
+- [x] **RISK-04**: 估算 i18n 改造的工作量（代码行数、文件数）
+- [x] **RISK-05**: 估算多 AI 集成的工作量和技术复杂度
 
 ### 原型验证
 
@@ -80,17 +80,17 @@
 | ANALYSIS-01 | Phase 1 | Complete |
 | ANALYSIS-02 | Phase 1 | Complete |
 | ANALYSIS-03 | Phase 1 | Complete |
-| ANALYSIS-04 | Phase 1 | Pending |
+| ANALYSIS-04 | Phase 1 | Complete |
 | ARCH-01 | Phase 2 | Complete |
-| ARCH-02 | Phase 2 | Pending |
-| ARCH-03 | Phase 2 | Pending |
+| ARCH-02 | Phase 2 | Complete |
+| ARCH-03 | Phase 2 | Complete |
 | ARCH-04 | Phase 2 | Complete |
 | ARCH-05 | Phase 2 | Complete |
-| RISK-01 | Phase 3 | Pending |
-| RISK-02 | Phase 3 | Pending |
-| RISK-03 | Phase 3 | Pending |
-| RISK-04 | Phase 3 | Pending |
-| RISK-05 | Phase 3 | Pending |
+| RISK-01 | Phase 3 | Complete |
+| RISK-02 | Phase 3 | Complete |
+| RISK-03 | Phase 3 | Complete |
+| RISK-04 | Phase 3 | Complete |
+| RISK-05 | Phase 3 | Complete |
 | PROTO-01 | Phase 4 | Pending |
 | PROTO-02 | Phase 4 | Pending |
 | PROTO-03 | Phase 4 | Pending |
@@ -108,4 +108,4 @@
 
 ---
 *Requirements defined: 2026-03-28*
-*Last updated: 2026-03-28 after roadmap creation*
+*Last updated: 2026-03-30 after Phase 03 completion*

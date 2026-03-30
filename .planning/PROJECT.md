@@ -22,9 +22,6 @@
 
 ### Active
 
-- [ ] 设计统一的 i18n 架构框架
-- [ ] 评估国际化改造的工作量和技术风险
-- [ ] 设计 GSD 利用 CCB 多 AI 协作的集成方案
 - [ ] 构建原型验证关键技术点
 - [ ] 编写完整的技术方案文档
 
@@ -34,6 +31,21 @@
   - CCB: 6471 个字符串
   - GSD: 3402 个字符串
   - 分类: 520 个协议字符串, 9029 个人类文本
+
+### Validated in Phase 2
+
+- ✓ 设计统一的 i18n 架构框架 — Phase 2: 架构设计 (2026-03-28)
+  - i18n_core 保持 `t(key, **kwargs)` 契约，并增加 `ccb.*` / `gsd.*` 命名空间和回退机制
+- ✓ 设计 GSD 利用 CCB 多 AI 协作的集成方案 — Phase 2: 架构设计 (2026-03-28)
+  - 明确 `CCBCLIBackend`、`TaskHandle` / `TaskResult` 和协议字符串保护机制
+
+### Validated in Phase 3
+
+- ✓ 评估国际化改造的工作量和技术风险 — Phase 3: 风险评估 (2026-03-30)
+  - 协议白名单扩展到 300 项，采用 `CI 检查 + 运行时验证` 双层保护
+  - i18n 完整实施估算 536 小时，建议按 643 小时缓冲口径排期
+- ✓ 评估多 AI 集成的工作量和技术复杂度 — Phase 3: 风险评估 (2026-03-30)
+  - 明确同 provider 单任务约束，推荐复用 `ProviderLock`，工作量估算 40-60 小时
 
 ### Out of Scope
 
@@ -103,15 +115,27 @@ GSD-CCB 集成：
 - **技术**: 基于现有 Python 技术栈，不引入重型框架
 - **兼容性**: 不破坏现有功能和 API
 
+## Current State
+
+- Phase 1-3 已完成：代码分析、架构设计、风险评估与工作量估算都已落盘并验证
+- 下一阶段是 Phase 4：原型验证，目标是把 i18n_core、CCBCLIBackend、协议保护和文件锁方案落成最小可运行实现
+- 当前最重要的工程约束：
+  - 协议字符串永不翻译，白名单当前为 300 项
+  - 同一 provider 必须串行化，避免结果覆盖
+  - 会话文件访问应复用 `ProviderLock`
+
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| 提取共享 i18n_core | Codex 建议：保持 API 契约，添加命名空间和目录支持 | — Pending |
-| CCBCLIBackend 优先 | 比 MCP 更简单，已有生产级 CLI 接口 | — Pending |
-| 区分人类文本和协议 | 永不翻译命令名、环境变量、完成标记 | — Pending |
-| 渐进式迁移策略 | 降低风险，按模块逐步国际化 | — Pending |
-| 结构化任务句柄 | 避免解析控制台文本，使用 TaskHandle/TaskResult | — Pending |
+| 提取共享 i18n_core | 保持 API 契约，添加命名空间和目录支持 | Phase 2 已验证 |
+| CCBCLIBackend 优先 | 比 MCP 更简单，已有生产级 CLI 接口 | Phase 2 已验证 |
+| 区分人类文本和协议 | 永不翻译命令名、环境变量、完成标记 | Phase 1-3 已验证 |
+| 渐进式迁移策略 | 降低风险，按模块逐步国际化 | Phase 3 工时估算支持该结论 |
+| 结构化任务句柄 | 避免解析控制台文本，使用 TaskHandle/TaskResult | Phase 2 已验证 |
+| 双层协议保护 | 外部翻译无法被 CI 覆盖，必须增加运行时验证 | Phase 3 已验证 |
+| 单 provider 单任务约束 | 同 provider 并发会导致结果覆盖 | Phase 3 已验证 |
+| 复用 ProviderLock | 现有 `process_lock.py` 已具备跨平台锁能力 | Phase 3 已验证 |
 
 ## Evolution
 
@@ -124,4 +148,4 @@ GSD-CCB 集成：
 4. 原型验证完成 → 移动 Requirements 到 Validated
 
 ---
-*Last updated: 2026-03-28 after initialization*
+*Last updated: 2026-03-30 after Phase 03 completion*

@@ -2,6 +2,7 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
+<<<<<<< Updated upstream
 status: planning
 last_updated: "2026-03-28T06:42:00.000Z"
 progress:
@@ -9,6 +10,15 @@ progress:
   completed_phases: 2
   total_plans: 10
   completed_plans: 7
+=======
+status: executing
+last_updated: "2026-03-30T03:06:45.521Z"
+progress:
+  total_phases: 5
+  completed_phases: 3
+  total_plans: 13
+  completed_plans: 9
+>>>>>>> Stashed changes
   percent: 60
 ---
 
@@ -25,10 +35,17 @@ progress:
 
 ## Current Position
 
+<<<<<<< Updated upstream
 Phase: 4
 Plan: 4 (of 4)
 **Status:** In progress
 **Progress:** [██████████------] 60%
+=======
+Phase: 04 (原型验证) — EXECUTING
+Plan: 1 of 4
+**Status:** Executing Phase 04
+**Progress:** [██████----] 60%
+>>>>>>> Stashed changes
 
 ## Performance Metrics
 
