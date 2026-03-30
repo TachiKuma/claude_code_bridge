@@ -43,6 +43,7 @@ lib_dir = script_dir.parent / "lib"
 sys.path.insert(0, str(lib_dir))
 
 from compat import read_stdin_text, setup_windows_encoding
+from i18n import t
 setup_windows_encoding()
 
 from cli_output import EXIT_ERROR, EXIT_OK
@@ -466,8 +467,7 @@ def _require_caller() -> str:
     if not default_caller:
         default_caller = "manual"
     print(
-        f"[WARN] CCB_CALLER not set; using '{default_caller}'. "
-        "Set CCB_CALLER explicitly to override.",
+        f"[WARN] {t('ccb.ask.warn_missing_caller', caller=default_caller)}",
         file=sys.stderr,
     )
     return default_caller
@@ -481,18 +481,18 @@ def make_task_id() -> str:
 
 
 def _usage() -> None:
-    print("Usage: ask <provider> [options] <message>", file=sys.stderr)
+    print(t("usage", cmd="ask <provider> [options] <message>"), file=sys.stderr)
     print("", file=sys.stderr)
-    print("Providers:", file=sys.stderr)
+    print(t("ccb.ask.providers_header"), file=sys.stderr)
     print("  gemini, codex, opencode, droid, claude, copilot, codebuddy, qwen", file=sys.stderr)
     print("", file=sys.stderr)
-    print("Options:", file=sys.stderr)
-    print("  -h, --help              Show this help message", file=sys.stderr)
-    print("  -t, --timeout SECONDS   Request timeout (default: 3600)", file=sys.stderr)
-    print("  --notify                Sync send, no wait for reply (for notifications)", file=sys.stderr)
-    print("  --foreground            Run in foreground (no nohup/background)", file=sys.stderr)
-    print("  --background            Force background mode", file=sys.stderr)
-    print("  --no-wrap               Don't wrap with CCB protocol markers", file=sys.stderr)
+    print(t("ccb.ask.options_header"), file=sys.stderr)
+    print(t("ccb.ask.help_help"), file=sys.stderr)
+    print(t("ccb.ask.help_timeout"), file=sys.stderr)
+    print(t("ccb.ask.help_notify"), file=sys.stderr)
+    print(t("ccb.ask.help_foreground"), file=sys.stderr)
+    print(t("ccb.ask.help_background"), file=sys.stderr)
+    print(t("ccb.ask.help_no_wrap"), file=sys.stderr)
 
 
 def main(argv: list[str]) -> int:
@@ -510,8 +510,11 @@ def main(argv: list[str]) -> int:
     base_provider, instance = parse_qualified_provider(raw_provider)
 
     if base_provider not in PROVIDER_DAEMONS:
-        print(f"[ERROR] Unknown provider: {base_provider}", file=sys.stderr)
-        print(f"[ERROR] Available: {', '.join(PROVIDER_DAEMONS.keys())}", file=sys.stderr)
+        print(f"[ERROR] {t('ccb.ask.error_unknown_provider', provider=base_provider)}", file=sys.stderr)
+        print(
+            f"[ERROR] {t('ccb.ask.error_available', providers=', '.join(PROVIDER_DAEMONS.keys()))}",
+            file=sys.stderr,
+        )
         return EXIT_ERROR
 
     daemon_cmd = PROVIDER_DAEMONS[base_provider]
@@ -533,10 +536,10 @@ def main(argv: list[str]) -> int:
             try:
                 timeout = float(next(it))
             except StopIteration:
-                print("[ERROR] --timeout requires a number", file=sys.stderr)
+                print(f"[ERROR] {t('ccb.command.arg_requires_number', arg='--timeout')}", file=sys.stderr)
                 return EXIT_ERROR
             except ValueError:
-                print("[ERROR] --timeout must be a number", file=sys.stderr)
+                print(f"[ERROR] {t('ccb.command.arg_must_be_number', arg='--timeout')}", file=sys.stderr)
                 return EXIT_ERROR
             continue
         if token == "--notify":
@@ -557,7 +560,7 @@ def main(argv: list[str]) -> int:
     if not message and not sys.stdin.isatty():
         message = read_stdin_text().strip()
     if not message:
-        print("[ERROR] Message cannot be empty", file=sys.stderr)
+        print(f"[ERROR] {t('ccb.command.message_empty')}", file=sys.stderr)
         return EXIT_ERROR
 
     # Notify mode: sync send, no wait for reply (used for hook notifications)
@@ -566,7 +569,7 @@ def main(argv: list[str]) -> int:
         if _use_unified_daemon():
             # TODO: Add fire-and-forget RPC mode for unified daemon
             # For now, disable unified mode for notify and use legacy path
-            print("[WARN] Notify mode not yet supported with unified daemon, using legacy", file=sys.stderr)
+            print(f"[WARN] {t('ccb.ask.warn_notify_legacy_fallback')}", file=sys.stderr)
             # Fall through to legacy path below
 
         # Legacy daemon path for notify mode
@@ -585,7 +588,7 @@ def main(argv: list[str]) -> int:
         except subprocess.TimeoutExpired:
             return EXIT_OK
         except Exception as e:
-            print(f"[ERROR] {e}", file=sys.stderr)
+            print(f"[ERROR] {t('ccb.error.execution_failed', error=e)}", file=sys.stderr)
             return EXIT_ERROR
 
     # Foreground mode: run provider directly via unified daemon
@@ -603,7 +606,7 @@ def main(argv: list[str]) -> int:
                 result = subprocess.run(cmd, input=message, text=True, env=env)
                 return result.returncode
             except Exception as e:
-                print(f"[ERROR] {e}", file=sys.stderr)
+                print(f"[ERROR] {t('ccb.error.execution_failed', error=e)}", file=sys.stderr)
                 return EXIT_ERROR
 
     # Default async mode: background task
@@ -613,7 +616,7 @@ def main(argv: list[str]) -> int:
 
         state_file = state_file_path("askd.json")
         if not ping_daemon(timeout_s=0.5, state_file=state_file) and not _maybe_start_unified_daemon():
-            print("[ERROR] Unified askd daemon not running", file=sys.stderr)
+            print(f"[ERROR] {t('ccb.ask.error_unified_daemon_not_running')}", file=sys.stderr)
             return EXIT_ERROR
 
     task_id = make_task_id()

@@ -1,5 +1,7 @@
-"""CCB configuration for Windows/WSL backend environment"""
+"""CCB configuration for Windows/WSL backend environment."""
+
 import json
+import locale
 import os
 import subprocess
 import sys
@@ -39,22 +41,71 @@ def save_project_config(data: dict, work_dir: Path | None = None) -> Path:
     return path
 
 
+def normalize_language_setting(value: str | None) -> str | None:
+    """Normalize user-provided language values to supported settings."""
+    normalized = (value or "").strip().lower()
+    if normalized in {"zh", "cn", "chinese"}:
+        return "zh"
+    if normalized in {"en", "english"}:
+        return "en"
+    if normalized == "xx":
+        return "xx"
+    if normalized == "auto":
+        return "auto"
+    return None
+
+
 def get_language_setting(work_dir: Path | None = None) -> str | None:
-    """Get configured language from env or .ccb-config.json."""
-    env_lang = (os.environ.get("CCB_LANG") or "").strip().lower()
-    if env_lang in VALID_LANGUAGE_VALUES:
+    """Get configured language from .ccb-config.json."""
+    data = load_project_config(work_dir)
+    return normalize_language_setting(str(data.get("Language") or ""))
+
+
+def detect_locale_language(env: dict[str, str] | None = None) -> str:
+    """Detect language from locale-related environment variables."""
+    language_env = env or os.environ
+    try:
+        lang = (
+            language_env.get("LANG", "")
+            or language_env.get("LC_ALL", "")
+            or language_env.get("LC_MESSAGES", "")
+        )
+        if not lang:
+            lang, _ = locale.getlocale()
+            lang = lang or ""
+        normalized = (lang or "").strip().lower()
+        if normalized.startswith("zh") or "chinese" in normalized:
+            return "zh"
+    except Exception:
+        pass
+    return "en"
+
+
+def resolve_language_setting(work_dir: Path | None = None, env: dict[str, str] | None = None) -> str:
+    """Resolve effective UI language.
+
+    Priority is fixed to:
+    1. `CCB_LANG` environment variable
+    2. `.ccb-config.json: Language`
+    3. Locale detection
+
+    CLI `--lang` is normalized into `CCB_LANG` before this function is called.
+    """
+    language_env = env or os.environ
+    env_lang = normalize_language_setting(language_env.get("CCB_LANG"))
+    if env_lang and env_lang != "auto":
         return env_lang
 
-    data = load_project_config(work_dir)
-    value = str(data.get("Language") or "").strip().lower()
-    if value in VALID_LANGUAGE_VALUES:
-        return value
-    return None
+    configured = get_language_setting(work_dir)
+    if configured and configured != "auto":
+        return configured
+
+    return detect_locale_language(language_env)
 
 
 def set_language_setting(lang: str, work_dir: Path | None = None) -> Path:
     """Set project language in .ccb-config.json."""
-    value = (lang or "").strip().lower()
+    value = normalize_language_setting(lang)
     if value not in VALID_LANGUAGE_VALUES:
         raise ValueError(f"Unsupported language: {lang}")
     data = load_project_config(work_dir)

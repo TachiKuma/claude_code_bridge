@@ -5,7 +5,7 @@ Covers:
 - CCB_LANG env var override
 - --lang CLI flag override
 - Priority chain: --lang (CCB_LANG) -> .ccb-config.json -> locale -> default 'en'
-- i18n_core._detect_language alignment with ccb_config.get_language_setting
+- i18n_core._detect_language alignment with ccb_config.resolve_language_setting
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ from ccb_config import (
     VALID_LANGUAGE_VALUES,
     get_language_setting,
     load_project_config,
+    resolve_language_setting,
     save_project_config,
     set_language_setting,
 )
@@ -104,40 +105,39 @@ class TestConfigFileLanguage:
 
 
 # ---------------------------------------------------------------------------
-# CCB_LANG env var override
+# Shared resolver priority
 # ---------------------------------------------------------------------------
 
 
 class TestCCBLangEnv:
-    """Test CCB_LANG env var takes priority over config file."""
+    """Test resolve_language_setting() applies env/config priority correctly."""
 
     def test_ccb_lang_overrides_config(self, tmp_path: Path):
         config_file = tmp_path / ".ccb-config.json"
         config_file.write_text(json.dumps({"Language": "zh"}), encoding="utf-8")
         with mock.patch.dict(os.environ, {"CCB_LANG": "en"}):
-            result = get_language_setting(tmp_path)
+            result = resolve_language_setting(tmp_path)
             assert result == "en"
 
     def test_ccb_lang_auto_falls_through_to_config(self, tmp_path: Path):
         config_file = tmp_path / ".ccb-config.json"
         config_file.write_text(json.dumps({"Language": "zh"}), encoding="utf-8")
-        # "auto" is a valid value but env check validates it first
         with mock.patch.dict(os.environ, {"CCB_LANG": "auto"}):
-            result = get_language_setting(tmp_path)
-            assert result == "auto"
+            result = resolve_language_setting(tmp_path)
+            assert result == "zh"
 
     def test_ccb_lang_invalid_falls_through_to_config(self, tmp_path: Path):
         config_file = tmp_path / ".ccb-config.json"
         config_file.write_text(json.dumps({"Language": "zh"}), encoding="utf-8")
         with mock.patch.dict(os.environ, {"CCB_LANG": "french"}):
-            result = get_language_setting(tmp_path)
+            result = resolve_language_setting(tmp_path)
             assert result == "zh"
 
     def test_ccb_lang_empty_falls_through(self, tmp_path: Path):
         config_file = tmp_path / ".ccb-config.json"
         config_file.write_text(json.dumps({"Language": "en"}), encoding="utf-8")
         with mock.patch.dict(os.environ, {"CCB_LANG": ""}):
-            result = get_language_setting(tmp_path)
+            result = resolve_language_setting(tmp_path)
             assert result == "en"
 
 
@@ -160,7 +160,7 @@ class TestLangCLI:
         config_file = tmp_path / ".ccb-config.json"
         config_file.write_text(json.dumps({"Language": "en"}), encoding="utf-8")
         with mock.patch.dict(os.environ, {"CCB_LANG": "zh"}):
-            result = get_language_setting(tmp_path)
+            result = resolve_language_setting(tmp_path)
             assert result == "zh"
 
 
@@ -177,7 +177,7 @@ class TestLanguagePriority:
         config_file = tmp_path / ".ccb-config.json"
         config_file.write_text(json.dumps({"Language": "zh"}), encoding="utf-8")
         with mock.patch.dict(os.environ, {"CCB_LANG": "en"}):
-            result = get_language_setting(tmp_path)
+            result = resolve_language_setting(tmp_path)
             assert result == "en"
 
     def test_priority_config_when_no_env(self, tmp_path: Path):
@@ -186,15 +186,16 @@ class TestLanguagePriority:
         config_file.write_text(json.dumps({"Language": "zh"}), encoding="utf-8")
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("CCB_LANG", None)
-            result = get_language_setting(tmp_path)
+            result = resolve_language_setting(tmp_path)
             assert result == "zh"
 
     def test_priority_default_when_nothing_set(self, tmp_path: Path):
-        """Returns None when nothing is set (caller falls back to locale/en)."""
+        """Falls back to locale/en when env and config are both absent."""
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("CCB_LANG", None)
-            result = get_language_setting(tmp_path)
-            assert result is None
+            with mock.patch("locale.getlocale", return_value=(None, None)):
+                result = resolve_language_setting(tmp_path)
+                assert result == "en"
 
     def test_valid_language_values(self):
         """Valid values are exactly auto, en, zh, xx."""
@@ -252,7 +253,7 @@ class TestI18nCoreDetectLanguage:
         env.pop("LC_MESSAGES", None)
         with mock.patch.dict(os.environ, env, clear=True):
             with mock.patch("locale.getlocale", return_value=(None, None)):
-                with mock.patch("ccb_config.get_language_setting", return_value=None):
+                with mock.patch("i18n_core.resolve_language_setting", return_value="en"):
                     result = core._detect_language()
                     assert result == "en"
 

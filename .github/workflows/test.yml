@@ -40,9 +40,9 @@ jobs:
       - name: Run tests
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
-            pytest test/ -v --tb=short -k "not tmux"
+            pytest tests/ test/ -v --tb=short -k "not tmux"
           else
-            pytest test/ -v --tb=short
+            pytest tests/ test/ -v --tb=short
           fi
         shell: bash
 
@@ -91,4 +91,4 @@ jobs:
         shell: wsl-bash {0}
         run: |
           export TERM=xterm-256color
-          python3 -m pytest test/ -v --tb=short
+          python3 -m pytest tests/ test/ -v --tb=short

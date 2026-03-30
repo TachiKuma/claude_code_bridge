@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 from lib.i18n import _key_mapping
 TRANSLATION_FILE = ROOT / "lib" / "i18n" / "ccb" / "en.json"
 TARGETS = (
+    ROOT / "ccb",
     ROOT / "lib" / "i18n.py",
     ROOT / "lib" / "i18n_core.py",
     ROOT / "lib" / "i18n_runtime.py",

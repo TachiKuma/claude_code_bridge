@@ -1,21 +1,9 @@
-"""
-i18n - Internationalization support for CCB
-
-Language detection priority:
-1. CCB_LANG environment variable (zh/en/auto)
-2. System locale (LANG/LC_ALL/LC_MESSAGES)
-3. Default to English
-
-Backward compatible wrapper around i18n_core.
-"""
-
-import os
-import locale
+"""Backward compatible wrapper around i18n_core."""
 
 try:
-    from lib.ccb_config import get_language_setting
+    from lib.ccb_config import resolve_language_setting
 except ModuleNotFoundError:
-    from ccb_config import get_language_setting
+    from ccb_config import resolve_language_setting
 
 _current_lang = None
 
@@ -258,37 +246,8 @@ def _ensure_loaded():
 
 
 def detect_language() -> str:
-    """Detect language from environment.
-
-    Priority:
-    1. CCB_LANG environment variable (zh/en/auto/xx)
-    2. .ccb-config.json Language
-    3. System locale
-    4. Default to English
-    """
-    ccb_lang = get_language_setting() or "auto"
-
-    if ccb_lang in ("zh", "cn", "chinese"):
-        return "zh"
-    if ccb_lang in ("en", "english"):
-        return "en"
-    if ccb_lang == "xx":
-        return "xx"
-
-    # Auto-detect from system locale
-    try:
-        lang = os.environ.get("LANG", "") or os.environ.get("LC_ALL", "") or os.environ.get("LC_MESSAGES", "")
-        if not lang:
-            lang, _ = locale.getlocale()
-            lang = lang or ""
-
-        lang = lang.lower()
-        if lang.startswith("zh") or "chinese" in lang:
-            return "zh"
-    except Exception:
-        pass
-
-    return "en"
+    """Detect language using the shared CCB priority chain."""
+    return resolve_language_setting()
 
 
 def get_lang() -> str:

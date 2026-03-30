@@ -25,63 +25,508 @@ detect_lang() {
 
 CCB_LANG_DETECTED="$(detect_lang)"
 
+localized_skill_template() {
+  local skill_dir="$1"
+  if [[ "$CCB_LANG_DETECTED" == "zh" ]] && [[ -f "$skill_dir/SKILL.zh.md" ]]; then
+    echo "$skill_dir/SKILL.zh.md"
+    return
+  fi
+  if [[ -f "$skill_dir/SKILL.md.bash" ]]; then
+    echo "$skill_dir/SKILL.md.bash"
+    return
+  fi
+  if [[ -f "$skill_dir/SKILL.md" ]]; then
+    echo "$skill_dir/SKILL.md"
+    return
+  fi
+}
+
+localized_config_template() {
+  local base_name="$1"
+  local zh_candidate="$INSTALL_PREFIX/config/${base_name}.zh"
+  local default_candidate="$INSTALL_PREFIX/config/${base_name}"
+
+  if [[ "$CCB_LANG_DETECTED" == "zh" ]]; then
+    case "$base_name" in
+      *.md)
+        zh_candidate="$INSTALL_PREFIX/config/${base_name%.md}.zh.md"
+        ;;
+      *.conf)
+        zh_candidate="$INSTALL_PREFIX/config/${base_name%.conf}.zh.conf"
+        ;;
+    esac
+    if [[ -f "$zh_candidate" ]]; then
+      echo "$zh_candidate"
+      return
+    fi
+  fi
+
+  echo "$default_candidate"
+}
+
 # Message function
 msg() {
   local key="$1"
   shift
   local en_msg zh_msg
   case "$key" in
-    install_complete)
+    install_complete) key="install.complete" ;;
+    uninstall_complete) key="install.uninstall.complete" ;;
+    python_version_old) key="install.python.version_old" ;;
+    requires_python) key="install.python.requires" ;;
+    missing_dep) key="install.dependency.missing" ;;
+    detected_env) key="install.environment.detected" ;;
+    confirm_wsl) key="install.backend.confirm_wsl_prompt" ;;
+    cancelled) key="install.backend.cancelled" ;;
+    wsl_warning) key="install.backend.wsl_warning" ;;
+    same_env_required) key="install.backend.same_env_required" ;;
+    confirm_wsl_native) key="install.backend.confirm_wsl_native" ;;
+    wezterm_recommended) key="install.wezterm.recommended" ;;
+    watchdog_installing) key="install.watchdog.installing" ;;
+    watchdog_installed) key="install.watchdog.installed" ;;
+    watchdog_failed) key="install.watchdog.failed" ;;
+    pip_missing) key="install.pip.missing" ;;
+    root_error) key="install.error.root" ;;
+  esac
+  case "$key" in
+    "install.complete")
       en_msg="Installation complete"
       zh_msg="安装完成" ;;
-    uninstall_complete)
+    "install.uninstall.complete")
       en_msg="Uninstall complete"
       zh_msg="卸载完成" ;;
-    python_version_old)
-      en_msg="Python version too old: $1"
-      zh_msg="Python 版本过旧: $1" ;;
-    requires_python)
-      en_msg="Requires Python 3.10+"
-      zh_msg="需要 Python 3.10+" ;;
-    missing_dep)
-      en_msg="Missing dependency: $1"
-      zh_msg="缺少依赖: $1" ;;
-    detected_env)
-      en_msg="Detected $1 environment"
-      zh_msg="检测到 $1 环境" ;;
-    confirm_wsl)
-      en_msg="Confirm continue installing in WSL? (y/N)"
-      zh_msg="确认继续在 WSL 中安装？(y/N)" ;;
-    cancelled)
-      en_msg="Installation cancelled"
-      zh_msg="安装已取消" ;;
-    wsl_warning)
-      en_msg="Detected WSL environment"
-      zh_msg="检测到 WSL 环境" ;;
-    same_env_required)
-      en_msg="ccb/ask/ping/pend must run in the same environment as codex/gemini."
-      zh_msg="ccb/ask/ping/pend 必须与 codex/gemini 在同一环境运行。" ;;
-    confirm_wsl_native)
-      en_msg="Please confirm: you will install and run codex/gemini in WSL (not Windows native)."
-      zh_msg="请确认：你将在 WSL 中安装并运行 codex/gemini（不是 Windows 原生）。" ;;
-    wezterm_recommended)
-      en_msg="Recommend installing WezTerm as terminal frontend"
-      zh_msg="推荐安装 WezTerm 作为终端前端" ;;
-    watchdog_installing)
-      en_msg="Installing Python dependency: watchdog"
-      zh_msg="正在安装 Python 依赖: watchdog" ;;
-    watchdog_installed)
-      en_msg="OK: watchdog installed"
-      zh_msg="OK: watchdog 已安装" ;;
-    watchdog_failed)
-      en_msg="WARN: watchdog install failed (will fall back to polling)"
-      zh_msg="警告：watchdog 安装失败（将退回轮询）" ;;
-    pip_missing)
-      en_msg="WARN: pip not available; please install watchdog manually"
-      zh_msg="警告：未找到 pip，请手动安装 watchdog" ;;
-    root_error)
+    "install.error.root")
       en_msg="ERROR: Do not run as root/sudo. Please run as normal user."
       zh_msg="错误：请勿以 root/sudo 身份运行。请使用普通用户执行。" ;;
+    "install.ui.separator")
+      en_msg="================================================================"
+      zh_msg="================================================================" ;;
+    "install.usage.title")
+      en_msg="Usage:"
+      zh_msg="用法：" ;;
+    "install.usage.install")
+      en_msg="  ./install.sh install    # Install or update Codex dual-window tools"
+      zh_msg="  ./install.sh install    # 安装或更新 Codex 双窗工具" ;;
+    "install.usage.uninstall")
+      en_msg="  ./install.sh uninstall  # Uninstall installed content"
+      zh_msg="  ./install.sh uninstall  # 卸载已安装内容" ;;
+    "install.usage.env_title")
+      en_msg="Optional environment variables:"
+      zh_msg="可选环境变量：" ;;
+    "install.usage.install_prefix")
+      en_msg="  CODEX_INSTALL_PREFIX     Install directory (default: ~/.local/share/codex-dual)"
+      zh_msg="  CODEX_INSTALL_PREFIX     安装目录（默认：~/.local/share/codex-dual）" ;;
+    "install.usage.bin_dir")
+      en_msg="  CODEX_BIN_DIR            Executable directory (default: ~/.local/bin)"
+      zh_msg="  CODEX_BIN_DIR            可执行目录（默认：~/.local/bin）" ;;
+    "install.usage.claude_dir")
+      en_msg="  CODEX_CLAUDE_COMMAND_DIR Custom Claude commands directory (default: auto-detect)"
+      zh_msg="  CODEX_CLAUDE_COMMAND_DIR 自定义 Claude commands 目录（默认：自动检测）" ;;
+    "install.usage.droid_autoinstall")
+      en_msg="  CCB_DROID_AUTOINSTALL    Auto-register Droid MCP tools if droid exists (default: 1)"
+      zh_msg="  CCB_DROID_AUTOINSTALL    若存在 droid，则自动注册 Droid MCP 工具（默认：1）" ;;
+    "install.usage.droid_force")
+      en_msg="  CCB_DROID_AUTOINSTALL_FORCE Re-register Droid MCP tools (default: 0)"
+      zh_msg="  CCB_DROID_AUTOINSTALL_FORCE 重新注册 Droid MCP 工具（默认：0）" ;;
+    "install.usage.claude_md_mode")
+      en_msg="  CCB_CLAUDE_MD_MODE       CLAUDE.md injection mode: \"inline\" (default) or \"route\""
+      zh_msg="  CCB_CLAUDE_MD_MODE       CLAUDE.md 注入模式：`inline`（默认）或 `route`" ;;
+    "install.usage.claude_md_mode_inline")
+      en_msg="                           inline = full config in CLAUDE.md (~57 lines)"
+      zh_msg="                           inline = 在 CLAUDE.md 中写入完整配置（约 57 行）" ;;
+    "install.usage.claude_md_mode_route")
+      en_msg="                           route  = minimal pointer in CLAUDE.md, full config in ~/.claude/rules/ccb-config.md"
+      zh_msg="                           route  = CLAUDE.md 中保留指针，完整配置写入 ~/.claude/rules/ccb-config.md" ;;
+    "install.dependency.missing")
+      en_msg="ERROR: Missing dependency: $1"
+      zh_msg="错误：缺少依赖：$1" ;;
+    "install.dependency.install_first")
+      en_msg="   Please install $1 first, then re-run install.sh"
+      zh_msg="   请先安装 $1，然后重新执行 install.sh" ;;
+    "install.python.missing")
+      en_msg="ERROR: Missing dependency: python (3.10+ required)"
+      zh_msg="错误：缺少依赖：python（需要 3.10+）" ;;
+    "install.python.install_hint")
+      en_msg="   Please install Python 3.10+ and ensure it is on PATH, then re-run install.sh"
+      zh_msg="   请安装 Python 3.10+ 并确保其在 PATH 中，然后重新执行 install.sh" ;;
+    "install.python.version_old")
+      en_msg="Python version too old: $1"
+      zh_msg="Python 版本过旧：$1" ;;
+    "install.python.requires")
+      en_msg="Requires Python 3.10+"
+      zh_msg="需要 Python 3.10+" ;;
+    "install.python.upgrade_hint")
+      en_msg="   Requires Python 3.10+, please upgrade and retry"
+      zh_msg="   需要 Python 3.10+，请升级后重试" ;;
+    "install.python.ok")
+      en_msg="OK: Python $1 ($2)"
+      zh_msg="OK：Python $1 ($2)" ;;
+    "install.environment.detected")
+      en_msg="Detected $1 environment"
+      zh_msg="检测到 $1 环境" ;;
+    "install.watchdog.installing")
+      en_msg="Installing Python dependency: watchdog"
+      zh_msg="正在安装 Python 依赖：watchdog" ;;
+    "install.watchdog.installed")
+      en_msg="OK: watchdog installed"
+      zh_msg="OK：watchdog 已安装" ;;
+    "install.watchdog.failed")
+      en_msg="WARN: watchdog install failed (will fall back to polling)"
+      zh_msg="警告：watchdog 安装失败（将退回轮询）" ;;
+    "install.pip.missing")
+      en_msg="WARN: pip not available; please install watchdog manually"
+      zh_msg="警告：未找到 pip，请手动安装 watchdog" ;;
+    "install.backend.non_interactive")
+      en_msg="ERROR: Installing in WSL but detected non-interactive terminal; aborted to avoid env mismatch."
+      zh_msg="错误：在 WSL 中安装时检测到非交互终端；为避免环境错配已中止。" ;;
+    "install.backend.non_interactive_hint")
+      en_msg="   If you confirm codex/gemini will be installed and run in WSL:"
+      zh_msg="   如果你确认 codex/gemini 将在 WSL 中安装并运行：" ;;
+    "install.backend.non_interactive_retry")
+      en_msg="   Re-run: CCB_INSTALL_ASSUME_YES=1 ./install.sh install"
+      zh_msg="   请重新执行：CCB_INSTALL_ASSUME_YES=1 ./install.sh install" ;;
+    "install.backend.wsl_warning")
+      en_msg="WARN: Detected WSL environment"
+      zh_msg="警告：检测到 WSL 环境" ;;
+    "install.backend.same_env_required")
+      en_msg="ccb/ask/ping/pend must run in the same environment as codex/gemini."
+      zh_msg="ccb/ask/ping/pend 必须与 codex/gemini 在同一环境运行。" ;;
+    "install.backend.confirm_wsl_native")
+      en_msg="Please confirm: you will install and run codex/gemini in WSL (not Windows native)."
+      zh_msg="请确认：你将在 WSL 中安装并运行 codex/gemini（不是 Windows 原生）。" ;;
+    "install.backend.windows_hint")
+      en_msg="If you plan to run codex/gemini in Windows native, exit and run on Windows side:"
+      zh_msg="如果你打算在 Windows 原生环境运行 codex/gemini，请退出并在 Windows 侧执行：" ;;
+    "install.backend.windows_command")
+      en_msg="   powershell -ExecutionPolicy Bypass -File .\\install.ps1 install"
+      zh_msg="   powershell -ExecutionPolicy Bypass -File .\\install.ps1 install" ;;
+    "install.backend.confirm_wsl_prompt")
+      en_msg="Confirm continue installing in WSL? (y/N)"
+      zh_msg="确认继续在 WSL 中安装？(y/N)" ;;
+    "install.backend.cancelled")
+      en_msg="Installation cancelled"
+      zh_msg="安装已取消" ;;
+    "install.tmux.macos_brew")
+      en_msg="   macOS: Run 'brew install tmux'"
+      zh_msg="   macOS：执行 `brew install tmux`" ;;
+    "install.tmux.macos_no_brew")
+      en_msg="   macOS: Homebrew not detected, install from https://brew.sh then run 'brew install tmux'"
+      zh_msg="   macOS：未检测到 Homebrew，请先安装 https://brew.sh 然后执行 `brew install tmux`" ;;
+    "install.tmux.debian")
+      en_msg="   Debian/Ubuntu: sudo apt-get update && sudo apt-get install -y tmux"
+      zh_msg="   Debian/Ubuntu：sudo apt-get update && sudo apt-get install -y tmux" ;;
+    "install.tmux.dnf")
+      en_msg="   Fedora/CentOS/RHEL: sudo dnf install -y tmux"
+      zh_msg="   Fedora/CentOS/RHEL：sudo dnf install -y tmux" ;;
+    "install.tmux.yum")
+      en_msg="   CentOS/RHEL: sudo yum install -y tmux"
+      zh_msg="   CentOS/RHEL：sudo yum install -y tmux" ;;
+    "install.tmux.pacman")
+      en_msg="   Arch/Manjaro: sudo pacman -S tmux"
+      zh_msg="   Arch/Manjaro：sudo pacman -S tmux" ;;
+    "install.tmux.apk")
+      en_msg="   Alpine: sudo apk add tmux"
+      zh_msg="   Alpine：sudo apk add tmux" ;;
+    "install.tmux.zypper")
+      en_msg="   openSUSE: sudo zypper install -y tmux"
+      zh_msg="   openSUSE：sudo zypper install -y tmux" ;;
+    "install.tmux.generic")
+      en_msg="   Linux: Please use your distro's package manager to install tmux"
+      zh_msg="   Linux：请使用你的发行版包管理器安装 tmux" ;;
+    "install.tmux.docs")
+      en_msg="   See https://github.com/tmux/tmux/wiki/Installing for tmux installation"
+      zh_msg="   参考 https://github.com/tmux/tmux/wiki/Installing 安装 tmux" ;;
+    "install.backend.wezterm_env_override")
+      en_msg="OK: Detected WezTerm environment ($1)"
+      zh_msg="OK：检测到 WezTerm 环境（$1）" ;;
+    "install.backend.wezterm_env")
+      en_msg="OK: Detected WezTerm environment"
+      zh_msg="OK：检测到 WezTerm 环境" ;;
+    "install.backend.tmux_env")
+      en_msg="OK: Detected tmux environment"
+      zh_msg="OK：检测到 tmux 环境" ;;
+    "install.backend.wezterm_override")
+      en_msg="OK: Detected WezTerm ($1)"
+      zh_msg="OK：检测到 WezTerm（$1）" ;;
+    "install.backend.wezterm")
+      en_msg="OK: Detected WezTerm"
+      zh_msg="OK：检测到 WezTerm" ;;
+    "install.backend.wezterm_program_files")
+      en_msg="OK: Detected WezTerm (/mnt/c/Program Files/WezTerm/wezterm.exe)"
+      zh_msg="OK：检测到 WezTerm（/mnt/c/Program Files/WezTerm/wezterm.exe）" ;;
+    "install.backend.wezterm_program_files_x86")
+      en_msg="OK: Detected WezTerm (/mnt/c/Program Files (x86)/WezTerm/wezterm.exe)"
+      zh_msg="OK：检测到 WezTerm（/mnt/c/Program Files (x86)/WezTerm/wezterm.exe）" ;;
+    "install.backend.tmux_recommended")
+      en_msg="OK: Detected tmux (recommend also installing WezTerm for better experience)"
+      zh_msg="OK：检测到 tmux（建议同时安装 WezTerm 以获得更好体验）" ;;
+    "install.backend.missing")
+      en_msg="ERROR: Missing dependency: WezTerm or tmux (at least one required)"
+      zh_msg="错误：缺少依赖：WezTerm 或 tmux（至少需要一个）" ;;
+    "install.backend.website")
+      en_msg="   WezTerm website: https://wezfurlong.org/wezterm/"
+      zh_msg="   WezTerm 网站：https://wezfurlong.org/wezterm/" ;;
+    "install.backend.macos_note")
+      en_msg="NOTE: macOS user recommended options:"
+      zh_msg="提示：macOS 用户推荐方案：" ;;
+    "install.backend.macos_tmux")
+      en_msg="   - Install tmux: brew install tmux"
+      zh_msg="   - 安装 tmux：brew install tmux" ;;
+    "install.wezterm.recommended")
+      en_msg="Recommend installing WezTerm as terminal frontend"
+      zh_msg="推荐安装 WezTerm 作为终端前端" ;;
+    "install.wezterm.cached")
+      en_msg="OK: WezTerm path cached: $1"
+      zh_msg="OK：已缓存 WezTerm 路径：$1" ;;
+    "install.link.script_missing")
+      en_msg="WARN: Script not found $1, skipping link creation"
+      zh_msg="警告：未找到脚本 $1，跳过创建链接" ;;
+    "install.link.created")
+      en_msg="Created executable links in $1"
+      zh_msg="已在 $1 创建可执行链接" ;;
+    "install.path.already_configured")
+      en_msg="PATH already configured in $1 (restart terminal to apply)"
+      zh_msg="PATH 已在 $1 中配置（重启终端后生效）" ;;
+    "install.path.added")
+      en_msg="OK: Added $1 to PATH in $2"
+      zh_msg="OK：已将 $1 添加到 $2 的 PATH" ;;
+    "install.path.reload_hint")
+      en_msg="   Run: source $1  (or restart terminal)"
+      zh_msg="   执行：source $1（或重启终端）" ;;
+    "install.commands.removed")
+      en_msg="  Removed obsolete command: $1"
+      zh_msg="  已移除废弃命令：$1" ;;
+    "install.commands.updated_dir")
+      en_msg="Updated Claude commands directory: $1"
+      zh_msg="已更新 Claude commands 目录：$1" ;;
+    "install.skill.removed")
+      en_msg="  Removed obsolete skill: $1"
+      zh_msg="  已移除废弃 skill：$1" ;;
+    "install.skill.installing_claude")
+      en_msg="Installing Claude skills (bash SKILL.md templates)..."
+      zh_msg="正在安装 Claude skills（bash SKILL.md 模板）..." ;;
+    "install.skill.installing_codex")
+      en_msg="Installing Codex skills (bash SKILL.md templates)..."
+      zh_msg="正在安装 Codex skills（bash SKILL.md 模板）..." ;;
+    "install.skill.installing_droid")
+      en_msg="Installing Droid/Factory skills..."
+      zh_msg="正在安装 Droid/Factory skills..." ;;
+    "install.skill.updated")
+      en_msg="  Updated skill: $1"
+      zh_msg="  已更新 skill：$1" ;;
+    "install.skill.updated_codex")
+      en_msg="  Updated Codex skill: $1"
+      zh_msg="  已更新 Codex skill：$1" ;;
+    "install.skill.updated_factory")
+      en_msg="  Updated Factory skill: $1"
+      zh_msg="  已更新 Factory skill：$1" ;;
+    "install.skill.docs_installed")
+      en_msg="  Installed skills docs: docs/"
+      zh_msg="  已安装 skills 文档：docs/" ;;
+    "install.skill.updated_dir")
+      en_msg="Updated Claude skills directory: $1"
+      zh_msg="已更新 Claude skills 目录：$1" ;;
+    "install.skill.updated_codex_dir")
+      en_msg="Updated Codex skills directory: $1"
+      zh_msg="已更新 Codex skills 目录：$1" ;;
+    "install.skill.updated_factory_dir")
+      en_msg="Updated Factory skills directory: $1"
+      zh_msg="已更新 Factory skills 目录：$1" ;;
+    "install.droid.python_missing")
+      en_msg="WARN: python required for Droid MCP setup; skipping"
+      zh_msg="警告：Droid MCP 配置需要 python，已跳过" ;;
+    "install.droid.server_missing")
+      en_msg="WARN: Droid MCP server not found at $1; skipping"
+      zh_msg="警告：未找到 Droid MCP server：$1，已跳过" ;;
+    "install.droid.registered")
+      en_msg="OK: Droid MCP delegation registered"
+      zh_msg="OK：Droid MCP delegation 已注册" ;;
+    "install.droid.register_failed")
+      en_msg="WARN: Failed to register Droid MCP delegation (already registered or droid config unavailable)"
+      zh_msg="警告：注册 Droid MCP delegation 失败（可能已注册或 droid 配置不可用）" ;;
+    "install.mcp.python_required")
+      en_msg="WARN: python required to detect MCP configuration"
+      zh_msg="警告：检测 MCP 配置需要 python" ;;
+    "install.mcp.detected_conflict")
+      en_msg="WARN: Detected codex-related MCP configuration, removing to avoid conflicts..."
+      zh_msg="警告：检测到与 codex 相关的 MCP 配置，正在移除以避免冲突..." ;;
+    "install.mcp.cleaned")
+      en_msg="OK: Codex MCP configuration cleaned"
+      zh_msg="OK：已清理 Codex MCP 配置" ;;
+    "install.claude_md.python_required")
+      en_msg="ERROR: python required to update CLAUDE.md"
+      zh_msg="错误：更新 CLAUDE.md 需要 python" ;;
+    "install.claude_md.template_missing")
+      en_msg="WARN: Template not found: $1; skipping CLAUDE.md injection"
+      zh_msg="警告：未找到模板：$1，跳过 CLAUDE.md 注入" ;;
+    "install.claude_md.external_written")
+      en_msg="Wrote full CCB config to $1"
+      zh_msg="已将完整 CCB 配置写入 $1" ;;
+    "install.claude_md.updating")
+      en_msg="Updating existing CCB config block (mode: $1)..."
+      zh_msg="正在更新现有 CCB 配置块（模式：$1）..." ;;
+    "install.claude_md.removing_legacy")
+      en_msg="Removing legacy rules and adding new CCB config block..."
+      zh_msg="正在移除旧规则并添加新的 CCB 配置块..." ;;
+    "install.claude_md.updated")
+      en_msg="Updated AI collaboration rules in $1 (mode: $2)"
+      zh_msg="已更新 $1 中的 AI 协作规则（模式：$2）" ;;
+    "install.agents.python_required")
+      en_msg="WARN: python required to update AGENTS.md; skipping"
+      zh_msg="警告：更新 AGENTS.md 需要 python，已跳过" ;;
+    "install.agents.template_missing")
+      en_msg="WARN: Template not found: $1; skipping AGENTS.md injection"
+      zh_msg="警告：未找到模板：$1，跳过 AGENTS.md 注入" ;;
+    "install.agents.updating")
+      en_msg="Updating existing CCB blocks in AGENTS.md..."
+      zh_msg="正在更新 AGENTS.md 中现有的 CCB 配置块..." ;;
+    "install.agents.updated")
+      en_msg="Updated AGENTS.md: $1"
+      zh_msg="已更新 AGENTS.md：$1" ;;
+    "install.clinerules.python_required")
+      en_msg="WARN: python required to update .clinerules; skipping"
+      zh_msg="警告：更新 .clinerules 需要 python，已跳过" ;;
+    "install.clinerules.template_missing")
+      en_msg="WARN: Template not found: $1; skipping .clinerules injection"
+      zh_msg="警告：未找到模板：$1，跳过 .clinerules 注入" ;;
+    "install.clinerules.updating")
+      en_msg="Updating existing CCB roles block in .clinerules..."
+      zh_msg="正在更新 .clinerules 中现有的 CCB 角色块..." ;;
+    "install.clinerules.updated")
+      en_msg="Updated .clinerules: $1"
+      zh_msg="已更新 .clinerules：$1" ;;
+    "install.settings.created")
+      en_msg="Created $1 with permissions"
+      zh_msg="已创建带权限配置的 $1" ;;
+    "install.settings.updated")
+      en_msg="Updated $1 permissions"
+      zh_msg="已更新 $1 的权限配置" ;;
+    "install.tmux.updated")
+      en_msg="Updated tmux configuration: $1"
+      zh_msg="已更新 tmux 配置：$1" ;;
+    "install.tmux.reloaded")
+      en_msg="Reloaded tmux configuration in running server."
+      zh_msg="已在运行中的 tmux server 中重新加载配置。" ;;
+    "install.tmux.reload_failed")
+      en_msg="WARN: Failed to reload tmux configuration automatically; run: tmux source $1"
+      zh_msg="警告：自动重载 tmux 配置失败；请执行：tmux source $1" ;;
+    "install.tmux.removing")
+      en_msg="Removing CCB tmux configuration from $1..."
+      zh_msg="正在从 $1 移除 CCB tmux 配置..." ;;
+    "install.tmux.removed")
+      en_msg="Removed CCB tmux configuration from $1"
+      zh_msg="已从 $1 移除 CCB tmux 配置" ;;
+    "install.wezterm.note")
+      en_msg="NOTE: Recommend installing WezTerm as terminal frontend (better experience, recommended for WSL2/Windows)"
+      zh_msg="提示：推荐安装 WezTerm 作为终端前端（体验更好，尤其推荐 WSL2/Windows）" ;;
+    "install.wezterm.site")
+      en_msg="   - Website: https://wezfurlong.org/wezterm/"
+      zh_msg="   - 网站：https://wezfurlong.org/wezterm/" ;;
+    "install.wezterm.benefit")
+      en_msg="   - Benefits: Smoother split/scroll/font rendering, more stable bridging in WezTerm mode"
+      zh_msg="   - 优势：分屏/滚动/字体渲染更顺滑，WezTerm 模式下桥接更稳定" ;;
+    "install.uninstall.remove_claude_md")
+      en_msg="Removing CCB config block from CLAUDE.md..."
+      zh_msg="正在从 CLAUDE.md 移除 CCB 配置块..." ;;
+    "install.uninstall.removed_claude_md")
+      en_msg="Removed CCB config from CLAUDE.md"
+      zh_msg="已从 CLAUDE.md 移除 CCB 配置" ;;
+    "install.uninstall.python_required_claude_md")
+      en_msg="WARN: python required to clean CLAUDE.md, please manually remove CCB_CONFIG block"
+      zh_msg="警告：清理 CLAUDE.md 需要 python，请手动移除 CCB_CONFIG 配置块" ;;
+    "install.uninstall.remove_legacy_rules")
+      en_msg="Removing legacy collaboration rules from CLAUDE.md..."
+      zh_msg="正在从 CLAUDE.md 移除旧版协作规则..." ;;
+    "install.uninstall.removed_legacy_rules")
+      en_msg="Removed collaboration rules from CLAUDE.md"
+      zh_msg="已从 CLAUDE.md 移除协作规则" ;;
+    "install.uninstall.python_required_legacy_rules")
+      en_msg="WARN: python required to clean CLAUDE.md, please manually remove collaboration rules"
+      zh_msg="警告：清理 CLAUDE.md 需要 python，请手动移除协作规则" ;;
+    "install.uninstall.removed_external_config")
+      en_msg="Removed external CCB config: $1"
+      zh_msg="已移除外部 CCB 配置：$1" ;;
+    "install.uninstall.removed_permissions")
+      en_msg="Removed permission configuration from settings.json"
+      zh_msg="已从 settings.json 移除权限配置" ;;
+    "install.uninstall.python_required_permissions")
+      en_msg="WARN: python required to clean settings.json, please manually remove related permissions"
+      zh_msg="警告：清理 settings.json 需要 python，请手动移除相关权限" ;;
+    "install.uninstall.remove_claude_skills")
+      en_msg="Removing CCB Claude skills..."
+      zh_msg="正在移除 CCB Claude skills..." ;;
+    "install.uninstall.remove_codex_skills")
+      en_msg="Removing CCB Codex skills..."
+      zh_msg="正在移除 CCB Codex skills..." ;;
+    "install.uninstall.remove_droid_skills")
+      en_msg="Removing CCB Droid skills..."
+      zh_msg="正在移除 CCB Droid skills..." ;;
+    "install.uninstall.remove_droid_commands")
+      en_msg="Removing CCB Droid commands..."
+      zh_msg="正在移除 CCB Droid commands..." ;;
+    "install.cleanup.start")
+      en_msg="Cleaning up legacy files..."
+      zh_msg="正在清理遗留文件..." ;;
+    "install.cleanup.removed_daemon")
+      en_msg="  Removed legacy daemon script: $1"
+      zh_msg="  已移除遗留守护进程脚本：$1" ;;
+    "install.cleanup.removed_state")
+      en_msg="  Removed legacy state file: $1"
+      zh_msg="  已移除遗留状态文件：$1" ;;
+    "install.cleanup.removed_module")
+      en_msg="  Removed legacy module: $1"
+      zh_msg="  已移除遗留模块：$1" ;;
+    "install.cleanup.none")
+      en_msg="  No legacy files found"
+      zh_msg="  未发现遗留文件" ;;
+    "install.cleanup.done")
+      en_msg="  Cleaned up $1 legacy file(s)"
+      zh_msg="  已清理 $1 个遗留文件" ;;
+    "install.summary.ok")
+      en_msg="OK: Installation complete"
+      zh_msg="OK：安装完成" ;;
+    "install.summary.project_dir")
+      en_msg="   Project dir    : $1"
+      zh_msg="   项目目录       : $1" ;;
+    "install.summary.bin_dir")
+      en_msg="   Executable dir : $1"
+      zh_msg="   可执行目录     : $1" ;;
+    "install.summary.commands")
+      en_msg="   Claude commands updated"
+      zh_msg="   Claude commands 已更新" ;;
+    "install.summary.claude_route")
+      en_msg="   Global CLAUDE.md configured with CCB route pointer (full config in ~/.claude/rules/ccb-config.md)"
+      zh_msg="   已为全局 CLAUDE.md 配置 CCB route 指针（完整配置在 ~/.claude/rules/ccb-config.md）" ;;
+    "install.summary.claude_inline")
+      en_msg="   Global CLAUDE.md configured with CCB collaboration rules (inline)"
+      zh_msg="   已为全局 CLAUDE.md 配置 CCB 协作规则（inline）" ;;
+    "install.summary.agents")
+      en_msg="   AGENTS.md configured with review rubrics"
+      zh_msg="   已配置 AGENTS.md 的 review rubrics" ;;
+    "install.summary.clinerules")
+      en_msg="   .clinerules configured with role assignments"
+      zh_msg="   已配置 .clinerules 的角色分配" ;;
+    "install.summary.settings")
+      en_msg="   Global settings.json permissions added"
+      zh_msg="   已添加全局 settings.json 权限" ;;
+    "install.uninstall.start")
+      en_msg="INFO: Starting ccb uninstall..."
+      zh_msg="信息：开始卸载 ccb..." ;;
+    "install.uninstall.project_removed")
+      en_msg="Removed project directory: $1"
+      zh_msg="已移除项目目录：$1" ;;
+    "install.uninstall.bin_removed")
+      en_msg="Removed bin links: $1"
+      zh_msg="已移除 bin 链接：$1" ;;
+    "install.uninstall.commands_cleaned")
+      en_msg="Cleaned commands directory: $1"
+      zh_msg="已清理 commands 目录：$1" ;;
+    "install.uninstall.ok")
+      en_msg="OK: Uninstall complete"
+      zh_msg="OK：卸载完成" ;;
+    "install.uninstall.note")
+      en_msg="   NOTE: Dependencies (python, tmux, wezterm) were not removed"
+      zh_msg="   注意：依赖（python、tmux、wezterm）不会被自动移除" ;;
     *)
       en_msg="$key"
       zh_msg="$key" ;;
@@ -95,7 +540,7 @@ msg() {
 
 # Check for root/sudo - refuse to run as root
 if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
-  msg root_error >&2
+  msg "install.error.root" >&2
   exit 1
 fi
 
@@ -157,21 +602,19 @@ LEGACY_SCRIPTS=(
 )
 
 usage() {
-  cat <<'USAGE'
-Usage:
-  ./install.sh install    # Install or update Codex dual-window tools
-  ./install.sh uninstall  # Uninstall installed content
-
-Optional environment variables:
-  CODEX_INSTALL_PREFIX     Install directory (default: ~/.local/share/codex-dual)
-  CODEX_BIN_DIR            Executable directory (default: ~/.local/bin)
-  CODEX_CLAUDE_COMMAND_DIR Custom Claude commands directory (default: auto-detect)
-  CCB_DROID_AUTOINSTALL    Auto-register Droid MCP tools if droid exists (default: 1)
-  CCB_DROID_AUTOINSTALL_FORCE Re-register Droid MCP tools (default: 0)
-  CCB_CLAUDE_MD_MODE       CLAUDE.md injection mode: "inline" (default) or "route"
-                           inline = full config in CLAUDE.md (~57 lines)
-                           route  = minimal pointer in CLAUDE.md, full config in ~/.claude/rules/ccb-config.md
-USAGE
+  msg "install.usage.title"
+  msg "install.usage.install"
+  msg "install.usage.uninstall"
+  printf '\n'
+  msg "install.usage.env_title"
+  msg "install.usage.install_prefix"
+  msg "install.usage.bin_dir"
+  msg "install.usage.claude_dir"
+  msg "install.usage.droid_autoinstall"
+  msg "install.usage.droid_force"
+  msg "install.usage.claude_md_mode"
+  msg "install.usage.claude_md_mode_inline"
+  msg "install.usage.claude_md_mode_route"
 }
 
 detect_claude_dir() {
@@ -202,8 +645,8 @@ require_command() {
   local cmd="$1"
   local pkg="${2:-$1}"
   if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "ERROR: Missing dependency: $cmd"
-    echo "   Please install $pkg first, then re-run install.sh"
+    msg "install.dependency.missing" "$cmd"
+    msg "install.dependency.install_first" "$pkg"
     exit 1
   fi
 }
@@ -245,18 +688,19 @@ pick_any_python_bin() {
 require_python_version() {
   # ccb requires Python 3.10+ (PEP 604 type unions: `str | None`, etc.)
   if ! pick_python_bin; then
-    echo "ERROR: Missing dependency: python (3.10+ required)"
-    echo "   Please install Python 3.10+ and ensure it is on PATH, then re-run install.sh"
+    msg "install.python.missing"
+    msg "install.python.install_hint"
     exit 1
   fi
   local version
   version="$("$PYTHON_BIN" -c 'import sys; print("{}.{}.{}".format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))' 2>/dev/null || echo unknown)"
   if ! _python_check_310 "$PYTHON_BIN"; then
-    echo "ERROR: Python version too old: $version"
-    echo "   Requires Python 3.10+, please upgrade and retry"
+    msg "install.dependency.missing" "python"
+    msg "install.python.version_old" "$version"
+    msg "install.python.upgrade_hint"
     exit 1
   fi
-  echo "OK: Python $version ($PYTHON_BIN)"
+  msg "install.python.ok" "$version" "$PYTHON_BIN"
 }
 
 python_has_module() {
@@ -352,7 +796,7 @@ check_wsl_compatibility() {
   if is_wsl; then
     local ver
     ver="$(get_wsl_version)"
-    echo "OK: Detected WSL $ver environment"
+    msg "install.environment.detected" "WSL $ver"
   fi
 }
 
@@ -366,27 +810,27 @@ confirm_backend_env_wsl() {
   fi
 
   if [[ ! -t 0 ]]; then
-    echo "ERROR: Installing in WSL but detected non-interactive terminal; aborted to avoid env mismatch."
-    echo "   If you confirm codex/gemini will be installed and run in WSL:"
-    echo "   Re-run: CCB_INSTALL_ASSUME_YES=1 ./install.sh install"
+    msg "install.backend.non_interactive"
+    msg "install.backend.non_interactive_hint"
+    msg "install.backend.non_interactive_retry"
     exit 1
   fi
 
-  echo
-  echo "================================================================"
-  echo "WARN: Detected WSL environment"
-  echo "================================================================"
-  echo "ccb/ask/ping/pend must run in the same environment as codex/gemini."
-  echo
-  echo "Please confirm: you will install and run codex/gemini in WSL (not Windows native)."
-  echo "If you plan to run codex/gemini in Windows native, exit and run on Windows side:"
-  echo "   powershell -ExecutionPolicy Bypass -File .\\install.ps1 install"
-  echo "================================================================"
-  echo
-  read -r -p "Confirm continue installing in WSL? (y/N): " reply
+  printf '\n'
+  msg "install.ui.separator"
+  msg "install.backend.wsl_warning"
+  msg "install.ui.separator"
+  msg "install.backend.same_env_required"
+  printf '\n'
+  msg "install.backend.confirm_wsl_native"
+  msg "install.backend.windows_hint"
+  msg "install.backend.windows_command"
+  msg "install.ui.separator"
+  printf '\n'
+  read -r -p "$(msg "install.backend.confirm_wsl_prompt"): " reply
   case "$reply" in
     y|Y|yes|YES) ;;
-    *) echo "Installation cancelled"; exit 1 ;;
+    *) msg "install.backend.cancelled"; exit 1 ;;
   esac
 }
 
@@ -396,30 +840,30 @@ print_tmux_install_hint() {
   case "$platform" in
     macos)
       if command -v brew >/dev/null 2>&1; then
-        echo "   macOS: Run 'brew install tmux'"
+        msg "install.tmux.macos_brew"
       else
-        echo "   macOS: Homebrew not detected, install from https://brew.sh then run 'brew install tmux'"
+        msg "install.tmux.macos_no_brew"
       fi
       ;;
     linux)
       if command -v apt-get >/dev/null 2>&1; then
-        echo "   Debian/Ubuntu: sudo apt-get update && sudo apt-get install -y tmux"
+        msg "install.tmux.debian"
       elif command -v dnf >/dev/null 2>&1; then
-        echo "   Fedora/CentOS/RHEL: sudo dnf install -y tmux"
+        msg "install.tmux.dnf"
       elif command -v yum >/dev/null 2>&1; then
-        echo "   CentOS/RHEL: sudo yum install -y tmux"
+        msg "install.tmux.yum"
       elif command -v pacman >/dev/null 2>&1; then
-        echo "   Arch/Manjaro: sudo pacman -S tmux"
+        msg "install.tmux.pacman"
       elif command -v apk >/dev/null 2>&1; then
-        echo "   Alpine: sudo apk add tmux"
+        msg "install.tmux.apk"
       elif command -v zypper >/dev/null 2>&1; then
-        echo "   openSUSE: sudo zypper install -y tmux"
+        msg "install.tmux.zypper"
       else
-        echo "   Linux: Please use your distro's package manager to install tmux"
+        msg "install.tmux.generic"
       fi
       ;;
     *)
-      echo "   See https://github.com/tmux/tmux/wiki/Installing for tmux installation"
+      msg "install.tmux.docs"
       ;;
   esac
 }
@@ -434,18 +878,18 @@ require_terminal_backend() {
   # 1. If running in WezTerm environment
   if [[ -n "${WEZTERM_PANE:-}" ]]; then
     if [[ -n "${wezterm_override}" ]] && { command -v "${wezterm_override}" >/dev/null 2>&1 || [[ -f "${wezterm_override}" ]]; }; then
-      echo "OK: Detected WezTerm environment (${wezterm_override})"
+      msg "install.backend.wezterm_env_override" "${wezterm_override}"
       return
     fi
     if command -v wezterm >/dev/null 2>&1 || command -v wezterm.exe >/dev/null 2>&1; then
-      echo "OK: Detected WezTerm environment"
+      msg "install.backend.wezterm_env"
       return
     fi
   fi
 
   # 2. If running in tmux environment
   if [[ -n "${TMUX:-}" ]]; then
-    echo "OK: Detected tmux environment"
+    msg "install.backend.tmux_env"
     return
   fi
 
@@ -456,43 +900,43 @@ require_terminal_backend() {
   # 3. Check WezTerm environment variable override
   if [[ -n "${wezterm_override}" ]]; then
     if command -v "${wezterm_override}" >/dev/null 2>&1 || [[ -f "${wezterm_override}" ]]; then
-      echo "OK: Detected WezTerm (${wezterm_override})"
+      msg "install.backend.wezterm_override" "${wezterm_override}"
       return
     fi
   fi
 
   # 4. Check WezTerm command
   if command -v wezterm >/dev/null 2>&1 || command -v wezterm.exe >/dev/null 2>&1; then
-    echo "OK: Detected WezTerm"
+    msg "install.backend.wezterm"
     return
   fi
 
   # WSL: Windows PATH may not be injected, try common install paths
   if [[ -f "/proc/version" ]] && grep -qi microsoft /proc/version 2>/dev/null; then
     if [[ -x "/mnt/c/Program Files/WezTerm/wezterm.exe" ]] || [[ -f "/mnt/c/Program Files/WezTerm/wezterm.exe" ]]; then
-      echo "OK: Detected WezTerm (/mnt/c/Program Files/WezTerm/wezterm.exe)"
+      msg "install.backend.wezterm_program_files"
       return
     fi
     if [[ -x "/mnt/c/Program Files (x86)/WezTerm/wezterm.exe" ]] || [[ -f "/mnt/c/Program Files (x86)/WezTerm/wezterm.exe" ]]; then
-      echo "OK: Detected WezTerm (/mnt/c/Program Files (x86)/WezTerm/wezterm.exe)"
+      msg "install.backend.wezterm_program_files_x86"
       return
     fi
   fi
 
   # 5. Check tmux
   if command -v tmux >/dev/null 2>&1; then
-    echo "OK: Detected tmux (recommend also installing WezTerm for better experience)"
+    msg "install.backend.tmux_recommended"
     return
   fi
 
   # 6. No terminal multiplexer found
-  echo "ERROR: Missing dependency: WezTerm or tmux (at least one required)"
-  echo "   WezTerm website: https://wezfurlong.org/wezterm/"
+  msg "install.backend.missing"
+  msg "install.backend.website"
 
   if [[ "$(uname)" == "Darwin" ]]; then
-    echo
-    echo "NOTE: macOS user recommended options:"
-    echo "   - Install tmux: brew install tmux"
+    printf '\n'
+    msg "install.backend.macos_note"
+    msg "install.backend.macos_tmux"
   fi
 
   print_tmux_install_hint
@@ -542,7 +986,7 @@ save_wezterm_config() {
     local cfg_root="${XDG_CONFIG_HOME:-$HOME/.config}"
     mkdir -p "$cfg_root/ccb"
     echo "CODEX_WEZTERM_BIN=${wezterm_path}" > "$cfg_root/ccb/env"
-    echo "OK: WezTerm path cached: $wezterm_path"
+    msg "install.wezterm.cached" "$wezterm_path"
   fi
 }
 
@@ -617,7 +1061,7 @@ install_bin_links() {
     local name
     name="$(basename "$path")"
     if [[ ! -f "$INSTALL_PREFIX/$path" ]]; then
-      echo "WARN: Script not found $INSTALL_PREFIX/$path, skipping link creation"
+      msg "install.link.script_missing" "$INSTALL_PREFIX/$path"
       continue
     fi
     chmod +x "$INSTALL_PREFIX/$path"
@@ -634,7 +1078,7 @@ install_bin_links() {
     rm -f "$BIN_DIR/$legacy"
   done
 
-  echo "Created executable links in $BIN_DIR"
+  msg "install.link.created" "$BIN_DIR"
 }
 
 ensure_path_configured() {
@@ -663,7 +1107,7 @@ ensure_path_configured() {
 
   # Check if already configured in shell rc
   if [[ -f "$shell_rc" ]] && grep -qF "$BIN_DIR" "$shell_rc" 2>/dev/null; then
-    echo "PATH already configured in $shell_rc (restart terminal to apply)"
+    msg "install.path.already_configured" "$shell_rc"
     return
   fi
 
@@ -671,8 +1115,8 @@ ensure_path_configured() {
   echo "" >> "$shell_rc"
   echo "# Added by ccb installer" >> "$shell_rc"
   echo "$path_line" >> "$shell_rc"
-  echo "OK: Added $BIN_DIR to PATH in $shell_rc"
-  echo "   Run: source $shell_rc  (or restart terminal)"
+  msg "install.path.added" "$BIN_DIR" "$shell_rc"
+  msg "install.path.reload_hint" "$shell_rc"
 }
 
 install_claude_commands() {
@@ -685,7 +1129,7 @@ install_claude_commands() {
   for obs_cmd in $obsolete_cmds; do
     if [[ -f "$claude_dir/$obs_cmd" ]]; then
       rm -f "$claude_dir/$obs_cmd"
-      echo "  Removed obsolete command: $obs_cmd"
+      msg "install.commands.removed" "$obs_cmd"
     fi
   done
 
@@ -694,7 +1138,7 @@ install_claude_commands() {
     chmod 0644 "$claude_dir/$doc" 2>/dev/null || true
   done
 
-  echo "Updated Claude commands directory: $claude_dir"
+  msg "install.commands.updated_dir" "$claude_dir"
 }
 
 install_claude_skills() {
@@ -712,11 +1156,11 @@ install_claude_skills() {
   for obs_skill in $obsolete_skills; do
     if [[ -d "$skills_dst/$obs_skill" ]]; then
       rm -rf "$skills_dst/$obs_skill"
-      echo "  Removed obsolete skill: $obs_skill"
+      msg "install.skill.removed" "$obs_skill"
     fi
   done
 
-  echo "Installing Claude skills (bash SKILL.md templates)..."
+  msg "install.skill.installing_claude"
   for skill_dir in "$skills_src"/*/; do
     [[ -d "$skill_dir" ]] || continue
     local skill_name
@@ -724,11 +1168,8 @@ install_claude_skills() {
     [[ "$skill_name" == "docs" ]] && continue
 
     local src_skill_md=""
-    if [[ -f "$skill_dir/SKILL.md.bash" ]]; then
-      src_skill_md="$skill_dir/SKILL.md.bash"
-    elif [[ -f "$skill_dir/SKILL.md" ]]; then
-      src_skill_md="$skill_dir/SKILL.md"
-    else
+    src_skill_md="$(localized_skill_template "$skill_dir")"
+    if [[ -z "$src_skill_md" ]]; then
       continue
     fi
 
@@ -746,14 +1187,14 @@ install_claude_skills() {
       fi
     done
 
-    echo "  Updated skill: $skill_name"
+    msg "install.skill.updated" "$skill_name"
   done
 
   # Shared docs live at skills/docs but are not a "skill directory". Install them as well.
   if [[ -d "$skills_src/docs" ]]; then
     rm -rf "$skills_dst/docs"
     cp -r "$skills_src/docs" "$skills_dst/docs"
-    echo "  Installed skills docs: docs/"
+    msg "install.skill.docs_installed"
   fi
 
   # Make autoloop scripts executable
@@ -762,7 +1203,7 @@ install_claude_skills() {
   [[ -f "$autoloop_sh" ]] && chmod +x "$autoloop_sh"
   [[ -f "$autoloop_py" ]] && chmod +x "$autoloop_py"
 
-  echo "Updated Claude skills directory: $skills_dst"
+  msg "install.skill.updated_dir" "$skills_dst"
 }
 
 install_codex_skills() {
@@ -780,22 +1221,19 @@ install_codex_skills() {
   for obs_skill in $obsolete_skills; do
     if [[ -d "$skills_dst/$obs_skill" ]]; then
       rm -rf "$skills_dst/$obs_skill"
-      echo "  Removed obsolete skill: $obs_skill"
+      msg "install.skill.removed" "$obs_skill"
     fi
   done
 
-  echo "Installing Codex skills (bash SKILL.md templates)..."
+  msg "install.skill.installing_codex"
   for skill_dir in "$skills_src"/*/; do
     [[ -d "$skill_dir" ]] || continue
     local skill_name
     skill_name=$(basename "$skill_dir")
 
     local src_skill_md=""
-    if [[ -f "$skill_dir/SKILL.md.bash" ]]; then
-      src_skill_md="$skill_dir/SKILL.md.bash"
-    elif [[ -f "$skill_dir/SKILL.md" ]]; then
-      src_skill_md="$skill_dir/SKILL.md"
-    else
+    src_skill_md="$(localized_skill_template "$skill_dir")"
+    if [[ -z "$src_skill_md" ]]; then
       continue
     fi
 
@@ -813,9 +1251,9 @@ install_codex_skills() {
       fi
     done
 
-    echo "  Updated Codex skill: $skill_name"
+    msg "install.skill.updated_codex" "$skill_name"
   done
-  echo "Updated Codex skills directory: $skills_dst"
+  msg "install.skill.updated_codex_dir" "$skills_dst"
 }
 
 install_droid_skills() {
@@ -837,20 +1275,19 @@ install_droid_skills() {
   for obs_skill in $obsolete_skills; do
     if [[ -d "$skills_dst/$obs_skill" ]]; then
       rm -rf "$skills_dst/$obs_skill"
-      echo "  Removed obsolete skill: $obs_skill"
+      msg "install.skill.removed" "$obs_skill"
     fi
   done
 
-  echo "Installing Droid/Factory skills..."
+  msg "install.skill.installing_droid"
   for skill_dir in "$skills_src"/*/; do
     [[ -d "$skill_dir" ]] || continue
     local skill_name
     skill_name=$(basename "$skill_dir")
 
     local src_skill_md=""
-    if [[ -f "$skill_dir/SKILL.md" ]]; then
-      src_skill_md="$skill_dir/SKILL.md"
-    else
+    src_skill_md="$(localized_skill_template "$skill_dir")"
+    if [[ -z "$src_skill_md" ]]; then
       continue
     fi
 
@@ -868,9 +1305,9 @@ install_droid_skills() {
       fi
     done
 
-    echo "  Updated Factory skill: $skill_name"
+    msg "install.skill.updated_factory" "$skill_name"
   done
-  echo "Updated Factory skills directory: $skills_dst"
+  msg "install.skill.updated_factory_dir" "$skills_dst"
 }
 
 install_droid_delegation() {
@@ -883,21 +1320,21 @@ install_droid_delegation() {
   local py
   py="$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)"
   if [[ -z "$py" ]]; then
-    echo "WARN: python required for Droid MCP setup; skipping"
+    msg "install.droid.python_missing"
     return
   fi
   local server="$INSTALL_PREFIX/mcp/ccb-delegation/server.py"
   if [[ ! -f "$server" ]]; then
-    echo "WARN: Droid MCP server not found at $server; skipping"
+    msg "install.droid.server_missing" "$server"
     return
   fi
   if [[ "${CCB_DROID_AUTOINSTALL_FORCE:-0}" == "1" ]]; then
     droid mcp remove ccb-delegation >/dev/null 2>&1 || true
   fi
   if droid mcp add ccb-delegation --type stdio "$py" "$server" >/dev/null 2>&1; then
-    echo "OK: Droid MCP delegation registered"
+    msg "install.droid.registered"
   else
-    echo "WARN: Failed to register Droid MCP delegation (already registered or droid config unavailable)"
+    msg "install.droid.register_failed"
   fi
 }
 
@@ -913,7 +1350,7 @@ remove_codex_mcp() {
   fi
 
   if ! pick_python_bin; then
-    echo "WARN: python required to detect MCP configuration"
+    msg "install.mcp.python_required"
     return
   fi
 
@@ -945,7 +1382,7 @@ except Exception:
 " 2>/dev/null)
 
   if [[ "$has_codex_mcp" == "yes" ]]; then
-    echo "WARN: Detected codex-related MCP configuration, removing to avoid conflicts..."
+    msg "install.mcp.detected_conflict"
     "$PYTHON_BIN" -c "
 import json
 import sys
@@ -976,15 +1413,17 @@ except Exception as e:
     sys.stderr.write(f'WARN: failed cleaning MCP config: {e}\\n')
     sys.exit(0)
 "
-    echo "OK: Codex MCP configuration cleaned"
+    msg "install.mcp.cleaned"
   fi
 }
 
 install_claude_md_config() {
   local claude_md="$HOME/.claude/CLAUDE.md"
   local md_mode="${CCB_CLAUDE_MD_MODE:-inline}"
-  local full_template="$INSTALL_PREFIX/config/claude-md-ccb.md"
-  local route_template="$INSTALL_PREFIX/config/claude-md-ccb-route.md"
+  local full_template
+  local route_template
+  full_template="$(localized_config_template "claude-md-ccb.md")"
+  route_template="$(localized_config_template "claude-md-ccb-route.md")"
   local external_config="$HOME/.claude/rules/ccb-config.md"
 
   # Select template based on mode
@@ -997,12 +1436,12 @@ install_claude_md_config() {
 
   mkdir -p "$HOME/.claude"
   if ! pick_python_bin; then
-    echo "ERROR: python required to update CLAUDE.md"
+    msg "install.claude_md.python_required"
     return 1
   fi
 
   if [[ ! -f "$template" ]]; then
-    echo "WARN: Template not found: $template; skipping CLAUDE.md injection"
+    msg "install.claude_md.template_missing" "$template"
     return 1
   fi
 
@@ -1010,7 +1449,7 @@ install_claude_md_config() {
   if [[ "$md_mode" == "route" ]]; then
     mkdir -p "$HOME/.claude/rules"
     cp "$full_template" "$external_config"
-    echo "Wrote full CCB config to $external_config"
+    msg "install.claude_md.external_written" "$external_config"
   fi
 
   local ccb_content
@@ -1018,7 +1457,7 @@ install_claude_md_config() {
 
   if [[ -f "$claude_md" ]]; then
     if grep -q "$CCB_START_MARKER" "$claude_md" 2>/dev/null; then
-      echo "Updating existing CCB config block (mode: $md_mode)..."
+      msg "install.claude_md.updating" "$md_mode"
       "$PYTHON_BIN" -c "
 import re, sys
 
@@ -1032,7 +1471,7 @@ with open(sys.argv[1], 'w', encoding='utf-8') as f:
     f.write(content)
 " "$claude_md" "$template"
     elif grep -qE "$LEGACY_RULE_MARKER|## Codex Collaboration Rules|## Gemini|## OpenCode" "$claude_md" 2>/dev/null; then
-      echo "Removing legacy rules and adding new CCB config block..."
+      msg "install.claude_md.removing_legacy"
       "$PYTHON_BIN" -c "
 import re, sys
 
@@ -1061,7 +1500,7 @@ with open(sys.argv[1], 'w', encoding='utf-8') as f:
     cat "$template" > "$claude_md"
   fi
 
-  echo "Updated AI collaboration rules in $claude_md (mode: $md_mode)"
+  msg "install.claude_md.updated" "$claude_md" "$md_mode"
 }
 
 CCB_ROLES_START_MARKER="<!-- CCB_ROLES_START -->"
@@ -1071,14 +1510,15 @@ CCB_RUBRICS_END_MARKER="<!-- REVIEW_RUBRICS_END -->"
 
 install_agents_md_config() {
   local agents_md="$INSTALL_PREFIX/AGENTS.md"
-  local template="$INSTALL_PREFIX/config/agents-md-ccb.md"
+  local template
+  template="$(localized_config_template "agents-md-ccb.md")"
 
   if ! pick_python_bin; then
-    echo "WARN: python required to update AGENTS.md; skipping"
+    msg "install.agents.python_required"
     return 1
   fi
   if [[ ! -f "$template" ]]; then
-    echo "WARN: Template not found: $template; skipping AGENTS.md injection"
+    msg "install.agents.template_missing" "$template"
     return 1
   fi
 
@@ -1087,7 +1527,7 @@ install_agents_md_config() {
     local updated=false
     if grep -q "$CCB_ROLES_START_MARKER" "$agents_md" 2>/dev/null || \
        grep -q "$CCB_RUBRICS_START_MARKER" "$agents_md" 2>/dev/null; then
-      echo "Updating existing CCB blocks in AGENTS.md..."
+      msg "install.agents.updating"
       "$PYTHON_BIN" -c "
 import re, sys
 
@@ -1118,25 +1558,26 @@ with open(sys.argv[1], 'w', encoding='utf-8') as f:
     cat "$template" > "$agents_md"
   fi
 
-  echo "Updated AGENTS.md: $agents_md"
+  msg "install.agents.updated" "$agents_md"
 }
 
 install_clinerules_config() {
   local clinerules="$INSTALL_PREFIX/.clinerules"
-  local template="$INSTALL_PREFIX/config/clinerules-ccb.md"
+  local template
+  template="$(localized_config_template "clinerules-ccb.md")"
 
   if ! pick_python_bin; then
-    echo "WARN: python required to update .clinerules; skipping"
+    msg "install.clinerules.python_required"
     return 1
   fi
   if [[ ! -f "$template" ]]; then
-    echo "WARN: Template not found: $template; skipping .clinerules injection"
+    msg "install.clinerules.template_missing" "$template"
     return 1
   fi
 
   if [[ -f "$clinerules" ]]; then
     if grep -q "$CCB_ROLES_START_MARKER" "$clinerules" 2>/dev/null; then
-      echo "Updating existing CCB roles block in .clinerules..."
+      msg "install.clinerules.updating"
       "$PYTHON_BIN" -c "
 import re, sys
 
@@ -1159,7 +1600,7 @@ with open(sys.argv[1], 'w', encoding='utf-8') as f:
     cat "$template" > "$clinerules"
   fi
 
-  echo "Updated .clinerules: $clinerules"
+  msg "install.clinerules.updated" "$clinerules"
 }
 
 install_settings_permissions() {
@@ -1185,7 +1626,7 @@ install_settings_permissions() {
   }
 }
 SETTINGS
-    echo "Created $settings_file with permissions"
+    msg "install.settings.created" "$settings_file"
     return
   fi
 
@@ -1253,7 +1694,7 @@ except Exception as e:
   done
 
   if [[ $added -eq 1 ]]; then
-    echo "Updated $settings_file permissions"
+    msg "install.settings.updated" "$settings_file"
   else
     echo "Permissions already exist in $settings_file"
   fi
@@ -1298,7 +1739,8 @@ install_tmux_config() {
   local tmux_conf_local="$HOME/.tmux.conf.local"
   local tmux_conf="$tmux_conf_main"
   local reload_conf="$tmux_conf_main"
-  local ccb_tmux_conf="$REPO_ROOT/config/tmux-ccb.conf"
+  local ccb_tmux_conf
+  ccb_tmux_conf="$(localized_config_template "tmux-ccb.conf")"
   local ccb_status_script="$REPO_ROOT/config/ccb-status.sh"
   local status_install_path="$BIN_DIR/ccb-status.sh"
 
@@ -1400,7 +1842,7 @@ sys.stdout.write(content.replace('@CCB_BIN_DIR@', bin_dir))
     fi
   } >> "$tmux_conf"
 
-  echo "Updated tmux configuration: $tmux_conf"
+  msg "install.tmux.updated" "$tmux_conf"
   echo "   - CCB tmux integration (copy mode, mouse, pane management)"
   echo "   - CCB theme is enabled only while CCB is running (auto restore on exit)"
   echo "   - Vi-style pane management with h/j/k/l"
@@ -1412,9 +1854,9 @@ sys.stdout.write(content.replace('@CCB_BIN_DIR@', bin_dir))
   if command -v tmux >/dev/null 2>&1; then
     if tmux list-sessions >/dev/null 2>&1; then
       if tmux source-file "$reload_conf" >/dev/null 2>&1; then
-        echo "Reloaded tmux configuration in running server."
+        msg "install.tmux.reloaded"
       else
-        echo "WARN: Failed to reload tmux configuration automatically; run: tmux source $reload_conf"
+        msg "install.tmux.reload_failed" "$reload_conf"
       fi
     fi
   fi
@@ -1455,9 +1897,9 @@ uninstall_tmux_config() {
     if [[ -f "$conf" ]] && \
       (grep -q "$CCB_TMUX_MARKER" "$conf" 2>/dev/null || \
        grep -q "$CCB_TMUX_MARKER_LEGACY" "$conf" 2>/dev/null); then
-      echo "Removing CCB tmux configuration from $conf..."
+      msg "install.tmux.removing" "$conf"
       if remove_ccb_tmux_block_from_file "$conf"; then
-        echo "Removed CCB tmux configuration from $conf"
+        msg "install.tmux.removed" "$conf"
         removed_any=true
       fi
     fi
@@ -1475,19 +1917,19 @@ install_requirements() {
   install_watchdog || true
   require_terminal_backend
   if ! has_wezterm; then
-    echo
-    echo "================================================================"
-    echo "NOTE: Recommend installing WezTerm as terminal frontend (better experience, recommended for WSL2/Windows)"
-    echo "   - Website: https://wezfurlong.org/wezterm/"
-    echo "   - Benefits: Smoother split/scroll/font rendering, more stable bridging in WezTerm mode"
-    echo "================================================================"
-    echo
+    printf '\n'
+    msg "install.ui.separator"
+    msg "install.wezterm.note"
+    msg "install.wezterm.site"
+    msg "install.wezterm.benefit"
+    msg "install.ui.separator"
+    printf '\n'
   fi
 }
 
 # Clean up legacy daemon files (replaced by unified askd)
 cleanup_legacy_files() {
-  echo "Cleaning up legacy files..."
+  msg "install.cleanup.start"
   local cleaned=0
 
   # Legacy daemon scripts in bin/
@@ -1495,13 +1937,13 @@ cleanup_legacy_files() {
   for daemon in $legacy_daemons; do
     if [[ -f "$BIN_DIR/$daemon" ]]; then
       rm -f "$BIN_DIR/$daemon"
-      echo "  Removed legacy daemon script: $BIN_DIR/$daemon"
+      msg "install.cleanup.removed_daemon" "$BIN_DIR/$daemon"
       cleaned=$((cleaned + 1))
     fi
     # Also check install prefix bin
     if [[ -f "$INSTALL_PREFIX/bin/$daemon" ]]; then
       rm -f "$INSTALL_PREFIX/bin/$daemon"
-      echo "  Removed legacy daemon script: $INSTALL_PREFIX/bin/$daemon"
+      msg "install.cleanup.removed_daemon" "$INSTALL_PREFIX/bin/$daemon"
       cleaned=$((cleaned + 1))
     fi
   done
@@ -1512,7 +1954,7 @@ cleanup_legacy_files() {
   for state in $legacy_states; do
     if [[ -f "$cache_dir/$state" ]]; then
       rm -f "$cache_dir/$state"
-      echo "  Removed legacy state file: $cache_dir/$state"
+      msg "install.cleanup.removed_state" "$cache_dir/$state"
       cleaned=$((cleaned + 1))
     fi
   done
@@ -1522,15 +1964,15 @@ cleanup_legacy_files() {
   for module in $legacy_modules; do
     if [[ -f "$INSTALL_PREFIX/lib/$module" ]]; then
       rm -f "$INSTALL_PREFIX/lib/$module"
-      echo "  Removed legacy module: $INSTALL_PREFIX/lib/$module"
+      msg "install.cleanup.removed_module" "$INSTALL_PREFIX/lib/$module"
       cleaned=$((cleaned + 1))
     fi
   done
 
   if [[ $cleaned -eq 0 ]]; then
-    echo "  No legacy files found"
+    msg "install.cleanup.none"
   else
-    echo "  Cleaned up $cleaned legacy file(s)"
+    msg "install.cleanup.done" "$cleaned"
   fi
 }
 
@@ -1552,19 +1994,19 @@ install_all() {
   install_clinerules_config
   install_settings_permissions
   install_tmux_config
-  echo "OK: Installation complete"
-  echo "   Project dir    : $INSTALL_PREFIX"
-  echo "   Executable dir : $BIN_DIR"
-  echo "   Claude commands updated"
+  msg "install.summary.ok"
+  msg "install.summary.project_dir" "$INSTALL_PREFIX"
+  msg "install.summary.bin_dir" "$BIN_DIR"
+  msg "install.summary.commands"
   local md_mode="${CCB_CLAUDE_MD_MODE:-inline}"
   if [[ "$md_mode" == "route" ]]; then
-    echo "   Global CLAUDE.md configured with CCB route pointer (full config in ~/.claude/rules/ccb-config.md)"
+    msg "install.summary.claude_route"
   else
-    echo "   Global CLAUDE.md configured with CCB collaboration rules (inline)"
+    msg "install.summary.claude_inline"
   fi
-  echo "   AGENTS.md configured with review rubrics"
-  echo "   .clinerules configured with role assignments"
-  echo "   Global settings.json permissions added"
+  msg "install.summary.agents"
+  msg "install.summary.clinerules"
+  msg "install.summary.settings"
 }
 
 uninstall_claude_md_config() {
@@ -1575,7 +2017,7 @@ uninstall_claude_md_config() {
   fi
 
   if grep -q "$CCB_START_MARKER" "$claude_md" 2>/dev/null; then
-    echo "Removing CCB config block from CLAUDE.md..."
+    msg "install.uninstall.remove_claude_md"
     if pick_any_python_bin; then
       "$PYTHON_BIN" -c "
 import re
@@ -1588,12 +2030,12 @@ content = content.strip() + '\\n'
 with open('$claude_md', 'w', encoding='utf-8') as f:
     f.write(content)
 "
-      echo "Removed CCB config from CLAUDE.md"
+      msg "install.uninstall.removed_claude_md"
     else
-      echo "WARN: python required to clean CLAUDE.md, please manually remove CCB_CONFIG block"
+      msg "install.uninstall.python_required_claude_md"
     fi
   elif grep -qE "$LEGACY_RULE_MARKER|## Codex Collaboration Rules|## Gemini|## OpenCode" "$claude_md" 2>/dev/null; then
-    echo "Removing legacy collaboration rules from CLAUDE.md..."
+    msg "install.uninstall.remove_legacy_rules"
     if pick_any_python_bin; then
       "$PYTHON_BIN" -c "
 import re
@@ -1614,9 +2056,9 @@ content = content.rstrip() + '\\n'
 with open('$claude_md', 'w', encoding='utf-8') as f:
     f.write(content)
 "
-      echo "Removed collaboration rules from CLAUDE.md"
+      msg "install.uninstall.removed_legacy_rules"
     else
-      echo "WARN: python required to clean CLAUDE.md, please manually remove collaboration rules"
+      msg "install.uninstall.python_required_legacy_rules"
     fi
   fi
 
@@ -1624,7 +2066,7 @@ with open('$claude_md', 'w', encoding='utf-8') as f:
   local external_config="$HOME/.claude/rules/ccb-config.md"
   if [[ -f "$external_config" ]]; then
     rm -f "$external_config"
-    echo "Removed external CCB config: $external_config"
+    msg "install.uninstall.removed_external_config" "$external_config"
   fi
 }
 
@@ -1699,10 +2141,10 @@ try:
 except Exception:
     sys.exit(0)
 "
-      echo "Removed permission configuration from settings.json"
+      msg "install.uninstall.removed_permissions"
     fi
   else
-    echo "WARN: python required to clean settings.json, please manually remove related permissions"
+    msg "install.uninstall.python_required_permissions"
   fi
 }
 
@@ -1714,7 +2156,7 @@ uninstall_claude_skills() {
     return
   fi
 
-  echo "Removing CCB Claude skills..."
+  msg "install.uninstall.remove_claude_skills"
   for skill in $ccb_skills; do
     if [[ -d "$skills_dst/$skill" ]]; then
       rm -rf "$skills_dst/$skill"
@@ -1731,7 +2173,7 @@ uninstall_codex_skills() {
     return
   fi
 
-  echo "Removing CCB Codex skills..."
+  msg "install.uninstall.remove_codex_skills"
   for skill in $ccb_skills; do
     if [[ -d "$skills_dst/$skill" ]]; then
       rm -rf "$skills_dst/$skill"
@@ -1748,7 +2190,7 @@ uninstall_droid_skills() {
     return
   fi
 
-  echo "Removing CCB Droid skills..."
+  msg "install.uninstall.remove_droid_skills"
   for skill in $ccb_skills; do
     if [[ -d "$skills_dst/$skill" ]]; then
       rm -rf "$skills_dst/$skill"
@@ -1776,7 +2218,7 @@ uninstall_droid_commands() {
     return
   fi
 
-  echo "Removing CCB Droid commands..."
+  msg "install.uninstall.remove_droid_commands"
   for cmd in $ccb_cmds; do
     if [[ -f "$cmds_dst/$cmd" ]]; then
       rm -f "$cmds_dst/$cmd"
@@ -1786,12 +2228,12 @@ uninstall_droid_commands() {
 }
 
 uninstall_all() {
-  echo "INFO: Starting ccb uninstall..."
+  msg "install.uninstall.start"
 
   # 1. Remove project directory
   if [[ -d "$INSTALL_PREFIX" ]]; then
     rm -rf "$INSTALL_PREFIX"
-    echo "Removed project directory: $INSTALL_PREFIX"
+    msg "install.uninstall.project_removed" "$INSTALL_PREFIX"
   fi
 
   # 2. Remove bin links
@@ -1805,7 +2247,7 @@ uninstall_all() {
   for legacy in "${LEGACY_SCRIPTS[@]}"; do
     rm -f "$BIN_DIR/$legacy"
   done
-  echo "Removed bin links: $BIN_DIR"
+  msg "install.uninstall.bin_removed" "$BIN_DIR"
 
   # 3. Remove Claude command files (clean all possible locations)
   local cmd_dirs=(
@@ -1818,7 +2260,7 @@ uninstall_all() {
       for doc in "${CLAUDE_MARKDOWN[@]+"${CLAUDE_MARKDOWN[@]}"}"; do
         rm -f "$dir/$doc"
       done
-      echo "Cleaned commands directory: $dir"
+      msg "install.uninstall.commands_cleaned" "$dir"
     fi
   done
 
@@ -1846,8 +2288,8 @@ uninstall_all() {
   # 11. Remove Droid commands
   uninstall_droid_commands
 
-  echo "OK: Uninstall complete"
-  echo "   NOTE: Dependencies (python, tmux, wezterm) were not removed"
+  msg "install.uninstall.ok"
+  msg "install.uninstall.note"
 }
 
 main() {
