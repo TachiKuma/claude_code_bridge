@@ -117,7 +117,7 @@ Plans:
 **Plans**: 6 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — 修复 i18n_core 阻断项与弃用告警
+- [x] 06-01-PLAN.md — 修复 i18n_core 阻断项与弃用告警
 - [ ] 06-02-PLAN.md — 扩展 CLI 核心翻译覆盖并标准化错误消息
 - [ ] 06-03-PLAN.md — 建立语言切换、CI 守卫与测试补全
 - [ ] 06-04-PLAN.md — 盘点 Mail/Web/TUI 文案并更新估算
