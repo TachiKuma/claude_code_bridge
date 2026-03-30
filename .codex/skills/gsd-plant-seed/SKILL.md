@@ -55,9 +55,9 @@ Consumed by: $gsd-new-milestone (scans seeds and presents matches)
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/plant-seed.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/plant-seed.md
 </execution_context>
 
 <process>
-Execute the plant-seed workflow from @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/plant-seed.md end-to-end.
+Execute the plant-seed workflow from @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/plant-seed.md end-to-end.
 </process>

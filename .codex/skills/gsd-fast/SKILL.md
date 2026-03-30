@@ -56,9 +56,9 @@ you could describe in one sentence and execute in under 2 minutes.
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/fast.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/fast.md
 </execution_context>
 
 <process>
-Execute the fast workflow from @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/fast.md end-to-end.
+Execute the fast workflow from @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/fast.md end-to-end.
 </process>

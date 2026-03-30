@@ -430,11 +430,11 @@ git bisect bad              # or good, based on testing
 ```
 Check code says:  hooksDir = path.join(configDir, 'hooks')
                   configDir = ~/.claude
-                  → checks E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/hooks/
+                  → checks D:/Python/GitHub/claude_code_bridge/.codex/hooks/
 
 Installer says:   hooksDest = path.join(targetDir, 'hooks')
-                  targetDir = E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done
-                  → writes to E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/hooks/
+                  targetDir = D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done
+                  → writes to D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/hooks/
 
 MISMATCH: Checker looks in wrong directory → hooks "not found" → reported as stale
 ```
@@ -1120,7 +1120,7 @@ mv .planning/debug/{slug}.md .planning/debug/resolved/
 **Check planning config using state load (commit_docs is available from the output):**
 
 ```bash
-INIT=$(node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" state load)
+INIT=$(node "D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" state load)
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 # commit_docs is in the JSON output
 ```
@@ -1138,7 +1138,7 @@ Root cause: {root_cause}"
 
 Then commit planning docs via CLI (respects `commit_docs` config automatically):
 ```bash
-node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" commit "docs: resolve debug {slug}" --files .planning/debug/resolved/{slug}.md
+node "D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" commit "docs: resolve debug {slug}" --files .planning/debug/resolved/{slug}.md
 ```
 
 **Append to knowledge base:**
@@ -1169,7 +1169,7 @@ Then append the entry:
 
 Commit the knowledge base update alongside the resolved session:
 ```bash
-node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" commit "docs: update debug knowledge base with {slug}" --files .planning/debug/knowledge-base.md
+node "D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" commit "docs: update debug knowledge base with {slug}" --files .planning/debug/knowledge-base.md
 ```
 
 Report completion and offer next steps.

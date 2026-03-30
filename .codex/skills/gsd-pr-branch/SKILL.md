@@ -54,9 +54,9 @@ changes that are irrelevant to code review.
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/pr-branch.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/pr-branch.md
 </execution_context>
 
 <process>
-Execute the pr-branch workflow from @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/pr-branch.md end-to-end.
+Execute the pr-branch workflow from @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/pr-branch.md end-to-end.
 </process>

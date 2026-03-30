@@ -60,9 +60,9 @@ Extract implementation decisions that downstream agents need — researcher and 
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/discuss-phase.md
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/discuss-phase-assumptions.md
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/templates/context.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/discuss-phase.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/discuss-phase-assumptions.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/templates/context.md
 </execution_context>
 
 <context>
@@ -74,12 +74,12 @@ Context files are resolved in-workflow using `init phase-op` and roadmap/state t
 <process>
 **Mode routing:**
 ```bash
-DISCUSS_MODE=$(node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" config-get workflow.discuss_mode 2>/dev/null || echo "discuss")
+DISCUSS_MODE=$(node "D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" config-get workflow.discuss_mode 2>/dev/null || echo "discuss")
 ```
 
-If `DISCUSS_MODE` is `"assumptions"`: Read and execute @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/discuss-phase-assumptions.md end-to-end.
+If `DISCUSS_MODE` is `"assumptions"`: Read and execute @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/discuss-phase-assumptions.md end-to-end.
 
-If `DISCUSS_MODE` is `"discuss"` (or unset, or any other value): Read and execute @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/discuss-phase.md end-to-end.
+If `DISCUSS_MODE` is `"discuss"` (or unset, or any other value): Read and execute @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/discuss-phase.md end-to-end.
 
 **MANDATORY:** The execution_context files listed above ARE the instructions. Read the workflow file BEFORE taking any action. The objective and success_criteria sections in this command file are summaries — the workflow file contains the complete step-by-step process with all required behaviors, config checks, and interaction patterns. Do not improvise from the summary.
 </process>

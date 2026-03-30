@@ -216,7 +216,7 @@ get-shit-done/
 
 **New Workflow:**
 - Implementation: `get-shit-done/workflows/{name}.md`
-- Usage: Reference from command with `@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/get-shit-done/workflows/{name}.md`
+- Usage: Reference from command with `@D:/Python/GitHub/claude_code_bridge/.gemini/get-shit-done/workflows/{name}.md`
 
 **New Reference Document:**
 - Implementation: `get-shit-done/references/{name}.md`
@@ -229,12 +229,12 @@ get-shit-done/
 ## Special Directories
 
 **get-shit-done/**
-- Purpose: Resources installed to E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/
+- Purpose: Resources installed to D:/Python/GitHub/claude_code_bridge/.gemini/
 - Source: Copied by bin/install.js during installation
 - Committed: Yes (source of truth)
 
 **commands/**
-- Purpose: Slash commands installed to E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/commands/
+- Purpose: Slash commands installed to D:/Python/GitHub/claude_code_bridge/.gemini/commands/
 - Source: Copied by bin/install.js during installation
 - Committed: Yes (source of truth)
 

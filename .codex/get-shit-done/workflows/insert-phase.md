@@ -34,7 +34,7 @@ Validate first argument is an integer.
 Load phase operation context:
 
 ```bash
-INIT=$(node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" init phase-op "${after_phase}")
+INIT=$(node "D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" init phase-op "${after_phase}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
@@ -49,7 +49,7 @@ Exit.
 **Delegate the phase insertion to gsd-tools:**
 
 ```bash
-RESULT=$(node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" phase insert "${after_phase}" "${description}")
+RESULT=$(node "D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" phase insert "${after_phase}" "${description}")
 ```
 
 The CLI handles:

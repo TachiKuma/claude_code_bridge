@@ -116,12 +116,12 @@ If `$FULL_MODE` only:
 **Step 2: Initialize**
 
 ```bash
-INIT=$(node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" init quick "$DESCRIPTION")
+INIT=$(node "D:/Python/GitHub/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" init quick "$DESCRIPTION")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
-AGENT_SKILLS_PLANNER=$(node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" agent-skills gsd-planner 2>/dev/null)
-AGENT_SKILLS_EXECUTOR=$(node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" agent-skills gsd-executor 2>/dev/null)
-AGENT_SKILLS_CHECKER=$(node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" agent-skills gsd-checker 2>/dev/null)
-AGENT_SKILLS_VERIFIER=$(node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" agent-skills gsd-verifier 2>/dev/null)
+AGENT_SKILLS_PLANNER=$(node "D:/Python/GitHub/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" agent-skills gsd-planner 2>/dev/null)
+AGENT_SKILLS_EXECUTOR=$(node "D:/Python/GitHub/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" agent-skills gsd-executor 2>/dev/null)
+AGENT_SKILLS_CHECKER=$(node "D:/Python/GitHub/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" agent-skills gsd-checker 2>/dev/null)
+AGENT_SKILLS_VERIFIER=$(node "D:/Python/GitHub/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" agent-skills gsd-verifier 2>/dev/null)
 ```
 
 Parse JSON for: `planner_model`, `executor_model`, `checker_model`, `verifier_model`, `commit_docs`, `branch_name`, `quick_id`, `slug`, `date`, `timestamp`, `quick_dir`, `task_dir`, `roadmap_exists`, `planning_exists`.
@@ -692,7 +692,7 @@ Build file list:
 - If `$FULL_MODE` and verification file exists: `${QUICK_DIR}/${quick_id}-VERIFICATION.md`
 
 ```bash
-node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" commit "docs(quick-${quick_id}): ${DESCRIPTION}" --files ${file_list}
+node "D:/Python/GitHub/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" commit "docs(quick-${quick_id}): ${DESCRIPTION}" --files ${file_list}
 ```
 
 Get final commit hash:

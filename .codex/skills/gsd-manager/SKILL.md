@@ -58,8 +58,8 @@ Designed for power users who want to parallelize work across phases from one ter
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/manager.md
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/references/ui-brand.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/manager.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/references/ui-brand.md
 </execution_context>
 
 <context>
@@ -69,6 +69,6 @@ Project context, phase list, dependencies, and recommendations are resolved insi
 </context>
 
 <process>
-Execute the manager workflow from @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/manager.md end-to-end.
+Execute the manager workflow from @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/manager.md end-to-end.
 Maintain the dashboard refresh loop until the user exits or all phases complete.
 </process>

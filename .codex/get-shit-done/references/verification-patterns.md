@@ -600,7 +600,7 @@ Some things can't be verified programmatically. Flag these for human testing:
 
 For automation-first checkpoint patterns, server lifecycle management, CLI installation handling, and error recovery protocols, see:
 
-**@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/references/checkpoints.md** → `<automation_reference>` section
+**@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/references/checkpoints.md** → `<automation_reference>` section
 
 Key principles:
 - the agent sets up verification environment BEFORE presenting checkpoints

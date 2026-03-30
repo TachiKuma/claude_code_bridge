@@ -54,7 +54,7 @@ Output: .planning/codebase/ folder with 7 structured documents about the codebas
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/map-codebase.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/map-codebase.md
 </execution_context>
 
 <context>

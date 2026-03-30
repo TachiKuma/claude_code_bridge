@@ -122,7 +122,7 @@ Repeat for all milestones in the cleanup set.
 Commit the changes:
 
 ```bash
-node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" commit "chore: archive phase directories from completed milestones" --files .planning/milestones/ .planning/phases/
+node "D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" commit "chore: archive phase directories from completed milestones" --files .planning/milestones/ .planning/phases/
 ```
 
 </step>

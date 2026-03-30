@@ -50,9 +50,9 @@ Display comprehensive project statistics including phase progress, plan executio
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/stats.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/stats.md
 </execution_context>
 
 <process>
-Execute the stats workflow from @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/stats.md end-to-end.
+Execute the stats workflow from @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/stats.md end-to-end.
 </process>

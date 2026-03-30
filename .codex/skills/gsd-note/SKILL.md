@@ -57,8 +57,8 @@ Runs inline — no Task, no AskUserQuestion, no Bash.
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/note.md
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/references/ui-brand.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/note.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/references/ui-brand.md
 </execution_context>
 
 <context>
@@ -66,6 +66,6 @@ Runs inline — no Task, no AskUserQuestion, no Bash.
 </context>
 
 <process>
-Execute the note workflow from @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/note.md end-to-end.
+Execute the note workflow from @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/note.md end-to-end.
 Capture the note, list notes, or promote to todo — depending on arguments.
 </process>

@@ -45,7 +45,7 @@ Report any summaries with placeholder content as incomplete items.
 **Write structured handoff to `.planning/HANDOFF.json`:**
 
 ```bash
-timestamp=$(node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" current-timestamp full --raw)
+timestamp=$(node "D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" current-timestamp full --raw)
 ```
 
 ```json
@@ -137,13 +137,13 @@ Be specific enough for a fresh the agent to understand immediately.
 
 Use `current-timestamp` for last_updated field. You can use init todos (which provides timestamps) or call directly:
 ```bash
-timestamp=$(node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" current-timestamp full --raw)
+timestamp=$(node "D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" current-timestamp full --raw)
 ```
 </step>
 
 <step name="commit">
 ```bash
-node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" commit "wip: [phase-name] paused at task [X]/[Y]" --files .planning/phases/*/.continue-here.md .planning/HANDOFF.json
+node "D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" commit "wip: [phase-name] paused at task [X]/[Y]" --files .planning/phases/*/.continue-here.md .planning/HANDOFF.json
 ```
 </step>
 

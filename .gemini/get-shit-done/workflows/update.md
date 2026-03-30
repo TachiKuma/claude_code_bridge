@@ -221,7 +221,7 @@ Exit.
 - `agents/gsd-*` files will be replaced
 
 (Paths are relative to detected runtime install location:
-global: `E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/`, `~/.config/opencode/`, `~/.opencode/`, `~/.gemini/`, or `~/.codex/`
+global: `D:/Python/GitHub/claude_code_bridge/.gemini/`, `~/.config/opencode/`, `~/.opencode/`, `~/.gemini/`, or `~/.codex/`
 local: `./.gemini/`, `./.config/opencode/`, `./.opencode/`, `./.gemini/`, or `./.codex/`)
 
 Your custom files in other locations are preserved:

@@ -50,9 +50,9 @@ Generate a structured SESSION_REPORT.md document capturing session outcomes, wor
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/session-report.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/session-report.md
 </execution_context>
 
 <process>
-Execute the session-report workflow from @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/session-report.md end-to-end.
+Execute the session-report workflow from @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/session-report.md end-to-end.
 </process>

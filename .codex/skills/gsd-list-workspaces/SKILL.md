@@ -50,10 +50,10 @@ Scan `~/gsd-workspaces/` for workspace directories containing `WORKSPACE.md` man
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/list-workspaces.md
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/references/ui-brand.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/list-workspaces.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/references/ui-brand.md
 </execution_context>
 
 <process>
-Execute the list-workspaces workflow from @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/list-workspaces.md end-to-end.
+Execute the list-workspaces workflow from @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/list-workspaces.md end-to-end.
 </process>

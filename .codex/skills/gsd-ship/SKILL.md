@@ -52,7 +52,7 @@ Closes the plan → execute → verify → ship loop.
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/ship.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/ship.md
 </execution_context>
 
-Execute the ship workflow from @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/ship.md end-to-end.
+Execute the ship workflow from @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/ship.md end-to-end.

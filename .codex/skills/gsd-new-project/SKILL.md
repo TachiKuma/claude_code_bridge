@@ -65,14 +65,14 @@ Initialize a new project through unified flow: questioning → research (optiona
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/new-project.md
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/references/questioning.md
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/references/ui-brand.md
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/templates/project.md
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/templates/requirements.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/new-project.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/references/questioning.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/references/ui-brand.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/templates/project.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/templates/requirements.md
 </execution_context>
 
 <process>
-Execute the new-project workflow from @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/new-project.md end-to-end.
+Execute the new-project workflow from @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/new-project.md end-to-end.
 Preserve all workflow gates (validation, approvals, commits, routing).
 </process>

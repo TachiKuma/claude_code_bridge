@@ -50,7 +50,7 @@ Scan all phases for pending, skipped, blocked, and human_needed UAT items. Cross
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/audit-uat.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/audit-uat.md
 </execution_context>
 
 <context>

@@ -8,7 +8,7 @@ Cross-phase audit of all UAT and verification files. Finds every outstanding ite
 Run the CLI audit:
 
 ```bash
-AUDIT=$(node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" audit-uat --raw)
+AUDIT=$(node "D:/Python/GitHub/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" audit-uat --raw)
 ```
 
 Parse JSON for `results` array and `summary` object.

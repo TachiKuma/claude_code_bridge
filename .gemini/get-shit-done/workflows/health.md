@@ -25,7 +25,7 @@ fi
 **Run health validation:**
 
 ```bash
-node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" validate health $REPAIR_FLAG
+node "D:/Python/GitHub/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" validate health $REPAIR_FLAG
 ```
 
 Parse JSON output:
@@ -112,7 +112,7 @@ If yes, re-run with --repair flag and display results.
 Re-run health check without --repair to confirm issues are resolved:
 
 ```bash
-node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" validate health
+node "D:/Python/GitHub/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" validate health
 ```
 
 Report final status.
@@ -166,13 +166,13 @@ When `--repair` is active, detect and clean up:
 
 ```bash
 # Check for stale task directories (older than 24 hours)
-TASKS_DIR="E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/tasks"
+TASKS_DIR="D:/Python/GitHub/claude_code_bridge/.gemini/tasks"
 if [ -d "$TASKS_DIR" ]; then
   STALE_COUNT=$( (find "$TASKS_DIR" -maxdepth 1 -type d -mtime +1 2>/dev/null || true) | wc -l )
   if [ "$STALE_COUNT" -gt 0 ]; then
-    echo "⚠️  Found $STALE_COUNT stale task directories in E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/tasks/"
+    echo "⚠️  Found $STALE_COUNT stale task directories in D:/Python/GitHub/claude_code_bridge/.gemini/tasks/"
     echo "   These are leftover from crashed subagent sessions."
-    echo "   Run: rm -rf E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/tasks/*  (safe — only affects dead sessions)"
+    echo "   Run: rm -rf D:/Python/GitHub/claude_code_bridge/.gemini/tasks/*  (safe — only affects dead sessions)"
   fi
 fi
 ```

@@ -56,10 +56,10 @@ Output ONLY the reference content below. Do NOT add:
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/help.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/help.md
 </execution_context>
 
 <process>
-Output the complete GSD command reference from @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/help.md.
+Output the complete GSD command reference from @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/help.md.
 Display the reference content directly — no additions or modifications.
 </process>

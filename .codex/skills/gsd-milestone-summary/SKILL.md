@@ -53,7 +53,7 @@ Output: MILESTONE_SUMMARY written to `.planning/reports/`, presented inline, opt
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/milestone-summary.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/milestone-summary.md
 </execution_context>
 
 <context>
@@ -71,7 +71,7 @@ Output: MILESTONE_SUMMARY written to `.planning/reports/`, presented inline, opt
 </context>
 
 <process>
-Read and execute the milestone-summary workflow from @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/milestone-summary.md end-to-end.
+Read and execute the milestone-summary workflow from @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/milestone-summary.md end-to-end.
 </process>
 
 <success_criteria>

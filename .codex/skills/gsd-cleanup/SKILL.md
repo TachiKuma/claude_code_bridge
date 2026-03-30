@@ -52,10 +52,10 @@ Use when `.planning/phases/` has accumulated directories from past milestones.
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/cleanup.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/cleanup.md
 </execution_context>
 
 <process>
-Follow the cleanup workflow at @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/cleanup.md.
+Follow the cleanup workflow at @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/cleanup.md.
 Identify completed milestones, show a dry-run summary, and archive on confirmation.
 </process>

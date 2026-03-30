@@ -52,8 +52,8 @@ Routes to the profile-user workflow which orchestrates the full flow: consent ga
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/profile-user.md
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/references/ui-brand.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/profile-user.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/references/ui-brand.md
 </execution_context>
 
 <context>

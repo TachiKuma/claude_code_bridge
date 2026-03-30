@@ -11,7 +11,7 @@ Instantly restore full project context so "Where were we?" has an immediate, com
 </purpose>
 
 <required_reading>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/get-shit-done/references/continuation-format.md
+@D:/Python/GitHub/claude_code_bridge/.gemini/get-shit-done/references/continuation-format.md
 </required_reading>
 
 <process>
@@ -20,7 +20,7 @@ Instantly restore full project context so "Where were we?" has an immediate, com
 Load all context in one call:
 
 ```bash
-INIT=$(node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" init resume)
+INIT=$(node "D:/Python/GitHub/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" init resume)
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 

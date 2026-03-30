@@ -76,7 +76,7 @@ Normalize phase input in step 1 before any directory lookups.
 ## 0. Initialize Context
 
 ```bash
-INIT=$(node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" init phase-op "{{GSD_ARGS}}")
+INIT=$(node "D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" init phase-op "{{GSD_ARGS}}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
@@ -84,13 +84,13 @@ Extract from init JSON: `phase_dir`, `phase_number`, `phase_name`, `phase_found`
 
 Resolve researcher model:
 ```bash
-RESEARCHER_MODEL=$(node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" resolve-model gsd-phase-researcher --raw)
+RESEARCHER_MODEL=$(node "D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" resolve-model gsd-phase-researcher --raw)
 ```
 
 ## 1. Validate Phase
 
 ```bash
-PHASE_INFO=$(node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" roadmap get-phase "${phase_number}")
+PHASE_INFO=$(node "D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/bin/gsd-tools.cjs" roadmap get-phase "${phase_number}")
 ```
 
 **If `found` is false:** Error and exit. **If `found` is true:** Extract `phase_number`, `phase_name`, `goal` from JSON.

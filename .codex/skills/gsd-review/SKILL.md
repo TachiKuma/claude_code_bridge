@@ -54,7 +54,7 @@ planning via $gsd-plan-phase --reviews.
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/review.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/review.md
 </execution_context>
 
 <context>
@@ -68,5 +68,5 @@ Phase number: extracted from {{GSD_ARGS}} (required)
 </context>
 
 <process>
-Execute the review workflow from @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/review.md end-to-end.
+Execute the review workflow from @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/review.md end-to-end.
 </process>

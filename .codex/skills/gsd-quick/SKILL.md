@@ -65,7 +65,7 @@ Flags are composable: `--discuss --research --full` gives discussion + research 
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/quick.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/quick.md
 </execution_context>
 
 <context>
@@ -75,6 +75,6 @@ Context files are resolved inside the workflow (`init quick`) and delegated via 
 </context>
 
 <process>
-Execute the quick workflow from @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/quick.md end-to-end.
+Execute the quick workflow from @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/quick.md end-to-end.
 Preserve all workflow gates (validation, task description, planning, execution, state updates, commits).
 </process>

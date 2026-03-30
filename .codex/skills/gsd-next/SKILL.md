@@ -53,9 +53,9 @@ Designed for rapid multi-project workflows where remembering which phase/step yo
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/next.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/next.md
 </execution_context>
 
 <process>
-Execute the next workflow from @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/next.md end-to-end.
+Execute the next workflow from @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/next.md end-to-end.
 </process>

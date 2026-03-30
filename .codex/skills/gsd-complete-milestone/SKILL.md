@@ -55,8 +55,8 @@ Output: Milestone archived (roadmap + requirements), PROJECT.md evolved, git tag
 <execution_context>
 **Load these files NOW (before proceeding):**
 
-- @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/complete-milestone.md (main workflow)
-- @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/templates/milestone-archive.md (archive template)
+- @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/complete-milestone.md (main workflow)
+- @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/templates/milestone-archive.md (archive template)
   </execution_context>
 
 <context>

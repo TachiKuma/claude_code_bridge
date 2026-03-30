@@ -52,8 +52,8 @@ Output: {phase_num}-UI-REVIEW.md
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/ui-review.md
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/references/ui-brand.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/ui-review.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/references/ui-brand.md
 </execution_context>
 
 <context>
@@ -61,6 +61,6 @@ Phase: {{GSD_ARGS}} — optional, defaults to last completed phase.
 </context>
 
 <process>
-Execute @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/ui-review.md end-to-end.
+Execute @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/ui-review.md end-to-end.
 Preserve all workflow gates.
 </process>

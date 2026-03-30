@@ -55,10 +55,10 @@ Remove a workspace directory after confirmation. For worktree strategy, runs `gi
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/remove-workspace.md
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/references/ui-brand.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/remove-workspace.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/references/ui-brand.md
 </execution_context>
 
 <process>
-Execute the remove-workspace workflow from @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/remove-workspace.md end-to-end.
+Execute the remove-workspace workflow from @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/remove-workspace.md end-to-end.
 </process>

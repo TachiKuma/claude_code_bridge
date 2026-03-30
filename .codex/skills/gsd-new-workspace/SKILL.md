@@ -71,11 +71,11 @@ Create a physical workspace directory containing copies of specified git repos (
 </objective>
 
 <execution_context>
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/new-workspace.md
-@E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/references/ui-brand.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/new-workspace.md
+@D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/references/ui-brand.md
 </execution_context>
 
 <process>
-Execute the new-workspace workflow from @E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codex/get-shit-done/workflows/new-workspace.md end-to-end.
+Execute the new-workspace workflow from @D:/Python/GitHub/claude_code_bridge/.codex/get-shit-done/workflows/new-workspace.md end-to-end.
 Preserve all workflow gates (validation, approvals, commits, routing).
 </process>

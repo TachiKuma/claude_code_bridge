@@ -31,9 +31,9 @@ Documents are reference material for Claude when planning/executing. Always incl
 Load codebase mapping context:
 
 ```bash
-INIT=$(node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" init map-codebase)
+INIT=$(node "D:/Python/GitHub/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" init map-codebase)
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
-AGENT_SKILLS_MAPPER=$(node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" agent-skills gsd-codebase-mapper 2>/dev/null)
+AGENT_SKILLS_MAPPER=$(node "D:/Python/GitHub/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" agent-skills gsd-codebase-mapper 2>/dev/null)
 ```
 
 Extract from init JSON: `mapper_model`, `commit_docs`, `codebase_dir`, `existing_maps`, `has_maps`, `codebase_dir_exists`.
@@ -312,7 +312,7 @@ Continue to commit_codebase_map.
 Commit the codebase map:
 
 ```bash
-node "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" commit "docs: map existing codebase" --files .planning/codebase/*.md
+node "D:/Python/GitHub/claude_code_bridge/.gemini/get-shit-done/bin/gsd-tools.cjs" commit "docs: map existing codebase" --files .planning/codebase/*.md
 ```
 
 Continue to offer_next.
