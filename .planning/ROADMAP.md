@@ -1,8 +1,8 @@
 # Roadmap: GSD & CCB 国际化与多 AI 协作可行性研究
 
-**项目:** GSD & CCB 国际化与多 AI 协作可行性研究
-**创建日期:** 2026-03-28
-**粒度:** fine
+**项目:** GSD & CCB 国际化与多 AI 协作可行性研究  
+**创建日期:** 2026-03-28  
+**粒度:** fine  
 **总阶段数:** 5
 
 ## 核心价值
@@ -13,21 +13,21 @@
 
 - [x] **Phase 1: 代码库分析** - 识别所有需要国际化的文本位置 (completed 2026-03-28)
 - [x] **Phase 2: 架构设计** - 设计共享 i18n 和多 AI 协作架构 (completed 2026-03-28)
-- [x] **Phase 3: 风险评估** - 评估实施风险和工作量 (completed 2026-03-30)
+- [ ] **Phase 3: 风险评估** - 评估实施风险和工作量
 - [ ] **Phase 4: 原型验证** - 验证关键技术点可行性
 - [ ] **Phase 5: 文档交付** - 编写完整技术方案和建议
 
 ## Phase Details
 
 ### Phase 1: 代码库分析
-**Goal**: 识别 CCB 和 GSD 代码库中所有需要国际化的文本，区分人类可读文本和协议字符串
-**Depends on**: 无（起点阶段）
-**Requirements**: ANALYSIS-01, ANALYSIS-02, ANALYSIS-03, ANALYSIS-04
+**Goal**: 识别 CCB 和 GSD 代码库中所有需要国际化的文本，区分人类可读文本和协议字符串  
+**Depends on**: 无（起点阶段）  
+**Requirements**: ANALYSIS-01, ANALYSIS-02, ANALYSIS-03, ANALYSIS-04  
 **Success Criteria** (what must be TRUE):
   1. CCB 代码库中所有硬编码文本位置已被识别和分类
   2. GSD 代码库中所有硬编码文本位置已被识别和分类
   3. 人类可读文本和协议字符串（命令名、环境变量、完成标记）已明确区分
-  4. 现有 CCB i18n.py 的可复用性评估报告已完成
+  4. 现有 CCB i18n.py 的可复用性评估报告已完成  
 **Plans**: 3 plans
 
 Plans:
@@ -65,27 +65,17 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [x] 03-01-PLAN.md — 协议字符串保护风险评估
-- [x] 03-02-PLAN.md — 多 AI 并发风险评估
-- [x] 03-03-PLAN.md — 工作量估算报告
-
-### Phase 4: 原型验证
-**Goal**: 实现最小原型验证 i18n_core、CCBCLIBackend、协议保护、文件锁等关键技术点
-**Depends on**: Phase 2
-**Requirements**: PROTO-01, PROTO-02, PROTO-03, PROTO-04, PROTO-05
+- [ ] 03-01-PLAN.md — 协议字符串保护风险评估
+- [ ] 03-02-PLAN.md — 多 AI 并发风险评估
+- [ ] 03-03-PLAN.md — 工作量估算报告
+Plans:- [ ] 03-01-PLAN.md — 协议字符串保护风险评估- [ ] 03-02-PLAN.md — 多 AI 并发风险评估- [ ] 03-03-PLAN.md — 工作量估算报告
 **Success Criteria** (what must be TRUE):
   1. i18n_core 最小原型已实现并验证（命名空间、t() API 工作正常）
   2. CCBCLIBackend 最小原型已实现并验证（能包装 ask/pend 命令）
   3. 协议字符串保护机制已验证（CI 检查脚本能检测误翻译）
   4. TaskHandle 结构化传递已验证（避免文本解析）
   5. 跨平台文件锁机制已验证（Windows/Linux/macOS 均可工作）
-**Plans**: 4 plans
-
-Plans:
-- [ ] 04-01-PLAN.md — 实现 i18n_core 核心原型（I18nCore 类 + 翻译文件 + 兼容层 + 测试）
-- [x] 04-02-PLAN.md — 实现 CCBCLIBackend + TaskHandle/TaskResult 原型
-- [ ] 04-03-PLAN.md — 实现协议字符串保护机制（CI 检查脚本 + 运行时验证）
-- [ ] 04-04-PLAN.md — 实现跨平台文件锁 FileLock 类
+**Plans**: TBD
 
 ### Phase 5: 文档交付
 **Goal**: 编写完整的技术方案文档、风险评估报告、原型验证报告和实施建议
@@ -104,15 +94,15 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. 代码库分析 | 3/3 | Complete   | 2026-03-28 |
 | 2. 架构设计 | 3/3 | Complete   | 2026-03-28 |
-| 3. 风险评估 | 3/3 | Complete   | 2026-03-30 |
-| 4. 原型验证 | 1/4 | In progress | - |
+| 3. 风险评估 | 0/0 | Not started | - |
+| 4. 原型验证 | 1/4 | In progress | 2026-03-30 |
 | 5. 文档交付 | 0/0 | Not started | - |
 
 ## Coverage
 
 **Total v1 requirements:** 23
 **Mapped to phases:** 23
-**Unmapped:** 0
+**Unmapped:** 0 ✓
 
 ### Requirement Mapping
 
@@ -144,4 +134,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-03-28*
-*Last updated: 2026-03-30 after Phase 04 planning*
+*Last updated: 2026-03-28*

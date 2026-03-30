@@ -33,10 +33,10 @@
 ### 原型验证
 
 - [ ] **PROTO-01**: 实现 i18n_core 最小原型（命名空间、t() API）
-- [x] **PROTO-02**: 实现 CCBCLIBackend 最小原型（包装 ask/pend）
+- [ ] **PROTO-02**: 实现 CCBCLIBackend 最小原型（包装 ask/pend）
 - [ ] **PROTO-03**: 验证协议字符串保护机制（CI 检查脚本）
-- [x] **PROTO-04**: 验证 TaskHandle 结构化传递（避免文本解析）
-- [ ] **PROTO-05**: 验证跨平台文件锁机制（Windows/Linux/macOS）
+- [ ] **PROTO-04**: 验证 TaskHandle 结构化传递（避免文本解析）
+- [x] **PROTO-05**: 验证跨平台文件锁机制（Windows/Linux/macOS）
 
 ### 文档交付
 
@@ -92,10 +92,10 @@
 | RISK-04 | Phase 3 | Pending |
 | RISK-05 | Phase 3 | Pending |
 | PROTO-01 | Phase 4 | Pending |
-| PROTO-02 | Phase 4 | Complete |
+| PROTO-02 | Phase 4 | Pending |
 | PROTO-03 | Phase 4 | Pending |
-| PROTO-04 | Phase 4 | Complete |
-| PROTO-05 | Phase 4 | Pending |
+| PROTO-04 | Phase 4 | Pending |
+| PROTO-05 | Phase 4 | Complete |
 | DOC-01 | Phase 5 | Pending |
 | DOC-02 | Phase 5 | Pending |
 | DOC-03 | Phase 5 | Pending |
