@@ -22,7 +22,6 @@
 
 ### Active
 
-- [ ] 构建原型验证关键技术点
 - [ ] 编写完整的技术方案文档
 
 ### Validated in Phase 1
@@ -46,6 +45,17 @@
   - i18n 完整实施估算 536 小时，建议按 643 小时缓冲口径排期
 - ✓ 评估多 AI 集成的工作量和技术复杂度 — Phase 3: 风险评估 (2026-03-30)
   - 明确同 provider 单任务约束，推荐复用 `ProviderLock`，工作量估算 40-60 小时
+
+### Validated in Phase 4
+
+- ✓ 构建并验证 I18nCore 原型 — Phase 4: 原型验证 (2026-03-30)
+  - 56 条消息迁移至 JSON，命名空间隔离、回退链、外部覆盖全部验证
+- ✓ 构建 TaskHandle/TaskResult 和 CCBCLIBackend 原型 — Phase 4: 原型验证 (2026-03-30)
+  - 25 个 mock 测试通过，退出码映射和 ProviderLock 集成验证
+- ✓ 验证双层协议字符串保护机制 — Phase 4: 原型验证 (2026-03-30)
+  - CI 脚本 + 运行时验证，300 项白名单对照检测
+- ✓ 验证跨平台 FileLock 机制 — Phase 4: 原型验证 (2026-03-30)
+  - Windows/Unix 双平台支持，过期锁检测
 
 ### Out of Scope
 
