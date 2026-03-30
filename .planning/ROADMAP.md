@@ -1,8 +1,8 @@
 # Roadmap: GSD & CCB 国际化与多 AI 协作可行性研究
 
-**项目:** GSD & CCB 国际化与多 AI 协作可行性研究  
-**创建日期:** 2026-03-28  
-**粒度:** fine  
+**项目:** GSD & CCB 国际化与多 AI 协作可行性研究
+**创建日期:** 2026-03-28
+**粒度:** fine
 **总阶段数:** 6
 
 ## 核心价值
@@ -21,14 +21,14 @@
 ## Phase Details
 
 ### Phase 1: 代码库分析
-**Goal**: 识别 CCB 和 GSD 代码库中所有需要国际化的文本，区分人类可读文本和协议字符串  
-**Depends on**: 无（起点阶段）  
-**Requirements**: ANALYSIS-01, ANALYSIS-02, ANALYSIS-03, ANALYSIS-04  
+**Goal**: 识别 CCB 和 GSD 代码库中所有需要国际化的文本，区分人类可读文本和协议字符串
+**Depends on**: 无（起点阶段）
+**Requirements**: ANALYSIS-01, ANALYSIS-02, ANALYSIS-03, ANALYSIS-04
 **Success Criteria** (what must be TRUE):
   1. CCB 代码库中所有硬编码文本位置已被识别和分类
   2. GSD 代码库中所有硬编码文本位置已被识别和分类
   3. 人类可读文本和协议字符串（命令名、环境变量、完成标记）已明确区分
-  4. 现有 CCB i18n.py 的可复用性评估报告已完成  
+  4. 现有 CCB i18n.py 的可复用性评估报告已完成
 **Plans**: 3 plans
 
 Plans:
@@ -110,11 +110,11 @@ Plans:
 **Requirements**: I18N-01, I18N-02, I18N-03, I18N-04, I18N-05, I18N-06
 **Success Criteria** (what must be TRUE):
   1. `lib/i18n_core.py` 的逐 key 英文回退、外部翻译协议拒绝、locale 检测行为与修订方案一致
-  2. CLI 核心用户可见消息完成翻译迁移，目标范围内 `t()` 覆盖率达到 ≥ 95%
+  2. CLI 核心用户可见消息完成翻译迁移，目标范围内 `t()` 覆盖率达到 >= 95%
   3. 翻译 CI 守卫、完整性检查和语言切换机制具备可执行落地方案
   4. Mail/Web/TUI 的文案盘点和第二版工时估算已形成书面产物
   5. CCB 全量 i18n 迁移的执行顺序、回归门禁和验证命令已明确
-**Plans**: 5 plans
+**Plans**: 6 plans
 
 Plans:
 - [ ] 06-01-PLAN.md — 修复 i18n_core 阻断项与弃用告警
@@ -122,6 +122,7 @@ Plans:
 - [ ] 06-03-PLAN.md — 建立语言切换、CI 守卫与测试补全
 - [ ] 06-04-PLAN.md — 盘点 Mail/Web/TUI 文案并更新估算
 - [ ] 06-05-PLAN.md — 执行全量迁移与回归验证
+- [ ] 06-06-PLAN.md — Skill 模板双语化 + Install 脚本全量迁移 + argparse help t() 包裹 + Config 模板混合翻译
 
 ## Progress
 
@@ -132,13 +133,13 @@ Plans:
 | 3. 风险评估 | 3/3 | Complete   | 2026-03-30 |
 | 4. 原型验证 | 4/4 | Complete   | 2026-03-30 |
 | 5. 文档交付 | 3/3 | Complete   | 2026-03-30 |
-| 6. CCB i18n 实施 | 0/5 | Not Started | - |
+| 6. CCB i18n 实施 | 0/6 | Not Started | - |
 
 ## Coverage
 
 **Total requirements:** 29
 **Mapped to phases:** 29
-**Unmapped:** 0 ✓
+**Unmapped:** 0
 
 ### Requirement Mapping
 
