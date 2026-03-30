@@ -737,7 +737,7 @@ class AILauncher:
         try:
             backend = TmuxBackend()
             pane_id = backend.get_current_pane_id()
-            title = f"CCB-{provider.capitalize()}"
+            title = f"CCB-{provider.capitalize()}-{self.project_id[:8]}"
             backend.set_pane_title(pane_id, title)
             backend.set_pane_user_option(pane_id, "@ccb_agent", provider.capitalize())
         except Exception:
@@ -1253,7 +1253,7 @@ class AILauncher:
             except StopIteration:
                 use_parent = None
 
-        pane_title_marker = f"CCB-{provider.capitalize()}"
+        pane_title_marker = f"CCB-{provider.capitalize()}-{self.project_id[:8]}"
         title_cmd = _build_pane_title_cmd(pane_title_marker)
         env_overrides = self._provider_env_overrides(provider)
         full_cmd = title_cmd + self._build_env_prefix(env_overrides) + _build_export_path_cmd(self.script_dir / "bin") + start_cmd
@@ -2110,7 +2110,7 @@ class AILauncher:
 
         env_overrides = self._provider_env_overrides("codex")
         start_cmd = self._build_env_prefix(env_overrides) + _build_export_path_cmd(self.script_dir / "bin") + self._build_codex_start_cmd()
-        pane_title_marker = "CCB-Codex"
+        pane_title_marker = f"CCB-Codex-{self.project_id[:8]}"
 
         backend = TmuxBackend()
 
@@ -2201,7 +2201,7 @@ class AILauncher:
 
         env_overrides = self._provider_env_overrides("gemini")
         start_cmd = self._build_env_prefix(env_overrides) + _build_export_path_cmd(self.script_dir / "bin") + self._build_gemini_start_cmd()
-        pane_title_marker = "CCB-Gemini"
+        pane_title_marker = f"CCB-Gemini-{self.project_id[:8]}"
 
         backend = TmuxBackend()
 
@@ -2252,7 +2252,7 @@ class AILauncher:
 
         env_overrides = self._provider_env_overrides("opencode")
         start_cmd = self._build_env_prefix(env_overrides) + _build_export_path_cmd(self.script_dir / "bin") + self._build_opencode_start_cmd()
-        pane_title_marker = "CCB-OpenCode"
+        pane_title_marker = f"CCB-OpenCode-{self.project_id[:8]}"
 
         backend = TmuxBackend()
 
@@ -2306,7 +2306,7 @@ class AILauncher:
 
         env_overrides = self._provider_env_overrides("droid")
         start_cmd = self._build_env_prefix(env_overrides) + _build_export_path_cmd(self.script_dir / "bin") + self._build_droid_start_cmd()
-        pane_title_marker = "CCB-Droid"
+        pane_title_marker = f"CCB-Droid-{self.project_id[:8]}"
 
         backend = TmuxBackend()
 
@@ -2396,7 +2396,7 @@ class AILauncher:
             print("❌ Unable to determine current pane id for Codex", file=sys.stderr)
             return 1
 
-        pane_title_marker = "CCB-Codex"
+        pane_title_marker = f"CCB-Codex-{self.project_id[:8]}"
         if self.terminal_type == "tmux":
             try:
                 backend = TmuxBackend()
@@ -2509,7 +2509,7 @@ class AILauncher:
             print("❌ Unable to determine current pane id for Gemini", file=sys.stderr)
             return 1
 
-        pane_title_marker = "CCB-Gemini"
+        pane_title_marker = f"CCB-Gemini-{self.project_id[:8]}"
         if self.terminal_type == "tmux":
             try:
                 backend = TmuxBackend()
@@ -2544,7 +2544,7 @@ class AILauncher:
             print("❌ Unable to determine current pane id for OpenCode", file=sys.stderr)
             return 1
 
-        pane_title_marker = "CCB-OpenCode"
+        pane_title_marker = f"CCB-OpenCode-{self.project_id[:8]}"
         if self.terminal_type == "tmux":
             try:
                 backend = TmuxBackend()
@@ -2605,7 +2605,7 @@ class AILauncher:
             print("❌ Unable to determine current pane id for Droid", file=sys.stderr)
             return 1
 
-        pane_title_marker = "CCB-Droid"
+        pane_title_marker = f"CCB-Droid-{self.project_id[:8]}"
         if self.terminal_type == "tmux":
             try:
                 backend = TmuxBackend()
@@ -3150,7 +3150,7 @@ class AILauncher:
 
         start_cmd = " ".join(cmd_parts)
         full_cmd = (
-            _build_pane_title_cmd("CCB-Claude")
+            _build_pane_title_cmd(f"CCB-Claude-{self.project_id[:8]}")
             + self._build_env_prefix(env_overrides)
             + _build_export_path_cmd(self.script_dir / "bin")
             + start_cmd
@@ -3167,7 +3167,7 @@ class AILauncher:
             backend = TmuxBackend()
             pane_id = backend.create_pane("", run_cwd, direction=use_direction, percent=50, parent_pane=use_parent)
             backend.respawn_pane(pane_id, cmd=full_cmd, cwd=run_cwd, remain_on_exit=True)
-            backend.set_pane_title(pane_id, "CCB-Claude")
+            backend.set_pane_title(pane_id, f"CCB-Claude-{self.project_id[:8]}")
             backend.set_pane_user_option(pane_id, "@ccb_agent", "Claude")
             self.tmux_panes["claude"] = pane_id
 
@@ -3176,7 +3176,7 @@ class AILauncher:
                 session_id=self._read_local_claude_session_id(),
                 active=True,
                 pane_id=str(pane_id or ""),
-                pane_title_marker="CCB-Claude",
+                pane_title_marker=f"CCB-Claude-{self.project_id[:8]}",
                 terminal=self.terminal_type,
             )
         except Exception:
@@ -3429,7 +3429,7 @@ class AILauncher:
                     session_id=self._read_local_claude_session_id(),
                     active=True,
                     pane_id=str(self.anchor_pane_id or ""),
-                    pane_title_marker="CCB-Claude",
+                    pane_title_marker=f"CCB-Claude-{self.project_id[:8]}",
                     terminal=self.terminal_type,
                 )
             except Exception:
