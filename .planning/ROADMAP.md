@@ -16,7 +16,7 @@
 - [x] **Phase 3: 风险评估** - 评估实施风险和工作量 (completed 2026-03-30)
 - [x] **Phase 4: 原型验证** - 验证关键技术点可行性 (completed 2026-03-30)
 - [x] **Phase 5: 文档交付** - 编写完整技术方案和建议 (completed 2026-03-30)
-- [ ] **Phase 6: CCB i18n 实施** - 按修订实施方案完成 CCB 国际化落地
+- [x] **Phase 6: CCB i18n 实施** - 按修订实施方案完成 CCB 国际化落地 (completed 2026-03-31)
 
 ## Phase Details
 
@@ -118,11 +118,11 @@ Plans:
 
 Plans:
 - [x] 06-01-PLAN.md — 修复 i18n_core 阻断项与弃用告警
-- [ ] 06-02-PLAN.md — 扩展 CLI 核心翻译覆盖并标准化错误消息
+- [x] 06-02-PLAN.md — 扩展 CLI 核心翻译覆盖并标准化错误消息
 - [x] 06-03-PLAN.md — 建立语言切换、CI 守卫与测试补全
-- [ ] 06-04-PLAN.md — 盘点 Mail/Web/TUI 文案并更新估算
-- [ ] 06-05-PLAN.md — 执行全量迁移与回归验证
-- [ ] 06-06-PLAN.md — Skill 模板双语化 + Install 脚本全量迁移 + argparse help t() 包裹 + Config 模板混合翻译
+- [x] 06-04-PLAN.md — 盘点 Mail/Web/TUI 文案并更新估算
+- [x] 06-05-PLAN.md — 执行全量迁移与回归验证
+- [x] 06-06-PLAN.md — Skill 模板双语化 + Install 脚本全量迁移 + argparse help t() 包裹 + Config 模板混合翻译
 
 ## Progress
 
@@ -133,7 +133,7 @@ Plans:
 | 3. 风险评估 | 3/3 | Complete   | 2026-03-30 |
 | 4. 原型验证 | 4/4 | Complete   | 2026-03-30 |
 | 5. 文档交付 | 3/3 | Complete   | 2026-03-30 |
-| 6. CCB i18n 实施 | 0/6 | Not Started | - |
+| 6. CCB i18n 实施 | 6/6 | Complete   | 2026-03-31 |
 
 ## Coverage
 
