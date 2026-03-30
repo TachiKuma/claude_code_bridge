@@ -31,6 +31,12 @@ jobs:
       - name: Syntax check
         run: python -m compileall -q lib bin ccb
 
+      - name: Translation guards
+        run: |
+          python scripts/check_protocol_strings.py
+          python scripts/check_translation_coverage.py
+          python scripts/check_translation_completeness.py
+
       - name: Run tests
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
@@ -73,6 +79,13 @@ jobs:
       - name: Syntax check in WSL
         shell: wsl-bash {0}
         run: python3 -m compileall -q lib bin ccb
+
+      - name: Translation guards in WSL
+        shell: wsl-bash {0}
+        run: |
+          python3 scripts/check_protocol_strings.py
+          python3 scripts/check_translation_coverage.py
+          python3 scripts/check_translation_completeness.py
 
       - name: Run tests in WSL with tmux
         shell: wsl-bash {0}

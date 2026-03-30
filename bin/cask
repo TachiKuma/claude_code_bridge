@@ -19,6 +19,7 @@ lib_dir = script_dir.parent / "lib"
 sys.path.insert(0, str(lib_dir))
 
 from compat import read_stdin_text, setup_windows_encoding
+from i18n import t
 
 setup_windows_encoding()
 
@@ -83,7 +84,7 @@ def _get_executor_from_roles() -> Optional[str]:
 
 
 def _usage() -> None:
-    print("Usage: cask [--sync] [--session-file FILE] [--timeout SECONDS] [--output FILE] <message>", file=sys.stderr)
+    print(t("usage", cmd="cask [--sync] [--session-file FILE] [--timeout SECONDS] [--output FILE] <message>"), file=sys.stderr)
 
 
 def _parse_args(argv: list[str]) -> Tuple[Optional[Path], float, str, bool, Optional[str], bool]:
@@ -109,21 +110,21 @@ def _parse_args(argv: list[str]) -> Tuple[Optional[Path], float, str, bool, Opti
             try:
                 session_file = next(it)
             except StopIteration:
-                raise ValueError("--session-file requires a file path")
+                raise ValueError(t("ccb.command.arg_requires_path", arg="--session-file"))
             continue
         if token in ("-o", "--output"):
             try:
                 output = Path(next(it)).expanduser()
             except StopIteration:
-                raise ValueError("--output requires a file path")
+                raise ValueError(t("ccb.command.arg_requires_path", arg="--output"))
             continue
         if token in ("-t", "--timeout"):
             try:
                 timeout = float(next(it))
             except StopIteration:
-                raise ValueError("--timeout requires a number")
+                raise ValueError(t("ccb.command.arg_requires_number", arg="--timeout"))
             except ValueError as exc:
-                raise ValueError(f"Invalid --timeout: {exc}")
+                raise ValueError(f"{t('ccb.command.arg_must_be_number', arg='--timeout')}: {exc}")
             continue
         parts.append(token)
 
@@ -179,14 +180,14 @@ def main(argv: list[str]) -> int:
             return exit_code
 
         if not env_bool(CASK_CLIENT_SPEC.enabled_env, True):
-            print(f"[ERROR] {CASK_CLIENT_SPEC.enabled_env}=0: cask daemon mode disabled.", file=sys.stderr)
+            print(f"[ERROR] {t('ccb.command.daemon_disabled', env=CASK_CLIENT_SPEC.enabled_env, command='cask')}", file=sys.stderr)
             return EXIT_ERROR
         if not find_project_session_file(work_dir, CASK_CLIENT_SPEC.session_filename):
-            print("[ERROR] No active Codex session found for this directory.", file=sys.stderr)
-            print("Run `ccb codex` (or add codex to ccb.config) in this project first.", file=sys.stderr)
+            print(f"[ERROR] {t('ccb.command.session_not_found_for_dir', provider='Codex')}", file=sys.stderr)
+            print(t("ccb.command.start_provider_hint", provider="codex"), file=sys.stderr)
             return EXIT_ERROR
-        print("[ERROR] cask daemon required but not available.", file=sys.stderr)
-        print("Start it with `caskd` (or enable autostart via CCB_CASKD_AUTOSTART=1).", file=sys.stderr)
+        print(f"[ERROR] {t('ccb.command.daemon_required', command='cask')}", file=sys.stderr)
+        print(t("ccb.command.start_daemon_hint", daemon="caskd", env="CCB_CASKD_AUTOSTART"), file=sys.stderr)
         return EXIT_ERROR
     except KeyboardInterrupt:
         return 130

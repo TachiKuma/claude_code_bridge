@@ -28,7 +28,7 @@ script_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(script_dir / "lib"))
 from terminal import TmuxBackend, WeztermBackend, detect_terminal, is_wsl, get_shell_type, get_backend_for_session
 from compat import setup_windows_encoding
-from ccb_config import get_backend_env
+from ccb_config import get_backend_env, get_language_setting, set_language_setting
 from ccb_start_config import DEFAULT_PROVIDERS, ensure_default_start_config, load_start_config
 from session_utils import (
     check_session_writable,
@@ -4825,11 +4825,61 @@ def cmd_droid_subcommand(argv: list[str]) -> int:
     return 1
 
 
+def _extract_global_lang_arg(argv: list[str]) -> tuple[str | None, list[str]]:
+    """Extract a global --lang option before subcommand dispatch."""
+    lang: str | None = None
+    remaining: list[str] = []
+    i = 0
+    while i < len(argv):
+        token = argv[i]
+        if token == "--lang":
+            if i + 1 >= len(argv):
+                print("❌ --lang requires a value: auto, en, zh, xx", file=sys.stderr)
+                raise SystemExit(2)
+            lang = argv[i + 1].strip().lower()
+            i += 2
+            continue
+        remaining.append(token)
+        i += 1
+    return lang, remaining
+
+
+def cmd_config(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="ccb config", description="CCB project configuration")
+    subparsers = parser.add_subparsers(dest="subcommand", help="Config subcommands")
+
+    lang_parser = subparsers.add_parser("lang", help="Get or set UI language")
+    lang_parser.add_argument("value", nargs="?", help="auto | en | zh | xx")
+
+    args = parser.parse_args(argv)
+
+    if args.subcommand == "lang":
+        if args.value:
+            try:
+                path = set_language_setting(args.value, Path.cwd())
+            except ValueError as exc:
+                print(f"❌ {exc}", file=sys.stderr)
+                return 2
+            print(f"Language set to {args.value.lower()} in {path}")
+            return 0
+
+        value = get_language_setting(Path.cwd()) or "auto"
+        print(value)
+        return 0
+
+    parser.print_help()
+    return 1
+
+
 def main():
     argv = sys.argv[1:]
     if "--print-version" in argv:
         print(f"v{VERSION}")
         return 0
+
+    lang_override, argv = _extract_global_lang_arg(argv)
+    if lang_override:
+        os.environ["CCB_LANG"] = lang_override
 
     if argv and argv[0] in {"-v", "--version"}:
         argv = ["version"]
@@ -4876,20 +4926,25 @@ def main():
     # Handle 'ccb mail' subcommand
     if argv and argv[0] == "mail":
         return cmd_mail(argv[1:])
+    if argv and argv[0] == "config":
+        return cmd_config(argv[1:])
 
     start_parser = argparse.ArgumentParser(
         description="Claude AI unified launcher",
         add_help=True,
-        epilog="Other commands: ccb update | ccb version | ccb kill | ccb uninstall | ccb reinstall | ccb droid setup-delegation | ccb mail setup",
+        epilog="Other commands: ccb update | ccb version | ccb kill | ccb uninstall | ccb reinstall | ccb config lang | ccb droid setup-delegation | ccb mail setup",
     )
     start_parser.add_argument(
         "providers",
         nargs="*",
         help="Backends to start (space or comma separated): codex, gemini, opencode, claude, droid (add cmd for a shell pane)",
     )
+    start_parser.add_argument("--lang", choices=["auto", "en", "zh", "xx"], help="Override UI language for this invocation")
     start_parser.add_argument("-r", "--resume", "--restore", action="store_true", help="Resume context")
     start_parser.add_argument("-a", "--auto", action="store_true", help="Full auto permission mode")
     args = start_parser.parse_args(argv)
+    if args.lang:
+        os.environ["CCB_LANG"] = args.lang
     return cmd_start(args)
 
 

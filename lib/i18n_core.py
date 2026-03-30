@@ -22,6 +22,7 @@ class I18nCore:
     def __init__(self, namespace: str = "ccb") -> None:
         self.namespace = namespace
         self.translations: Dict[str, str] = {}
+        self.fallback_translations: Dict[str, str] = {}
         self.current_lang: Optional[str] = None
         self.logger = logging.getLogger(f"i18n.{namespace}")
 
@@ -29,44 +30,17 @@ class I18nCore:
         """Load translations: builtin -> external override -> protocol validation."""
         lang = self._detect_language()
         self.current_lang = lang
+        self.translations = {}
+        self.fallback_translations = {}
         self.logger.info("Detected language: %s", lang)
 
-        # 1. Load builtin translations
-        builtin_path = Path(__file__).parent / "i18n" / self.namespace / f"{lang}.json"
-        if builtin_path.exists():
-            try:
-                self.translations = self._load_json_file(builtin_path)
-                self.logger.info("Loaded builtin translations: %s", builtin_path)
-            except Exception as e:
-                self.logger.error("Failed to parse builtin translations: %s", e)
+        self.translations = self._load_language_translations(lang)
+        if lang != "en":
+            self.fallback_translations = self._load_language_translations("en")
         else:
-            self.logger.warning("Builtin translation file not found: %s", builtin_path)
+            self.fallback_translations = self.translations
 
-        # 2. Fallback to English if not English and no translations loaded
-        if lang != "en" and not self.translations:
-            fallback_path = Path(__file__).parent / "i18n" / self.namespace / "en.json"
-            if fallback_path.exists():
-                try:
-                    self.translations = self._load_json_file(fallback_path)
-                    self.logger.info("Fallback to English translations: %s", fallback_path)
-                except Exception as e:
-                    self.logger.error("Failed to load fallback English: %s", e)
-
-        # 3. Load external translation override
-        external_path = (
-            Path.home() / ".ccb" / "i18n" / self.namespace / f"{lang}.json"
-        )
-        if external_path.exists():
-            try:
-                external = self._load_json_file(external_path)
-                self.translations.update(external)
-                self.logger.info("Loaded external translations: %s", external_path)
-            except (OSError, json.JSONDecodeError) as e:
-                self.logger.warning("Failed to load external translations: %s", e)
-        else:
-            self.logger.debug("No external translations at %s", external_path)
-
-        # 4. Runtime protocol string validation (warning only)
+        # Runtime protocol string validation
         violations = self._validate_no_protocol_strings()
         if violations:
             self.logger.warning(
@@ -74,6 +48,48 @@ class I18nCore:
                 "Review translations and .planning/protocol_whitelist.json",
                 len(violations),
             )
+
+    def _load_language_translations(self, lang: str) -> Dict[str, str]:
+        """Load builtin translations and merge allowed external overrides for one language."""
+        translations: Dict[str, str] = {}
+
+        builtin_path = Path(__file__).parent / "i18n" / self.namespace / f"{lang}.json"
+        if builtin_path.exists():
+            translations = self._load_json_file(builtin_path)
+            if translations:
+                self.logger.info("Loaded builtin translations: %s", builtin_path)
+        else:
+            self.logger.warning("Builtin translation file not found: %s", builtin_path)
+
+        external_path = Path.home() / ".ccb" / "i18n" / self.namespace / f"{lang}.json"
+        if external_path.exists():
+            external = self._load_json_file(external_path)
+            if external:
+                translations = self._merge_external_translations(translations, external)
+                self.logger.info("Loaded external translations: %s", external_path)
+        else:
+            self.logger.debug("No external translations at %s", external_path)
+
+        return translations
+
+    def _merge_external_translations(
+        self, builtin: Dict[str, str], external: Dict[str, str]
+    ) -> Dict[str, str]:
+        """Merge external translations while rejecting protocol string values."""
+        merged = dict(builtin)
+        whitelist = self._load_whitelist()
+
+        for key, value in external.items():
+            if isinstance(value, str) and value in whitelist:
+                self.logger.error(
+                    "BLOCKED: Protocol key '%s' in external translation value '%s'",
+                    key,
+                    value,
+                )
+                continue
+            merged[key] = value
+
+        return merged
 
     def _detect_language(self) -> str:
         """Detect language: CCB_LANG env -> system locale -> default 'en'."""
@@ -94,7 +110,7 @@ class I18nCore:
                 or os.environ.get("LC_MESSAGES", "")
             )
             if not lang:
-                lang, _ = locale.getdefaultlocale()
+                lang, _ = locale.getlocale()
                 lang = lang or ""
 
             lang = lang.lower()
@@ -111,6 +127,8 @@ class I18nCore:
         Fallback chain: current language -> English -> key name itself.
         """
         msg = self.translations.get(key)
+        if msg is None:
+            msg = self.fallback_translations.get(key)
         if msg is None:
             self.logger.warning("Translation key not found: %s", key)
             return key

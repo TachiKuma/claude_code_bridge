@@ -17,6 +17,7 @@ script_dir = Path(__file__).resolve().parent
 lib_dir = script_dir.parent / "lib"
 sys.path.insert(0, str(lib_dir))
 from compat import read_stdin_text, setup_windows_encoding
+from i18n import t
 
 setup_windows_encoding()
 
@@ -110,7 +111,7 @@ def _daemon_request_with_retries(
 
 
 def _usage() -> None:
-    print("Usage: dask [--sync] [--session-file FILE] [--timeout SECONDS] [--output FILE] <message>", file=sys.stderr)
+    print(t("usage", cmd="dask [--sync] [--session-file FILE] [--timeout SECONDS] [--output FILE] <message>"), file=sys.stderr)
 
 
 def main(argv: list[str]) -> int:
@@ -140,24 +141,24 @@ def main(argv: list[str]) -> int:
             try:
                 session_file = next(it)
             except StopIteration:
-                print("[ERROR] --session-file requires a file path", file=sys.stderr)
+                print(f"[ERROR] {t('ccb.command.arg_requires_path', arg='--session-file')}", file=sys.stderr)
                 return EXIT_ERROR
             continue
         if token in ("-o", "--output"):
             try:
                 output_path = Path(next(it)).expanduser()
             except StopIteration:
-                print("[ERROR] --output requires a file path", file=sys.stderr)
+                print(f"[ERROR] {t('ccb.command.arg_requires_path', arg='--output')}", file=sys.stderr)
                 return EXIT_ERROR
             continue
         if token in ("-t", "--timeout"):
             try:
                 timeout = float(next(it))
             except StopIteration:
-                print("[ERROR] --timeout requires a number", file=sys.stderr)
+                print(f"[ERROR] {t('ccb.command.arg_requires_number', arg='--timeout')}", file=sys.stderr)
                 return EXIT_ERROR
             except ValueError:
-                print("[ERROR] --timeout must be a number", file=sys.stderr)
+                print(f"[ERROR] {t('ccb.command.arg_must_be_number', arg='--timeout')}", file=sys.stderr)
                 return EXIT_ERROR
             continue
         parts.append(token)
@@ -166,7 +167,7 @@ def main(argv: list[str]) -> int:
     if not message and not sys.stdin.isatty():
         message = read_stdin_text().strip()
     if not message:
-        print("[ERROR] Message cannot be empty", file=sys.stderr)
+        print(f"[ERROR] {t('ccb.command.message_empty')}", file=sys.stderr)
         return EXIT_ERROR
 
     if timeout is None:
@@ -197,14 +198,14 @@ def main(argv: list[str]) -> int:
             return exit_code
 
         if not env_bool(DASK_CLIENT_SPEC.enabled_env, True):
-            print(f"[ERROR] {DASK_CLIENT_SPEC.enabled_env}=0: dask daemon mode disabled.", file=sys.stderr)
+            print(f"[ERROR] {t('ccb.command.daemon_disabled', env=DASK_CLIENT_SPEC.enabled_env, command='dask')}", file=sys.stderr)
             return EXIT_ERROR
         if not find_project_session_file(work_dir, DASK_CLIENT_SPEC.session_filename):
-            print("[ERROR] No active Droid session found for this directory.", file=sys.stderr)
-            print("Run `ccb droid` (or add droid to ccb.config) in this project first.", file=sys.stderr)
+            print(f"[ERROR] {t('ccb.command.session_not_found_for_dir', provider='Droid')}", file=sys.stderr)
+            print(t("ccb.command.start_provider_hint", provider="droid"), file=sys.stderr)
             return EXIT_ERROR
-        print("[ERROR] dask daemon required but not available.", file=sys.stderr)
-        print("Start it with `daskd` (or enable autostart via CCB_DASKD_AUTOSTART=1).", file=sys.stderr)
+        print(f"[ERROR] {t('ccb.command.daemon_required', command='dask')}", file=sys.stderr)
+        print(t("ccb.command.start_daemon_hint", daemon="daskd", env="CCB_DASKD_AUTOSTART"), file=sys.stderr)
         return EXIT_ERROR
     except KeyboardInterrupt:
         return 130

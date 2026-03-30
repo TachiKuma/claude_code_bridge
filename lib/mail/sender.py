@@ -13,6 +13,8 @@ from email.mime.multipart import MIMEMultipart
 from email.utils import formatdate, make_msgid
 from typing import Optional, List, Callable, TypeVar
 
+from i18n_runtime import t
+
 from .config import MailConfig, SmtpConfig
 from .credentials import get_password
 from .filters import filter_outgoing, sanitize_subject
@@ -129,10 +131,10 @@ class SmtpSender:
         try:
             if self.connect():
                 self.disconnect()
-                return True, "SMTP connection successful"
-            return False, "SMTP authentication failed"
+                return True, t("ccb.mail.sender.connection_success")
+            return False, t("ccb.mail.sender.auth_failed")
         except Exception as e:
-            return False, f"SMTP connection error: {e}"
+            return False, t("ccb.mail.sender.connection_error", error=e)
 
     def send_reply(
         self,
@@ -181,7 +183,10 @@ class SmtpSender:
             # Add provider signature
             body_with_sig = body
             if provider:
-                body_with_sig = f"{body}\n\n---\nSent via CCB ({provider})"
+                body_with_sig = (
+                    f"{body}\n\n---\n"
+                    f"{t('ccb.mail.sender.provider_signature', provider=provider)}"
+                )
 
             # Add body
             text_part = MIMEText(body_with_sig, "plain", "utf-8")
@@ -202,17 +207,17 @@ class SmtpSender:
             self._connection = None
             return False, str(e)
 
-    def send_test_email(self) -> tuple[bool, str]:
+    def send_test_email(self, to_addr: Optional[str] = None) -> tuple[bool, str]:
         """
-        Send a test email to self.
+        Send a test email.
 
         Returns:
             Tuple of (success, message)
         """
         return self.send_reply(
-            to_addr=self.email_addr,
-            subject="[CCB] Test Email",
-            body="This is a test email from CCB Mail System.\n\nIf you received this, your email configuration is working correctly.",
+            to_addr=to_addr or self.email_addr,
+            subject=t("ccb.mail.sender.test_subject"),
+            body=t("ccb.mail.sender.test_body"),
             provider="test",
         )
 
@@ -256,9 +261,18 @@ class SmtpSender:
         if work_dir:
             # Use last directory name for brevity
             dir_name = os.path.basename(work_dir.rstrip('/'))
-            subject = f"{subject_prefix} {provider.capitalize()} @ {dir_name}"
+            subject = t(
+                "ccb.mail.sender.output_subject_with_dir",
+                prefix=subject_prefix,
+                provider=provider.capitalize(),
+                directory=dir_name,
+            )
         else:
-            subject = f"{subject_prefix} {provider.capitalize()} Output"
+            subject = t(
+                "ccb.mail.sender.output_subject",
+                prefix=subject_prefix,
+                provider=provider.capitalize(),
+            )
 
         # Sanitize subject
         subject = sanitize_subject(subject)
@@ -266,20 +280,26 @@ class SmtpSender:
         # Truncate output if too long
         max_length = self.config.notification.max_email_length if hasattr(self.config, 'notification') else 10000
         if len(output) > max_length:
-            output = output[:max_length] + "\n\n... (truncated)"
+            output = output[:max_length] + "\n\n" + t("ccb.mail.sender.output_truncated")
 
         # Build body with work dir info
         separator = "━" * 40
-        work_dir_line = f"\n工作目录: {work_dir}" if work_dir else ""
+        header = t("ccb.mail.sender.output_header", provider=provider.capitalize())
+        work_dir_line = ""
+        if work_dir:
+            work_dir_line = "\n" + t("ccb.mail.sender.output_work_dir", work_dir=work_dir)
+        reply_instruction = t(
+            "ccb.mail.sender.output_reply_instruction",
+            provider=provider.capitalize(),
+        )
         body = f"""{separator}
- {provider.capitalize()} Pane Output{work_dir_line}
+ {header}{work_dir_line}
 {separator}
 
 {output}
 
 {separator}
-回复此邮件即可向 {provider.capitalize()} 发送指令
-Reply to this email to send commands to {provider.capitalize()}
+{reply_instruction}
 {separator}"""
 
         def _send() -> tuple[bool, str]:

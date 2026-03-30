@@ -7,6 +7,8 @@ Uses textual for terminal UI.
 import sys
 from typing import Optional
 
+from i18n_runtime import t
+
 # Check if textual is available
 try:
     from textual.app import App, ComposeResult
@@ -41,19 +43,19 @@ ADAPTERS = {
 
 def run_simple_wizard() -> bool:
     """Run a simple text-based wizard (fallback when textual unavailable)."""
-    print("\n=== CCB Mail Setup Wizard ===\n")
+    print(f"\n=== {t('ccb.mail_tui.simple.title')} ===\n")
 
     # Load existing config
     config = load_config()
 
     # Step 1: Select provider
-    print("Select your email provider:")
-    print("  1. Gmail")
-    print("  2. Outlook / Microsoft 365")
-    print("  3. QQ Mail")
-    print("  4. Custom")
+    print(t("ccb.mail_tui.simple.select_provider"))
+    print(f"  1. {t('ccb.mail_tui.provider.gmail')}")
+    print(f"  2. {t('ccb.mail_tui.provider.outlook')}")
+    print(f"  3. {t('ccb.mail_tui.provider.qq')}")
+    print(f"  4. {t('ccb.mail_tui.provider.custom')}")
 
-    choice = input("\nEnter choice [1-4]: ").strip()
+    choice = input(f"\n{t('ccb.mail_tui.simple.prompt_provider_choice')} ").strip()
     provider_map = {"1": "gmail", "2": "outlook", "3": "qq", "4": "custom"}
     provider = provider_map.get(choice, "custom")
 
@@ -64,76 +66,78 @@ def run_simple_wizard() -> bool:
 
     # Step 2: Enter email
     default_email = config.account.email or ""
-    email = input(f"Enter your email address [{default_email}]: ").strip()
+    email = input(
+        t("ccb.mail_tui.simple.prompt_email", default_email=default_email or "-")
+    ).strip()
     if not email:
         email = default_email
     if not email:
-        print("Error: Email address is required")
+        print(t("ccb.mail_tui.simple.error_email_required"))
         return False
 
     # Step 3: Enter password
     has_existing = has_password(email)
     if has_existing:
-        print(f"Password already stored for {email}")
-        change = input("Change password? [y/N]: ").strip().lower()
+        print(t("ccb.mail_tui.simple.password_exists", email=email))
+        change = input(f"{t('ccb.mail_tui.simple.prompt_change_password')} ").strip().lower()
         if change == "y":
             import getpass
-            password = getpass.getpass("Enter app password: ")
+            password = getpass.getpass(t("ccb.mail_tui.simple.prompt_app_password"))
             if password:
                 store_password(email, password)
     else:
         import getpass
-        password = getpass.getpass("Enter app password: ")
+        password = getpass.getpass(t("ccb.mail_tui.simple.prompt_app_password"))
         if not password:
-            print("Error: Password is required")
+            print(t("ccb.mail_tui.simple.error_password_required"))
             return False
         store_password(email, password)
 
     # Step 4: Configure routing
-    print("\nSelect routing mode:")
-    print("  1. Plus-alias (user+claude@gmail.com)")
-    print("  2. Subject prefix ([claude] message)")
+    print(f"\n{t('ccb.mail_tui.simple.select_routing_mode')}")
+    print(f"  1. {t('ccb.mail_tui.simple.routing_plus_alias')}")
+    print(f"  2. {t('ccb.mail_tui.simple.routing_subject_prefix')}")
 
-    route_choice = input("\nEnter choice [1-2]: ").strip()
+    route_choice = input(f"\n{t('ccb.mail_tui.simple.prompt_routing_choice')} ").strip()
     _routing_mode = "subject_prefix" if route_choice == "2" else "plus_alias"
 
     # Step 5: Default provider
-    print("\nSelect default AI provider:")
+    print(f"\n{t('ccb.mail_tui.simple.select_default_provider')}")
     print("  1. Claude")
     print("  2. Codex")
     print("  3. Gemini")
     print("  4. OpenCode")
     print("  5. Droid")
 
-    default_choice = input("\nEnter choice [1-5]: ").strip()
+    default_choice = input(f"\n{t('ccb.mail_tui.simple.prompt_default_provider')} ").strip()
     default_map = {"1": "claude", "2": "codex", "3": "gemini", "4": "opencode", "5": "droid"}
     default_provider = default_map.get(default_choice, "claude")
 
     # Step 6: Allowed senders (whitelist)
-    print("\n允许的发件人 (安全白名单):")
-    print("  只有白名单中的邮箱发来的邮件才会被处理")
-    print("  留空表示接受所有发件人")
-    allowed_input = input("\n输入允许的邮箱地址 (多个用逗号分隔): ").strip()
+    print(f"\n{t('ccb.mail_tui.simple.allowed_senders_title')}")
+    print(f"  {t('ccb.mail_tui.simple.allowed_senders_desc_1')}")
+    print(f"  {t('ccb.mail_tui.simple.allowed_senders_desc_2')}")
+    allowed_input = input(f"\n{t('ccb.mail_tui.simple.prompt_allowed_senders')} ").strip()
     allowed_senders = [s.strip() for s in allowed_input.split(",") if s.strip()] if allowed_input else []
 
     # Step 7: Reply address
-    print("\n回复地址设置:")
-    print("  默认: 回复到原始发件人")
-    print("  可设置固定地址: 所有回复都发到指定邮箱")
-    reply_to = input("\n固定回复地址 (留空使用默认): ").strip()
+    print(f"\n{t('ccb.mail_tui.simple.reply_to_title')}")
+    print(f"  {t('ccb.mail_tui.simple.reply_to_desc_1')}")
+    print(f"  {t('ccb.mail_tui.simple.reply_to_desc_2')}")
+    reply_to = input(f"\n{t('ccb.mail_tui.simple.prompt_reply_to')} ").strip()
 
     # Build config
     if provider in PROVIDER_PRESETS:
         config.account = AccountConfig.from_preset(provider, email)
     else:
         # Custom provider
-        print("\nCustom IMAP settings:")
-        imap_host = input("IMAP host: ").strip()
-        imap_port = int(input("IMAP port [993]: ").strip() or "993")
+        print(f"\n{t('ccb.mail_tui.simple.custom_imap_title')}")
+        imap_host = input(t("ccb.mail_tui.simple.prompt_imap_host")).strip()
+        imap_port = int(input(t("ccb.mail_tui.simple.prompt_imap_port")).strip() or "993")
 
-        print("\nCustom SMTP settings:")
-        smtp_host = input("SMTP host: ").strip()
-        smtp_port = int(input("SMTP port [587]: ").strip() or "587")
+        print(f"\n{t('ccb.mail_tui.simple.custom_smtp_title')}")
+        smtp_host = input(t("ccb.mail_tui.simple.prompt_smtp_host")).strip()
+        smtp_port = int(input(t("ccb.mail_tui.simple.prompt_smtp_port")).strip() or "587")
 
         config.account = AccountConfig(
             provider="custom",
@@ -155,31 +159,31 @@ def run_simple_wizard() -> bool:
         config.target_email = allowed_senders[0]
 
     # Step 8: Test connection
-    print("\nTesting connection...")
+    print(f"\n{t('ccb.mail_tui.simple.testing_connection')}")
 
     poller = ImapPoller(config)
     imap_ok, imap_msg = poller.test_connection()
-    print(f"  IMAP: {imap_msg}")
+    print(t("ccb.mail_tui.simple.test_imap", message=imap_msg))
 
     sender = SmtpSender(config)
     smtp_ok, smtp_msg = sender.test_connection()
-    print(f"  SMTP: {smtp_msg}")
+    print(t("ccb.mail_tui.simple.test_smtp", message=smtp_msg))
 
     if not (imap_ok and smtp_ok):
-        save_anyway = input("\nConnection test failed. Save config anyway? [y/N]: ").strip().lower()
+        save_anyway = input(f"\n{t('ccb.mail_tui.simple.prompt_save_anyway')} ").strip().lower()
         if save_anyway != "y":
             return False
 
     # Save config
     config.enabled = True
     save_config(config)
-    print("\nConfiguration saved!")
+    print(f"\n{t('ccb.mail_tui.simple.config_saved')}")
 
     # Start service?
-    start = input("\nStart mail service now? [Y/n]: ").strip().lower()
+    start = input(f"\n{t('ccb.mail_tui.simple.prompt_start_service')} ").strip().lower()
     if start != "n":
         from mail.daemon import start_daemon
-        print("Starting mail daemon...")
+        print(t("ccb.mail_tui.simple.starting_daemon"))
         start_daemon(foreground=False)
 
     return True
@@ -193,23 +197,18 @@ if TEXTUAL_AVAILABLE:
         def compose(self) -> ComposeResult:
             yield Header()
             yield Container(
-                Static("Welcome to CCB Mail Setup", classes="title"),
+                Static(t("ccb.mail_tui.textual.welcome_title"), classes="title"),
                 Static(
-                    "This wizard will help you configure email integration "
-                    "for CCB, allowing you to interact with AI providers via email.",
+                    t("ccb.mail_tui.textual.welcome_description"),
                     classes="description",
                 ),
                 Static(
-                    "\nFeatures:\n"
-                    "• Send messages to AI providers via email\n"
-                    "• Receive AI responses in your inbox\n"
-                    "• Route messages using plus-alias or subject prefix\n"
-                    "• Support for Gmail, Outlook, QQ Mail, and custom servers",
+                    t("ccb.mail_tui.textual.welcome_features"),
                     classes="features",
                 ),
                 Horizontal(
-                    Button("Continue", id="continue", variant="primary"),
-                    Button("Cancel", id="cancel"),
+                    Button(t("ccb.mail_tui.textual.button_continue"), id="continue", variant="primary"),
+                    Button(t("ccb.mail_tui.textual.button_cancel"), id="cancel"),
                     classes="buttons",
                 ),
                 id="welcome",
@@ -228,17 +227,17 @@ if TEXTUAL_AVAILABLE:
         def compose(self) -> ComposeResult:
             yield Header()
             yield Container(
-                Static("Select Email Provider", classes="title"),
+                Static(t("ccb.mail_tui.textual.provider_title"), classes="title"),
                 ListView(
-                    ListItem(Label("Gmail"), id="gmail"),
-                    ListItem(Label("Outlook / Microsoft 365"), id="outlook"),
-                    ListItem(Label("QQ 邮箱"), id="qq"),
-                    ListItem(Label("Custom Server"), id="custom"),
+                    ListItem(Label(t("ccb.mail_tui.provider.gmail")), id="gmail"),
+                    ListItem(Label(t("ccb.mail_tui.provider.outlook")), id="outlook"),
+                    ListItem(Label(t("ccb.mail_tui.provider.qq")), id="qq"),
+                    ListItem(Label(t("ccb.mail_tui.provider.custom_server")), id="custom"),
                     id="provider-list",
                 ),
                 Horizontal(
-                    Button("Back", id="back"),
-                    Button("Next", id="next", variant="primary"),
+                    Button(t("ccb.mail_tui.textual.button_back"), id="back"),
+                    Button(t("ccb.mail_tui.textual.button_next"), id="next", variant="primary"),
                     classes="buttons",
                 ),
                 id="provider",
@@ -292,6 +291,6 @@ def run_wizard() -> bool:
             app.run()
             return True
         except Exception as e:
-            print(f"TUI error: {e}, falling back to simple wizard")
+            print(t("ccb.mail_tui.error_fallback", error=e))
 
     return run_simple_wizard()

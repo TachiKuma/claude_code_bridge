@@ -5,26 +5,26 @@
     <!-- Status Card -->
     <div class="bg-white shadow rounded-lg">
         <div class="px-4 py-5 sm:p-6">
-            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Mail Service Status</h3>
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">{{ t("ccb.web.mail.status_title") }}</h3>
             <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <div class="text-center">
-                    <p class="text-sm text-gray-500">Configured</p>
+                    <p class="text-sm text-gray-500">{{ t("ccb.web.mail.status_configured") }}</p>
                     <p class="text-lg font-medium" :class="status.configured ? 'text-green-600' : 'text-red-600'"
-                        x-text="status.configured ? 'Yes' : 'No'"></p>
+                        x-text="status.configured ? ui.yes : ui.no"></p>
                 </div>
                 <div class="text-center">
-                    <p class="text-sm text-gray-500">Enabled</p>
+                    <p class="text-sm text-gray-500">{{ t("ccb.web.mail.status_enabled") }}</p>
                     <p class="text-lg font-medium" :class="status.enabled ? 'text-green-600' : 'text-gray-600'"
-                        x-text="status.enabled ? 'Yes' : 'No'"></p>
+                        x-text="status.enabled ? ui.yes : ui.no"></p>
                 </div>
                 <div class="text-center">
-                    <p class="text-sm text-gray-500">Daemon</p>
+                    <p class="text-sm text-gray-500">{{ t("ccb.web.mail.status_daemon") }}</p>
                     <p class="text-lg font-medium" :class="status.daemon_running ? 'text-green-600' : 'text-red-600'"
-                        x-text="status.daemon_running ? 'Running' : 'Stopped'"></p>
+                        x-text="status.daemon_running ? ui.running : ui.stopped"></p>
                 </div>
                 <div class="text-center">
-                    <p class="text-sm text-gray-500">Account</p>
-                    <p class="text-lg font-medium text-gray-900" x-text="status.email || '-'"></p>
+                    <p class="text-sm text-gray-500">{{ t("ccb.web.mail.status_account") }}</p>
+                    <p class="text-lg font-medium text-gray-900" x-text="status.service_email || '-'"></p>
                 </div>
             </div>
         </div>
@@ -33,51 +33,51 @@
     <!-- Configuration Form -->
     <div class="bg-white shadow rounded-lg">
         <div class="px-4 py-5 sm:p-6">
-            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Configuration</h3>
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">{{ t("ccb.web.mail.form_title") }}</h3>
 
             <form @submit.prevent="saveConfig()" class="space-y-4">
                 <!-- Provider -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Email Provider</label>
-                    <select x-model="config.provider"
+                    <label class="block text-sm font-medium text-gray-700">{{ t("ccb.web.mail.field_email_provider") }}</label>
+                    <select x-model="config.service_provider"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                        <option value="gmail">Gmail</option>
-                        <option value="outlook">Outlook / Microsoft 365</option>
-                        <option value="qq">QQ 邮箱</option>
-                        <option value="custom">Custom</option>
+                        <option value="gmail">{{ t("ccb.mail_tui.provider.gmail") }}</option>
+                        <option value="outlook">{{ t("ccb.mail_tui.provider.outlook") }}</option>
+                        <option value="qq">{{ t("ccb.mail_tui.provider.qq") }}</option>
+                        <option value="custom">{{ t("ccb.mail_tui.provider.custom") }}</option>
                     </select>
                 </div>
 
                 <!-- Email -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Email Address</label>
-                    <input type="email" x-model="config.email" required
+                    <label class="block text-sm font-medium text-gray-700">{{ t("ccb.web.mail.field_email_address") }}</label>
+                    <input type="email" x-model="config.service_email" required
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                        placeholder="your@email.com">
+                        placeholder="{{ t('ccb.web.mail.placeholder_email_address') }}">
                 </div>
 
                 <!-- Password -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">App Password</label>
-                    <input type="password" x-model="config.password"
+                    <label class="block text-sm font-medium text-gray-700">{{ t("ccb.web.mail.field_app_password") }}</label>
+                    <input type="password" x-model="config.service_password"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                        placeholder="Leave empty to keep existing">
-                    <p class="mt-1 text-xs text-gray-500">Use an app-specific password, not your regular password</p>
+                        placeholder="{{ t('ccb.web.mail.placeholder_app_password') }}">
+                    <p class="mt-1 text-xs text-gray-500">{{ t("ccb.web.mail.help_app_password") }}</p>
                 </div>
 
                 <!-- Routing Mode -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Routing Mode</label>
+                    <label class="block text-sm font-medium text-gray-700">{{ t("ccb.web.mail.field_routing_mode") }}</label>
                     <select x-model="config.routing_mode"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                        <option value="plus_alias">Plus-alias (user+claude@gmail.com)</option>
-                        <option value="subject_prefix">Subject prefix ([claude] message)</option>
+                        <option value="plus_alias">{{ t("ccb.web.mail.routing_plus_alias") }}</option>
+                        <option value="subject_prefix">{{ t("ccb.web.mail.routing_subject_prefix") }}</option>
                     </select>
                 </div>
 
                 <!-- Default Provider -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Default AI Provider</label>
+                    <label class="block text-sm font-medium text-gray-700">{{ t("ccb.web.mail.field_default_provider") }}</label>
                     <select x-model="config.default_provider"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                         <option value="claude">Claude</option>
@@ -90,7 +90,7 @@
 
                 <!-- Polling Interval -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Polling Interval (seconds)</label>
+                    <label class="block text-sm font-medium text-gray-700">{{ t("ccb.web.mail.field_polling_interval") }}</label>
                     <input type="number" x-model.number="config.polling_interval" min="10" max="300"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                 </div>
@@ -99,25 +99,25 @@
                 <div class="flex items-center">
                     <input type="checkbox" x-model="config.enabled" id="enabled"
                         class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                    <label for="enabled" class="ml-2 block text-sm text-gray-900">Enable mail service</label>
+                    <label for="enabled" class="ml-2 block text-sm text-gray-900">{{ t("ccb.web.mail.field_enable_service") }}</label>
                 </div>
 
                 <!-- Buttons -->
                 <div class="flex space-x-3 pt-4">
                     <button type="submit" :disabled="saving"
                         class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50">
-                        <span x-show="!saving">Save Configuration</span>
-                        <span x-show="saving">Saving...</span>
+                        <span x-show="!saving">{{ t("ccb.web.mail.button_save") }}</span>
+                        <span x-show="saving">{{ t("ccb.web.mail.button_saving") }}</span>
                     </button>
                     <button type="button" @click="testConnection()" :disabled="testing"
                         class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">
-                        <span x-show="!testing">Test Connection</span>
-                        <span x-show="testing">Testing...</span>
+                        <span x-show="!testing">{{ t("ccb.web.mail.button_test_connection") }}</span>
+                        <span x-show="testing">{{ t("ccb.web.mail.button_testing") }}</span>
                     </button>
                     <button type="button" @click="sendTestEmail()" :disabled="sendingTest"
                         class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50">
-                        <span x-show="!sendingTest">Send Test Email</span>
-                        <span x-show="sendingTest">Sending...</span>
+                        <span x-show="!sendingTest">{{ t("ccb.web.mail.button_send_test_email") }}</span>
+                        <span x-show="sendingTest">{{ t("ccb.web.mail.button_sending") }}</span>
                     </button>
                 </div>
             </form>
@@ -127,7 +127,7 @@
     <!-- Test Results -->
     <div x-show="testResult" x-cloak class="bg-white shadow rounded-lg">
         <div class="px-4 py-5 sm:p-6">
-            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Connection Test Results</h3>
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">{{ t("ccb.web.mail.test_results_title") }}</h3>
             <div class="space-y-2">
                 <div class="flex items-center">
                     <span class="status-dot" :class="testResult?.imap_ok ? 'status-running' : 'status-stopped'"></span>
@@ -152,11 +152,11 @@
 <script>
 function mailConfigApp() {
     return {
-        status: { configured: false, enabled: false, daemon_running: false, email: null },
+        status: { configured: false, enabled: false, daemon_running: false, service_email: null },
         config: {
-            provider: 'gmail',
-            email: '',
-            password: '',
+            service_provider: 'gmail',
+            service_email: '',
+            service_password: '',
             routing_mode: 'plus_alias',
             default_provider: 'claude',
             polling_interval: 30,
@@ -167,6 +167,20 @@ function mailConfigApp() {
         testing: false,
         sendingTest: false,
         notification: null,
+        ui: {
+            yes: {{ t("ccb.web.mail.status_yes") | tojson }},
+            no: {{ t("ccb.web.mail.status_no") | tojson }},
+            running: {{ t("ccb.web.mail.status_running") | tojson }},
+            stopped: {{ t("ccb.web.mail.status_stopped") | tojson }},
+            successSaved: {{ t("ccb.web.mail.success_saved") | tojson }},
+            errorSaveDefault: {{ t("ccb.web.mail.error_save_default") | tojson }},
+            errorSaveRequest: {{ t("ccb.web.mail.error_save_request") | tojson }},
+            successConnectionPassed: {{ t("ccb.web.mail.success_connection_passed") | tojson }},
+            errorConnectionFailed: {{ t("ccb.web.mail.error_connection_failed") | tojson }},
+            errorTestRequest: {{ t("ccb.web.mail.error_test_request") | tojson }},
+            successTestEmailSent: {{ t("ccb.web.mail.success_test_email_sent") | tojson }},
+            errorSendTestRequest: {{ t("ccb.web.mail.error_send_test_request") | tojson }}
+        },
 
         async init() {
             await this.fetchStatus();
@@ -186,7 +200,7 @@ function mailConfigApp() {
             try {
                 const res = await fetch('/api/mail/config');
                 const data = await res.json();
-                this.config = { ...this.config, ...data, password: '' };
+                this.config = { ...this.config, ...data, service_password: '' };
             } catch (e) {
                 console.error('Failed to fetch config:', e);
             }
@@ -196,7 +210,7 @@ function mailConfigApp() {
             this.saving = true;
             try {
                 const payload = { ...this.config };
-                if (!payload.password) delete payload.password;
+                if (!payload.service_password) delete payload.service_password;
 
                 const res = await fetch('/api/mail/config', {
                     method: 'PUT',
@@ -205,14 +219,14 @@ function mailConfigApp() {
                 });
 
                 if (res.ok) {
-                    this.showNotification('success', 'Configuration saved');
+                    this.showNotification('success', this.ui.successSaved);
                     await this.fetchStatus();
                 } else {
                     const err = await res.json();
-                    this.showNotification('error', err.detail || 'Failed to save');
+                    this.showNotification('error', err.detail || this.ui.errorSaveDefault);
                 }
             } catch (e) {
-                this.showNotification('error', 'Failed to save configuration');
+                this.showNotification('error', this.ui.errorSaveRequest);
             }
             this.saving = false;
         },
@@ -224,12 +238,12 @@ function mailConfigApp() {
                 const res = await fetch('/api/mail/test', { method: 'POST' });
                 this.testResult = await res.json();
                 if (this.testResult.success) {
-                    this.showNotification('success', 'Connection test passed');
+                    this.showNotification('success', this.ui.successConnectionPassed);
                 } else {
-                    this.showNotification('error', 'Connection test failed');
+                    this.showNotification('error', this.ui.errorConnectionFailed);
                 }
             } catch (e) {
-                this.showNotification('error', 'Failed to test connection');
+                this.showNotification('error', this.ui.errorTestRequest);
             }
             this.testing = false;
         },
@@ -240,12 +254,12 @@ function mailConfigApp() {
                 const res = await fetch('/api/mail/send-test', { method: 'POST' });
                 const data = await res.json();
                 if (data.success) {
-                    this.showNotification('success', 'Test email sent');
+                    this.showNotification('success', this.ui.successTestEmailSent);
                 } else {
                     this.showNotification('error', data.message);
                 }
             } catch (e) {
-                this.showNotification('error', 'Failed to send test email');
+                this.showNotification('error', this.ui.errorSendTestRequest);
             }
             this.sendingTest = false;
         },

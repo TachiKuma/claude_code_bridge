@@ -12,6 +12,11 @@ Backward compatible wrapper around i18n_core.
 import os
 import locale
 
+try:
+    from lib.ccb_config import get_language_setting
+except ModuleNotFoundError:
+    from ccb_config import get_language_setting
+
 _current_lang = None
 
 MESSAGES = {
@@ -236,7 +241,10 @@ _key_mapping = {
     "cancelled": "ccb.install.cancelled",
 }
 
-from lib.i18n_core import I18nCore
+try:
+    from lib.i18n_core import I18nCore
+except ModuleNotFoundError:
+    from i18n_core import I18nCore
 
 _core = I18nCore("ccb")
 _core_loaded = False
@@ -253,22 +261,25 @@ def detect_language() -> str:
     """Detect language from environment.
 
     Priority:
-    1. CCB_LANG environment variable (zh/en/auto)
-    2. System locale
-    3. Default to English
+    1. CCB_LANG environment variable (zh/en/auto/xx)
+    2. .ccb-config.json Language
+    3. System locale
+    4. Default to English
     """
-    ccb_lang = os.environ.get("CCB_LANG", "auto").lower()
+    ccb_lang = get_language_setting() or "auto"
 
     if ccb_lang in ("zh", "cn", "chinese"):
         return "zh"
     if ccb_lang in ("en", "english"):
         return "en"
+    if ccb_lang == "xx":
+        return "xx"
 
     # Auto-detect from system locale
     try:
         lang = os.environ.get("LANG", "") or os.environ.get("LC_ALL", "") or os.environ.get("LC_MESSAGES", "")
         if not lang:
-            lang, _ = locale.getdefaultlocale()
+            lang, _ = locale.getlocale()
             lang = lang or ""
 
         lang = lang.lower()
@@ -291,7 +302,7 @@ def get_lang() -> str:
 def set_lang(lang: str) -> None:
     """Set language explicitly."""
     global _current_lang
-    if lang in ("zh", "en"):
+    if lang in ("zh", "en", "xx"):
         _current_lang = lang
 
 

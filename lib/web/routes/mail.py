@@ -9,6 +9,7 @@ from typing import Optional, List, Dict
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from i18n_runtime import t
 from web.auth import require_auth
 
 router = APIRouter()
@@ -82,6 +83,11 @@ class HookToggleRequest(BaseModel):
     notify_mode: Optional[str] = None
 
 
+def _http_error(status_code: int, key: str, **kwargs) -> HTTPException:
+    """Build a translated HTTPException."""
+    return HTTPException(status_code=status_code, detail=t(key, **kwargs))
+
+
 # ============================================================================
 # Mail Service Endpoints
 # ============================================================================
@@ -126,7 +132,7 @@ async def get_mail_status(user: dict = Depends(require_auth)) -> MailStatusRespo
             enabled_hooks=enabled_hooks,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _http_error(500, "ccb.web.mail_api.error_status_failed", error=str(e))
 
 
 @router.get("/config")
@@ -172,7 +178,7 @@ async def get_mail_config(user: dict = Depends(require_auth)) -> MailConfigRespo
             polling_interval=config.polling.interval_seconds,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _http_error(500, "ccb.web.mail_api.error_config_load_failed", error=str(e))
 
 
 @router.put("/config")
@@ -220,7 +226,7 @@ async def update_mail_config(
         # Return updated config
         return await get_mail_config(user)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _http_error(500, "ccb.web.mail_api.error_config_save_failed", error=str(e))
 
 
 @router.post("/toggle")
@@ -235,10 +241,14 @@ async def toggle_mail_service(user: dict = Depends(require_auth)) -> dict:
 
         return {
             "enabled": config.enabled,
-            "message": "Mail service enabled" if config.enabled else "Mail service disabled",
+            "message": t(
+                "ccb.web.mail_api.message_toggle_enabled"
+                if config.enabled
+                else "ccb.web.mail_api.message_toggle_disabled"
+            ),
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _http_error(500, "ccb.web.mail_api.error_toggle_failed", error=str(e))
 
 
 @router.post("/test")
@@ -258,7 +268,7 @@ async def test_mail_connection(user: dict = Depends(require_auth)) -> MailTestRe
             service_email = config.account.email
 
         if not service_email:
-            raise HTTPException(status_code=400, detail="Mail not configured")
+            raise _http_error(400, "ccb.web.mail_api.error_not_configured")
 
         # Test IMAP
         poller = ImapPoller(config)
@@ -278,7 +288,7 @@ async def test_mail_connection(user: dict = Depends(require_auth)) -> MailTestRe
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _http_error(500, "ccb.web.mail_api.error_test_failed", error=str(e))
 
 
 @router.post("/send-test")
@@ -297,27 +307,27 @@ async def send_test_email(user: dict = Depends(require_auth)) -> dict:
             service_email = config.account.email
 
         if not service_email:
-            raise HTTPException(status_code=400, detail="Mail not configured")
+            raise _http_error(400, "ccb.web.mail_api.error_not_configured")
 
         sender = SmtpSender(config)
 
         # Send to target email if configured, otherwise to self
         target = getattr(config, 'target_email', '') or service_email
 
-        success, result = sender.send_output(
-            to_addr=target,
-            provider="test",
-            output="This is a test notification from CCB Mail System.\n\nIf you received this, your mail configuration is working correctly.",
-        )
+        success, result = sender.send_test_email(target)
 
         return {
             "success": success,
-            "message": f"Test email sent to {target}" if success else f"Failed: {result}",
+            "message": (
+                t("ccb.web.mail_api.message_test_email_sent", target=target)
+                if success
+                else t("ccb.web.mail_api.message_test_email_failed", error=result)
+            ),
         }
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _http_error(500, "ccb.web.mail_api.error_send_test_failed", error=str(e))
 
 
 # ============================================================================
@@ -347,7 +357,7 @@ async def get_all_hooks(user: dict = Depends(require_auth)) -> List[PaneHookStat
 
         return hooks
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _http_error(500, "ccb.web.mail_api.error_hooks_list_failed", error=str(e))
 
 
 @router.get("/hooks/{provider}")
@@ -358,7 +368,7 @@ async def get_hook(provider: str, user: dict = Depends(require_auth)) -> PaneHoo
         from mail.daemon import get_pane_ids
 
         if provider not in SUPPORTED_PROVIDERS:
-            raise HTTPException(status_code=404, detail=f"Unknown provider: {provider}")
+            raise _http_error(404, "ccb.web.mail_api.error_unknown_provider", provider=provider)
 
         config = load_config()
         pane_ids = get_pane_ids()
@@ -374,7 +384,7 @@ async def get_hook(provider: str, user: dict = Depends(require_auth)) -> PaneHoo
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _http_error(500, "ccb.web.mail_api.error_hook_get_failed", error=str(e))
 
 
 @router.put("/hooks/{provider}")
@@ -389,12 +399,12 @@ async def update_hook(
         from mail.daemon import get_pane_ids
 
         if provider not in SUPPORTED_PROVIDERS:
-            raise HTTPException(status_code=404, detail=f"Unknown provider: {provider}")
+            raise _http_error(404, "ccb.web.mail_api.error_unknown_provider", provider=provider)
 
         config = load_config()
 
         if not hasattr(config, 'pane_hooks'):
-            raise HTTPException(status_code=400, detail="Config version does not support pane hooks")
+            raise _http_error(400, "ccb.web.mail_api.error_hooks_unsupported")
 
         # Update hook
         config.set_hook_enabled(provider, update.enabled)
@@ -414,7 +424,7 @@ async def update_hook(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _http_error(500, "ccb.web.mail_api.error_hook_update_failed", error=str(e))
 
 
 @router.post("/hooks/{provider}/toggle")
@@ -425,12 +435,12 @@ async def toggle_hook(provider: str, user: dict = Depends(require_auth)) -> Pane
         from mail.daemon import get_pane_ids
 
         if provider not in SUPPORTED_PROVIDERS:
-            raise HTTPException(status_code=404, detail=f"Unknown provider: {provider}")
+            raise _http_error(404, "ccb.web.mail_api.error_unknown_provider", provider=provider)
 
         config = load_config()
 
         if not hasattr(config, 'pane_hooks'):
-            raise HTTPException(status_code=400, detail="Config version does not support pane hooks")
+            raise _http_error(400, "ccb.web.mail_api.error_hooks_unsupported")
 
         # Toggle hook
         current = config.pane_hooks[provider].enabled
@@ -448,7 +458,7 @@ async def toggle_hook(provider: str, user: dict = Depends(require_auth)) -> Pane
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _http_error(500, "ccb.web.mail_api.error_hook_toggle_failed", error=str(e))
 
 
 # ============================================================================
@@ -463,7 +473,7 @@ async def start_daemon(user: dict = Depends(require_auth)) -> dict:
         import threading
 
         if is_daemon_running():
-            return {"success": False, "message": "Daemon already running"}
+            return {"success": False, "message": t("ccb.web.mail_api.message_daemon_already_running")}
 
         # Start daemon in background thread
         def run_daemon():
@@ -480,11 +490,10 @@ async def start_daemon(user: dict = Depends(require_auth)) -> dict:
         time.sleep(1)
 
         if is_daemon_running():
-            return {"success": True, "message": "Daemon started"}
-        else:
-            return {"success": False, "message": "Daemon failed to start"}
+            return {"success": True, "message": t("ccb.web.mail_api.message_daemon_started")}
+        return {"success": False, "message": t("ccb.web.mail_api.message_daemon_failed_to_start")}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _http_error(500, "ccb.web.mail_api.error_daemon_start_failed", error=str(e))
 
 
 @router.post("/daemon/stop")
@@ -496,7 +505,11 @@ async def stop_daemon(user: dict = Depends(require_auth)) -> dict:
         success = _stop_daemon()
         return {
             "success": success,
-            "message": "Daemon stopped" if success else "Daemon not running",
+            "message": t(
+                "ccb.web.mail_api.message_daemon_stopped"
+                if success
+                else "ccb.web.mail_api.message_daemon_not_running"
+            ),
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _http_error(500, "ccb.web.mail_api.error_daemon_stop_failed", error=str(e))

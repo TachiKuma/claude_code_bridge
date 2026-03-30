@@ -5,7 +5,61 @@ import subprocess
 import sys
 from pathlib import Path
 
-from terminal import _subprocess_kwargs
+try:
+    from terminal import _subprocess_kwargs
+except ModuleNotFoundError:
+    from lib.terminal import _subprocess_kwargs
+
+CONFIG_FILE_NAME = ".ccb-config.json"
+VALID_LANGUAGE_VALUES = {"auto", "en", "zh", "xx"}
+
+
+def get_project_config_path(work_dir: Path | None = None) -> Path:
+    """Return the project config file path."""
+    base = work_dir or Path.cwd()
+    return base / CONFIG_FILE_NAME
+
+
+def load_project_config(work_dir: Path | None = None) -> dict:
+    """Load .ccb-config.json as a dict."""
+    path = get_project_config_path(work_dir)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_project_config(data: dict, work_dir: Path | None = None) -> Path:
+    """Persist .ccb-config.json."""
+    path = get_project_config_path(work_dir)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def get_language_setting(work_dir: Path | None = None) -> str | None:
+    """Get configured language from env or .ccb-config.json."""
+    env_lang = (os.environ.get("CCB_LANG") or "").strip().lower()
+    if env_lang in VALID_LANGUAGE_VALUES:
+        return env_lang
+
+    data = load_project_config(work_dir)
+    value = str(data.get("Language") or "").strip().lower()
+    if value in VALID_LANGUAGE_VALUES:
+        return value
+    return None
+
+
+def set_language_setting(lang: str, work_dir: Path | None = None) -> Path:
+    """Set project language in .ccb-config.json."""
+    value = (lang or "").strip().lower()
+    if value not in VALID_LANGUAGE_VALUES:
+        raise ValueError(f"Unsupported language: {lang}")
+    data = load_project_config(work_dir)
+    data["Language"] = value
+    return save_project_config(data, work_dir)
 
 
 def get_backend_env() -> str | None:
@@ -13,15 +67,10 @@ def get_backend_env() -> str | None:
     v = (os.environ.get("CCB_BACKEND_ENV") or "").strip().lower()
     if v in {"wsl", "windows"}:
         return v
-    path = Path.cwd() / ".ccb-config.json"
-    if path.exists():
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            v = (data.get("BackendEnv") or "").strip().lower()
-            if v in {"wsl", "windows"}:
-                return v
-        except Exception:
-            pass
+    data = load_project_config()
+    v = str(data.get("BackendEnv") or "").strip().lower()
+    if v in {"wsl", "windows"}:
+        return v
     return "windows" if sys.platform == "win32" else None
 
 

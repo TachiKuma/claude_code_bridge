@@ -1,20 +1,15 @@
-"""
-CCB Web Controller - FastAPI Application.
+"""CCB Web Controller - FastAPI Application."""
 
-Provides a web-based interface for managing CCB services.
-"""
-
-import os
 import secrets
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Request, Depends, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from web.auth import get_current_user, verify_local_access
+from i18n_runtime import get_translator
 from web.routes import daemons, providers, mail, ws
 
 # Application info
@@ -25,6 +20,18 @@ APP_VERSION = "1.0.0"
 WEB_DIR = Path(__file__).parent
 TEMPLATES_DIR = WEB_DIR / "templates"
 STATIC_DIR = WEB_DIR / "static"
+
+
+def _build_template_context(request: Request, title_key: str, active_page: str) -> dict:
+    """Build a template context with a fresh translator."""
+    translate, lang = get_translator("ccb")
+    return {
+        "request": request,
+        "title": translate(title_key),
+        "active_page": active_page,
+        "lang": lang,
+        "t": translate,
+    }
 
 
 def create_app(
@@ -63,7 +70,7 @@ def create_app(
     async def dashboard(request: Request):
         return templates.TemplateResponse(
             "dashboard.html",
-            {"request": request, "title": "Dashboard"},
+            _build_template_context(request, "ccb.web.app.dashboard_title", "dashboard"),
         )
 
     # Mail configuration page
@@ -71,7 +78,7 @@ def create_app(
     async def mail_page(request: Request):
         return templates.TemplateResponse(
             "mail.html",
-            {"request": request, "title": "Mail Configuration"},
+            _build_template_context(request, "ccb.web.app.mail_title", "mail"),
         )
 
     # Health check
