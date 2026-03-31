@@ -199,6 +199,11 @@ class ProviderLock:
                 self._fd = None
                 self._acquired = False
 
+    @property
+    def is_acquired(self) -> bool:
+        """Whether the lock is currently held by this instance."""
+        return self._acquired
+
     def __enter__(self) -> "ProviderLock":
         if not self.acquire():
             raise TimeoutError(f"Failed to acquire {self.provider} lock after {self.timeout}s")
