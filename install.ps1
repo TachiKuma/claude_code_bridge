@@ -94,14 +94,14 @@ function Get-Msg {
     "install.python.detect_failed" = @{ en = "Failed to query Python version using: $Arg1"; zh = "无法查询 Python 版本：$Arg1" }
     "install.python.error_details" = @{ en = "   Error details: $Arg1"; zh = "   错误详情：$Arg1" }
     "install.python.ok" = @{ en = "[OK] Python $Arg1"; zh = "[OK] Python $Arg1" }
-    "install.backend.windows_warning" = @{ en = "You are installing ccb in native Windows environment"; zh = "你正在 Windows 原生环境安装 ccb" }
+    "install.backend.windows_warning" = @{ en = "You are installing ccb in native Windows environment"; zh = "你正在原生 Windows 环境中安装 ccb" }
     "install.backend.same_env" = @{ en = "ccb/ask/ping/pend must run in the same environment as codex/gemini."; zh = "ccb/ask/ping/pend 必须与 codex/gemini 在同一环境运行。" }
-    "install.backend.confirm_windows" = @{ en = "Continue installation in Windows? (y/N)"; zh = "确认继续在 Windows 中安装？(y/N)" }
+    "install.backend.confirm_windows" = @{ en = "Continue installation in Windows? (y/N)"; zh = "确认安装到原生 Windows 环境中吗？(y/N)" }
     "install.backend.cancelled" = @{ en = "Installation cancelled"; zh = "安装已取消" }
     "install.backend.non_interactive_error" = @{ en = "Non-interactive environment detected, aborting to prevent Windows/WSL mismatch."; zh = "检测到非交互环境，为避免 Windows/WSL 环境错配，安装已中止。" }
     "install.backend.if_windows" = @{ en = "   If codex/gemini will run in native Windows:"; zh = "   如果 codex/gemini 将在原生 Windows 运行：" }
     "install.backend.re_run_windows" = @{ en = "Re-run: powershell -ExecutionPolicy Bypass -File .\\install.ps1 install -Yes"; zh = "请重新执行：powershell -ExecutionPolicy Bypass -File .\\install.ps1 install -Yes" }
-    "install.backend.confirm_native" = @{ en = "Please confirm: You will install and run codex/gemini in native Windows (not WSL)."; zh = "请确认：你将在原生 Windows 中安装并运行 codex/gemini（不是 WSL）。" }
+    "install.backend.confirm_native" = @{ en = "Please confirm: You will install and run codex/gemini in native Windows (not WSL)."; zh = "请确认：你将在原生 Windows 中安装并运行 codex/gemini（非 WSL 环境）。" }
     "install.backend.if_wsl" = @{ en = "If you plan to run codex/gemini in WSL, exit and run in WSL:"; zh = "如果你计划在 WSL 中运行 codex/gemini，请退出并在 WSL 中执行：" }
     "install.backend.install_sh" = @{ en = "   ./install.sh install"; zh = "   ./install.sh install" }
     "install.starting" = @{ en = "Installing ccb to $Arg1 ..."; zh = "正在安装 ccb 到 $Arg1 ..." }
