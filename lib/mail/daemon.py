@@ -93,7 +93,8 @@ def write_daemon_state(state: DaemonState) -> None:
     state_path.parent.mkdir(parents=True, exist_ok=True)
     with open(state_path, "w") as f:
         json.dump(state.to_dict(), f, indent=2)
-    state_path.chmod(0o600)
+    if os.name != "nt":
+        state_path.chmod(0o600)
 
 
 def remove_daemon_state() -> None:

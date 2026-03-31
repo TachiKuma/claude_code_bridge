@@ -94,7 +94,8 @@ def save_attachment(
     try:
         with open(local_path, "wb") as f:
             f.write(content)
-        local_path.chmod(0o600)
+        if os.name != "nt":
+            local_path.chmod(0o600)
 
         return CachedAttachment(
             filename=filename,

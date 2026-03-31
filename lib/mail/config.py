@@ -333,8 +333,9 @@ def ensure_config_dir() -> Path:
     """Ensure the configuration directory exists with proper permissions."""
     config_dir = get_config_dir()
     config_dir.mkdir(parents=True, exist_ok=True)
-    # Set directory permissions to 700 (owner only)
-    config_dir.chmod(0o700)
+    if os.name != "nt":
+        # Set directory permissions to 700 (owner only)
+        config_dir.chmod(0o700)
     return config_dir
 
 
@@ -430,8 +431,9 @@ def save_config(config: "MailConfig") -> None:
     config_path = get_config_path()
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump(config.to_dict(), f, indent=2, ensure_ascii=False)
-    # Set file permissions to 600 (owner read/write only)
-    config_path.chmod(0o600)
+    if os.name != "nt":
+        # Set file permissions to 600 (owner read/write only)
+        config_path.chmod(0o600)
 
 
 def get_threads_path() -> Path:

@@ -95,7 +95,8 @@ class AskHandler:
 
             with open(context_file, "w", encoding="utf-8") as f:
                 json.dump(context, f, indent=2)
-            context_file.chmod(0o600)
+            if os.name != "nt":
+                context_file.chmod(0o600)
             return True
         except Exception as e:
             print(f"[maild] Failed to save email context: {e}")

@@ -110,7 +110,8 @@ def store_password(email: str, password: str) -> bool:
 
         with open(fallback_path, "w") as f:
             f.write(encrypted)
-        fallback_path.chmod(0o600)
+        if os.name != "nt":
+            fallback_path.chmod(0o600)
         return True
     except Exception as e:
         print(f"Error storing credentials: {e}")

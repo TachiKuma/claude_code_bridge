@@ -5,6 +5,7 @@ Maps email thread IDs to CCB session IDs for conversation continuity.
 """
 
 import json
+import os
 import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -79,7 +80,8 @@ class ThreadStore:
         data = {tid: m.to_dict() for tid, m in self._cache.items()}
         with open(self.threads_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
-        self.threads_file.chmod(0o600)
+        if os.name != "nt":
+            self.threads_file.chmod(0o600)
 
     def get(self, thread_id: str) -> Optional[ThreadMapping]:
         """Get session mapping for a thread ID."""
