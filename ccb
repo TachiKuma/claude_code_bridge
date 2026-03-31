@@ -4619,7 +4619,11 @@ def _run_installer(action: str) -> int:
     if platform.system() == "Windows":
         script = install_dir / "install.ps1"
         if not script.exists():
-            print(f"❌ install.ps1 not found in {install_dir}", file=sys.stderr)
+            # Fallback: try the script's own source directory
+            script_root = Path(__file__).resolve().parent
+            script = script_root / "install.ps1"
+        if not script.exists():
+            print(f"❌ install.ps1 not found in {install_dir} or {script.parent}", file=sys.stderr)
             return 1
         cmd = [
             "powershell",
