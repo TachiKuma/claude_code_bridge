@@ -124,6 +124,12 @@ Plans:
 - [x] 06-05-PLAN.md — 执行全量迁移与回归验证
 - [x] 06-06-PLAN.md — Skill 模板双语化 + Install 脚本全量迁移 + argparse help t() 包裹 + Config 模板混合翻译
 
+- [x] 07-01-PLAN.md — 测试基础设施 + 性能审计测试 (WIN-01)
+- [ ] 07-02-PLAN.md — 兼容性审计测试 (WIN-02)
+- [ ] 07-03-PLAN.md — 安全性审计测试 (WIN-03)
+- [ ] 07-04-PLAN.md — 编译问题清单 + 修复方案
+- [ ] 07-05-PLAN.md — 实施全部修复 + 回归验证
+
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -134,11 +140,12 @@ Plans:
 | 4. 原型验证 | 4/4 | Complete   | 2026-03-30 |
 | 5. 文档交付 | 3/3 | Complete   | 2026-03-30 |
 | 6. CCB i18n 实施 | 6/6 | Complete   | 2026-03-31 |
+| 7. Windows 原生环境专项检查 | 1/5 | In progress | |
 
 ## Coverage
 
-**Total requirements:** 29
-**Mapped to phases:** 29
+**Total requirements:** 32
+**Mapped to phases:** 32
 **Unmapped:** 0
 
 ### Requirement Mapping
@@ -174,7 +181,10 @@ Plans:
 | I18N-04 | 6 | 语言切换 |
 | I18N-05 | 6 | 文案盘点 |
 | I18N-06 | 6 | 全量迁移与回归 |
+| WIN-01 | 7 | 性能审计 |
+| WIN-02 | 7 | 兼容性审计 |
+| WIN-03 | 7 | 安全性审计 |
 
 ---
 *Roadmap created: 2026-03-28*
-*Last updated: 2026-03-30*
+*Last updated: 2026-03-31*
