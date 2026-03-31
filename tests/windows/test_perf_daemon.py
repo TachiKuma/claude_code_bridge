@@ -19,58 +19,6 @@ from lib.askd_runtime import state_file_path
 CREATE_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
 
-@pytest.fixture(scope="module")
-def daemon_proc():
-    """Start a daemon subprocess once per module, yield (proc, state_file_path)."""
-    # Use a dedicated temp dir for daemon state isolation
-    import tempfile
-    tmp_dir = Path(tempfile.mkdtemp(prefix="askd_test_"))
-
-    env = {**os.environ, "CCB_RUN_DIR": str(tmp_dir)}
-
-    proc = subprocess.Popen(
-        [sys.executable, "bin/askd"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        creationflags=CREATE_NO_WINDOW,
-        env=env,
-    )
-
-    # Wait for state file to appear (daemon is ready)
-    state_file = tmp_dir / "askd.json"
-    deadline = time.time() + 10.0
-    while time.time() < deadline:
-        if state_file.exists():
-            time.sleep(0.1)  # extra settle
-            break
-        time.sleep(0.05)
-        if proc.poll() is not None:
-            # Daemon crashed
-            yield None, None, tmp_dir, env
-            return
-
-    yield proc, state_file, tmp_dir, env
-
-    # Cleanup: shutdown daemon then terminate
-    try:
-        if proc.poll() is None:
-            proc.terminate()
-            try:
-                proc.wait(timeout=5.0)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait(timeout=2.0)
-    except Exception:
-        pass
-
-    # Remove temp dir
-    try:
-        import shutil
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-    except Exception:
-        pass
-
-
 @pytest.fixture
 def temp_run_dir(tmp_path, monkeypatch, daemon_proc):
     """Create isolated temp run dir using the daemon's own tmp dir."""
