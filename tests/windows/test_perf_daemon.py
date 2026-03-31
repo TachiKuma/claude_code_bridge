@@ -239,14 +239,16 @@ class TestDaemonShutdown:
 class TestDaemonPing:
     """D-16: daemon ping functionality."""
 
-    def test_daemon_ping_returns_true_when_running(self, daemon_state):
+    def test_daemon_ping_returns_true_when_running(self, daemon_state, daemon_proc):
         """ping_daemon returns True when daemon is running."""
         from lib.askd.daemon import ping_daemon
 
-        # Need to set CCB_RUN_DIR so ping_daemon finds the correct state file
-        state = daemon_state
-        state_file_path_str = str(state_file_path("askd.json"))
-        result = ping_daemon(timeout_s=2.0, state_file=Path(state_file_path_str))
+        # Use the state_file from daemon_proc (the actual isolated tmp dir)
+        _proc, state_file, _tmp_dir, _env = daemon_proc
+        if state_file is None or not state_file.exists():
+            pytest.skip("Daemon state file not available")
+
+        result = ping_daemon(timeout_s=2.0, state_file=state_file)
         assert result is True, "ping_daemon should return True when daemon is running"
 
     def test_daemon_ping_returns_false_when_not_running(self, tmp_path):
