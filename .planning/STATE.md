@@ -116,6 +116,7 @@ Plan: 5 of 5 ✓
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260331-cqp | Sync upstream repo and preserve i18n work | 2026-03-31 | 3a3d9fc | [260331-cqp-sync-upstream-repo-and-preserve-i18n-wor](./quick/260331-cqp-sync-upstream-repo-and-preserve-i18n-wor/) |
+| 260331-jwv | Fix ccb uninstall install.ps1 + daemon ping test | 2026-03-31 | b76705b | [260331-jwv-windows-1-ccb-uninstall-install-ps1-2-pi](./quick/260331-jwv-windows-1-ccb-uninstall-install-ps1-2-pi/) |
 
 ### Known Blockers
 
