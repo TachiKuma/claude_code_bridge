@@ -127,7 +127,7 @@ Plans:
 - [x] 07-01-PLAN.md — 测试基础设施 + 性能审计测试 (WIN-01)
 - [x] 07-02-PLAN.md — 兼容性审计测试 (WIN-02)
 - [x] 07-03-PLAN.md — 安全性审计测试 (WIN-03)
-- [ ] 07-04-PLAN.md — 编译问题清单 + 修复方案
+- [x] 07-04-PLAN.md — 编译问题清单 + 修复方案
 - [ ] 07-05-PLAN.md — 实施全部修复 + 回归验证
 
 ## Progress
@@ -140,7 +140,7 @@ Plans:
 | 4. 原型验证 | 4/4 | Complete   | 2026-03-30 |
 | 5. 文档交付 | 3/3 | Complete   | 2026-03-30 |
 | 6. CCB i18n 实施 | 6/6 | Complete   | 2026-03-31 |
-| 7. Windows 原生环境专项检查 | 1/5 | In progress | |
+| 7. Windows 原生环境专项检查 | 4/6 | In Progress|  |
 
 ## Coverage
 
