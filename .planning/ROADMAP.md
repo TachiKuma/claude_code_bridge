@@ -125,7 +125,7 @@ Plans:
 - [x] 06-06-PLAN.md — Skill 模板双语化 + Install 脚本全量迁移 + argparse help t() 包裹 + Config 模板混合翻译
 
 - [x] 07-01-PLAN.md — 测试基础设施 + 性能审计测试 (WIN-01)
-- [ ] 07-02-PLAN.md — 兼容性审计测试 (WIN-02)
+- [x] 07-02-PLAN.md — 兼容性审计测试 (WIN-02)
 - [ ] 07-03-PLAN.md — 安全性审计测试 (WIN-03)
 - [ ] 07-04-PLAN.md — 编译问题清单 + 修复方案
 - [ ] 07-05-PLAN.md — 实施全部修复 + 回归验证
