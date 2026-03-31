@@ -29,7 +29,7 @@ def daemon_state(daemon_proc):
 def _make_ping_request(token: str) -> str:
     """Build a JSON ping request string."""
     return json.dumps({
-        "type": "askd.ping",
+        "type": "ask.ping",
         "v": 1,
         "id": "socket-perf-test",
         "token": token,
@@ -107,7 +107,7 @@ class TestSocketUnauthorizedRejection:
 
         # Send with wrong token
         req = json.dumps({
-            "type": "askd.ping",
+            "type": "ask.ping",
             "v": 1,
             "id": "unauth-test",
             "token": "wrong-token-00000000000000",
@@ -139,7 +139,7 @@ class TestConcurrentRequests:
 
         def send_ping(idx: int) -> dict:
             req = json.dumps({
-                "type": "askd.ping",
+                "type": "ask.ping",
                 "v": 1,
                 "id": f"concurrent-{idx}",
                 "token": token,

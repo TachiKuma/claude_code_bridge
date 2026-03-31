@@ -62,7 +62,7 @@ def decode_stdin_bytes(data: bytes) -> str:
 
     if sys.platform == "win32":
         try:
-            return data.decode("mbcs", errors="strict")
+            return data.decode("mbcs", errors="replace")
         except Exception:
             pass
 

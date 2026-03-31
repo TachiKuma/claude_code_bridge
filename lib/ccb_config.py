@@ -10,7 +10,17 @@ from pathlib import Path
 try:
     from terminal import _subprocess_kwargs
 except ModuleNotFoundError:
-    from lib.terminal import _subprocess_kwargs
+    try:
+        from lib.terminal import _subprocess_kwargs
+    except ModuleNotFoundError:
+        def _subprocess_kwargs() -> dict:
+            """Fallback subprocess kwargs when terminal module is unavailable."""
+            kwargs = {}
+            if sys.platform == "win32":
+                # CREATE_NO_WINDOW = 0x08000000 prevents CMD window flash
+                CREATE_NO_WINDOW = 0x08000000
+                kwargs["creationflags"] = CREATE_NO_WINDOW
+            return kwargs
 
 CONFIG_FILE_NAME = ".ccb-config.json"
 VALID_LANGUAGE_VALUES = {"auto", "en", "zh", "xx"}
@@ -126,11 +136,31 @@ def get_backend_env() -> str | None:
 
 
 def _wsl_probe_distro_and_home() -> tuple[str, str]:
-    """Probe default WSL distro and home directory"""
+    """Probe default WSL distro and home directory.
+
+    On native Windows without WSL, returns defaults immediately after
+    a fast check (< 2s timeout) instead of waiting 10+ seconds.
+    """
+    # Fast check: is WSL installed at all?
+    try:
+        r = subprocess.run(
+            ["wsl.exe", "--list", "--quiet"],
+            capture_output=True, text=True, encoding="utf-16-le",
+            errors="replace", timeout=2,
+            **_subprocess_kwargs()
+        )
+        if r.returncode != 0:
+            # WSL not available or not installed
+            return "", ""
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        # wsl.exe doesn't exist or timed out -- no WSL
+        return "", ""
+
+    # WSL is available, probe distro and home
     try:
         r = subprocess.run(
             ["wsl.exe", "-e", "sh", "-lc", "echo $WSL_DISTRO_NAME; echo $HOME"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
             **_subprocess_kwargs()
         )
         if r.returncode == 0:
@@ -175,6 +205,9 @@ def apply_backend_env() -> None:
     if os.environ.get("CODEX_SESSION_ROOT") and os.environ.get("GEMINI_ROOT"):
         return
     distro, home = _wsl_probe_distro_and_home()
+    if not distro:
+        # WSL not available, skip WSL path setup
+        return
     for base in (fr"\\wsl.localhost\{distro}", fr"\\wsl$\{distro}"):
         prefix = base + home.replace("/", "\\")
         codex_path = prefix + r"\.codex\sessions"

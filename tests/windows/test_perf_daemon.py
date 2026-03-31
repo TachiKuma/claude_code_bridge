@@ -110,7 +110,7 @@ class TestCommandResponse:
         token = state["token"]
 
         req = json.dumps({
-            "type": "askd.ping",
+            "type": "ask.ping",
             "v": 1,
             "id": "perf-test-ping",
             "token": token,
