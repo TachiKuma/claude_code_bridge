@@ -52,7 +52,7 @@ backend_env = get_backend_env()
 if backend_env and not os.environ.get("CCB_BACKEND_ENV"):
     os.environ["CCB_BACKEND_ENV"] = backend_env
 
-VERSION = "5.2.8"
+VERSION = "5.2.9"
 GIT_COMMIT = "c539e79"
 GIT_DATE = "2026-02-25"
 
@@ -555,11 +555,15 @@ class AILauncher:
         resume: bool = False,
         auto: bool = False,
         cmd_config: dict | None = None,
+        launch_args: dict | None = None,
+        launch_env: dict | None = None,
     ):
         self.providers = providers or ["codex"]
         self.resume = resume
         self.auto = auto
         self.cmd_config = self._normalize_cmd_config(cmd_config)
+        self.launch_args = launch_args if isinstance(launch_args, dict) else {}
+        self.launch_env = launch_env if isinstance(launch_env, dict) else {}
         self.script_dir = Path(__file__).resolve().parent
         self.invocation_dir = Path.cwd()
         # Project root is strictly the current working directory.
@@ -610,6 +614,12 @@ class AILauncher:
         prov = (provider or "").strip().lower()
         if prov in {"claude", "codex", "gemini", "opencode", "droid", "email", "manual"}:
             env["CCB_CALLER"] = prov
+        # Merge per-provider launch_env from config.
+        extra = self.launch_env.get(prov)
+        if isinstance(extra, dict):
+            for k, v in extra.items():
+                if isinstance(k, str) and k.strip():
+                    env[k.strip()] = str(v)
         return env
 
     def _project_config_dir(self) -> Path:
@@ -737,7 +747,7 @@ class AILauncher:
         try:
             backend = TmuxBackend()
             pane_id = backend.get_current_pane_id()
-            title = f"CCB-{provider.capitalize()}"
+            title = f"CCB-{provider.capitalize()}-{self.project_id[:8]}"
             backend.set_pane_title(pane_id, title)
             backend.set_pane_user_option(pane_id, "@ccb_agent", provider.capitalize())
         except Exception:
@@ -1253,7 +1263,7 @@ class AILauncher:
             except StopIteration:
                 use_parent = None
 
-        pane_title_marker = f"CCB-{provider.capitalize()}"
+        pane_title_marker = f"CCB-{provider.capitalize()}-{self.project_id[:8]}"
         title_cmd = _build_pane_title_cmd(pane_title_marker)
         env_overrides = self._provider_env_overrides(provider)
         full_cmd = title_cmd + self._build_env_prefix(env_overrides) + _build_export_path_cmd(self.script_dir / "bin") + start_cmd
@@ -1897,14 +1907,20 @@ class AILauncher:
         if provider == "codex":
             # NOTE: Codex TUI has paste-burst detection; terminal injection (wezterm send-text/tmux paste-buffer)
             # is often detected as "paste", causing Enter to only line-break not submit. Disable detection by default.
-            return self._build_codex_start_cmd()
+            cmd = self._build_codex_start_cmd()
         elif provider == "gemini":
-            return self._build_gemini_start_cmd()
+            cmd = self._build_gemini_start_cmd()
         elif provider == "opencode":
-            return self._build_opencode_start_cmd()
+            cmd = self._build_opencode_start_cmd()
         elif provider == "droid":
-            return self._build_droid_start_cmd()
-        return ""
+            cmd = self._build_droid_start_cmd()
+        else:
+            cmd = ""
+        # Append per-provider launch_args from config.
+        extra = self.launch_args.get(provider)
+        if isinstance(extra, str) and extra.strip():
+            cmd = f"{cmd} {extra.strip()}" if cmd else extra.strip()
+        return cmd
 
     def _opencode_resume_allowed(self) -> bool:
         try:
@@ -2110,7 +2126,7 @@ class AILauncher:
 
         env_overrides = self._provider_env_overrides("codex")
         start_cmd = self._build_env_prefix(env_overrides) + _build_export_path_cmd(self.script_dir / "bin") + self._build_codex_start_cmd()
-        pane_title_marker = "CCB-Codex"
+        pane_title_marker = f"CCB-Codex-{self.project_id[:8]}"
 
         backend = TmuxBackend()
 
@@ -2201,7 +2217,7 @@ class AILauncher:
 
         env_overrides = self._provider_env_overrides("gemini")
         start_cmd = self._build_env_prefix(env_overrides) + _build_export_path_cmd(self.script_dir / "bin") + self._build_gemini_start_cmd()
-        pane_title_marker = "CCB-Gemini"
+        pane_title_marker = f"CCB-Gemini-{self.project_id[:8]}"
 
         backend = TmuxBackend()
 
@@ -2252,7 +2268,7 @@ class AILauncher:
 
         env_overrides = self._provider_env_overrides("opencode")
         start_cmd = self._build_env_prefix(env_overrides) + _build_export_path_cmd(self.script_dir / "bin") + self._build_opencode_start_cmd()
-        pane_title_marker = "CCB-OpenCode"
+        pane_title_marker = f"CCB-OpenCode-{self.project_id[:8]}"
 
         backend = TmuxBackend()
 
@@ -2306,7 +2322,7 @@ class AILauncher:
 
         env_overrides = self._provider_env_overrides("droid")
         start_cmd = self._build_env_prefix(env_overrides) + _build_export_path_cmd(self.script_dir / "bin") + self._build_droid_start_cmd()
-        pane_title_marker = "CCB-Droid"
+        pane_title_marker = f"CCB-Droid-{self.project_id[:8]}"
 
         backend = TmuxBackend()
 
@@ -2396,7 +2412,7 @@ class AILauncher:
             print("❌ Unable to determine current pane id for Codex", file=sys.stderr)
             return 1
 
-        pane_title_marker = "CCB-Codex"
+        pane_title_marker = f"CCB-Codex-{self.project_id[:8]}"
         if self.terminal_type == "tmux":
             try:
                 backend = TmuxBackend()
@@ -2509,7 +2525,7 @@ class AILauncher:
             print("❌ Unable to determine current pane id for Gemini", file=sys.stderr)
             return 1
 
-        pane_title_marker = "CCB-Gemini"
+        pane_title_marker = f"CCB-Gemini-{self.project_id[:8]}"
         if self.terminal_type == "tmux":
             try:
                 backend = TmuxBackend()
@@ -2544,7 +2560,7 @@ class AILauncher:
             print("❌ Unable to determine current pane id for OpenCode", file=sys.stderr)
             return 1
 
-        pane_title_marker = "CCB-OpenCode"
+        pane_title_marker = f"CCB-OpenCode-{self.project_id[:8]}"
         if self.terminal_type == "tmux":
             try:
                 backend = TmuxBackend()
@@ -2605,7 +2621,7 @@ class AILauncher:
             print("❌ Unable to determine current pane id for Droid", file=sys.stderr)
             return 1
 
-        pane_title_marker = "CCB-Droid"
+        pane_title_marker = f"CCB-Droid-{self.project_id[:8]}"
         if self.terminal_type == "tmux":
             try:
                 backend = TmuxBackend()
@@ -3086,6 +3102,10 @@ class AILauncher:
             _, has_history, resume_dir = self._get_latest_claude_session_id()
             if has_history:
                 cmd.append("--continue")
+        # Append per-provider launch_args from config.
+        extra = self.launch_args.get("claude")
+        if isinstance(extra, str) and extra.strip():
+            cmd.extend(shlex.split(extra.strip()))
         run_cwd = str(self.project_root) if self.resume else str(Path.cwd())
         if self.resume and has_history and resume_dir:
             run_cwd = str(resume_dir)
@@ -3150,7 +3170,7 @@ class AILauncher:
 
         start_cmd = " ".join(cmd_parts)
         full_cmd = (
-            _build_pane_title_cmd("CCB-Claude")
+            _build_pane_title_cmd(f"CCB-Claude-{self.project_id[:8]}")
             + self._build_env_prefix(env_overrides)
             + _build_export_path_cmd(self.script_dir / "bin")
             + start_cmd
@@ -3167,7 +3187,7 @@ class AILauncher:
             backend = TmuxBackend()
             pane_id = backend.create_pane("", run_cwd, direction=use_direction, percent=50, parent_pane=use_parent)
             backend.respawn_pane(pane_id, cmd=full_cmd, cwd=run_cwd, remain_on_exit=True)
-            backend.set_pane_title(pane_id, "CCB-Claude")
+            backend.set_pane_title(pane_id, f"CCB-Claude-{self.project_id[:8]}")
             backend.set_pane_user_option(pane_id, "@ccb_agent", "Claude")
             self.tmux_panes["claude"] = pane_id
 
@@ -3176,7 +3196,7 @@ class AILauncher:
                 session_id=self._read_local_claude_session_id(),
                 active=True,
                 pane_id=str(pane_id or ""),
-                pane_title_marker="CCB-Claude",
+                pane_title_marker=f"CCB-Claude-{self.project_id[:8]}",
                 terminal=self.terminal_type,
             )
         except Exception:
@@ -3383,6 +3403,8 @@ class AILauncher:
         atexit.register(lambda: self.cleanup(**cleanup_kwargs))
         signal.signal(signal.SIGINT, lambda s, f: (self.cleanup(**cleanup_kwargs), sys.exit(0)))
         signal.signal(signal.SIGTERM, lambda s, f: (self.cleanup(**cleanup_kwargs), sys.exit(0)))
+        if hasattr(signal, "SIGHUP"):
+            signal.signal(signal.SIGHUP, lambda s, f: (self.cleanup(**cleanup_kwargs), sys.exit(0)))
 
         # Best-effort cleanup of leftover `tmpclaude-*-cwd` artifacts (can be disabled via env).
         try:
@@ -3427,7 +3449,7 @@ class AILauncher:
                     session_id=self._read_local_claude_session_id(),
                     active=True,
                     pane_id=str(self.anchor_pane_id or ""),
-                    pane_title_marker="CCB-Claude",
+                    pane_title_marker=f"CCB-Claude-{self.project_id[:8]}",
                     terminal=self.terminal_type,
                 )
             except Exception:
@@ -3708,11 +3730,18 @@ def cmd_start(args):
         elif not cmd_config:
             cmd_config = True
 
+    raw_launch_args = config_data.get("launch_args")
+    launch_args = raw_launch_args if isinstance(raw_launch_args, dict) else None
+    raw_launch_env = config_data.get("launch_env")
+    launch_env = raw_launch_env if isinstance(raw_launch_env, dict) else None
+
     launcher = AILauncher(
         providers=providers,
         resume=resume,
         auto=auto,
         cmd_config=cmd_config,
+        launch_args=launch_args,
+        launch_env=launch_env,
     )
     return launcher.run_up()
 
