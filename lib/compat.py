@@ -41,8 +41,10 @@ def decode_stdin_bytes(data: bytes) -> str:
     if forced:
         try:
             return data.decode(forced, errors="strict")
-        except Exception:
+        except UnicodeDecodeError:
             return data.decode(forced, errors="replace")
+        except (LookupError, Exception):
+            pass  # fall through to standard chain
 
     try:
         return data.decode("utf-8", errors="strict")
