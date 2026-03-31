@@ -3,7 +3,7 @@
 **项目:** GSD & CCB 国际化与多 AI 协作可行性研究
 **创建日期:** 2026-03-28
 **粒度:** fine
-**总阶段数:** 6
+**总阶段数:** 7
 
 ## 核心价值
 
@@ -17,6 +17,7 @@
 - [x] **Phase 4: 原型验证** - 验证关键技术点可行性 (completed 2026-03-30)
 - [x] **Phase 5: 文档交付** - 编写完整技术方案和建议 (completed 2026-03-30)
 - [x] **Phase 6: CCB i18n 实施** - 按修订实施方案完成 CCB 国际化落地 (completed 2026-03-31)
+- [ ] **Phase 7: Windows 原生环境专项检查** - 检查性能、兼容性与安全性并提出提升方案
 
 ## Phase Details
 
@@ -124,6 +125,18 @@ Plans:
 - [x] 06-05-PLAN.md — 执行全量迁移与回归验证
 - [x] 06-06-PLAN.md — Skill 模板双语化 + Install 脚本全量迁移 + argparse help t() 包裹 + Config 模板混合翻译
 
+### Phase 7: Windows 原生环境专项检查
+**Goal**: 专项检查项目在原生 Windows 环境中安装后用户使用时的性能、兼容性和安全性，输出问题清单和提升方案
+**Depends on**: Phase 6
+**Requirements**: WIN-01, WIN-02, WIN-03
+**Success Criteria** (what must be TRUE):
+  1. 原生 Windows 环境下所有核心命令（ask/pend/ccb start 等）功能正常
+  2. 性能瓶颈已识别（启动延迟、内存占用、并发处理）并有量化数据
+  3. 安全风险已识别（文件权限、敏感信息泄露、进程隔离）并有缓解措施
+  4. 兼容性问题已识别（路径分隔符、编码、终端模拟器差异）并有修复方案
+  5. 输出完整的检查报告和可执行的提升方案
+**Plans**: 0 plans
+
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -134,6 +147,7 @@ Plans:
 | 4. 原型验证 | 4/4 | Complete   | 2026-03-30 |
 | 5. 文档交付 | 3/3 | Complete   | 2026-03-30 |
 | 6. CCB i18n 实施 | 6/6 | Complete   | 2026-03-31 |
+| 7. Windows 原生环境专项检查 | 0/0 | Not started | |
 
 ## Coverage
 
