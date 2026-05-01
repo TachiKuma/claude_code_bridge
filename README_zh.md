@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/模型皆可控-CF1322?style=for-the-badge" alt="模型皆可控">
 </p>
 
-[![Version](https://img.shields.io/badge/version-6.0.22-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-6.0.23-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 [English](README.md) | **中文**
@@ -98,6 +98,15 @@ cmd; writer:codex, reviewer:claude; qa:gemini(worktree)
 历史说明：下面较旧的发布记录里仍可能出现 `askd`、旧 flag 或已移除命令。这些内容仅作为 changelog 历史保留，不代表当前 CLI 入口。
 
 <details open>
+<summary><b>v6.0.23</b> - CI 矩阵稳定化</summary>
+
+- **Release CI 已转绿**：最新 release 现在指向完整 GitHub Actions 测试通过的提交，覆盖 Ubuntu、macOS、WSL 与安装 smoke
+- **Provider 黑盒覆盖聚焦**：重型 pane-backed provider restart / rotate / settle 测试改为在专门的 Ubuntu provider-blackbox job 中运行，不再重复进入每个 OS 与 Python 矩阵单元
+- **修复 macOS socket 测试 race**：ccbd socket 测试现在会等 daemon socket 能响应 ping 后再发 RPC，避免 macOS runner 上的 readiness 竞态
+
+</details>
+
+<details>
 <summary><b>v6.0.22</b> - Claude macOS 登录继承</summary>
 
 - **继承 macOS Keychain 登录态**：managed Claude 启动现在会从 macOS Keychain 读取 Claude Code 官方登录凭据，并在隔离 Claude home 内物化等价的项目级 `.claude/.credentials.json`

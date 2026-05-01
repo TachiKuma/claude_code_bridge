@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## v6.0.23 (2026-05-01)
+
+### CI Matrix Stabilization
+
+- **Release CI Greened**: latest release validation now points at a commit whose full GitHub Actions test workflow passes across Ubuntu, macOS, WSL, and install smoke jobs
+- **Provider Blackbox Coverage Focused**: heavy pane-backed provider restart / rotate / settle tests now run in a dedicated Ubuntu provider-blackbox job instead of being repeated across every OS and Python matrix cell
+- **macOS Socket Test Race Fixed**: ccbd socket tests now wait for the daemon socket to answer ping requests before issuing RPCs, avoiding macOS runner readiness races
+
 ## v6.0.22 (2026-04-29)
 
 ### Claude macOS Login Inheritance
