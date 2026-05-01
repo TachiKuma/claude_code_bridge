@@ -160,8 +160,6 @@ def _spawn_daemon(app: ProjectKeeper, *, state: KeeperState, start_timeout_s: fl
 def _project_definition_missing(app: ProjectKeeper) -> bool:
     if not app.paths.ccb_dir.exists():
         return True
-    if not app.paths.config_path.exists():
-        return True
     return False
 
 

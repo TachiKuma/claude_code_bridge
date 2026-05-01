@@ -102,6 +102,7 @@ cmd; writer:codex, reviewer:claude; qa:gemini(worktree)
 
 - **继承 macOS Keychain 登录态**：managed Claude 启动现在会从 macOS Keychain 读取 Claude Code 官方登录凭据，并在隔离 Claude home 内物化等价的项目级 `.claude/.credentials.json`
 - **刷新 Claude 账号元数据**：继承的 `.claude.json` 账号元数据现在会从 source home 刷新，同时保留 managed workspace trust，并排除 source workspace trust 与 API key secret
+- **修复默认配置启动**：keeper 现在会把缺失 `.ccb/ccb.config` 视为使用代码内置默认项目配置，而不是在 `ccbd` mount 前提前退出
 - **扩展回归覆盖**：新增测试锁定 Keychain 投影、账号元数据刷新以及关闭 auth 继承后的清理路径
 
 </details>
