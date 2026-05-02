@@ -181,7 +181,8 @@ Rules:
 - bundle export must be project-local and deterministic enough for support usage
 - provider-state export must exclude credential material such as copied auth
   tokens and provider-managed credential files like `auth.json` or
-  `oauth_creds.json`
+  `oauth_creds.json`; Gemini projected auth artifacts such as `.env` and
+  `google_accounts.json` must also be excluded
 - Codex managed-home violations must remain visible as diagnostics evidence; bundle export must not hide them by silently replacing the managed reader source with global `~/.codex/sessions`
 
 ### 3.8 Keeper Child Reaping

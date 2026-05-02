@@ -118,6 +118,16 @@ When `ccb` starts a managed Codex agent:
   `.tmp/plugins.sha` when present as one managed-home authority unit rather
   than cherry-picking only marketplace or manifest fragments
 - when API inheritance is enabled, it must pass the current inheritable Codex API environment into the managed Codex process at launch time rather than relying on stale one-time projection state
+- it may inherit user-session transport variables required for official-login
+  connectivity, ChatGPT Apps/MCP connectivity, proxy routing, custom trust
+  stores, browser launch, and WSL interop; examples include `HTTPS_PROXY`,
+  `ALL_PROXY`, `NO_PROXY`, `CODEX_CA_CERTIFICATE`, `SSL_CERT_FILE`,
+  `NODE_EXTRA_CA_CERTS`, `BROWSER`, `WSL_INTEROP`, and `WSL_DISTRO_NAME`
+- user-session transport inheritance is not Codex session authority and must
+  not allow caller-global runtime variables such as `CODEX_HOME`,
+  `CODEX_SESSION_ROOT`, `CODEX_RUNTIME_DIR`, `CODEX_INPUT_FIFO`,
+  `CODEX_OUTPUT_FIFO`, `CODEX_TERMINAL`, or `CCB_CALLER_*` to override the
+  managed launcher's agent-scoped values
 - when explicit agent API authority is configured, the managed home must not
   project global Codex config that can redefine provider routing; instead the
   managed `config.toml` must materialize an agent-local `model_provider` /

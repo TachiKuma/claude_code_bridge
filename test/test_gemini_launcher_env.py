@@ -67,6 +67,7 @@ def test_gemini_launcher_build_start_cmd_exports_managed_home(tmp_path) -> None:
     expected_home = runtime_dir / 'gemini-home'
     expected_root = expected_home / '.gemini' / 'tmp'
     assert f'HOME={shlex.quote(str(expected_home))}' in start_cmd
+    assert f'GEMINI_CLI_HOME={shlex.quote(str(expected_home / ".gemini"))}' in start_cmd
     assert f'GEMINI_ROOT={shlex.quote(str(expected_root))}' in start_cmd
 
 
@@ -81,6 +82,7 @@ def test_gemini_launcher_build_start_cmd_uses_agent_provider_state_home_for_mana
     expected_home = tmp_path / '.ccb' / 'agents' / 'agent1' / 'provider-state' / 'gemini' / 'home'
     expected_root = expected_home / '.gemini' / 'tmp'
     assert f'HOME={shlex.quote(str(expected_home))}' in start_cmd
+    assert f'GEMINI_CLI_HOME={shlex.quote(str(expected_home / ".gemini"))}' in start_cmd
     assert f'GEMINI_ROOT={shlex.quote(str(expected_root))}' in start_cmd
 
 

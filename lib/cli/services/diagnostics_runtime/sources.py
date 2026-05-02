@@ -6,7 +6,13 @@ from pathlib import Path
 _TAIL_SUFFIXES = {'.log', '.jsonl', '.txt', '.yaml', '.yml'}
 _COPY_SUFFIXES = {'.json', '.pid'}
 _PROVIDER_STATE_SUFFIXES = _TAIL_SUFFIXES | _COPY_SUFFIXES | {'.toml'}
-_PROVIDER_STATE_SECRET_FILENAMES = {'.credentials.json', 'auth.json', 'oauth_creds.json'}
+_PROVIDER_STATE_SECRET_FILENAMES = {
+    '.credentials.json',
+    '.env',
+    'auth.json',
+    'google_accounts.json',
+    'oauth_creds.json',
+}
 _PROVIDER_STATE_SECRET_DIRNAMES = {'.codeisland'}
 
 

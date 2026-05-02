@@ -938,11 +938,57 @@ def test_materialize_gemini_home_config_projects_system_settings_into_managed_ho
     assert payload['theme'] == 'Default'
 
 
+def test_materialize_gemini_home_config_projects_dotenv_api_auth_into_managed_home(tmp_path: Path) -> None:
+    source_home = tmp_path / 'system-home'
+    target_home = tmp_path / 'managed-home'
+    source_gemini = source_home / '.gemini'
+    source_gemini.mkdir(parents=True, exist_ok=True)
+    (source_gemini / 'settings.json').write_text(
+        json.dumps(
+            {
+                'security': {
+                    'auth': {
+                        'selectedType': 'gemini-api-key',
+                    }
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+    (source_gemini / '.env').write_text(
+        '\n'.join(
+            [
+                'GEMINI_API_KEY=system-gemini-key',
+                'GOOGLE_GEMINI_BASE_URL=https://gemini.example.test',
+                'GOOGLE_GENAI_USE_GCA=true',
+                'GOOGLE_CLOUD_PROJECT=demo-project',
+                'OTHER_SECRET=must-not-copy',
+            ]
+        )
+        + '\n',
+        encoding='utf-8',
+    )
+
+    layout = materialize_gemini_home_config(target_home, source_home=source_home)
+
+    payload = json.loads(layout.settings_path.read_text(encoding='utf-8'))
+    dotenv = (layout.gemini_dir / '.env').read_text(encoding='utf-8')
+    assert payload['security']['auth']['selectedType'] == 'gemini-api-key'
+    assert 'GEMINI_API_KEY="system-gemini-key"' in dotenv
+    assert 'GOOGLE_GEMINI_BASE_URL="https://gemini.example.test"' in dotenv
+    assert 'GOOGLE_GENAI_USE_GCA="true"' in dotenv
+    assert 'GOOGLE_CLOUD_PROJECT="demo-project"' in dotenv
+    assert 'OTHER_SECRET' not in dotenv
+
+
 def test_materialize_gemini_home_config_projects_oauth_credentials_for_login_auth(tmp_path: Path) -> None:
     source_home = tmp_path / 'system-home'
     target_home = tmp_path / 'managed-home'
     source_settings = source_home / '.gemini' / 'settings.json'
     source_oauth = source_home / '.gemini' / 'oauth_creds.json'
+    source_accounts = source_home / '.gemini' / 'google_accounts.json'
     source_settings.parent.mkdir(parents=True, exist_ok=True)
     source_settings.write_text(
         json.dumps(
@@ -963,12 +1009,17 @@ def test_materialize_gemini_home_config_projects_oauth_credentials_for_login_aut
         json.dumps({'refresh_token': 'system-refresh-token'}, ensure_ascii=False, indent=2),
         encoding='utf-8',
     )
+    source_accounts.write_text(
+        json.dumps({'active': 'user@example.test'}, ensure_ascii=False, indent=2),
+        encoding='utf-8',
+    )
 
     layout = materialize_gemini_home_config(target_home, source_home=source_home)
 
     payload = json.loads(layout.settings_path.read_text(encoding='utf-8'))
     assert payload['security']['auth']['selectedType'] == 'oauth-personal'
     assert json.loads((layout.gemini_dir / 'oauth_creds.json').read_text(encoding='utf-8'))['refresh_token'] == 'system-refresh-token'
+    assert json.loads((layout.gemini_dir / 'google_accounts.json').read_text(encoding='utf-8'))['active'] == 'user@example.test'
 
 
 def test_materialize_gemini_home_config_strips_oauth_selection_and_credentials_when_auth_not_inherited(tmp_path: Path) -> None:
@@ -999,6 +1050,8 @@ def test_materialize_gemini_home_config_strips_oauth_selection_and_credentials_w
     target_oauth = target_home / '.gemini' / 'oauth_creds.json'
     target_oauth.parent.mkdir(parents=True, exist_ok=True)
     target_oauth.write_text('{"refresh_token":"stale-token"}\n', encoding='utf-8')
+    target_accounts = target_home / '.gemini' / 'google_accounts.json'
+    target_accounts.write_text('{"active":"stale@example.test"}\n', encoding='utf-8')
 
     layout = materialize_gemini_home_config(
         target_home,
@@ -1010,6 +1063,7 @@ def test_materialize_gemini_home_config_strips_oauth_selection_and_credentials_w
     assert payload['theme'] == 'Default'
     assert payload.get('security', {}).get('auth', {}).get('selectedType') is None
     assert not (layout.gemini_dir / 'oauth_creds.json').exists()
+    assert not (layout.gemini_dir / 'google_accounts.json').exists()
 
 
 def test_materialize_gemini_home_config_strips_api_auth_selection_when_api_not_inherited(tmp_path: Path) -> None:
@@ -1017,6 +1071,7 @@ def test_materialize_gemini_home_config_strips_api_auth_selection_when_api_not_i
     target_home = tmp_path / 'managed-home'
     source_settings = source_home / '.gemini' / 'settings.json'
     source_settings.parent.mkdir(parents=True, exist_ok=True)
+    (source_home / '.gemini' / '.env').write_text('GEMINI_API_KEY=system-gemini-key\n', encoding='utf-8')
     source_settings.write_text(
         json.dumps(
             {
@@ -1044,6 +1099,7 @@ def test_materialize_gemini_home_config_strips_api_auth_selection_when_api_not_i
     assert payload['theme'] == 'Default'
     assert payload.get('env') is None
     assert payload.get('security', {}).get('auth', {}).get('selectedType') is None
+    assert not (layout.gemini_dir / '.env').exists()
 
 
 def test_materialize_gemini_home_config_preserves_runtime_hooks(tmp_path: Path) -> None:

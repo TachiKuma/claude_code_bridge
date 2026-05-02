@@ -206,8 +206,21 @@ Managed provider startup mutation rules:
   - those variables are runtime-local evidence for the currently running managed agent process, not startup authority for a new or existing project backend
   - provider runtime environment must be injected only into the managed provider process being launched, not leaked into project-scoped control-plane subprocesses
 - that provider-runtime scrub must still preserve ordinary user-session variables needed for the project command pane to behave like the user's shell:
-  - examples include `PATH`, `SHELL`, `DISPLAY`, `WAYLAND_DISPLAY`, `DBUS_SESSION_BUS_ADDRESS`, `XAUTHORITY`, and `SSH_AUTH_SOCK`
+  - examples include `PATH`, `SHELL`, `DISPLAY`, `WAYLAND_DISPLAY`,
+    `DBUS_SESSION_BUS_ADDRESS`, `XAUTHORITY`, and `SSH_AUTH_SOCK`
+  - user-session transport variables such as proxy settings, custom CA bundle
+    paths, browser/session IPC state, and WSL interop markers must also be
+    preserved for control-plane children and explicitly injected into managed
+    provider panes
+  - examples include `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`,
+    `CODEX_CA_CERTIFICATE`, `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `BROWSER`,
+    `WSL_INTEROP`, and `WSL_DISTRO_NAME`
   - those variables are user-session transport or shell-usability state, not managed-provider session authority
+  - this allowance must not reopen provider runtime authority inheritance;
+    managed variables such as `CODEX_HOME`, `CODEX_SESSION_ROOT`,
+    `GEMINI_ROOT`, `GEMINI_CLI_HOME`, `CLAUDE_PROJECTS_ROOT`,
+    `OPENCODE_*`, `DROID_*`, and `CCB_CALLER_*` remain runtime-local and must
+    be injected only by the provider launch path that owns them
 
 Missing-config recovery rules:
 

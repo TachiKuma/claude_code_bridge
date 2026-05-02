@@ -171,6 +171,15 @@ When `ccb` starts a managed Claude agent:
   those referenced assets into the managed home so the inherited hook command
   remains executable under the isolated `HOME`; those copied assets remain
   provider-state and must be excluded from diagnostics
+- it may inherit user-session transport variables required for official-login
+  connectivity, proxy routing, custom trust stores, browser launch, and WSL
+  interop; examples include `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`,
+  `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `BROWSER`, `WSL_INTEROP`, and
+  `WSL_DISTRO_NAME`
+- user-session transport inheritance is not Claude session authority and must
+  not allow caller-global runtime variables such as `HOME`,
+  `CLAUDE_PROJECTS_ROOT`, `CLAUDE_PROJECT_ROOT`, `CLAUDE_*`, or
+  `CCB_CALLER_*` to override the managed launcher's agent-scoped values
 - it must install Claude hook/trust state only inside that managed home
 - it must write the effective `claude_home`, `claude_projects_root`, and
   `claude_session_env_root` into the agent session file

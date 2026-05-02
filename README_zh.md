@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/模型皆可控-CF1322?style=for-the-badge" alt="模型皆可控">
 </p>
 
-[![Version](https://img.shields.io/badge/version-6.0.23-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-6.0.24-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 [English](README.md) | **中文**
@@ -98,6 +98,16 @@ cmd; writer:codex, reviewer:claude; qa:gemini(worktree)
 历史说明：下面较旧的发布记录里仍可能出现 `askd`、旧 flag 或已移除命令。这些内容仅作为 changelog 历史保留，不代表当前 CLI 入口。
 
 <details open>
+<summary><b>v6.0.24</b> - WSL 官方登录传输环境</summary>
+
+- **继承 WSL Provider 传输环境**：managed provider pane 现在会保留官方登录与 Codex Apps/MCP 联网路径所需的用户会话 proxy、CA、browser 与 WSL interop 环境
+- **保持 Managed 隔离边界**：传输环境继承集中在共性层，不允许调用者全局 `CODEX_HOME`、`GEMINI_ROOT`、`CLAUDE_PROJECTS_ROOT` 或 `CCB_CALLER_*` runtime authority 覆盖 agent 级 managed state
+- **扩展 Gemini 登录投影**：managed Gemini home 现在会投影 allowlist 后的 `.gemini/.env` API 凭据、`google_accounts.json` 与 `GEMINI_CLI_HOME`，诊断包仍会排除复制的 auth artifacts
+- **加固 Opencode Session 检测**：opencode 现在只有在 provider 专属 runtime env 存在时才进入 env-session 模式，避免 stale 通用 `CCB_SESSION_ID` 污染
+
+</details>
+
+<details>
 <summary><b>v6.0.23</b> - CI 矩阵稳定化</summary>
 
 - **Release CI 已转绿**：最新 release 现在指向完整 GitHub Actions 测试通过的提交，覆盖 Ubuntu、macOS、WSL 与安装 smoke

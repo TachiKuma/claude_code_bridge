@@ -154,7 +154,7 @@ def test_export_diagnostic_bundle_includes_provider_state_and_excludes_auth(tmp_
     assert f'{summary.bundle_id}/project/.ccb/agents/demo/provider-state/codex/home/auth.json' not in members
 
 
-def test_export_diagnostic_bundle_excludes_gemini_oauth_credentials(tmp_path: Path) -> None:
+def test_export_diagnostic_bundle_excludes_gemini_auth_artifacts(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-bundle-gemini-provider-state'
     (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
     (project_root / '.ccb' / 'ccb.config').write_text('demo:gemini\n', encoding='utf-8')
@@ -168,6 +168,8 @@ def test_export_diagnostic_bundle_excludes_gemini_oauth_credentials(tmp_path: Pa
     managed_home = provider_state_dir / 'home' / '.gemini'
     managed_home.mkdir(parents=True, exist_ok=True)
     (managed_home / 'settings.json').write_text('{"security":{"auth":{"selectedType":"oauth-personal"}}}\n', encoding='utf-8')
+    (managed_home / '.env').write_text('GEMINI_API_KEY=secret\n', encoding='utf-8')
+    (managed_home / 'google_accounts.json').write_text('{"active":"user@example.test"}\n', encoding='utf-8')
     (managed_home / 'oauth_creds.json').write_text('{"refresh_token":"secret"}\n', encoding='utf-8')
 
     summary = export_diagnostic_bundle(context, ParsedDoctorCommand(project=None, bundle=True))
@@ -184,7 +186,17 @@ def test_export_diagnostic_bundle_excludes_gemini_oauth_credentials(tmp_path: Pa
         entry['archive_path'] != 'project/.ccb/agents/demo/provider-state/gemini/home/.gemini/oauth_creds.json'
         for entry in manifest['entries']
     )
+    assert all(
+        entry['archive_path'] != 'project/.ccb/agents/demo/provider-state/gemini/home/.gemini/.env'
+        for entry in manifest['entries']
+    )
+    assert all(
+        entry['archive_path'] != 'project/.ccb/agents/demo/provider-state/gemini/home/.gemini/google_accounts.json'
+        for entry in manifest['entries']
+    )
     assert f'{summary.bundle_id}/project/.ccb/agents/demo/provider-state/gemini/home/.gemini/oauth_creds.json' not in members
+    assert f'{summary.bundle_id}/project/.ccb/agents/demo/provider-state/gemini/home/.gemini/.env' not in members
+    assert f'{summary.bundle_id}/project/.ccb/agents/demo/provider-state/gemini/home/.gemini/google_accounts.json' not in members
 
 
 def test_export_diagnostic_bundle_excludes_claude_credentials(tmp_path: Path) -> None:
