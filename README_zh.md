@@ -925,7 +925,7 @@ ccb reinstall
 
 📧 Email: bfly123@126.com
 💬 微信: seemseam-com
-🌐 Linux.do: https://linux.do
+🌐 [Linux.do](https://linux.do/)
 
 感谢 [Linux.do 社区](https://linux.do) 在测试、反馈和讨论中的支持。
 

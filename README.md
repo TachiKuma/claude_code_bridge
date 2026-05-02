@@ -980,7 +980,7 @@ ccb reinstall
 
 📧 Email: bfly123@126.com
 💬 WeChat: seemseam-com
-🌐 Linux.do: https://linux.do
+🌐 [Linux.do](https://linux.do/)
 
 Thanks to the [Linux.do community](https://linux.do) for the testing, feedback, and discussion support.
 
