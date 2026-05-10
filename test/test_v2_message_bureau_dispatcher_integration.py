@@ -2466,3 +2466,76 @@ def test_dispatcher_tick_repairs_stale_running_reply_delivery_head_with_executio
     assert stale.status.value == 'incomplete'
     assert any(job.request.message_type == 'reply_delivery' and job.status.value == 'completed' for job in repaired)
     assert dispatcher.inbox('claude')['item_count'] == 0
+
+
+def test_dispatcher_shutdown_terminalizes_reply_delivery_without_spawning_replacement(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-reply-delivery-shutdown'
+    ctx = _bootstrap_test_project(project_root)
+    layout = PathLayout(project_root)
+    config = _provider_config('codex', 'claude')
+    registry = AgentRegistry(layout, config)
+    registry.upsert(_runtime('codex', project_id=ctx.project_id, layout=layout, pid=101))
+    registry.upsert(_runtime('claude', project_id=ctx.project_id, layout=layout, pid=102))
+    execution_service = DeferredReplyDeliveryExecutionService()
+    dispatcher = JobDispatcher(
+        layout,
+        config,
+        registry,
+        execution_service=execution_service,
+        auto_reply_delivery_on_complete=True,
+        clock=lambda: '2026-03-30T00:00:00Z',
+    )
+
+    reply_receipt = dispatcher.submit(
+        MessageEnvelope(
+            project_id=ctx.project_id,
+            to_agent='codex',
+            from_actor='claude',
+            body='question for codex',
+            task_id='task-reply-shutdown',
+            reply_to=None,
+            message_type='ask',
+            delivery_scope=DeliveryScope.SINGLE,
+        )
+    )
+    reply_job_id = reply_receipt.jobs[0].job_id
+    dispatcher.tick()
+    dispatcher.complete(reply_job_id, _decision(reply='reply for claude'))
+
+    started = dispatcher.tick()
+    assert len(started) == 1
+    delivery_job = started[0]
+    assert delivery_job.request.message_type == 'reply_delivery'
+    assert delivery_job.status.value == 'running'
+
+    dispatcher.disable_auto_reply_delivery()
+    terminated = dispatcher.terminate_nonterminal_jobs(shutdown_reason='stop_all', forced=False)
+
+    assert len(terminated) == 1
+    terminal = dispatcher.get(delivery_job.job_id)
+    assert terminal is not None
+    assert terminal.status is JobStatus.INCOMPLETE
+    assert terminal.terminal_decision is not None
+    assert terminal.terminal_decision['reason'] == 'project_shutdown'
+    latest_by_job = {
+        record.job_id: record
+        for record in dispatcher._job_store.list_agent('claude')
+    }
+    reply_delivery_jobs = [
+        record
+        for record in latest_by_job.values()
+        if record.request.message_type == 'reply_delivery'
+    ]
+    pending_delivery_jobs = [
+        record
+        for record in reply_delivery_jobs
+        if record.status in {JobStatus.ACCEPTED, JobStatus.QUEUED, JobStatus.RUNNING}
+    ]
+    assert [record.job_id for record in reply_delivery_jobs] == [delivery_job.job_id]
+    assert pending_delivery_jobs == []
+    inbox = dispatcher.inbox('claude')
+    assert inbox['head'] is not None
+    head = InboundEventStore(layout).get_latest('claude', inbox['head']['inbound_event_id'])
+    assert head is not None
+    assert head.status is InboundEventStatus.QUEUED
+    assert delivery_job_id_from_payload(head.payload_ref) is None

@@ -55,6 +55,8 @@ def _command_help_name(tokens: list[str]) -> str | None:
             return "doctor-ps"
         if visible[0] == "doctor" and visible[1] in {"logs", "--logs"}:
             return "doctor-logs"
+        if visible[0] == "doctor" and visible[1] == "storage":
+            return "doctor-storage"
         if visible[0] == "repair" and visible[1] == "ack":
             return "repair-ack"
         if visible[0] == "repair" and visible[1] == "retry":

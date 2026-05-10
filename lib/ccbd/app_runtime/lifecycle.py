@@ -169,6 +169,10 @@ def prepare_project_stop(
     app.project_stop_requested = True
     _mark_lifecycle_stopping(app, shutdown_intent=reason)
     try:
+        app.dispatcher.disable_auto_reply_delivery()
+    except Exception:
+        pass
+    try:
         terminated_jobs = app.dispatcher.terminate_nonterminal_jobs(
             shutdown_reason=reason,
             forced=force,

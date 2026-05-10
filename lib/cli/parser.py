@@ -12,6 +12,7 @@ from .parser_runtime import (
     parse_ack,
     parse_ask,
     parse_cancel,
+    parse_cleanup,
     parse_config,
     parse_doctor,
     parse_fault,
@@ -39,6 +40,7 @@ class CliUsageError(ValueError):
 
 _COMMAND_PARSERS = {
     'cancel': parse_cancel,
+    'cleanup': parse_cleanup,
     'kill': parse_kill,
     'ps': parse_ps,
     'ping': parse_ping,

@@ -204,6 +204,7 @@ Managed provider startup mutation rules:
 - startup preparation must not create, delete, or rewrite project-level provider dotfiles such as `.claude/settings.json`, `.claude/settings.local.json`, `.gemini/settings.json`, `.codex/*`, or equivalent provider-owned workspace config
 - provider bootstrap config needed for managed launches must live under `.ccb/agents/<agent>/provider-state/<provider>/` or an explicit validated provider-profile runtime home
 - agent workspaces may still be created or reconciled as workspace mounts, but provider configuration/trust state must remain inside the managed provider boundary rather than the project worktree
+- a configured `git-worktree` workspace requires the project root to be a git repository; startup must fail rather than silently copying a non-git project tree
 - the project control plane (`ccb`, keeper, `ccbd`) must not inherit provider-runtime session identity or managed-home variables from the caller shell:
   - examples include `CCB_SESSION_ID`, `CCB_SESSION_FILE`, `CCB_CALLER_*`, `CODEX_*`, `CLAUDE_*`, `GEMINI_*`, `OPENCODE_*`, and equivalent provider runtime markers
   - those variables are runtime-local evidence for the currently running managed agent process, not startup authority for a new or existing project backend
@@ -534,6 +535,7 @@ That means:
 - explicit `ccb kill` is a strong management action and must not be blocked merely because the current backend is `DEGRADED` with fresh heartbeat but an unreachable socket
 - configured-agent authority must end in a clean stopped/unmounted state
 - non-terminal jobs must not survive explicit project stop as active restore or automatic retry authority
+- shutdown terminalization must not create fresh provider work while draining existing work; in particular, after-complete hooks such as automatic reply delivery must be suspended once project stop is requested
 - once shutdown intent is acquired, the backend must not run any further reconcile/heartbeat tick that could remount desired agents during the same shutdown transaction
 - once shutdown intent is acquired, new mutating RPC requests such as `submit`, `start`, `restore`, `retry`, or `attach` must be rejected with a stable lifecycle-level stopping error; clients must not surface raw socket reset errors as the user-visible contract
 - local daemon shutdown helpers must not stop at `mark_unmounted()` plus socket close; they must run the same stop-all cleanup transaction first so provider-runtime pid files, namespace state, and configured-agent authority do not survive a backend-local shutdown

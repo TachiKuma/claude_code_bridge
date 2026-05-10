@@ -171,6 +171,17 @@ Contract:
 - Config rendering and recovery must preserve the user-facing `model` field
   instead of expanding it into provider-specific `startup_args`.
 
+### 4.4 Workspace Mode Semantics
+
+- `workspace_mode = "inplace"` means the agent uses the project root directly.
+- `workspace_mode = "git-worktree"` means the project root must be a valid git
+  repository and startup must materialize a real `git worktree`.
+- `git-worktree` must not silently fall back to copying the project directory
+  when the project root is not a git repository. Startup must fail with an
+  actionable error instead.
+- `workspace_mode = "copy"` is the only mode that may create an explicit
+  directory copy of the project tree.
+
 ## 5. Default Layout Contract
 
 Bootstrap must generate a balanced two-column layout over all visible panes.

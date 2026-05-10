@@ -15,6 +15,11 @@ It is the authoritative design anchor for:
 
 This document complements, but does not replace, the project startup contract in
 [docs/ccbd-startup-supervision-contract.md](/home/bfly/yunwei/ccb_source/docs/ccbd-startup-supervision-contract.md).
+Storage class naming, diagnostics classification, shared-cache eligibility, and
+cleanup sequencing for managed Claude files are defined by
+[docs/ccb-provider-state-storage-boundary-plan.md](/home/bfly/yunwei/ccb_source/docs/ccb-provider-state-storage-boundary-plan.md).
+Claude binary/version cache specifics are further narrowed by
+[docs/claude-binary-cache-dedup-plan.md](/home/bfly/yunwei/ccb_source/docs/claude-binary-cache-dedup-plan.md).
 
 ## 2. Identity Model
 

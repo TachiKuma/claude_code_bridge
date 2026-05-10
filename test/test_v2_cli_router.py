@@ -338,9 +338,10 @@ def test_run_cli_entrypoint_prints_doctor_help_with_converged_subviews() -> None
     )
 
     assert result == 0
-    assert "usage: ccb doctor [ps|logs <agent>] [--output [PATH]]" in stdout.getvalue()
+    assert "usage: ccb doctor [ps|logs <agent>|storage] [--output [PATH]]" in stdout.getvalue()
     assert "ccb doctor ps" in stdout.getvalue()
     assert "ccb doctor logs <agent>" in stdout.getvalue()
+    assert "ccb doctor storage" in stdout.getvalue()
     assert "`ccb ps` and `ccb logs <agent>` remain compatibility entrypoints." in stdout.getvalue()
     assert stderr.getvalue() == ""
 
@@ -359,7 +360,45 @@ def test_run_cli_entrypoint_prints_doctor_help_with_plain_help_token() -> None:
     )
 
     assert result == 0
-    assert "usage: ccb doctor [ps|logs <agent>] [--output [PATH]]" in stdout.getvalue()
+    assert "usage: ccb doctor [ps|logs <agent>|storage] [--output [PATH]]" in stdout.getvalue()
+    assert stderr.getvalue() == ""
+
+
+def test_run_cli_entrypoint_prints_doctor_storage_subview_help() -> None:
+    stdout = StringIO()
+    stderr = StringIO()
+
+    result = run_cli_entrypoint(
+        ["doctor", "storage", "--help"],
+        version="5.2.8",
+        script_root=Path("/tmp/ccb"),
+        cwd=Path("/tmp/project"),
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert result == 0
+    assert "usage: ccb doctor storage [--json]" in stdout.getvalue()
+    assert "ccb doctor storage --json" in stdout.getvalue()
+    assert stderr.getvalue() == ""
+
+
+def test_run_cli_entrypoint_prints_cleanup_help() -> None:
+    stdout = StringIO()
+    stderr = StringIO()
+
+    result = run_cli_entrypoint(
+        ["cleanup", "--help"],
+        version="5.2.8",
+        script_root=Path("/tmp/ccb"),
+        cwd=Path("/tmp/project"),
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert result == 0
+    assert "usage: ccb cleanup" in stdout.getvalue()
+    assert "Use `ccb doctor storage` before cleanup" in stdout.getvalue()
     assert stderr.getvalue() == ""
 
 

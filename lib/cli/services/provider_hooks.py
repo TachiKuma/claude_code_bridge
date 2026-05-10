@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+import json
 from pathlib import Path
 import sys
 
@@ -99,6 +101,12 @@ def _materialize_provider_home(*, layout, spec, runtime_dir: Path, resolved_prof
             profile=resolved_profile,
             source_home=current_provider_source_home(),
         )
+        _record_claude_binary_cache_drift_if_present(
+            layout=layout,
+            spec=spec,
+            runtime_dir=runtime_dir,
+            home_root=home_root,
+        )
         return
     if provider == 'gemini':
         materialize_gemini_home_config(
@@ -132,9 +140,69 @@ def provider_hook_home_root(
 
 
 def resolve_gemini_home_root(*, layout, agent_name: str, resolved_profile: ResolvedProviderProfile | None) -> Path:
-    if resolved_profile is not None and resolved_profile.runtime_home_path is not None:
-        return resolved_profile.runtime_home_path
+    del resolved_profile
     return layout.agent_provider_state_dir(agent_name, 'gemini') / 'home'
+
+
+def _record_claude_binary_cache_drift_if_present(*, layout, spec, runtime_dir: Path, home_root: Path) -> None:
+    versions_dir = Path(home_root) / '.local' / 'share' / 'claude' / 'versions'
+    signature = _claude_versions_cache_signature(versions_dir)
+    if signature is None:
+        return
+    marker_path = Path(runtime_dir) / 'claude-binary-cache-drift.json'
+    if _same_cached_signature(marker_path, signature):
+        return
+    payload = {
+        'record_type': 'agent_event',
+        'event_type': 'claude_binary_cache_drift',
+        'provider': 'claude',
+        'agent_name': spec.name,
+        'status': 'notice',
+        'reason': signature['reason'],
+        'versions_dir': str(versions_dir),
+        'version_count': len(signature['version_names']),
+        'version_names': signature['version_names'],
+        'created_at': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+    }
+    try:
+        events_path = layout.agent_events_path(spec.name)
+        events_path.parent.mkdir(parents=True, exist_ok=True)
+        with events_path.open('a', encoding='utf-8') as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False) + '\n')
+        marker_path.parent.mkdir(parents=True, exist_ok=True)
+        marker_path.write_text(json.dumps(signature, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    except OSError:
+        return
+
+
+def _claude_versions_cache_signature(versions_dir: Path) -> dict[str, object] | None:
+    try:
+        if versions_dir.is_symlink():
+            return {
+                'reason': 'versions_dir_symlink',
+                'versions_dir': str(versions_dir),
+                'version_names': [],
+            }
+        if not versions_dir.is_dir():
+            return None
+        version_names = sorted(child.name for child in versions_dir.iterdir() if not child.name.startswith('.'))
+    except OSError:
+        return None
+    if not version_names:
+        return None
+    return {
+        'reason': 'per_agent_versions_cache_present',
+        'versions_dir': str(versions_dir),
+        'version_names': version_names,
+    }
+
+
+def _same_cached_signature(marker_path: Path, signature: dict[str, object]) -> bool:
+    try:
+        payload = json.loads(marker_path.read_text(encoding='utf-8'))
+    except Exception:
+        return False
+    return isinstance(payload, dict) and payload == signature
 
 
 __all__ = [

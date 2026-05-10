@@ -14,6 +14,9 @@ It is the authoritative design anchor for:
 
 This document complements, but does not replace, the project startup contract in
 [docs/ccbd-startup-supervision-contract.md](/home/bfly/yunwei/ccb_source/docs/ccbd-startup-supervision-contract.md).
+Storage class naming, diagnostics classification, shared-cache eligibility, and
+cleanup sequencing for managed Codex files are defined by
+[docs/ccb-provider-state-storage-boundary-plan.md](/home/bfly/yunwei/ccb_source/docs/ccb-provider-state-storage-boundary-plan.md).
 
 Detailed implementation sequencing lives in
 [docs/codex-managed-home-isolation-plan.md](/home/bfly/yunwei/ccb_source/docs/codex-managed-home-isolation-plan.md).
@@ -75,7 +78,21 @@ If the effective Codex home is explicitly overridden by a provider profile, the 
 
 - `<codex_home>/sessions/`
 
-Provider-profile runtime homes are explicit authority only when they preserve the managed isolation contract. Two configured Codex agents must not resolve to the same effective `codex_home` unless a future explicit shared-home feature declares and validates that weaker isolation mode.
+Provider-profile runtime homes are explicit authority only when they preserve the managed isolation contract. Non-explicit Codex provider profiles must use the agent-scoped managed home under `.ccb/agents/<agent>/provider-state/codex/home/`; startup migrates old default `.ccb/provider-profiles/<agent>/codex/` runtime-home data into that managed home and rewrites persisted `codex_home`/`codex_session_root` authority. Two configured Codex agents must not resolve to the same effective `codex_home` unless a future explicit shared-home feature declares and validates that weaker isolation mode.
+
+Legacy provider-profile migration must validate persisted Codex session
+authority before moving session material. Missing, malformed, or non-matching
+authority must leave the legacy tree in place rather than moving files and
+breaking recovery. Migration must also leave the legacy tree untouched when the
+agent runtime authority still points at a live non-terminal provider runtime
+process, or when a transitional runtime state lacks usable pid evidence.
+Migrated and skipped outcomes must be diagnosable through project-local agent
+events.
+After a successful move, startup refreshes current
+config/auth/plugin projection from the active profile/source home so stale
+legacy projected files cannot override current `inherit_auth` or mix plugin
+bundle versions; migrated plugin projection is discarded before the active
+source plugin bundle is projected.
 
 The managed session file must persist:
 

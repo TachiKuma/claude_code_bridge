@@ -184,4 +184,53 @@ def render_doctor(payload: Mapping[str, object]) -> tuple[str, ...]:
     return tuple(lines)
 
 
-__all__ = ['render_doctor']
+def render_doctor_storage(payload: Mapping[str, object]) -> tuple[str, ...]:
+    lines = [
+        'storage_status: ok',
+        f'storage_schema_version: {payload.get("schema_version")}',
+        f'project: {payload.get("project")}',
+        f'project_id: {payload.get("project_id")}',
+        f'storage_runtime_root_kind: {payload.get("runtime_root_kind")}',
+        f'storage_runtime_state_root: {payload.get("runtime_state_root")}',
+        f'storage_shared_cache_status: {payload.get("shared_cache_status")}',
+        f'storage_shared_cache_reason: {payload.get("shared_cache_reason")}',
+        f'storage_total_bytes: {payload.get("total_bytes")}',
+        f'storage_total_count: {payload.get("total_count")}',
+    ]
+    for storage_class, summary in sorted((payload.get('by_class') or {}).items()):
+        lines.append(
+            'storage_class: '
+            f'class={storage_class} '
+            f'bytes={summary.get("bytes")} '
+            f'count={summary.get("count")}'
+        )
+    for provider, summary in sorted((payload.get('by_provider') or {}).items()):
+        lines.append(
+            'storage_provider: '
+            f'provider={provider} '
+            f'bytes={summary.get("bytes")} '
+            f'count={summary.get("count")}'
+        )
+    for agent, summary in sorted((payload.get('by_agent') or {}).items()):
+        lines.append(
+            'storage_agent: '
+            f'agent={agent} '
+            f'bytes={summary.get("bytes")} '
+            f'count={summary.get("count")}'
+        )
+    for entry in (payload.get('entries') or ())[:50]:
+        lines.append(
+            'storage_entry: '
+            f'class={entry.get("storage_class")} '
+            f'provider={entry.get("provider")} '
+            f'agent={entry.get("agent")} '
+            f'bytes={entry.get("size_bytes")} '
+            f'active={entry.get("active")} '
+            f'reclaimable={entry.get("reclaimable")} '
+            f'reason={entry.get("reason")} '
+            f'path={entry.get("relative_path")}'
+        )
+    return tuple(lines)
+
+
+__all__ = ['render_doctor', 'render_doctor_storage']

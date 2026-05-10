@@ -6,6 +6,7 @@ from pathlib import Path
 from agents.policy import resolve_agent_launch_policy
 from agents.store import AgentRestoreStore, AgentSpecStore
 from cli.services.provider_hooks import prepare_provider_workspace
+from provider_profiles import validate_provider_runtime_home_uniqueness
 from workspace.binding import WorkspaceBindingStore
 from workspace.materializer import WorkspaceMaterializer
 from workspace.planner import WorkspacePlanner
@@ -44,6 +45,11 @@ def prepare_start_agents(
     materializer = WorkspaceMaterializer()
     validator = WorkspaceValidator(binding_store)
     prepared: list[PreparedStartAgent] = []
+
+    try:
+        validate_provider_runtime_home_uniqueness(layout=paths, specs=config.agents.values())
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc
 
     for agent_name in targets:
         spec = config.agents[agent_name]

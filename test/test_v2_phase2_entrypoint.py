@@ -18,6 +18,7 @@ import pytest
 from ccbd.app import CcbdApp
 from ccbd.socket_client import CcbdClient, CcbdClientError
 from ccbd.services.health import HealthMonitor
+from cli.services.cleanup import CleanupAction, CleanupSummary
 from cli.services.start_runtime import StartSummary
 import cli.phase2 as phase2_module
 from cli.phase2 import maybe_handle_phase2
@@ -241,6 +242,45 @@ def test_phase2_start_bootstraps_missing_project_without_writing_config(monkeypa
     assert (project_root / '.ccb' / 'ccb.config').exists() is False
     assert 'start_status: ok' in stdout
     assert 'agents: codex, claude' in stdout
+
+
+def test_phase2_config_validate_rejects_duplicate_effective_runtime_home(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-config-validate'
+    _write(
+        project_root / '.ccb' / 'ccb.config',
+        """version = 2
+default_agents = ["agent1", "agent2"]
+
+[agents.agent1]
+provider = "codex"
+target = "."
+workspace_mode = "inplace"
+restore = "auto"
+permission = "manual"
+
+[agents.agent1.provider_profile]
+mode = "isolated"
+home = ".ccb/provider-profiles/shared-codex"
+
+[agents.agent2]
+provider = "codex"
+target = "."
+workspace_mode = "inplace"
+restore = "auto"
+permission = "manual"
+
+[agents.agent2.provider_profile]
+mode = "isolated"
+home = ".ccb/provider-profiles/shared-codex"
+""",
+    )
+
+    code, stdout, stderr = _run_phase2_local(['config', 'validate'], cwd=project_root)
+
+    assert code == 1
+    assert stdout == ''
+    assert 'config_status: invalid' in stderr
+    assert 'duplicate effective codex_home' in stderr
 
 
 def test_ccb_kill_without_anchor_is_noop_and_does_not_bootstrap(tmp_path: Path) -> None:
@@ -754,6 +794,119 @@ def test_phase2_doctor_bundle_renders_export_summary(monkeypatch, tmp_path: Path
     assert 'doctor_bundle_status: ok' in stdout
     assert 'bundle_id: bundle-1' in stdout
     assert 'truncated_count: 2' in stdout
+
+
+def test_phase2_doctor_storage_renders_storage_summary(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-doctor-storage'
+    project_root.mkdir()
+
+    monkeypatch.setattr(
+        phase2_module,
+        'doctor_storage_summary',
+        lambda context: {
+            'schema_version': 1,
+            'project': str(context.project.project_root),
+            'project_id': context.project.project_id,
+            'runtime_root_kind': 'project',
+            'runtime_state_root': str(context.paths.runtime_state_root),
+            'shared_cache_status': 'disabled',
+            'shared_cache_reason': 'not_implemented',
+            'total_bytes': 12,
+            'total_count': 2,
+            'by_class': {'secret': {'bytes': 4, 'count': 1}, 'session': {'bytes': 8, 'count': 1}},
+            'by_provider': {'codex': {'bytes': 12, 'count': 2}},
+            'by_agent': {'agent1': {'bytes': 12, 'count': 2}},
+            'entries': [
+                {
+                    'relative_path': 'agents/agent1/provider-state/codex/home/auth.json',
+                    'storage_class': 'secret',
+                    'size_bytes': 4,
+                    'provider': 'codex',
+                    'agent': 'agent1',
+                    'active': None,
+                    'reclaimable': None,
+                    'reason': 'provider_secret',
+                }
+            ],
+        },
+    )
+
+    code, stdout, stderr = _run_phase2_local(['doctor', 'storage'], cwd=project_root)
+
+    assert code == 0, stderr
+    assert 'storage_status: ok' in stdout
+    assert 'storage_shared_cache_status: disabled' in stdout
+    assert 'storage_shared_cache_reason: not_implemented' in stdout
+    assert 'storage_class: class=secret bytes=4 count=1' in stdout
+    assert 'storage_provider: provider=codex bytes=12 count=2' in stdout
+    assert 'storage_entry: class=secret provider=codex agent=agent1 bytes=4' in stdout
+
+
+def test_phase2_doctor_storage_json_emits_full_payload(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-doctor-storage-json'
+    project_root.mkdir()
+
+    monkeypatch.setattr(
+        phase2_module,
+        'doctor_storage_summary',
+        lambda context: {
+            'schema_version': 1,
+            'project': str(context.project.project_root),
+            'project_id': context.project.project_id,
+            'runtime_root_kind': 'project',
+            'runtime_state_root': str(context.paths.runtime_state_root),
+            'shared_cache_status': 'disabled',
+            'shared_cache_reason': 'not_implemented',
+            'total_bytes': 0,
+            'total_count': 0,
+            'by_class': {},
+            'by_provider': {},
+            'by_agent': {},
+            'entries': [],
+        },
+    )
+
+    code, stdout, stderr = _run_phase2_local(['doctor', 'storage', '--json'], cwd=project_root)
+
+    assert code == 0, stderr
+    payload = json.loads(stdout)
+    assert payload['schema_version'] == 1
+    assert payload['shared_cache_status'] == 'disabled'
+    assert payload['entries'] == []
+
+
+def test_phase2_cleanup_renders_cleanup_summary(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-cleanup'
+    (project_root / '.ccb').mkdir(parents=True)
+
+    monkeypatch.setattr(
+        phase2_module,
+        'cleanup_project_storage',
+        lambda context, command: CleanupSummary(
+            project_root=str(context.project.project_root),
+            project_id=context.project.project_id,
+            status='ok',
+            deleted_bytes=12,
+            deleted_count=1,
+            skipped_count=0,
+            actions=(
+                CleanupAction(
+                    provider='claude',
+                    kind='version_cache',
+                    path=str(context.paths.ccb_dir / 'agents/agent1/provider-state/claude/home/.local/share/claude/versions/old'),
+                    bytes_removed=12,
+                    reason='old_claude_version_cache',
+                ),
+            ),
+        ),
+    )
+
+    code, stdout, stderr = _run_phase2_local(['cleanup'], cwd=project_root)
+
+    assert code == 0, stderr
+    assert 'cleanup_status: ok' in stdout
+    assert 'cleanup_deleted_bytes: 12' in stdout
+    assert 'cleanup_action: provider=claude kind=version_cache bytes=12 reason=old_claude_version_cache' in stdout
 
 
 def test_phase2_resubmit_renders_new_message_chain(monkeypatch, tmp_path: Path) -> None:

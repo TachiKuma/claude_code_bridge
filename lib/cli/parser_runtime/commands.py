@@ -5,6 +5,7 @@ import argparse
 from cli.models import (
     ParsedAckCommand,
     ParsedCancelCommand,
+    ParsedCleanupCommand,
     ParsedConfigValidateCommand,
     ParsedDoctorCommand,
     ParsedInboxCommand,
@@ -36,6 +37,11 @@ def parse_kill(tokens: list[str], *, project: str | None, error_type) -> ParsedK
     parser.add_argument('-f', '--force', action='store_true')
     namespace = parse_args(parser, tokens, error_message='invalid kill command', error_type=error_type)
     return ParsedKillCommand(project=project, force=bool(namespace.force))
+
+
+def parse_cleanup(tokens: list[str], *, project: str | None, error_type) -> ParsedCleanupCommand:
+    require_no_extra(tokens, command='cleanup', error_type=error_type)
+    return ParsedCleanupCommand(project=project)
 
 
 def parse_ps(tokens: list[str], *, project: str | None, error_type) -> ParsedPsCommand:
@@ -185,6 +191,11 @@ def parse_doctor(tokens: list[str], *, project: str | None, error_type) -> Parse
         return parse_ps(tokens[1:], project=project, error_type=error_type)
     if tokens[:1] in (['logs'], ['--logs']):
         return parse_logs(tokens[1:], project=project, error_type=error_type)
+    if tokens[:1] == ['storage']:
+        parser = argparse.ArgumentParser(prog='ccb doctor storage', add_help=False)
+        parser.add_argument('--json', dest='json_output', action='store_true')
+        namespace = parse_args(parser, tokens[1:], error_message='invalid doctor storage command', error_type=error_type)
+        return ParsedDoctorCommand(project=project, storage=True, json_output=bool(namespace.json_output))
     parser = argparse.ArgumentParser(prog='ccb doctor', add_help=False)
     parser.add_argument('--output', dest='output_path', nargs='?', const='', default=None)
     try:
@@ -207,6 +218,7 @@ def parse_config(tokens: list[str], *, project: str | None, error_type) -> Parse
 __all__ = [
     'parse_ack',
     'parse_cancel',
+    'parse_cleanup',
     'parse_config',
     'parse_doctor',
     'parse_inbox',

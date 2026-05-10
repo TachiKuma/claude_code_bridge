@@ -2082,9 +2082,10 @@ def test_claude_launcher_build_start_cmd_uses_agent_settings_overlay_when_presen
     assert json.loads(settings_path.read_text(encoding='utf-8')) == {'model': 'opus'}
 
 
-def test_claude_launcher_build_start_cmd_uses_materialized_profile_home(monkeypatch, tmp_path: Path) -> None:
+def test_claude_launcher_build_start_cmd_ignores_profile_runtime_home(monkeypatch, tmp_path: Path) -> None:
     runtime_dir = tmp_path / 'runtime'
     profile_home = tmp_path / 'claude-profile-home'
+    managed_home = runtime_dir / 'claude-home'
     runtime_dir.mkdir(parents=True, exist_ok=True)
     _write_provider_profile(
         runtime_dir,
@@ -2111,8 +2112,9 @@ def test_claude_launcher_build_start_cmd_uses_materialized_profile_home(monkeypa
         'claude-sess-home',
     )
 
-    assert f'HOME={shlex.quote(str(profile_home))}' in start_cmd
-    assert f'CLAUDE_PROJECTS_ROOT={shlex.quote(str(profile_home / ".claude" / "projects"))}' in start_cmd
+    assert f'HOME={shlex.quote(str(managed_home))}' in start_cmd
+    assert f'CLAUDE_PROJECTS_ROOT={shlex.quote(str(managed_home / ".claude" / "projects"))}' in start_cmd
+    assert str(profile_home) not in start_cmd
 
 
 def test_claude_launcher_build_start_cmd_exports_user_session_transport_without_runtime_leaks(

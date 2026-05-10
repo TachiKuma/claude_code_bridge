@@ -77,6 +77,85 @@ jobs:
           CCB_FASTPATH_STRESS_ASK_WAIT_TIMEOUT_S=240 \
             bash test/system_fastpath_stress.sh
 
+      - name: Storage doctor and cleanup smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          export TERM=xterm-256color
+          python - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, "lib")
+          from storage.paths import PathLayout
+
+          project = Path(os.environ["RUNNER_TEMP"]) / "ccb-storage-cleanup-smoke"
+          if project.exists():
+              import shutil
+              shutil.rmtree(project)
+          (project / ".ccb").mkdir(parents=True)
+          (project / ".ccb" / "ccb.config").write_text("alpha:claude,gamma:gemini\n", encoding="utf-8")
+          layout = PathLayout(project)
+          claude_home = layout.agent_provider_state_dir("alpha", "claude") / "home"
+          gemini_home = layout.agent_provider_state_dir("gamma", "gemini") / "home"
+          for version, body in {"2.1.132": "old", "2.1.133": "rollback", "2.1.137": "current"}.items():
+              target = claude_home / ".local" / "share" / "claude" / "versions" / version / "claude"
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(body, encoding="utf-8")
+          bin_dir = claude_home / ".local" / "bin"
+          bin_dir.mkdir(parents=True, exist_ok=True)
+          link = bin_dir / "claude"
+          link.unlink(missing_ok=True)
+          link.symlink_to("../share/claude/versions/2.1.137/claude")
+          for relative, body in {
+              ".npm/_cacache/blob": "cache",
+              ".cache/node-gyp/state": "nodegyp",
+              ".gemini/tmp/session.json": "session",
+          }.items():
+              target = gemini_home / relative
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(body, encoding="utf-8")
+          print(project)
+          PY
+          project="${RUNNER_TEMP}/ccb-storage-cleanup-smoke"
+          ./ccb --project "$project" doctor storage --json >"$RUNNER_TEMP/storage-before.json"
+          ./ccb --project "$project" cleanup >"$RUNNER_TEMP/cleanup.out"
+          ./ccb --project "$project" doctor storage --json >"$RUNNER_TEMP/storage-after.json"
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, "lib")
+          from storage.paths import PathLayout
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          project = root / "ccb-storage-cleanup-smoke"
+          before = json.loads((root / "storage-before.json").read_text(encoding="utf-8"))
+          after = json.loads((root / "storage-after.json").read_text(encoding="utf-8"))
+          layout = PathLayout(project)
+          claude_home = layout.agent_provider_state_dir("alpha", "claude") / "home"
+          gemini_home = layout.agent_provider_state_dir("gamma", "gemini") / "home"
+          cleanup_text = (root / "cleanup.out").read_text(encoding="utf-8")
+          assert "cleanup_status: ok" in cleanup_text
+          assert "old_claude_version_cache" in cleanup_text
+          assert "rebuildable_gemini_cache" in cleanup_text
+          checks = {
+              "old_removed": not (claude_home / ".local/share/claude/versions/2.1.132").exists(),
+              "rollback_kept": (claude_home / ".local/share/claude/versions/2.1.133/claude").exists(),
+              "current_kept": (claude_home / ".local/share/claude/versions/2.1.137/claude").exists(),
+              "gemini_cache_removed": not (gemini_home / ".npm/_cacache").exists(),
+              "node_gyp_removed": not (gemini_home / ".cache/node-gyp").exists(),
+              "gemini_session_kept": (gemini_home / ".gemini/tmp/session.json").exists(),
+              "storage_reduced": after["by_class"]["rebuildable_cache"]["bytes"] < before["by_class"]["rebuildable_cache"]["bytes"],
+          }
+          failed = [name for name, passed in checks.items() if not passed]
+          if failed:
+              raise AssertionError(f"storage cleanup smoke failed: {failed}")
+          PY
+
       - name: Upload macOS artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -163,6 +242,84 @@ jobs:
           CCB_FASTPATH_STRESS_STUB_DELAY=0.3 \
           CCB_FASTPATH_STRESS_ASK_WAIT_TIMEOUT_S=240 \
             bash test/system_fastpath_stress.sh
+
+      - name: Storage doctor and cleanup smoke in WSL mounted checkout
+        shell: wsl-bash {0}
+        run: |
+          set -euo pipefail
+          export TERM=xterm-256color
+          smoke_root="/mnt/c/Temp/ccb-storage-cleanup-smoke-${{ github.run_id }}-${{ github.run_attempt }}"
+          rm -rf "$smoke_root"
+          mkdir -p "$smoke_root/.ccb"
+          printf 'alpha:claude,gamma:gemini\n' >"$smoke_root/.ccb/ccb.config"
+          python3 - "$smoke_root" <<'PY'
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, "lib")
+          from storage.paths import PathLayout
+
+          project = Path(sys.argv[1])
+          layout = PathLayout(project)
+          claude_home = layout.agent_provider_state_dir("alpha", "claude") / "home"
+          gemini_home = layout.agent_provider_state_dir("gamma", "gemini") / "home"
+          for version, body in {"2.1.132": "old", "2.1.133": "rollback", "2.1.137": "current"}.items():
+              target = claude_home / ".local" / "share" / "claude" / "versions" / version / "claude"
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(body, encoding="utf-8")
+          bin_dir = claude_home / ".local" / "bin"
+          bin_dir.mkdir(parents=True, exist_ok=True)
+          link = bin_dir / "claude"
+          link.unlink(missing_ok=True)
+          link.symlink_to("../share/claude/versions/2.1.137/claude")
+          for relative, body in {
+              ".npm/_cacache/blob": "cache",
+              ".cache/node-gyp/state": "nodegyp",
+              ".gemini/tmp/session.json": "session",
+          }.items():
+              target = gemini_home / relative
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(body, encoding="utf-8")
+          PY
+          ./ccb --project "$smoke_root" doctor storage --json >/tmp/ccb-storage-before.json
+          ./ccb --project "$smoke_root" cleanup >/tmp/ccb-cleanup.out
+          ./ccb --project "$smoke_root" doctor storage --json >/tmp/ccb-storage-after.json
+          python3 - "$smoke_root" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, "lib")
+          from storage.paths import PathLayout
+
+          project = Path(sys.argv[1])
+          before = json.loads(Path("/tmp/ccb-storage-before.json").read_text(encoding="utf-8"))
+          after = json.loads(Path("/tmp/ccb-storage-after.json").read_text(encoding="utf-8"))
+          layout = PathLayout(project)
+          claude_home = layout.agent_provider_state_dir("alpha", "claude") / "home"
+          gemini_home = layout.agent_provider_state_dir("gamma", "gemini") / "home"
+          cleanup_text = Path("/tmp/ccb-cleanup.out").read_text(encoding="utf-8")
+          assert "cleanup_status: ok" in cleanup_text
+          assert "old_claude_version_cache" in cleanup_text
+          assert "rebuildable_gemini_cache" in cleanup_text
+          assert before["shared_cache_reason"] in {
+              "wsl_drvfs_requires_runtime_relocation",
+              "not_implemented_runtime_relocated",
+          }
+          checks = {
+              "old_removed": not (claude_home / ".local/share/claude/versions/2.1.132").exists(),
+              "rollback_kept": (claude_home / ".local/share/claude/versions/2.1.133/claude").exists(),
+              "current_kept": (claude_home / ".local/share/claude/versions/2.1.137/claude").exists(),
+              "gemini_cache_removed": not (gemini_home / ".npm/_cacache").exists(),
+              "node_gyp_removed": not (gemini_home / ".cache/node-gyp").exists(),
+              "gemini_session_kept": (gemini_home / ".gemini/tmp/session.json").exists(),
+              "storage_reduced": after["by_class"]["rebuildable_cache"]["bytes"] < before["by_class"]["rebuildable_cache"]["bytes"],
+          }
+          failed = [name for name, passed in checks.items() if not passed]
+          if failed:
+              raise AssertionError(f"storage cleanup smoke failed: {failed}")
+          PY
+          rm -rf "$smoke_root"
 
       - name: Upload WSL artifacts
         if: always()

@@ -61,10 +61,8 @@ def materialize_claude_home_config(target_home: Path, *, profile=None, source_ho
 
 
 def _profile_runtime_home(profile) -> Path | None:
-    runtime_home = getattr(profile, 'runtime_home', None) if profile is not None else None
-    if not runtime_home:
-        return None
-    return Path(runtime_home).expanduser()
+    del profile
+    return None
 
 
 def _existing_layout(runtime_dir: Path, *, managed_home: Path) -> ClaudeHomeLayout | None:

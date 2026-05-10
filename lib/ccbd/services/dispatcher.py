@@ -111,6 +111,9 @@ class JobDispatcher(DispatcherRuntimeStateMixin, DispatcherFacadeMixin):
         prepare_reply_deliveries(self)
         return tick_jobs(self)
 
+    def disable_auto_reply_delivery(self) -> None:
+        self._runtime_state.auto_reply_delivery_on_complete = False
+
     def complete(self, job_id: str, decision: CompletionDecision) -> JobRecord:
         return complete_job(self, job_id, decision)
 

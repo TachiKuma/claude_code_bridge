@@ -4,6 +4,7 @@ from .ask import parse_ask
 from .commands import (
     parse_ack,
     parse_cancel,
+    parse_cleanup,
     parse_config,
     parse_doctor,
     parse_inbox,
@@ -31,6 +32,7 @@ __all__ = [
     'parse_ack',
     'parse_ask',
     'parse_cancel',
+    'parse_cleanup',
     'parse_config',
     'parse_doctor',
     'parse_fault',

@@ -10,6 +10,7 @@ from cli.models import (
     ParsedAskCommand,
     ParsedAskWaitCommand,
     ParsedCancelCommand,
+    ParsedCleanupCommand,
     ParsedConfigValidateCommand,
     ParsedDoctorCommand,
     ParsedFaultArmCommand,
@@ -228,6 +229,10 @@ def test_parse_kill(parser: CliParser) -> None:
     assert parser.parse(['kill', '-f']) == ParsedKillCommand(project=None, force=True)
 
 
+def test_parse_cleanup(parser: CliParser) -> None:
+    assert parser.parse(['cleanup']) == ParsedCleanupCommand(project=None)
+
+
 def test_parse_removed_attach_command_is_not_active(parser: CliParser) -> None:
     with pytest.raises(CliUsageError, match='start does not accept'):
         parser.parse(['open'])
@@ -328,6 +333,16 @@ def test_parse_logs(parser: CliParser) -> None:
 
 def test_parse_doctor_bundle(parser: CliParser) -> None:
     assert parser.parse(['doctor']) == ParsedDoctorCommand(project=None, bundle=False, output_path=None)
+    assert parser.parse(['doctor', 'storage']) == ParsedDoctorCommand(
+        project=None,
+        storage=True,
+        json_output=False,
+    )
+    assert parser.parse(['doctor', 'storage', '--json']) == ParsedDoctorCommand(
+        project=None,
+        storage=True,
+        json_output=True,
+    )
     assert parser.parse(['doctor', '--output']) == ParsedDoctorCommand(project=None, bundle=True, output_path=None)
     assert parser.parse(['doctor', '--output', '/tmp/support.tar.gz']) == ParsedDoctorCommand(
         project=None,

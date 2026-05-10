@@ -64,6 +64,7 @@ def print_start_help(*, file=None) -> None:
               ccb -n               Rebuild .ccb except ccb.config, then start fresh.
               ccb kill             Stop the current project's background runtime.
               ccb kill -f          Force cleanup project-owned runtime residue.
+              ccb cleanup          Prune safe provider rebuildable caches after ccbd is stopped.
 
             Core commands:
               ccb ask <agent> [from <sender>] <message>
@@ -208,13 +209,33 @@ _COMMAND_HELP = {
           ccb doctor ps   Show known runtime/session/workspace bindings through the primary diagnostics entrypoint.
           `ccb ps` remains a compatibility alias.
     """,
+    "doctor-storage": """
+        usage: ccb doctor storage [--json]
+
+        Storage diagnostics subview:
+          ccb doctor storage        Show .ccb storage class totals and largest entries.
+          ccb doctor storage --json Emit full storage classification payload.
+    """,
+    "cleanup": """
+        usage: ccb cleanup
+
+        Storage cleanup:
+          ccb cleanup   Prune safe provider rebuildable caches after ccbd is stopped.
+
+        Safety:
+          - Refuses to run while ccbd is active or ask jobs are pending/running.
+          - Keeps Claude's current version and one rollback version.
+          - Does not remove provider sessions, auth, plugin bundles, mailbox data, or runtime authority.
+          - Use `ccb doctor storage` before cleanup to inspect storage classes.
+    """,
     "doctor": """
-        usage: ccb doctor [ps|logs <agent>] [--output [PATH]]
+        usage: ccb doctor [ps|logs <agent>|storage] [--output [PATH]]
 
         Deep diagnostics:
           ccb doctor               Print project diagnostic summary.
           ccb doctor ps            Show the runtime/session/workspace diagnostics subview.
           ccb doctor logs <agent>  Tail the runtime/session log diagnostics subview for one agent.
+          ccb doctor storage       Show .ccb storage class totals.
           ccb doctor --output      Export a support bundle to the default path.
           ccb doctor --output PATH Export a support bundle to PATH.
           `ccb ps` and `ccb logs <agent>` remain compatibility entrypoints.

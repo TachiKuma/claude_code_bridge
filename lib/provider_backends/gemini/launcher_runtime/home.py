@@ -37,10 +37,8 @@ def prepare_gemini_home_overrides(runtime_dir: Path, profile) -> dict[str, str]:
 
 
 def _profile_runtime_home(profile) -> Path | None:
-    runtime_home = getattr(profile, 'runtime_home', None) if profile is not None else None
-    if not runtime_home:
-        return None
-    return Path(runtime_home).expanduser()
+    del profile
+    return None
 
 
 def _existing_layout(runtime_dir: Path, *, managed_home: Path) -> GeminiHomeLayout | None:
