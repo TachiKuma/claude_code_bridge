@@ -241,7 +241,7 @@ def test_prepare_tmux_start_layout_survives_exiting_default_command(tmp_path: Pa
     project_root = tmp_path / 'repo-layout-stress'
     ctx = _context(project_root)
     config = load_project_config(project_root).config
-    socket_path = tmp_path / f'tmux-{uuid.uuid4().hex}.sock'
+    socket_path = Path('/tmp') / f'ccb-{uuid.uuid4().hex[:12]}.sock'
     backend = TmuxBackend(socket_path=str(socket_path))
 
     try:
@@ -270,3 +270,4 @@ def test_prepare_tmux_start_layout_survives_exiting_default_command(tmp_path: Pa
             backend._tmux_run(['kill-session', '-t', session_name], check=False)
     finally:
         subprocess.run(['tmux', '-S', str(socket_path), 'kill-server'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        socket_path.unlink(missing_ok=True)
