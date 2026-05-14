@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/模型皆可控-CF1322?style=for-the-badge" alt="模型皆可控">
 </p>
 
-[![Version](https://img.shields.io/badge/version-6.1.15-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-6.1.16-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 [English](README.md) | **中文**
@@ -75,9 +75,9 @@
 <summary><b>最新版本亮点</b></summary>
 
 - **`ccb kill` 会真正收停后台**：远程关闭会等待记录下来的 `ccbd` 和 keeper pid 退出，不再只依赖 lifecycle 显示 unmounted。
-- **kill 后可立即 cleanup**：远程 kill 会把 lifecycle finalize 到 stopped/unmounted，正常关闭后不再需要第二次 kill 才能 cleanup。
-- **孤儿 runtime 进程清理更可靠**：kill finalization 继续收集 provider-runtime pid 文件和 orphan process group，同时避开新的 backend generation。
-- **关闭诊断更清晰**：启动/诊断契约要求最终报告反映 shutdown 后状态，而不是 transient stopping 状态。
+- **共享记忆里的 handoff 更收敛**：生成的 managed memory bundle 现在注入 CCB 自己的 submit-only `/ask` 规则，旧 `.ccb/ccb_memory.md` 文本不会再把 polling/waiting 行为带回来。
+- **新项目记忆模板更干净**：新的 `.ccb/ccb_memory.md` 会把 ask 描述为 fire-and-forget handoff，并移除过时的 `ccb -h` 引导。
+- **Claude 重启后跟随 ccswitch**：managed Claude 启动时会优先使用 `~/.claude/settings.json` 里的 `ANTHROPIC_BASE_URL`，不再被旧 shell env 覆盖；显式 agent profile URL 仍然优先。
 
 完整历史见 [新版本记录](#新版本记录)。
 
@@ -297,6 +297,16 @@ ccb reinstall
 历史说明：下面较旧的发布记录里仍可能出现 `askd`、旧 flag 或已移除命令。这些内容仅作为 changelog 历史保留，不代表当前 CLI 入口。
 
 <details open>
+<summary><b>v6.1.16</b> - Memory Handoff And Claude Route Hotfix</summary>
+
+- 生成的 managed-memory bundle 会加入 CCB 自己的 submit-only ask 协作规则，避免旧共享记忆文本重新引入 polling/waiting 行为。
+- 新建 `.ccb/ccb_memory.md` 模板同步使用 fire-and-forget handoff 表述。
+- managed Claude 启动会优先使用 ccswitch 更新后的 `~/.claude/settings.json` 路由配置，而不是旧 caller-shell `ANTHROPIC_BASE_URL`。
+- 补充 Claude 路由继承契约，并增加优先级回归测试。
+
+</details>
+
+<details>
 <summary><b>v6.1.15</b> - Kill Shutdown Reliability Hotfix</summary>
 
 - 远程 `ccb kill` 会等待记录下来的 `ccbd` 和 keeper pid 退出，不再只信任 lifecycle unmounted。

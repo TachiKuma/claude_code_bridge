@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## v6.1.16 (2026-05-14)
+
+### Memory Handoff And Claude Route Hotfix
+
+- **Ask Handoff Guidance Stabilized**: generated managed-memory bundles now include CCB-owned submit-only ask coordination rules, so stale `.ccb/ccb_memory.md` text cannot reintroduce polling/waiting behavior after restart.
+- **Project Memory Template Tightened**: new `.ccb/ccb_memory.md` files now describe `/ask` as a fire-and-forget handoff and avoid obsolete `ccb -h` guidance in the managed memory seed.
+- **Claude ccswitch Route Inheritance Fixed**: managed Claude startup now prefers the source-home `~/.claude/settings.json` `ANTHROPIC_BASE_URL` over a stale caller-shell `ANTHROPIC_BASE_URL`, so ccswitch route changes take effect after `ccb kill && ccb`.
+- **Claude Source Contract Documented**: the Claude isolation contract now records source settings as the route authority when no agent-specific profile URL is configured.
+
 ## v6.1.15 (2026-05-14)
 
 ### Kill Shutdown Reliability Hotfix

@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Every_Model_Controllable-CF1322?style=for-the-badge" alt="Every Model Controllable">
 </p>
 
-[![Version](https://img.shields.io/badge/version-6.1.15-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-6.1.16-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 **English** | [Chinese](README_zh.md)
@@ -75,9 +75,9 @@ Build project-local teams with roles, pane layout, provider state, worktree isol
 <summary><b>Latest release highlights</b></summary>
 
 - **`ccb kill` now fully stops the backend**: remote shutdown waits for the recorded `ccbd` and keeper pids to exit instead of returning as soon as lifecycle says unmounted.
-- **`ccb cleanup` works immediately after kill**: remote kill finalizes lifecycle state to stopped/unmounted, so cleanup no longer needs a second kill after a normal shutdown.
-- **Orphan runtime processes are swept more reliably**: kill finalization keeps collecting provider-runtime pid files and orphan process groups while avoiding newer backend generations.
-- **Shutdown diagnostics are clearer**: the startup and diagnostics contracts now require final reports to reflect post-shutdown state, not transient stopping state.
+- **Shared memory handoffs are stricter**: generated managed-memory bundles now inject CCB-owned submit-only `/ask` guidance so older `.ccb/ccb_memory.md` text cannot bring back polling or waiting behavior.
+- **New project memory seeds are cleaner**: `.ccb/ccb_memory.md` templates now describe ask as a fire-and-forget handoff and omit obsolete `ccb -h` guidance.
+- **Claude follows ccswitch after restart**: managed Claude startup now prefers `~/.claude/settings.json` `ANTHROPIC_BASE_URL` over stale shell env, while explicit agent profile URLs still win.
 
 See [Release Notes](#release-notes) for the full history.
 
@@ -306,6 +306,16 @@ Thanks to the [Linux.do community](https://linux.do) for testing, feedback, and 
 Historical note: older release notes below may mention `askd`, legacy flags, or removed commands. Those references are kept only as changelog history and do not redefine the current CLI surface.
 
 <details open>
+<summary><b>v6.1.16</b> - Memory Handoff And Claude Route Hotfix</summary>
+
+- Adds CCB-owned submit-only ask coordination rules to generated managed-memory bundles, preventing stale shared memory text from reintroducing polling/waiting behavior.
+- Updates new `.ccb/ccb_memory.md` templates with the same fire-and-forget handoff guidance.
+- Makes managed Claude startup prefer ccswitch-updated `~/.claude/settings.json` route settings over stale caller-shell `ANTHROPIC_BASE_URL`.
+- Documents the Claude route inheritance contract and adds regression coverage for the new priority order.
+
+</details>
+
+<details>
 <summary><b>v6.1.15</b> - Kill Shutdown Reliability Hotfix</summary>
 
 - Waits for recorded `ccbd` and keeper pids to exit during remote `ccb kill` instead of trusting lifecycle unmounted alone.
