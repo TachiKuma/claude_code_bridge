@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/模型皆可控-CF1322?style=for-the-badge" alt="模型皆可控">
 </p>
 
-[![Version](https://img.shields.io/badge/version-6.1.18-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-6.1.19-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 [English](README.md) | **中文**
@@ -74,10 +74,10 @@
 <details>
 <summary><b>最新版本亮点</b></summary>
 
-- **卡住的 provider job 会确定收尾**：heartbeat 观察只保存在内部，连续三轮无进展后只发一次终态 `heartbeat_timeout`，并提示先发小任务测试通讯。
-- **Completion deadline 不再被轮询噪声续命**：cursor 偏移、rescan 时间戳、session bookkeeping 不再算作 provider 进展。
-- **Reliability timeout 状态会被持久化保留**：恢复后的 provider job 会继承 `reliability_*` deadline 元数据，不会重置超时窗口。
-- **Useful Tools 更方便分发**：release artifacts 现在包含 `useful_tools/useful_tools.zip`，同时保留可选工具目录。
+- **Managed ask skill 会干净继承**：Claude skills/commands 和 Droid skills 都通过 CCB projected assets 投射，行为对齐 Codex，避免 copy-sync 漂移。
+- **Droid 获得 managed FACTORY_HOME**：每个 managed Droid agent 都有项目级 Factory home 和 session root，重启或 session rotation 后 reader 会继续跟随 managed session log。
+- **Ask 默认回复更简洁**：`ccb ask` 会注入回复指导，`--compact` 用于压缩回答，`--silence` 用于成功静默的检查任务。
+- **Storage 诊断识别新投射物**：Claude 和 Droid 的 projected skill assets 会被归类为 managed projected config，而不是 unknown residue。
 
 完整历史见 [新版本记录](#新版本记录)。
 
@@ -297,6 +297,16 @@ ccb reinstall
 历史说明：下面较旧的发布记录里仍可能出现 `askd`、旧 flag 或已移除命令。这些内容仅作为 changelog 历史保留，不代表当前 CLI 入口。
 
 <details open>
+<summary><b>v6.1.19</b> - Managed Ask Skill Projection Release</summary>
+
+- Claude 继承的 `skills/` 和 `commands/` 改为通过 CCB projected assets 路由，不再 copy-sync，让系统 ask skill 可进入 managed Claude home。
+- Droid 增加 managed `FACTORY_HOME`，会投射系统 `~/.factory/skills`，并使用 session-scoped Droid sessions root。
+- Droid launch、execution polling 和 communicator session reader 现在会在重启或 session rotation 后继续跟随 managed session root。
+- `ccb ask` 默认注入简洁回复指导，并新增 `--compact` / `--silence` 提交模式；旧 wait/output flags 作为兼容输入被忽略。
+
+</details>
+
+<details>
 <summary><b>v6.1.18</b> - Heartbeat Timeout And Useful Tools Release</summary>
 
 - running-job heartbeat 观察会保持为内部状态，连续三轮无进展后才以 `heartbeat_timeout` 终态收尾，并建议先发小任务测试通讯。

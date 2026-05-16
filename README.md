@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Every_Model_Controllable-CF1322?style=for-the-badge" alt="Every Model Controllable">
 </p>
 
-[![Version](https://img.shields.io/badge/version-6.1.18-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-6.1.19-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 **English** | [Chinese](README_zh.md)
@@ -74,10 +74,10 @@ Build project-local teams with roles, pane layout, provider state, worktree isol
 <details>
 <summary><b>Latest release highlights</b></summary>
 
-- **Stalled provider jobs now finish predictably**: heartbeat observations stay internal, and after three no-progress intervals CCB emits one terminal `heartbeat_timeout` reply with a communication-test recommendation.
-- **Completion deadlines ignore polling noise**: cursor movement, rescan timestamps, and session bookkeeping no longer count as provider progress.
-- **Reliability timeout state is preserved**: restored provider jobs keep their `reliability_*` deadline metadata instead of resetting progress after persistence.
-- **Useful Tools are easier to carry around**: release artifacts include `useful_tools/useful_tools.zip` in addition to the optional tool tree.
+- **Managed ask skills inherit cleanly**: Claude skills/commands and Droid skills now route through CCB projected assets, matching Codex's inherited-skill model without copy-sync drift.
+- **Droid gets a managed FACTORY_HOME**: each managed Droid agent has a project-scoped Factory home and session root, so Droid session readers follow the managed session log after restart or rotation.
+- **Ask replies are concise by default**: `ccb ask` injects reply guidance, with `--compact` for distilled answers and `--silence` for silent-on-success checks.
+- **Provider storage diagnostics recognize the new projections**: projected Claude and Droid skill assets are classified as managed projected config rather than unknown residue.
 
 See [Release Notes](#release-notes) for the full history.
 
@@ -306,6 +306,16 @@ Thanks to the [Linux.do community](https://linux.do) for testing, feedback, and 
 Historical note: older release notes below may mention `askd`, legacy flags, or removed commands. Those references are kept only as changelog history and do not redefine the current CLI surface.
 
 <details open>
+<summary><b>v6.1.19</b> - Managed Ask Skill Projection Release</summary>
+
+- Routes inherited Claude `skills/` and `commands/` through CCB projected assets instead of copy-sync, so system-installed ask skills reach managed Claude agents without duplicating provider homes.
+- Adds managed Droid `FACTORY_HOME` support with projected system `~/.factory/skills` and a session-scoped Droid sessions root.
+- Updates Droid launch, execution polling, and communicator session readers to follow the managed session root after restart or session rotation.
+- Adds concise default ask reply guidance plus `--compact` and `--silence` submission modes, while keeping legacy wait/output flags as ignored compatibility inputs.
+
+</details>
+
+<details>
 <summary><b>v6.1.18</b> - Heartbeat Timeout And Useful Tools Release</summary>
 
 - Keeps running-job heartbeat observations internal until three no-progress intervals, then terminalizes once with `heartbeat_timeout` and a small communication-test recommendation.
