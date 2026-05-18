@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/模型皆可控-CF1322?style=for-the-badge" alt="模型皆可控">
 </p>
 
-[![Version](https://img.shields.io/badge/version-6.2.2-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-6.2.3-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 [English](README.md) | **中文**
@@ -74,10 +74,10 @@
 <details>
 <summary><b>最新版本亮点</b></summary>
 
-- **Managed Codex 不再卡在迁移提示**：CCB 只在托管 Codex home 里禁用 Codex `external_migration`。
-- **保留继承的 Codex 配置**：source-home 的 model、API 和其他 feature 设置仍会继承；managed-home override 只阻止交互式迁移提示。
-- **Fallback config copy 也覆盖**：即使 TOML parser 不可用，复制到 managed Codex home 的配置也会追加 external migration override。
-- **继承式 `ccb_config` 保持可用**：Claude 和 Codex 安装继续包含 v6.2.1 新增的 CCB 配置设计 skill。
+- **Release checker 更易维护**：local、Markdown、GitHub、workflow 和 asset 检查拆到专门 helper module，外层 CLI 保持不变。
+- **Provider memory projection 有共享核心**：Codex、Claude、Gemini 和 OpenCode 共用 projection event、marker、signature 和 materialization helper，同时保留 provider 特定行为。
+- **Startup update 按职责拆分**：update state、refresh 和 flow 逻辑拆成独立模块，后续审查和改动更安全。
+- **Storage cleanup 分类更清晰**：provider-home cleanup 规则有独立边界，并补充 provider precedence 与 unknown-provider 测试。
 
 完整历史见 [新版本记录](#新版本记录)。
 
@@ -330,6 +330,16 @@ ccb reinstall
 历史说明：下面较旧的发布记录里仍可能出现 `askd`、旧 flag 或已移除命令。这些内容仅作为 changelog 历史保留，不代表当前 CLI 入口。
 
 <details open>
+<summary><b>v6.2.3</b> - Architecture Hotspot Optimization Release</summary>
+
+- 将 GitHub release checker 拆分为 local、Markdown、GitHub、workflow 和 asset 等职责明确的 helper module。
+- 将 provider memory projection 的 event、marker、signature 和 bundle materialization 迁入 provider-core 共享 helper。
+- 将 startup update 处理拆分为 state、refresh 和 flow 模块。
+- 抽出 provider-home storage cleanup 分类边界，并记录 architecture optimization plan。
+
+</details>
+
+<details>
 <summary><b>v6.2.2</b> - Codex Managed Home Migration Prompt Hotfix</summary>
 
 - 在 managed Codex home 内禁用 `[features].external_migration`，避免 pane 被交互式 migration prompt 卡住。

@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Every_Model_Controllable-CF1322?style=for-the-badge" alt="Every Model Controllable">
 </p>
 
-[![Version](https://img.shields.io/badge/version-6.2.2-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-6.2.3-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 **English** | [Chinese](README_zh.md)
@@ -74,10 +74,10 @@ Build project-local teams with roles, pane layout, provider state, worktree isol
 <details>
 <summary><b>Latest release highlights</b></summary>
 
-- **Managed Codex no longer stops on migration prompts**: CCB disables Codex `external_migration` only inside managed Codex homes.
-- **Inherited Codex config is preserved**: source-home model, API, and feature settings still carry forward; the managed-home override only prevents the interactive migration prompt.
-- **Fallback config copy is covered**: even when TOML parsing is unavailable, copied managed Codex config receives the external migration override.
-- **Inherited `ccb_config` remains available**: Claude and Codex installs keep the CCB config-design skill introduced in v6.2.1.
+- **Release checker is easier to maintain**: local, Markdown, GitHub, workflow, and asset checks now live in focused helper modules behind the same release-checker CLI.
+- **Provider memory projection has a shared core**: Codex, Claude, Gemini, and OpenCode use common projection event, marker, signature, and materialization helpers while keeping provider-specific behavior.
+- **Startup update code is split by responsibility**: update state, refresh, and flow logic now live in separate modules for easier review and safer changes.
+- **Storage cleanup classification is clearer**: provider-home cleanup rules now have a dedicated boundary and direct tests for precedence and unknown-provider handling.
 
 See [Release Notes](#release-notes) for the full history.
 
@@ -339,6 +339,16 @@ Thanks to the [Linux.do community](https://linux.do) for testing, feedback, and 
 Historical note: older release notes below may mention `askd`, legacy flags, or removed commands. Those references are kept only as changelog history and do not redefine the current CLI surface.
 
 <details open>
+<summary><b>v6.2.3</b> - Architecture Hotspot Optimization Release</summary>
+
+- Splits the GitHub release checker into focused local, Markdown, GitHub, workflow, and asset helper modules.
+- Moves shared provider memory projection events, markers, signatures, and bundle materialization into provider-core helpers.
+- Splits startup update handling into state, refresh, and flow modules.
+- Extracts provider-home storage cleanup classification and records the architecture optimization plan.
+
+</details>
+
+<details>
 <summary><b>v6.2.2</b> - Codex Managed Home Migration Prompt Hotfix</summary>
 
 - Disables `[features].external_migration` inside managed Codex homes so panes do not block on an interactive migration prompt.

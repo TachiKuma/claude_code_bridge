@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## v6.2.3 (2026-05-18)
+
+### Architecture Hotspot Optimization Release
+
+- **Release Checker Split Into Focused Modules**: the GitHub release checker now keeps the CLI entrypoint small while moving local state, Markdown, GitHub, workflow, and asset checks into dedicated helper modules.
+- **Provider Memory Projection Shared**: Codex, Claude, Gemini, and OpenCode memory projection now share provider-core helpers for projection events, markers, signatures, and bundle materialization while preserving provider-specific behavior.
+- **Startup Update Flow Simplified**: startup update handling is split into state, refresh, and flow modules so update checks and install refresh logic are easier to review and test.
+- **Storage Classification Boundary Extracted**: provider-home cleanup classification now has a dedicated module with direct tests for provider precedence and unknown-provider handling.
+- **Architecture Plan Captured**: the optimization roadmap, decisions, and post-phase Architec results are recorded under `plans/architecture-optimization/`.
+
 ## v6.2.2 (2026-05-18)
 
 ### Codex Managed Home Migration Prompt Hotfix
