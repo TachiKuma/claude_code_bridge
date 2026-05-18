@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Every_Model_Controllable-CF1322?style=for-the-badge" alt="Every Model Controllable">
 </p>
 
-[![Version](https://img.shields.io/badge/version-6.2.1-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-6.2.2-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 **English** | [Chinese](README_zh.md)
@@ -74,10 +74,10 @@ Build project-local teams with roles, pane layout, provider state, worktree isol
 <details>
 <summary><b>Latest release highlights</b></summary>
 
-- **Inherited `ccb_config` skill added**: Claude and Codex installs now include a CCB-owned skill for designing `.ccb/ccb.config` and team memory.
-- **Inherited skills moved under `inherit_skills/`**: CCB-owned skills are inherited automatically, while optional `useful_tools/` remain user-installable.
-- **Ask guidance is shorter**: CCB injects concise English reply guidance, avoids repeating nested-routing instructions in every ask body, and recognizes more explicit-output requests.
-- **Memory routing is clearer**: `ccb_config` role memory favors direct owner-to-next-owner handoffs and separate root work packages for parallel chains.
+- **Managed Codex no longer stops on migration prompts**: CCB disables Codex `external_migration` only inside managed Codex homes.
+- **Inherited Codex config is preserved**: source-home model, API, and feature settings still carry forward; the managed-home override only prevents the interactive migration prompt.
+- **Fallback config copy is covered**: even when TOML parsing is unavailable, copied managed Codex config receives the external migration override.
+- **Inherited `ccb_config` remains available**: Claude and Codex installs keep the CCB config-design skill introduced in v6.2.1.
 
 See [Release Notes](#release-notes) for the full history.
 
@@ -339,6 +339,15 @@ Thanks to the [Linux.do community](https://linux.do) for testing, feedback, and 
 Historical note: older release notes below may mention `askd`, legacy flags, or removed commands. Those references are kept only as changelog history and do not redefine the current CLI surface.
 
 <details open>
+<summary><b>v6.2.2</b> - Codex Managed Home Migration Prompt Hotfix</summary>
+
+- Disables `[features].external_migration` inside managed Codex homes so panes do not block on an interactive migration prompt.
+- Preserves inherited Codex source-home config, model/API settings, and other feature flags.
+- Adds coverage for parsed TOML inheritance and fallback copy behavior when TOML parsing is unavailable.
+
+</details>
+
+<details>
 <summary><b>v6.2.1</b> - Inherited CCB Config Skill Release</summary>
 
 - Adds inherited Claude and Codex `ccb_config` skills for designing `.ccb/ccb.config`, choosing agent roles/providers/worktree layout, and updating shared plus per-agent memory.

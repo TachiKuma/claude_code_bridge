@@ -41,6 +41,7 @@ _CODEX_PLUGIN_REQUIRED_RELATIVE_PATHS = (
     Path('.agents') / 'skills',
     Path('plugins'),
 )
+_MANAGED_CODEX_DISABLED_FEATURES = ('external_migration',)
 
 
 @dataclass(frozen=True)
@@ -76,7 +77,12 @@ def materialize_codex_home_config(
         _write_codex_api_authority_config(target_config, authority, source_config=source_config)
     elif _inherits_config(profile) and _inherits_api(profile) and _source_config_valid(source_config):
         if source_config.is_file():
-            _sync_file(source_config, target_config)
+            payload = _read_source_config_payload(source_config)
+            if payload:
+                _write_managed_codex_config(target_config, payload)
+            else:
+                _sync_file(source_config, target_config)
+                _append_managed_codex_feature_overrides(target_config)
         else:
             _write_managed_config_stub(target_config)
     else:
@@ -199,6 +205,25 @@ def _write_managed_config_stub(target: Path) -> None:
     target.write_text('# ccb agent-local codex config\n', encoding='utf-8')
 
 
+def _write_managed_codex_config(target: Path, payload: dict[str, object]) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    sanitized = _disable_interactive_migration_features(payload)
+    target.write_text(_render_toml_document(sanitized), encoding='utf-8')
+
+
+def _append_managed_codex_feature_overrides(target: Path) -> None:
+    if not target.is_file():
+        return
+    try:
+        text = target.read_text(encoding='utf-8')
+    except Exception:
+        return
+    lines = [text.rstrip(), '', '[features]']
+    for feature_name in _MANAGED_CODEX_DISABLED_FEATURES:
+        lines.append(f'{feature_name} = false')
+    target.write_text('\n'.join(lines).lstrip('\n') + '\n', encoding='utf-8')
+
+
 def _managed_codex_config_payload(source_config: Path, *, authority: CodexApiAuthority) -> dict[str, object]:
     payload = {'model_provider': authority.provider_id}
     inherited_payload = _strip_route_authority(_read_source_config_payload(source_config))
@@ -212,7 +237,17 @@ def _managed_codex_config_payload(source_config: Path, *, authority: CodexApiAut
             'base_url': authority.base_url,
         }
     }
-    return payload
+    return _disable_interactive_migration_features(payload)
+
+
+def _disable_interactive_migration_features(payload: dict[str, object]) -> dict[str, object]:
+    sanitized = _clone_mapping(payload)
+    raw_features = sanitized.get('features')
+    features = dict(raw_features) if isinstance(raw_features, dict) else {}
+    for feature_name in _MANAGED_CODEX_DISABLED_FEATURES:
+        features[feature_name] = False
+    sanitized['features'] = features
+    return sanitized
 
 
 def _import_optional_toml_reader():

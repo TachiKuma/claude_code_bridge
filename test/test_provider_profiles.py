@@ -136,6 +136,39 @@ def test_materialize_codex_profile_copies_inherited_assets(tmp_path: Path, monke
     assert (runtime_home / 'sessions').is_dir()
 
 
+def test_materialize_codex_profile_disables_external_migration_prompt(tmp_path: Path, monkeypatch) -> None:
+    project_root = tmp_path / 'repo'
+    source_home = tmp_path / 'system-codex-home'
+    source_home.mkdir(parents=True, exist_ok=True)
+    (source_home / 'config.toml').write_text(
+        '\n'.join(
+            [
+                'model = "gpt-5.5"',
+                '',
+                '[features]',
+                'external_migration = true',
+                'memories = true',
+                '',
+            ]
+        ),
+        encoding='utf-8',
+    )
+    monkeypatch.setenv('CODEX_HOME', str(source_home))
+
+    profile = materialize_provider_profile(
+        layout=PathLayout(project_root),
+        spec=_spec('agent1', provider_profile=ProviderProfileSpec(mode='isolated')),
+        workspace_path=project_root,
+    )
+
+    config_text = (Path(profile.runtime_home or '') / 'config.toml').read_text(encoding='utf-8')
+    assert 'model = "gpt-5.5"' in config_text
+    assert '[features]' in config_text
+    assert 'memories = true' in config_text
+    assert 'external_migration = false' in config_text
+    assert 'external_migration = true' not in config_text
+
+
 def test_materialize_codex_home_config_falls_back_to_marked_copy_when_symlink_fails(tmp_path: Path, monkeypatch) -> None:
     source_home = tmp_path / 'system-codex-home'
     target_home = tmp_path / 'managed-codex-home'

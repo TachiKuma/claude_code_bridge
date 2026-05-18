@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## v6.2.2 (2026-05-18)
+
+### Codex Managed Home Migration Prompt Hotfix
+
+- **Codex External Migration Prompt Disabled In Managed Homes**: managed Codex `config.toml` now forces `[features].external_migration = false` so managed panes do not stop on an interactive migration prompt.
+- **Inherited Config Preserved**: source-home Codex config, model/API settings, and existing feature flags are still inherited; only the managed-home external migration prompt is disabled.
+- **Fallback Copy Path Hardened**: when TOML parsing is unavailable, the copied managed config still gets a managed `[features]` override for `external_migration = false`.
+
 ## v6.2.1 (2026-05-18)
 
 ### Inherited CCB Config Skill Release

@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/模型皆可控-CF1322?style=for-the-badge" alt="模型皆可控">
 </p>
 
-[![Version](https://img.shields.io/badge/version-6.2.1-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-6.2.2-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 [English](README.md) | **中文**
@@ -74,10 +74,10 @@
 <details>
 <summary><b>最新版本亮点</b></summary>
 
-- **新增继承式 `ccb_config` skill**：Claude 和 Codex 安装现在会继承 CCB 自带的配置设计 skill，用于设计 `.ccb/ccb.config` 和团队记忆。
-- **继承式 skill 统一到 `inherit_skills/`**：CCB 自带 skill 自动继承，`useful_tools/` 保持为用户按需安装的可选工具。
-- **Ask guidance 更短**：CCB 注入简洁英文回复指引，不再给每个 ask body 重复 nested-routing 说明，并识别更多显式完整输出要求。
-- **记忆路由更清晰**：`ccb_config` 角色记忆示例强调 owner-to-next-owner 直接交接，以及并行链路使用独立 root work package。
+- **Managed Codex 不再卡在迁移提示**：CCB 只在托管 Codex home 里禁用 Codex `external_migration`。
+- **保留继承的 Codex 配置**：source-home 的 model、API 和其他 feature 设置仍会继承；managed-home override 只阻止交互式迁移提示。
+- **Fallback config copy 也覆盖**：即使 TOML parser 不可用，复制到 managed Codex home 的配置也会追加 external migration override。
+- **继承式 `ccb_config` 保持可用**：Claude 和 Codex 安装继续包含 v6.2.1 新增的 CCB 配置设计 skill。
 
 完整历史见 [新版本记录](#新版本记录)。
 
@@ -330,6 +330,15 @@ ccb reinstall
 历史说明：下面较旧的发布记录里仍可能出现 `askd`、旧 flag 或已移除命令。这些内容仅作为 changelog 历史保留，不代表当前 CLI 入口。
 
 <details open>
+<summary><b>v6.2.2</b> - Codex Managed Home Migration Prompt Hotfix</summary>
+
+- 在 managed Codex home 内禁用 `[features].external_migration`，避免 pane 被交互式 migration prompt 卡住。
+- 保留继承的 Codex source-home config、model/API 设置和其他 feature flags。
+- 增加 parsed TOML 继承和 TOML parser 不可用时 fallback copy 行为的测试覆盖。
+
+</details>
+
+<details>
 <summary><b>v6.2.1</b> - Inherited CCB Config Skill Release</summary>
 
 - 新增继承式 Claude / Codex `ccb_config` skill，用于设计 `.ccb/ccb.config`、选择 agent 角色/provider/worktree layout，并更新共享和 per-agent memory。
