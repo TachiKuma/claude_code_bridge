@@ -456,6 +456,7 @@ def test_project_keeper_uses_builtin_default_when_config_missing(tmp_path: Path,
 
     loaded_config = load_project_config(project_root)
     assert loaded_config.source_path is None
+    assert loaded_config.source_kind == 'builtin_default'
     assert loaded_config.used_default is True
     assert (project_root / '.ccb' / 'ccb.config').exists() is False
     assert len(spawn_calls) == 1

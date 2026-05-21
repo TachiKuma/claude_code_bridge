@@ -5,7 +5,13 @@ from pathlib import Path
 
 from agents.models import normalize_agent_name, parse_layout_spec
 
-from ..common import ConfigLoadResult, ConfigValidationError
+from ..common import (
+    CONFIG_SOURCE_BUILTIN_DEFAULT,
+    CONFIG_SOURCE_PROJECT,
+    CONFIG_SOURCE_USER,
+    ConfigLoadResult,
+    ConfigValidationError,
+)
 from ..defaults import build_default_project_config
 from ..parsing import validate_project_config
 from ..paths import project_config_path, user_default_config_path
@@ -238,6 +244,7 @@ def load_project_config(project_root: Path) -> ConfigLoadResult:
         return ConfigLoadResult(
             config=validate_project_config(_load_config_document(project_path), source_path=project_path),
             source_path=project_path,
+            source_kind=CONFIG_SOURCE_PROJECT,
             used_default=False,
         )
     user_default_path = user_default_config_path()
@@ -245,11 +252,13 @@ def load_project_config(project_root: Path) -> ConfigLoadResult:
         return ConfigLoadResult(
             config=validate_project_config(_load_config_document(user_default_path), source_path=user_default_path),
             source_path=user_default_path,
-            used_default=True,
+            source_kind=CONFIG_SOURCE_USER,
+            used_default=False,
         )
     return ConfigLoadResult(
         config=build_default_project_config(),
         source_path=None,
+        source_kind=CONFIG_SOURCE_BUILTIN_DEFAULT,
         used_default=True,
     )
 
