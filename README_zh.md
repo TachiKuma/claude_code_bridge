@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/模型皆可控-CF1322?style=for-the-badge" alt="模型皆可控">
 </p>
 
-[![Version](https://img.shields.io/badge/version-7.0.0-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-7.0.1-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 [English](README.md) | **中文**
@@ -74,9 +74,9 @@
 <details>
 <summary><b>最新版本亮点</b></summary>
 
+- **Sidebar release 打包热修复**：sidebar artifact checksum 现在会从 `sha256sum` fallback 到 `shasum -a 256` 或 `python3`，Linux/macOS 都可生成。
 - **原生项目侧边栏**：顶部 agent 行展示真实 provider pane/runtime 活动状态，底部 Comms 专注于 CCB ask/job 跟踪和恢复。
 - **Window topology 配置**：`version = 2` `[windows]` 配置可挂载多个命名 tmux window 和 sidebar；旧 compact/hybrid 配置仍是单业务窗口并保留 `cmd` 语义。
-- **终端和安装兼容性增强**：Ghostty/tmux 兼容、tmux 环境/mouse 行为、release sidebar 二进制打包和 source wrapper 处理都已加固。
 
 完整历史见 [新版本记录](#新版本记录)。
 
@@ -329,6 +329,13 @@ ccb reinstall
 历史说明：下面较旧的发布记录里仍可能出现 `askd`、旧 flag 或已移除命令。这些内容仅作为 changelog 历史保留，不代表当前 CLI 入口。
 
 <details open>
+<summary><b>v7.0.1</b> - Sidebar Release Packaging Hotfix</summary>
+
+- 修复 macOS 上 sidebar artifact checksum 生成：会依次使用 `sha256sum`、`shasum -a 256` 或 `python3`，恢复 v7 release line 的 GitHub Tests。
+
+</details>
+
+<details>
 <summary><b>v7.0.0</b> - Native Sidebar Control Release</summary>
 
 - 新增 Rust `ccb-agent-sidebar` 原生侧边栏 helper，支持每个 window 的 project view、固定灰色侧边栏身份、彩色 provider/runtime 活动状态，以及鼠标/键盘 focus 切换。

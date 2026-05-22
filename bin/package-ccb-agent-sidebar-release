@@ -8,6 +8,35 @@ STAGE_DIR="$REPO_ROOT/dist/$ARTIFACT_NAME"
 OUT_TAR="$REPO_ROOT/dist/$ARTIFACT_NAME.tar.gz"
 OUT_SHA="$OUT_TAR.sha256"
 
+write_sha256_file() {
+  local path="$1"
+  local output="$2"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$path" > "$output"
+    return
+  fi
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$path" > "$output"
+    return
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$path" > "$output" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+digest = hashlib.sha256(path.read_bytes()).hexdigest()
+print(f"{digest}  {path}")
+PY
+    return
+  fi
+  echo "ERROR: no sha256 checksum tool found; install sha256sum, shasum, or python3" >&2
+  exit 1
+}
+
 if [[ ! -x "$SOURCE_BIN" ]]; then
   echo "ERROR: missing executable $SOURCE_BIN" >&2
   exit 1
@@ -22,6 +51,6 @@ mkdir -p "$STAGE_DIR/bin"
 cp -f "$SOURCE_BIN" "$STAGE_DIR/bin/ccb-agent-sidebar"
 chmod +x "$STAGE_DIR/bin/ccb-agent-sidebar"
 tar -C "$REPO_ROOT/dist" -czf "$OUT_TAR" "$ARTIFACT_NAME"
-sha256sum "$OUT_TAR" > "$OUT_SHA"
+write_sha256_file "$OUT_TAR" "$OUT_SHA"
 echo "Packaged $OUT_TAR"
 echo "Checksum $OUT_SHA"

@@ -39,7 +39,10 @@ def test_sidebar_package_script_stages_release_artifact() -> None:
     assert 'STAGE_DIR="$REPO_ROOT/dist/$ARTIFACT_NAME"' in text
     assert 'CCB_AGENT_SIDEBAR_WRAPPER' in text
     assert 'tar -C "$REPO_ROOT/dist" -czf "$OUT_TAR" "$ARTIFACT_NAME"' in text
-    assert 'sha256sum "$OUT_TAR" > "$OUT_SHA"' in text
+    assert 'write_sha256_file "$OUT_TAR" "$OUT_SHA"' in text
+    assert 'sha256sum "$path" > "$output"' in text
+    assert 'shasum -a 256 "$path" > "$output"' in text
+    assert 'hashlib.sha256' in text
 
 
 def test_sidebar_build_script_executes_copy_path_with_fake_cargo(tmp_path: Path) -> None:
@@ -122,7 +125,11 @@ def test_sidebar_package_script_executes_artifact_dry_run(tmp_path: Path) -> Non
     checksum = repo / 'dist' / 'ccb-agent-sidebar-linux-x86_64.tar.gz.sha256'
     assert artifact.is_file()
     assert checksum.is_file()
-    assert 'ccb-agent-sidebar-linux-x86_64.tar.gz' in checksum.read_text(encoding='utf-8')
+    checksum_text = checksum.read_text(encoding='utf-8').strip()
+    checksum_parts = checksum_text.split()
+    assert len(checksum_parts) == 2
+    assert len(checksum_parts[0]) == 64
+    assert checksum_parts[1].endswith('ccb-agent-sidebar-linux-x86_64.tar.gz')
     listing = subprocess.run(
         ['tar', '-tzf', str(artifact)],
         stdout=subprocess.PIPE,
@@ -233,5 +240,5 @@ def test_sidebar_release_workflow_publishes_linux_artifact() -> None:
 def test_release_artifacts_workflow_sets_up_rust_for_sidebar_build() -> None:
     text = Path('.github/workflows/release-artifacts.yml').read_text(encoding='utf-8')
 
-    assert 'default: "v7.0.0"' in text
+    assert 'default: "v7.0.1"' in text
     assert 'uses: dtolnay/rust-toolchain@stable' in text

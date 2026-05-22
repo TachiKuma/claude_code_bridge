@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Every_Model_Controllable-CF1322?style=for-the-badge" alt="Every Model Controllable">
 </p>
 
-[![Version](https://img.shields.io/badge/version-7.0.0-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-7.0.1-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 **English** | [Chinese](README_zh.md)
@@ -74,9 +74,9 @@ Build project-local teams with roles, pane layout, provider state, worktree isol
 <details>
 <summary><b>Latest release highlights</b></summary>
 
+- **Sidebar release packaging hotfix**: sidebar artifact checksums now work on Linux and macOS by falling back from `sha256sum` to `shasum -a 256` or `python3`.
 - **Native project sidebar**: top agent rows reflect real provider pane/runtime activity, while the bottom Comms section stays focused on CCB ask/job tracking and recovery.
 - **Window topology config**: `version = 2` `[windows]` configs mount multiple named tmux windows with sidebars, while legacy compact/hybrid configs remain one business window and keep `cmd` semantics.
-- **Terminal and install hardening**: Ghostty/tmux compatibility, tmux environment/mouse behavior, release sidebar binary packaging, and source-wrapper handling are tightened for normal installs.
 
 See [Release Notes](#release-notes) for the full history.
 
@@ -352,6 +352,13 @@ Thanks to the [Linux.do community](https://linux.do) for testing, feedback, and 
 Historical note: older release notes below may mention `askd`, legacy flags, or removed commands. Those references are kept only as changelog history and do not redefine the current CLI surface.
 
 <details open>
+<summary><b>v7.0.1</b> - Sidebar Release Packaging Hotfix</summary>
+
+- Fixes sidebar artifact checksum generation on macOS by using `sha256sum`, `shasum -a 256`, or `python3`, restoring GitHub Tests for the v7 release line.
+
+</details>
+
+<details>
 <summary><b>v7.0.0</b> - Native Sidebar Control Release</summary>
 
 - Adds the native Rust `ccb-agent-sidebar` helper with per-window project view, fixed gray sidebar identity, colored provider/runtime activity status, and mouse/keyboard focus switching.

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v7.0.1 (2026-05-23)
+
+### Sidebar Release Packaging Hotfix
+
+- **macOS Checksum Portability Fixed**: `bin/package-ccb-agent-sidebar-release` now writes sidebar artifact SHA256 files with `sha256sum`, macOS `shasum -a 256`, or a `python3` fallback, restoring macOS GitHub Tests for the v7 release line.
+
 ## v7.0.0 (2026-05-23)
 
 ### Native Sidebar Control Release
