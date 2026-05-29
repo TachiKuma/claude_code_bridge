@@ -266,6 +266,17 @@ Phase 6b first-step status:
   updates false. If the existing start flow writes a new-agent runtime record
   before failing, that record is explicit new-agent residue and preserved agents
   must remain unchanged.
+- Added `publish_additive_reload_transaction(...)` as the signature/publish
+  handoff helper. It blocks unless namespace patch is applied and runtime mounts
+  are mounted/no-op, then updates the current lease and mounted lifecycle config
+  signature before publishing the service graph.
+- Lease signature update uses a narrow current-holder API with pid,
+  daemon_instance_id, and generation checks. Lifecycle signature update also
+  checks mounted phase, owner, daemon instance, and generation.
+- Publish remains an internal helper only. If namespace patch, runtime mount,
+  signature handoff, or graph publish fails, the current app graph/config remain
+  unchanged; signature writes are rolled back to the old config signature on
+  post-write failures when the current holder/generation still match.
 - Non-dry-run `project_reload_config` and `ccb reload` remain rejected.
 
 Deliverables:

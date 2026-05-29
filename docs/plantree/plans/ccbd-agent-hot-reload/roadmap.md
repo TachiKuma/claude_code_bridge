@@ -57,20 +57,24 @@ Date: 2026-05-29
   start-flow/runtime authority path only for namespace-patch-created agent
   panes, proves preserved runtime authority is unchanged, and remains
   disconnected from non-dry-run reload.
+- Added the Phase 6b signature/publish transaction helper: after successful
+  namespace patch and runtime mount results, it updates the current lease and
+  mounted lifecycle config signature with holder/generation checks, then
+  publishes the new service graph.
 
 ## In Progress
 
 - Phase 6b additive mutating reload remains in progress. Next work is
-  lease/lifecycle signature updates and final graph publish.
+  wiring the internal helpers into an explicit non-dry-run apply path behind
+  the existing rejection gate.
 
 ## Next
 
-1. Add lease/lifecycle signature update and graph publish handoff tests.
-2. Expose additive mutating reload: view-only, add agent, and add window.
-3. Expose dynamic unload for idle and bounded-draining agents.
-4. Expose replacement only after unload semantics are safe; busy replacement
+1. Expose additive mutating reload: view-only, add agent, and add window.
+2. Expose dynamic unload for idle and bounded-draining agents.
+3. Expose replacement only after unload semantics are safe; busy replacement
    remains pending with explicit bounds.
-5. Run the automatic and manual matrix in
+4. Run the automatic and manual matrix in
     [topics/test-matrix.md](topics/test-matrix.md).
 
 ## Deferred

@@ -82,6 +82,20 @@ Date: 2026-05-29
   - partial start-flow failure may leave new-agent authority residue, but
     diagnostics must mark graph and lease/lifecycle publish false;
   - non-dry-run reload remains rejected.
+- Phase 6b signature/publish transaction helper:
+  - successful transaction updates lease config signature, mounted lifecycle
+    config signature, namespace epoch, then publishes the new service graph;
+  - app-visible graph version, config identity, registry, and ping config
+    signature come from the new graph only after publish;
+  - namespace patch failure blocks before signature writes and publish;
+  - runtime mount failure, including partial new-agent runtime residue, blocks
+    before signature writes and publish;
+  - lease/lifecycle signature failure keeps the current graph/config visible and
+    rolls back any signature write that already happened;
+  - stale lease holder, daemon instance, or generation blocks signature handoff;
+  - graph publish failure after signature writes rolls signatures back and keeps
+    graph old;
+  - non-dry-run reload remains rejected.
 - Bounded drain/retire state:
   - idle intent transitions immediately to `idle_ready` / `retiring`;
   - busy intent remains `waiting` / `draining` until timeout;

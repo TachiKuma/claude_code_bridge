@@ -211,10 +211,14 @@ Failure during lease/lifecycle signature update:
 
 - do not publish a graph;
 - return failure with old graph active;
+- if a signature write already happened, roll lease/lifecycle config signatures
+  back to the old graph signature before returning failure when holder and
+  generation still match;
 - new panes/runtime records may exist as residue or partially mounted new
   agents, but they are not part of the published desired graph until retry
   succeeds;
-- diagnostics must include whether lease or lifecycle write failed.
+- diagnostics must include whether signature rollback was attempted and
+  completed.
 
 Failure after graph publish:
 
@@ -318,6 +322,32 @@ Current status:
   new agent. That residue remains outside the published desired graph until the
   later lease/lifecycle and graph-publish handoff succeeds.
 
-Remaining Phase 6b risk is the signature handoff: lease/lifecycle config
-signature updates and service graph publish still need a transaction test before
-non-dry-run `ccb reload` can be enabled.
+## Phase 6b Signature Publish Helper
+
+`publish_additive_reload_transaction(...)` is now the internal handoff after
+namespace patch and runtime mounts. It is still not wired into
+`project_reload_config`.
+
+Current status:
+
+- It requires `NamespacePatchApplyResult.status == applied`.
+- It requires runtime mount status `mounted` or `noop`; partial/failed runtime
+  residue blocks publish and is echoed in diagnostics.
+- It updates the lease config signature through a narrow
+  `MountManager.update_config_signature(...)` API that checks current pid,
+  daemon instance id, and generation instead of replaying startup
+  `mark_mounted(...)`.
+- It updates mounted lifecycle config signature only when lifecycle is mounted
+  and owner pid, daemon instance id, and generation still match the current
+  daemon.
+- It publishes the target service graph only after both signature writes
+  succeed. If publish itself fails, it rolls signatures back to the old graph
+  signature and leaves the old app graph active.
+- Tests cover successful publish, namespace patch failure, runtime mount
+  failure with new-agent residue, signature handoff failure with rollback,
+  stale lease generation, publish failure with rollback, and continued
+  non-dry-run reload rejection.
+
+Remaining Phase 6b work is wiring these internal helpers into a single explicit
+non-dry-run additive apply path while preserving the existing rejection gate
+until the end-to-end apply sequence is reviewed.
