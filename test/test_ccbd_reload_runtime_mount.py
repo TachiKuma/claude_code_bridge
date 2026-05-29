@@ -392,15 +392,19 @@ def test_additive_runtime_mount_blocks_foreign_namespace_project(tmp_path: Path)
     assert result.diagnostics['lease_or_lifecycle_written'] is False
 
 
-def test_project_reload_non_dry_run_still_rejected_after_runtime_mount_helper(tmp_path: Path) -> None:
-    project_root = _project(tmp_path / 'repo-runtime-mount-reject', BASE_CONFIG)
+def test_project_reload_non_dry_run_no_change_blocks_after_runtime_mount_helper(tmp_path: Path) -> None:
+    project_root = _project(tmp_path / 'repo-runtime-mount-block-no-change', BASE_CONFIG)
     app = CcbdApp(project_root, clock=lambda: NOW, pid=4242)
+    old_graph = app.service_graph
 
-    with pytest.raises(ValueError, match='dry_run=true'):
-        app.socket_server._handlers['project_reload_config']({'dry_run': False})
+    payload = app.socket_server._handlers['project_reload_config']({'dry_run': False})
 
-    assert app.service_graph.version == 1
-    assert app.control_plane_metrics.last_reload_duration_s is None
+    assert payload['status'] == 'blocked'
+    assert payload['stage'] == 'plan'
+    assert payload['plan_class'] == 'no_change'
+    assert payload['diagnostics']['graph_published'] is False
+    assert app.service_graph is old_graph
+    assert app.control_plane_metrics.last_reload_duration_s is not None
 
 
 def _build_graph(app: CcbdApp, config_text: str, *, version: int):

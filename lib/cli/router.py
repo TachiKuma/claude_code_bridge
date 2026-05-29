@@ -63,6 +63,7 @@ def print_start_help(*, file=None) -> None:
               ccb -s               Safe start. Disable CLI auto-permission override.
               ccb -n               Rebuild runtime state while preserving config and managed agent history.
               ccb clear [agent...]  Send provider-native /clear to managed agent panes.
+              ccb reload            Apply a safe additive config reload, or reject with diagnostics.
               ccb reload --dry-run  Validate and plan config reload without mutation.
               ccb kill             Stop the current project's background runtime.
               ccb kill -f          Force cleanup project-owned runtime residue.
@@ -322,14 +323,16 @@ _COMMAND_HELP = {
           ccb config validate   Validate `.ccb/ccb.config` for the current project.
     """,
     "reload": """
-        usage: ccb reload --dry-run
+        usage: ccb reload [--dry-run]
 
-        Reload dry-run:
+        Reload:
+          ccb reload             Apply only safe additive changes: view-only, append-only add_agent, or add_window.
           ccb reload --dry-run   Ask the mounted daemon to validate `.ccb/ccb.config` and return a no-mutation reload plan.
 
-        Phase 3 only:
-          - Non-dry-run reload is rejected.
-          - The daemon does not mutate tmux, runtime authority, service graph, lifecycle, or config watchers.
+        Phase 6b boundary:
+          - remove_agent, replace_agent, move_agent, and arbitrary layout changes are rejected.
+          - No config watch is started; unload/replace and kill/reflow of existing panes are not implemented.
+          - Non-dry-run output includes stage, plan_class, graph version, diagnostics, and any residue.
     """,
 }
 

@@ -147,108 +147,6 @@ def render_ps(payload: Mapping[str, object]) -> tuple[str, ...]:
     return tuple(lines)
 
 
-def render_reload(payload: Mapping[str, object]) -> tuple[str, ...]:
-    status = str(payload.get('status') or 'unknown')
-    lines = [
-        f'reload_status: {status}',
-        f'dry_run: {str(bool(payload.get("dry_run"))).lower()}',
-        f'mutation_enabled: {str(bool(payload.get("mutation_enabled"))).lower()}',
-        f'plan_class: {payload.get("plan_class")}',
-        f'safe_to_apply: {str(bool(payload.get("safe_to_apply"))).lower()}',
-        f'future_safe_to_apply: {str(bool(payload.get("future_safe_to_apply"))).lower()}',
-        f'old_config_signature: {payload.get("old_config_signature")}',
-        f'new_config_signature: {payload.get("new_config_signature")}',
-    ]
-    for operation in tuple(payload.get('operations') or ()):
-        if isinstance(operation, Mapping):
-            lines.append(f'reload_operation: {_operation_line(operation)}')
-        else:
-            lines.append(f'reload_operation: {operation}')
-    for intent in tuple(payload.get('drain_intents') or ()):
-        if isinstance(intent, Mapping):
-            lines.append(f'reload_drain_intent: {_drain_intent_line(intent)}')
-        else:
-            lines.append(f'reload_drain_intent: {intent}')
-    patch_plan = payload.get('namespace_patch_plan')
-    if isinstance(patch_plan, Mapping):
-        lines.extend(_namespace_patch_lines(patch_plan))
-    for reason in tuple(payload.get('reasons') or ()):
-        lines.append(f'reload_reason: {reason}')
-    for warning in tuple(payload.get('warnings') or ()):
-        lines.append(f'reload_warning: {warning}')
-    for error in tuple(payload.get('errors') or ()):
-        lines.append(f'reload_error: {error}')
-    return tuple(lines)
-
-
-def _operation_line(operation: Mapping[str, object]) -> str:
-    fields = [f'op={operation.get("op")}']
-    for key in ('agent', 'window', 'from_window', 'to_window', 'field', 'change'):
-        value = operation.get(key)
-        if value not in (None, ''):
-            fields.append(f'{key}={value}')
-    if operation.get('agents'):
-        fields.append(f'agents={",".join(str(item) for item in tuple(operation.get("agents") or ()))}')
-    if operation.get('fields'):
-        fields.append(f'fields={",".join(str(item) for item in tuple(operation.get("fields") or ()))}')
-    reason = operation.get('reason')
-    if reason:
-        fields.append(f'reason={reason}')
-    return ' '.join(fields)
-
-
-def _drain_intent_line(intent: Mapping[str, object]) -> str:
-    fields = [f'intent_kind={intent.get("intent_kind")}']
-    for key in ('agent', 'initial_phase'):
-        value = intent.get(key)
-        if value not in (None, ''):
-            fields.append(f'{key}={value}')
-    if intent.get('dry_run_only') is not None:
-        fields.append(f'dry_run_only={str(bool(intent.get("dry_run_only"))).lower()}')
-    reason = intent.get('reason')
-    if reason:
-        fields.append(f'reason={reason}')
-    return ' '.join(fields)
-
-
-def _namespace_patch_lines(plan: Mapping[str, object]) -> list[str]:
-    lines = [
-        f'reload_namespace_patch_status: {plan.get("status")}',
-        f'reload_namespace_patch_apply_deferred: {str(bool(plan.get("apply_deferred"))).lower()}',
-    ]
-    for step in tuple(plan.get('steps') or ()):
-        if isinstance(step, Mapping):
-            lines.append(f'reload_namespace_patch_step: {_namespace_patch_step_line(step)}')
-    for blocked in tuple(plan.get('blocked_operations') or ()):
-        if isinstance(blocked, Mapping):
-            lines.append(f'reload_namespace_patch_blocked: {_namespace_patch_blocked_line(blocked)}')
-    return lines
-
-
-def _namespace_patch_step_line(step: Mapping[str, object]) -> str:
-    fields = [f'action={step.get("action")}']
-    for key in ('window', 'agent', 'role', 'slot_key', 'managed_by', 'anchor_agent'):
-        value = step.get(key)
-        if value not in (None, ''):
-            fields.append(f'{key}={value}')
-    reason = step.get('reason')
-    if reason:
-        fields.append(f'reason={reason}')
-    return ' '.join(fields)
-
-
-def _namespace_patch_blocked_line(blocked: Mapping[str, object]) -> str:
-    fields = [f'op={blocked.get("op")}']
-    for key in ('agent', 'window'):
-        value = blocked.get(key)
-        if value not in (None, ''):
-            fields.append(f'{key}={value}')
-    reason = blocked.get('reason')
-    if reason:
-        fields.append(f'reason={reason}')
-    return ' '.join(fields)
-
-
 __all__ = [
     'render_clear',
     'render_cleanup',
@@ -257,6 +155,5 @@ __all__ = [
     'render_kill',
     'render_logs',
     'render_ps',
-    'render_reload',
     'render_start',
 ]

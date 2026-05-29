@@ -19,7 +19,8 @@ Date: 2026-05-29
     and `invalid_config`;
   - `ccb reload --dry-run` renders daemon payloads and returns non-zero for
     invalid-config dry-run results;
-  - non-dry-run reload is rejected.
+  - plain `ccb reload` is not a dry-run and is allowed only for the gated
+    additive classes below.
   - Phase 4 dry-run payloads may include bounded `drain_intents` suggestions
     for `remove_agent` and `replace_agent`, but they remain no-mutation plans
     with `safe_to_apply=false`.
@@ -48,11 +49,11 @@ Date: 2026-05-29
     refresh;
   - document that graph publish is forbidden after any failure before the publish
     step;
-  - document the keeper config-signature race and require a Phase 6b handoff
-    test before non-dry-run reload is enabled;
+  - document the keeper config-signature race and require Phase 6b handoff
+    tests before additive non-dry-run reload can publish;
   - document the before/after pane-id proof required for `preserved_agents`;
-  - keep non-dry-run reload rejected until the narrow apply API has fake-backend
-    tests.
+  - record the historical gate that non-dry-run reload stayed rejected until
+    the narrow apply API had fake-backend tests.
 - Phase 6b namespace additive patch API:
   - `add_window` fake-backend apply creates only the new window, optional
     sidebar pane, and new agent panes;
@@ -66,8 +67,7 @@ Date: 2026-05-29
     remain blocked;
   - patch-plan/topology mismatch is blocked before pane mutation;
   - failures before or during patch return diagnostics with graph/runtime/lease
-    publish flags false;
-  - non-dry-run reload remains rejected.
+    publish flags false.
 - Phase 6b additive runtime mount helper:
   - fake `run_start_flow` receives only `patch_result.agent_panes` new agents
     and explicit `namespace_agent_panes`;
@@ -80,8 +80,7 @@ Date: 2026-05-29
   - start-flow failure does not publish a graph or update lease/lifecycle
     signature;
   - partial start-flow failure may leave new-agent authority residue, but
-    diagnostics must mark graph and lease/lifecycle publish false;
-  - non-dry-run reload remains rejected.
+    diagnostics must mark graph and lease/lifecycle publish false.
 - Phase 6b signature/publish transaction helper:
   - successful transaction updates lease config signature, mounted lifecycle
     config signature, namespace epoch, then publishes the new service graph;
@@ -94,8 +93,7 @@ Date: 2026-05-29
     rolls back any signature write that already happened;
   - stale lease holder, daemon instance, or generation blocks signature handoff;
   - graph publish failure after signature writes rolls signatures back and keeps
-    graph old;
-  - non-dry-run reload remains rejected.
+    graph old.
 - Phase 6b additive apply orchestrator:
   - view-only apply publishes the target graph without real namespace mutation
     or new runtime authority writes;
@@ -107,9 +105,24 @@ Date: 2026-05-29
   - failed namespace patch diagnostics report created window/pane residue;
   - failed runtime mount diagnostics report new-agent runtime authority residue;
   - successful publish leaves app graph/config, lease signature, and lifecycle
-    signature consistent;
-  - `project_reload_config(dry_run=false)` remains rejected and does not invoke
-    the internal orchestrator.
+    signature consistent.
+- Phase 6b user path gate:
+  - `project_reload_config(dry_run=false)` and plain `ccb reload` invoke the
+    additive apply orchestrator;
+  - non-dry-run `view_only_change`, append-only `add_agent`, and `add_window`
+    succeed in focused tests;
+  - `no_change`, `remove_agent`, `replace_agent`, `move_agent`, and arbitrary
+    `layout_change` are rejected or blocked without graph publish;
+  - namespace patch, runtime mount, and publish transaction failures return
+    stage-specific diagnostics and residue while keeping the old graph/config
+    visible;
+  - CLI render/exit-code tests cover non-dry-run success and failed residue
+    output;
+  - plain CLI reload writes a bounded `reload-handoff.json` before RPC submit,
+    and changed-signature daemon apply overwrites it during the transaction;
+    both clear it after success or failure;
+  - after successful non-dry-run publish, `ping('ccbd')` and `project_view`
+    read the new graph/config signature.
 - Bounded drain/retire state:
   - idle intent transitions immediately to `idle_ready` / `retiring`;
   - busy intent remains `waiting` / `draining` until timeout;
@@ -164,11 +177,17 @@ Date: 2026-05-29
   - busy runtime authority is unchanged.
 - Keeper signature continuity:
   - successful reload updates daemon ping payload signature;
-  - keeper `daemon_matches_project_config()` returns true after reload.
+  - keeper `daemon_matches_project_config()` returns true after reload;
+  - during apply, keeper tolerates the exact target-disk/old-daemon signature
+    handoff only for a fresh matching live holder;
+  - expired or wrong-holder handoff records do not bypass drift detection.
 - Project view/sidebar:
   - successful reload invalidates cache;
   - next `project_view` includes new agents/windows;
-  - sidebar refresh signal is sent to managed sidebars.
+  - sidebar refresh control and `r` shortcut submit non-dry-run reload and then
+    refresh project view;
+  - daemon-pushed sidebar refresh remains deferred unless later manual
+    validation proves it is needed.
 - Performance gates:
   - no-op dry-run does not increase steady-state heartbeat work;
   - project-view cache hits remain cache hits;
@@ -208,12 +227,12 @@ Date: 2026-05-29
 - Phase 5 dry-run namespace patch checks:
   - for add-agent/add-window dry-run, inspect `namespace_patch_plan`; it should
     show deferred additive steps and leave panes/runtime state untouched;
-  - run plain `ccb reload` and confirm it is still rejected before any mutation.
+  - run `ccb reload --dry-run` before plain `ccb reload` and confirm the
+    planned class is one of the gated additive classes before mutation.
 - Phase 6+ mutating checks:
-  - before enabling non-dry-run reload, run fake-backend tests for the narrow
-    namespace patch API and verify no `kill-server`, `kill-window`,
-    `reflow_workspace`, or full `ensure_project_namespace` recreation path is
-    called;
+  - keep fake-backend tests for the enabled additive path and verify no
+    `kill-server`, `kill-window`, `reflow_workspace`, or full
+    `ensure_project_namespace` recreation path is called;
   - start a project with two windows and four agents;
   - start a long-running/manual task in `agent2`;
   - edit `.ccb/ccb.config` to add `agent5` to an existing window;

@@ -49,7 +49,7 @@ from cli.services.pend import pend_target
 from cli.services.ping import ping_target
 from cli.services.ps import ps_summary
 from cli.services.queue import queue_target
-from cli.services.reload import reload_config_dry_run
+from cli.services.reload import reload_config
 from cli.services.resubmit import resubmit_message
 from cli.services.retry import retry_attempt
 from cli.services.start import start_agents
@@ -78,7 +78,7 @@ def build_phase2_dispatch_services(**overrides):
         ping_target=ping_target,
         ps_summary=ps_summary,
         queue_target=queue_target,
-        reload_config_dry_run=reload_config_dry_run,
+        reload_config=reload_config,
         render_ack=render_ack,
         render_ask=render_ask,
         render_cancel=render_cancel,

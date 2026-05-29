@@ -3,14 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
-
 from agents.config_loader import load_project_config
 from ccbd.app import CcbdApp
 from ccbd.models import CcbdStartupAgentResult
 from ccbd.reload_apply import run_additive_reload_apply
+from ccbd.reload_handoff import ReloadHandoffStore
 from ccbd.reload_runtime_mount import AdditiveRuntimeMountResult
 from ccbd.services.lifecycle import build_lifecycle
+from ccbd.services.project_namespace import ProjectNamespaceController
 from ccbd.services.project_namespace_runtime import NamespacePatchApplyResult
 from ccbd.services.project_namespace_state import ProjectNamespaceState, ProjectNamespaceStateStore
 from ccbd.start_flow_runtime import StartFlowSummary
@@ -131,6 +131,84 @@ def test_additive_reload_apply_add_agent_success_mounts_then_publishes(tmp_path:
     assert calls[0]['namespace_agent_panes'] == {'agent3': '%3'}
 
 
+def test_additive_reload_apply_add_agent_materializes_tmux_pane_before_mount(
+    tmp_path: Path,
+) -> None:
+    app = _started_app(tmp_path / 'repo-add-agent-real-patch', BASE_CONFIG)
+    backend = _PatchFakeBackend(socket_path=str(app.paths.ccbd_tmux_socket_path))
+    backend.add_window(app.paths.ccbd_tmux_session_name, 'main')
+    backend.sessions[app.paths.ccbd_tmux_session_name][0]['panes'].append('%2')
+    backend.pane_counter = 2
+    _seed_agent_pane(backend, '%1', project_id=app.project_id, window='main', agent='agent1')
+    _seed_agent_pane(backend, '%2', project_id=app.project_id, window='main', agent='agent2')
+    app.project_namespace = ProjectNamespaceController(
+        app.paths,
+        app.project_id,
+        clock=app.clock,
+        backend_factory=lambda socket_path=None: backend,
+    )
+    _seed_runtime(app.runtime_service, 'agent1', pane_id='%1')
+    _seed_runtime(app.runtime_service, 'agent2', pane_id='%2')
+    new_config = _load_config(app.project_root, ADD_AGENT_CONFIG)
+    calls: list[dict[str, object]] = []
+
+    result = run_additive_reload_apply(
+        app,
+        new_config,
+        run_start_flow_fn=_mounting_start_flow(app, calls),
+    )
+
+    assert result.status == 'published'
+    assert result.namespace_patch['agent_panes'] == {'agent3': '%3'}
+    assert result.runtime_mount['runtime_authority_written_agents'] == ['agent3']
+    assert backend.split_calls == [('%2', 'right', 50)]
+    assert backend.pane_options['%3']['@ccb_role'] == 'agent'
+    assert backend.pane_options['%3']['@ccb_slot'] == 'agent3'
+    assert backend.pane_options['%3']['@ccb_window'] == 'main'
+    assert calls[0]['namespace_agent_panes'] == {'agent3': '%3'}
+    assert app.service_graph.registry.get('agent3').pane_id == '%3'
+
+
+def test_additive_reload_apply_writes_bounded_handoff_during_apply_and_clears_after_success(
+    tmp_path: Path,
+) -> None:
+    app = _started_app(tmp_path / 'repo-handoff-success', BASE_CONFIG)
+    new_config = _load_config(app.project_root, ADD_AGENT_CONFIG)
+    seen_handoffs: list[dict[str, object]] = []
+
+    def _patch_with_handoff_probe(**_kwargs):
+        handoff = ReloadHandoffStore(app.paths).load()
+        assert handoff is not None
+        seen_handoffs.append(handoff.to_record())
+        return _namespace_patch_result(agent_panes={'agent3': '%3'})
+
+    result = run_additive_reload_apply(
+        app,
+        new_config,
+        current_namespace=_namespace(app),
+        apply_namespace_patch_fn=_patch_with_handoff_probe,
+        run_start_flow_fn=_mounting_start_flow(app, []),
+    )
+
+    assert result.status == 'published'
+    assert seen_handoffs
+    assert seen_handoffs[0]['old_config_signature'] == result.old_config_signature
+    assert seen_handoffs[0]['target_config_signature'] == result.new_config_signature
+    assert seen_handoffs[0]['daemon_pid'] == app.pid
+    assert seen_handoffs[0]['daemon_instance_id'] == app.daemon_instance_id
+    assert ReloadHandoffStore(app.paths).load() is None
+
+
+def test_additive_reload_apply_clears_handoff_after_blocked_plan(tmp_path: Path) -> None:
+    app = _started_app(tmp_path / 'repo-handoff-blocked', BASE_CONFIG)
+    new_config = _load_config(app.project_root, REMOVE_AGENT_CONFIG)
+
+    result = run_additive_reload_apply(app, new_config, current_namespace=_namespace(app))
+
+    assert result.status == 'blocked'
+    assert ReloadHandoffStore(app.paths).load() is None
+
+
 def test_additive_reload_apply_add_window_success_mounts_new_window_agent_then_publishes(
     tmp_path: Path,
 ) -> None:
@@ -160,6 +238,45 @@ def test_additive_reload_apply_add_window_success_mounts_new_window_agent_then_p
     assert app.config.entry_window == 'main'
     assert app.service_graph.registry.get('agent3').pane_id == '%4'
     assert calls[0]['namespace_agent_panes'] == {'agent3': '%4'}
+
+
+def test_additive_reload_apply_add_window_materializes_tmux_window_before_mount(
+    tmp_path: Path,
+) -> None:
+    app = _started_app(tmp_path / 'repo-add-window-real-patch', BASE_CONFIG)
+    backend = _PatchFakeBackend(socket_path=str(app.paths.ccbd_tmux_socket_path))
+    backend.add_window(app.paths.ccbd_tmux_session_name, 'main')
+    backend.sessions[app.paths.ccbd_tmux_session_name][0]['panes'].append('%2')
+    backend.pane_counter = 2
+    _seed_agent_pane(backend, '%1', project_id=app.project_id, window='main', agent='agent1')
+    _seed_agent_pane(backend, '%2', project_id=app.project_id, window='main', agent='agent2')
+    app.project_namespace = ProjectNamespaceController(
+        app.paths,
+        app.project_id,
+        clock=app.clock,
+        backend_factory=lambda socket_path=None: backend,
+    )
+    _seed_runtime(app.runtime_service, 'agent1', pane_id='%1')
+    _seed_runtime(app.runtime_service, 'agent2', pane_id='%2')
+    new_config = _load_config(app.project_root, ADD_WINDOW_CONFIG)
+    calls: list[dict[str, object]] = []
+
+    result = run_additive_reload_apply(
+        app,
+        new_config,
+        run_start_flow_fn=_mounting_start_flow(app, calls),
+    )
+
+    assert result.status == 'published'
+    assert result.namespace_patch['created_windows'] == ['review']
+    assert result.namespace_patch['sidebar_panes'] == {'review': '%3'}
+    assert result.namespace_patch['agent_panes'] == {'agent3': '%4'}
+    assert ('new-window', '-d', '-t', app.paths.ccbd_tmux_session_name, '-n', 'review') == backend.tmux_calls[1][:6]
+    assert backend.split_calls == [('%3', 'right', 85)]
+    assert backend.pane_options['%3']['@ccb_role'] == 'sidebar'
+    assert backend.pane_options['%4']['@ccb_slot'] == 'agent3'
+    assert calls[0]['namespace_agent_panes'] == {'agent3': '%4'}
+    assert app.service_graph.registry.get('agent3').pane_id == '%4'
 
 
 def test_additive_reload_apply_blocks_non_additive_plan_without_building_target_graph(tmp_path: Path) -> None:
@@ -298,14 +415,243 @@ def test_additive_reload_apply_publish_transaction_failure_keeps_old_graph(tmp_p
     assert app.lifecycle_store.load().config_signature == old_lifecycle['config_signature']
 
 
-def test_project_reload_non_dry_run_still_rejected_after_apply_orchestrator(tmp_path: Path) -> None:
-    app = _started_app(tmp_path / 'repo-reject', BASE_CONFIG)
+def test_project_reload_non_dry_run_view_only_publishes_and_refreshes_graph_views(
+    tmp_path: Path,
+) -> None:
+    app = _started_app(tmp_path / 'repo-view-handler', VIEW_CONFIG)
+    old_signature = app.config_identity['config_signature']
+    old_view = app.socket_server._handlers['project_view']({'schema_version': 1})
+    assert old_view['view']['namespace']['sidebar']['view']['comms_limit'] == 4
+    _project(app.project_root, VIEW_CONFIG_CHANGED)
 
-    with pytest.raises(ValueError, match='dry_run=true'):
-        app.socket_server._handlers['project_reload_config']({'dry_run': False})
+    payload = app.socket_server._handlers['project_reload_config']({'dry_run': False})
 
-    assert app.service_graph.version == 1
-    assert app.control_plane_metrics.last_reload_duration_s is None
+    assert payload['status'] == 'published'
+    assert payload['dry_run'] is False
+    assert payload['mutation_enabled'] is True
+    assert payload['plan_class'] == 'view_only_change'
+    assert payload['stage'] == 'publish_transaction'
+    assert payload['old_graph_version'] == 1
+    assert payload['target_graph_version'] == 2
+    assert payload['published_graph_version'] == 2
+    assert payload['old_config_signature'] == old_signature
+    assert payload['new_config_signature'] == old_signature
+    assert payload['warnings'] == []
+    assert payload['diagnostics']['graph_published'] is True
+    assert payload['diagnostics']['project_view_cache_invalidated'] is True
+    assert payload['diagnostics']['sidebar_refresh_signal_sent'] is False
+    assert app.service_graph.version == 2
+    assert app.config.sidebar_view.comms_limit == 5
+    assert app.mount_manager.load_state().config_signature == app.config_identity['config_signature']
+    assert app.lifecycle_store.load().config_signature == app.config_identity['config_signature']
+
+    ping = app.socket_server._handlers['ping']({'target': 'ccbd'})
+    assert ping['config_signature'] == app.config_identity['config_signature']
+    assert ping['diagnostics']['service_graph_version'] == 2
+    assert ping['known_agents'] == ['agent1', 'agent2']
+    view = app.socket_server._handlers['project_view']({'schema_version': 1})
+    assert view['view']['namespace']['sidebar']['view']['comms_limit'] == 5
+
+
+def test_project_reload_non_dry_run_add_agent_publishes_after_additive_stages(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    app = _started_app(tmp_path / 'repo-add-agent-handler', BASE_CONFIG)
+    _project(app.project_root, ADD_AGENT_CONFIG)
+    monkeypatch.setattr(
+        'ccbd.reload_apply_service.apply_namespace_patch',
+        lambda *_args, **_kwargs: _namespace_patch_result(agent_panes={'agent3': '%3'}),
+    )
+    monkeypatch.setattr(
+        'ccbd.reload_apply_service.run_runtime_mount',
+        lambda *_args, **_kwargs: AdditiveRuntimeMountResult(
+            status='mounted',
+            requested_agents=('agent3',),
+            mounted_agents=('agent3',),
+            runtime_authority_written_agents=('agent3',),
+            preserved_runtime_unchanged_agents=('agent1', 'agent2'),
+        ),
+    )
+
+    payload = app.socket_server._handlers['project_reload_config']({'dry_run': False})
+
+    assert payload['status'] == 'published'
+    assert payload['plan_class'] == 'add_agent'
+    assert {item['op'] for item in payload['operations']} == {'add_agent'}
+    assert payload['namespace_patch']['agent_panes'] == {'agent3': '%3'}
+    assert payload['runtime_mount']['runtime_authority_written_agents'] == ['agent3']
+    assert payload['diagnostics']['graph_published'] is True
+    assert app.service_graph.version == 2
+    assert app.config_identity == app.service_graph.config_identity
+    assert app.mount_manager.load_state().config_signature == app.config_identity['config_signature']
+    ping = app.socket_server._handlers['ping']({'target': 'ccbd'})
+    assert ping['known_agents'] == ['agent1', 'agent2', 'agent3']
+    assert ping['config_signature'] == app.config_identity['config_signature']
+
+
+def test_project_reload_non_dry_run_add_window_publishes_after_additive_stages(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    app = _started_app(tmp_path / 'repo-add-window-handler', BASE_CONFIG)
+    _project(app.project_root, ADD_WINDOW_CONFIG)
+    monkeypatch.setattr(
+        'ccbd.reload_apply_service.apply_namespace_patch',
+        lambda *_args, **_kwargs: _namespace_patch_result(
+            created_windows=('review',),
+            created_panes=('%3', '%4'),
+            agent_panes={'agent3': '%4'},
+            sidebar_panes={'review': '%3'},
+        ),
+    )
+    monkeypatch.setattr(
+        'ccbd.reload_apply_service.run_runtime_mount',
+        lambda *_args, **_kwargs: AdditiveRuntimeMountResult(
+            status='mounted',
+            requested_agents=('agent3',),
+            mounted_agents=('agent3',),
+            runtime_authority_written_agents=('agent3',),
+            preserved_runtime_unchanged_agents=('agent1', 'agent2'),
+        ),
+    )
+
+    payload = app.socket_server._handlers['project_reload_config']({'dry_run': False})
+
+    assert payload['status'] == 'published'
+    assert payload['plan_class'] == 'add_window'
+    assert {item['op'] for item in payload['operations']} == {'add_agent', 'add_window'}
+    assert payload['namespace_patch']['created_windows'] == ['review']
+    assert payload['namespace_patch']['sidebar_panes'] == {'review': '%3'}
+    assert app.service_graph.version == 2
+    assert [window.name for window in app.config.windows] == ['main', 'review']
+    view = app.socket_server._handlers['project_view']({'schema_version': 1})
+    assert [window['name'] for window in view['view']['windows']] == ['main', 'review']
+
+
+def test_project_reload_non_dry_run_rejects_non_additive_plan_without_publish(tmp_path: Path) -> None:
+    app = _started_app(tmp_path / 'repo-remove-handler', BASE_CONFIG)
+    old_graph = app.service_graph
+    _project(app.project_root, REMOVE_AGENT_CONFIG)
+
+    payload = app.socket_server._handlers['project_reload_config']({'dry_run': False})
+
+    assert payload['status'] == 'blocked'
+    assert payload['stage'] == 'plan'
+    assert payload['plan_class'] == 'remove_agent'
+    assert payload['mutation_enabled'] is False
+    assert payload['diagnostics']['reason'] == 'unsupported_plan_class'
+    assert payload['diagnostics']['graph_published'] is False
+    assert app.service_graph is old_graph
+    assert app.control_plane_metrics.last_reload_plan_class == 'remove_agent'
+    assert app.control_plane_metrics.last_reload_error
+
+
+def test_project_reload_non_dry_run_namespace_failure_reports_residue_without_publish(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    app = _started_app(tmp_path / 'repo-namespace-handler', BASE_CONFIG)
+    old_graph = app.service_graph
+    _project(app.project_root, ADD_WINDOW_CONFIG)
+    monkeypatch.setattr(
+        'ccbd.reload_apply_service.apply_namespace_patch',
+        lambda *_args, **_kwargs: NamespacePatchApplyResult(
+            status='failed',
+            created_windows=('review',),
+            created_panes=('%3',),
+            partial=True,
+            rollback_actions=('created_pane:%3',),
+            diagnostics={'reason': 'namespace_patch_failed', 'message': 'split failed'},
+        ),
+    )
+    monkeypatch.setattr(
+        'ccbd.reload_apply_service.run_runtime_mount',
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('must not mount after namespace failure')),
+    )
+
+    payload = app.socket_server._handlers['project_reload_config']({'dry_run': False})
+
+    assert payload['status'] == 'failed'
+    assert payload['stage'] == 'namespace_patch'
+    assert payload['mutation_enabled'] is False
+    assert payload['diagnostics']['reason'] == 'namespace_patch_failed'
+    assert payload['diagnostics']['namespace_residue']['created_windows'] == ['review']
+    assert payload['diagnostics']['namespace_residue']['created_panes'] == ['%3']
+    assert payload['diagnostics']['graph_published'] is False
+    assert app.service_graph is old_graph
+
+
+def test_project_reload_non_dry_run_runtime_failure_reports_residue_without_publish(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    app = _started_app(tmp_path / 'repo-runtime-handler', BASE_CONFIG)
+    old_graph = app.service_graph
+    _project(app.project_root, ADD_AGENT_CONFIG)
+    monkeypatch.setattr(
+        'ccbd.reload_apply_service.apply_namespace_patch',
+        lambda *_args, **_kwargs: _namespace_patch_result(agent_panes={'agent3': '%3'}),
+    )
+    monkeypatch.setattr(
+        'ccbd.reload_apply_service.run_runtime_mount',
+        lambda *_args, **_kwargs: AdditiveRuntimeMountResult(
+            status='failed',
+            requested_agents=('agent3',),
+            mounted_agents=('agent3',),
+            runtime_authority_written_agents=('agent3',),
+            partial=True,
+            diagnostics={'reason': 'runtime_mount_failed', 'message': 'provider launch failed'},
+        ),
+    )
+
+    payload = app.socket_server._handlers['project_reload_config']({'dry_run': False})
+
+    assert payload['status'] == 'failed'
+    assert payload['stage'] == 'runtime_mount'
+    assert payload['mutation_enabled'] is False
+    assert payload['diagnostics']['runtime_residue']['runtime_authority_written_agents'] == ['agent3']
+    assert payload['diagnostics']['graph_published'] is False
+    assert app.service_graph is old_graph
+
+
+def test_project_reload_non_dry_run_publish_failure_keeps_old_graph_and_reports_stage(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    app = _started_app(tmp_path / 'repo-publish-handler', BASE_CONFIG)
+    old_graph = app.service_graph
+    _project(app.project_root, ADD_AGENT_CONFIG)
+    monkeypatch.setattr(
+        'ccbd.reload_apply_service.apply_namespace_patch',
+        lambda *_args, **_kwargs: _namespace_patch_result(agent_panes={'agent3': '%3'}),
+    )
+    monkeypatch.setattr(
+        'ccbd.reload_apply_service.run_runtime_mount',
+        lambda *_args, **_kwargs: AdditiveRuntimeMountResult(
+            status='mounted',
+            requested_agents=('agent3',),
+            mounted_agents=('agent3',),
+            runtime_authority_written_agents=('agent3',),
+        ),
+    )
+    monkeypatch.setattr(
+        app,
+        'publish_service_graph',
+        lambda _graph: (_ for _ in ()).throw(RuntimeError('publish failed')),
+    )
+
+    payload = app.socket_server._handlers['project_reload_config']({'dry_run': False})
+
+    assert payload['status'] == 'failed'
+    assert payload['stage'] == 'publish_transaction'
+    assert payload['mutation_enabled'] is False
+    assert payload['diagnostics']['reason'] == 'service_graph_publish_failed'
+    assert payload['diagnostics']['graph_published'] is False
+    assert payload['diagnostics']['publish_transaction_diagnostics']['signature_rollback']['complete'] is True
+    assert app.service_graph is old_graph
+    assert app.mount_manager.load_state().config_signature == old_graph.config_identity['config_signature']
+    assert app.lifecycle_store.load().config_signature == old_graph.config_identity['config_signature']
 
 
 def _started_app(project_root: Path, config_text: str) -> CcbdApp:
@@ -426,6 +772,28 @@ def _mounting_start_flow(app: CcbdApp, calls: list[dict[str, object]]):
     return _fake_start_flow
 
 
+def _seed_runtime(runtime_service, agent_name: str, *, pane_id: str):
+    return runtime_service.attach(
+        agent_name=agent_name,
+        workspace_path=str(runtime_service._layout.workspace_path(agent_name)),
+        backend_type='pane-backed',
+        runtime_ref=f'tmux:{pane_id}',
+        session_ref=f'session-{agent_name}',
+        health='healthy',
+        provider='codex',
+        terminal_backend='tmux',
+        pane_id=pane_id,
+        active_pane_id=pane_id,
+        pane_state='alive',
+        tmux_socket_path=str(runtime_service._layout.ccbd_tmux_socket_path),
+        tmux_window_name='main',
+        slot_key=agent_name,
+        lifecycle_state='idle',
+        managed_by='ccbd',
+        binding_source='provider-session',
+    )
+
+
 def _namespace(app: CcbdApp):
     return SimpleNamespace(
         project_id=app.project_id,
@@ -469,3 +837,105 @@ def _project(project_root: Path, config_text: str) -> Path:
 
 def _load_config(project_root: Path, config_text: str):
     return load_project_config(_project(project_root, config_text)).config
+
+
+class _PatchFakeBackend:
+    def __init__(self, socket_path: str | None = None) -> None:
+        self.socket_path = socket_path
+        self.sessions: dict[str, list[dict[str, object]]] = {}
+        self.pane_options: dict[str, dict[str, str]] = {}
+        self.pane_titles: dict[str, str] = {}
+        self.split_calls: list[tuple[str, str, int]] = []
+        self.tmux_calls: list[tuple[str, ...]] = []
+        self.respawn_calls: list[tuple[str, str]] = []
+        self.pane_counter = 0
+        self.window_counter = 0
+
+    def add_window(self, session_name: str, window_name: str) -> str:
+        pane_id = self._alloc_pane()
+        self.window_counter += 1
+        self.sessions.setdefault(session_name, []).append(
+            {
+                'id': f'@{self.window_counter}',
+                'name': window_name,
+                'panes': [pane_id],
+            }
+        )
+        return pane_id
+
+    def split_pane(self, parent_pane_id: str, direction: str, percent: int, cmd=None, cwd=None) -> str:
+        del cmd, cwd
+        self.split_calls.append((parent_pane_id, direction, percent))
+        for windows in self.sessions.values():
+            for record in windows:
+                panes = record['panes']
+                if parent_pane_id in panes:
+                    pane_id = self._alloc_pane()
+                    panes.append(pane_id)
+                    return pane_id
+        raise RuntimeError(f'pane not found: {parent_pane_id}')
+
+    def list_panes_by_user_options(self, expected: dict[str, str]) -> list[str]:
+        return [
+            pane_id
+            for pane_id, options in self.pane_options.items()
+            if all(str(options.get(key, '') or '') == str(value) for key, value in expected.items())
+        ]
+
+    def respawn_pane(self, pane_id: str, *, cmd: str, cwd: str | None = None, remain_on_exit: bool = True) -> None:
+        del cwd, remain_on_exit
+        self.respawn_calls.append((pane_id, cmd))
+
+    def set_pane_title(self, pane_id: str, title: str) -> None:
+        self.pane_titles[pane_id] = title
+
+    def set_pane_user_option(self, pane_id: str, name: str, value: str) -> None:
+        self.pane_options.setdefault(pane_id, {})[name] = value
+
+    def set_pane_style(self, pane_id: str, *, border_style=None, active_border_style=None) -> None:
+        if border_style:
+            self.set_pane_user_option(pane_id, 'pane-border-style', border_style)
+        if active_border_style:
+            self.set_pane_user_option(pane_id, 'pane-active-border-style', active_border_style)
+
+    def _tmux_run(self, args: list[str], *, check=False, capture=False, input_bytes=None, timeout=None):
+        del check, capture, input_bytes, timeout
+        self.tmux_calls.append(tuple(args))
+        if args[:2] == ['has-session', '-t']:
+            return SimpleNamespace(returncode=0 if args[2] in self.sessions else 1, stdout='', stderr='')
+        if len(args) >= 7 and args[:2] == ['new-window', '-d']:
+            session_name = args[args.index('-t') + 1]
+            window_name = args[args.index('-n') + 1]
+            self.add_window(session_name, window_name)
+            return SimpleNamespace(returncode=0, stdout='', stderr='')
+        if len(args) >= 4 and args[:2] == ['list-windows', '-t']:
+            session_name = args[2]
+            rows = [f"{record['id']}\t{record['name']}\t0" for record in self.sessions.get(session_name, [])]
+            return SimpleNamespace(returncode=0, stdout='\n'.join(rows), stderr='')
+        if len(args) >= 4 and args[:2] == ['list-panes', '-t']:
+            target = args[2]
+            session_name, _, window_ref = target.partition(':')
+            record = self._window(session_name, window_ref)
+            panes = list(record['panes']) if record is not None else []
+            return SimpleNamespace(returncode=0, stdout='\n'.join(str(item) for item in panes), stderr='')
+        raise AssertionError(f'unexpected tmux command in additive reload test: {args}')
+
+    def _window(self, session_name: str, window_ref: str) -> dict[str, object] | None:
+        for record in self.sessions.get(session_name, []):
+            if record['name'] == window_ref or record['id'] == window_ref:
+                return record
+        return None
+
+    def _alloc_pane(self) -> str:
+        self.pane_counter += 1
+        return f'%{self.pane_counter}'
+
+
+def _seed_agent_pane(backend: _PatchFakeBackend, pane_id: str, *, project_id: str, window: str, agent: str) -> None:
+    backend.pane_options[pane_id] = {
+        '@ccb_project_id': project_id,
+        '@ccb_role': 'agent',
+        '@ccb_slot': agent,
+        '@ccb_window': window,
+        '@ccb_managed_by': 'ccbd',
+    }

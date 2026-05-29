@@ -66,22 +66,40 @@ Date: 2026-05-29
   `add_agent`, and `add_window`, then runs namespace patch, runtime mount, and
   signature/publish transaction in order. Stage failures keep the old graph
   active and return pane/runtime residue diagnostics.
+- Wired the Phase 6b additive apply orchestrator into the explicit user path:
+  `project_reload_config(dry_run=false)` and plain `ccb reload` now attempt
+  only `view_only_change`, append-only `add_agent`, and `add_window`.
+  Non-additive classes still block at plan stage, CLI output includes stage,
+  graph versions, diagnostics, and residue, and successful publish invalidates
+  the project-view cache.
+- Added the Phase 6b keeper handoff guard: plain `ccb reload` and accepted
+  daemon-side non-dry-run additive apply with a changed config signature write a
+  short-lived `reload-handoff.json` while disk config has the target signature
+  but daemon ping may still report the old graph signature. Keeper accepts that
+  mismatch only for the matching live daemon holder and stale or mismatched
+  handoffs fail closed.
+- Wired sidebar's refresh control and `r` shortcut to the same explicit
+  non-dry-run reload path, then refresh project view after the response. This
+  lets edited configs materialize new tmux panes/windows without adding a
+  background config watcher.
 
 ## In Progress
 
-- Phase 6b additive mutating reload remains in progress. The internal
-  end-to-end apply sequence exists, but `project_reload_config(dry_run=false)`
-  and plain `ccb reload` still reject before invoking it.
+- Phase 6b additive mutating reload remains in progress for manual hardening:
+  accepted user-path classes and sidebar-initiated reload are implemented, while
+  daemon-pushed sidebar refresh is not signaled and unload/replace/move/layout
+  remain blocked.
 
 ## Next
 
-1. Review and explicitly gate non-dry-run additive reload invocation for
-   view-only, add agent, and add window.
-2. Expose dynamic unload for idle and bounded-draining agents.
-3. Expose replacement only after unload semantics are safe; busy replacement
+1. Run the automatic and manual additive reload matrix in
+   [topics/test-matrix.md](topics/test-matrix.md), including `test_ccb2`
+   screenshots for unchanged old panes and newly-mounted agents.
+2. Add a lightweight daemon-pushed sidebar refresh signal if needed after manual
+   validation; avoid polling or steady-state scans.
+3. Expose dynamic unload for idle and bounded-draining agents.
+4. Expose replacement only after unload semantics are safe; busy replacement
    remains pending with explicit bounds.
-4. Run the automatic and manual matrix in
-    [topics/test-matrix.md](topics/test-matrix.md).
 
 ## Deferred
 

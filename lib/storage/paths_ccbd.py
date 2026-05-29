@@ -175,6 +175,10 @@ class CcbdOpsPathMixin:
     def ccbd_reload_drain_path(self):
         return self.ccbd_dir / 'reload-drain.json'
 
+    @property
+    def ccbd_reload_handoff_path(self):
+        return self.ccbd_dir / 'reload-handoff.json'
+
 
 class CcbdArtifactsPathMixin:
     @property

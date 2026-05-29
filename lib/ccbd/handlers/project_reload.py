@@ -3,14 +3,18 @@ from __future__ import annotations
 from time import monotonic
 
 from agents.config_loader import load_project_config, project_config_path
+from ccbd.reload_apply import run_additive_reload_apply
 from ccbd.reload_plan import build_invalid_reload_dry_run_plan, build_reload_dry_run_plan
+from .project_reload_metrics import metrics_fields
+from .project_reload_payload import (
+    apply_reload_payload,
+    non_dry_run_invalid_config_payload,
+)
 
 
 def build_project_reload_config_handler(app, current_graph_fn):
     def handle(payload: dict) -> dict:
-        if not _truthy(payload.get('dry_run')):
-            raise ValueError('project_reload_config currently supports dry_run=true only')
-
+        dry_run = _truthy(payload.get('dry_run'))
         started = monotonic()
         plan_class = 'error'
         error_text = None
@@ -27,17 +31,20 @@ def build_project_reload_config_handler(app, current_graph_fn):
                     exc,
                     current_config_identity=graph.config_identity,
                 )
+                if not dry_run:
+                    plan = non_dry_run_invalid_config_payload(plan)
             else:
-                plan = build_reload_dry_run_plan(
-                    graph.config,
-                    new_config,
-                    current_config_identity=graph.config_identity,
-                    project_id=getattr(app, 'project_id', None),
-                    current_namespace=_current_namespace(app),
-                )
-            plan_class = str(plan.get('plan_class') or plan_class)
-            errors = [str(item) for item in (plan.get('errors') or ()) if str(item)]
-            error_text = '; '.join(errors) if errors else None
+                if dry_run:
+                    plan = build_reload_dry_run_plan(
+                        graph.config,
+                        new_config,
+                        current_config_identity=graph.config_identity,
+                        project_id=getattr(app, 'project_id', None),
+                        current_namespace=_current_namespace(app),
+                    )
+                else:
+                    plan = apply_reload_payload(run_additive_reload_apply(app, new_config), app=app)
+            plan_class, error_text = metrics_fields(plan, fallback_plan_class=plan_class)
             return plan
         except Exception as exc:
             error_text = str(exc)

@@ -4,11 +4,11 @@ Date: 2026-05-29
 
 ## Scope
 
-Phase 6a is design-only. It does not enable non-dry-run `ccb reload`, call
+Phase 6a was design-only. It did not enable non-dry-run `ccb reload`, call
 tmux, mount providers, write runtime authority, update lifecycle/lease state, or
 publish a service graph.
 
-Phase 6b may enable only these mutating classes:
+Phase 6b enables only these mutating classes through the explicit reload path:
 
 - `view_only_change`;
 - append-only `add_agent`;
@@ -19,8 +19,9 @@ remain rejected until later phases.
 
 ## Current API Findings
 
-`project_reload_config` currently rejects non-dry-run before loading the new
-config. Keep that guard until the additive transaction below exists.
+At the Phase 6a checkpoint, `project_reload_config` still rejected non-dry-run
+before loading the new config. That guard was kept until the additive
+transaction path existed and was wired behind the Phase 6b user-path gate.
 
 `build_ccbd_service_graph()` is the right way to build a new config-bound
 bundle. `publish_ccbd_service_graph()` is the only publish step and must be the
@@ -67,7 +68,7 @@ call the startup-only `_mark_lifecycle_mounted()` path directly.
 
 ## Required Narrow APIs
 
-Add these before opening non-dry-run reload:
+Phase 6b added these before opening non-dry-run reload:
 
 - `ProjectNamespaceController.apply_additive_patch(plan, old_topology,
   new_topology, timeout_s=...) -> NamespacePatchApplyResult`.
@@ -168,14 +169,19 @@ The graph publish step is intentionally after all durable state required by
 keeper and handlers is consistent. If any earlier step fails, handlers continue
 reading the old graph.
 
-The final signature handoff needs a dedicated Phase 6b race test. The keeper
+The final signature handoff needs dedicated Phase 6b race coverage. The keeper
 process checks the mounted daemon by calling `ping('ccbd')` and comparing the
 daemon-reported config signature with the on-disk config. A reload implementation
 must therefore prevent a keeper-visible window where disk config is new,
 `ping('ccbd')` still reports the old graph signature, and the keeper requests
-shutdown. If the lease/lifecycle writes cannot be proven adjacent enough to
-graph publish, Phase 6b must add an explicit reload-in-progress keeper grace or
-another tested handoff mechanism before enabling non-dry-run reload.
+shutdown. The current user path writes a short TTL `reload-handoff.json` before
+the CLI submits the non-dry-run RPC, then the daemon overwrites the same record
+after the plan is accepted and only when the target config signature differs
+from the current daemon signature. Keeper accepts the mismatch only when the
+handoff project, target signature, old daemon signature, holder pid, daemon
+instance, generation, socket connectivity, liveness, and age all match. Stale,
+mismatched, missing, or unreadable handoff records fail closed and keep the
+normal drift restart behavior.
 
 ## Failure And Diagnostics
 
@@ -286,11 +292,11 @@ Implementation status:
   blocked.
 - The fake-backend tests cover new window/sidebar/agent pane creation,
   append-only agent pane creation, `managed_by=ccbd` identity evidence,
-  preservation snapshots, patch-plan/topology mismatch, failure diagnostics, and
-  continued non-dry-run reload rejection.
-- The API is not wired into `project_reload_config`; it does not mount
-  providers, write runtime authority, update lease/lifecycle, publish a graph,
-  or add config watching.
+  preservation snapshots, patch-plan/topology mismatch, and failure diagnostics.
+- At the namespace-patch checkpoint, this API was not wired into
+  `project_reload_config`; by itself it still does not mount providers, write
+  runtime authority, update lease/lifecycle, publish a graph, or add config
+  watching.
 
 ## Phase 6b Runtime Mount Helper
 
@@ -325,8 +331,7 @@ Current status:
 ## Phase 6b Signature Publish Helper
 
 `publish_additive_reload_transaction(...)` is now the internal handoff after
-namespace patch and runtime mounts. It is still not wired into
-`project_reload_config`.
+namespace patch and runtime mounts.
 
 Current status:
 
@@ -345,17 +350,15 @@ Current status:
   signature and leaves the old app graph active.
 - Tests cover successful publish, namespace patch failure, runtime mount
   failure with new-agent residue, signature handoff failure with rollback,
-  stale lease generation, publish failure with rollback, and continued
-  non-dry-run reload rejection.
+  stale lease generation, and publish failure with rollback.
 
-Remaining Phase 6b work is wiring these internal helpers into a single explicit
-non-dry-run additive apply path while preserving the existing rejection gate
-until the end-to-end apply sequence is reviewed.
+This helper is now used by the explicit user path only through the additive
+apply orchestrator. Non-additive plans still block before transaction publish.
 
 ## Phase 6b Apply Orchestrator
 
-`run_additive_reload_apply(...)` now exists as an internal orchestration helper.
-It is deliberately not called by `project_reload_config` yet.
+`run_additive_reload_apply(...)` is the internal orchestration helper used by
+`project_reload_config(dry_run=false)` and plain `ccb reload`.
 
 Current status:
 
@@ -381,7 +384,30 @@ Current status:
   authority residue. The current app graph/config stay unchanged unless the
   publish transaction returns `published`.
 
-The remaining step before exposing non-dry-run reload is a review/gating patch
-that wires the existing handler to this helper only for the accepted classes and
-adds the final user-path manual test matrix. Until that patch, plain
-`ccb reload` and `project_reload_config(dry_run=false)` must keep rejecting.
+## Phase 6b User Path Gate
+
+Current status:
+
+- `project_reload_config(dry_run=false)` loads `.ccb/ccb.config` once and calls
+  `run_additive_reload_apply(...)`.
+- Plain `ccb reload` sends `dry_run=false`; `ccb reload --dry-run` remains
+  compatible and no-mutation.
+- Only `view_only_change`, append-only `add_agent`, and `add_window` can reach
+  namespace patch/runtime/publish stages.
+- `no_change`, `remove_agent`, `replace_agent`, `move_agent`, and arbitrary
+  `layout_change` return blocked/failed structured output and do not publish.
+- Successful publish invalidates the current project-view cache so the next
+  `project_view` and `ping('ccbd')` read the newly published graph/config.
+- Apply writes and clears a bounded keeper handoff record so the pre-publish
+  old-signature window is not misclassified as config drift.
+- CLI rendering includes reload stage, graph versions, publish diagnostics, and
+  namespace/runtime residue for failed applies.
+- Sidebar's refresh control and `r` shortcut submit the same non-dry-run reload
+  request and then force a project-view refresh. This is an explicit user action,
+  not a file watcher or steady-state scan.
+
+The user-path gate still does not add config watching, unload/replace,
+existing-pane kill/reflow, or provider cleanup. Daemon-pushed sidebar refresh is
+not signaled yet; diagnostics explicitly report
+`sidebar_refresh_signal_sent=false` after successful publish so the remaining
+push-refresh work is visible.

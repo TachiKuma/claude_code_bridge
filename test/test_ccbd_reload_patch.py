@@ -11,8 +11,8 @@ from ccbd.reload_patch import build_namespace_patch_plan
 from ccbd.reload_plan import build_reload_dry_run_plan
 from cli.context import CliContext
 from cli.models import ParsedReloadCommand
-from cli.parser import CliParser, CliUsageError
-from cli.services.reload import reload_config_dry_run
+from cli.parser import CliParser
+from cli.services.reload import reload_config
 from project.resolver import bootstrap_project
 from storage.paths import PathLayout
 
@@ -66,14 +66,45 @@ def test_namespace_patch_plan_add_agent_append_preserves_existing_agents(tmp_pat
     ]
 
 
+def test_namespace_patch_plan_add_agent_trailing_vertical_append(tmp_path: Path) -> None:
+    current = _load_config(tmp_path / 'current-trailing', BASE_CONFIG)
+    new = _load_config(
+        tmp_path / 'new-trailing',
+        BASE_CONFIG.replace('agent1:codex, agent2:claude', 'agent1:codex, agent2:claude, agent3:codex'),
+    )
+
+    plan = build_reload_dry_run_plan(
+        current,
+        new,
+        project_id='proj-1',
+        current_namespace=_namespace('proj-1'),
+    )
+
+    patch = plan['namespace_patch_plan']
+
+    assert plan['plan_class'] == 'add_agent'
+    assert patch['status'] == 'planned'
+    assert patch['blocked_operations'] == []
+    assert patch['steps'] == [
+        {
+            'action': 'create_agent_pane',
+            'window': 'main',
+            'agent': 'agent3',
+            'role': 'agent',
+            'slot_key': 'agent3',
+            'managed_by': 'ccbd',
+            'anchor_agent': 'agent2',
+            'reason': 'new agent appended to existing managed window',
+        }
+    ]
+
+
 @pytest.mark.parametrize(
     'layout',
-    [
-        'agent1:codex, agent2:claude, agent3:codex',
-        'agent1:codex; agent2:claude, agent3:codex',
-        'agent1:codex, (agent2:claude, agent3:codex)',
-    ],
-)
+        [
+            'agent1:codex; agent2:claude, agent3:codex',
+        ],
+    )
 def test_namespace_patch_plan_blocks_add_agent_layouts_that_do_not_expand_last_pane(
     tmp_path: Path,
     layout: str,
@@ -283,22 +314,26 @@ def test_namespace_patch_planner_does_not_touch_old_runtime_or_tmux(tmp_path: Pa
     assert _runtime_file_snapshot(project_root) == before_snapshot
 
 
-def test_project_reload_non_dry_run_still_rejected_before_metrics(tmp_path: Path) -> None:
-    project_root = _project(tmp_path / 'repo-reject', BASE_CONFIG)
+def test_project_reload_non_dry_run_no_change_blocks_without_publish(tmp_path: Path) -> None:
+    project_root = _project(tmp_path / 'repo-block-no-change', BASE_CONFIG)
     app = CcbdApp(project_root, clock=lambda: '2026-05-29T00:00:00Z', pid=4242)
+    old_graph = app.service_graph
 
-    with pytest.raises(ValueError, match='dry_run=true'):
-        app.socket_server._handlers['project_reload_config']({'dry_run': False})
+    payload = app.socket_server._handlers['project_reload_config']({'dry_run': False})
 
-    assert app.control_plane_metrics.last_reload_duration_s is None
-    assert app.control_plane_metrics.last_reload_plan_class is None
-    assert app.control_plane_metrics.last_reload_error is None
+    assert payload['status'] == 'blocked'
+    assert payload['stage'] == 'plan'
+    assert payload['plan_class'] == 'no_change'
+    assert payload['diagnostics']['graph_published'] is False
+    assert app.service_graph is old_graph
+    assert app.control_plane_metrics.last_reload_duration_s is not None
+    assert app.control_plane_metrics.last_reload_plan_class == 'no_change'
+    assert app.control_plane_metrics.last_reload_error
 
 
-def test_cli_reload_non_dry_run_still_rejected_before_socket_call(tmp_path: Path, monkeypatch) -> None:
+def test_cli_reload_non_dry_run_calls_socket_with_dry_run_false(tmp_path: Path, monkeypatch) -> None:
     parser = CliParser()
-    with pytest.raises(CliUsageError, match='requires --dry-run'):
-        parser.parse(['reload'])
+    assert parser.parse(['reload']) == ParsedReloadCommand(project=None, dry_run=False)
 
     project_root = _project(tmp_path / 'repo-cli-reject', BASE_CONFIG)
     command = ParsedReloadCommand(project=None, dry_run=False)
@@ -311,13 +346,22 @@ def test_cli_reload_non_dry_run_still_rejected_before_socket_call(tmp_path: Path
 
     import cli.services.reload as reload_module
 
+    calls: list[bool] = []
+
+    class _Client:
+        def project_reload_config(self, *, dry_run: bool) -> dict:
+            calls.append(dry_run)
+            return {'status': 'blocked', 'dry_run': dry_run}
+
     monkeypatch.setattr(
         reload_module,
         'connect_current_mounted_daemon',
-        lambda _context: (_ for _ in ()).throw(AssertionError('non-dry-run reload must not connect to daemon')),
+        lambda _context: SimpleNamespace(client=_Client()),
     )
-    with pytest.raises(ValueError, match='requires --dry-run'):
-        reload_config_dry_run(context, command)
+    payload = reload_config(context, command)
+
+    assert calls == [False]
+    assert payload == {'status': 'blocked', 'dry_run': False}
 
 
 def _namespace(project_id: str):

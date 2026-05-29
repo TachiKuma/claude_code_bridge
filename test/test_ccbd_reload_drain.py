@@ -16,7 +16,7 @@ from ccbd.reload_drain import (
 )
 from ccbd.reload_plan import build_reload_dry_run_plan
 from agents.config_loader import load_project_config
-from cli.parser import CliParser, CliUsageError
+from cli.parser import CliParser
 from cli.render import render_reload
 
 
@@ -216,14 +216,19 @@ main = "agent1:claude"
     assert plan['mutation_enabled'] is False
 
 
-def test_reload_dry_run_still_rejects_non_dry_run_and_parser_requires_flag(tmp_path: Path) -> None:
-    project_root = _project(tmp_path / 'repo-reject', BASE_CONFIG)
+def test_reload_non_dry_run_no_change_blocks_and_parser_accepts_explicit_apply(tmp_path: Path) -> None:
+    project_root = _project(tmp_path / 'repo-block-no-change', BASE_CONFIG)
     app = CcbdApp(project_root, clock=lambda: '2026-05-29T00:00:00Z', pid=4242)
+    old_graph = app.service_graph
 
-    with pytest.raises(ValueError, match='dry_run=true'):
-        app.socket_server._handlers['project_reload_config']({'dry_run': False})
-    with pytest.raises(CliUsageError, match='requires --dry-run'):
-        CliParser().parse(['reload'])
+    payload = app.socket_server._handlers['project_reload_config']({'dry_run': False})
+
+    assert payload['status'] == 'blocked'
+    assert payload['stage'] == 'plan'
+    assert payload['plan_class'] == 'no_change'
+    assert payload['diagnostics']['graph_published'] is False
+    assert app.service_graph is old_graph
+    assert CliParser().parse(['reload']).dry_run is False
 
 
 def test_drain_intent_suggestions_are_stable_and_do_not_cover_additive_ops() -> None:

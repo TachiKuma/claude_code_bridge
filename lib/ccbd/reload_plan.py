@@ -8,8 +8,6 @@ from ccbd.reload_drain import drain_intent_suggestions_for_reload_operations
 from ccbd.reload_patch import build_invalid_namespace_patch_plan, build_namespace_patch_plan
 
 
-DRY_RUN_ONLY_WARNING = 'Phase 3 dry-run only; mutation capability is disabled.'
-
 _PLAN_PRIORITY = {
     'no_change': 0,
     'view_only_change': 10,
@@ -32,7 +30,7 @@ def build_reload_dry_run_plan(
 ) -> dict[str, object]:
     old_identity = dict(current_config_identity or project_config_identity_payload(current_config))
     new_identity = project_config_identity_payload(new_config)
-    warnings = [DRY_RUN_ONLY_WARNING]
+    warnings: list[str] = []
 
     if old_identity.get('config_signature') == new_identity.get('config_signature'):
         return _identity_preserving_plan(
@@ -106,7 +104,7 @@ def build_invalid_reload_dry_run_plan(
         drain_intents=[],
         namespace_patch_plan=build_invalid_namespace_patch_plan(error),
         reasons=['new config could not be loaded or validated'],
-        warnings=[DRY_RUN_ONLY_WARNING],
+        warnings=[],
         errors=[str(error)],
         future_safe_to_apply=False,
     )
@@ -424,7 +422,6 @@ def _record_or_none(value) -> dict[str, object] | None:
 
 
 __all__ = [
-    'DRY_RUN_ONLY_WARNING',
     'build_invalid_reload_dry_run_plan',
     'build_reload_dry_run_plan',
 ]

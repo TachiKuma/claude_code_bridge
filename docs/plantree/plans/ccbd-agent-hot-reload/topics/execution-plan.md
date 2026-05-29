@@ -173,10 +173,10 @@ Phase 4 implementation status:
 - Phase 3 dry-run plans now include `drain_intents` suggestions for
   `remove_agent` and `replace_agent`, but `safe_to_apply=false` and
   `mutation_enabled=false` remain unchanged.
-- Non-dry-run `project_reload_config` / `ccb reload` is still rejected. Phase 4
-  performs no tmux delete/create, graph publish, namespace patch, runtime
-  authority write, config watch, mount, unmount, provider start, or provider
-  stop.
+- At the Phase 4 checkpoint, non-dry-run `project_reload_config` / `ccb reload`
+  was still rejected. Phase 4 performed no tmux delete/create, graph publish,
+  namespace patch, runtime authority write, config watch, mount, unmount,
+  provider start, or provider stop.
 
 Rollback:
 
@@ -220,9 +220,10 @@ Phase 5 implementation status:
   window; inserting/reordering existing agents is blocked as layout mutation.
 - Add-window planning creates only deferred steps for the new window, sidebar,
   and new agent panes; it does not create tmux windows/panes yet.
-- Non-dry-run `project_reload_config` / `ccb reload` is still rejected before
-  any socket mutation path. Phase 5 performs no tmux calls, provider start/stop,
-  runtime authority writes, lifecycle/lease writes, or service-graph publish.
+- At the Phase 5 checkpoint, non-dry-run `project_reload_config` / `ccb reload`
+  was still rejected before any socket mutation path. Phase 5 performed no tmux
+  calls, provider start/stop, runtime authority writes, lifecycle/lease writes,
+  or service-graph publish.
 
 Rollback:
 
@@ -240,7 +241,6 @@ Phase 6a design-only status:
   recreate reasons.
 - Identified lower-level namespace primitives and the runtime mount path to
   reuse through new narrow APIs.
-- Non-dry-run `project_reload_config` and `ccb reload` remain rejected.
 
 Phase 6b first-step status:
 
@@ -290,7 +290,29 @@ Phase 6b first-step status:
   stop the sequence before later stages. Failure diagnostics include created
   pane/window residue and new-agent runtime authority residue when present; the
   old graph/config remain visible unless the final publish succeeds.
-- Non-dry-run `project_reload_config` and `ccb reload` remain rejected.
+- `project_reload_config(dry_run=false)` and plain `ccb reload` now call the
+  orchestrator, but only the accepted additive classes may publish.
+- `ccb reload --dry-run` remains no-mutation and keeps the same planning
+  payload shape.
+- Non-additive `remove_agent`, `replace_agent`, `move_agent`, and arbitrary
+  `layout_change` still block at plan stage with no graph publish, no runtime
+  authority writes, no lease/lifecycle signature writes, and no tmux unload or
+  reflow.
+- CLI non-dry-run output includes apply stage, plan class, graph versions,
+  diagnostics, and namespace/runtime residue. Handler diagnostics mark
+  `project_view_cache_invalidated=true` after successful publish and
+  `sidebar_refresh_signal_sent=false` because no active sidebar refresh signal
+  has been added in this patch.
+- Plain `ccb reload` writes a short TTL `reload-handoff.json` before submitting
+  the RPC, and accepted daemon-side apply with a changed config signature
+  overwrites the same record around the transaction. Keeper may use it only to
+  tolerate the specific window where disk config has the target signature and
+  daemon ping still reports the old graph signature; holder, daemon instance,
+  generation, project id, and age must match.
+- Sidebar's refresh control and `r` shortcut call
+  `project_reload_config(dry_run=false)` and then force a project-view refresh,
+  so edited configs can materialize additive tmux panes/windows through the same
+  explicit reload path. No background config watcher is added.
 
 Deliverables:
 
@@ -299,7 +321,12 @@ Deliverables:
   succeed.
 - Update lifecycle/lease/ping config signature so keeper does not restart the
   hot-loaded daemon.
-- Invalidate project view and refresh sidebars.
+- Bound the pre-publish keeper signature race with a fail-closed reload
+  handoff record.
+- Invalidate project view after publish. Active sidebar refresh signaling is
+  still not implemented in this patch and is reported as
+  `sidebar_refresh_signal_sent=false`; sidebar user actions trigger reload
+  directly instead of waiting for a daemon push.
 
 Exit criteria:
 
@@ -315,6 +342,8 @@ Exit criteria:
 - The final config-signature handoff is protected against keeper restart races:
   the keeper must not observe new disk config while daemon ping still reports
   the old graph signature and then request shutdown.
+- Stale, mismatched, or wrong-holder handoff records do not suppress the normal
+  keeper drift restart path.
 
 Rollback:
 

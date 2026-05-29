@@ -233,9 +233,7 @@ def parse_reload(tokens: list[str], *, project: str | None, error_type) -> Parse
     parser = argparse.ArgumentParser(prog='ccb reload', add_help=False)
     parser.add_argument('--dry-run', dest='dry_run', action='store_true')
     namespace = parse_args(parser, tokens, error_message='invalid reload command', error_type=error_type)
-    if not namespace.dry_run:
-        raise error_type('reload currently requires --dry-run')
-    return ParsedReloadCommand(project=project, dry_run=True)
+    return ParsedReloadCommand(project=project, dry_run=bool(namespace.dry_run))
 
 
 __all__ = [

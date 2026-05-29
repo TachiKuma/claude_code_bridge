@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from agents.config_identity import project_config_identity_payload
 from ccbd.reload_apply_graph import build_reload_service_graph
 from ccbd.reload_apply_namespace import (
     apply_namespace_patch,
@@ -17,6 +18,7 @@ from ccbd.reload_apply_stages import (
     publish_stage,
     runtime_mount_failed,
 )
+from ccbd.reload_handoff import begin_reload_handoff, clear_reload_handoff
 from ccbd.reload_plan import build_reload_dry_run_plan
 
 
@@ -87,47 +89,52 @@ def _run_locked(
             namespace_diagnostics=namespace_diagnostics,
         )
 
-    target_graph = build_reload_service_graph(app, new_config)
-    namespace_patch = _namespace_patch_stage(
-        app,
-        old_graph,
-        new_config,
-        plan,
-        apply_namespace_patch_fn,
-    )
-    if status_of(namespace_patch) != 'applied':
-        return namespace_patch_failed(old_graph, target_graph, plan, namespace_patch)
+    handoff = begin_reload_handoff(app, target_config_identity=project_config_identity_payload(new_config))
+    try:
+        target_graph = build_reload_service_graph(app, new_config)
+        namespace_patch = _namespace_patch_stage(
+            app,
+            old_graph,
+            new_config,
+            plan,
+            apply_namespace_patch_fn,
+        )
+        if status_of(namespace_patch) != 'applied':
+            return namespace_patch_failed(old_graph, target_graph, plan, namespace_patch)
 
-    runtime_mount = run_runtime_mount(
-        app,
-        target_graph,
-        namespace=namespace,
-        namespace_patch=namespace_patch,
-        run_runtime_mount_fn=run_runtime_mount_fn,
-        run_start_flow_fn=run_start_flow_fn,
-    )
-    if status_of(runtime_mount) not in PUBLISH_READY_RUNTIME_STATUSES:
-        return runtime_mount_failed(
+        runtime_mount = run_runtime_mount(
+            app,
+            target_graph,
+            namespace=namespace,
+            namespace_patch=namespace_patch,
+            run_runtime_mount_fn=run_runtime_mount_fn,
+            run_start_flow_fn=run_start_flow_fn,
+        )
+        if status_of(runtime_mount) not in PUBLISH_READY_RUNTIME_STATUSES:
+            return runtime_mount_failed(
+                old_graph,
+                target_graph,
+                plan,
+                namespace_patch,
+                runtime_mount,
+            )
+
+        return publish_stage(
+            app,
             old_graph,
             target_graph,
             plan,
-            namespace_patch,
-            runtime_mount,
+            namespace=namespace,
+            namespace_patch=namespace_patch,
+            runtime_mount=runtime_mount,
+            publish_transaction_fn=publish_transaction_fn,
+            publish_graph_fn=publish_graph_fn,
+            update_lease_config_signature_fn=update_lease_config_signature_fn,
+            update_lifecycle_config_signature_fn=update_lifecycle_config_signature_fn,
         )
-
-    return publish_stage(
-        app,
-        old_graph,
-        target_graph,
-        plan,
-        namespace=namespace,
-        namespace_patch=namespace_patch,
-        runtime_mount=runtime_mount,
-        publish_transaction_fn=publish_transaction_fn,
-        publish_graph_fn=publish_graph_fn,
-        update_lease_config_signature_fn=update_lease_config_signature_fn,
-        update_lifecycle_config_signature_fn=update_lifecycle_config_signature_fn,
-    )
+    finally:
+        if handoff is not None:
+            clear_reload_handoff(app)
 
 
 def current_namespace_for_apply(app, provided_namespace):

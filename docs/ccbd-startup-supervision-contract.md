@@ -861,7 +861,47 @@ Write semantics:
   tmux pane removal, provider stop, runtime authority deletion, service graph
   publish, or namespace patch
 
-### 7.9 Diagnostics Bundle
+### 7.9 Reload Handoff
+
+Path:
+
+- `.ccb/ccbd/reload-handoff.json`
+
+Required purpose:
+
+- give the project keeper a bounded grace window during explicit additive
+  reload, when `.ccb/ccb.config` already contains the target signature but the
+  mounted daemon may still report the old service-graph signature
+- prevent the keeper from treating that short, intentional handoff as daemon
+  drift and requesting shutdown
+
+Minimum content:
+
+- `project_id`
+- `started_at`
+- `old_config_signature`
+- `target_config_signature`
+- current daemon `pid`, `daemon_instance_id`, and `generation`
+- `status=applying`
+- `ttl_s`
+
+Write semantics:
+
+- this file is not backend lifecycle authority, lease authority, runtime
+  authority, namespace authority, or a config-watch trigger
+- the `ccb reload` CLI may write it immediately before submitting the explicit
+  non-dry-run RPC, and the daemon may overwrite it inside the accepted apply
+  transaction after the plan is accepted; both writers use the same holder and
+  signature checks, only write when target and current config signatures
+  differ, and clear in `finally`
+- keeper may accept a signature mismatch only when the handoff is fresh, the
+  target signature matches disk config, the old signature matches daemon ping,
+  and the current lease holder pid, daemon instance, generation, socket, and
+  liveness evidence match the handoff record
+- stale, mismatched, unreadable, or missing handoff records must fail closed and
+  keep the normal keeper drift handling
+
+### 7.10 Diagnostics Bundle
 
 Command:
 

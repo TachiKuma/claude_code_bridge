@@ -340,6 +340,40 @@ def test_apply_append_add_agent_creates_only_new_agent_pane(tmp_path: Path, monk
     assert result.diagnostics['lease_or_lifecycle_written'] is False
 
 
+def test_apply_trailing_add_agent_creates_new_agent_pane(tmp_path: Path, monkeypatch) -> None:
+    current = _load_config(tmp_path / 'current-add-agent-trailing', BASE_CONFIG)
+    new = _load_config(
+        tmp_path / 'new-add-agent-trailing',
+        BASE_CONFIG.replace('agent1:codex, agent2:claude', 'agent1:codex, agent2:claude, agent3:codex'),
+    )
+    layout = PathLayout(_project(tmp_path / 'repo-add-agent-trailing', BASE_CONFIG))
+    backend = _PatchFakeBackend(socket_path=str(layout.ccbd_tmux_socket_path))
+    backend.add_window(layout.ccbd_tmux_session_name, 'main')
+    backend.sessions[layout.ccbd_tmux_session_name][0]['panes'].append('%2')
+    backend.pane_counter = 2
+    _seed_agent_pane(backend, '%1', project_id='proj-1', window='main', agent='agent1')
+    _seed_agent_pane(backend, '%2', project_id='proj-1', window='main', agent='agent2')
+    _store_namespace(layout, project_id='proj-1')
+    controller = ProjectNamespaceController(layout, 'proj-1', backend_factory=lambda socket_path=None: backend)
+    _forbid_recreate_paths(monkeypatch)
+    plan = build_reload_dry_run_plan(current, new, project_id='proj-1', current_namespace=controller.load())
+
+    result = controller.apply_additive_patch(
+        patch_plan=plan['namespace_patch_plan'],
+        old_topology=build_namespace_topology_plan(current),
+        new_topology=build_namespace_topology_plan(new),
+        timeout_s=0.0,
+    )
+
+    assert result.status == 'applied'
+    assert result.created_windows == ()
+    assert result.created_panes == ('%3',)
+    assert result.agent_panes == {'agent3': '%3'}
+    assert backend.split_calls == [('%2', 'bottom', 50)]
+    assert backend.pane_options['%3']['@ccb_slot'] == 'agent3'
+    assert backend.pane_options['%3']['@ccb_window'] == 'main'
+
+
 def test_apply_append_add_agent_failure_does_not_publish_or_write_authority(tmp_path: Path, monkeypatch) -> None:
     current = _load_config(tmp_path / 'current-add-agent-fail', BASE_CONFIG)
     new = _load_config(
@@ -383,10 +417,6 @@ def test_apply_append_add_agent_failure_does_not_publish_or_write_authority(tmp_
     [
         (
             BASE_CONFIG.replace('agent1:codex, agent2:claude', 'agent1:codex, agent3:codex, agent2:claude'),
-            'patch_plan_not_planned',
-        ),
-        (
-            BASE_CONFIG.replace('agent1:codex, agent2:claude', 'agent1:codex, agent2:claude, agent3:codex'),
             'patch_plan_not_planned',
         ),
         (
@@ -509,15 +539,19 @@ bottom_height = 20
     assert backend.split_calls == []
 
 
-def test_project_reload_non_dry_run_still_rejected_after_patch_api(tmp_path: Path) -> None:
-    project_root = _project(tmp_path / 'repo-reject', BASE_CONFIG)
+def test_project_reload_non_dry_run_no_change_blocks_after_patch_api(tmp_path: Path) -> None:
+    project_root = _project(tmp_path / 'repo-block-no-change', BASE_CONFIG)
     app = CcbdApp(project_root, clock=lambda: '2026-05-29T00:00:00Z', pid=4242)
+    old_graph = app.service_graph
 
-    with pytest.raises(ValueError, match='dry_run=true'):
-        app.socket_server._handlers['project_reload_config']({'dry_run': False})
+    payload = app.socket_server._handlers['project_reload_config']({'dry_run': False})
 
-    assert app.service_graph.version == 1
-    assert app.control_plane_metrics.last_reload_duration_s is None
+    assert payload['status'] == 'blocked'
+    assert payload['stage'] == 'plan'
+    assert payload['plan_class'] == 'no_change'
+    assert payload['diagnostics']['graph_published'] is False
+    assert app.service_graph is old_graph
+    assert app.control_plane_metrics.last_reload_duration_s is not None
 
 
 def _forbid_recreate_paths(monkeypatch) -> None:

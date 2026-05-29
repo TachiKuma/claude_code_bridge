@@ -10,14 +10,15 @@ from agents.config_loader import load_project_config
 from ccbd.app import CcbdApp
 from ccbd.models import LeaseHealth, LeaseInspection
 import ccbd.handlers.project_reload as project_reload_handler
+from ccbd.reload_handoff import ReloadHandoffStore
 from ccbd.reload_plan import build_reload_dry_run_plan
 from ccbd.socket_client import CcbdClient
 from cli.context import CliContext
 from cli.models import ParsedReloadCommand
-from cli.parser import CliParser, CliUsageError
+from cli.parser import CliParser
 from cli.phase2 import maybe_handle_phase2
 from cli.render import render_reload
-from cli.services.reload import reload_config_dry_run
+from cli.services.reload import reload_config
 from project.resolver import bootstrap_project
 from storage.paths import PathLayout
 
@@ -224,23 +225,32 @@ def test_reload_dry_run_missing_project_config_is_invalid_not_default_fallback(
     assert app.control_plane_metrics.last_reload_error
 
 
-def test_reload_non_dry_run_is_rejected_without_reload_metrics(tmp_path: Path) -> None:
-    project_root = _project(tmp_path / 'repo-reject-non-dry-run', BASE_CONFIG)
+def test_reload_non_dry_run_no_change_is_blocked_without_mutation(tmp_path: Path) -> None:
+    project_root = _project(tmp_path / 'repo-block-no-change', BASE_CONFIG)
     app = CcbdApp(project_root, clock=lambda: '2026-05-29T00:00:00Z', pid=4242)
+    before_snapshot = _runtime_file_snapshot(project_root)
+    before_graph = app.service_graph
 
-    with pytest.raises(ValueError, match='dry_run=true'):
-        app.socket_server._handlers['project_reload_config']({'dry_run': False})
+    payload = app.socket_server._handlers['project_reload_config']({'dry_run': False})
 
-    assert app.control_plane_metrics.last_reload_duration_s is None
-    assert app.control_plane_metrics.last_reload_plan_class is None
-    assert app.control_plane_metrics.last_reload_error is None
+    assert payload['status'] == 'blocked'
+    assert payload['dry_run'] is False
+    assert payload['mutation_enabled'] is False
+    assert payload['plan_class'] == 'no_change'
+    assert payload['stage'] == 'plan'
+    assert payload['diagnostics']['reason'] == 'unsupported_plan_class'
+    assert payload['diagnostics']['graph_published'] is False
+    assert app.service_graph is before_graph
+    assert _runtime_file_snapshot(project_root) == before_snapshot
+    assert app.control_plane_metrics.last_reload_duration_s is not None
+    assert app.control_plane_metrics.last_reload_plan_class == 'no_change'
+    assert app.control_plane_metrics.last_reload_error
 
 
 def test_reload_cli_parser_endpoint_render_and_phase2_return_code(monkeypatch, tmp_path: Path) -> None:
     parser = CliParser()
     assert parser.parse(['reload', '--dry-run']) == ParsedReloadCommand(project=None, dry_run=True)
-    with pytest.raises(CliUsageError, match='requires --dry-run'):
-        parser.parse(['reload'])
+    assert parser.parse(['reload']) == ParsedReloadCommand(project=None, dry_run=False)
 
     rendered = render_reload(
         {
@@ -260,7 +270,7 @@ def test_reload_cli_parser_endpoint_render_and_phase2_return_code(monkeypatch, t
                 'steps': [],
                 'blocked_operations': [{'op': 'namespace_scope', 'reason': 'namespace unavailable'}],
             },
-            'warnings': ['Phase 3 dry-run only; mutation capability is disabled.'],
+            'warnings': [],
             'reasons': ['add_agent agent3: new'],
             'errors': [],
         }
@@ -279,7 +289,6 @@ def test_reload_cli_parser_endpoint_render_and_phase2_return_code(monkeypatch, t
         'reload_namespace_patch_apply_deferred: true',
         'reload_namespace_patch_blocked: op=namespace_scope reason=namespace unavailable',
         'reload_reason: add_agent agent3: new',
-        'reload_warning: Phase 3 dry-run only; mutation capability is disabled.',
     )
 
     import cli.phase2 as phase2_module
@@ -294,54 +303,103 @@ def test_reload_cli_parser_endpoint_render_and_phase2_return_code(monkeypatch, t
 
     monkeypatch.setattr(phase2_module, '_build_context', lambda command, cwd, out: fake_context)
     monkeypatch.setattr(phase2_module, 'ensure_bootstrap_project_config', _unexpected_bootstrap)
-    monkeypatch.setattr(
-        phase2_module,
-        'reload_config_dry_run',
-        lambda context, command: {
-            'status': 'ok',
-            'dry_run': True,
-            'mutation_enabled': False,
-            'plan_class': 'no_change',
-            'safe_to_apply': False,
+    phase2_calls: list[bool] = []
+
+    def _reload_payload(_context, command):
+        phase2_calls.append(command.dry_run)
+        if command.dry_run:
+            return {
+                'status': 'ok',
+                'dry_run': True,
+                'mutation_enabled': False,
+                'plan_class': 'no_change',
+                'safe_to_apply': False,
+                'future_safe_to_apply': True,
+                'old_config_signature': 'same',
+                'new_config_signature': 'same',
+                'operations': [],
+                'drain_intents': [],
+                'namespace_patch_plan': {'status': 'no_op', 'apply_deferred': True, 'steps': [], 'blocked_operations': []},
+                'reasons': ['config identity and presentation fields are unchanged'],
+                'warnings': [],
+                'errors': [],
+            }
+        return {
+            'status': 'published',
+            'dry_run': False,
+            'mutation_enabled': True,
+            'plan_class': 'view_only_change',
+            'stage': 'publish_transaction',
+            'safe_to_apply': True,
             'future_safe_to_apply': True,
+            'old_graph_version': 1,
+            'target_graph_version': 2,
+            'published_graph_version': 2,
             'old_config_signature': 'same',
             'new_config_signature': 'same',
-            'operations': [],
+            'operations': [{'op': 'view_only_change', 'field': 'sidebar_view'}],
             'drain_intents': [],
-            'namespace_patch_plan': {'status': 'no_op', 'apply_deferred': True, 'steps': [], 'blocked_operations': []},
-            'reasons': ['config identity and presentation fields are unchanged'],
+            'namespace_patch_plan': {'status': 'planned', 'apply_deferred': True, 'steps': [], 'blocked_operations': []},
+            'diagnostics': {
+                'graph_published': True,
+                'lease_or_lifecycle_written': True,
+                'config_watch_started': False,
+                'unload_or_replace_executed': False,
+            },
+            'reasons': [],
             'warnings': [],
             'errors': [],
-        },
-    )
+        }
+
+    monkeypatch.setattr(phase2_module, 'reload_config', _reload_payload)
 
     stdout = StringIO()
     stderr = StringIO()
     code = maybe_handle_phase2(['reload', '--dry-run'], cwd=tmp_path, stdout=stdout, stderr=stderr)
 
     assert code == 0
+    assert phase2_calls == [True]
     assert bootstrap_called is False
     assert 'reload_status: ok\n' in stdout.getvalue()
     assert 'plan_class: no_change\n' in stdout.getvalue()
     assert stderr.getvalue() == ''
 
+    stdout = StringIO()
+    stderr = StringIO()
+    code = maybe_handle_phase2(['reload'], cwd=tmp_path, stdout=stdout, stderr=stderr)
 
-def test_ccbd_client_reload_endpoint_builds_dry_run_payload(monkeypatch, tmp_path: Path) -> None:
+    assert code == 0
+    assert phase2_calls == [True, False]
+    assert 'reload_status: published\n' in stdout.getvalue()
+    assert 'dry_run: false\n' in stdout.getvalue()
+    assert 'reload_stage: publish_transaction\n' in stdout.getvalue()
+    assert 'reload_published_graph_version: 2\n' in stdout.getvalue()
+    assert 'reload_diagnostic: graph_published=true\n' in stdout.getvalue()
+    assert stderr.getvalue() == ''
+
+
+def test_ccbd_client_reload_endpoint_builds_reload_payload(monkeypatch, tmp_path: Path) -> None:
     client = CcbdClient(tmp_path / 'ccbd.sock')
     calls: list[tuple[str, dict]] = []
     monkeypatch.setattr(client, 'request', lambda op, payload=None: calls.append((op, payload)) or {'status': 'ok'})
 
     assert client.project_reload_config(dry_run=True) == {'status': 'ok'}
-    assert calls == [('project_reload_config', {'dry_run': True})]
+    assert client.project_reload_config(dry_run=False) == {'status': 'ok'}
+    assert calls == [
+        ('project_reload_config', {'dry_run': True}),
+        ('project_reload_config', {'dry_run': False}),
+    ]
 
 
+@pytest.mark.parametrize('dry_run', [True, False])
 def test_reload_service_connects_drifted_current_daemon_without_compatibility_restart(
     monkeypatch,
     tmp_path: Path,
+    dry_run: bool,
 ) -> None:
     project_root = _project(tmp_path / 'repo-drifted-reload-service', BASE_CONFIG)
     project = bootstrap_project(project_root)
-    command = ParsedReloadCommand(project=None, dry_run=True)
+    command = ParsedReloadCommand(project=None, dry_run=dry_run)
     context = CliContext(command=command, cwd=project_root, project=project, paths=PathLayout(project_root))
     inspection = LeaseInspection(
         lease=None,
@@ -372,13 +430,136 @@ def test_reload_service_connects_drifted_current_daemon_without_compatibility_re
 
     monkeypatch.setattr(daemon_service, 'CcbdClient', _Client)
 
-    payload = reload_config_dry_run(context, command)
+    payload = reload_config(context, command)
 
     assert payload == {
         'status': 'ok',
-        'dry_run': True,
+        'dry_run': dry_run,
         'socket_path': str(context.paths.ccbd_socket_path),
     }
+
+
+def test_reload_service_writes_cli_handoff_before_non_dry_run_rpc_and_clears_after(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root = _project(tmp_path / 'repo-cli-handoff', BASE_CONFIG)
+    project = bootstrap_project(project_root)
+    command = ParsedReloadCommand(project=None, dry_run=False)
+    context = CliContext(command=command, cwd=project_root, project=project, paths=PathLayout(project_root))
+    app = CcbdApp(project_root, clock=lambda: '2026-05-29T00:00:00Z', pid=4242)
+    app.lease = app.mount_manager.mark_mounted(
+        project_id=app.project_id,
+        pid=app.pid,
+        socket_path=app.paths.ccbd_socket_path,
+        generation=1,
+        started_at='2026-05-29T00:00:00Z',
+        config_signature=app.config_identity['config_signature'],
+        daemon_instance_id=app.daemon_instance_id,
+    )
+    _write_config(
+        project_root,
+        BASE_CONFIG.replace(
+            'agent1:codex, agent2:claude',
+            'agent1:codex, agent2:claude, agent3:codex',
+        ),
+    )
+
+    import cli.services.daemon as daemon_service
+
+    inspection = SimpleNamespace(
+        phase='mounted',
+        health=LeaseHealth.HEALTHY,
+        pid_alive=True,
+        socket_connectable=True,
+        heartbeat_fresh=True,
+        takeover_allowed=False,
+        reason='healthy',
+        lease=app.lease,
+    )
+    monkeypatch.setattr(daemon_service, 'inspect_daemon', lambda _context: (None, None, inspection))
+    seen: list[dict[str, object]] = []
+
+    class _Client:
+        def __init__(self, socket_path):
+            self.socket_path = socket_path
+
+        def project_reload_config(self, *, dry_run: bool) -> dict:
+            assert dry_run is False
+            handoff = ReloadHandoffStore(context.paths).load()
+            assert handoff is not None
+            seen.append(handoff.to_record())
+            return {'status': 'published', 'dry_run': False}
+
+    monkeypatch.setattr(daemon_service, 'CcbdClient', _Client)
+
+    payload = reload_config(context, command)
+
+    assert payload == {'status': 'published', 'dry_run': False}
+    assert seen
+    assert seen[0]['old_config_signature'] == app.config_identity['config_signature']
+    assert seen[0]['daemon_pid'] == app.pid
+    assert seen[0]['daemon_instance_id'] == app.daemon_instance_id
+    assert ReloadHandoffStore(context.paths).load() is None
+
+
+def test_reload_service_clears_cli_handoff_when_daemon_connection_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root = _project(tmp_path / 'repo-cli-handoff-connect-fail', BASE_CONFIG)
+    project = bootstrap_project(project_root)
+    command = ParsedReloadCommand(project=None, dry_run=False)
+    context = CliContext(command=command, cwd=project_root, project=project, paths=PathLayout(project_root))
+    app = CcbdApp(project_root, clock=lambda: '2026-05-29T00:00:00Z', pid=4242)
+    app.lease = app.mount_manager.mark_mounted(
+        project_id=app.project_id,
+        pid=app.pid,
+        socket_path=app.paths.ccbd_socket_path,
+        generation=1,
+        started_at='2026-05-29T00:00:00Z',
+        config_signature=app.config_identity['config_signature'],
+        daemon_instance_id=app.daemon_instance_id,
+    )
+    _write_config(
+        project_root,
+        BASE_CONFIG.replace(
+            'agent1:codex, agent2:claude',
+            'agent1:codex, agent2:claude, agent3:codex',
+        ),
+    )
+
+    import cli.services.daemon as daemon_service
+
+    inspection = SimpleNamespace(
+        phase='mounted',
+        health=LeaseHealth.HEALTHY,
+        pid_alive=True,
+        socket_connectable=True,
+        heartbeat_fresh=True,
+        takeover_allowed=False,
+        reason='healthy',
+        lease=app.lease,
+    )
+    monkeypatch.setattr(daemon_service, 'inspect_daemon', lambda _context: (None, None, inspection))
+
+    class _Client:
+        def __init__(self, socket_path):
+            del socket_path
+            handoff = ReloadHandoffStore(context.paths).load()
+            assert handoff is not None
+            raise RuntimeError('connect failed')
+
+    monkeypatch.setattr(daemon_service, 'CcbdClient', _Client)
+
+    try:
+        reload_config(context, command)
+    except RuntimeError as exc:
+        assert str(exc) == 'connect failed'
+    else:
+        raise AssertionError('reload_config should propagate connection failure')
+
+    assert ReloadHandoffStore(context.paths).load() is None
 
 
 def _project(project_root: Path, config_text: str) -> Path:
