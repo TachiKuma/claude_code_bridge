@@ -63,6 +63,7 @@ def print_start_help(*, file=None) -> None:
               ccb -s               Safe start. Disable CLI auto-permission override.
               ccb -n               Rebuild runtime state while preserving config and managed agent history.
               ccb clear [agent...]  Send provider-native /clear to managed agent panes.
+              ccb reload --dry-run  Validate and plan config reload without mutation.
               ccb kill             Stop the current project's background runtime.
               ccb kill -f          Force cleanup project-owned runtime residue.
               ccb cleanup          Prune safe provider rebuildable caches after ccbd is stopped.
@@ -319,6 +320,16 @@ _COMMAND_HELP = {
 
         Config validation:
           ccb config validate   Validate `.ccb/ccb.config` for the current project.
+    """,
+    "reload": """
+        usage: ccb reload --dry-run
+
+        Reload dry-run:
+          ccb reload --dry-run   Ask the mounted daemon to validate `.ccb/ccb.config` and return a no-mutation reload plan.
+
+        Phase 3 only:
+          - Non-dry-run reload is rejected.
+          - The daemon does not mutate tmux, runtime authority, service graph, lifecycle, or config watchers.
     """,
 }
 

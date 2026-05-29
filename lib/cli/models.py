@@ -25,6 +25,7 @@ from .models_start import (
     ParsedLogsCommand,
     ParsedPingCommand,
     ParsedPsCommand,
+    ParsedReloadCommand,
     ParsedStartCommand,
 )
 
@@ -47,6 +48,7 @@ ParsedCommand = Union[
     ParsedPingCommand,
     ParsedPsCommand,
     ParsedQueueCommand,
+    ParsedReloadCommand,
     ParsedResubmitCommand,
     ParsedRetryCommand,
     ParsedStartCommand,

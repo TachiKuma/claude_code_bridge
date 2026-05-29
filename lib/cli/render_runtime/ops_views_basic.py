@@ -147,6 +147,48 @@ def render_ps(payload: Mapping[str, object]) -> tuple[str, ...]:
     return tuple(lines)
 
 
+def render_reload(payload: Mapping[str, object]) -> tuple[str, ...]:
+    status = str(payload.get('status') or 'unknown')
+    lines = [
+        f'reload_status: {status}',
+        f'dry_run: {str(bool(payload.get("dry_run"))).lower()}',
+        f'mutation_enabled: {str(bool(payload.get("mutation_enabled"))).lower()}',
+        f'plan_class: {payload.get("plan_class")}',
+        f'safe_to_apply: {str(bool(payload.get("safe_to_apply"))).lower()}',
+        f'future_safe_to_apply: {str(bool(payload.get("future_safe_to_apply"))).lower()}',
+        f'old_config_signature: {payload.get("old_config_signature")}',
+        f'new_config_signature: {payload.get("new_config_signature")}',
+    ]
+    for operation in tuple(payload.get('operations') or ()):
+        if isinstance(operation, Mapping):
+            lines.append(f'reload_operation: {_operation_line(operation)}')
+        else:
+            lines.append(f'reload_operation: {operation}')
+    for reason in tuple(payload.get('reasons') or ()):
+        lines.append(f'reload_reason: {reason}')
+    for warning in tuple(payload.get('warnings') or ()):
+        lines.append(f'reload_warning: {warning}')
+    for error in tuple(payload.get('errors') or ()):
+        lines.append(f'reload_error: {error}')
+    return tuple(lines)
+
+
+def _operation_line(operation: Mapping[str, object]) -> str:
+    fields = [f'op={operation.get("op")}']
+    for key in ('agent', 'window', 'from_window', 'to_window', 'field', 'change'):
+        value = operation.get(key)
+        if value not in (None, ''):
+            fields.append(f'{key}={value}')
+    if operation.get('agents'):
+        fields.append(f'agents={",".join(str(item) for item in tuple(operation.get("agents") or ()))}')
+    if operation.get('fields'):
+        fields.append(f'fields={",".join(str(item) for item in tuple(operation.get("fields") or ()))}')
+    reason = operation.get('reason')
+    if reason:
+        fields.append(f'reason={reason}')
+    return ' '.join(fields)
+
+
 __all__ = [
     'render_clear',
     'render_cleanup',
@@ -155,5 +197,6 @@ __all__ = [
     'render_kill',
     'render_logs',
     'render_ps',
+    'render_reload',
     'render_start',
 ]

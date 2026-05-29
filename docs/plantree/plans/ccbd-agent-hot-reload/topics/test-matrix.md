@@ -14,6 +14,12 @@ Date: 2026-05-29
   - no tmux commands are issued;
   - no graph is published;
   - no lifecycle or lease signature changes.
+  - Phase 3 covered classes: `no_change`, `view_only_change`, `add_agent`,
+    `add_window`, `remove_agent`, `replace_agent`, `move_agent`, `layout_change`,
+    and `invalid_config`;
+  - `ccb reload --dry-run` renders daemon payloads and returns non-zero for
+    invalid-config dry-run results;
+  - non-dry-run reload is rejected.
 - Handler graph routing:
   - after graph replacement, `submit`, `project_view`, `ping`, and focus
     handlers resolve the new graph;
@@ -40,7 +46,7 @@ Date: 2026-05-29
   - classified as `unsafe_requires_restart` while runtime is running;
   - existing pane and runtime record are untouched.
 - Existing agent removed from `[windows]`:
-  - dry-run reports `unload_agent`;
+  - Phase 3 dry-run reports `remove_agent`;
   - idle unload retires runtime and removes only the target pane;
   - busy unload enters bounded draining or returns a stable rejection;
   - existing unrelated processes are not killed by reload.
@@ -83,6 +89,20 @@ Date: 2026-05-29
 
 ## Manual `test_ccb2` Tests
 
+- Phase 3 dry-run checks:
+  - start a mounted project and run `ccb reload --dry-run` with no config
+    changes; expect `plan_class: no_change`;
+  - edit `.ccb/ccb.config` to add one agent to an existing window; dry-run
+    should report `add_agent` and no new pane should appear;
+  - edit config to add a new window; dry-run should report `add_window` and no
+    tmux window should appear;
+  - edit an existing agent provider/workspace/model/key/url; dry-run should
+    report `replace_agent` and leave the running pane untouched;
+  - delete or move an existing agent; dry-run should report `remove_agent` or
+    `move_agent`/`layout_change` and leave panes untouched;
+  - break TOML or config validation; dry-run should report `invalid_config`
+    while `ccb ping ccbd` still shows the old config signature.
+- Phase 4+ mutating checks:
 - Start a project with two windows and four agents.
 - Start a long-running/manual task in `agent2`.
 - Edit `.ccb/ccb.config` to add `agent5` to an existing window.

@@ -26,6 +26,7 @@ from .parser_runtime import (
     parse_ps,
     parse_queue,
     parse_repair,
+    parse_reload,
     parse_resubmit,
     parse_retry,
     parse_start,
@@ -59,6 +60,7 @@ _COMMAND_PARSERS = {
     'doctor': parse_doctor,
     'config': parse_config,
     'fault': parse_fault,
+    'reload': parse_reload,
 }
 
 

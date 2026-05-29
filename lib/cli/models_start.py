@@ -47,6 +47,13 @@ class ParsedConfigValidateCommand:
 
 
 @dataclass(frozen=True)
+class ParsedReloadCommand:
+    project: str | None
+    dry_run: bool = False
+    kind: str = 'reload'
+
+
+@dataclass(frozen=True)
 class ParsedDoctorCommand:
     project: str | None
     bundle: bool = False
@@ -79,5 +86,6 @@ __all__ = [
     'ParsedLogsCommand',
     'ParsedPingCommand',
     'ParsedPsCommand',
+    'ParsedReloadCommand',
     'ParsedStartCommand',
 ]

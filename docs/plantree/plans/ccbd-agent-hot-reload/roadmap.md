@@ -25,25 +25,27 @@ Date: 2026-05-29
 - Added Phase 2 stable handler routing wrappers so request handlers resolve the
   current service graph at request time without a steady-state publish/read
   mutex.
+- Added Phase 3 dry-run reload planning: `project_reload_config` accepts only
+  `dry_run=true`, `ccb reload --dry-run` renders the no-mutation plan, and the
+  classifier reports no-op, view-only, add, remove, replace, move/layout, and
+  invalid-config cases without publishing a graph or touching tmux/runtime
+  authority.
 
 ## In Progress
 
-- Phase 3 dry-run reload planning: load/validate `.ccb/ccb.config`, compute a
-  no-mutation diff, and return structured planned operations.
+- Phase 4 bounded draining and retiring design is the next implementation
+  target before dynamic unload or replace can be exposed.
 
 ## Next
 
-1. Add `ccb reload --dry-run` and `project_reload_config` dry-run mode:
-   load/validate config, compute diff, report the execution plan, mutate
-   nothing.
-2. Add bounded draining and retiring state machinery for unload, including
+1. Add bounded draining and retiring state machinery for unload, including
    queue limits, timeouts, and explicit failure responses.
-3. Add namespace additive/remove patch operations behind dry-run-proven plans.
-4. Expose additive mutating reload: view-only, add agent, and add window.
-5. Expose dynamic unload for idle and bounded-draining agents.
-6. Expose replacement only after unload semantics are safe; busy replacement
+2. Add namespace additive/remove patch operations behind dry-run-proven plans.
+3. Expose additive mutating reload: view-only, add agent, and add window.
+4. Expose dynamic unload for idle and bounded-draining agents.
+5. Expose replacement only after unload semantics are safe; busy replacement
    remains pending with explicit bounds.
-7. Run the automatic and manual matrix in
+6. Run the automatic and manual matrix in
     [topics/test-matrix.md](topics/test-matrix.md).
 
 ## Deferred

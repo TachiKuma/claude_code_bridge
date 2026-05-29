@@ -35,6 +35,7 @@ from cli.services.pend import pend_target
 from cli.services.ping import ping_target
 from cli.services.ps import ps_summary
 from cli.services.queue import queue_target
+from cli.services.reload import reload_config_dry_run
 from cli.services.reset_project import reset_project_state
 from cli.services.resubmit import resubmit_message
 from cli.services.retry import retry_attempt
@@ -77,7 +78,7 @@ def maybe_handle_phase2(
 
 def _command_requires_bootstrap_config(command) -> bool:
     kind = getattr(command, 'kind', None)
-    return kind not in {'cleanup', 'config-validate', 'kill'}
+    return kind not in {'cleanup', 'config-validate', 'kill', 'reload'}
 
 
 def _render_kill_without_anchor(command, *, cwd: Path | None, out: TextIO) -> int:
@@ -146,6 +147,7 @@ def _dispatch_services():
         ping_target=ping_target,
         ps_summary=ps_summary,
         queue_target=queue_target,
+        reload_config_dry_run=reload_config_dry_run,
         resubmit_message=resubmit_message,
         retry_attempt=retry_attempt,
         start_agents=start_agents,

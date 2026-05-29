@@ -109,6 +109,23 @@ Exit criteria:
 - Invalid config returns structured errors and leaves all state untouched.
 - No-op reload reports no changes.
 - Add, unload, replace, move, and view-only cases are classified.
+- Phase 3 implementation status:
+  - `project_reload_config` rejects non-dry-run requests before updating reload
+    metrics.
+  - `ccb reload --dry-run` calls the mounted daemon and does not bootstrap or
+    write a missing `.ccb/ccb.config`.
+  - returned payloads include old/new config signatures, `plan_class`,
+    `safe_to_apply=false`, `future_safe_to_apply`, operations, reasons,
+    warnings, and errors.
+  - classification is conservative: existing agent spec changes are reported as
+    `replace_agent`; presentation-only identity-preserving diffs are reported
+    as `view_only_change`; Phase 3 does not split metadata-only agent fields
+    from runtime-relevant replacement fields.
+  - metrics `last_reload_duration_s`, `last_reload_plan_class`, and
+    `last_reload_error` are updated only after a dry-run handler invocation.
+  - dry-run does not publish a service graph, mutate tmux, write lifecycle,
+    lease, namespace, start-policy, restore, or agent runtime authority, and
+    does not install a config watcher.
 
 Rollback:
 
