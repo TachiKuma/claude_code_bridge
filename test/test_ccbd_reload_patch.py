@@ -174,6 +174,8 @@ def test_namespace_patch_plan_view_only_has_no_tmux_mutation_step(tmp_path: Path
         BASE_CONFIG
         + """
 [ui.sidebar.view]
+agents_height = "50%"
+comms_height = "15%"
 comms_limit = 4
 """,
     )
@@ -182,6 +184,8 @@ comms_limit = 4
         BASE_CONFIG
         + """
 [ui.sidebar.view]
+agents_height = "60%"
+comms_height = "10%"
 comms_limit = 5
 """,
     )

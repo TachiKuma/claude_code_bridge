@@ -145,6 +145,11 @@ review = "reviewer:claude, qa:gemini"
 mode = "every_window"
 width = "15%"
 bottom_height = 20
+
+[ui.sidebar.view]
+agents_height = "50%"
+comms_height = "15%"
+comms_limit = 3
 ```
 
 If you are not sure how to group windows, how many workers you need, which agents should use worktrees, or which agents need separate models or API routes, ask an agent with the `ccb-config` skill to discuss and generate the config proposal with you.
@@ -287,6 +292,11 @@ review = "reviewer:claude, qa:gemini"
 mode = "every_window"
 width = "15%"
 bottom_height = 20
+
+[ui.sidebar.view]
+agents_height = "50%"
+comms_height = "15%"
+comms_limit = 3
 ```
 
 Note: `cmd` belongs to compact/hybrid single-window layouts. Do not put `cmd` inside `[windows]`.

@@ -31,8 +31,7 @@ const PROJECT_VIEW_REFRESH_MIN_MS: u64 = 100;
 const PROJECT_VIEW_REFRESH_MAX_MS: u64 = 5000;
 const PROJECT_VIEW_REFRESH_DEFAULT_MS: u64 = 1000;
 const DEFAULT_TREE_HEIGHT_PERCENT: u16 = 33;
-const SIDEBAR_RATIO_DENOMINATOR: u16 = 12;
-const SIDEBAR_COMMS_RATIO_NUMERATOR: u16 = 3;
+const DEFAULT_COMMS_HEIGHT_PERCENT: u16 = 25;
 const TREE_CONTROL_CONTENT_WIDTH: u16 = 3;
 const TREE_REFRESH_SYMBOL: &str = "↻";
 const TREE_KILL_SYMBOL: &str = "×";
@@ -587,11 +586,7 @@ fn sidebar_areas(area: Rect, view: &SidebarViewInfo) -> SidebarAreas {
     }
     let tree_height = tree_height_for(area.height, view).min(area.height);
     let remaining_after_tree = area.height.saturating_sub(tree_height);
-    let desired_comms_height = ratio_height(
-        area.height,
-        SIDEBAR_COMMS_RATIO_NUMERATOR,
-        SIDEBAR_RATIO_DENOMINATOR,
-    );
+    let desired_comms_height = comms_height_for(area.height, view);
     let comms_height = desired_comms_height.min(remaining_after_tree);
     let tips_height = remaining_after_tree.saturating_sub(comms_height);
     let chunks = Layout::default()
@@ -610,14 +605,34 @@ fn sidebar_areas(area: Rect, view: &SidebarViewInfo) -> SidebarAreas {
 }
 
 fn tree_height_for(total_height: u16, view: &SidebarViewInfo) -> u16 {
-    match &view.agents_height {
+    view_height_for(
+        total_height,
+        &view.agents_height,
+        DEFAULT_TREE_HEIGHT_PERCENT,
+    )
+}
+
+fn comms_height_for(total_height: u16, view: &SidebarViewInfo) -> u16 {
+    view_height_for(
+        total_height,
+        &view.comms_height,
+        DEFAULT_COMMS_HEIGHT_PERCENT,
+    )
+}
+
+fn view_height_for(
+    total_height: u16,
+    value: &serde_json::Value,
+    default_percent: u16,
+) -> u16 {
+    match value {
         serde_json::Value::Number(number) => number
             .as_u64()
             .and_then(|value| u16::try_from(value).ok())
-            .unwrap_or_else(|| percent_height(total_height, DEFAULT_TREE_HEIGHT_PERCENT)),
+            .unwrap_or_else(|| percent_height(total_height, default_percent)),
         serde_json::Value::String(text) => parse_height_value(total_height, text)
-            .unwrap_or_else(|| percent_height(total_height, DEFAULT_TREE_HEIGHT_PERCENT)),
-        _ => percent_height(total_height, DEFAULT_TREE_HEIGHT_PERCENT),
+            .unwrap_or_else(|| percent_height(total_height, default_percent)),
+        _ => percent_height(total_height, default_percent),
     }
     .clamp(3.min(total_height), total_height)
 }
@@ -639,18 +654,6 @@ fn percent_height(total_height: u16, percent: u16) -> u16 {
     let numerator = u32::from(total_height) * u32::from(percent);
     let value = numerator.saturating_add(99) / 100;
     u16::try_from(value).unwrap_or(total_height).max(1)
-}
-
-fn ratio_height(total_height: u16, numerator: u16, denominator: u16) -> u16 {
-    let denominator = u32::from(denominator).max(1);
-    let numerator = u32::from(numerator);
-    let value = u32::from(total_height)
-        .saturating_mul(numerator)
-        .saturating_add(denominator.saturating_sub(1))
-        / denominator;
-    u16::try_from(value)
-        .unwrap_or(total_height)
-        .min(total_height)
 }
 
 fn default_sidebar_view() -> &'static SidebarViewInfo {
@@ -1551,7 +1554,7 @@ mod tests {
     }
 
     #[test]
-    fn tall_sidebar_uses_one_third_one_quarter_and_five_twelfths_split() {
+    fn tall_sidebar_uses_default_one_third_one_quarter_and_five_twelfths_split() {
         let mut app = SidebarApp::new("main".into());
         app.apply_response(sample_response_with_comms(6));
         let area = Rect::new(0, 0, 24, 47);
@@ -1561,6 +1564,22 @@ mod tests {
         assert_eq!(areas.tree.height, 16);
         assert_eq!(areas.comms.height, 12);
         assert_eq!(areas.tips.map(|area| area.height), Some(19));
+    }
+
+    #[test]
+    fn configured_sidebar_view_can_make_tree_taller_and_comms_shorter() {
+        let mut app = SidebarApp::new("main".into());
+        let mut response = sample_response_with_comms(6);
+        response.view.namespace.sidebar.view.agents_height = serde_json::Value::String("50%".into());
+        response.view.namespace.sidebar.view.comms_height = serde_json::Value::String("15%".into());
+        app.apply_response(response);
+        let area = Rect::new(0, 0, 24, 40);
+
+        let areas = sidebar_areas(area, app.sidebar_view());
+
+        assert_eq!(areas.tree.height, 20);
+        assert_eq!(areas.comms.height, 6);
+        assert_eq!(areas.tips.map(|area| area.height), Some(14));
     }
 
     #[test]

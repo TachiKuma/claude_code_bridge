@@ -918,6 +918,8 @@ bottom_height = 20
     assert result.config.sidebar.mode == 'every_window'
     assert result.config.sidebar.width == '15%'
     assert result.config.sidebar.bottom_height == 20
+    assert result.config.sidebar_view.agents_height == '33%'
+    assert result.config.sidebar_view.comms_height == '25%'
     assert result.config.sidebar_view.comms_limit == 5
     assert result.config.sidebar_view.tips[0] == 'C-b d  detach'
     assert 'C-b h/j/k/l pane' in result.config.sidebar_view.tips
@@ -944,6 +946,7 @@ bottom_height = 20
         + """
 [ui.sidebar.view]
 agents_height = "40%"
+comms_height = "15%"
 comms_limit = 4
 comms_compact = true
 tips_enabled = true
@@ -954,6 +957,7 @@ tips = ["C-b d detach", "C-b z zoom"]
     configured = load_project_config(project_root).config
 
     assert configured.sidebar_view.agents_height == '40%'
+    assert configured.sidebar_view.comms_height == '15%'
     assert configured.sidebar_view.comms_limit == 4
     assert configured.sidebar_view.comms_compact is True
     assert configured.sidebar_view.tips_enabled is True
@@ -967,6 +971,7 @@ tips = ["C-b d detach", "C-b z zoom"]
         + """
 [ui.sidebar.view]
 agents_height = "35%"
+comms_height = "10%"
 comms_limit = 5
 tips = ["C-b c new win"]
 """,

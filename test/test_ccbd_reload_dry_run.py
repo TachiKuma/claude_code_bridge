@@ -159,6 +159,8 @@ def test_reload_plan_classifies_sidebar_view_only_change(tmp_path: Path) -> None
         BASE_CONFIG
         + """
 [ui.sidebar.view]
+agents_height = "50%"
+comms_height = "15%"
 comms_limit = 4
 tips = ["C-b d detach"]
 """,
@@ -168,6 +170,8 @@ tips = ["C-b d detach"]
         BASE_CONFIG
         + """
 [ui.sidebar.view]
+agents_height = "60%"
+comms_height = "10%"
 comms_limit = 5
 tips = ["C-b c new win"]
 """,

@@ -145,6 +145,11 @@ review = "reviewer:claude, qa:gemini"
 mode = "every_window"
 width = "15%"
 bottom_height = 20
+
+[ui.sidebar.view]
+agents_height = "50%"
+comms_height = "15%"
+comms_limit = 3
 ```
 
 如果你不确定应该如何分组、要几个 worker、哪些 agent 用 worktree、哪些 agent 需要独立模型或 API，可以先让支持 skill 的 agent 使用 `ccb-config` 和你讨论并生成配置方案。
@@ -284,6 +289,11 @@ review = "reviewer:claude, qa:gemini"
 mode = "every_window"
 width = "15%"
 bottom_height = 20
+
+[ui.sidebar.view]
+agents_height = "50%"
+comms_height = "15%"
+comms_limit = 3
 ```
 
 注意：`cmd` 只属于紧凑/混合单窗口布局；`[windows]` 拓扑里不要写 `cmd`。

@@ -44,7 +44,10 @@ def parse_sidebar_view(raw_ui: Any) -> SidebarViewSpec | None:
     if sidebar.get('view') is None:
         return None
     view = expect_mapping(sidebar['view'], field_name='ui.sidebar.view')
-    unknown_view = sorted(set(view) - {'agents_height', 'comms_limit', 'comms_compact', 'tips_enabled', 'tips'})
+    unknown_view = sorted(
+        set(view)
+        - {'agents_height', 'comms_height', 'comms_limit', 'comms_compact', 'tips_enabled', 'tips'}
+    )
     if unknown_view:
         raise ConfigValidationError(
             f'ui.sidebar.view contains unknown fields: {", ".join(unknown_view)}'
@@ -52,6 +55,7 @@ def parse_sidebar_view(raw_ui: Any) -> SidebarViewSpec | None:
     try:
         return SidebarViewSpec(
             agents_height=view.get('agents_height', '33%'),
+            comms_height=view.get('comms_height', '25%'),
             comms_limit=view.get('comms_limit', 5),
             comms_compact=expect_bool(view.get('comms_compact', True), field_name='ui.sidebar.view.comms_compact'),
             tips_enabled=expect_bool(view.get('tips_enabled', True), field_name='ui.sidebar.view.tips_enabled'),
