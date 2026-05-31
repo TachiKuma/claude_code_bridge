@@ -33,6 +33,7 @@ VIEW_CONFIG = BASE_CONFIG + """
 [ui.sidebar.view]
 agents_height = "50%"
 comms_height = "15%"
+tips_height = "35%"
 comms_limit = 4
 """
 
@@ -40,6 +41,7 @@ VIEW_CONFIG_CHANGED = BASE_CONFIG + """
 [ui.sidebar.view]
 agents_height = "60%"
 comms_height = "10%"
+tips_height = "30%"
 comms_limit = 5
 """
 
@@ -103,6 +105,7 @@ def test_additive_reload_apply_view_only_publishes_without_namespace_or_runtime_
     assert app.config is app.service_graph.config
     assert app.config.sidebar_view.agents_height == '60%'
     assert app.config.sidebar_view.comms_height == '10%'
+    assert app.config.sidebar_view.tips_height == '30%'
     assert app.config.sidebar_view.comms_limit == 5
     assert app.config_identity == app.service_graph.config_identity
     assert app.mount_manager.load_state().config_signature == app.config_identity['config_signature']
@@ -528,6 +531,7 @@ def test_project_reload_non_dry_run_view_only_publishes_and_refreshes_graph_view
     old_view = app.socket_server._handlers['project_view']({'schema_version': 1})
     assert old_view['view']['namespace']['sidebar']['view']['agents_height'] == '50%'
     assert old_view['view']['namespace']['sidebar']['view']['comms_height'] == '15%'
+    assert old_view['view']['namespace']['sidebar']['view']['tips_height'] == '35%'
     assert old_view['view']['namespace']['sidebar']['view']['comms_limit'] == 4
     _project(app.project_root, VIEW_CONFIG_CHANGED)
 
@@ -550,6 +554,7 @@ def test_project_reload_non_dry_run_view_only_publishes_and_refreshes_graph_view
     assert app.service_graph.version == 2
     assert app.config.sidebar_view.agents_height == '60%'
     assert app.config.sidebar_view.comms_height == '10%'
+    assert app.config.sidebar_view.tips_height == '30%'
     assert app.config.sidebar_view.comms_limit == 5
     assert app.mount_manager.load_state().config_signature == app.config_identity['config_signature']
     assert app.lifecycle_store.load().config_signature == app.config_identity['config_signature']
@@ -561,6 +566,7 @@ def test_project_reload_non_dry_run_view_only_publishes_and_refreshes_graph_view
     view = app.socket_server._handlers['project_view']({'schema_version': 1})
     assert view['view']['namespace']['sidebar']['view']['agents_height'] == '60%'
     assert view['view']['namespace']['sidebar']['view']['comms_height'] == '10%'
+    assert view['view']['namespace']['sidebar']['view']['tips_height'] == '30%'
     assert view['view']['namespace']['sidebar']['view']['comms_limit'] == 5
 
 

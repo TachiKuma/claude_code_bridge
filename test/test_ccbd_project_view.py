@@ -828,8 +828,9 @@ def test_project_view_returns_minimal_windows_agents_and_comms(tmp_path: Path) -
     assert response['cache']['sequence'] == 1
     assert view['project']['display_name'] == 'repo'
     assert view['ccbd']['state'] == MountState.MOUNTED.value
-    assert view['namespace']['sidebar']['view']['agents_height'] == '33%'
-    assert view['namespace']['sidebar']['view']['comms_height'] == '25%'
+    assert view['namespace']['sidebar']['view']['agents_height'] == '50%'
+    assert view['namespace']['sidebar']['view']['comms_height'] == '15%'
+    assert view['namespace']['sidebar']['view']['tips_height'] == '35%'
     assert view['namespace']['sidebar']['view']['comms_limit'] == 5
     assert view['namespace']['sidebar']['view']['tips'][0] == 'C-b d  detach'
     assert 'C-b h/j/k/l pane' in view['namespace']['sidebar']['view']['tips']
@@ -868,6 +869,7 @@ ops = "agent3:codex"
 [ui.sidebar.view]
 agents_height = "50%"
 comms_height = "15%"
+tips_height = "35%"
 comms_limit = 4
 tips = ["C-b d detach"]
 """,
@@ -905,6 +907,7 @@ ops = "agent3:codex"
 [ui.sidebar.view]
 agents_height = "60%"
 comms_height = "10%"
+tips_height = "30%"
 comms_limit = 2
 tips = ["C-b z zoom", "C-b c new win"]
 """,
@@ -913,10 +916,12 @@ tips = ["C-b z zoom", "C-b c new win"]
 
     assert first['agents_height'] == '50%'
     assert first['comms_height'] == '15%'
+    assert first['tips_height'] == '35%'
     assert first['comms_limit'] == 4
     assert first['tips'] == ['C-b d detach']
     assert second['agents_height'] == '60%'
     assert second['comms_height'] == '10%'
+    assert second['tips_height'] == '30%'
     assert second['comms_limit'] == 2
     assert second['tips'] == ['C-b z zoom', 'C-b c new win']
 

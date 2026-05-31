@@ -30,8 +30,9 @@ use crate::status::{activity_color, activity_symbol};
 const PROJECT_VIEW_REFRESH_MIN_MS: u64 = 100;
 const PROJECT_VIEW_REFRESH_MAX_MS: u64 = 5000;
 const PROJECT_VIEW_REFRESH_DEFAULT_MS: u64 = 1000;
-const DEFAULT_TREE_HEIGHT_PERCENT: u16 = 33;
-const DEFAULT_COMMS_HEIGHT_PERCENT: u16 = 25;
+const DEFAULT_TREE_HEIGHT_PERCENT: u16 = 50;
+const DEFAULT_COMMS_HEIGHT_PERCENT: u16 = 15;
+const DEFAULT_TIPS_HEIGHT_PERCENT: u16 = 35;
 const TREE_CONTROL_CONTENT_WIDTH: u16 = 3;
 const TREE_REFRESH_SYMBOL: &str = "↻";
 const TREE_KILL_SYMBOL: &str = "×";
@@ -588,7 +589,9 @@ fn sidebar_areas(area: Rect, view: &SidebarViewInfo) -> SidebarAreas {
     let remaining_after_tree = area.height.saturating_sub(tree_height);
     let desired_comms_height = comms_height_for(area.height, view);
     let comms_height = desired_comms_height.min(remaining_after_tree);
-    let tips_height = remaining_after_tree.saturating_sub(comms_height);
+    let remaining_after_comms = remaining_after_tree.saturating_sub(comms_height);
+    let desired_tips_height = tips_height_for(area.height, view);
+    let tips_height = desired_tips_height.min(remaining_after_comms);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -617,6 +620,14 @@ fn comms_height_for(total_height: u16, view: &SidebarViewInfo) -> u16 {
         total_height,
         &view.comms_height,
         DEFAULT_COMMS_HEIGHT_PERCENT,
+    )
+}
+
+fn tips_height_for(total_height: u16, view: &SidebarViewInfo) -> u16 {
+    view_height_for(
+        total_height,
+        &view.tips_height,
+        DEFAULT_TIPS_HEIGHT_PERCENT,
     )
 }
 
@@ -1533,7 +1544,7 @@ mod tests {
     }
 
     #[test]
-    fn renders_three_panel_sidebar_with_five_compact_comms_rows() {
+    fn renders_three_panel_sidebar_with_default_compact_comms_rows() {
         let mut app = SidebarApp::new("main".into());
         app.apply_response(sample_response_with_comms(6));
 
@@ -1543,36 +1554,20 @@ mod tests {
 
         let rendered = terminal.backend().to_string();
         assert!(rendered.contains("↻  X  ⌫  agent4>agent1 ok"));
-        assert!(rendered.contains("↻  X  ⌫  agent5>agent1 ok"));
+        assert!(!rendered.contains("agent5>agent1"));
         assert!(!rendered.contains("agent6>agent1"));
         assert!(rendered.contains("Tips"));
         let buffer = terminal.backend().buffer();
-        assert_eq!(buffer[(0, 12)].symbol(), "┌");
-        assert_eq!(buffer[(1, 12)].symbol(), "C");
-        assert_eq!(buffer[(0, 21)].symbol(), "┌");
-        assert_eq!(buffer[(1, 21)].symbol(), "T");
+        assert_eq!(buffer[(0, 18)].symbol(), "┌");
+        assert_eq!(buffer[(1, 18)].symbol(), "C");
+        assert_eq!(buffer[(0, 24)].symbol(), "┌");
+        assert_eq!(buffer[(1, 24)].symbol(), "T");
     }
 
     #[test]
-    fn tall_sidebar_uses_default_one_third_one_quarter_and_five_twelfths_split() {
+    fn tall_sidebar_uses_default_half_fifteen_and_thirty_five_split() {
         let mut app = SidebarApp::new("main".into());
         app.apply_response(sample_response_with_comms(6));
-        let area = Rect::new(0, 0, 24, 47);
-
-        let areas = sidebar_areas(area, app.sidebar_view());
-
-        assert_eq!(areas.tree.height, 16);
-        assert_eq!(areas.comms.height, 12);
-        assert_eq!(areas.tips.map(|area| area.height), Some(19));
-    }
-
-    #[test]
-    fn configured_sidebar_view_can_make_tree_taller_and_comms_shorter() {
-        let mut app = SidebarApp::new("main".into());
-        let mut response = sample_response_with_comms(6);
-        response.view.namespace.sidebar.view.agents_height = serde_json::Value::String("50%".into());
-        response.view.namespace.sidebar.view.comms_height = serde_json::Value::String("15%".into());
-        app.apply_response(response);
         let area = Rect::new(0, 0, 24, 40);
 
         let areas = sidebar_areas(area, app.sidebar_view());
@@ -1580,6 +1575,23 @@ mod tests {
         assert_eq!(areas.tree.height, 20);
         assert_eq!(areas.comms.height, 6);
         assert_eq!(areas.tips.map(|area| area.height), Some(14));
+    }
+
+    #[test]
+    fn configured_sidebar_view_can_adjust_all_three_sections() {
+        let mut app = SidebarApp::new("main".into());
+        let mut response = sample_response_with_comms(6);
+        response.view.namespace.sidebar.view.agents_height = serde_json::Value::String("40%".into());
+        response.view.namespace.sidebar.view.comms_height = serde_json::Value::String("20%".into());
+        response.view.namespace.sidebar.view.tips_height = serde_json::Value::String("40%".into());
+        app.apply_response(response);
+        let area = Rect::new(0, 0, 24, 40);
+
+        let areas = sidebar_areas(area, app.sidebar_view());
+
+        assert_eq!(areas.tree.height, 16);
+        assert_eq!(areas.comms.height, 8);
+        assert_eq!(areas.tips.map(|area| area.height), Some(16));
     }
 
     #[test]
@@ -1771,6 +1783,9 @@ mod tests {
     fn mouse_coordinates_map_to_comms_rows() {
         let mut app = SidebarApp::new("main".into());
         let mut response = sample_response_with_comms(3);
+        response.view.namespace.sidebar.view.agents_height = serde_json::Value::String("50%".into());
+        response.view.namespace.sidebar.view.comms_height = serde_json::Value::String("40%".into());
+        response.view.namespace.sidebar.view.tips_height = serde_json::Value::String("10%".into());
         response.view.comms[0].body_preview = "line two".into();
         response.view.comms[1].body_preview = "line two".into();
         app.apply_response(response);

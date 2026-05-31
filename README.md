@@ -149,6 +149,7 @@ bottom_height = 20
 [ui.sidebar.view]
 agents_height = "50%"
 comms_height = "15%"
+tips_height = "35%"
 comms_limit = 3
 ```
 
@@ -296,6 +297,7 @@ bottom_height = 20
 [ui.sidebar.view]
 agents_height = "50%"
 comms_height = "15%"
+tips_height = "35%"
 comms_limit = 3
 ```
 

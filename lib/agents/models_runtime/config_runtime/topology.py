@@ -65,8 +65,9 @@ class SidebarSpec:
 
 @dataclass(frozen=True)
 class SidebarViewSpec:
-    agents_height: str | int = '33%'
-    comms_height: str | int = '25%'
+    agents_height: str | int = '50%'
+    comms_height: str | int = '15%'
+    tips_height: str | int = '35%'
     comms_limit: int = 5
     comms_compact: bool = True
     tips_enabled: bool = True
@@ -89,6 +90,14 @@ class SidebarViewSpec:
                 field_name='ui.sidebar.view.comms_height',
             ),
         )
+        object.__setattr__(
+            self,
+            'tips_height',
+            normalize_sidebar_view_height(
+                self.tips_height,
+                field_name='ui.sidebar.view.tips_height',
+            ),
+        )
         try:
             comms_limit = int(self.comms_limit)
         except Exception as exc:
@@ -109,6 +118,7 @@ class SidebarViewSpec:
         return {
             'agents_height': self.agents_height,
             'comms_height': self.comms_height,
+            'tips_height': self.tips_height,
             'comms_limit': self.comms_limit,
             'comms_compact': self.comms_compact,
             'tips_enabled': self.tips_enabled,
