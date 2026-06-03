@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## v7.2.6 (2026-06-04)
+## v7.2.7 (2026-06-04)
 
 ### Agent Roles Catalog Release
 
@@ -13,6 +13,13 @@
 - **Compatibility Alias Kept**: legacy `ccb.archi` inputs resolve to `agentroles.archi` while project config and locks use the canonical catalog role id.
 - **Source Runtime Guard Fixed**: source checkout commands that pass `--project` now validate the target project against allowed test roots, restoring CCBD communication smoke checks launched from the source checkout.
 - **Official Smoke Roots Fixed**: real-platform soak, fastpath, and storage cleanup smoke checks now pass their generated test roots through `CCB_SOURCE_ALLOWED_ROOTS`.
+- **WSL Mounted Startup Smoke Fixed**: the main Tests workflow now passes the generated `/mnt/c/Temp` startup-smoke project through `CCB_SOURCE_ALLOWED_ROOTS`.
+
+## v7.2.6 (2026-06-04)
+
+### Superseded Official Smoke Root Hotfix
+
+- Superseded by v7.2.7 after the release gate found that the WSL mounted startup smoke in the main Tests workflow also needed its generated `/mnt/c/Temp` project in `CCB_SOURCE_ALLOWED_ROOTS`.
 
 ## v7.2.5 (2026-06-04)
 
