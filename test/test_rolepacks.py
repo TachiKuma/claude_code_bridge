@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import zipfile
 
 import pytest
 
@@ -1044,6 +1045,45 @@ def test_catalog_discovery_falls_back_to_github_cache_when_local_catalog_missing
     expected_cache = tmp_path / 'xdg-cache' / 'ccb' / 'role-catalogs' / 'agent-roles-spec'
     assert source == expected_cache.resolve()
     assert commands == [['git', 'clone', '--depth', '1', DEFAULT_AGENT_ROLES_SPEC_GIT_URL, str(expected_cache)]]
+    assert rows['agentroles.remote']['source'] == 'agentroles'
+    assert rows['agentroles.remote']['path'] == str(expected_cache / 'roles' / 'remote')
+
+
+def test_catalog_discovery_downloads_archive_when_git_is_missing(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv('AGENT_ROLES_SPEC_HOME', raising=False)
+    monkeypatch.delenv('CCB_AGENT_ROLES_SPEC_HOME', raising=False)
+    monkeypatch.setenv('HOME', str(tmp_path / 'home'))
+    monkeypatch.setenv('XDG_CACHE_HOME', str(tmp_path / 'xdg-cache'))
+    monkeypatch.setenv('XDG_DATA_HOME', str(tmp_path / 'xdg-data'))
+    remote_catalog = tmp_path / 'remote-agent-roles-spec-main'
+    _write_catalog_role(
+        remote_catalog,
+        'roles',
+        'remote',
+        role_id='agentroles.remote',
+        version='0.1.0',
+        name='Remote Role',
+    )
+    archive_path = tmp_path / 'agent-roles-spec.zip'
+    with zipfile.ZipFile(archive_path, 'w') as archive:
+        for path in remote_catalog.rglob('*'):
+            if path.is_file():
+                archive.write(path, path.relative_to(tmp_path))
+
+    def missing_git(cmd, **kwargs):
+        raise FileNotFoundError(cmd[0])
+
+    monkeypatch.setattr(role_sources.subprocess, 'run', missing_git)
+    monkeypatch.setenv('CCB_AGENT_ROLES_SPEC_ARCHIVE_URL', archive_path.as_uri())
+
+    source = default_agent_roles_source()
+    rows = {str(row['role_id']): row for row in role_catalog_status()}
+
+    expected_cache = tmp_path / 'xdg-cache' / 'ccb' / 'role-catalogs' / 'agent-roles-spec'
+    assert source == expected_cache.resolve()
     assert rows['agentroles.remote']['source'] == 'agentroles'
     assert rows['agentroles.remote']['path'] == str(expected_cache / 'roles' / 'remote')
 
