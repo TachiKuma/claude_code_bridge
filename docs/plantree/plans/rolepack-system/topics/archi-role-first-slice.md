@@ -33,11 +33,12 @@ non_goals = ["business implementation", "release publishing"]
 - Claude skills: same semantic set in Claude skill format.
 - Tools:
   - install or update Archi through the global npm package
-    `@seemseam/architec`
+    `@seemseam/archi`
   - do not split Hippo or llmgateway into CCB-managed pip, venv, git, or
     editable installs
-  - doctor checks the main `archi` CLI and bundled `hippo`/`llmgateway`
-    command availability without trying to install them separately
+  - doctor checks the main `archi` CLI; bundled `hippo`/`llmgateway` fields
+    report npm package bundle availability without trying to install them
+    separately
 
 ## CCB Binding
 
@@ -74,8 +75,8 @@ role details or diagnostics, but not as the main agent row label.
 
 - installed role version and digest
 - `archi` CLI readiness
-- bundled `hippo` and `llmgateway` command availability
-- remediation pointing to `npm install -g @seemseam/architec` when missing
+- bundled Hippo and llmgateway npm package bundle availability
+- remediation pointing to `npm install -g @seemseam/archi` when missing
 - skill projection status for each bound provider
 - memory projection hash
 - actionable remediation for missing dependencies
@@ -93,9 +94,9 @@ Implemented in the first code slice, with migration needed:
 - Codex and Claude role skill projection into managed provider homes
 - `ccb roles list/show/install/update/sync/add/doctor`
 - Archi tool lifecycle execution through global npm package
-  `@seemseam/architec`
-- `doctor` checks the `archi`, `hippo`, and `llmgateway` commands without
-  printing secrets or attempting split installs
+  `@seemseam/archi`
+- `doctor` checks the `archi` command and reports bundled Hippo/llmgateway
+  package availability without printing secrets or attempting split installs
 - shorthand config validation with sidebar display as `archi`
 - real `test_ccb2` validation for install/update/sync/add, projection,
   startup, reload, and runtime doctor

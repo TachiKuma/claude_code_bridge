@@ -440,18 +440,6 @@ require_python_version() {
   echo "OK: Python $version ($PYTHON_BIN)"
 }
 
-python_supports_role_tool_venv() {
-  "$PYTHON_BIN" - <<'PY' >/dev/null 2>&1
-import importlib.util
-import sys
-
-for module_name in ("venv", "ensurepip"):
-    if importlib.util.find_spec(module_name) is None:
-        raise SystemExit(1)
-raise SystemExit(0)
-PY
-}
-
 print_git_install_hint() {
   local platform
   platform="$(detect_platform)"
@@ -486,32 +474,36 @@ print_git_install_hint() {
   esac
 }
 
-print_python_venv_install_hint() {
+print_npm_install_hint() {
   local platform
   platform="$(detect_platform)"
   case "$platform" in
     macos)
-      echo "   macOS: install or repair Python 3.10+; Homebrew users can run 'brew install python'"
+      if command -v brew >/dev/null 2>&1; then
+        echo "   macOS: brew install node"
+      else
+        echo "   macOS: install Node.js/npm from https://nodejs.org/ or with Homebrew"
+      fi
       ;;
     linux)
       if command -v apt-get >/dev/null 2>&1; then
-        echo "   Debian/Ubuntu: sudo apt-get update && sudo apt-get install -y python3-venv python3-pip"
+        echo "   Debian/Ubuntu: sudo apt-get update && sudo apt-get install -y nodejs npm"
       elif command -v dnf >/dev/null 2>&1; then
-        echo "   Fedora/CentOS/RHEL: sudo dnf install -y python3 python3-pip"
+        echo "   Fedora/CentOS/RHEL: sudo dnf install -y nodejs npm"
       elif command -v yum >/dev/null 2>&1; then
-        echo "   CentOS/RHEL: sudo yum install -y python3 python3-pip"
+        echo "   CentOS/RHEL: sudo yum install -y nodejs npm"
       elif command -v pacman >/dev/null 2>&1; then
-        echo "   Arch/Manjaro: sudo pacman -S python python-pip"
+        echo "   Arch/Manjaro: sudo pacman -S nodejs npm"
       elif command -v apk >/dev/null 2>&1; then
-        echo "   Alpine: sudo apk add python3 py3-pip"
+        echo "   Alpine: sudo apk add nodejs npm"
       elif command -v zypper >/dev/null 2>&1; then
-        echo "   openSUSE: sudo zypper install -y python3 python3-pip"
+        echo "   openSUSE: sudo zypper install -y nodejs npm"
       else
-        echo "   Linux: install Python venv/ensurepip support with your distro's package manager"
+        echo "   Linux: install Node.js/npm with your distro's package manager"
       fi
       ;;
     *)
-      echo "   Install Python venv/ensurepip support for Python 3.10+"
+      echo "   Install Node.js/npm and ensure npm is on PATH"
       ;;
   esac
 }
@@ -528,9 +520,9 @@ check_role_pack_dependencies() {
     print_git_install_hint
     missing=1
   fi
-  if ! python_supports_role_tool_venv; then
-    echo "$label: Missing Python support for Role Pack tool dependencies: venv/ensurepip"
-    print_python_venv_install_hint
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "$label: Missing dependency for Role Pack provisioning: npm"
+    print_npm_install_hint
     missing=1
   fi
   if [[ "$missing" -eq 0 ]]; then

@@ -38,7 +38,7 @@ from .sources import (
 
 ARCHITEC_ROLE_ID = 'agentroles.archi'
 ARCHITEC_TOOL_ID = 'architec'
-ARCHITEC_NPM_PACKAGE = '@seemseam/architec'
+ARCHITEC_NPM_PACKAGE = '@seemseam/archi'
 
 
 class RolePackError(RoleManifestError):
@@ -300,7 +300,7 @@ def _run_architec_npm_install(*, action: str, required: bool) -> dict[str, objec
                 install_command=display_command,
                 reason='npm is not available on PATH',
             ),
-            'stderr': 'npm is not available; install Node.js/npm, then run `npm install -g @seemseam/architec`',
+            'stderr': f'npm is not available; install Node.js/npm, then run `{display_command}`',
         }
     command[0] = npm_bin
     try:
@@ -350,38 +350,31 @@ def _run_architec_npm_install(*, action: str, required: bool) -> dict[str, objec
 
 def _run_architec_doctor(*, action: str, required: bool) -> dict[str, object]:
     package = _architec_npm_package()
-    archi = _which_first('archi', 'architec')
-    archi_probe = _probe_archi_help(archi)
-    archi_help = str(archi_probe.get('status') or 'missing')
-    hippo_capability = 'available' if bool(archi_probe.get('hippo_capability')) else 'unknown'
-    llmgateway_capability = 'available' if bool(archi_probe.get('llmgateway_capability')) else 'unknown'
-    if not archi or archi_help == 'failed':
+    archi = shutil.which('archi')
+    archi_probe = _probe_archi_cli(archi)
+    archi_probe_status = str(archi_probe.get('status') or 'missing')
+    if not archi or archi_probe_status == 'failed':
         architec_status = 'missing' if not archi else 'failed'
         returncode = 1
         status = 'failed'
-    elif hippo_capability != 'available' or llmgateway_capability != 'available':
-        architec_status = 'degraded'
-        returncode = 0
-        status = 'ok'
     else:
         architec_status = 'ok'
         returncode = 0
         status = 'ok'
+    bundle_status = 'available' if architec_status == 'ok' else 'unknown'
     stdout = _architec_status_text(
         architec_status=architec_status,
         action=action,
         package=package,
         install_command=f'npm install -g {package}',
         archi_binary=archi or '',
-        bundled_hippo=hippo_capability,
-        bundled_llmgateway=llmgateway_capability,
-        archi_help=archi_help,
-        hippo_check='archi --help includes --refresh-from-hippos',
-        llmgateway_check='archi --help includes --check or --full',
+        bundled_hippo=bundle_status,
+        bundled_llmgateway=bundle_status,
+        archi_probe=archi_probe_status,
+        bundle_check='npm package bundle provides Hippo and llmgateway capabilities',
         reason=_architec_doctor_reason(
             architec_status,
-            hippo_capability=hippo_capability,
-            llmgateway_capability=llmgateway_capability,
+            package=package,
         ),
     )
     return {
@@ -403,74 +396,41 @@ def _architec_npm_bin() -> str | None:
 
 
 def _architec_npm_package() -> str:
-    return str(os.environ.get('CCB_ARCHITEC_NPM_PACKAGE') or ARCHITEC_NPM_PACKAGE).strip() or ARCHITEC_NPM_PACKAGE
+    return (
+        str(os.environ.get('CCB_ARCHI_NPM_PACKAGE') or os.environ.get('CCB_ARCHITEC_NPM_PACKAGE') or ARCHITEC_NPM_PACKAGE)
+        .strip()
+        or ARCHITEC_NPM_PACKAGE
+    )
 
 
-def _which_first(*names: str) -> str | None:
-    for name in names:
-        path = shutil.which(name)
-        if path:
-            return path
-    return None
-
-
-def _probe_binary_help(path: str | None) -> str:
-    if not path:
-        return 'missing'
-    try:
-        completed = subprocess.run(
-            [path, '--help'],
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=20,
-            check=False,
-        )
-    except Exception:
-        return 'failed'
-    return 'ok' if completed.returncode == 0 else 'failed'
-
-
-def _probe_archi_help(path: str | None) -> dict[str, object]:
+def _probe_archi_cli(path: str | None) -> dict[str, object]:
     if not path:
         return {'status': 'missing'}
-    try:
-        completed = subprocess.run(
-            [path, '--help'],
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=20,
-            check=False,
-        )
-    except Exception:
-        return {'status': 'failed'}
-    if completed.returncode != 0:
-        return {'status': 'failed'}
-    help_text = '\n'.join((completed.stdout or '', completed.stderr or '')).lower()
-    return {
-        'status': 'ok',
-        'hippo_capability': '--refresh-from-hippos' in help_text or 'hippo' in help_text,
-        'llmgateway_capability': '--check' in help_text or '--full' in help_text or 'llm' in help_text,
-    }
+    for flag in ('--help', '--version'):
+        try:
+            completed = subprocess.run(
+                [path, flag],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=20,
+                check=False,
+            )
+        except Exception:
+            continue
+        if completed.returncode == 0:
+            return {'status': 'ok'}
+    return {'status': 'failed'}
 
 
 def _architec_doctor_reason(
     status: str,
     *,
-    hippo_capability: str,
-    llmgateway_capability: str,
+    package: str,
 ) -> str:
     if status == 'ok':
-        return '@seemseam/architec CLI bundle is available'
-    missing = []
-    if hippo_capability != 'available':
-        missing.append('hippo capability')
-    if llmgateway_capability != 'available':
-        missing.append('llmgateway capability')
-    if missing:
-        return 'archi CLI did not advertise bundled ' + ', '.join(missing)
-    return 'install or update @seemseam/architec'
+        return f'{package} CLI bundle is available'
+    return f'install or update {package}'
 
 
 def _architec_status_text(**fields: object) -> str:

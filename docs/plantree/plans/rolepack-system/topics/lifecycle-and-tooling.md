@@ -111,7 +111,7 @@ $XDG_CACHE_HOME/ccb/tools/<tool-id>/
 ```
 
 For example, `agentroles.archi` installs Archi through the global npm package
-`@seemseam/architec`. CCB must not split Hippo or llmgateway into separate
+`@seemseam/archi`. CCB must not split Hippo or llmgateway into separate
 pip, venv, git, or editable installs because those capabilities are provided
 by the Architec package.
 
@@ -131,9 +131,10 @@ inside the installed role snapshot.
 ## Secrets
 
 Role tools may require external configuration, but the Role Pack must not store
-secrets. For Architec, doctor may check whether bundled llmgateway capability is
-available, but remediation should point to `npm install -g @seemseam/architec`
-or updating that package rather than separate llmgateway installation steps.
+secrets. For Architec, doctor checks whether the npm-provided `archi` CLI is
+callable. Bundled Hippo/llmgateway fields describe package-bundle availability;
+remediation should point to `npm install -g @seemseam/archi` or updating that
+package rather than separate llmgateway installation steps.
 
 ## Removal
 
