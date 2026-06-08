@@ -10,7 +10,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WSL-lightgrey.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
-[![Version](https://img.shields.io/badge/version-7.3.6-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-7.3.7-orange.svg)]()
 [![Release](https://img.shields.io/badge/install-release--first-orange.svg)]()
 
 **English** | [中文](README_zh.md)
@@ -536,6 +536,17 @@ v7 highlights:
 - Hardened tmux, Ghostty, release helper, Codex trust, and provider session restore paths.
 
 <details open>
+<summary><b>v7.3.7</b> - Ask Parameter Policy And Skill Guidance</summary>
+
+- Updates inherited Claude, Codex, and Droid ask skills to choose flags from result intent first: `--silence`, `--compact`, `--artifact-reply`, or plain `ask`.
+- Keeps dependency handling explicit by adding `--callback` only when an active parent job must wait for a child result.
+- Separates artifact transport from task relationship: use `--artifact-request` and `--artifact-io` when exact input or input/output preservation matters.
+- Adds the Agent Collaboration ask-parameter quick reference to README and README_zh.
+- Adds the ask-parameter-policy plan tree, decision records, parameter matrix, and validation notes.
+
+</details>
+
+<details>
 <summary><b>v7.3.6</b> - Provider Memory Ownership Cleanup</summary>
 
 - Adds provider memory ownership policy: Claude, Codex, and OpenCode managed contexts no longer duplicate provider-native project memory inside the CCB generated bundle; Gemini keeps the previous behavior pending audit.

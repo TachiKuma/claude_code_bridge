@@ -10,7 +10,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WSL-lightgrey.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
-[![Version](https://img.shields.io/badge/version-7.3.6-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-7.3.7-orange.svg)]()
 [![Release](https://img.shields.io/badge/install-release--first-orange.svg)]()
 
 **中文** | [English](README.md)
@@ -527,6 +527,17 @@ v7 线重点：
 - 加固 tmux、Ghostty、release helper、Codex trust 和 provider 会话恢复路径。
 
 <details open>
+<summary><b>v7.3.7</b> - Ask 参数策略与 skill 指引</summary>
+
+- inherited Claude、Codex、Droid ask skills 改为先按结果意图选择参数：`--silence`、`--compact`、`--artifact-reply` 或普通 `ask`。
+- 依赖关系保持显式：只有 active 父任务必须等待子任务结果时才追加 `--callback`。
+- artifact transport 与任务关系分离：需要精确输入或输入/输出保真时才使用 `--artifact-request` 和 `--artifact-io`。
+- README / README_zh 的 Agent Collaboration 小节新增 ask 参数速查表。
+- 新增 ask-parameter-policy plan tree、决策记录、参数矩阵和验证记录。
+
+</details>
+
+<details>
 <summary><b>v7.3.6</b> - Provider memory ownership 清理</summary>
 
 - 新增 provider memory ownership policy：Claude、Codex、OpenCode 的托管上下文不再把 provider-native project memory 重复注入 CCB 生成 bundle；Gemini 暂时保留旧行为，等待单独审计。
