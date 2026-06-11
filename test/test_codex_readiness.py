@@ -18,6 +18,18 @@ def test_codex_looks_ready_rejects_shutdown_text() -> None:
     assert not looks_ready(text)
 
 
+def test_codex_unusable_marker_ignores_legitimate_conversation_text() -> None:
+    text = (
+        '>_ OpenAI Codex\n'
+        'model: gpt-5.5 xhigh /model to change\n'
+        'The user asked how to handle shutting down a Kubernetes cluster.\n'
+        '› Implement {feature}'
+    )
+
+    assert not looks_unusable(text)
+    assert looks_ready(text)
+
+
 def test_codex_wait_for_runtime_ready_waits_for_stable_ready_prompt(monkeypatch) -> None:
     class _Backend:
         def __init__(self) -> None:

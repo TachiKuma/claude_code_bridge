@@ -53,6 +53,9 @@ usable later for schedule-driven tasks sent to other configured agents.
 - [topics/implementation-slices.md](topics/implementation-slices.md): code
   entrypoint inventory, PR sequence, first safe slice, test mapping, and
   implementation blockers.
+- [topics/schedule-consumer-runner.md](topics/schedule-consumer-runner.md):
+  next slice for consuming persisted `schedule.json` automatically after
+  startup instead of relying on manual `maintenance tick`.
 - [decisions/001-independent-runner-default-self-escalation.md](decisions/001-independent-runner-default-self-escalation.md):
   decision to use an independent CCB runner with configurable assessor
   escalation, defaulting to `ccb_self`.
@@ -66,6 +69,9 @@ usable later for schedule-driven tasks sent to other configured agents.
 - [decisions/004-activation-condition-pipeline.md](decisions/004-activation-condition-pipeline.md):
   decision to separate activation conditions from activation dispatch so future
   triggers and targets can reuse the same pipeline.
+- [decisions/005-project-scoped-schedule-consumer.md](decisions/005-project-scoped-schedule-consumer.md):
+  decision to add a CCB-owned project-scoped schedule consumer helper that
+  consumes heartbeat schedules and invokes the existing one-shot tick.
 
 ## Related Sources
 
@@ -85,6 +91,10 @@ In scope:
 - Programmatic CCB runtime and communication snapshots used as evidence.
 - Configurable semantic-assessor escalation, defaulting to `ccb_self`.
 - A `ccb_self` running-supervision skill as the first semantic assessor.
+- Assessor-side real pane observation for ambiguous execution progress:
+  heartbeat passes target references, while `ccb_self` starts with read-only
+  `tmux capture-pane` style bottom/current text capture and activity sampling,
+  using bounded screenshot artifacts only as fallback.
 - A controlled schedule update surface for the next heartbeat time.
 - `ccb.config` heartbeat enablement and assessor selection.
 - Startup integration so normal `ccb` project startup ensures the independent

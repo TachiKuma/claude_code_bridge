@@ -3,15 +3,23 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import signal
+import subprocess
+import sys
+import threading
+import time
 import uuid
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import timedelta
+from pathlib import Path
 
 from agents.config_loader import load_project_config
 from ccbd.api_models import DeliveryScope, MessageEnvelope
+from ccbd.services.lifecycle import CcbdLifecycleStore
 from ccbd.system import parse_utc_timestamp, utc_now
 from cli.context import CliContext
+from cli.kill_runtime.processes import is_pid_alive as _process_pid_alive
 from cli.models import ParsedMaintenanceCommand, ParsedPsCommand
 from mailbox_runtime import MAINTENANCE_HEARTBEAT_ACTOR
 from maintenance_heartbeat import (
@@ -20,12 +28,14 @@ from maintenance_heartbeat import (
     MaintenanceHeartbeatLock,
     MaintenanceHeartbeatLockBusy,
     MaintenanceHeartbeatReadResult,
+    MaintenanceHeartbeatRunner,
     MaintenanceHeartbeatSchedule,
     MaintenanceHeartbeatStatus,
     MaintenanceHeartbeatStore,
     evaluate_project_view,
     evaluate_ps_summary,
 )
+from runtime_env.control_plane import control_plane_env
 
 from .daemon import connect_mounted_daemon, invoke_mounted_daemon
 from .ps import ps_summary
@@ -34,6 +44,8 @@ _ACTIVATION_TAIL_LIMIT = 100
 _MESSAGE_EVIDENCE_LIMIT = 5
 _ACTIVE_ACTIVATION_BUSINESS_STATUSES = {'delivering', 'replying', 'sending'}
 _ACTIVE_JOB_STATUSES = {'accepted', 'queued', 'running'}
+_RUNNER_DEFAULT_SLEEP_CAP_S = 30.0
+_RUNNER_STOP_WAIT_S = 1.0
 
 
 @dataclass(frozen=True)
@@ -50,6 +62,8 @@ def maintenance_status(context: CliContext, command: ParsedMaintenanceCommand) -
         return _maintenance_tick(context, command)
     if action == 'schedule':
         return _maintenance_schedule(context, command)
+    if action == 'runner':
+        return _maintenance_runner(context, command)
     if action in {'enable', 'disable'}:
         return {
             'maintenance_status': 'not_implemented',
@@ -69,8 +83,9 @@ def _maintenance_status(context: CliContext) -> dict:
     store = MaintenanceHeartbeatStore(context.paths, project_id=context.project.project_id)
     schedule = store.load_schedule()
     last_status = store.load_status()
+    runner = store.load_runner()
     last_activation = _load_last_activation(store, context)
-    degraded = schedule.state == 'corrupt' or last_status.state == 'corrupt'
+    degraded = schedule.state == 'corrupt' or last_status.state == 'corrupt' or runner.state == 'corrupt'
     return {
         'maintenance_status': 'degraded' if degraded else 'ok',
         'project': str(context.project.project_root),
@@ -87,6 +102,7 @@ def _maintenance_status(context: CliContext) -> dict:
         'startup_ensure': heartbeat.startup_ensure,
         'schedule': schedule.to_record(),
         'last_status': last_status.to_record(),
+        'runner': runner.to_record(),
         'last_activation': last_activation,
     }
 
@@ -236,6 +252,163 @@ def _maintenance_schedule(context: CliContext, command: ParsedMaintenanceCommand
         'requested_after_s': schedule_options['after_s'],
         'scheduled_after_s': delay_s,
         'next_run_at': next_run_at,
+    }
+
+
+def _maintenance_runner(context: CliContext, command: ParsedMaintenanceCommand) -> dict:
+    try:
+        options = _parse_runner_args(command.args)
+    except ValueError as exc:
+        return {
+            'maintenance_status': 'invalid',
+            'action': 'runner',
+            'reason': str(exc),
+        }
+    return _run_maintenance_runner(
+        context,
+        runner_id=str(options['runner_id'] or _runner_id()),
+        source=str(options['source']),
+        max_iterations=options['max_iterations'],
+        sleep_cap_s=float(options['sleep_cap_s']),
+        dispatch=bool(options['dispatch']),
+    )
+
+
+def _run_maintenance_runner(
+    context: CliContext,
+    *,
+    runner_id: str,
+    source: str,
+    max_iterations: int | None,
+    sleep_cap_s: float,
+    dispatch: bool,
+) -> dict:
+    store = MaintenanceHeartbeatStore(context.paths, project_id=context.project.project_id)
+    current_pid = os.getpid()
+    existing = store.load_runner()
+    if _runner_read_result_is_live(existing, exclude_pid=current_pid):
+        return {
+            **_maintenance_status(context),
+            'maintenance_status': 'ok',
+            'action': 'runner',
+            'runner_status': 'already_running',
+            'runner_pid': existing.value.pid if existing.value is not None else None,
+            'runner_id': existing.value.runner_id if existing.value is not None else None,
+        }
+
+    stop_event = threading.Event()
+    previous_handlers = _install_runner_signal_handlers(stop_event)
+    started_at = utc_now()
+    runner = MaintenanceHeartbeatRunner(
+        project_id=context.project.project_id,
+        runner_id=runner_id,
+        pid=current_pid,
+        state='running',
+        source=source,
+        started_at=started_at,
+        last_seen_at=started_at,
+    )
+    store.save_runner(runner)
+    iterations = 0
+    exit_reason = 'max_iterations' if max_iterations == 0 else 'stopped'
+    failure_error: str | None = None
+    try:
+        while not stop_event.is_set():
+            observed_at = utc_now()
+            loaded = load_project_config(context.project.project_root)
+            heartbeat = loaded.config.maintenance_heartbeat
+            if not heartbeat.enabled:
+                exit_reason = 'disabled'
+                break
+            if heartbeat.assessor not in loaded.config.agents:
+                exit_reason = f'assessor_missing:{heartbeat.assessor}'
+                break
+            if not _project_lifecycle_allows_runner(context):
+                exit_reason = 'project_stopped'
+                break
+
+            schedule = store.load_schedule()
+            if _schedule_is_future(schedule, observed_at):
+                next_run_at = schedule.value.next_run_at if schedule.value is not None else None
+                runner = _runner_update(
+                    runner,
+                    state='sleeping',
+                    last_seen_at=observed_at,
+                    observed_next_run_at=next_run_at,
+                    sleep_until=next_run_at,
+                    exit_reason=None,
+                )
+                store.save_runner(runner)
+                iterations += 1
+                if max_iterations is not None and iterations >= max_iterations:
+                    exit_reason = 'max_iterations'
+                    break
+                delay_s = min(_seconds_until(observed_at, next_run_at), max(0.0, float(sleep_cap_s)))
+                if delay_s > 0:
+                    stop_event.wait(delay_s)
+                continue
+
+            runner = _runner_update(
+                runner,
+                state='running',
+                last_seen_at=observed_at,
+                last_wake_at=observed_at,
+                observed_next_run_at=schedule.value.next_run_at if schedule.value is not None else None,
+                sleep_until=None,
+                exit_reason=None,
+            )
+            store.save_runner(runner)
+            tick_args = () if dispatch else ('--no-dispatch',)
+            tick_payload = _maintenance_tick(
+                context,
+                ParsedMaintenanceCommand(project=getattr(context.command, 'project', None), action='tick', args=tick_args),
+            )
+            status_record = tick_payload.get('last_status')
+            tick_at = _nested_record_value(status_record, 'last_tick_at') or observed_at
+            tick_status = str(tick_payload.get('tick_status') or '').strip() or None
+            runner = _runner_update(
+                runner,
+                state='running',
+                last_seen_at=utc_now(),
+                last_tick_at=tick_at,
+                last_tick_status=tick_status,
+                observed_next_run_at=_nested_record_value(tick_payload.get('schedule'), 'next_run_at'),
+                sleep_until=None,
+                exit_reason=None,
+            )
+            store.save_runner(runner)
+            iterations += 1
+            if max_iterations is not None and iterations >= max_iterations:
+                exit_reason = 'max_iterations'
+                break
+
+        if stop_event.is_set():
+            exit_reason = 'signal'
+    except Exception as exc:
+        exit_reason = f'error:{exc}'
+        failure_error = str(exc)
+    finally:
+        _restore_runner_signal_handlers(previous_handlers)
+        stopped_at = utc_now()
+        store.save_runner(
+            _runner_update(
+                runner,
+                state='stopped',
+                last_seen_at=stopped_at,
+                sleep_until=None,
+                exit_reason=exit_reason,
+            )
+        )
+    return {
+        **_maintenance_status(context),
+        'maintenance_status': 'degraded' if failure_error else 'ok',
+        'action': 'runner',
+        'runner_status': 'stopped',
+        'runner_id': runner_id,
+        'runner_pid': current_pid,
+        'runner_exit_reason': exit_reason,
+        'runner_iterations': iterations,
+        'reason': failure_error,
     }
 
 
@@ -677,6 +850,54 @@ def _parse_schedule_args(args: tuple[str, ...]) -> dict[str, object]:
     return {'after_s': after_s, 'reason': reason}
 
 
+def _parse_runner_args(args: tuple[str, ...]) -> dict[str, object]:
+    runner_id: str | None = None
+    source = 'manual'
+    max_iterations: int | None = None
+    sleep_cap_s = _RUNNER_DEFAULT_SLEEP_CAP_S
+    dispatch = True
+    index = 0
+    while index < len(args):
+        token = args[index]
+        if token == '--runner-id':
+            index += 1
+            if index >= len(args):
+                raise ValueError('runner --runner-id requires text')
+            runner_id = str(args[index] or '').strip() or None
+        elif token == '--source':
+            index += 1
+            if index >= len(args):
+                raise ValueError('runner --source requires text')
+            source = str(args[index] or '').strip() or 'manual'
+        elif token == '--max-iterations':
+            index += 1
+            if index >= len(args):
+                raise ValueError('runner --max-iterations requires an integer')
+            max_iterations = int(args[index])
+            if max_iterations < 0:
+                raise ValueError('runner --max-iterations cannot be negative')
+        elif token == '--sleep-cap':
+            index += 1
+            if index >= len(args):
+                raise ValueError('runner --sleep-cap requires a duration')
+            sleep_cap_s = float(_duration_seconds(args[index]))
+        elif token == '--no-dispatch':
+            dispatch = False
+        else:
+            raise ValueError(
+                'runner supports only: --runner-id <id>, --source <text>, '
+                '--max-iterations <n>, --sleep-cap <duration>, --no-dispatch'
+            )
+        index += 1
+    return {
+        'runner_id': runner_id,
+        'source': source,
+        'max_iterations': max_iterations,
+        'sleep_cap_s': sleep_cap_s,
+        'dispatch': dispatch,
+    }
+
+
 def _duration_seconds(value: str) -> int:
     text = str(value or '').strip().lower()
     if not text:
@@ -709,6 +930,15 @@ def _schedule_is_future(
         return False
 
 
+def _seconds_until(observed_at: str, next_run_at: str | None) -> float:
+    if not next_run_at:
+        return 0.0
+    try:
+        return max(0.0, (parse_utc_timestamp(next_run_at) - parse_utc_timestamp(observed_at)).total_seconds())
+    except Exception:
+        return 0.0
+
+
 def _heartbeat_lock(context: CliContext, *, action: str, observed_at: str) -> MaintenanceHeartbeatLock:
     return MaintenanceHeartbeatLock(
         context.paths.ccbd_maintenance_heartbeat_lock_path,
@@ -736,6 +966,251 @@ def _load_last_activation(store: MaintenanceHeartbeatStore, context: CliContext)
     return {'state': 'ok', 'path': str(path), 'error': None, 'record': tail[-1].to_record()}
 
 
+def _runner_id() -> str:
+    return f'runner_{uuid.uuid4().hex[:16]}'
+
+
+def _runner_update(runner: MaintenanceHeartbeatRunner, **kwargs) -> MaintenanceHeartbeatRunner:
+    return replace(runner, **kwargs)
+
+
+def _nested_record_value(payload: object, key: str) -> str | None:
+    if not isinstance(payload, Mapping):
+        return None
+    record = payload.get('record')
+    if not isinstance(record, Mapping):
+        return None
+    value = str(record.get(key) or '').strip()
+    return value or None
+
+
+def _install_runner_signal_handlers(stop_event: threading.Event):
+    if threading.current_thread() is not threading.main_thread():
+        return {}
+    previous = {}
+
+    def _handler(signum, frame):
+        del signum, frame
+        stop_event.set()
+
+    for signum in (signal.SIGTERM, signal.SIGINT):
+        try:
+            previous[signum] = signal.getsignal(signum)
+            signal.signal(signum, _handler)
+        except Exception:
+            continue
+    return previous
+
+
+def _restore_runner_signal_handlers(previous) -> None:
+    for signum, handler in dict(previous or {}).items():
+        try:
+            signal.signal(signum, handler)
+        except Exception:
+            continue
+
+
+def _runner_read_result_is_live(
+    result: MaintenanceHeartbeatReadResult[MaintenanceHeartbeatRunner],
+    *,
+    exclude_pid: int | None = None,
+) -> bool:
+    runner = result.value
+    if runner is None or runner.pid is None:
+        return False
+    if exclude_pid is not None and int(runner.pid) == int(exclude_pid):
+        return False
+    if runner.state in {'stopped', 'failed'}:
+        return False
+    return _pid_alive(int(runner.pid))
+
+
+def _pid_alive(pid: int) -> bool:
+    return _process_pid_alive(int(pid))
+
+
+def _project_lifecycle_allows_runner(context: CliContext) -> bool:
+    try:
+        lifecycle = CcbdLifecycleStore(context.paths).load()
+    except Exception:
+        return True
+    if lifecycle is None:
+        return True
+    desired = str(getattr(lifecycle, 'desired_state', '') or '').strip()
+    phase = str(getattr(lifecycle, 'phase', '') or '').strip()
+    if desired == 'stopped':
+        return False
+    if phase in {'stopping', 'unmounted'}:
+        return False
+    return True
+
+
+def _script_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def _runner_env() -> dict[str, str]:
+    extra = {
+        'PYTHONUNBUFFERED': '1',
+        'CCB_MAINTENANCE_HEARTBEAT_RUNNER': '1',
+    }
+    for key in (
+        'CCB_SOURCE_ALLOWED_ROOTS',
+        'CCB_TEST_ROOTS',
+        'CCB_TEST_ENTRYPOINT',
+        'CCB_SKIP_STARTUP_UPDATE_CHECK',
+        'CCB_SOURCE_HOME',
+    ):
+        value = os.environ.get(key)
+        if value:
+            extra[key] = value
+    env = control_plane_env(extra=extra)
+    lib_root = str(_script_root() / 'lib')
+    current_pythonpath = env.get('PYTHONPATH')
+    env['PYTHONPATH'] = lib_root if not current_pythonpath else lib_root + os.pathsep + current_pythonpath
+    path = env.get('PATH', '')
+    script_root = str(_script_root())
+    env['PATH'] = script_root + (os.pathsep + path if path else '')
+    return env
+
+
+def _spawn_maintenance_runner(context: CliContext, *, runner_id: str, source: str) -> subprocess.Popen:
+    script = _script_root() / 'ccb'
+    context.paths.ccbd_maintenance_heartbeat_dir.mkdir(parents=True, exist_ok=True)
+    stdout_log = open(context.paths.ccbd_maintenance_heartbeat_dir / 'runner.stdout.log', 'ab')
+    stderr_log = open(context.paths.ccbd_maintenance_heartbeat_dir / 'runner.stderr.log', 'ab')
+    try:
+        return subprocess.Popen(
+            [
+                sys.executable,
+                str(script),
+                '--project',
+                str(context.project.project_root),
+                'maintenance',
+                'runner',
+                '--runner-id',
+                runner_id,
+                '--source',
+                source,
+            ],
+            cwd=str(context.project.project_root),
+            env=_runner_env(),
+            stdin=subprocess.DEVNULL,
+            stdout=stdout_log,
+            stderr=stderr_log,
+            start_new_session=True,
+        )
+    finally:
+        stdout_log.close()
+        stderr_log.close()
+
+
+def ensure_maintenance_heartbeat_runner(context: CliContext, *, source: str = 'startup_ensure') -> dict:
+    loaded = load_project_config(context.project.project_root)
+    heartbeat = loaded.config.maintenance_heartbeat
+    store = MaintenanceHeartbeatStore(context.paths, project_id=context.project.project_id)
+    if not heartbeat.enabled or not heartbeat.startup_ensure:
+        return {
+            **_maintenance_status(context),
+            'maintenance_status': 'ok',
+            'action': 'runner-ensure',
+            'runner_status': 'disabled',
+            'runner_started': False,
+        }
+    if heartbeat.assessor not in loaded.config.agents:
+        return {
+            **_maintenance_status(context),
+            'maintenance_status': 'degraded',
+            'action': 'runner-ensure',
+            'runner_status': 'skipped',
+            'runner_started': False,
+            'reason': f'configured heartbeat assessor is not present: {heartbeat.assessor}',
+        }
+    existing = store.load_runner()
+    if _runner_read_result_is_live(existing):
+        return {
+            **_maintenance_status(context),
+            'maintenance_status': 'ok',
+            'action': 'runner-ensure',
+            'runner_status': 'already_running',
+            'runner_started': False,
+            'runner_pid': existing.value.pid if existing.value is not None else None,
+            'runner_id': existing.value.runner_id if existing.value is not None else None,
+        }
+    observed_at = utc_now()
+    runner_id = _runner_id()
+    process = _spawn_maintenance_runner(context, runner_id=runner_id, source=source)
+    store.save_runner(
+        MaintenanceHeartbeatRunner(
+            project_id=context.project.project_id,
+            runner_id=runner_id,
+            pid=int(process.pid),
+            state='starting',
+            source=source,
+            started_at=observed_at,
+            last_seen_at=observed_at,
+        )
+    )
+    return {
+        **_maintenance_status(context),
+        'maintenance_status': 'ok',
+        'action': 'runner-ensure',
+        'runner_status': 'started',
+        'runner_started': True,
+        'runner_pid': int(process.pid),
+        'runner_id': runner_id,
+    }
+
+
+def stop_maintenance_heartbeat_runner(context: CliContext, *, reason: str = 'shutdown') -> dict:
+    store = MaintenanceHeartbeatStore(context.paths, project_id=context.project.project_id)
+    result = store.load_runner()
+    if result.value is None:
+        return {'runner_stop_status': result.state, 'runner_stopped': False, 'reason': result.error}
+    runner = result.value
+    if runner.pid is None or not _pid_alive(int(runner.pid)):
+        store.save_runner(
+            _runner_update(
+                runner,
+                state='stopped',
+                last_seen_at=utc_now(),
+                sleep_until=None,
+                exit_reason='stale_pid',
+            )
+        )
+        return {'runner_stop_status': 'stale', 'runner_stopped': False, 'runner_pid': runner.pid}
+    if int(runner.pid) == os.getpid():
+        return {'runner_stop_status': 'self', 'runner_stopped': False, 'runner_pid': runner.pid}
+    store.save_runner(
+        _runner_update(
+            runner,
+            state='stopping',
+            last_seen_at=utc_now(),
+            sleep_until=None,
+            exit_reason=reason,
+        )
+    )
+    try:
+        os.kill(int(runner.pid), signal.SIGTERM)
+    except ProcessLookupError:
+        return {'runner_stop_status': 'stale', 'runner_stopped': False, 'runner_pid': runner.pid}
+    deadline = time.time() + _RUNNER_STOP_WAIT_S
+    while time.time() < deadline:
+        if not _pid_alive(int(runner.pid)):
+            store.save_runner(
+                _runner_update(
+                    runner,
+                    state='stopped',
+                    last_seen_at=utc_now(),
+                    sleep_until=None,
+                    exit_reason=reason,
+                )
+            )
+            return {'runner_stop_status': 'stopped', 'runner_stopped': True, 'runner_pid': runner.pid}
+        time.sleep(0.05)
+    return {'runner_stop_status': 'signalled', 'runner_stopped': False, 'runner_pid': runner.pid}
+
+
 def startup_ensure_maintenance_heartbeat(context: CliContext) -> dict | None:
     try:
         loaded = load_project_config(context.project.project_root)
@@ -746,17 +1221,35 @@ def startup_ensure_maintenance_heartbeat(context: CliContext) -> dict | None:
             return {
                 'maintenance_status': 'degraded',
                 'action': 'startup_ensure',
-                'tick_status': 'skipped',
+                'runner_status': 'skipped',
                 'reason': f'configured heartbeat assessor is not present: {heartbeat.assessor}',
             }
-        return maintenance_status(context, ParsedMaintenanceCommand(project=getattr(context.command, 'project', None), action='tick'))
+        try:
+            return ensure_maintenance_heartbeat_runner(context, source='startup_ensure')
+        except Exception as runner_exc:
+            fallback = maintenance_status(
+                context,
+                ParsedMaintenanceCommand(project=getattr(context.command, 'project', None), action='tick'),
+            )
+            return {
+                **fallback,
+                'maintenance_status': 'degraded',
+                'action': 'startup_ensure',
+                'runner_status': 'failed',
+                'reason': str(runner_exc),
+            }
     except Exception as exc:
         return {
             'maintenance_status': 'degraded',
             'action': 'startup_ensure',
-            'tick_status': 'failed',
+            'runner_status': 'failed',
             'reason': str(exc),
         }
 
 
-__all__ = ['maintenance_status', 'startup_ensure_maintenance_heartbeat']
+__all__ = [
+    'ensure_maintenance_heartbeat_runner',
+    'maintenance_status',
+    'startup_ensure_maintenance_heartbeat',
+    'stop_maintenance_heartbeat_runner',
+]

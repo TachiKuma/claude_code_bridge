@@ -230,6 +230,33 @@ Verification:
   `schedule`/`tick`/`tick --force --no-dispatch` smoke tests passed from
   `/home/bfly/yunwei/test_ccb2` with isolated `HOME` and `CCB_SOURCE_HOME`.
 
+## Schedule Consumer Runner Slice
+
+Landed on 2026-06-11:
+
+- Added `MaintenanceHeartbeatRunner` state under
+  `.ccb/ccbd/maintenance-heartbeat/runner.json`.
+- Added internal `ccb maintenance runner` as the project-scoped schedule
+  consumer. It observes `schedule.json`, sleeps until due times with a bounded
+  wake cap, and invokes the existing one-shot `maintenance tick` path.
+- `ccb` startup ensure now starts or reuses one detached runner when heartbeat
+  is enabled and the assessor is present.
+- `ccb kill` best-effort signals the live runner and records stopped/stale
+  state without blocking shutdown on runner residue.
+- `maintenance status` and render output now expose runner state.
+- Startup and diagnostics contracts now define runner lifecycle and
+  `runner.json` diagnostics.
+
+Verification:
+
+- `python -m pytest -q test/test_maintenance_heartbeat.py` passed with
+  `24 passed`.
+- Focused start/kill/render/parser suite passed with `203 passed`.
+- Full `python -m pytest -q` passed with `2529 passed, 2 skipped`.
+- Isolated `/home/bfly/yunwei/test_ccb2` source validation confirmed startup
+  starts the runner, repeated startup reuses it, and a due `next_run_at` is
+  consumed without manual `maintenance tick`.
+
 ## Test Mapping
 
 - Config enablement and validation: `test_v2_config_loader.py`.

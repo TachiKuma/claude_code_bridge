@@ -62,15 +62,43 @@ Date: 2026-06-10
   `/home/bfly/yunwei/ccb_source/ccb_test` smoke tests from
   `/home/bfly/yunwei/test_ccb2` covered disabled status/tick/schedule plus an
   enabled temporary project schedule/too-early/force-no-dispatch flow.
+- Landed post-review hardening for the next release: Codex unusable-pane
+  detection now uses line-level terminal marker matching instead of broad
+  substring matching; pure `[maintenance.heartbeat]` config diffs are
+  classified and published as `maintenance_change` without tmux namespace
+  mutation, runtime mount/unload, or agent pane restart; v1
+  `escalation_policy` is documented as status-only. Verified with full
+  `python -m pytest -q` (`2523 passed, 2 skipped`), reload/namespace targeted
+  tests (`114 passed`), focused maintenance/Codex/reload tests, `git diff
+  --check`, `py_compile`, and isolated `ccb_test --diagnose`, `config
+  validate`, and `maintenance status` from `/home/bfly/yunwei/test_ccb2`.
+- Accepted the self-supervision refinement: ambiguous execution-quality
+  diagnosis should use real CCB-owned pane observation, starting with
+  `tmux capture-pane` bottom/current text capture and short activity sampling.
+  Screenshot or equivalent visual artifacts are fallback evidence when text is
+  insufficient. Heartbeat passes target references; the `ccb_self` assessor
+  requests pane evidence through sanctioned read-only tools.
+- Verified the schedule-consumption gap in `/home/bfly/yunwei/test_ccb2`:
+  manual `maintenance tick --force` updates status, submits `ccb_self`, and
+  lets `ccb_self` reschedule a follow-up, but a due `next_run_at` is not
+  consumed automatically without a background schedule consumer.
+- Landed the project-scoped schedule consumer runner: startup ensure now starts
+  or reuses one detached runner, `maintenance status` reports `runner.json`,
+  the runner invokes the existing one-shot tick when schedules are due, and
+  `ccb kill` best-effort signals it. Verified with targeted tests, full pytest,
+  and isolated `/home/bfly/yunwei/test_ccb2` validation showing automatic
+  `last_tick_at` advancement without manual `maintenance tick`.
 
 ## In Progress
 
-- None for v1.
+- None for the runner slice.
 
 ## Next
 
 1. Define the `ccb_self` running-supervision skill input/output contract as
-   the v1 default assessor implementation.
+   the v1 default assessor implementation, including pane state,
+   bottom/current capture references, activity sample references, and optional
+   visual fallback evidence.
 2. Add a public scheduled-activation surface for targets other than the
    configured assessor only after a second use case needs it.
 3. Define config-edit policy if `ccb maintenance enable/disable` should ever
@@ -86,7 +114,8 @@ Date: 2026-06-10
 - Always-on provider-side self loops.
 - Project-wide shutdown or force cleanup from heartbeat logic.
 - Multiple maintenance roles with arbitration.
-- Automatic external scheduler installation.
+- Automatic host OS scheduler installation; the next slice uses a CCB-owned
+  project-scoped schedule consumer helper instead.
 - Multi-assessor arbitration beyond the default `ccb_self` assessor.
 - Public scheduled activation to arbitrary target agents.
 - `ccb maintenance enable/disable` editing `.ccb/ccb.config`; v1 keeps

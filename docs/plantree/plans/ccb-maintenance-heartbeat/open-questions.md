@@ -58,6 +58,16 @@ Date: 2026-06-10
   is enabled, `startup_ensure=true`, and the configured assessor exists.
 - Enable/disable: v1 keeps enablement as config authority; `ccb maintenance
   enable/disable` do not edit `.ccb/ccb.config`.
+- Pane-view self-supervision: heartbeat does not read panes or screenshot every
+  tick. For ambiguous execution progress, it passes target references and
+  inconclusive reasons to `ccb_self`; the assessor requests CCB-owned
+  `tmux capture-pane` style bottom/current text, activity samples, and only
+  then screenshot or visual inspection fallback through sanctioned read-only
+  tools.
+- Schedule consumption: v1 schedule-only state is insufficient. The next slice
+  should add a CCB-owned project-scoped schedule consumer helper, ensured by
+  normal project startup, that consumes due `schedule.json` entries and invokes
+  the existing one-shot tick. Host OS scheduler installation remains deferred.
 
 ## Product
 
@@ -97,3 +107,9 @@ Date: 2026-06-10
    second producer exists?
 8. Should `ccb maintenance enable/disable` edit `.ccb/ccb.config`, update only
    runtime schedule state, or be deferred until a config-editing policy exists?
+9. What artifact retention and redaction policy should apply to pane text
+   captures and screenshot fallback evidence captured for `ccb_self`
+   self-supervision?
+10. Should the internal schedule consumer runner ever become a public command,
+    or should `ccb maintenance status|tick|schedule` remain the only documented
+    user-facing heartbeat surface?

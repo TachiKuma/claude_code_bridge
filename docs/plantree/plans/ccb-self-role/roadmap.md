@@ -82,16 +82,28 @@ Date: 2026-06-10
   [decisions/004-default-recommended-install.md](decisions/004-default-recommended-install.md):
   role assets are prepared by default, but project topology changes remain
   explicit.
+- Accepted the next product direction that `ccb_self` should become the
+  project-local CCB expert, not only a maintenance operator. Captured the
+  expert knowledge model in
+  [topics/ccb-expert-knowledge-role.md](topics/ccb-expert-knowledge-role.md).
 
 ## In Progress
 
 - Finish 7.4.0 release validation and push after review.
+- Shape the CCB expert role upgrade: source/command knowledge references,
+  architecture navigation, release/update awareness, and pane-view
+  self-supervision.
 
 ## Next
 
-1. Decide whether to add a separate non-self delegation stub; the full inherited
+1. Implement the v1 expert upgrade: role identity wording,
+   `ccb-architecture-navigator`, `ccb-pane-view-diagnose`,
+   `ccb-source-map.md`, and `ccb-command-surface.md`.
+2. Decide whether to add a separate non-self delegation stub; the full inherited
    `ccb-config` source has been removed.
-2. Add the v1 structured MCP/control-plane diagnostic helper contracts.
+3. Add the v1 structured MCP/control-plane diagnostic helper contracts.
+4. Add release/update awareness and knowledge-refresh once the first expert
+   references prove useful.
 
 ## Deferred
 
@@ -103,3 +115,5 @@ Date: 2026-06-10
 - Reintroducing the full config editing skill as a global inherited skill for
   non-`ccb_self` agents by default.
 - Multiple maintenance roles with shared lock arbitration.
+- Automatically indexing or embedding the whole CCB source tree before the
+  manual expert-reference model proves insufficient.

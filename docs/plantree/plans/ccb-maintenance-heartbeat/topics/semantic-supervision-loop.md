@@ -148,6 +148,15 @@ assessor result. The assessor's running-supervision skill can then inspect
 deeper evidence and, through sanctioned CCB commands, schedule the next
 heartbeat or request user action.
 
+The runner should not capture pane contents or screenshots on every tick. When
+progress is ambiguous, it should pass enough target references for the assessor
+to request real pane observation through sanctioned read-only tools. The default
+`ccb_self` assessor should prefer a pane-text-first evidence ladder for
+ambiguous execution-quality questions: pane metadata, bottom/current
+`tmux capture-pane` text, recent scrollback, short activity sampling, and then
+a bounded CCB-owned pane screenshot or equivalent visual artifact only when
+text is insufficient.
+
 ## Delayed Follow-Up
 
 Because escalation uses `ask --silence`, the runner will not receive a normal
@@ -246,6 +255,13 @@ The skill should produce a compact structured result:
   diagnostics, or unknown
 - `evidence`: short references to command outputs, traces, artifacts, or plan
   files
+- `pane_state`: optional assessor classification such as `working`,
+  `waiting_input`, `stale_prompt`, `provider_update`, `provider_error`,
+  `dead_or_blank`, `misframed`, or `unknown`
+- `pane_capture`: optional bottom/current prompt capture, recent scrollback, or
+  activity-sample artifact references
+- `visual_evidence`: optional screenshot or OCR artifact references when text
+  capture was insufficient
 - `recommended_action`: v1 values are `report_only` or `ask_user`; repair
   values are deferred until an explicit autonomous repair policy exists
 - `next_heartbeat_after`: desired delay with reason
@@ -272,6 +288,11 @@ Minimum useful fields:
   agents when available;
 - recent terminal failures with job id, target, reason, and timestamp;
 - active callbacks or pending replies that could block progress;
+- target pane/window references sufficient for the assessor to request
+  read-only `tmux capture-pane` style text capture, activity sampling, or
+  screenshot fallback through CCB-owned tools;
+- whether programmatic evidence conflicts with provider/pane evidence or
+  suggests a visual check;
 - fault-injection rules when present;
 - last heartbeat result and unknown/failing streak counters;
 - artifact, trace, or diagnostics references for any included failure.

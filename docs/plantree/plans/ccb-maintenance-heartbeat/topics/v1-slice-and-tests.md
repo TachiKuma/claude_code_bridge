@@ -18,7 +18,9 @@ V1 must not perform automatic mutating repair.
 - `ccb maintenance status`: read current schedule and last tick state.
 - `ccb maintenance schedule --after <duration> --reason <text>`: validated
   schedule update.
-- `ccb maintenance enable` / `disable`: user-facing policy commands only.
+- `ccb maintenance enable` / `disable`: reserved user-facing policy commands
+  only; v1 returns `not_implemented` and keeps `.ccb/ccb.config` as the
+  enablement authority.
 - Effective `ccb.config` heartbeat enablement and configured assessor lookup.
 - Normal `ccb` startup ensures the independent runner when heartbeat is enabled
   and the configured assessor exists by refreshing schedule state and running
@@ -34,15 +36,17 @@ V1 must not perform automatic mutating repair.
   interval, and does not wake the assessor.
 - Escalation to the configured assessor for risk, unknown, or unhealthy states,
   using `ask --silence`, a bounded diagnostic package, and a dedup key.
-- V1 assessor result validation limited to `report_only`, `ask_user`, and
-  schedule recommendations.
+- V1 validates and reports `escalation_policy = "report_only" | "ask_user"`,
+  but the field is status-only. It does not branch dispatch behavior in v1;
+  all non-healthy activations use one bounded silent ask to the configured
+  assessor.
 - Assessor-requested delayed follow-up through a validated schedule command,
   not through direct self-to-self ask or a provider-side loop.
 - A minimal internal `ActivationIntent` envelope for heartbeat diagnostic
   dispatch, with fields that can later support scheduled tasks to other agents.
-- A minimal activation-condition model where heartbeat state checks and due
-  follow-ups create `ActivationIntent` values, but v1 dispatch only targets
-  `self` / `ccb_self`.
+- A minimal activation-condition model where heartbeat state checks create
+  `ActivationIntent`-style activation records and dispatch only to the
+  configured assessor.
 
 ## Deferred From V1
 
@@ -56,6 +60,9 @@ V1 must not perform automatic mutating repair.
 - Rich `ccb doctor` or sidebar UI integration beyond a minimal status summary.
 - Provider-side loops or long-lived assessor turns.
 - Direct self-to-self ask chains for delayed diagnosis.
+- Policy-specific dispatch behavior for `escalation_policy`.
+- Hot reload paths that mutate tmux namespace or restart agents for
+  maintenance-only config changes.
 
 ## Contract Update Gate
 
@@ -73,79 +80,60 @@ Before implementing files, config fields, startup behavior, or status fields:
 - complete [snapshot-and-contract-gates.md](snapshot-and-contract-gates.md)
   with a field-to-read-path map and close any required diagnostics gaps.
 
-## Test Matrix
+## Delivered Test Matrix
 
-- `test_maintenance_tick_idle_project`: healthy idle state records `last_ok`,
-  advances `next_run_at`, and does not wake the assessor.
-- `test_maintenance_tick_risk_escalates_to_assessor`: non-empty risk evidence
-  sends one bounded diagnostic package to the configured assessor.
-- `test_maintenance_tick_unknown_escalates_and_shortens`: unknown state
-  escalates to the assessor with `ask --silence` and schedules a shorter
-  validated interval.
-- `test_maintenance_tick_unhealthy_escalates_user_visible`: unhealthy state
-  records user-visible diagnostics and sends the bounded package to the
-  assessor.
-- `test_maintenance_tick_duplicate_wakeup`: existing assessor maintenance task
-  prevents a duplicate wakeup.
-- `test_maintenance_tick_lock`: concurrent ticks are deduplicated by the
-  heartbeat lock.
-- `test_maintenance_tick_stale_lock`: stale heartbeat lock is released only by
-  the heartbeat stale-lock rule.
-- `test_maintenance_disabled`: disabled heartbeat exits without diagnostics
-  mutation beyond a status result.
-- `test_maintenance_too_early`: tick exits when `next_run_at` is in the
-  future unless explicitly forced by a user command.
-- `test_maintenance_assessor_missing`: healthy states still succeed
-  programmatically; non-healthy states become user-visible diagnostics.
-- `test_maintenance_assessor_degraded`: degraded assessor is not woken
-  repeatedly; the runner backs off and records reason.
-- `test_maintenance_schedule_validation`: intervals below the minimum, missing
-  reasons, or zero-delay loops are rejected.
-- `test_maintenance_enable_disable`: user commands change policy state and
-  `status` reflects it.
-- `test_maintenance_config_enablement`: effective config controls heartbeat
-  enablement and assessor target.
-- `test_maintenance_startup_ensures_runner`: normal `ccb` project startup
-  ensures the runner only when heartbeat is enabled and the assessor exists.
-- `test_maintenance_startup_runner_failure_nonfatal`: optional runner launch
-  failure is reported as diagnostics/status evidence without failing ordinary
-  project startup.
-- `test_maintenance_kill_concurrent`: `ccb kill` during a tick does not leave
-  keeper/ccbd locks blocked and heartbeat lock cleanup follows heartbeat rules.
-- `test_maintenance_schedule_corrupt`: malformed schedule state degrades to a
-  visible diagnostics error without crashing startup or tick.
-- `test_maintenance_multi_project_isolation`: two projects with heartbeat
-  enabled use separate schedule, lock, and activation state.
-- `test_maintenance_diagnostics_read_race`: runner tolerates ccbd diagnostics
-  files being updated while it reads snapshots.
-- `test_maintenance_followup_conflict`: assessor schedule request that
-  conflicts with an active follow-up is deduplicated or rejected with a clear
-  reason.
-- `test_maintenance_config_hot_reload`: config changes while ccbd is mounted
-  update heartbeat policy only through the accepted reload semantics.
-- `test_maintenance_unmounted_residue`: stale schedule state with an unmounted
-  project records diagnostics and does not invent backend authority.
-- `test_maintenance_ask_silence_dispatch`: inconclusive unfinished work sends
-  one silence ask to the assessor and the runner exits without waiting.
-- `test_maintenance_activation_intent`: heartbeat dispatch is represented as
-  a bounded `ActivationIntent` with target, trigger kind, dedup key, delivery
-  mode, reason, and payload reference.
-- `test_maintenance_activation_condition_state_check`: risk or unknown
-  programmatic state creates an `ActivationIntent` without hard-coding dispatch
-  in the condition evaluator.
-- `test_maintenance_activation_condition_due_followup`: a due follow-up
-  creates the same `ActivationIntent` shape as a state-check condition.
-- `test_maintenance_activation_target_scope_v1`: v1 rejects non-self target
-  dispatch even though the activation envelope has a generic target field.
-- `test_maintenance_assessor_schedules_followup`: self can register a delayed
-  follow-up through the sanctioned schedule surface with reason and diagnostic
-  fingerprint.
-- `test_maintenance_followup_resolves_without_wakeup`: a due follow-up takes a
-  fresh snapshot and resolves without waking self when the condition cleared.
-- `test_maintenance_followup_reasks_when_still_ambiguous`: a due follow-up
-  sends one new `ask --silence` to self when the same ambiguity remains.
-- `test_maintenance_followup_cap_escalates_user`: repeated follow-ups hit the
-  configured cap, stop shortening the interval, and surface `needs_user=true`.
-- `test_maintenance_snapshot_reuses_diagnostics`: required snapshot fields come
-  from existing diagnostics/communication surfaces rather than a parallel
-  collection path.
+- `test_maintenance_heartbeat_paths_use_dedicated_namespace`: heartbeat state
+  lives under `.ccb/ccbd/maintenance-heartbeat/`.
+- `test_maintenance_heartbeat_store_round_trips_and_reports_missing` and
+  `test_maintenance_heartbeat_store_reports_corrupt_files`: schedule, status,
+  activation, missing, and corrupt-state read paths are covered.
+- `test_maintenance_parser_accepts_status_and_reserves_mutating_actions`,
+  `test_phase2_maintenance_enable_disable_are_config_authority`, and
+  `test_maintenance_status_rejects_reserved_mutating_actions`: v1
+  `enable/disable` stay reserved and config-owned.
+- `test_maintenance_status_reads_config_and_missing_state`,
+  `test_phase2_maintenance_status_outputs_read_only_status`, and
+  `test_render_maintenance_status_includes_config_and_state`: status/render
+  surfaces expose config, schedule, status, and last activation state.
+- `test_maintenance_tick_disabled_does_not_write_status_or_schedule`,
+  `test_maintenance_tick_healthy_project_view_writes_status_and_schedule`,
+  `test_maintenance_tick_concern_shortens_next_schedule`, and
+  `test_maintenance_tick_falls_back_to_local_ps_when_project_view_unavailable`:
+  disabled, healthy, concern, and local-ps fallback paths are covered.
+- `test_maintenance_schedule_persists_followup_and_enforces_min_interval`,
+  `test_maintenance_tick_exits_when_schedule_is_not_due`, and
+  `test_maintenance_tick_force_no_dispatch_bypasses_schedule_without_submit`:
+  schedule, too-early, force, and no-dispatch behavior are covered.
+- `test_maintenance_tick_suppresses_recent_duplicate_activation` and
+  `test_maintenance_tick_reports_lock_busy`: duplicate activation and active
+  lock handling are covered.
+- `test_reload_plan_classifies_maintenance_only_change`,
+  `test_additive_reload_apply_maintenance_change_publishes_without_namespace_or_runtime_mutation`,
+  and `test_project_reload_non_dry_run_maintenance_change_publishes_policy`:
+  config changes while ccbd is mounted update heartbeat policy through explicit
+  `maintenance_change` reload semantics.
+- `test_maintenance_status_reports_corrupt_state_as_degraded`: corrupt stored
+  state is user-visible and degraded.
+
+## Deferred Test Ideas
+
+- `test_maintenance_tick_stale_lock`: stale heartbeat lock cleanup needs a
+  dedicated stale-pid rule before implementation.
+- `test_maintenance_assessor_degraded`: repeated degraded-assessor backoff can
+  be added after assessor health has a stable dedicated signal.
+- `test_maintenance_kill_concurrent`: kill/tick concurrency should be covered
+  when heartbeat operations become long-running enough to create real overlap.
+- `test_maintenance_diagnostics_read_race`: diagnostics read-race tests can be
+  added when the snapshot surface grows beyond the current bounded
+  `project_view`/`ps` read path.
+- `test_maintenance_followup_conflict`,
+  `test_maintenance_activation_condition_due_followup`,
+  `test_maintenance_assessor_schedules_followup`,
+  `test_maintenance_followup_resolves_without_wakeup`,
+  `test_maintenance_followup_reasks_when_still_ambiguous`, and
+  `test_maintenance_followup_cap_escalates_user`: deferred until follow-up
+  activations become first-class records rather than schedule-only state.
+- `test_maintenance_activation_target_scope_v1`: deferred because v1 already
+  uses a configured assessor target and no public arbitrary-target scheduler.
+- `test_maintenance_enable_disable`: deferred until config editing policy
+  allows these commands to mutate `.ccb/ccb.config`.

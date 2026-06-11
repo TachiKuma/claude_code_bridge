@@ -63,8 +63,8 @@ def parse_maintenance(tokens: list[str], *, project: str | None, error_type) -> 
     if not tokens:
         return ParsedMaintenanceCommand(project=project, action='status')
     action = str(tokens[0] or '').strip().lower()
-    if action not in {'status', 'tick', 'schedule', 'enable', 'disable'}:
-        raise error_type('maintenance supports: status, tick, schedule, enable, disable')
+    if action not in {'status', 'tick', 'schedule', 'runner', 'enable', 'disable'}:
+        raise error_type('maintenance supports: status, tick, schedule, runner, enable, disable')
     return ParsedMaintenanceCommand(project=project, action=action, args=tuple(tokens[1:]))
 
 

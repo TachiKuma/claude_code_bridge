@@ -14,6 +14,7 @@ from cli.services.maintenance import maintenance_status
 from maintenance_heartbeat import (
     MaintenanceHeartbeatActivation,
     MaintenanceHeartbeatLock,
+    MaintenanceHeartbeatRunner,
     MaintenanceHeartbeatSchedule,
     MaintenanceHeartbeatStatus,
     MaintenanceHeartbeatStore,
@@ -105,6 +106,7 @@ def test_maintenance_heartbeat_paths_use_dedicated_namespace(tmp_path: Path) -> 
     assert layout.ccbd_maintenance_heartbeat_dir == layout.ccbd_dir / 'maintenance-heartbeat'
     assert layout.ccbd_maintenance_heartbeat_schedule_path.name == 'schedule.json'
     assert layout.ccbd_maintenance_heartbeat_status_path.name == 'status.json'
+    assert layout.ccbd_maintenance_heartbeat_runner_path.name == 'runner.json'
     assert layout.ccbd_maintenance_heartbeat_lock_path.name == 'lock.json'
     assert layout.ccbd_maintenance_heartbeat_activations_path.name == 'activations.jsonl'
     assert '/heartbeats/' not in str(layout.ccbd_maintenance_heartbeat_schedule_path)
@@ -116,6 +118,7 @@ def test_maintenance_heartbeat_store_round_trips_and_reports_missing(tmp_path: P
 
     assert store.load_schedule().state == 'missing'
     assert store.load_status().state == 'missing'
+    assert store.load_runner().state == 'missing'
 
     store.save_schedule(
         MaintenanceHeartbeatSchedule(
@@ -134,6 +137,17 @@ def test_maintenance_heartbeat_store_round_trips_and_reports_missing(tmp_path: P
             last_ok_at='2026-06-10T11:00:00Z',
             unknown_streak=0,
             updated_at='2026-06-10T11:00:00Z',
+        )
+    )
+    store.save_runner(
+        MaintenanceHeartbeatRunner(
+            project_id=layout.project_id,
+            runner_id='runner_1',
+            pid=123,
+            state='running',
+            source='test',
+            started_at='2026-06-10T11:00:00Z',
+            last_seen_at='2026-06-10T11:00:01Z',
         )
     )
     store.append_activation(
@@ -157,6 +171,7 @@ def test_maintenance_heartbeat_store_round_trips_and_reports_missing(tmp_path: P
 
     schedule = store.load_schedule()
     status = store.load_status()
+    runner = store.load_runner()
 
     assert schedule.state == 'ok'
     assert schedule.value is not None
@@ -164,6 +179,10 @@ def test_maintenance_heartbeat_store_round_trips_and_reports_missing(tmp_path: P
     assert status.state == 'ok'
     assert status.value is not None
     assert status.value.last_tick_status == 'idle'
+    assert runner.state == 'ok'
+    assert runner.value is not None
+    assert runner.value.runner_id == 'runner_1'
+    assert runner.value.pid == 123
     activations = store.load_activation_tail(5)
     assert len(activations) == 1
     assert activations[0].job_id == 'job_1'
@@ -190,6 +209,11 @@ def test_maintenance_parser_accepts_status_and_reserves_mutating_actions() -> No
         project=None,
         action='schedule',
         args=('--after', '5m'),
+    )
+    assert parser.parse(['maintenance', 'runner', '--max-iterations', '1']) == ParsedMaintenanceCommand(
+        project=None,
+        action='runner',
+        args=('--max-iterations', '1'),
     )
 
 
@@ -223,6 +247,7 @@ startup_ensure = true
     assert payload['assessor_present'] is True
     assert payload['schedule']['state'] == 'missing'
     assert payload['last_status']['state'] == 'missing'
+    assert payload['runner']['state'] == 'missing'
 
 
 def test_phase2_maintenance_status_outputs_read_only_status(tmp_path: Path) -> None:
@@ -394,6 +419,84 @@ def test_maintenance_schedule_persists_followup_and_enforces_min_interval(tmp_pa
     assert schedule.reason == 'self_followup'
 
 
+def test_maintenance_runner_due_tick_materializes_status_and_schedule(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(maintenance_service, 'utc_now', lambda: NOW)
+    _patch_project_view(monkeypatch, _project_view_payload())
+    project_root = tmp_path / 'repo-runner-due'
+    _write(project_root / '.ccb' / 'ccb.config', _enabled_config())
+    context = CliContextBuilder().build(
+        ParsedMaintenanceCommand(project=None, action='runner'),
+        cwd=project_root,
+        bootstrap_if_missing=False,
+    )
+
+    payload = maintenance_status(
+        context,
+        ParsedMaintenanceCommand(
+            project=None,
+            action='runner',
+            args=('--runner-id', 'runner_test', '--max-iterations', '1', '--no-dispatch'),
+        ),
+    )
+    store = MaintenanceHeartbeatStore(context.paths, project_id=context.project.project_id)
+    status = store.load_status().value
+    schedule = store.load_schedule().value
+    runner = store.load_runner().value
+
+    assert payload['maintenance_status'] == 'ok'
+    assert payload['runner_status'] == 'stopped'
+    assert payload['runner_exit_reason'] == 'max_iterations'
+    assert payload['runner_iterations'] == 1
+    assert status is not None
+    assert status.last_tick_status == 'healthy'
+    assert schedule is not None
+    assert schedule.next_run_at == '2026-06-10T12:15:00Z'
+    assert runner is not None
+    assert runner.runner_id == 'runner_test'
+    assert runner.state == 'stopped'
+    assert runner.last_tick_status == 'healthy'
+    assert runner.exit_reason == 'max_iterations'
+
+
+def test_maintenance_runner_future_schedule_waits_without_tick(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(maintenance_service, 'utc_now', lambda: NOW)
+    _patch_project_view(monkeypatch, _project_view_payload(agent_state='pending', agent_reason='provider_prompt_idle'))
+    project_root = tmp_path / 'repo-runner-future'
+    _write(project_root / '.ccb' / 'ccb.config', _enabled_config())
+    context = CliContextBuilder().build(
+        ParsedMaintenanceCommand(project=None, action='runner'),
+        cwd=project_root,
+        bootstrap_if_missing=False,
+    )
+    store = MaintenanceHeartbeatStore(context.paths, project_id=context.project.project_id)
+    store.save_schedule(
+        MaintenanceHeartbeatSchedule(
+            project_id=context.project.project_id,
+            next_run_at='2026-06-10T12:10:00Z',
+            reason='future',
+            updated_at=NOW,
+            updated_by='test',
+        )
+    )
+
+    payload = maintenance_status(
+        context,
+        ParsedMaintenanceCommand(
+            project=None,
+            action='runner',
+            args=('--runner-id', 'runner_wait', '--max-iterations', '1', '--sleep-cap', '1s', '--no-dispatch'),
+        ),
+    )
+    runner = store.load_runner().value
+
+    assert payload['runner_exit_reason'] == 'max_iterations'
+    assert store.load_status().state == 'missing'
+    assert runner is not None
+    assert runner.state == 'stopped'
+    assert runner.observed_next_run_at == '2026-06-10T12:10:00Z'
+    assert runner.last_tick_status is None
+
+
 def test_maintenance_tick_exits_when_schedule_is_not_due(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(maintenance_service, 'utc_now', lambda: NOW)
     _patch_project_view(monkeypatch, _project_view_payload(agent_state='pending', agent_reason='provider_prompt_idle'))
@@ -421,6 +524,43 @@ def test_maintenance_tick_exits_when_schedule_is_not_due(tmp_path: Path, monkeyp
     assert payload['status_written'] is False
     assert payload['activation_written'] is False
     assert store.load_status().state == 'missing'
+
+
+def test_maintenance_tick_force_no_dispatch_bypasses_schedule_without_submit(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(maintenance_service, 'utc_now', lambda: NOW)
+    seen: dict[str, object] = {}
+    _patch_submit(monkeypatch, seen)
+    _patch_project_view(monkeypatch, _project_view_payload(agent_state='pending', agent_reason='provider_prompt_idle'))
+    project_root = tmp_path / 'repo-tick-force-no-dispatch'
+    _write(project_root / '.ccb' / 'ccb.config', _enabled_config())
+    context = CliContextBuilder().build(
+        ParsedMaintenanceCommand(project=None, action='tick'),
+        cwd=project_root,
+        bootstrap_if_missing=False,
+    )
+    store = MaintenanceHeartbeatStore(context.paths, project_id=context.project.project_id)
+    store.save_schedule(
+        MaintenanceHeartbeatSchedule(
+            project_id=context.project.project_id,
+            next_run_at='2026-06-10T12:10:00Z',
+            reason='future',
+            updated_at=NOW,
+            updated_by='test',
+        )
+    )
+
+    payload = maintenance_status(
+        context,
+        ParsedMaintenanceCommand(project=None, action='tick', args=('--force', '--no-dispatch')),
+    )
+    activations = store.load_activation_tail(10)
+
+    assert payload['tick_status'] == 'concern'
+    assert payload['tick_activation_status'] == 'suppressed'
+    assert payload['tick_activation_job_id'] is None
+    assert payload['activation_written'] is True
+    assert activations[-1].suppressed_reason == 'dispatch_disabled'
+    assert seen == {}
 
 
 def test_maintenance_tick_suppresses_recent_duplicate_activation(tmp_path: Path, monkeypatch) -> None:
@@ -526,6 +666,107 @@ def test_maintenance_status_rejects_reserved_mutating_actions(tmp_path: Path) ->
     }
 
 
+def test_startup_ensure_starts_schedule_consumer_runner(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(maintenance_service, 'utc_now', lambda: NOW)
+    project_root = tmp_path / 'repo-startup-runner'
+    _write(project_root / '.ccb' / 'ccb.config', _enabled_config())
+    context = CliContextBuilder().build(
+        ParsedMaintenanceCommand(project=None, action='status'),
+        cwd=project_root,
+        bootstrap_if_missing=False,
+    )
+    seen: dict[str, object] = {}
+
+    def _spawn(context, *, runner_id, source):
+        seen['project'] = str(context.project.project_root)
+        seen['runner_id'] = runner_id
+        seen['source'] = source
+        return SimpleNamespace(pid=4242)
+
+    monkeypatch.setattr(maintenance_service, '_spawn_maintenance_runner', _spawn)
+
+    payload = maintenance_service.startup_ensure_maintenance_heartbeat(context)
+    runner = MaintenanceHeartbeatStore(context.paths, project_id=context.project.project_id).load_runner().value
+
+    assert payload is not None
+    assert payload['action'] == 'runner-ensure'
+    assert payload['runner_status'] == 'started'
+    assert payload['runner_started'] is True
+    assert payload['runner_pid'] == 4242
+    assert seen['source'] == 'startup_ensure'
+    assert runner is not None
+    assert runner.pid == 4242
+    assert runner.state == 'starting'
+
+
+def test_startup_ensure_reuses_live_schedule_consumer_runner(tmp_path: Path, monkeypatch) -> None:
+    project_root = tmp_path / 'repo-startup-runner-live'
+    _write(project_root / '.ccb' / 'ccb.config', _enabled_config())
+    context = CliContextBuilder().build(
+        ParsedMaintenanceCommand(project=None, action='status'),
+        cwd=project_root,
+        bootstrap_if_missing=False,
+    )
+    store = MaintenanceHeartbeatStore(context.paths, project_id=context.project.project_id)
+    store.save_runner(
+        MaintenanceHeartbeatRunner(
+            project_id=context.project.project_id,
+            runner_id='runner_live',
+            pid=4242,
+            state='sleeping',
+            source='startup_ensure',
+        )
+    )
+    monkeypatch.setattr(maintenance_service, '_pid_alive', lambda pid: pid == 4242)
+    monkeypatch.setattr(
+        maintenance_service,
+        '_spawn_maintenance_runner',
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError('should not spawn')),
+    )
+
+    payload = maintenance_service.startup_ensure_maintenance_heartbeat(context)
+
+    assert payload is not None
+    assert payload['runner_status'] == 'already_running'
+    assert payload['runner_started'] is False
+    assert payload['runner_pid'] == 4242
+
+
+def test_stop_maintenance_runner_signals_live_pid(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(maintenance_service, 'utc_now', lambda: NOW)
+    project_root = tmp_path / 'repo-stop-runner'
+    _write(project_root / '.ccb' / 'ccb.config', _enabled_config())
+    context = CliContextBuilder().build(
+        ParsedMaintenanceCommand(project=None, action='status'),
+        cwd=project_root,
+        bootstrap_if_missing=False,
+    )
+    store = MaintenanceHeartbeatStore(context.paths, project_id=context.project.project_id)
+    store.save_runner(
+        MaintenanceHeartbeatRunner(
+            project_id=context.project.project_id,
+            runner_id='runner_stop',
+            pid=5151,
+            state='sleeping',
+            source='startup_ensure',
+        )
+    )
+    alive = [True, False]
+    killed: list[tuple[int, int]] = []
+    monkeypatch.setattr(maintenance_service, '_pid_alive', lambda pid: alive.pop(0) if alive else False)
+    monkeypatch.setattr(maintenance_service.os, 'kill', lambda pid, sig: killed.append((pid, sig)))
+
+    payload = maintenance_service.stop_maintenance_heartbeat_runner(context, reason='kill')
+    runner = store.load_runner().value
+
+    assert payload['runner_stop_status'] == 'stopped'
+    assert payload['runner_stopped'] is True
+    assert killed == [(5151, maintenance_service.signal.SIGTERM)]
+    assert runner is not None
+    assert runner.state == 'stopped'
+    assert runner.exit_reason == 'kill'
+
+
 def test_render_maintenance_status_includes_config_and_state() -> None:
     lines = render_maintenance(
         {
@@ -558,6 +799,21 @@ def test_render_maintenance_status_includes_config_and_state() -> None:
                 'path': '/tmp/repo/.ccb/ccbd/maintenance-heartbeat/status.json',
                 'error': None,
             },
+            'runner': {
+                'state': 'ok',
+                'path': '/tmp/repo/.ccb/ccbd/maintenance-heartbeat/runner.json',
+                'error': None,
+                'record': {
+                    'runner_id': 'runner_1',
+                    'pid': 123,
+                    'state': 'sleeping',
+                    'source': 'startup_ensure',
+                    'started_at': '2026-06-10T11:00:00Z',
+                    'last_seen_at': '2026-06-10T11:05:00Z',
+                    'observed_next_run_at': '2026-06-10T12:00:00Z',
+                    'sleep_until': '2026-06-10T12:00:00Z',
+                },
+            },
             'last_activation': {
                 'state': 'ok',
                 'path': '/tmp/repo/.ccb/ccbd/maintenance-heartbeat/activations.jsonl',
@@ -583,5 +839,8 @@ def test_render_maintenance_status_includes_config_and_state() -> None:
     assert 'schedule_state: ok' in lines
     assert 'schedule_next_run_at: 2026-06-10T12:00:00Z' in lines
     assert 'last_status_state: missing' in lines
+    assert 'runner_state: ok' in lines
+    assert 'runner_runner_id: runner_1' in lines
+    assert 'runner_pid: 123' in lines
     assert 'last_activation_state: ok' in lines
     assert 'last_activation_status: submitted' in lines

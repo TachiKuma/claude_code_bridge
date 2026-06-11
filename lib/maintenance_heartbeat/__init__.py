@@ -4,6 +4,7 @@ from .classifier import MaintenanceHeartbeatEvaluation, evaluate_project_view, e
 from .lock import MaintenanceHeartbeatLock, MaintenanceHeartbeatLockBusy
 from .models import (
     MaintenanceHeartbeatActivation,
+    MaintenanceHeartbeatRunner,
     MaintenanceHeartbeatSchedule,
     MaintenanceHeartbeatStatus,
 )
@@ -15,6 +16,7 @@ __all__ = [
     'MaintenanceHeartbeatLock',
     'MaintenanceHeartbeatLockBusy',
     'MaintenanceHeartbeatReadResult',
+    'MaintenanceHeartbeatRunner',
     'MaintenanceHeartbeatSchedule',
     'MaintenanceHeartbeatStatus',
     'MaintenanceHeartbeatStore',

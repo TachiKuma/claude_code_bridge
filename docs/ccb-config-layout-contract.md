@@ -169,7 +169,10 @@ Contract:
   assessor state is surfaced by heartbeat status/diagnostics.
 - `interval_s`, `min_interval_s`, and `unknown_streak_cap` are positive
   integers. `min_interval_s` must not exceed `interval_s`.
-- v1 accepted escalation policies are `report_only` and `ask_user`.
+- v1 accepted escalation policies are `report_only` and `ask_user`, but the
+  field is status-only in v1. Both values use the same bounded silent assessor
+  activation path; the selected value is exposed in status/diagnostics and can
+  be used by the assessor as advisory intent.
 - `ccb maintenance status` may read and report this policy.
 - `ccb maintenance tick` may use this policy to run a bounded one-shot
   diagnosis, write maintenance heartbeat status/schedule/activation state when
@@ -180,6 +183,11 @@ Contract:
   `min_interval_s` are raised to `min_interval_s`.
 - `ccb maintenance enable` and `disable` must not edit `.ccb/ccb.config` until
   config editing policy is defined before those commands mutate behavior.
+- `ccb reload --dry-run` must classify a pure `[maintenance.heartbeat]` diff as
+  `maintenance_change`, not `layout_change`.
+- `ccb reload` may publish a `maintenance_change` by refreshing the project
+  service graph and config signatures without tmux namespace mutation, runtime
+  mount/unload, or agent pane restart.
 
 ### 4.1.2 Explicit Windows Topology
 

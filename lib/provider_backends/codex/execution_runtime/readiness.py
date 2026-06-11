@@ -1,20 +1,25 @@
 from __future__ import annotations
 
 import os
+import re
 import time
 from dataclasses import dataclass
 
 
-_UNUSABLE_MARKERS = (
-    'pane is dead',
-    'pane dead',
-    'shutting down',
+_UNUSABLE_LINE_PATTERNS = (
+    re.compile(r'^(?:error:\s*)?(?:pane is dead|pane dead)\b[.!:;\-\s]*$', re.IGNORECASE),
+    re.compile(r'^(?:codex\s+)?shutting down(?:\.\.\.)?[.!:;\-\s]*$', re.IGNORECASE),
 )
 
 
 def looks_unusable(text: str) -> bool:
-    lowered = str(text or '').lower()
-    return any(marker in lowered for marker in _UNUSABLE_MARKERS)
+    for line in str(text or '').splitlines():
+        candidate = line.strip()
+        if not candidate:
+            continue
+        if any(pattern.match(candidate) for pattern in _UNUSABLE_LINE_PATTERNS):
+            return True
+    return False
 
 
 def looks_ready(text: str) -> bool:

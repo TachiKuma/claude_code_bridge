@@ -180,6 +180,10 @@ class CcbdOpsPathMixin:
         return self.ccbd_maintenance_heartbeat_dir / 'status.json'
 
     @property
+    def ccbd_maintenance_heartbeat_runner_path(self):
+        return self.ccbd_maintenance_heartbeat_dir / 'runner.json'
+
+    @property
     def ccbd_maintenance_heartbeat_lock_path(self):
         return self.ccbd_maintenance_heartbeat_dir / 'lock.json'
 

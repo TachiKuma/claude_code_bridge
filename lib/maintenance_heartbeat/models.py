@@ -7,6 +7,7 @@ SCHEMA_VERSION = 1
 SCHEDULE_RECORD_TYPE = 'maintenance_heartbeat_schedule'
 STATUS_RECORD_TYPE = 'maintenance_heartbeat_status'
 ACTIVATION_RECORD_TYPE = 'maintenance_heartbeat_activation'
+RUNNER_RECORD_TYPE = 'maintenance_heartbeat_runner'
 
 
 @dataclass(frozen=True)
@@ -126,6 +127,72 @@ class MaintenanceHeartbeatStatus:
             last_activation_job_id=_optional_text(payload.get('last_activation_job_id')),
             last_activation_target=_optional_text(payload.get('last_activation_target')),
             last_activation_dedup_key=_optional_text(payload.get('last_activation_dedup_key')),
+        )
+
+
+@dataclass(frozen=True)
+class MaintenanceHeartbeatRunner:
+    project_id: str
+    runner_id: str
+    pid: int | None = None
+    state: str = 'unknown'
+    source: str | None = None
+    started_at: str | None = None
+    last_seen_at: str | None = None
+    last_wake_at: str | None = None
+    last_tick_at: str | None = None
+    last_tick_status: str | None = None
+    observed_next_run_at: str | None = None
+    sleep_until: str | None = None
+    exit_reason: str | None = None
+
+    def __post_init__(self) -> None:
+        if not str(self.project_id or '').strip():
+            raise ValueError('project_id cannot be empty')
+        if not str(self.runner_id or '').strip():
+            raise ValueError('runner_id cannot be empty')
+        if not str(self.state or '').strip():
+            raise ValueError('state cannot be empty')
+        if self.pid is not None and int(self.pid) <= 0:
+            raise ValueError('pid must be positive')
+        object.__setattr__(self, 'pid', int(self.pid) if self.pid is not None else None)
+
+    def to_record(self) -> dict[str, Any]:
+        return {
+            'schema_version': SCHEMA_VERSION,
+            'record_type': RUNNER_RECORD_TYPE,
+            'project_id': self.project_id,
+            'runner_id': self.runner_id,
+            'pid': self.pid,
+            'state': self.state,
+            'source': self.source,
+            'started_at': self.started_at,
+            'last_seen_at': self.last_seen_at,
+            'last_wake_at': self.last_wake_at,
+            'last_tick_at': self.last_tick_at,
+            'last_tick_status': self.last_tick_status,
+            'observed_next_run_at': self.observed_next_run_at,
+            'sleep_until': self.sleep_until,
+            'exit_reason': self.exit_reason,
+        }
+
+    @classmethod
+    def from_record(cls, payload: dict[str, Any]) -> 'MaintenanceHeartbeatRunner':
+        _validate_header(payload, record_type=RUNNER_RECORD_TYPE)
+        return cls(
+            project_id=str(payload.get('project_id') or ''),
+            runner_id=str(payload.get('runner_id') or ''),
+            pid=_optional_int(payload.get('pid')),
+            state=str(payload.get('state') or 'unknown'),
+            source=_optional_text(payload.get('source')),
+            started_at=_optional_text(payload.get('started_at')),
+            last_seen_at=_optional_text(payload.get('last_seen_at')),
+            last_wake_at=_optional_text(payload.get('last_wake_at')),
+            last_tick_at=_optional_text(payload.get('last_tick_at')),
+            last_tick_status=_optional_text(payload.get('last_tick_status')),
+            observed_next_run_at=_optional_text(payload.get('observed_next_run_at')),
+            sleep_until=_optional_text(payload.get('sleep_until')),
+            exit_reason=_optional_text(payload.get('exit_reason')),
         )
 
 
@@ -280,8 +347,10 @@ def _tuple_of_mappings(value: object) -> tuple[dict[str, Any], ...]:
 __all__ = [
     'ACTIVATION_RECORD_TYPE',
     'MaintenanceHeartbeatActivation',
+    'MaintenanceHeartbeatRunner',
     'MaintenanceHeartbeatSchedule',
     'MaintenanceHeartbeatStatus',
+    'RUNNER_RECORD_TYPE',
     'SCHEMA_VERSION',
     'SCHEDULE_RECORD_TYPE',
     'STATUS_RECORD_TYPE',

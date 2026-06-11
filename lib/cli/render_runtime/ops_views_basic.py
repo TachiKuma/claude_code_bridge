@@ -34,11 +34,17 @@ def render_start(summary) -> tuple[str, ...]:
     ]
     heartbeat = getattr(summary, 'maintenance_heartbeat', None)
     if isinstance(heartbeat, Mapping):
+        details = [
+            f'status={heartbeat.get("maintenance_status")}',
+            f'action={heartbeat.get("action")}',
+        ]
+        if heartbeat.get('runner_status') is not None:
+            details.append(f'runner_status={heartbeat.get("runner_status")}')
+        if heartbeat.get('tick_status') is not None:
+            details.append(f'tick_status={heartbeat.get("tick_status")}')
         lines.append(
             'maintenance_heartbeat: '
-            f'status={heartbeat.get("maintenance_status")} '
-            f'action={heartbeat.get("action")} '
-            f'tick_status={heartbeat.get("tick_status")}'
+            + ' '.join(details)
         )
         reason = str(heartbeat.get('reason') or '').strip()
         if reason:
@@ -189,6 +195,18 @@ def render_maintenance(payload) -> tuple[str, ...]:
         lines.append(f'reason: {reason}')
     if status == 'not_implemented':
         return tuple(lines)
+    runner_status = str(data.get('runner_status') or '').strip()
+    if runner_status:
+        lines.extend(
+            [
+                f'runner_status: {runner_status}',
+                f'runner_started: {_render_optional(data.get("runner_started"))}',
+                f'runner_id: {_render_optional(data.get("runner_id"))}',
+                f'runner_pid: {_render_optional(data.get("runner_pid"))}',
+                f'runner_exit_reason: {_render_optional(data.get("runner_exit_reason"))}',
+                f'runner_iterations: {_render_optional(data.get("runner_iterations"))}',
+            ]
+        )
     tick_status = str(data.get('tick_status') or '').strip()
     if tick_status:
         lines.extend(
@@ -238,6 +256,9 @@ def render_maintenance(payload) -> tuple[str, ...]:
     last_status = data.get('last_status')
     if isinstance(last_status, Mapping):
         lines.extend(_maintenance_record_lines('last_status', last_status))
+    runner = data.get('runner')
+    if isinstance(runner, Mapping):
+        lines.extend(_maintenance_record_lines('runner', runner))
     last_activation = data.get('last_activation')
     if isinstance(last_activation, Mapping):
         lines.extend(_maintenance_record_lines('last_activation', last_activation))
@@ -273,6 +294,17 @@ def _maintenance_record_lines(prefix: str, payload: Mapping[str, object]) -> lis
             'last_activation_job_id',
             'last_activation_target',
             'last_activation_dedup_key',
+            'runner_id',
+            'pid',
+            'state',
+            'started_at',
+            'last_seen_at',
+            'last_wake_at',
+            'last_tick_at',
+            'last_tick_status',
+            'observed_next_run_at',
+            'sleep_until',
+            'exit_reason',
             'activation_id',
             'status',
             'condition_kind',

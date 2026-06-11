@@ -10,6 +10,11 @@ been collected; and the current implementation now prepares
 `agentroles.ccb_self` as a recommended default Role Pack during install/update
 provisioning while keeping project binding explicit.
 
+The next design slice is the CCB expert upgrade: `ccb_self` should carry enough
+skills and compact technical references to answer CCB architecture, usage,
+feature-status, release, and pane-view self-supervision questions from local
+source/docs/tests/runtime evidence.
+
 ## Last Landed
 
 - 2026-06-09: Added reviewable draft Role Pack content under
@@ -52,15 +57,32 @@ provisioning while keeping project binding explicit.
   adding `agentroles.ccb_self:codex`, and
   [decisions/004-default-recommended-install.md](decisions/004-default-recommended-install.md)
   records that project topology changes remain explicit.
+- 2026-06-10: Added the draft `ccb-comm-reply-recover` skill to capture the
+  observed "reply not received" communication recovery pattern: trace lineage,
+  inspect mailbox head-of-line state, cross-check provider pane evidence, cancel
+  stale active jobs, preserve valid running work, and cancel duplicate retries
+  after a successful reply.
+- 2026-06-10: Captured the user direction that `ccb_self` should become the
+  project-local CCB expert, with architecture navigation, command usage,
+  release/update awareness, knowledge refresh, and bounded pane-view diagnosis
+  planned in
+  [topics/ccb-expert-knowledge-role.md](topics/ccb-expert-knowledge-role.md).
+- 2026-06-10: Refined self-supervision around real pane text view: use
+  `tmux capture-pane` bottom/current prompt content and activity sampling as
+  the v1 primary evidence path, with screenshot/OCR only as fallback. See
+  [topics/pane-view-self-supervision.md](topics/pane-view-self-supervision.md).
 
 ## Active TODO
 
-1. Finish targeted and full 7.4.0 source validation.
-2. Commit and re-review the default recommended install delta before pushing.
-3. Add handoff matrix tests for diagnose/recover/chain/config routing.
-4. Define or implement the first structured MCP/control-plane helper surface.
-5. Decide whether non-self agents need a separate delegation stub; the full
+1. Review and finalize the CCB expert and pane-view supervision v1 slice before
+   implementation.
+2. Add handoff matrix tests for diagnose/recover/chain/config/comm-reply
+   routing.
+3. Define or implement the first structured MCP/control-plane helper surface.
+4. Decide whether non-self agents need a separate delegation stub; the full
    public inherited `ccb-config` source has been removed.
+5. Finish any remaining targeted/full 7.4.0 validation tied to the Role Pack
+   release line.
 
 ## Blocked By
 

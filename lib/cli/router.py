@@ -289,6 +289,7 @@ _COMMAND_HELP = {
           - tick reads ccbd/project-view evidence and may write only maintenance-heartbeat status/schedule/activation records.
           - non-healthy tick may submit one silent ask to the configured assessor, default ccb_self.
           - tick does not run repairs or start providers.
+          - runner is an internal project-scoped schedule consumer used by startup ensure.
           - enable and disable are config-authority in v1; edit [maintenance.heartbeat].enabled.
           - Status reads `.ccb/ccbd/maintenance-heartbeat/`, not `.ccb/ccbd/heartbeats/`.
     """,

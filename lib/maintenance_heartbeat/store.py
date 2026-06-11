@@ -9,6 +9,7 @@ from storage.paths import PathLayout
 
 from .models import (
     MaintenanceHeartbeatActivation,
+    MaintenanceHeartbeatRunner,
     MaintenanceHeartbeatSchedule,
     MaintenanceHeartbeatStatus,
 )
@@ -77,6 +78,21 @@ class MaintenanceHeartbeatStore:
         self._store.save(
             self._layout.ccbd_maintenance_heartbeat_status_path,
             status,
+            serializer=lambda value: value.to_record(),
+        )
+
+    def load_runner(self) -> MaintenanceHeartbeatReadResult[MaintenanceHeartbeatRunner]:
+        return self._load(
+            self._layout.ccbd_maintenance_heartbeat_runner_path,
+            loader=MaintenanceHeartbeatRunner.from_record,
+            expected_project_id=self._project_id,
+        )
+
+    def save_runner(self, runner: MaintenanceHeartbeatRunner) -> None:
+        self._ensure_project(runner.project_id)
+        self._store.save(
+            self._layout.ccbd_maintenance_heartbeat_runner_path,
+            runner,
             serializer=lambda value: value.to_record(),
         )
 

@@ -41,6 +41,7 @@ to resume across agents and sessions.
 | [ccb-maintenance-heartbeat](plans/ccb-maintenance-heartbeat/README.md) | Planning | Add a generic CCB-owned maintenance heartbeat that independently diagnoses agent health and escalates risk, unknown, or unhealthy states to a semantic assessor, defaulting to `ccb_self`. |
 | [workspace-sharing](plans/workspace-sharing/README.md) | In progress | Add explicit external workspace paths and internal shared worktree groups without changing default per-agent worktree behavior. |
 | [ask-parameter-policy](plans/ask-parameter-policy/README.md) | Planning | Clarify how ask skills choose silence, compact, callback, and artifact flags from result intent, dependency, and content-preservation needs. |
+| [ccb-manuals](plans/ccb-manuals/README.md) | Complete | Produced source-backed CCB developer and user manuals, including Archi/Hippo architecture analysis and a deep communication-logic chapter. |
 
 ## Legacy Planning Sources
 
