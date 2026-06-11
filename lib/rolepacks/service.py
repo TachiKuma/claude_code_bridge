@@ -72,7 +72,12 @@ def install_role(
     with_tools: bool = True,
 ) -> dict[str, object]:
     migrate_legacy_installed_roles(role_id)
-    return _install_role_via_agent_roles_manager(role_id, source_path=source_path, with_tools=with_tools)
+    return _install_role_via_agent_roles_manager(
+        role_id,
+        script_root=script_root,
+        source_path=source_path,
+        with_tools=with_tools,
+    )
 
 
 def update_role(
@@ -83,7 +88,12 @@ def update_role(
     with_tools: bool = True,
 ) -> dict[str, object]:
     migrate_legacy_installed_roles(role_id)
-    return _update_role_via_agent_roles_manager(role_id, source_path=source_path, with_tools=with_tools)
+    return _update_role_via_agent_roles_manager(
+        role_id,
+        script_root=script_root,
+        source_path=source_path,
+        with_tools=with_tools,
+    )
 
 
 def sync_roles_from_path(source_path: Path, *, with_tools: bool = False) -> dict[str, object]:
@@ -111,6 +121,7 @@ def sync_roles_from_path(source_path: Path, *, with_tools: bool = False) -> dict
 def _install_role_via_agent_roles_manager(
     role_id: str | None,
     *,
+    script_root: Path | None,
     source_path: Path | None,
     with_tools: bool,
 ) -> dict[str, object]:
@@ -121,7 +132,7 @@ def _install_role_via_agent_roles_manager(
     payload = _normalize_agent_roles_payload(payload, default_role_status='installed')
     if with_tools:
         installed = load_role(Path(str(payload['path'])))
-        tool_results = run_role_tool_hooks(installed, action='install', fail_required=True)
+        tool_results = run_role_tool_hooks(installed, action='install', fail_required=True, script_root=script_root)
         payload['tools_status'] = _tool_results_status(tool_results)
         payload['tools'] = tool_results
     else:
@@ -133,6 +144,7 @@ def _install_role_via_agent_roles_manager(
 def _update_role_via_agent_roles_manager(
     role_id: str | None,
     *,
+    script_root: Path | None = None,
     source_path: Path | None = None,
     with_tools: bool,
 ) -> dict[str, object]:
@@ -147,7 +159,7 @@ def _update_role_via_agent_roles_manager(
     payload['role_status'] = 'updated'
     if with_tools:
         installed = load_role(Path(str(payload['path'])))
-        tool_results = run_role_tool_hooks(installed, action='update', fail_required=True)
+        tool_results = run_role_tool_hooks(installed, action='update', fail_required=True, script_root=script_root)
         payload['tools_status'] = _tool_results_status(tool_results)
         payload['tools'] = tool_results
     else:
@@ -186,7 +198,13 @@ def _normalize_agent_roles_sync_payload(payload: dict[str, object]) -> dict[str,
     }
 
 
-def role_status(role_id: str, *, script_root: Path | None = None, include_tools: bool = False) -> dict[str, object]:
+def role_status(
+    role_id: str,
+    *,
+    script_root: Path | None = None,
+    include_tools: bool = False,
+    project_root: Path | None = None,
+) -> dict[str, object]:
     role_id = normalize_role_id(role_id)
     migrate_legacy_installed_roles(role_id)
     source_role = find_source_role(role_id)
@@ -211,7 +229,12 @@ def role_status(role_id: str, *, script_root: Path | None = None, include_tools:
         if role is None and source_role is not None:
             role = load_role(source_role.path)
         if role is not None:
-            tool_results = run_role_tool_hooks(role, action='doctor')
+            tool_results = run_role_tool_hooks(
+                role,
+                action='doctor',
+                script_root=script_root,
+                project_root=project_root,
+            )
             payload['tools_status'] = _tool_results_status(tool_results)
             payload['tools'] = tool_results
         else:
@@ -224,6 +247,8 @@ def run_role_tool_hooks(
     *,
     action: str,
     fail_required: bool = False,
+    script_root: Path | None = None,
+    project_root: Path | None = None,
 ) -> tuple[dict[str, object], ...]:
     tools = dict(role.manifest.get('tools') or {})
     results: list[dict[str, object]] = []
@@ -253,7 +278,15 @@ def run_role_tool_hooks(
                 }
             )
             continue
-        result = _run_role_tool_command(role, tool_id=tool_id, action=action, command=command, required=required)
+        result = _run_role_tool_command(
+            role,
+            tool_id=tool_id,
+            action=action,
+            command=command,
+            required=required,
+            script_root=script_root,
+            project_root=project_root,
+        )
         results.append(result)
         if fail_required and result.get('status') == 'failed' and required:
             raise RolePackError(
@@ -454,6 +487,8 @@ def _run_role_tool_command(
     action: str,
     command: str,
     required: bool,
+    script_root: Path | None = None,
+    project_root: Path | None = None,
 ) -> dict[str, object]:
     try:
         argv = shlex.split(command)
@@ -475,8 +510,15 @@ def _run_role_tool_command(
             'reason': 'empty hook command',
         }
     if argv[0] in {'python', 'python3'}:
+        _resolve_python_hook_script(role.root, argv)
         argv[0] = sys.executable
     env = dict(os.environ)
+    ccb_bin = _role_tool_ccb_bin(script_root)
+    if ccb_bin is not None:
+        env.setdefault('CCB_BIN', str(ccb_bin))
+    if project_root is not None:
+        env.setdefault('CCB_PROJECT_ROOT', str(project_root))
+        env.setdefault('CCB_ROLE_TOOL_PROJECT_ROOT', str(project_root))
     env.update(
         {
             'CCB_ROLE_ID': role.id,
@@ -487,9 +529,10 @@ def _run_role_tool_command(
         }
     )
     try:
+        cwd = Path(project_root) if action == 'doctor' and project_root is not None else role.root
         completed = subprocess.run(
             argv,
-            cwd=role.root,
+            cwd=cwd,
             env=env,
             text=True,
             stdout=subprocess.PIPE,
@@ -516,6 +559,31 @@ def _run_role_tool_command(
         'stdout': completed.stdout.strip(),
         'stderr': completed.stderr.strip(),
     }
+
+
+def _resolve_python_hook_script(role_root: Path, argv: list[str]) -> None:
+    for index in range(1, len(argv)):
+        token = argv[index]
+        if token in {'-c', '-m'}:
+            return
+        if token.startswith('-'):
+            continue
+        candidate = Path(token)
+        if candidate.is_absolute():
+            return
+        rooted = Path(role_root) / candidate
+        if rooted.is_file():
+            argv[index] = str(rooted)
+        return
+
+
+def _role_tool_ccb_bin(script_root: Path | None) -> Path | None:
+    if script_root is None:
+        return None
+    candidate = Path(script_root) / 'ccb'
+    if candidate.is_file():
+        return candidate
+    return None
 
 
 def _tool_results_status(results: tuple[dict[str, object], ...]) -> str:
@@ -545,6 +613,7 @@ def add_role_to_project_config(
         if source_role is not None:
             install_payload = _install_role_via_agent_roles_manager(
                 role_id,
+                script_root=script_root,
                 source_path=source_role.path,
                 with_tools=False,
             )
@@ -579,7 +648,6 @@ def add_role_to_project_config(
         after = _upsert_agent_role_overlay(
             after,
             agent_name=selected_agent,
-            provider=selected_provider,
             role_id=role_id,
         )
     loaded = _load_project_config_from_text(after)
@@ -625,7 +693,7 @@ def _load_builtin_role_by_id(role_id: str) -> RolePack | None:
         return None
 
 
-def _upsert_agent_role_overlay(text: str, *, agent_name: str, provider: str, role_id: str) -> str:
+def _upsert_agent_role_overlay(text: str, *, agent_name: str, role_id: str) -> str:
     lines = text.rstrip().splitlines()
     header = f'[agents.{agent_name}]'
     start = None
@@ -642,13 +710,12 @@ def _upsert_agent_role_overlay(text: str, *, agent_name: str, provider: str, rol
             '',
             header,
             f'role = "{role_id}"',
-            f'provider = "{provider}"',
         ]
         return '\n'.join(lines + block).rstrip() + '\n'
 
     block = lines[start:end]
     block = _upsert_key(block, 'role', role_id)
-    block = _upsert_key(block, 'provider', provider)
+    block = _remove_key(block, 'provider')
     return '\n'.join(lines[:start] + block + lines[end:]).rstrip() + '\n'
 
 
@@ -720,6 +787,16 @@ def _upsert_key(block: list[str], key: str, value: str) -> list[str]:
             block[index] = rendered
             return block
     return block + [rendered]
+
+
+def _remove_key(block: list[str], key: str) -> list[str]:
+    prefix = f'{key} '
+    return [
+        line
+        for index, line in enumerate(block)
+        if index == 0
+        or not (line.strip().startswith(prefix) or line.strip().startswith(f'{key}='))
+    ]
 
 
 def _write_project_role_lock(project_root: Path, role: RolePack) -> None:
