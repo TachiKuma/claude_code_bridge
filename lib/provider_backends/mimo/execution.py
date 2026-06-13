@@ -113,7 +113,7 @@ def _start_submission(
     request_anchor = request_anchor_for_job(job.job_id)
     no_wrap = no_wrap_requested(job)
     prompt = job.request.body if no_wrap else wrap_mimo_prompt(job.request.body or "", request_anchor)
-    cmd = [*provider_start_parts(provider), "run", "--format", "json", "--dir", str(work_dir), prompt]
+    cmd = [*provider_start_parts(provider), "run", "--pure", "--format", "json", "--dir", str(work_dir), prompt]
     env = _mimo_run_env(session.data)
 
     try:
@@ -149,6 +149,7 @@ def _start_submission(
         "next_seq": 1,
         "anchor_emitted": bool(no_wrap),
         "no_wrap": bool(no_wrap),
+        "pure_mode": True,
         "reply_buffer": "",
         "stdout_path": str(stdout_path),
         "stderr_path": str(stderr_path),
@@ -346,6 +347,21 @@ def _terminal_result_if_ready(
             },
         )
     if returncode == 0 and not observation.finished:
+        if observation.finish_reason:
+            return _terminal(
+                submission,
+                state,
+                items,
+                now,
+                status=CompletionStatus.INCOMPLETE,
+                reason=f"mimo_run_finished:{observation.finish_reason}",
+                reply=reply,
+                confidence=CompletionConfidence.DEGRADED,
+                diagnostics_extra={
+                    "finish_reason": observation.finish_reason,
+                    "returncode": returncode,
+                },
+            )
         return _terminal(
             submission,
             state,
@@ -463,8 +479,14 @@ def _read_mimo_run_output(path: Path) -> _MimoRunObservation:
             completed_at = completed_at or event.get("time") or event.get("timestamp")
             continue
         if effective_type in {"step_finish", "turn_finish", "finish", "done"}:
+            reason = _event_reason(event) or finish_reason or "stop"
+            if _is_intermediate_finish_reason(reason):
+                finish_reason = reason
+                turn_ref = turn_ref or _event_ref(event)
+                completed_at = completed_at or event.get("time") or event.get("timestamp")
+                continue
             finished = True
-            finish_reason = _event_reason(event) or finish_reason or "stop"
+            finish_reason = reason
             turn_ref = turn_ref or _event_ref(event)
             completed_at = completed_at or event.get("time") or event.get("timestamp")
             continue
@@ -478,6 +500,11 @@ def _read_mimo_run_output(path: Path) -> _MimoRunObservation:
         completed_at=completed_at,
         error=error,
     )
+
+
+def _is_intermediate_finish_reason(reason: str) -> bool:
+    normalized = reason.strip().lower().replace("-", "_")
+    return normalized in {"tool_calls", "tool_call"}
 
 
 def _event_type(event: dict[str, Any]) -> str:

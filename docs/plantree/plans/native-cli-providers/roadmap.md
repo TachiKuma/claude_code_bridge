@@ -4,14 +4,17 @@ Date: 2026-06-13
 
 ## Status Summary
 
-- Current status: native completion pivot is in the working tree. Kimi,
+- Current status: native completion pivot has landed in source. Kimi,
   DeepSeek/DeepCode, AGY, and MiMo no longer use `CCB_DONE` as their primary
   completion signal. Kimi and OpenCode inherited ask skill injection landed in
   commit `a4395c2`; MiMo inherited ask instruction injection and native
-  `mimo run --format json` execution are in the working tree.
+  `mimo run --format json` execution landed in commit `fce17c3`.
 - Last verified: focused native completion tests, provider catalog tests,
-  Kimi/OpenCode skill projection tests, and a real MiMo CCB ask passed.
-- Next target: commit the MiMo provider integration.
+  Kimi/OpenCode skill projection tests, and a real MiMo CCB ask passed after
+  switching CCB MiMo execution to `mimo run --pure --format json`; full
+  pytest release gate passed with `2613 passed, 2 skipped`.
+- Next target: publish the 7.5 patch release that includes MiMo in the public
+  README/provider surface.
 
 ## Done
 
@@ -116,12 +119,14 @@ Date: 2026-06-13
   - CCB startup still mounts a managed visible MiMo pane and materializes
     MiMo `mimocode.json` with memory plus ask instruction paths.
   - CCB ask execution uses a per-job native subprocess:
-    `mimo run --format json --dir <workdir> <wrapped prompt>`.
+    `mimo run --pure --format json --dir <workdir> <wrapped prompt>`.
   - Completion is observed from JSON result events: `part.text` supplies the
     assistant reply and `step_finish` / `part.reason=stop` terminalizes with
     `completion_reason: mimo_run_stop`.
   - Completed-native-empty MiMo results terminalize as
     `mimo_run_empty_reply` instead of waiting for reliability timeout.
+  - CCB passes `--pure` for MiMo run-mode asks so external plugin/tool-call
+    intermediate steps do not consume simple CCB ask jobs before final text.
 - MiMo verification:
   - Real installed `mimo run --format json --dir
     /home/bfly/yunwei/test_ccb2/mimo_real` completed with exact reply
@@ -131,6 +136,10 @@ Date: 2026-06-13
     launched with `/home/bfly/yunwei/ccb_source/ccb_test -s`, and completed
     job `job_ae41cad0e98a` with reply `MIMO_CCB_RUN_OK_3` and
     `completion_reason: mimo_run_stop`.
+  - Release-gate rerun with `--pure` completed job `job_023d114681ca` with
+    reply `MIMO_RELEASE_751_OK` and `completion_reason: mimo_run_stop`; the
+    preceding non-pure probe exposed `mimo_run_finished:tool-calls`, now
+    covered as an intermediate finish reason.
   - Focused touched-provider tests:
     `python -m pytest -q test/test_mimo_provider.py
     test/test_native_cli_providers.py test/test_v2_provider_catalog.py
@@ -141,17 +150,18 @@ Date: 2026-06-13
     test/test_project_memory_real_context.py
     test/test_provider_memory_external_matrix.py test/test_opencode_comm_sqlite.py
     test/test_opencode_execution_polling.py
-    test/test_provider_execution_service_runtime.py`: `262 passed, 1 skipped`.
+    test/test_provider_execution_service_runtime.py`: `263 passed, 1 skipped`.
+  - Final full release-gate pytest: `2613 passed, 2 skipped`.
   - `git diff --check`: passed.
 
 ## In Progress
 
-- MiMo provider integration is ready to commit.
-- Broader review/release-gate validation if requested.
+- 7.5 patch release packaging for the landed MiMo provider integration.
+- README/npm release surface now needs final gate checks and publication.
 
 ## Next
 
-1. Commit the MiMo provider integration.
+1. Publish `v7.5.1` through the release workflow/push-agent path.
 2. Review reusable smoke projects under `/home/bfly/yunwei/test_ccb2` before
    final cleanup if the release gate requires a clean test directory.
 

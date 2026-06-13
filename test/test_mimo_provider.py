@@ -222,6 +222,7 @@ def test_mimo_adapter_completes_from_native_run_json(monkeypatch, tmp_path: Path
 
     assert submission.source_kind is CompletionSourceKind.STRUCTURED_RESULT_STREAM
     assert submission.runtime_state["mode"] == "mimo_run"
+    assert submission.runtime_state["pure_mode"] is True
     terminal = None
     emitted: list[CompletionItemKind] = []
     current = submission
@@ -275,3 +276,48 @@ def test_mimo_adapter_reports_empty_native_run_reply(tmp_path: Path) -> None:
     assert result.decision is not None
     assert result.decision.status is CompletionStatus.INCOMPLETE
     assert result.decision.reason == "mimo_run_empty_reply"
+
+
+def test_mimo_adapter_treats_tool_calls_finish_as_intermediate(tmp_path: Path) -> None:
+    stdout = tmp_path / "run.jsonl"
+    stdout.write_text(
+        "\n".join(
+            [
+                json.dumps({"type": "step_finish", "part": {"type": "step-finish", "reason": "tool-calls"}}),
+                json.dumps({"type": "step_start", "part": {"type": "step-start"}}),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    submission = ProviderSubmission(
+        job_id="job_tool_calls",
+        agent_name="mimo1",
+        provider="mimo",
+        accepted_at="2026-06-13T00:00:00Z",
+        ready_at="2026-06-13T00:00:00Z",
+        source_kind=CompletionSourceKind.STRUCTURED_RESULT_STREAM,
+        reply="",
+        runtime_state={
+            "mode": "mimo_run",
+            "request_anchor": "job_tool_calls",
+            "stdout_path": str(stdout),
+            "stderr_path": str(tmp_path / "stderr.log"),
+            "next_seq": 1,
+            "anchor_emitted": False,
+            "returncode": None,
+        },
+    )
+
+    active = MimoProviderAdapter().poll(submission, now="2026-06-13T00:00:01Z")
+
+    assert active is not None
+    assert active.decision is None
+
+    active.submission.runtime_state["returncode"] = 0
+    terminal = MimoProviderAdapter().poll(active.submission, now="2026-06-13T00:00:02Z")
+
+    assert terminal is not None
+    assert terminal.decision is not None
+    assert terminal.decision.status is CompletionStatus.INCOMPLETE
+    assert terminal.decision.reason == "mimo_run_finished:tool-calls"

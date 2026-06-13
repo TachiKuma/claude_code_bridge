@@ -4,12 +4,12 @@ Date: 2026-06-13
 
 ## Current Phase
 
-Native completion pivot is implemented in the working tree. Kimi,
+Native completion pivot is implemented in source. Kimi,
 DeepSeek/DeepCode, AGY, and MiMo now use provider-native session/event logs or
 structured result streams for completion detection instead of asking the model
 to print `CCB_DONE`. Kimi and OpenCode inherited ask skill injection landed in
 commit `a4395c2`. MiMo inherited ask instruction injection and `mimo run
---format json` execution are implemented in the working tree.
+--format json` execution landed in commit `fce17c3`.
 
 ## Last Landed
 
@@ -45,7 +45,7 @@ commit `a4395c2`. MiMo inherited ask instruction injection and `mimo run
   - Provider key `mimo`, default command `mimo`, override `MIMO_START_CMD`.
   - Launch prepares `MIMOCODE_HOME`, `MIMOCODE_CONFIG`, memory bridge, and
     generated ask instruction path in MiMo `mimocode.json`.
-  - CCB ask execution uses `mimo run --format json --dir <workdir>` as a
+  - CCB ask execution uses `mimo run --pure --format json --dir <workdir>` as a
     per-job native subprocess. The visible pane remains a managed MiMo session
     for user/runtime maintenance, but completion no longer depends on TUI pane
     prompt injection.
@@ -55,7 +55,7 @@ commit `a4395c2`. MiMo inherited ask instruction injection and `mimo run
 
 ## Active TODO
 
-1. Commit the MiMo provider integration.
+1. Publish the 7.5 patch release with MiMo in the public provider strip.
 2. Decide whether to keep the smoke/real test projects as reusable validation
    fixtures.
 
@@ -238,6 +238,14 @@ MiMo provider verification:
     `.ccb/agents/mimo1/provider-runtime/mimo/completion/job_ae41cad0e98a.mimo-run.jsonl`
     contained `part.text = MIMO_CCB_RUN_OK_3` and
     `step_finish` / `part.reason = stop`.
+- Release-gate rerun:
+  - A non-pure probe exposed `mimo_run_finished:tool-calls` with an empty
+    reply after MiMo invoked its memory plugin.
+  - CCB MiMo execution now passes `--pure`, and tool-call `step_finish` is
+    treated as an intermediate finish reason until final text or process exit.
+  - After restart, `ccb_test ask mimo1 'Reply exactly: MIMO_RELEASE_751_OK'`
+    completed job `job_023d114681ca` with reply `MIMO_RELEASE_751_OK` and
+    `completion_reason: mimo_run_stop`.
 - Focused final test set:
   `python -m pytest -q test/test_mimo_provider.py
   test/test_native_cli_providers.py test/test_v2_provider_catalog.py
@@ -248,5 +256,6 @@ MiMo provider verification:
   test/test_project_memory_real_context.py
   test/test_provider_memory_external_matrix.py test/test_opencode_comm_sqlite.py
   test/test_opencode_execution_polling.py
-  test/test_provider_execution_service_runtime.py`: `262 passed, 1 skipped`.
+  test/test_provider_execution_service_runtime.py`: `263 passed, 1 skipped`.
+- Full release-gate pytest: `2613 passed, 2 skipped`.
 - `git diff --check`: passed.
