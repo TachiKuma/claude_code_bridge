@@ -62,10 +62,10 @@ jobs:
           for attempt in $(seq 1 80); do
             if assets="$(gh release view "$TAG_NAME" --json assets --jq '[.assets[].name] | sort' 2>/dev/null)"; then
               if ASSETS="$assets" REQUIRED="$required" node - <<'NODE'
-const assets = JSON.parse(process.env.ASSETS);
-const required = JSON.parse(process.env.REQUIRED);
-process.exit(required.every((name) => assets.includes(name)) ? 0 : 1);
-NODE
+          const assets = JSON.parse(process.env.ASSETS);
+          const required = JSON.parse(process.env.REQUIRED);
+          process.exit(required.every((name) => assets.includes(name)) ? 0 : 1);
+          NODE
               then
                 echo "release assets ready for $TAG_NAME"
                 exit 0
