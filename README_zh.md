@@ -30,7 +30,7 @@
 
 **中文** | [English](README.md)
 
-[快速开始](#快速开始) · [v7 界面](#v7-界面速览) · [配置团队](#配置-agent-团队) · [使用文档](docs/manuals/user-guide/) · [开发文档](docs/manuals/developer-guide/)
+[快速开始](#快速开始) · [v7 界面](#v7-界面速览) · [Rich 模式](#rich-mode-new) · [配置团队](#配置-agent-团队) · [使用文档](docs/manuals/user-guide/) · [开发文档](docs/manuals/developer-guide/)
 
 <p align="center">
   <img src="assets/readme_v7/ccb-hero-zh.png" alt="CCB v7 可见多 Agent CLI 工作台" width="960">
@@ -88,10 +88,6 @@ ccb update
 ```bash
 ccb update rich
 ```
-
-<p align="center">
-  <img src="assets/readme_v7/rich-workbench.png" alt="CCB rich 富媒体工作台在 WezTerm 中使用 Yazi 预览 PDF" width="860">
-</p>
 
 <details>
 <summary><b>GitHub release 包和源码安装兜底</b></summary>
@@ -180,6 +176,16 @@ ccb
 | 鼠标操作 | 支持点击切换 window、agent 和 pane，也可在通信区刷新、kill 或删除条目。 |
 | 工作区 | 每个 pane 都是真实 CLI；可以鼠标点击切换，也可以用 tmux 快捷键切换。 |
 | 常用技巧 | `Ctrl-b h/j/k/l` 切换相邻 pane，`Ctrl-b z` 放大或还原当前 CLI pane。 |
+
+<a id="rich-mode-new"></a>
+
+### Rich 模式（NEW!）
+
+运行 `ccb update rich` 安装可选富媒体工作台，再用 `ccb rich` 打开 WezTerm + Yazi + LazyVim，支持 Markdown 渲染和图片/PDF/视频预览。
+
+<p align="center">
+  <img src="assets/readme_v7/rich-workbench.png" alt="CCB rich 富媒体工作台在 WezTerm 中使用 Yazi 预览 PDF" width="860">
+</p>
 
 ### 联系方式
 

@@ -30,7 +30,7 @@
 
 **English** | [中文](README_zh.md)
 
-[Quick Start](#quick-start) · [v7 UI](#v7-ui-tour) · [Configure Agents](#configure-your-agent-team) · [User Guide](docs/manuals/user-guide/) · [Developer Guide](docs/manuals/developer-guide/)
+[Quick Start](#quick-start) · [v7 UI](#v7-ui-tour) · [Rich Mode](#rich-mode-new) · [Configure Agents](#configure-your-agent-team) · [User Guide](docs/manuals/user-guide/) · [Developer Guide](docs/manuals/developer-guide/)
 
 <p align="center">
   <img src="assets/readme_v7/ccb-hero-en.png" alt="CCB v7 visible multi-agent CLI workspace" width="960">
@@ -88,10 +88,6 @@ Install or refresh the optional rich media workbench with WezTerm, Yazi, LazyVim
 ```bash
 ccb update rich
 ```
-
-<p align="center">
-  <img src="assets/readme_v7/rich-workbench.png" alt="CCB rich workbench with Yazi PDF preview in WezTerm" width="860">
-</p>
 
 <details>
 <summary><b>GitHub release package and source install fallbacks</b></summary>
@@ -179,6 +175,16 @@ Agents can also call `/ask` from workflow orchestration to delegate and hand off
 | Mouse control | Click to switch windows, agents, and panes; refresh, kill, or delete communication entries from the communication area. |
 | Workspace | Every pane is a real CLI. Switch by mouse or tmux shortcuts. |
 | Useful shortcuts | `Ctrl-b h/j/k/l` switches adjacent panes; `Ctrl-b z` zooms or restores the current CLI pane. |
+
+<a id="rich-mode-new"></a>
+
+### Rich Mode (NEW!)
+
+Run `ccb update rich` to install the optional rich workbench, then `ccb rich` to open WezTerm + Yazi + LazyVim with Markdown rendering and image/PDF/video previews.
+
+<p align="center">
+  <img src="assets/readme_v7/rich-workbench.png" alt="CCB rich workbench with Yazi PDF preview in WezTerm" width="860">
+</p>
 
 ### Contact
 
