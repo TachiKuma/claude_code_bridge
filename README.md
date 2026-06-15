@@ -548,14 +548,6 @@ If agent A is handling a user-originated CCB task and needs agent B's result to 
 
 </details>
 
-### Editor Workflow
-
-<p align="center">
-  <img src="assets/nvim.png" alt="Neovim integration with multi-model code review" width="860">
-</p>
-
-CCB does not require leaving your editor. A common setup is: editor for code, CCB terminal for multi-agent planning, implementation, review, testing, and handoff.
-
 ### Install And Update
 
 #### Requirements
