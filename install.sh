@@ -243,6 +243,67 @@ require_non_root_execution() {
   confirm_root_install_if_needed
 }
 
+canonical_existing_parent_path() {
+  local path="$1"
+  if [[ -d "$path" ]]; then
+    (cd "$path" && pwd -P)
+    return
+  fi
+  local dir base
+  dir="$(dirname "$path")"
+  base="$(basename "$path")"
+  if [[ -d "$dir" ]]; then
+    printf '%s/%s\n' "$(cd "$dir" && pwd -P)" "$base"
+  else
+    printf '%s\n' "$path"
+  fi
+}
+
+path_is_within() {
+  local root="$1"
+  local candidate="$2"
+  [[ "$candidate" == "$root" || "$candidate" == "$root/"* ]]
+}
+
+path_is_temporary_rooted() {
+  local path="$1"
+  case "$path" in
+    /tmp|/tmp/*|/var/tmp|/var/tmp/*|/dev/shm|/dev/shm/*|/private/tmp|/private/tmp/*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+validate_temporary_install_scope() {
+  if env_value_is_true "${CCB_ALLOW_TEMP_INSTALL_GLOBAL_BIN:-}"; then
+    return 0
+  fi
+
+  local prefix_path bin_path home_path
+  prefix_path="$(canonical_existing_parent_path "$INSTALL_PREFIX")"
+  bin_path="$(canonical_existing_parent_path "$BIN_DIR")"
+  home_path="$(canonical_existing_parent_path "$HOME")"
+
+  if ! path_is_temporary_rooted "$prefix_path"; then
+    return 0
+  fi
+  if path_is_within "$prefix_path" "$bin_path"; then
+    return 0
+  fi
+  if path_is_temporary_rooted "$home_path" && path_is_within "$home_path" "$bin_path"; then
+    return 0
+  fi
+
+  echo "ERROR: Refusing to install a temporary CODEX_INSTALL_PREFIX into an external bin directory." >&2
+  echo "   install prefix : $INSTALL_PREFIX" >&2
+  echo "   bin directory  : $BIN_DIR" >&2
+  echo "   Use an isolated CODEX_BIN_DIR under the same temp prefix/home, or set CCB_ALLOW_TEMP_INSTALL_GLOBAL_BIN=1 if intentional." >&2
+  exit 1
+}
+
 SCRIPTS_TO_LINK=(
   bin/ask
   bin/autonew
@@ -325,9 +386,9 @@ Optional environment variables:
                            auto = enabled for macOS release installs, disabled for source/dev installs
   CCB_INSTALL_TOMLI        Auto-install tomli on Python versions without tomllib (default: 1; set 0 to skip)
   CCB_INSTALL_WATCHDOG     Auto-install optional watchdog dependency (default: 1; set 0 to skip)
-  CCB_INSTALL_NEOVIM       Install default Neovim/LazyVim tool: auto soft (default), 1 required, 0 skip
   CCB_INSTALL_ROLES        Install catalog Role Packs and dependencies: auto soft (default), 1 required, 0 skip
   CCB_ALLOW_ROOT_INSTALL   Set to 1 to explicitly allow a root-owned install
+  CCB_ALLOW_TEMP_INSTALL_GLOBAL_BIN Set to 1 to allow a temporary install prefix to write outside its isolated bin/home
   CCB_CONFIRM_MAJOR_UPGRADE Set to 1 to confirm replacing a pre-v6 install with v6+
 USAGE
 }
@@ -2871,6 +2932,7 @@ cleanup_legacy_files() {
 }
 
 install_all() {
+  validate_temporary_install_scope
   require_major_upgrade_confirmation
   install_requirements
   remove_codex_mcp
@@ -2893,7 +2955,6 @@ install_all() {
   install_settings_permissions
   install_tmux_config
   provision_role_packs
-  provision_neovim_tool
   echo "OK: Installation complete"
   echo "   Executable dir : $BIN_DIR"
   if install_uses_live_source; then
@@ -2979,41 +3040,6 @@ provision_default_role_pack() {
   sed 's/^/   /' "$log_file" 2>/dev/null || true
   rm -f "$log_file"
   return 1
-}
-
-provision_neovim_tool() {
-  local requested="${CCB_INSTALL_NEOVIM:-auto}"
-  if env_value_is_false "$requested"; then
-    echo "INFO: Neovim tool provisioning skipped by CCB_INSTALL_NEOVIM=0"
-    return 0
-  fi
-  local required=0
-  if env_value_is_true "$requested"; then
-    required=1
-  else
-    echo "INFO: Neovim/LazyVim provisioning enabled by default; set CCB_INSTALL_NEOVIM=0 to skip."
-  fi
-  local ccb_entry
-  if install_uses_live_source; then
-    ccb_entry="$(resolve_live_source_root)/ccb"
-  else
-    ccb_entry="$INSTALL_PREFIX/ccb"
-  fi
-  if [[ ! -x "$ccb_entry" ]]; then
-    echo "WARN: Neovim tool provisioning skipped; ccb entrypoint not executable: $ccb_entry"
-    [[ "$required" == "1" ]] && return 1 || return 0
-  fi
-  local log_file
-  log_file="$(mktemp "${TMPDIR:-/tmp}/ccb-neovim-install.XXXXXX")"
-  if CODEX_BIN_DIR="$BIN_DIR" "$ccb_entry" tools install neovim >"$log_file" 2>&1; then
-    rm -f "$log_file"
-    echo "OK: Neovim tool provisioning checked"
-    return 0
-  fi
-  echo "WARN: Neovim tool provisioning failed"
-  sed 's/^/   /' "$log_file" 2>/dev/null || true
-  rm -f "$log_file"
-  [[ "$required" == "1" ]] && return 1 || return 0
 }
 
 uninstall_claude_md_config() {
