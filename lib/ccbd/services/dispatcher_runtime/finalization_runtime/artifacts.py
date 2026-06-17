@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from completion.models import CompletionDecision
+from completion.models import CompletionDecision, CompletionStatus
 from storage.text_artifacts import artifact_stub, maybe_spill_text, write_text_artifact
 
 
@@ -24,11 +24,7 @@ def spill_terminal_reply_if_needed(
             owner_id=current.job_id,
             now=finished_at,
         )
-        reply = artifact_stub(
-            prefix=f'CCB completion reply for job {current.job_id} was stored as an artifact by --artifact-reply.',
-            artifact=artifact,
-            include_preview=False,
-        )
+        reply = _forced_reply_artifact_stub(current, decision, artifact)
         diagnostics['artifact_reply_forced'] = True
     else:
         reply, artifact = maybe_spill_text(
@@ -48,6 +44,38 @@ def spill_terminal_reply_if_needed(
 def _force_reply_artifact(current) -> bool:
     options = dict(getattr(current.request, 'route_options', None) or {})
     return bool(options.get('artifact_reply'))
+
+
+def _forced_reply_artifact_stub(current, decision: CompletionDecision, artifact: dict[str, object]) -> str:
+    if _is_empty_unsuccessful_reply(decision, artifact):
+        reason = str(getattr(decision, 'reason', '') or 'unknown')
+        lines = [
+            (
+                f'No provider completion reply was captured for job {current.job_id}; '
+                'an empty --artifact-reply artifact was recorded for diagnostics.'
+            ),
+            f'Reason: {reason}',
+            f"Full text: {artifact.get('path')}",
+            f"Bytes: {artifact.get('bytes')}",
+            f"SHA256: {artifact.get('sha256')}",
+            '',
+            'Instruction: do not treat this artifact as a successful reply; inspect trace/diagnostics and workspace evidence before acting.',
+        ]
+        return '\n'.join(lines).rstrip()
+    return artifact_stub(
+        prefix=f'CCB completion reply for job {current.job_id} was stored as an artifact by --artifact-reply.',
+        artifact=artifact,
+        include_preview=False,
+    )
+
+
+def _is_empty_unsuccessful_reply(decision: CompletionDecision, artifact: dict[str, object]) -> bool:
+    if getattr(decision, 'status', None) is CompletionStatus.COMPLETED:
+        return False
+    try:
+        return int(artifact.get('bytes') or 0) == 0
+    except (TypeError, ValueError):
+        return False
 
 
 __all__ = ['spill_terminal_reply_if_needed']

@@ -446,6 +446,52 @@ def test_dispatcher_forces_short_completion_reply_artifact(tmp_path: Path) -> No
     assert reply.reply == reply_body
 
 
+def test_dispatcher_describes_empty_forced_reply_artifact_as_uncaptured_reply(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-empty-forced-reply-artifact'
+    ctx = _bootstrap_test_project(project_root)
+    layout = PathLayout(project_root)
+    config = _provider_config('codex', 'claude')
+    registry = AgentRegistry(layout, config)
+    registry.upsert(_runtime('codex', project_id=ctx.project_id, layout=layout, pid=101))
+    registry.upsert(_runtime('claude', project_id=ctx.project_id, layout=layout, pid=102))
+    dispatcher = JobDispatcher(layout, config, registry, clock=lambda: '2026-03-30T00:00:00Z')
+
+    job_id = dispatcher.submit(
+        MessageEnvelope(
+            project_id=ctx.project_id,
+            to_agent='codex',
+            from_actor='claude',
+            body='produce governed receipt',
+            task_id='task-empty-forced-reply-artifact',
+            reply_to=None,
+            message_type='ask',
+            delivery_scope=DeliveryScope.SINGLE,
+            route_options={'artifact_reply': True},
+        )
+    ).jobs[0].job_id
+    dispatcher.tick()
+    dispatcher.complete(
+        job_id,
+        _failed_decision(
+            reason='kimi_native_turn_timeout',
+            diagnostics={'mode': 'native_turn_log', 'total_secs': 300.1, 'reply_chars': 0},
+        ),
+    )
+
+    job = dispatcher.get(job_id)
+    assert job is not None
+    terminal = dict(job.terminal_decision or {})
+    reply_body = str(terminal['reply'])
+    assert 'No provider completion reply was captured' in reply_body
+    assert 'read the full text file above before acting' not in reply_body
+    assert 'Bytes: 0' in reply_body
+    artifact = dict(terminal['diagnostics']['reply_artifact'])
+    assert terminal['diagnostics']['artifact_reply_forced'] is True
+    artifact_path = Path(str(artifact['path']))
+    assert artifact_path.exists()
+    assert artifact_path.read_text(encoding='utf-8') == ''
+
+
 def test_dispatcher_routes_reply_into_registered_caller_mailbox(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-registered-caller'
     ctx = _bootstrap_test_project(project_root)
