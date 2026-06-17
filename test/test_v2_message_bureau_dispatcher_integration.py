@@ -446,23 +446,23 @@ def test_dispatcher_forces_short_completion_reply_artifact(tmp_path: Path) -> No
     assert reply.reply == reply_body
 
 
-def test_dispatcher_describes_empty_forced_reply_artifact_as_uncaptured_reply(tmp_path: Path) -> None:
-    project_root = tmp_path / 'repo-empty-forced-reply-artifact'
+def test_dispatcher_forced_artifact_reports_kimi_no_captured_reply(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-kimi-empty-reply-artifact'
     ctx = _bootstrap_test_project(project_root)
     layout = PathLayout(project_root)
-    config = _provider_config('codex', 'claude')
+    config = _provider_config('kimi', 'codex')
     registry = AgentRegistry(layout, config)
-    registry.upsert(_runtime('codex', project_id=ctx.project_id, layout=layout, pid=101))
-    registry.upsert(_runtime('claude', project_id=ctx.project_id, layout=layout, pid=102))
+    registry.upsert(_runtime('kimi', project_id=ctx.project_id, layout=layout, pid=101))
+    registry.upsert(_runtime('codex', project_id=ctx.project_id, layout=layout, pid=102))
     dispatcher = JobDispatcher(layout, config, registry, clock=lambda: '2026-03-30T00:00:00Z')
 
     job_id = dispatcher.submit(
         MessageEnvelope(
             project_id=ctx.project_id,
-            to_agent='codex',
-            from_actor='claude',
-            body='produce governed receipt',
-            task_id='task-empty-forced-reply-artifact',
+            to_agent='kimi',
+            from_actor='codex',
+            body='produce receipt',
+            task_id='task-kimi-empty-reply-artifact',
             reply_to=None,
             message_type='ask',
             delivery_scope=DeliveryScope.SINGLE,
@@ -474,7 +474,13 @@ def test_dispatcher_describes_empty_forced_reply_artifact_as_uncaptured_reply(tm
         job_id,
         _failed_decision(
             reason='kimi_native_turn_timeout',
-            diagnostics={'mode': 'native_turn_log', 'total_secs': 300.1, 'reply_chars': 0},
+            diagnostics={
+                'reply_chars': 0,
+                'no_captured_reply': True,
+                'provider_no_reply': True,
+                'receipt_valid': False,
+                'receipt_class': 'no_captured_reply',
+            },
         ),
     )
 
@@ -482,23 +488,23 @@ def test_dispatcher_describes_empty_forced_reply_artifact_as_uncaptured_reply(tm
     assert job is not None
     terminal = dict(job.terminal_decision or {})
     reply_body = str(terminal['reply'])
-    assert 'No provider completion reply was captured' in reply_body
-    assert 'read the full text file above before acting' not in reply_body
-    assert 'Bytes: 0' in reply_body
+    assert 'no captured Kimi provider reply' in reply_body
+    assert 'empty artifact for transport metadata only' in reply_body
+    assert 'Instruction: no provider reply was captured' in reply_body
+    assert 'Instruction: read the full text file above before acting.' not in reply_body
     artifact = dict(terminal['diagnostics']['reply_artifact'])
     assert terminal['diagnostics']['artifact_reply_forced'] is True
+    assert terminal['diagnostics']['artifact_instruction'] == 'no_provider_reply_captured'
+    assert terminal['diagnostics']['artifact_empty_no_provider_reply'] is True
     artifact_path = Path(str(artifact['path']))
     assert artifact_path.exists()
     assert artifact_path.read_text(encoding='utf-8') == ''
+    assert artifact['bytes'] == 0
 
-    trace = dispatcher.trace(job_id)
-    trace_reply = trace['replies'][0]
-    assert trace_reply['reply_artifact'] == artifact
-    assert trace_reply['artifact_reply_forced'] is True
-    assert trace_reply['empty_reply_artifact'] is True
-    assert trace_reply['no_captured_reply'] is True
-    assert trace_reply['total_secs'] == 300.1
-    assert trace_reply['captured_reply_chars'] == 0
+    message = MessageStore(layout).list_all()[-1]
+    reply = ReplyStore(layout).list_message(message.message_id)[-1]
+    assert reply.reply_artifact == artifact
+    assert reply.reply == reply_body
 
 
 def test_dispatcher_routes_reply_into_registered_caller_mailbox(tmp_path: Path) -> None:

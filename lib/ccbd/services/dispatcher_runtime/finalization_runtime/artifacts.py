@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from completion.models import CompletionDecision, CompletionStatus
+from completion.models import CompletionDecision
 from storage.text_artifacts import artifact_stub, maybe_spill_text, write_text_artifact
 
 
@@ -24,7 +24,24 @@ def spill_terminal_reply_if_needed(
             owner_id=current.job_id,
             now=finished_at,
         )
-        reply = _forced_reply_artifact_stub(current, decision, artifact)
+        if _is_kimi_no_captured_reply(current, decision, diagnostics):
+            reply = artifact_stub(
+                prefix=(
+                    f'CCB completion reply for job {current.job_id} has no captured Kimi provider reply; '
+                    '--artifact-reply stored an empty artifact for transport metadata only.'
+                ),
+                artifact=artifact,
+                include_preview=False,
+                instruction='Instruction: no provider reply was captured; do not treat this artifact as task evidence.',
+            )
+            diagnostics['artifact_instruction'] = 'no_provider_reply_captured'
+            diagnostics['artifact_empty_no_provider_reply'] = True
+        else:
+            reply = artifact_stub(
+                prefix=f'CCB completion reply for job {current.job_id} was stored as an artifact by --artifact-reply.',
+                artifact=artifact,
+                include_preview=False,
+            )
         diagnostics['artifact_reply_forced'] = True
     else:
         reply, artifact = maybe_spill_text(
@@ -46,36 +63,26 @@ def _force_reply_artifact(current) -> bool:
     return bool(options.get('artifact_reply'))
 
 
-def _forced_reply_artifact_stub(current, decision: CompletionDecision, artifact: dict[str, object]) -> str:
-    if _is_empty_unsuccessful_reply(decision, artifact):
-        reason = str(getattr(decision, 'reason', '') or 'unknown')
-        lines = [
-            (
-                f'No provider completion reply was captured for job {current.job_id}; '
-                'an empty --artifact-reply artifact was recorded for diagnostics.'
-            ),
-            f'Reason: {reason}',
-            f"Full text: {artifact.get('path')}",
-            f"Bytes: {artifact.get('bytes')}",
-            f"SHA256: {artifact.get('sha256')}",
-            '',
-            'Instruction: do not treat this artifact as a successful reply; inspect trace/diagnostics and workspace evidence before acting.',
-        ]
-        return '\n'.join(lines).rstrip()
-    return artifact_stub(
-        prefix=f'CCB completion reply for job {current.job_id} was stored as an artifact by --artifact-reply.',
-        artifact=artifact,
-        include_preview=False,
+def _is_kimi_no_captured_reply(current, decision: CompletionDecision, diagnostics: dict[str, object]) -> bool:
+    provider = str(getattr(current, 'provider', '') or '').strip().lower()
+    if provider != 'kimi':
+        return False
+    if str(decision.reason or '') != 'kimi_native_turn_timeout':
+        return False
+    if _int_value(diagnostics.get('reply_chars')) != 0:
+        return False
+    return bool(
+        diagnostics.get('no_captured_reply')
+        or diagnostics.get('provider_no_reply')
+        or diagnostics.get('receipt_class') == 'no_captured_reply'
     )
 
 
-def _is_empty_unsuccessful_reply(decision: CompletionDecision, artifact: dict[str, object]) -> bool:
-    if getattr(decision, 'status', None) is CompletionStatus.COMPLETED:
-        return False
+def _int_value(value: object) -> int:
     try:
-        return int(artifact.get('bytes') or 0) == 0
+        return int(value or 0)
     except (TypeError, ValueError):
-        return False
+        return 0
 
 
 __all__ = ['spill_terminal_reply_if_needed']
