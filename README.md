@@ -6,7 +6,7 @@
 **Visible, controllable multi-agent cooperative TUI workspace**
 
 <p>
-  <img src="https://img.shields.io/badge/version-7.6.6-orange.svg" alt="version">
+  <img src="https://img.shields.io/badge/version-7.6.7-orange.svg" alt="version">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WSL-lightgrey.svg" alt="platform">
   <img src="https://img.shields.io/badge/providers-14%20CLI%20families-0B7285.svg" alt="providers">
 </p>
@@ -30,7 +30,7 @@
 
 **English** | [中文](README_zh.md)
 
-[Quick Start](#quick-start) · [v7 UI](#v7-ui-tour) · [Configure Agents](#configure-your-agent-team) · [User Guide](docs/manuals/user-guide/) · [Developer Guide](docs/manuals/developer-guide/)
+[Quick Start](#quick-start) · [v7 UI](#v7-ui-tour) · [Rich Mode](#rich-mode-new) · [Configure Agents](#configure-your-agent-team) · [User Guide](docs/manuals/user-guide/) · [Developer Guide](docs/manuals/developer-guide/)
 
 <p align="center">
   <img src="assets/readme_v7/ccb-hero-en.png" alt="CCB v7 visible multi-agent CLI workspace" width="960">
@@ -89,7 +89,7 @@ Install or refresh the optional rich media workbench; it bundles verified binari
 ccb update rich
 ```
 
-After rich is enabled, plain `ccb` opens the rich WezTerm launcher when needed; use `ccb uninstall rich` to return to the normal terminal startup.
+After rich is enabled, plain `ccb` opens the rich WezTerm launcher unless it is already running inside a CCB-managed rich WezTerm; use `ccb uninstall rich` to return to the normal terminal startup.
 
 <details>
 <summary><b>GitHub release package and source install fallbacks</b></summary>
@@ -182,10 +182,10 @@ Agents can also call `/ask` from workflow orchestration to delegate and hand off
 
 ### Rich Mode (NEW!)
 
-Run `ccb update rich` to install the optional rich workbench; it bundles Yazi where possible, uses WezTerm for the rich terminal surface, and gives Markdown rendering plus image/PDF/video previews. After installation, plain `ccb` automatically opens this rich launcher outside WezTerm; `ccb rich` remains available as an explicit launcher.
+Run `ccb update rich` to install the optional rich workbench; it bundles Yazi where possible, uses WezTerm for the rich terminal surface, and gives Markdown rendering plus image/PDF/video previews. After installation, plain `ccb` automatically opens this rich launcher unless it is already running inside a CCB-managed rich WezTerm; `ccb rich` remains available as an explicit launcher.
 
 <p align="center">
-  <img src="assets/readme_v7/rich-workbench.png" alt="CCB rich workbench with Yazi Markdown preview in WezTerm" width="860">
+  <img src="assets/readme_v7/rich-workbench.png" alt="CCB rich workbench with Yazi preview in WezTerm" width="860">
 </p>
 
 ### Contact
@@ -641,6 +641,19 @@ v7 highlights:
 - Hardened tmux, Ghostty, release helper, Codex trust, and provider session restore paths.
 
 <details open>
+<summary><b>v7.6.7</b> - Rich Workbench Closure</summary>
+
+- Plain `ccb` and `ccb rich` now launch the CCB-managed rich WezTerm unless
+  already inside that managed rich session; ordinary external WezTerm sessions
+  no longer suppress rich auto-start.
+- Runtime entrypoints share the `_ccb-python` launcher, keeping installed and
+  source command execution pinned to the intended Python interpreter.
+- Built-in defaults keep `ccb_self` in its own `claude` window, while ordinary
+  default startup still avoids standalone Neovim tool windows.
+
+</details>
+
+<details>
 <summary><b>v7.6.6</b> - Role Store Home Pinning</summary>
 
 - Pins role store lookup outside managed provider homes so provider session

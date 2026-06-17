@@ -6,7 +6,7 @@
 **可见、可控的多 Agent 合作TUI工作台**
 
 <p>
-  <img src="https://img.shields.io/badge/version-7.6.6-orange.svg" alt="version">
+  <img src="https://img.shields.io/badge/version-7.6.7-orange.svg" alt="version">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WSL-lightgrey.svg" alt="platform">
   <img src="https://img.shields.io/badge/providers-14%20CLI%20families-0B7285.svg" alt="providers">
 </p>
@@ -30,7 +30,7 @@
 
 **中文** | [English](README.md)
 
-[快速开始](#快速开始) · [v7 界面](#v7-界面速览) · [配置团队](#配置-agent-团队) · [使用文档](docs/manuals/user-guide/) · [开发文档](docs/manuals/developer-guide/)
+[快速开始](#快速开始) · [v7 界面](#v7-界面速览) · [Rich 模式](#rich-mode-new) · [配置团队](#配置-agent-团队) · [使用文档](docs/manuals/user-guide/) · [开发文档](docs/manuals/developer-guide/)
 
 <p align="center">
   <img src="assets/readme_v7/ccb-hero-zh.png" alt="CCB v7 可见多 Agent CLI 工作台" width="960">
@@ -89,7 +89,7 @@ ccb update
 ccb update rich
 ```
 
-rich 启用后，普通 `ccb` 会在需要时自动打开 rich WezTerm launcher；运行 `ccb uninstall rich` 可退回普通终端启动。
+rich 启用后，普通 `ccb` 会自动打开 rich WezTerm launcher，只有当当前已经处于 CCB 自己拉起的 rich WezTerm 中时才不会再次跳转；运行 `ccb uninstall rich` 可退回普通终端启动。
 
 <details>
 <summary><b>GitHub release 包和源码安装兜底</b></summary>
@@ -183,10 +183,10 @@ ccb
 
 ### Rich 模式（NEW!）
 
-运行 `ccb update rich` 安装可选富媒体工作台；它会尽量封装 Yazi 等二进制，并用 WezTerm 承载富媒体终端界面，提供 Markdown 渲染和图片/PDF/视频预览。安装后，普通 `ccb` 在 WezTerm 外会自动打开 rich launcher；`ccb rich` 仍可作为显式启动入口。
+运行 `ccb update rich` 安装可选富媒体工作台；它会尽量封装 Yazi 等二进制，并用 WezTerm 承载富媒体终端界面，提供 Markdown 渲染和图片/PDF/视频预览。安装后，普通 `ccb` 会自动打开 rich launcher，只有当当前已经处于 CCB 自己拉起的 rich WezTerm 中时才不会再次跳转；`ccb rich` 仍可作为显式启动入口。
 
 <p align="center">
-  <img src="assets/readme_v7/rich-workbench.png" alt="CCB rich 富媒体工作台在 WezTerm 中使用 Yazi 预览 Markdown" width="860">
+  <img src="assets/readme_v7/rich-workbench.png" alt="CCB rich 富媒体工作台在 WezTerm 中使用 Yazi 预览" width="860">
 </p>
 
 ### 联系方式
@@ -630,6 +630,18 @@ v7 线重点：
 - 加固 tmux、Ghostty、release helper、Codex trust 和 provider 会话恢复路径。
 
 <details open>
+<summary><b>v7.6.7</b> - Rich Workbench 闭环</summary>
+
+- 普通 `ccb` 和 `ccb rich` 现在会启动 CCB 托管的 rich WezTerm；只有已经在该
+  CCB 托管 rich 会话内时才跳过自动启动，普通外部 WezTerm 不再误判为 rich。
+- 运行入口统一走 `_ccb-python` launcher，让安装版和源码版命令都固定到预期
+  Python 解释器。
+- 内置默认配置继续把 `ccb_self` 放在独立 `claude` window，同时普通默认启动
+  不恢复 standalone Neovim tool window。
+
+</details>
+
+<details>
 <summary><b>v7.6.6</b> - Role Store Home Pinning</summary>
 
 - role store lookup 现在会固定在 managed provider home 之外，provider session
