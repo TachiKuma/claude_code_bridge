@@ -214,8 +214,8 @@ def test_render_default_project_config_text_includes_neovim_tool_window(tmp_path
     assert 'command = "ccb-nvim"' in rendered
     assert '[ui.sidebar.view]' in rendered
     assert 'agents_height = "50%"' in rendered
-    assert 'comms_height = "15%"' in rendered
-    assert 'tips_height = "35%"' in rendered
+    assert 'comms_height = "23%"' in rendered
+    assert 'tips_height = "27%"' in rendered
     config_path = tmp_path / 'repo-render-default' / '.ccb' / 'ccb.config'
     _write(config_path, rendered)
     loaded = load_project_config(config_path.parents[1]).config
@@ -1169,8 +1169,8 @@ bottom_height = 20
     assert result.config.sidebar.width == '15%'
     assert result.config.sidebar.bottom_height == 20
     assert result.config.sidebar_view.agents_height == '50%'
-    assert result.config.sidebar_view.comms_height == '15%'
-    assert result.config.sidebar_view.tips_height == '35%'
+    assert result.config.sidebar_view.comms_height == '23%'
+    assert result.config.sidebar_view.tips_height == '27%'
     assert result.config.sidebar_view.comms_limit == 5
     assert result.config.sidebar_view.tips[0] == 'C-b d  detach'
     assert 'C-b h/j/k/l pane' in result.config.sidebar_view.tips

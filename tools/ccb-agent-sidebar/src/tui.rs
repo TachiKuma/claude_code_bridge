@@ -15,10 +15,13 @@ use crossterm::terminal::{
 };
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
 use ratatui::prelude::{Color, Frame, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph};
+use ratatui::widgets::{
+    Block, Borders, Clear, List, ListItem, Paragraph, Scrollbar, ScrollbarOrientation,
+    ScrollbarState,
+};
 
 use crate::args::Args;
 use crate::client::CcbdClient;
@@ -32,14 +35,15 @@ const PROJECT_VIEW_REFRESH_MIN_MS: u64 = 100;
 const PROJECT_VIEW_REFRESH_MAX_MS: u64 = 5000;
 const PROJECT_VIEW_REFRESH_DEFAULT_MS: u64 = 1000;
 const DEFAULT_TREE_HEIGHT_PERCENT: u16 = 50;
-const DEFAULT_COMMS_HEIGHT_PERCENT: u16 = 15;
-const DEFAULT_TIPS_HEIGHT_PERCENT: u16 = 35;
+const DEFAULT_COMMS_HEIGHT_PERCENT: u16 = 23;
+const DEFAULT_TIPS_HEIGHT_PERCENT: u16 = 27;
 const TREE_CONTROL_CONTENT_WIDTH: u16 = 3;
 const TREE_REFRESH_SYMBOL: &str = "↻";
 const TREE_KILL_SYMBOL: &str = "×";
 const COMMS_ACTION_RETRY_COLS: std::ops::RangeInclusive<u16> = 0..=1;
 const COMMS_ACTION_CANCEL_COLS: std::ops::RangeInclusive<u16> = 3..=4;
 const COMMS_ACTION_CLEAR_COLS: std::ops::RangeInclusive<u16> = 6..=7;
+const COMMS_DETAIL_INDENT_WIDTH: usize = 3;
 
 pub fn run(args: Args) -> io::Result<()> {
     let action = run_tui(&args)?;
@@ -90,14 +94,23 @@ fn run_tui(args: &Args) -> io::Result<ExitAction> {
                     _ => {}
                 },
                 Event::Mouse(mouse) => {
-                    if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
-                        let size = terminal.size()?;
-                        let area = Rect::new(0, 0, size.width, size.height);
-                        if let Some(action) =
-                            app.handle_mouse_down(mouse.column, mouse.row, area, &client)
-                        {
-                            return Ok(action);
+                    let size = terminal.size()?;
+                    let area = Rect::new(0, 0, size.width, size.height);
+                    match mouse.kind {
+                        MouseEventKind::Down(MouseButton::Left) => {
+                            if let Some(action) =
+                                app.handle_mouse_down(mouse.column, mouse.row, area, &client)
+                            {
+                                return Ok(action);
+                            }
                         }
+                        MouseEventKind::ScrollDown => {
+                            app.scroll_tips_at(mouse.column, mouse.row, area, 1);
+                        }
+                        MouseEventKind::ScrollUp => {
+                            app.scroll_tips_at(mouse.column, mouse.row, area, -1);
+                        }
+                        _ => {}
                     }
                 }
                 _ => {}
@@ -164,6 +177,7 @@ pub struct SidebarApp {
     selected: usize,
     selected_comms: Option<usize>,
     hidden_comms: HashSet<String>,
+    tips_scroll: usize,
     selection_follows_focus: bool,
     refresh_after: Instant,
 }
@@ -178,6 +192,7 @@ impl SidebarApp {
             selected: 0,
             selected_comms: None,
             hidden_comms: HashSet::new(),
+            tips_scroll: 0,
             selection_follows_focus: true,
             refresh_after: Instant::now(),
         }
@@ -325,6 +340,27 @@ impl SidebarApp {
             _ => {}
         }
         true
+    }
+
+    fn scroll_tips_at(&mut self, column: u16, row: u16, area: Rect, delta: isize) -> bool {
+        let Some(tips) = sidebar_areas(area, self.sidebar_view()).tips else {
+            return false;
+        };
+        if !rect_contains(tips, column, row) {
+            return false;
+        }
+        self.scroll_tips(delta, tips.height.saturating_sub(2));
+        true
+    }
+
+    fn scroll_tips(&mut self, delta: isize, viewport_height: u16) {
+        let max_scroll = tips_scroll_max(self.sidebar_view(), viewport_height);
+        let current = self.tips_scroll.min(max_scroll);
+        self.tips_scroll = if delta < 0 {
+            current.saturating_sub(delta.unsigned_abs())
+        } else {
+            current.saturating_add(delta as usize).min(max_scroll)
+        };
     }
 
     fn target_index_at(&self, column: u16, row: u16, area: Rect) -> Option<usize> {
@@ -628,18 +664,10 @@ fn comms_height_for(total_height: u16, view: &SidebarViewInfo) -> u16 {
 }
 
 fn tips_height_for(total_height: u16, view: &SidebarViewInfo) -> u16 {
-    view_height_for(
-        total_height,
-        &view.tips_height,
-        DEFAULT_TIPS_HEIGHT_PERCENT,
-    )
+    view_height_for(total_height, &view.tips_height, DEFAULT_TIPS_HEIGHT_PERCENT)
 }
 
-fn view_height_for(
-    total_height: u16,
-    value: &serde_json::Value,
-    default_percent: u16,
-) -> u16 {
+fn view_height_for(total_height: u16, value: &serde_json::Value, default_percent: u16) -> u16 {
     match value {
         serde_json::Value::Number(number) => number
             .as_u64()
@@ -703,6 +731,13 @@ fn target_index_at_tree_area(
     }
 }
 
+fn rect_contains(area: Rect, column: u16, row: u16) -> bool {
+    column >= area.x
+        && column < area.x.saturating_add(area.width)
+        && row >= area.y
+        && row < area.y.saturating_add(area.height)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CommsMouseAction {
     Select,
@@ -761,6 +796,9 @@ fn comms_action_at_area(
     for (index, item) in items.iter().enumerate() {
         let height = comms_lines(item, width, compact).len().max(1) as u16;
         if row >= current && row < current.saturating_add(height) {
+            if row != current {
+                return Some((index, CommsMouseAction::Select));
+            }
             let relative_column = column.saturating_sub(left);
             return Some((index, comms_mouse_action_for_column(relative_column)));
         }
@@ -929,10 +967,7 @@ fn window_row(window: &WindowView) -> ListItem<'static> {
     };
     ListItem::new(Line::from(vec![
         Span::raw(format!("{active} ")),
-        Span::styled(
-            label,
-            Style::default().add_modifier(Modifier::BOLD),
-        ),
+        Span::styled(label, Style::default().add_modifier(Modifier::BOLD)),
     ]))
 }
 
@@ -1008,20 +1043,50 @@ fn draw_tips(frame: &mut Frame<'_>, area: Rect, app: &SidebarApp) {
         return;
     }
     let content_height = usize::from(area.height.saturating_sub(2));
-    let content_width = usize::from(area.width.saturating_sub(2));
+    let tips_count = app.sidebar_view().tips.len();
+    let needs_scrollbar = content_height > 0 && tips_count > content_height;
+    let content_width = usize::from(
+        area.width
+            .saturating_sub(if needs_scrollbar { 3 } else { 2 }),
+    );
     let mut lines = app
         .sidebar_view()
         .tips
         .iter()
-        .take(content_height)
         .map(|tip| Line::from(truncate_comms_preview(tip, content_width)))
         .collect::<Vec<_>>();
     if lines.is_empty() {
         lines.push(Line::from("no tips"));
     }
-    let paragraph =
-        Paragraph::new(lines).block(Block::default().title("Tips").borders(Borders::ALL));
+    let scroll = app
+        .tips_scroll
+        .min(lines.len().saturating_sub(content_height.max(1)));
+    let paragraph = Paragraph::new(lines.clone())
+        .scroll((scroll as u16, 0))
+        .block(Block::default().title("Tips").borders(Borders::ALL));
     frame.render_widget(paragraph, area);
+    if needs_scrollbar {
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓"));
+        let mut scrollbar_state = ScrollbarState::new(lines.len())
+            .position(scroll)
+            .viewport_content_length(content_height);
+        frame.render_stateful_widget(
+            scrollbar,
+            area.inner(Margin {
+                vertical: 1,
+                horizontal: 0,
+            }),
+            &mut scrollbar_state,
+        );
+    }
+}
+
+fn tips_scroll_max(view: &SidebarViewInfo, viewport_height: u16) -> usize {
+    view.tips
+        .len()
+        .saturating_sub(usize::from(viewport_height.max(1)))
 }
 
 fn empty_dash(value: &str) -> &str {
@@ -1044,7 +1109,7 @@ fn comms_line_text(item: &CommsItem) -> String {
 
 fn comms_lines(item: &CommsItem, width: usize, compact: bool) -> Vec<Line<'static>> {
     if compact {
-        return vec![compact_comms_line(item, width)];
+        return compact_comms_lines(item, width);
     }
     let status = if item.status_label.trim().is_empty() {
         empty_dash(&item.status)
@@ -1057,7 +1122,7 @@ fn comms_lines(item: &CommsItem, width: usize, compact: bool) -> Vec<Line<'stati
         .unwrap_or_default();
     let mut first_line_spans = comms_action_spans(item);
     first_line_spans.push(Span::raw(format!(
-        "{}>{} ",
+        "{} > {} ",
         empty_dash(&item.sender),
         empty_dash(&item.target)
     )));
@@ -1075,13 +1140,17 @@ fn comms_lines(item: &CommsItem, width: usize, compact: bool) -> Vec<Line<'stati
     lines
 }
 
-fn compact_comms_line(item: &CommsItem, width: usize) -> Line<'static> {
+fn compact_comms_lines(item: &CommsItem, width: usize) -> Vec<Line<'static>> {
     let status = if item.status_label.trim().is_empty() {
         empty_dash(&item.status)
     } else {
         item.status_label.trim()
     };
-    let route = format!("{}>{} ", empty_dash(&item.sender), empty_dash(&item.target));
+    let route = format!(
+        "{} > {} ",
+        empty_dash(&item.sender),
+        empty_dash(&item.target)
+    );
     let compact_status = compact_comms_status(status).to_string();
     let mut spans = comms_action_spans(item);
     spans.push(Span::raw(route.clone()));
@@ -1089,16 +1158,20 @@ fn compact_comms_line(item: &CommsItem, width: usize) -> Line<'static> {
         compact_status.clone(),
         Style::default().fg(comms_status_color(item)),
     ));
-    let used = spans_text_width(&spans);
-    if width > used.saturating_add(1) {
-        let detail = compact_comms_detail(item);
-        if !detail.is_empty() {
-            let available = width.saturating_sub(used).saturating_sub(1);
-            spans.push(Span::raw(" "));
-            spans.push(Span::raw(truncate_comms_preview(&detail, available)));
-        }
+    vec![Line::from(spans), compact_comms_detail_line(item, width)]
+}
+
+fn compact_comms_detail_line(item: &CommsItem, width: usize) -> Line<'static> {
+    let indent = " ".repeat(COMMS_DETAIL_INDENT_WIDTH.min(width));
+    let available = width.saturating_sub(COMMS_DETAIL_INDENT_WIDTH);
+    let detail = compact_comms_detail(item);
+    if detail.is_empty() || available == 0 {
+        return Line::from(indent);
     }
-    Line::from(spans)
+    Line::from(format!(
+        "{indent}{}",
+        truncate_comms_preview(&detail, available)
+    ))
 }
 
 fn compact_comms_detail(item: &CommsItem) -> String {
@@ -1110,10 +1183,6 @@ fn compact_comms_detail(item: &CommsItem) -> String {
         (true, false) => reason.to_string(),
         (false, false) => format!("{preview} {reason}"),
     }
-}
-
-fn spans_text_width(spans: &[Span<'_>]) -> usize {
-    spans.iter().map(|span| span.content.chars().count()).sum()
 }
 
 fn comms_action_spans(_item: &CommsItem) -> Vec<Span<'static>> {
@@ -1422,7 +1491,7 @@ mod tests {
         assert!(rendered.contains("◐* agent1 [codex]"));
         assert!(!rendered.contains("#job1"));
         assert!(rendered.contains("Comms"));
-        assert!(rendered.contains("↻  X  ⌫  agent2>agent1 run"));
+        assert!(rendered.contains("↻  X  ⌫  agent2 > agent1 run"));
 
         let buffer = terminal.backend().buffer();
         assert_eq!(buffer[(0, 0)].fg, Color::DarkGray);
@@ -1552,7 +1621,7 @@ mod tests {
 
         assert!(rendered.contains("config ✕"));
         assert!(rendered.contains("config error: invalid TOML config"));
-        assert!(rendered.contains("↻  X  ⌫  agent2>agent1 run"));
+        assert!(rendered.contains("↻  X  ⌫  agent2 > agent1 run"));
     }
 
     #[test]
@@ -1565,19 +1634,20 @@ mod tests {
         terminal.draw(|frame| draw(frame, &app)).unwrap();
 
         let rendered = terminal.backend().to_string();
-        assert!(rendered.contains("↻  X  ⌫  agent4>agent1 ok"));
-        assert!(!rendered.contains("agent5>agent1"));
-        assert!(!rendered.contains("agent6>agent1"));
+        assert!(rendered.contains("↻  X  ⌫  agent3 > agent1 ok"));
+        assert!(!rendered.contains("agent4 > agent1"));
+        assert!(!rendered.contains("agent5 > agent1"));
+        assert!(!rendered.contains("agent6 > agent1"));
         assert!(rendered.contains("Tips"));
         let buffer = terminal.backend().buffer();
         assert_eq!(buffer[(0, 18)].symbol(), "┌");
         assert_eq!(buffer[(1, 18)].symbol(), "C");
-        assert_eq!(buffer[(0, 24)].symbol(), "┌");
-        assert_eq!(buffer[(1, 24)].symbol(), "T");
+        assert_eq!(buffer[(0, 27)].symbol(), "┌");
+        assert_eq!(buffer[(1, 27)].symbol(), "T");
     }
 
     #[test]
-    fn tall_sidebar_uses_default_half_fifteen_and_thirty_five_split() {
+    fn tall_sidebar_uses_default_half_twenty_three_and_twenty_seven_split() {
         let mut app = SidebarApp::new("main".into());
         app.apply_response(sample_response_with_comms(6));
         let area = Rect::new(0, 0, 24, 40);
@@ -1585,15 +1655,16 @@ mod tests {
         let areas = sidebar_areas(area, app.sidebar_view());
 
         assert_eq!(areas.tree.height, 20);
-        assert_eq!(areas.comms.height, 6);
-        assert_eq!(areas.tips.map(|area| area.height), Some(14));
+        assert_eq!(areas.comms.height, 10);
+        assert_eq!(areas.tips.map(|area| area.height), Some(10));
     }
 
     #[test]
     fn configured_sidebar_view_can_adjust_all_three_sections() {
         let mut app = SidebarApp::new("main".into());
         let mut response = sample_response_with_comms(6);
-        response.view.namespace.sidebar.view.agents_height = serde_json::Value::String("40%".into());
+        response.view.namespace.sidebar.view.agents_height =
+            serde_json::Value::String("40%".into());
         response.view.namespace.sidebar.view.comms_height = serde_json::Value::String("20%".into());
         response.view.namespace.sidebar.view.tips_height = serde_json::Value::String("40%".into());
         app.apply_response(response);
@@ -1646,7 +1717,7 @@ mod tests {
         assert!(rendered.contains("◐* agent1 [codex]"));
         assert!(!rendered.contains("#job1"));
         assert!(rendered.contains("stale ProjectView"));
-        assert!(rendered.contains("↻  X  ⌫  agent2>agent1 run"));
+        assert!(rendered.contains("↻  X  ⌫  agent2 > agent1 run"));
         assert!(!rendered.contains("connect /tmp/ccbd.sock"));
     }
 
@@ -1696,9 +1767,31 @@ mod tests {
 
         assert_eq!(
             comms_line_text(&item),
-            "↻  X  ⌫  agent2>agent1 err check agent status timeout"
+            "↻  X  ⌫  agent2 > agent1 err\n   check agent status timeout"
         );
         assert_eq!(comms_status_color(&item), Color::Red);
+    }
+
+    #[test]
+    fn compact_comms_rows_use_two_lines_with_message_under_cancel_column() {
+        let item = crate::model::CommsItem {
+            sender: "aaa".into(),
+            target: "bbb".into(),
+            status: "completed".into(),
+            business_status: "replied".into(),
+            status_label: "done".into(),
+            body_preview: "message content".into(),
+            ..Default::default()
+        };
+        let rendered = comms_lines(&item, 32, true)
+            .into_iter()
+            .map(line_text)
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            rendered.as_slice(),
+            ["↻  X  ⌫  aaa > bbb ok", "   message content"]
+        );
     }
 
     #[test]
@@ -1720,7 +1813,7 @@ mod tests {
 
         assert_eq!(
             comms_line_text(&item),
-            "↻  X  ⌫  agent2>agent1 run check agent status pane_dead"
+            "↻  X  ⌫  agent2 > agent1 run\n   check agent status pane_dead"
         );
         assert_eq!(recover_job_id(&item), Some("job1"));
         assert_eq!(recover_reply_delivery_job_id(&item), Some("job2"));
@@ -1740,7 +1833,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(comms_line_text(&item), "↻  X  ⌫  agent2>agent1 ok all set");
+        assert_eq!(
+            comms_line_text(&item),
+            "↻  X  ⌫  agent2 > agent1 ok\n   all set"
+        );
         assert_eq!(comms_status_color(&item), Color::Blue);
     }
 
@@ -1765,12 +1861,12 @@ mod tests {
 
         assert_eq!(
             rendered.as_slice(),
-            ["↻  X  ⌫  agent2>agent1 ok", "COMMS_BUS..."]
+            ["↻  X  ⌫  agent2 > agent1 ok", "COMMS_BUS..."]
         );
     }
 
     #[test]
-    fn compact_comms_preview_truncates_to_available_width() {
+    fn compact_comms_preview_truncates_to_available_width_on_second_line() {
         let item = crate::model::CommsItem {
             sender: "agent2".into(),
             target: "agent1".into(),
@@ -1780,22 +1876,29 @@ mod tests {
         };
         let rendered = comms_lines(&item, 35, true)
             .into_iter()
-            .map(|line| {
-                line.spans
-                    .iter()
-                    .map(|span| span.content.as_ref())
-                    .collect::<String>()
-            })
+            .map(line_text)
             .collect::<Vec<_>>();
 
-        assert_eq!(rendered.as_slice(), ["↻  X  ⌫  agent2>agent1 ok COMMS_..."]);
+        assert_eq!(
+            rendered.as_slice(),
+            ["↻  X  ⌫  agent2 > agent1 ok", "   COMMS_BUSINESS_VIEW_OK"]
+        );
+        let narrow = comms_lines(&item, 10, true)
+            .into_iter()
+            .map(line_text)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            narrow.as_slice(),
+            ["↻  X  ⌫  agent2 > agent1 ok", "   COMM..."]
+        );
     }
 
     #[test]
     fn mouse_coordinates_map_to_comms_rows() {
         let mut app = SidebarApp::new("main".into());
         let mut response = sample_response_with_comms(3);
-        response.view.namespace.sidebar.view.agents_height = serde_json::Value::String("50%".into());
+        response.view.namespace.sidebar.view.agents_height =
+            serde_json::Value::String("50%".into());
         response.view.namespace.sidebar.view.comms_height = serde_json::Value::String("40%".into());
         response.view.namespace.sidebar.view.tips_height = serde_json::Value::String("10%".into());
         response.view.comms[0].body_preview = "line two".into();
@@ -1803,13 +1906,15 @@ mod tests {
         app.apply_response(response);
         let area = Rect::new(0, 0, 24, 20);
         let row0 = comms_row_y(&app, area, 0);
-        let row1 = comms_row_y(&app, area, 1);
+        let row0_detail = comms_row_y(&app, area, 1);
+        let row1 = comms_row_y(&app, area, 2);
         let before_comms = sidebar_areas(area, app.sidebar_view())
             .comms
             .y
             .saturating_sub(1);
 
         assert_eq!(app.comms_index_at(1, row0, area), Some(0));
+        assert_eq!(app.comms_index_at(1, row0_detail, area), Some(0));
         assert_eq!(app.comms_index_at(1, row1, area), Some(1));
         assert_eq!(app.comms_index_at(0, row0, area), None);
         assert_eq!(app.comms_index_at(1, before_comms, area), None);
@@ -1889,6 +1994,30 @@ mod tests {
             comms_action_at_area(&[sample_comms_item("msg1")], area, 10, 11, 22, true, 0),
             Some((0, CommsMouseAction::Select))
         );
+        assert_eq!(
+            comms_action_at_area(&[sample_comms_item("msg1")], area, 4, 12, 22, true, 0),
+            Some((0, CommsMouseAction::Select))
+        );
+    }
+
+    #[test]
+    fn tips_rendering_respects_scroll_offset() {
+        let mut app = SidebarApp::new("main".into());
+        let mut response = sample_response();
+        response.view.namespace.sidebar.view.tips = vec![
+            "tip one".into(),
+            "tip two".into(),
+            "tip three".into(),
+            "tip four".into(),
+        ];
+        app.tips_scroll = 2;
+        app.apply_response(response);
+        app.tips_scroll = 2;
+
+        let rendered = render_to_string(&app, 40, 12);
+
+        assert!(!rendered.contains("tip one"));
+        assert!(rendered.contains("tip three"));
     }
 
     #[cfg(unix)]
@@ -2199,6 +2328,13 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
         terminal.draw(|frame| draw(frame, app)).unwrap();
         terminal.backend().to_string()
+    }
+
+    fn line_text(line: Line<'static>) -> String {
+        line.spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect::<String>()
     }
 
     fn comms_row_y(app: &SidebarApp, area: Rect, offset: u16) -> u16 {

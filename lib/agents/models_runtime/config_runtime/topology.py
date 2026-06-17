@@ -12,6 +12,10 @@ from ..names import AgentValidationError, normalize_agent_name
 
 
 _WINDOW_NAME_RE = re.compile(r'^[A-Za-z][A-Za-z0-9_-]*$')
+_LAYOUT_TOOL_ALIASES = {'rich'}
+_LAYOUT_TOOL_ALIAS_COMMANDS = {
+    'rich': 'CCB_WORKBENCH_PROFILE=rich CCB_WORKBENCH_FORCE_RICH=1 ccb-workbench files',
+}
 SIDEBAR_MODE_EVERY_WINDOW = 'every_window'
 SIDEBAR_MODE_OFF = 'off'
 DEFAULT_SIDEBAR_VIEW_TIPS = (
@@ -66,8 +70,8 @@ class SidebarSpec:
 @dataclass(frozen=True)
 class SidebarViewSpec:
     agents_height: str | int = '50%'
-    comms_height: str | int = '15%'
-    tips_height: str | int = '35%'
+    comms_height: str | int = '23%'
+    tips_height: str | int = '27%'
     comms_limit: int = 5
     comms_compact: bool = True
     tips_enabled: bool = True
@@ -132,6 +136,7 @@ class WindowSpec:
     order: int
     layout_spec: str
     agent_names: tuple[str, ...]
+    tool_names: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         name = validate_window_name(self.name)
@@ -143,14 +148,23 @@ class WindowSpec:
         if not layout_spec:
             raise AgentValidationError(f'windows.{name} layout cannot be empty')
         agent_names = tuple(normalize_agent_name(item) for item in self.agent_names)
-        if not agent_names:
-            raise AgentValidationError(f'windows.{name} must contain at least one agent')
+        tool_names = tuple(normalize_layout_tool_alias(item) for item in self.tool_names)
+        if not agent_names and not tool_names:
+            raise AgentValidationError(f'windows.{name} must contain at least one agent or tool')
         if len(set(agent_names)) != len(agent_names):
             raise AgentValidationError(f'windows.{name} cannot contain duplicate agents')
+        if len(set(tool_names)) != len(tool_names):
+            raise AgentValidationError(f'windows.{name} cannot contain duplicate tool aliases')
+        conflicts = set(agent_names).intersection(tool_names)
+        if conflicts:
+            raise AgentValidationError(
+                f'windows.{name} cannot use {sorted(conflicts)[0]} as both agent and tool'
+            )
         object.__setattr__(self, 'name', name)
         object.__setattr__(self, 'order', order)
         object.__setattr__(self, 'layout_spec', layout_spec)
         object.__setattr__(self, 'agent_names', agent_names)
+        object.__setattr__(self, 'tool_names', tool_names)
 
     def to_record(self) -> dict[str, object]:
         return {
@@ -158,6 +172,7 @@ class WindowSpec:
             'order': self.order,
             'layout_spec': self.layout_spec,
             'agent_names': list(self.agent_names),
+            'tool_names': list(self.tool_names),
         }
 
 
@@ -261,6 +276,26 @@ def _normalize_tip(value: object) -> str:
     return text
 
 
+def is_layout_tool_alias(value: object) -> bool:
+    return str(value or '').strip().lower() in _LAYOUT_TOOL_ALIASES
+
+
+def normalize_layout_tool_alias(value: object) -> str:
+    alias = str(value or '').strip().lower()
+    if alias not in _LAYOUT_TOOL_ALIASES:
+        raise AgentValidationError(f'unknown layout tool alias: {value}')
+    return alias
+
+
+def layout_tool_alias_command(value: object) -> str:
+    alias = normalize_layout_tool_alias(value)
+    return _LAYOUT_TOOL_ALIAS_COMMANDS[alias]
+
+
+def layout_tool_alias_label(value: object) -> str:
+    return normalize_layout_tool_alias(value)
+
+
 def normalize_windows(
     windows: tuple[WindowSpec, ...] | None,
     *,
@@ -298,6 +333,7 @@ def _validate_windows(windows: tuple[WindowSpec, ...]) -> tuple[WindowSpec, ...]
             order=index,
             layout_spec=window.layout_spec,
             agent_names=window.agent_names,
+            tool_names=window.tool_names,
         )
         if spec.name in seen_windows:
             raise AgentValidationError(f'duplicate window name: {spec.name}')
@@ -387,6 +423,7 @@ def topology_signature_payload(
                 'order': window.order,
                 'layout': window.layout_spec,
                 'agents': list(window.agent_names),
+                'tools': list(window.tool_names),
             }
             for window in windows
         ],
@@ -419,6 +456,10 @@ __all__ = [
     'default_sidebar_spec',
     'default_sidebar_view_spec',
     'legacy_main_window',
+    'is_layout_tool_alias',
+    'layout_tool_alias_command',
+    'layout_tool_alias_label',
+    'normalize_layout_tool_alias',
     'normalize_sidebar_width',
     'normalize_sidebar_view_height',
     'normalize_tool_windows',
