@@ -435,10 +435,10 @@ Foreground command split:
     - the foreground attach RPC budget is allowed to match the stable operational client budget, while daemon config/probe checks must remain fast-fail
     - the foreground attach target-ready budget must remain bounded by the startup transaction budget so namespace/UI lag does not redefine backend startup authority
   - once the tmux client is observed attached, `ccb` should issue a best-effort tmux client refresh so the first attached frame does not depend on a manual user redraw
-  - if the foreground tmux client later exits and the authoritative project
-    session no longer exists on the project-owned socket, `ccb` must best-effort
-    request project stop-all before returning so `[server exited]` cannot leave
-    an apparently active backend behind
+  - once foreground attach has been established, later foreground client exit,
+    detach, terminal close, or transport loss must not rewrite project
+    lifecycle authority or request shutdown; only explicit `ccb kill` or
+    backend-owned severe-loss recovery may transition the project toward stop
   - in a non-interactive terminal, reports the start transaction without attaching to tmux
   - startup success and foreground attach success are distinct outcomes; foreground attach failure must not rewrite a successful startup report as failed
   - foreground attach errors must state whether `ccbd` failed to answer the attach ping or whether `ccbd` was responsive but the project namespace was not attachable
@@ -485,7 +485,8 @@ Project namespace compatibility:
 - for a fresh namespace, the `cmd` pane bootstrap happens only after layout finalization and must replace that silent placeholder in place
 - project-namespace bootstrap must treat tmux server warmup and tmux server-policy persistence as separate steps:
   - `prepare_server` warms the server boundary only
-  - CCB-managed tmux policy that may require a live server/session, such as `destroy-unattached off`, `mouse on`, `history-limit 50000`, `set-clipboard on`, `mode-keys vi`, vi copy-mode bindings, and Vim-style pane focus/resize bindings, must be applied only after the authoritative project session exists
+  - CCB-managed tmux policy that may require a live server/session, such as `destroy-unattached off`, `mouse on`, `history-limit 50000`, `set-clipboard on`, `allow-passthrough on`, `mode-keys vi`, vi copy-mode bindings, and Vim-style pane focus/resize bindings, must be applied only after the authoritative project session exists
+  - tmux environment synchronization must preserve terminal/media capability signals including `TERM`, `TERM_PROGRAM`, `TERM_PROGRAM_VERSION`, WezTerm/Kitty image-protocol identifiers, and CCB rich-workbench variables such as `CCB_WORKBENCH_TERMINAL_PROGRAM`, so CCB-owned tool panes can make the same rich-media decision as the foreground launcher
 - project-owned pane mutation commands, including `respawn-pane` used by `cmd` bootstrap and pane-backed runtime launch/relaunch, must use the same shared tmux ready-retry budget as namespace create/reflow rather than a separate shorter timeout
 - namespace session liveness on the project-owned tmux socket must treat both `can't find session` and `no server running on <project socket>` as "namespace absent" for create/recreate decisions; startup must not fail that path as a generic tmux inspect error
 - startup must not rely on "real shell first, respawn later" behavior for the `cmd` pane, because that leaves stale prompt residue and can surface zsh no-newline `%` markers

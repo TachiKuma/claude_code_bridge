@@ -135,31 +135,41 @@ def classify_process(
     if 'ccbd/sidebar' in text or 'ccbd/sidecar_sidebar' in text or 'sidecar-sidebar' in text:
         return 'ccbd/sidebar'
 
+    tokenized = text.split()
+    has_ccb_invocation = any(
+        token == 'ccb'
+        or token == 'ccb_test'
+        or token.endswith('/ccb')
+        or token.endswith('/ccb_test')
+        or token.endswith('\\ccb')
+        or token.endswith('\\ccb_test')
+        for token in tokenized
+    )
+    if has_ccb_invocation and 'ask' in tokenized:
+        return 'ask-cli-subprocess'
+
+    if 'tmux' in text and ('send-keys' in text or 'attach' in text or 'source-file' in text):
+        return 'terminal-frontend'
+    if ((' tmux ' in f' {text} ') or name.startswith('tmux')) and ('server' in text or 'tmux' in name):
+        return 'tmux-server'
+
     for provider in KNOWN_PROVIDERS:
         marker = f'/{provider}/'
+        provider_runtime_marker = f'provider-runtime/{provider}'
+        provider_state_marker = f'provider-state/{provider}'
         if marker in text and ('provider-state' in text or 'provider-runtime' in text):
             return f'provider/{provider}'
+        if provider_runtime_marker in text or provider_state_marker in text:
+            return f'provider/{provider}'
         if f'provider/{provider}' in text or f'provider-{provider}' in text or f'{provider}-provider' in text:
+            return f'provider/{provider}'
+        if _command_uses_binary(text, provider):
             return f'provider/{provider}'
         if f' {provider} ' in f' {text} ':
             return f'provider/{provider}'
 
     if name in {'sh', 'bash', 'zsh'} or '-lc' in text or ' sh -c ' in f' {text} ':
         return 'shell-wrapper'
-    if 'tmux' in text and ('send-keys' in text or 'attach' in text or 'source-file' in text):
-        return 'terminal-frontend'
-    if ((' tmux ' in f' {text} ') or name.startswith('tmux')) and ('server' in text or 'tmux' in name):
-        return 'tmux-server'
-    tokenized = text.split()
-    has_ccb_invocation = any(
-        token == 'ccb'
-        or token == 'ccb_test'
-        or token.endswith('/ccb_test')
-        or token.endswith('\\ccb_test')
-        for token in tokenized
-    )
-    if has_ccb_invocation and 'ask' in tokenized:
-        return 'ask-cli-subprocess'
 
     if ('python' in name or name.endswith('.py')) and in_project:
         return 'python-misc'
@@ -167,6 +177,14 @@ def classify_process(
         return 'provider/other'
 
     return 'other-system'
+
+
+def _command_uses_binary(command: str, binary_name: str) -> bool:
+    for token in str(command or '').split():
+        cleaned = token.strip("'\"")
+        if Path(cleaned).name == binary_name:
+            return True
+    return False
 
 
 def _command_basename(raw: str) -> str:
@@ -273,13 +291,18 @@ def _collect_phase_samples(
     samples: list[ProcessSample] = []
     start = time.perf_counter()
     remaining = max(1, max_samples)
+    profile_pid = os.getpid()
     for _ in range(remaining):
         elapsed = time.perf_counter() - start
         process_rows = _collect_process_snapshot()
         project_pids = _project_related_pids(process_rows, project_root)
         snapshot_rows: list[SampledProcess] = []
         for pid, ppid, cpu_pct, rss_mib, command in process_rows:
+            if pid == profile_pid or _is_sampler_process(command):
+                continue
             in_project = project_root is not None and pid in project_pids
+            if project_root is not None and not in_project:
+                continue
             bucket = classify_process(
                 command,
                 command_basename=_command_basename(command),
@@ -305,6 +328,10 @@ def _collect_phase_samples(
     return samples
 
 
+def _is_sampler_process(command: str) -> bool:
+    return str(command or '').strip().startswith('ps -eo pid=,ppid=,pcpu=,rss=,vsz=,args=')
+
+
 def _aggregate_phase(samples: list[ProcessSample]) -> dict[str, Any]:
     if not samples:
         phase_summary = _default_skipped_phase('no_samples')
@@ -314,6 +341,9 @@ def _aggregate_phase(samples: list[ProcessSample]) -> dict[str, Any]:
     per_bucket_cpu: dict[str, list[float]] = {bucket: [] for bucket in ALL_BUCKETS}
     per_bucket_rss: dict[str, list[float]] = {bucket: [] for bucket in ALL_BUCKETS}
     per_bucket_proc_counts: dict[str, list[int]] = {bucket: [] for bucket in ALL_BUCKETS}
+    per_bucket_command_cpu: dict[str, dict[str, float]] = {bucket: {} for bucket in ALL_BUCKETS}
+    per_bucket_command_rss: dict[str, dict[str, float]] = {bucket: {} for bucket in ALL_BUCKETS}
+    per_bucket_command_pids: dict[str, dict[str, set[int]]] = {bucket: {} for bucket in ALL_BUCKETS}
     total_cpu_by_sample: list[float] = []
     total_rss_by_sample: list[float] = []
     total_proc_count_by_sample: list[int] = []
@@ -327,6 +357,13 @@ def _aggregate_phase(samples: list[ProcessSample]) -> dict[str, Any]:
             totals[bucket] += proc.cpu_pct
             rss_totals[bucket] += proc.rss_mib
             pids[bucket].add(proc.pid)
+            command_key = _summarize_command(proc.command)
+            per_bucket_command_cpu[bucket][command_key] = per_bucket_command_cpu[bucket].get(command_key, 0.0) + proc.cpu_pct
+            per_bucket_command_rss[bucket][command_key] = max(
+                per_bucket_command_rss[bucket].get(command_key, 0.0),
+                proc.rss_mib,
+            )
+            per_bucket_command_pids[bucket].setdefault(command_key, set()).add(proc.pid)
         total_cpu_by_sample.append(sum(totals.values()))
         total_rss_by_sample.append(sum(rss_totals.values()))
         total_proc_count_by_sample.append(sum(len(pid_set) for pid_set in pids.values()))
@@ -345,6 +382,12 @@ def _aggregate_phase(samples: list[ProcessSample]) -> dict[str, Any]:
             'cpu_share': round((avg_cpu / avg_total_cpu) if avg_total_cpu > 0 else 0.0, 6),
             'rss_max_mib': round(max(per_bucket_rss[bucket], default=0.0), 3),
             'procs_max': max(per_bucket_proc_counts[bucket], default=0),
+            'top_commands': _top_bucket_commands(
+                per_bucket_command_cpu[bucket],
+                per_bucket_command_rss[bucket],
+                per_bucket_command_pids[bucket],
+                sample_count=len(samples),
+            ),
         }
 
     return {
@@ -356,6 +399,36 @@ def _aggregate_phase(samples: list[ProcessSample]) -> dict[str, Any]:
         'procs_max': max(total_proc_count_by_sample, default=0),
         'buckets': buckets_summary,
     }
+
+
+def _summarize_command(command: str, *, limit: int = 240) -> str:
+    text = ' '.join(str(command or '').split())
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3] + '...'
+
+
+def _top_bucket_commands(
+    cpu_by_command: dict[str, float],
+    rss_by_command: dict[str, float],
+    pids_by_command: dict[str, set[int]],
+    *,
+    sample_count: int,
+    limit: int = 8,
+) -> list[dict[str, Any]]:
+    if sample_count <= 0:
+        return []
+    rows: list[dict[str, Any]] = []
+    for command, cpu_sum in sorted(cpu_by_command.items(), key=lambda item: item[1], reverse=True)[:limit]:
+        rows.append(
+            {
+                'command': command,
+                'avg_cpu_pct': round(cpu_sum / sample_count, 6),
+                'rss_max_mib': round(rss_by_command.get(command, 0.0), 3),
+                'pids_seen': len(pids_by_command.get(command, set())),
+            }
+        )
+    return rows
 
 
 def _build_default_startup_command(options: LifecycleProfileOptions) -> tuple[str, ...] | None:

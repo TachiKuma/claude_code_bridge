@@ -43,9 +43,10 @@ and interactive refresh isolation rather than broad CCB-core rewrites.
 1. [roadmap.md](roadmap.md)
 2. [implementation-status.md](implementation-status.md)
 3. [history/real-lifecycle-cpu-profile-2026-06-16.md](history/real-lifecycle-cpu-profile-2026-06-16.md)
-4. [topics/startup-and-runtime-low-latency-plan.md](topics/startup-and-runtime-low-latency-plan.md)
-5. [topics/candidate-commit-scope-2026-06-16.md](topics/candidate-commit-scope-2026-06-16.md)
-6. [open-questions.md](open-questions.md)
+4. [history/shell-system-bucket-split-2026-06-16.md](history/shell-system-bucket-split-2026-06-16.md)
+5. [topics/startup-and-runtime-low-latency-plan.md](topics/startup-and-runtime-low-latency-plan.md)
+6. [topics/candidate-commit-scope-2026-06-16.md](topics/candidate-commit-scope-2026-06-16.md)
+7. [open-questions.md](open-questions.md)
 
 ## Related Plans
 

@@ -83,11 +83,13 @@ After CCB is installed, use CCB's updater:
 ccb update
 ```
 
-Install or refresh the optional rich media workbench; this also attempts to install WezTerm, Yazi, Markdown/PDF/image/video helpers, and recommended fonts:
+Install or refresh the optional rich media workbench; it bundles verified binaries where possible and installs only the required terminal/media/font dependencies through the platform package manager:
 
 ```bash
 ccb update rich
 ```
+
+After rich is enabled, plain `ccb` opens the rich WezTerm launcher unless it is already running inside a CCB-managed rich WezTerm; use `ccb uninstall rich` to return to the normal terminal startup.
 
 <details>
 <summary><b>GitHub release package and source install fallbacks</b></summary>
@@ -180,7 +182,7 @@ Agents can also call `/ask` from workflow orchestration to delegate and hand off
 
 ### Rich Mode (NEW!)
 
-Run `ccb update rich` to install the optional rich workbench and its dependencies, then `ccb rich` to open WezTerm + Yazi + LazyVim with Markdown rendering and image/PDF/video previews.
+Run `ccb update rich` to install the optional rich workbench; it bundles Yazi where possible, uses WezTerm for the rich terminal surface, and gives Markdown rendering plus image/PDF/video previews. After installation, plain `ccb` automatically opens this rich launcher unless it is already running inside a CCB-managed rich WezTerm; `ccb rich` remains available as an explicit launcher.
 
 <p align="center">
   <img src="assets/readme_v7/rich-workbench.png" alt="CCB rich workbench with Yazi PDF preview in WezTerm" width="860">
@@ -271,6 +273,7 @@ CCB also supports complex workflows, but it is not an automatic DAG generator. Y
 | Force cleanup before rebuilding | `ccb kill -f` then `ccb -n` |
 | Update to the latest stable release | `ccb update` |
 | Install or refresh the optional rich workbench | `ccb update rich` |
+| Remove rich mode and return normal startup | `ccb uninstall rich` |
 | Open the rich workbench | `ccb rich` |
 | Inspect the active config layer | `ccb config validate` |
 | Preview a config reload plan without changing tmux | `ccb reload --dry-run` |
@@ -330,7 +333,7 @@ CCB resolves config in three layers, from lowest to highest priority:
 3. Project config at `.ccb/ccb.config`.
 
 Higher layers replace lower layers as a whole; they are not merged. The project authority file is `.ccb/ccb.config`. The old `.ccb_config/ccb.config` path is legacy migration evidence only.
-The built-in default is a v2 `[windows]` config with `agent1`, `agent2`, `agent3`, and `ccb_self`. The optional rich workbench can be installed with `ccb update rich` and mounted as a tool window when wanted. The default `ccb_self` agent uses `codex` and is bound to `agentroles.ccb_self`.
+The built-in default is a v2 `[windows]` config with `agent1`, `agent2`, `agent3`, and `ccb_self`. The optional rich workbench can be installed with `ccb update rich`; once enabled, normal `ccb` startup uses the rich launcher unless you run `ccb uninstall rich`. The default `ccb_self` agent uses `codex` and is bound to `agentroles.ccb_self`.
 
 `.ccb/ccb.config` mainly controls:
 
@@ -458,7 +461,7 @@ command = "CCB_WORKBENCH_PROFILE=rich CCB_WORKBENCH_FORCE_RICH=1 ccb-workbench f
 label = "rich"
 ```
 
-`ccb update rich` prepares the optional workbench bundle under CCB-owned XDG paths and attempts to install required rich dependencies through the platform package manager, including WezTerm, Yazi, Markdown/PDF/image/video helpers, and recommended fonts. Normal `ccb update` keeps this bundle untouched; rerun `ccb update rich` to install, repair, or refresh it, then use `ccb rich` or mount the tool window above. Set `CCB_RICH_INSTALL_DEPS=0` to skip system package installation.
+`ccb update rich` prepares the optional workbench bundle under CCB-owned XDG paths, downloads and validates bundled binaries where available, and uses the platform package manager only for required rich dependencies such as WezTerm, Markdown/PDF/image/video helpers, and recommended fonts. Under WSL, CCB can launch Windows-native `wezterm.exe` while running the rich tools inside the current Linux distro. Normal `ccb update` keeps this bundle untouched; rerun `ccb update rich` to install, repair, or refresh it. Run `ccb uninstall rich` to remove the bundle and return plain `ccb` to normal terminal startup. Set `CCB_RICH_DOWNLOAD_BINARIES=0` to skip bundled binary downloads, or `CCB_RICH_INSTALL_DEPS=0` to skip system package installation.
 
 #### Per-agent model, API key, or base URL
 
@@ -992,7 +995,7 @@ v7 highlights:
 - Adds the Role Pack surface with the built-in `ccb.archi` architecture role, role memory, Codex/Claude skill projection, and project role locks.
 - Makes `ccb roles add ccb.archi:codex` the primary role onboarding command; config stores the shorthand while runtime resolves it to the local `archi` agent.
 - Makes `ccb roles install/update ccb.archi` refresh role assets and dependencies by default; install/update prompts interactive users and gives non-interactive users the follow-up command.
-- Adds managed tool windows such as `[tool_windows.neovim]`, plus `ccb tools install/doctor neovim`, sidebar rows, and safe reload add/remove behavior for non-agent tools.
+- Adds managed tool windows, sidebar rows, and safe reload add/remove behavior for non-agent tools.
 - Includes the new `agy` / Google Antigravity provider support from `main`.
 
 </details>

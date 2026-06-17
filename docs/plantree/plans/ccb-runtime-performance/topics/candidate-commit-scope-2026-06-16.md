@@ -74,14 +74,34 @@ roadmap, and this scope note.
 
 ## Exclude
 
+- Production Rust/helper entry points that need a separate risk/benefit gate:
+  - `lib/jobs/store.py` helper paths behind `CCB_RUST_JSONL_STORE`,
+    `CCB_RUST_PROJECT_VIEW_RECENT_JOBS`, and `CCB_RUST_JOB_SUMMARY_TAIL`
+  - `lib/storage/jsonl_store.py` helper path behind `CCB_RUST_JSONL_STORE`
+  - `lib/ccbd/project_view/service.py` helper parser path behind
+    `CCB_RUST_PROJECT_VIEW`
 - `lib/rust_helpers_project_view.py`
+- `lib/rust_helpers_jsonl.py`
 - `test/test_rust_helpers_project_view.py`
+- `test/test_rust_helpers_jsonl.py`
 - `dev_tools/perf_phase5_project_view_tmux_helper.py`
+- `dev_tools/perf_phase2_jsonl_helper.py`
+- `dev_tools/perf_phase6_jsonl_store_strict_helper.py`
 - `dev_tools/perf_phase7_project_view_recent_jobs_helper.py`
+- `dev_tools/perf_phase8_job_summary_projection_helper.py`
 - `dev_tools/perf_results/python_rust_phase5_project_view_tmux_helper.json`
+- `dev_tools/perf_results/python_rust_phase2_jsonl_helper.json`
+- `dev_tools/perf_results/python_rust_phase6_jsonl_store_strict_helper.json`
 - `dev_tools/perf_results/python_rust_phase7_project_view_recent_jobs_helper.json`
+- `dev_tools/perf_results/python_rust_phase8_job_summary_projection_helper.json`
 - Any unrelated README, install, namespace, layout, workbench, Windows, or
   provider-storage changes currently present in the worktree.
+
+Rationale: the current lifecycle profile is dominated by shell/tmux/system
+overhead rather than JSONL parsing or local tmux-output parsing. These helper
+paths also add environment-gated production branches, required-helper failure
+modes, and untracked wrapper/test artifacts. They should remain outside the
+main performance branch until measured against the already-landed Python paths.
 
 ## Required Verification Before Commit
 

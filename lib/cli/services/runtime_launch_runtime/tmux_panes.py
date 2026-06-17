@@ -7,6 +7,9 @@ from pathlib import Path
 from terminal_runtime.placeholders import pane_placeholder_argv
 
 _TMUX_ENVIRONMENT_KEYS = (
+    'TERM',
+    'TERM_PROGRAM',
+    'TERM_PROGRAM_VERSION',
     'DISPLAY',
     'WAYLAND_DISPLAY',
     'XDG_RUNTIME_DIR',
@@ -14,6 +17,17 @@ _TMUX_ENVIRONMENT_KEYS = (
     'WSL_INTEROP',
     'SSH_AUTH_SOCK',
     'SSH_CONNECTION',
+    'KITTY_WINDOW_ID',
+    'WEZTERM_EXECUTABLE',
+    'WEZTERM_PANE',
+    'WEZTERM_UNIX_SOCKET',
+    'CCB_WORKBENCH_PROFILE',
+    'CCB_WORKBENCH_FORCE_RICH',
+    'CCB_WORKBENCH_ROOT',
+    'CCB_WORKBENCH_TERMINAL_PROGRAM',
+    'CCB_WORKBENCH_TERMINAL_PROGRAM_VERSION',
+    'CCB_WORKBENCH_YAZI_SAFE_CONFIG',
+    'CCB_WORKBENCH_YAZI_RICH_CONFIG',
     'AGENT_ROLES_STORE',
 )
 _PREPARED_DETACHED_TMUX_SERVER_KEYS: set[tuple[object, ...]] = set()
@@ -136,6 +150,7 @@ def prepare_detached_tmux_server(backend) -> None:
     prepared = best_effort_tmux_run(backend, ['set-option', '-g', 'set-clipboard', 'on']) and prepared
     prepared = best_effort_tmux_run(backend, ['set-option', '-g', 'focus-events', 'on']) and prepared
     prepared = best_effort_tmux_run(backend, ['set-option', '-g', 'escape-time', '10']) and prepared
+    prepared = best_effort_tmux_run(backend, ['set-option', '-g', 'allow-passthrough', 'on']) and prepared
     prepared = _best_effort_tmux_environment_policy(backend) and prepared
     prepared = best_effort_tmux_run(backend, ['set-window-option', '-g', 'mode-keys', 'vi']) and prepared
     prepared = best_effort_tmux_run(backend, ['bind-key', '-T', 'copy-mode-vi', 'v', 'send-keys', '-X', 'begin-selection']) and prepared
@@ -149,6 +164,7 @@ def prepare_detached_tmux_server(backend) -> None:
         prepared = best_effort_tmux_run(backend, ['bind-key', key, 'select-pane', direction]) and prepared
     for key, direction in (('H', '-L'), ('J', '-D'), ('K', '-U'), ('L', '-R')):
         prepared = best_effort_tmux_run(backend, ['bind-key', '-r', key, 'resize-pane', direction, '5']) and prepared
+
 
     if prepared:
         _PREPARED_DETACHED_TMUX_SERVER_KEYS.add(cache_key)

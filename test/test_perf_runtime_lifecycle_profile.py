@@ -28,10 +28,17 @@ def test_classify_process_buckets() -> None:
     assert runner.classify_process("sh -lc 'tmux list-panes'", command_basename="sh") == "shell-wrapper"
     assert runner.classify_process("tmux send-keys -t 0 C-c", command_basename="tmux") == "terminal-frontend"
     assert runner.classify_process("tmux: server (0)", command_basename="tmux:") == "tmux-server"
+    assert runner.classify_process("tmux new-session sh -lc 'sleep 1'", command_basename="tmux") == "tmux-server"
     assert (
         runner.classify_process("python /path/ccb_test ask agent_codex hi", command_basename="python")
         == "ask-cli-subprocess"
     )
+    assert (
+        runner.classify_process("python /path/ccb ask agent_codex hi", command_basename="python")
+        == "ask-cli-subprocess"
+    )
+    assert runner.classify_process("node /opt/bin/codex resume abc", command_basename="node") == "provider/codex"
+    assert runner.classify_process("node /opt/bin/gemini --resume latest", command_basename="node") == "provider/gemini"
     assert (
         runner.classify_process("python -m helper --project /repo", command_basename="python", in_project=True)
         == "python-misc"
@@ -122,6 +129,31 @@ def test_collect_phase_samples_stops_when_inactive() -> None:
     assert samples[1].processes[1].bucket == "tmux-server"
 
 
+def test_collect_phase_samples_filters_unrelated_processes_when_project_scoped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    runner = _load_runner()
+    project = tmp_path / "project"
+    process_rows = (
+        (10, 1, 10.0, 1024.0, f"python {project}/lib/ccbd/main.py"),
+        (11, 10, 3.0, 1024.0, "sh -lc 'ccb ask agent hi'"),
+        (12, 1, 90.0, 1024.0, "python /unrelated/heavy.py"),
+        (13, 10, 1.0, 1024.0, "ps -eo pid=,ppid=,pcpu=,rss=,vsz=,args="),
+    )
+
+    monkeypatch.setattr(runner, "_collect_process_snapshot", lambda: process_rows)
+    monkeypatch.setattr(runner, "_pid_cwd_under_project", lambda _pid, _project: False)
+    monkeypatch.setattr(runner.os, "getpid", lambda: 10)
+
+    samples = runner._collect_phase_samples(
+        is_active=lambda: False,
+        max_samples=1,
+        interval_s=0.0,
+        project_root=project,
+    )
+
+    assert [proc.pid for proc in samples[0].processes] == [11]
+    assert [proc.bucket for proc in samples[0].processes] == ["shell-wrapper"]
+
+
 def test_aggregate_phase_rollup_math() -> None:
     runner = _load_runner()
     samples = [
@@ -178,6 +210,8 @@ def test_aggregate_phase_rollup_math() -> None:
     assert summary["buckets"]["tmux-server"]["cpu_share"] == 0.5
     assert summary["buckets"]["ccb/ccbd/main"]["rss_max_mib"] == 6.0
     assert summary["buckets"]["tmux-server"]["rss_max_mib"] == 8.0
+    assert summary["buckets"]["ccb/ccbd/main"]["top_commands"][0]["avg_cpu_pct"] == 15.0
+    assert summary["buckets"]["tmux-server"]["top_commands"][0]["command"] == "tmux: server"
 
 
 def test_run_load_phase_branches(tmp_path: Path) -> None:

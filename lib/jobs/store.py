@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import os
 from typing import Any
 
 from ccbd.api_models import DeliveryScope, JobEvent, JobRecord, JobStatus, MessageEnvelope, SubmissionRecord, TargetKind
@@ -72,6 +73,73 @@ class JobStore:
     def list_agent_tail(self, agent_name: str, *, limit: int) -> list[JobRecord]:
         return self.list_target_tail(TargetKind.AGENT, agent_name, limit=limit)
 
+    def list_agent_tails_batch(self, agent_names: tuple[str, ...] | list[str], *, limit: int) -> dict[str, list[JobRecord]]:
+        normalized = [str(agent_name) for agent_name in agent_names]
+        if _strict_jsonl_helper_required():
+            from rust_helpers_jsonl import read_jsonl_tail_strict_batch_required
+
+            result = read_jsonl_tail_strict_batch_required(
+                [
+                    {
+                        'id': agent_name,
+                        'path': str(self._layout.target_jobs_path(TargetKind.AGENT, agent_name)),
+                        'n': limit,
+                    }
+                    for agent_name in normalized
+                ],
+            )
+            rows_by_agent: dict[str, list[JobRecord]] = {agent_name: [] for agent_name in normalized}
+            for item in result.value.get('requests', []):
+                if not isinstance(item, dict):
+                    continue
+                agent_name = str(item.get('id') or '')
+                rows = item.get('rows')
+                if agent_name not in rows_by_agent or not isinstance(rows, list):
+                    continue
+                rows_by_agent[agent_name] = [_job_record_from_record(row) for row in rows if isinstance(row, dict)]
+            return rows_by_agent
+        return {agent_name: self.list_agent_tail(agent_name, limit=limit) for agent_name in normalized}
+
+    def list_agent_tail_summaries_batch(
+        self,
+        agent_names: tuple[str, ...] | list[str],
+        *,
+        limit: int,
+    ) -> dict[str, list[ProjectViewJobSummary]]:
+        normalized = [str(agent_name) for agent_name in agent_names]
+        if _job_summary_tail_helper_required():
+            from rust_helpers_jsonl import read_job_tail_summaries_required
+
+            result = read_job_tail_summaries_required(
+                [
+                    {
+                        'id': agent_name,
+                        'path': str(self._layout.target_jobs_path(TargetKind.AGENT, agent_name)),
+                        'n': limit,
+                    }
+                    for agent_name in normalized
+                ],
+            )
+            summaries_by_agent: dict[str, list[ProjectViewJobSummary]] = {agent_name: [] for agent_name in normalized}
+            for item in result.value.get('requests', []):
+                if not isinstance(item, dict):
+                    continue
+                agent_name = str(item.get('id') or '')
+                jobs = item.get('jobs')
+                if agent_name not in summaries_by_agent or not isinstance(jobs, list):
+                    continue
+                summaries_by_agent[agent_name] = [
+                    _project_view_job_summary_from_record(job) for job in jobs if isinstance(job, dict)
+                ]
+            return summaries_by_agent
+        return {
+            agent_name: [
+                _project_view_job_summary_from_job(record)
+                for record in self.list_agent_tail(agent_name, limit=limit)
+            ]
+            for agent_name in normalized
+        }
+
     def list_project_view_recent_jobs(
         self,
         agent_names: tuple[str, ...] | list[str],
@@ -94,6 +162,36 @@ class JobStore:
         initial_limit = per_agent_limit if per_agent_initial_limit is None else min(per_agent_initial_limit, per_agent_limit)
         if initial_limit <= 0:
             initial_limit = min(per_agent_limit, 1)
+        if _project_view_recent_jobs_helper_required():
+            if initial_limit < per_agent_limit:
+                from rust_helpers_project_view import read_jobs_query_recent_required
+
+                result = read_jobs_query_recent_required(
+                    [
+                        {
+                            'id': agent_name,
+                            'path': str(self._layout.target_jobs_path(TargetKind.AGENT, agent_name)),
+                        }
+                        for agent_name in normalized
+                    ],
+                    statuses=tuple(status_values),
+                    result_limit=result_limit,
+                    per_agent_initial=initial_limit,
+                    per_agent_max=per_agent_limit,
+                )
+                return tuple(
+                    _project_view_job_summary_from_record(row)
+                    for row in result.value.get('jobs', [])
+                    if isinstance(row, dict)
+                )
+
+            return self._list_project_view_recent_jobs_with_helper(
+                normalized,
+                per_agent_limit=per_agent_limit,
+                result_limit=result_limit,
+                status_values=status_values,
+            )
+
         current_limit = initial_limit
         while True:
             jobs = self._list_project_view_recent_jobs_python(
@@ -105,6 +203,34 @@ class JobStore:
             if len(jobs) >= result_limit or current_limit >= per_agent_limit:
                 return jobs
             current_limit = min(per_agent_limit, max(current_limit + 1, current_limit * 2))
+
+    def _list_project_view_recent_jobs_with_helper(
+        self,
+        agent_names: list[str],
+        *,
+        per_agent_limit: int,
+        result_limit: int,
+        status_values: frozenset[str],
+    ) -> tuple[ProjectViewJobSummary, ...]:
+        from rust_helpers_project_view import read_project_view_recent_jobs_required
+
+        result = read_project_view_recent_jobs_required(
+            [
+                {
+                    'id': agent_name,
+                    'path': str(self._layout.target_jobs_path(TargetKind.AGENT, agent_name)),
+                    'n': per_agent_limit,
+                }
+                for agent_name in agent_names
+            ],
+            statuses=tuple(status_values),
+            result_limit=result_limit,
+        )
+        return tuple(
+            _project_view_job_summary_from_record(row)
+            for row in result.value.get('jobs', [])
+            if isinstance(row, dict)
+        )
 
     def _list_project_view_recent_jobs_python(
         self,
@@ -143,6 +269,36 @@ class JobStore:
             predicate=lambda payload: str(payload.get('job_id') or '') == job_id,
             loader=_job_record_from_record,
         )
+
+
+def _strict_jsonl_helper_required() -> bool:
+    return str(os.environ.get('CCB_RUST_JSONL_STORE') or '').strip().lower() in {
+        '1',
+        'true',
+        'yes',
+        'on',
+        'required',
+    }
+
+
+def _project_view_recent_jobs_helper_required() -> bool:
+    return str(os.environ.get('CCB_RUST_PROJECT_VIEW_RECENT_JOBS') or '').strip().lower() in {
+        '1',
+        'true',
+        'yes',
+        'on',
+        'required',
+    }
+
+
+def _job_summary_tail_helper_required() -> bool:
+    return str(os.environ.get('CCB_RUST_JOB_SUMMARY_TAIL') or '').strip().lower() in {
+        '1',
+        'true',
+        'yes',
+        'on',
+        'required',
+    }
 
 
 class JobEventStore:
@@ -266,6 +422,35 @@ def _project_view_job_summary_from_job(record: JobRecord) -> ProjectViewJobSumma
         target_kind=record.target_kind,
         target_name=record.target_name,
         provider_options=dict(record.provider_options or {}),
+    )
+
+
+def _project_view_job_summary_from_record(record: dict) -> ProjectViewJobSummary:
+    request = record.get('request') if isinstance(record.get('request'), dict) else {}
+    return ProjectViewJobSummary(
+        job_id=str(record.get('job_id') or ''),
+        agent_name=str(record.get('agent_name') or ''),
+        provider=str(record.get('provider') or ''),
+        request=ProjectViewMessageSummary(
+            project_id=str(request.get('project_id') or ''),
+            to_agent=str(request.get('to_agent') or ''),
+            from_actor=str(request.get('from_actor') or ''),
+            body=str(request.get('body') or ''),
+            task_id=str(request.get('task_id')) if request.get('task_id') is not None else None,
+            reply_to=str(request.get('reply_to')) if request.get('reply_to') is not None else None,
+            message_type=str(request.get('message_type') or ''),
+            delivery_scope=str(request.get('delivery_scope') or ''),
+            silence_on_success=bool(request.get('silence_on_success', False)),
+            route_options=dict(request.get('route_options') or {}),
+            body_artifact=dict(request.get('body_artifact')) if isinstance(request.get('body_artifact'), dict) else None,
+        ),
+        status=JobStatus(str(record.get('status') or '')),
+        terminal_decision=dict(record.get('terminal_decision')) if isinstance(record.get('terminal_decision'), dict) else None,
+        created_at=str(record.get('created_at') or ''),
+        updated_at=str(record.get('updated_at') or ''),
+        target_kind=TargetKind(str(record.get('target_kind') or TargetKind.AGENT.value)),
+        target_name=str(record.get('target_name') or record.get('agent_name') or ''),
+        provider_options=dict(record.get('provider_options') or {}),
     )
 
 

@@ -840,7 +840,7 @@ def test_phase2_doctor_storage_renders_storage_summary(monkeypatch, tmp_path: Pa
     monkeypatch.setattr(
         phase2_module,
         'doctor_storage_summary',
-        lambda context: {
+        lambda context, *, compact=False: {
             'schema_version': 1,
             'project': str(context.project.project_root),
             'project_id': context.project.project_id,
@@ -890,7 +890,7 @@ def test_phase2_doctor_storage_json_emits_full_payload(monkeypatch, tmp_path: Pa
     monkeypatch.setattr(
         phase2_module,
         'doctor_storage_summary',
-        lambda context: {
+        lambda context, *, compact=False: {
             'schema_version': 1,
             'project': str(context.project.project_root),
             'project_id': context.project.project_id,

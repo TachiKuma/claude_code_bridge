@@ -83,11 +83,13 @@ npm install -g @seemseam/ccb
 ccb update
 ```
 
-可选富媒体工作台用 `ccb update rich` 安装或刷新，它也会尝试自动安装 WezTerm、Yazi、Markdown/PDF/图片/视频辅助工具和推荐字体：
+可选富媒体工作台用 `ccb update rich` 安装或刷新；它会优先下载并验证可封装的二进制，只把必要的终端、媒体和字体依赖交给平台包管理器安装：
 
 ```bash
 ccb update rich
 ```
+
+rich 启用后，普通 `ccb` 会自动打开 rich WezTerm launcher，只有当当前已经处于 CCB 自己拉起的 rich WezTerm 中时才不会再次跳转；运行 `ccb uninstall rich` 可退回普通终端启动。
 
 <details>
 <summary><b>GitHub release 包和源码安装兜底</b></summary>
@@ -181,7 +183,7 @@ ccb
 
 ### Rich 模式（NEW!）
 
-运行 `ccb update rich` 安装可选富媒体工作台及其依赖，再用 `ccb rich` 打开 WezTerm + Yazi + LazyVim，支持 Markdown 渲染和图片/PDF/视频预览。
+运行 `ccb update rich` 安装可选富媒体工作台；它会尽量封装 Yazi 等二进制，并用 WezTerm 承载富媒体终端界面，提供 Markdown 渲染和图片/PDF/视频预览。安装后，普通 `ccb` 会自动打开 rich launcher，只有当当前已经处于 CCB 自己拉起的 rich WezTerm 中时才不会再次跳转；`ccb rich` 仍可作为显式启动入口。
 
 <p align="center">
   <img src="assets/readme_v7/rich-workbench.png" alt="CCB rich 富媒体工作台在 WezTerm 中使用 Yazi 预览 PDF" width="860">
@@ -270,6 +272,7 @@ CCB 也支持复杂工作流，但它不是自动生成 DAG 的 harness；复杂
 | 强制清理当前项目残留后再重建 | `ccb kill -f` 后接 `ccb -n` |
 | 更新到最新稳定 release | `ccb update` |
 | 安装或刷新可选 rich 富媒体工作台 | `ccb update rich` |
+| 移除 rich 模式并退回普通启动 | `ccb uninstall rich` |
 | 打开 rich 富媒体工作台 | `ccb rich` |
 | 查看当前使用的配置层 | `ccb config validate` |
 | 预览配置热加载计划，不修改 tmux | `ccb reload --dry-run` |
@@ -326,7 +329,7 @@ CCB 配置有三层，优先级从低到高：
 3. 项目配置 `.ccb/ccb.config`。
 
 更高层会整体替换低层，不做局部合并。当前项目的权威配置文件是 `.ccb/ccb.config`；旧路径 `.ccb_config/ccb.config` 只应作为迁移参考。
-内置默认配置是 v2 `[windows]` 拓扑，包含 `agent1`、`agent2`、`agent3` 和 `ccb_self`。可选 rich 富媒体工作台通过 `ccb update rich` 安装，需要时可以挂载成工具 window。默认 `ccb_self` 使用 `codex` 并绑定 `agentroles.ccb_self`。
+内置默认配置是 v2 `[windows]` 拓扑，包含 `agent1`、`agent2`、`agent3` 和 `ccb_self`。可选 rich 富媒体工作台通过 `ccb update rich` 安装；启用后普通 `ccb` 会走 rich launcher，运行 `ccb uninstall rich` 后退回普通终端启动。默认 `ccb_self` 使用 `codex` 并绑定 `agentroles.ccb_self`。
 
 `.ccb/ccb.config` 主要配置这些内容：
 
@@ -449,7 +452,7 @@ command = "CCB_WORKBENCH_PROFILE=rich CCB_WORKBENCH_FORCE_RICH=1 ccb-workbench f
 label = "rich"
 ```
 
-`ccb update rich` 会在 CCB 自己的 XDG 目录下准备可选工作台包，并通过当前平台的包管理器尝试安装 rich 依赖，包括 WezTerm、Yazi、Markdown/PDF/图片/视频辅助工具和推荐字体。普通 `ccb update` 不会主动安装或刷新该包；需要安装、修复或更新时重新运行 `ccb update rich`，然后使用 `ccb rich` 或上面的工具 window 挂载方式启动。设置 `CCB_RICH_INSTALL_DEPS=0` 可跳过系统包安装。
+`ccb update rich` 会在 CCB 自己的 XDG 目录下准备可选工作台包，优先下载并验证可封装的二进制，只把 WezTerm、Markdown/PDF/图片/视频辅助工具和推荐字体等必要依赖交给平台包管理器。WSL 下可以调用 Windows 原生 `wezterm.exe`，同时让 rich 工具继续运行在当前 Linux 发行版内。普通 `ccb update` 不会主动安装或刷新该包；需要安装、修复或更新时重新运行 `ccb update rich`。运行 `ccb uninstall rich` 会移除该包，并让普通 `ccb` 回到常规终端启动。设置 `CCB_RICH_DOWNLOAD_BINARIES=0` 可跳过二进制下载，设置 `CCB_RICH_INSTALL_DEPS=0` 可跳过系统包安装。
 
 #### 给 agent 单独配置模型、API key 或 base URL
 
@@ -964,7 +967,7 @@ v7 线重点：
 - 新增 Role Pack 体验面，内置 `ccb.archi` 架构师 role，包含 role memory、Codex/Claude skill 投影和项目 role lock。
 - `ccb roles add ccb.archi:codex` 成为主要接入命令；config 保留 shorthand，运行时解析为本地 agent `archi`。
 - `ccb roles install/update ccb.archi` 默认刷新 role 资产和依赖；安装/更新时交互提示，非交互场景会给出后续运行命令。
-- 新增 `[tool_windows.neovim]` 这类托管工具 window，以及 `ccb tools install/doctor neovim`、sidebar 行和安全的 reload add/remove 行为。
+- 新增托管工具 window、sidebar 行和安全的 reload add/remove 行为。
 - 包含 main 上已合入的 `agy` / Google Antigravity provider 支持。
 
 </details>
