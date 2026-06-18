@@ -1551,6 +1551,166 @@ def test_materialize_claude_home_config_refreshes_login_metadata_without_replaci
     assert 'primaryApiKey' not in payload
 
 
+def test_materialize_claude_home_config_projects_mcp_config_into_managed_workspace(
+    tmp_path: Path,
+) -> None:
+    source_home = tmp_path / 'system-home'
+    target_home = tmp_path / 'managed-home'
+    project_root = tmp_path / 'repo'
+    workspace = project_root / '.ccb' / 'workspaces' / 'clauder'
+    source_trust = source_home / '.claude.json'
+    target_trust = target_home / '.claude.json'
+    source_trust.parent.mkdir(parents=True, exist_ok=True)
+    target_trust.parent.mkdir(parents=True, exist_ok=True)
+    project_root.mkdir(parents=True, exist_ok=True)
+    workspace.mkdir(parents=True, exist_ok=True)
+    source_project_key = str(project_root.resolve())
+    target_project_key = str(workspace.resolve())
+    source_trust.write_text(
+        json.dumps(
+            {
+                'mcpServers': {
+                    'global-tool': {
+                        'command': 'global-mcp',
+                        'args': ['serve'],
+                        'env': {'GLOBAL_TOKEN': 'secret-value'},
+                    },
+                },
+                'projects': {
+                    source_project_key: {
+                        'mcpServers': {
+                            'project-tool': {
+                                'command': 'project-mcp',
+                                'args': ['--stdio'],
+                            },
+                        },
+                        'enabledMcpjsonServers': ['project-tool'],
+                        'disabledMcpjsonServers': ['disabled-json-tool'],
+                        'disabledMcpServers': ['disabled-native-tool'],
+                        'mcpContextUris': ['mcp://project-context'],
+                        'allowedTools': ['must-not-project'],
+                    },
+                    '/unrelated/workspace': {
+                        'mcpServers': {
+                            'unrelated-tool': {'command': 'must-not-project'},
+                        },
+                    },
+                },
+                'primaryApiKey': 'must-not-project',
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+    target_trust.write_text(
+        json.dumps(
+            {
+                target_project_key: {
+                    'hasTrustDialogAccepted': True,
+                    'mcpServers': {'stale-tool': {'command': 'stale'}},
+                },
+                'projects': {
+                    target_project_key: {
+                        'hasTrustDialogAccepted': True,
+                        'mcpServers': {'stale-tool': {'command': 'stale'}},
+                    },
+                },
+                'primaryApiKey': 'stale-key',
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+
+    layout = materialize_claude_home_config(
+        target_home,
+        source_home=source_home,
+        project_root=project_root,
+        workspace_path=workspace,
+    )
+
+    payload = json.loads(layout.trust_path.read_text(encoding='utf-8'))
+    assert payload['mcpServers']['global-tool']['command'] == 'global-mcp'
+    assert payload['mcpServers']['global-tool']['env'] == {'GLOBAL_TOKEN': 'secret-value'}
+    assert payload['projects'][target_project_key]['hasTrustDialogAccepted'] is True
+    assert payload['projects'][target_project_key]['mcpServers']['project-tool']['command'] == 'project-mcp'
+    assert payload['projects'][target_project_key]['enabledMcpjsonServers'] == ['project-tool']
+    assert payload['projects'][target_project_key]['disabledMcpjsonServers'] == ['disabled-json-tool']
+    assert payload['projects'][target_project_key]['disabledMcpServers'] == ['disabled-native-tool']
+    assert payload['projects'][target_project_key]['mcpContextUris'] == ['mcp://project-context']
+    assert payload[target_project_key]['mcpServers']['project-tool']['command'] == 'project-mcp'
+    assert 'allowedTools' not in payload['projects'][target_project_key]
+    assert 'stale-tool' not in payload['projects'][target_project_key]['mcpServers']
+    assert source_project_key not in payload['projects']
+    assert '/unrelated/workspace' not in payload['projects']
+    assert 'primaryApiKey' not in payload
+
+
+def test_materialize_claude_home_config_strips_mcp_config_when_config_not_inherited(
+    tmp_path: Path,
+) -> None:
+    source_home = tmp_path / 'system-home'
+    target_home = tmp_path / 'managed-home'
+    workspace = tmp_path / 'repo' / '.ccb' / 'workspaces' / 'clauder'
+    source_trust = source_home / '.claude.json'
+    target_trust = target_home / '.claude.json'
+    source_trust.parent.mkdir(parents=True, exist_ok=True)
+    target_trust.parent.mkdir(parents=True, exist_ok=True)
+    workspace.mkdir(parents=True, exist_ok=True)
+    target_project_key = str(workspace.resolve())
+    source_trust.write_text(
+        json.dumps(
+            {
+                'mcpServers': {'global-tool': {'command': 'global-mcp'}},
+                'projects': {
+                    target_project_key: {
+                        'mcpServers': {'project-tool': {'command': 'project-mcp'}},
+                    },
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+    target_trust.write_text(
+        json.dumps(
+            {
+                'mcpServers': {'stale-global': {'command': 'stale'}},
+                target_project_key: {
+                    'hasTrustDialogAccepted': True,
+                    'mcpServers': {'stale-project': {'command': 'stale'}},
+                },
+                'projects': {
+                    target_project_key: {
+                        'hasTrustDialogAccepted': True,
+                        'mcpServers': {'stale-project': {'command': 'stale'}},
+                    },
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+
+    layout = materialize_claude_home_config(
+        target_home,
+        profile=ProviderProfileSpec(inherit_config=False),
+        source_home=source_home,
+        workspace_path=workspace,
+    )
+
+    payload = json.loads(layout.trust_path.read_text(encoding='utf-8'))
+    assert 'mcpServers' not in payload
+    assert payload[target_project_key]['hasTrustDialogAccepted'] is True
+    assert 'mcpServers' not in payload[target_project_key]
+    assert payload['projects'][target_project_key]['hasTrustDialogAccepted'] is True
+    assert 'mcpServers' not in payload['projects'][target_project_key]
+
+
 def test_materialize_claude_home_config_strips_login_metadata_when_auth_not_inherited(
     tmp_path: Path,
 ) -> None:
@@ -1859,6 +2019,63 @@ def test_materialize_claude_home_config_preserves_runtime_hooks_and_permissions(
     assert payload['theme'] == 'dark'
     assert payload['hooks']['Stop'][0]['hooks'][0]['command'] == 'echo hook'
     assert payload['permissions']['allow'] == ['Bash(ls)']
+
+
+def test_materialize_claude_home_config_merges_source_and_managed_hooks(tmp_path: Path) -> None:
+    source_home = tmp_path / 'system-home'
+    target_home = tmp_path / 'managed-home'
+    source_settings = source_home / '.claude' / 'settings.json'
+    source_settings.parent.mkdir(parents=True, exist_ok=True)
+    source_settings.write_text(
+        json.dumps(
+            {
+                'hooks': {
+                    'Stop': [
+                        {'hooks': [{'type': 'command', 'command': 'echo source-stop'}]},
+                    ],
+                    'UserPromptSubmit': [
+                        {'hooks': [{'type': 'command', 'command': 'echo source-prompt'}]},
+                    ],
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+    target_settings = target_home / '.claude' / 'settings.json'
+    target_settings.parent.mkdir(parents=True, exist_ok=True)
+    target_settings.write_text(
+        json.dumps(
+            {
+                'hooks': {
+                    'Stop': [
+                        {'hooks': [{'type': 'command', 'command': 'echo source-stop'}]},
+                        {'hooks': [{'type': 'command', 'command': 'echo managed-stop'}]},
+                    ],
+                    'PostToolUse': [
+                        {'hooks': [{'type': 'command', 'command': 'echo managed-post'}]},
+                    ],
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+
+    layout = materialize_claude_home_config(target_home, source_home=source_home)
+
+    payload = json.loads(layout.settings_path.read_text(encoding='utf-8'))
+    stop_commands = [
+        hook['command']
+        for group in payload['hooks']['Stop']
+        for hook in group.get('hooks', [])
+        if isinstance(hook, dict)
+    ]
+    assert stop_commands == ['echo source-stop', 'echo managed-stop']
+    assert payload['hooks']['UserPromptSubmit'][0]['hooks'][0]['command'] == 'echo source-prompt'
+    assert payload['hooks']['PostToolUse'][0]['hooks'][0]['command'] == 'echo managed-post'
 
 
 def test_materialize_claude_home_config_refreshes_ccb_only_permissions_for_auto_permission(tmp_path: Path) -> None:

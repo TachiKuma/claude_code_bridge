@@ -1,5 +1,25 @@
 # Changelog
 
+## v7.6.12 (2026-06-18)
+
+### Claude MCP And Hook Inheritance
+
+- **Claude MCP Projection Added**: managed Claude agents now inherit source
+  Claude Code MCP configuration from `.claude.json`, including global
+  `mcpServers` and current project/workspace MCP server state.
+- **Claude Hook Inheritance Fixed**: managed Claude settings now merge inherited
+  source-home hooks with CCB-managed finish/activity hooks so user-installed
+  Claude Code hook tools stay visible after agent restart.
+- **Workspace Mapping Kept Scoped**: project-level MCP state is mapped only onto
+  the current managed workspace/project key; unrelated source project records
+  are not copied into the managed Claude home.
+- **Secret Handling Hardened**: managed Claude `.claude.json` now classifies as
+  secret provider state because inherited MCP definitions may carry environment
+  variables or auth-adjacent launch material.
+- **Release Surface Synchronized**: VERSION, CLI version constants,
+  package.json, release workflow defaults, README release notes, and npm
+  packaging metadata are aligned for 7.6.12.
+
 ## v7.6.11 (2026-06-18)
 
 ### Layout Percent And Codex MCP Overlays

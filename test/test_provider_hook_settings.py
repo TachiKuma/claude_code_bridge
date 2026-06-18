@@ -204,6 +204,116 @@ def test_prepare_provider_workspace_materializes_claude_settings_before_hooks(tm
     assert not (workspace / '.claude').exists()
 
 
+def test_prepare_provider_workspace_materializes_claude_mcp_from_source_home(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project_root = tmp_path / 'repo'
+    workspace = project_root / '.ccb' / 'workspaces' / 'clauder'
+    system_home = tmp_path / 'system-home'
+    system_settings = system_home / '.claude' / 'settings.json'
+    system_trust = system_home / '.claude.json'
+    system_settings.parent.mkdir(parents=True, exist_ok=True)
+    system_settings.write_text(json.dumps({'theme': 'light'}, ensure_ascii=False, indent=2), encoding='utf-8')
+    project_root.mkdir(parents=True, exist_ok=True)
+    workspace.mkdir(parents=True, exist_ok=True)
+    source_project_key = str(project_root.resolve())
+    target_project_key = str(workspace.resolve())
+    system_trust.write_text(
+        json.dumps(
+            {
+                'mcpServers': {'global-tool': {'command': 'global-mcp'}},
+                'projects': {
+                    source_project_key: {
+                        'mcpServers': {'project-tool': {'command': 'project-mcp'}},
+                        'enabledMcpjsonServers': ['project-tool'],
+                    },
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+    monkeypatch.setenv('HOME', str(system_home))
+
+    prepare_provider_workspace(
+        layout=PathLayout(project_root),
+        spec=_spec('agent1'),
+        workspace_path=workspace,
+        completion_dir=project_root / '.ccb' / 'agents' / 'agent1' / 'provider-runtime' / 'claude' / 'completion',
+        agent_name='agent1',
+        refresh_profile=True,
+    )
+
+    trust_path = project_root / '.ccb' / 'agents' / 'agent1' / 'provider-state' / 'claude' / 'home' / '.claude.json'
+    payload = json.loads(trust_path.read_text(encoding='utf-8'))
+    assert payload['mcpServers']['global-tool']['command'] == 'global-mcp'
+    assert payload['projects'][target_project_key]['mcpServers']['project-tool']['command'] == 'project-mcp'
+    assert payload['projects'][target_project_key]['enabledMcpjsonServers'] == ['project-tool']
+    assert source_project_key not in payload['projects']
+    assert not (workspace / '.claude').exists()
+
+
+def test_prepare_provider_workspace_inherits_claude_hooks_from_source_home(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project_root = tmp_path / 'repo'
+    workspace = project_root / 'workspace'
+    system_home = tmp_path / 'system-home'
+    system_settings = system_home / '.claude' / 'settings.json'
+    system_settings.parent.mkdir(parents=True, exist_ok=True)
+    system_settings.write_text(
+        json.dumps(
+            {
+                'hooks': {
+                    'Stop': [
+                        {'hooks': [{'type': 'command', 'command': 'echo source-stop-hook'}]},
+                    ],
+                    'UserPromptSubmit': [
+                        {'hooks': [{'type': 'command', 'command': 'echo source-prompt-hook'}]},
+                    ],
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+    monkeypatch.setenv('HOME', str(system_home))
+
+    prepare_provider_workspace(
+        layout=PathLayout(project_root),
+        spec=_spec('agent1'),
+        workspace_path=workspace,
+        completion_dir=project_root / '.ccb' / 'agents' / 'agent1' / 'provider-runtime' / 'claude' / 'completion',
+        agent_name='agent1',
+        refresh_profile=True,
+    )
+
+    settings_path = project_root / '.ccb' / 'agents' / 'agent1' / 'provider-state' / 'claude' / 'home' / '.claude' / 'settings.json'
+    payload = json.loads(settings_path.read_text(encoding='utf-8'))
+    stop_commands = [
+        hook['command']
+        for group in payload['hooks']['Stop']
+        for hook in group.get('hooks', [])
+        if isinstance(hook, dict)
+    ]
+    prompt_commands = [
+        hook['command']
+        for group in payload['hooks']['UserPromptSubmit']
+        for hook in group.get('hooks', [])
+        if isinstance(hook, dict)
+    ]
+    assert 'echo source-stop-hook' in stop_commands
+    assert any('ccb-provider-finish-hook' in command for command in stop_commands)
+    assert any('ccb-provider-activity-hook' in command for command in stop_commands)
+    assert 'echo source-prompt-hook' in prompt_commands
+    assert any('ccb-provider-activity-hook' in command for command in prompt_commands)
+    assert not (workspace / '.claude').exists()
+
+
 def test_prepare_provider_workspace_materializes_claude_activity_hooks(tmp_path: Path, monkeypatch) -> None:
     project_root = tmp_path / 'repo'
     workspace = project_root / 'workspace'

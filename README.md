@@ -6,7 +6,7 @@
 **Visible, controllable multi-agent cooperative TUI workspace**
 
 <p>
-  <img src="https://img.shields.io/badge/version-7.6.11-orange.svg" alt="version">
+  <img src="https://img.shields.io/badge/version-7.6.12-orange.svg" alt="version">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WSL-lightgrey.svg" alt="platform">
   <img src="https://img.shields.io/badge/providers-15%20CLI%20families-0B7285.svg" alt="providers">
 </p>
@@ -45,21 +45,29 @@
 
 Mix CLIs per agent in `.ccb/ccb.config`; actual availability depends on the local CLI installation and account access.
 
-- Codex (`codex`)
-- Claude (`claude`)
-- Gemini (`gemini`)
-- Kimi (`kimi`)
-- MiMo (`mimo`)
-- Qwen (`qwen`)
-- Cursor (`cursor`)
-- GitHub Copilot CLI (`copilot`)
-- Crush (`crush`)
-- Kiro CLI (`kiro`)
-- Pi (`pi`)
-- Z.ai CLI (`zai`)
-- OpenCode (`opencode`)
-- Antigravity (`agy`)
-- Droid (`droid`)
+<table>
+  <tr>
+    <td>Codex<br><code>codex</code></td>
+    <td>Claude<br><code>claude</code></td>
+    <td>Gemini<br><code>gemini</code></td>
+    <td>Kimi<br><code>kimi</code></td>
+    <td>MiMo<br><code>mimo</code></td>
+  </tr>
+  <tr>
+    <td>Qwen<br><code>qwen</code></td>
+    <td>Cursor<br><code>cursor</code></td>
+    <td>GitHub Copilot CLI<br><code>copilot</code></td>
+    <td>Crush<br><code>crush</code></td>
+    <td>Kiro CLI<br><code>kiro</code></td>
+  </tr>
+  <tr>
+    <td>Pi<br><code>pi</code></td>
+    <td>Z.ai CLI<br><code>zai</code></td>
+    <td>OpenCode<br><code>opencode</code></td>
+    <td>Antigravity<br><code>agy</code></td>
+    <td>Droid<br><code>droid</code></td>
+  </tr>
+</table>
 
 **New role specification**: package skills, memory, and tool dependencies into self-contained Role Packs, then create hot-loadable and removable specialist agents.
 
@@ -190,16 +198,49 @@ Run `ccb update rich` to install the optional rich workbench; it bundles Yazi wh
   <img src="assets/readme_v7/rich-workbench.png" alt="CCB rich workbench with Yazi preview in WezTerm" width="860">
 </p>
 
+### Agent Roles Spec And Role Catalog
+
+CCB supports the [Agent Roles Spec](https://github.com/SeemSeam/agent-roles-spec), a host-neutral way to package specialist agents as portable Role Packs. The same repository also acts as the public role catalog.
+
+<details>
+<summary><b>Available catalog roles</b></summary>
+
+| Role | Basic function |
+| :--- | :--- |
+| `agentroles.ccb_self` | CCB self-maintenance, config help, runtime diagnosis, guarded recovery, and workflow orchestration. |
+| `agentroles.archi` | Architecture review, boundary checks, coupling analysis, maintainability risk, and practical next-step gates. |
+| `agentroles.frontend_engineer` | Frontend design and implementation, design-system work, accessibility, browser QA, and reviewed AGY delegation. |
+| `agentroles.mobile_app_engineer` | Mobile app design and implementation across iOS, Android, React Native, Expo, Flutter, SwiftUI, and Jetpack Compose. |
+| `agentroles.mother` | Role creation, role-source audit, role research, blueprinting, and Agent Roles spec compliance review. |
+| `agentroles.su_ccb` | SU-CCB workflow operation for requirement analysis, planning, dispatch, review gates, archive, and recovery. |
+
+</details>
+
 ### Contact
 
 - Email: `bfly123@126.com`
 - WeChat: `seemseam-com`
 
+<p align="center">
+  <img src="assets/weixin.jpg" alt="WeChat group" width="240">
+</p>
+
 ---
 
 ## More Reading
 
-Start with Quick Start for first use; the sections below cover CCB's design boundaries, comparisons, daily operations, and configuration model.
+Start with Quick Start for first use. Open only the reference area you need.
+
+| Topic | When to open it |
+| :--- | :--- |
+| Concepts and positioning | What CCB is, why multi-agent workflows help, and how CCB compares with other approaches. |
+| Daily operation | Common commands and tmux basics for routine use. |
+| Configuration and roles | `.ccb/ccb.config`, Role Packs, and `ccb_self` configuration help. |
+| Collaboration and maintenance | Ask routes, install/update notes, FAQ, and credits. |
+| Release notes | Current v7 highlights and historical release entries. |
+
+<details open>
+<summary><b>Concepts and positioning</b></summary>
 
 ### What Is CCB?
 
@@ -264,6 +305,11 @@ CCB also supports complex workflows, but it is not an automatic DAG generator. Y
 
 </details>
 
+</details>
+
+<details>
+<summary><b>Daily operation</b></summary>
+
 ### Daily Operation
 
 | Goal | Command |
@@ -326,6 +372,11 @@ New users should avoid pane/window killing shortcuts at first. To stop a CCB pro
 
 </details>
 
+</details>
+
+<details>
+<summary><b>Configuration and roles</b></summary>
+
 ### Configure Your Agent Team
 
 CCB resolves config in three layers, from lowest to highest priority:
@@ -356,10 +407,19 @@ If you want to discuss the configuration before writing it by hand, ask `ccb_sel
 
 #### Role Packs
 
-Role Packs define reusable agent roles. A role can carry a stable identity,
-responsibilities, memory, provider-specific skills, tool hooks, and dependency
-setup. This keeps project config short and makes specialized agents reusable
-instead of copying long role instructions into every project.
+Role Packs define reusable agent roles through the
+[Agent Roles Spec](https://github.com/SeemSeam/agent-roles-spec). The spec is a
+host-neutral package format for specialist agents: a Role carries a stable
+identity, responsibilities, non-goals, memory, skills, prompts, references,
+tools, plugin content, validation notes, and host adapter metadata as one
+reviewable unit.
+
+The practical value is separation. Role source stays portable and versioned;
+project bindings decide where that Role is mounted; runtime provider state,
+credentials, task progress, and generated projection output stay outside the
+Role. That makes specialist agents easier to install, update, audit, migrate,
+and remove without copying long prompts into every project or mutating user
+global configuration.
 
 The recommended default catalog roles are `agentroles.ccb_self`, the CCB
 self-maintenance role, and `agentroles.archi`, an architecture reviewer role
@@ -369,6 +429,9 @@ refreshes installed roles and installs missing recommended roles in the user
 environment. You can also refresh manually:
 
 ```bash
+ccb roles list
+ccb roles show agentroles.archi
+ccb roles install agentroles.archi
 ccb roles update agentroles.ccb_self
 ccb roles update agentroles.archi
 ```
@@ -518,6 +581,11 @@ By default, `ccb-config` does not edit `.ccb/ccb_memory.md` or `.ccb/agents/<age
 
 </details>
 
+</details>
+
+<details>
+<summary><b>Collaboration and maintenance</b></summary>
+
 ### Agent Collaboration
 
 Normal `ask` is submit-and-return: after handing work to the target agent, the current agent should not poll and wait.
@@ -627,9 +695,10 @@ Thanks to the [Linux.do community](https://linux.do) for testing, feedback, and 
 
 Thanks to [tmux-agent-sidebar](https://github.com/hiroppy/tmux-agent-sidebar) for the sidebar ideas and inspiration.
 
-<div align="center">
-  <img src="assets/weixin.jpg" alt="WeChat group" width="300">
-</div>
+</details>
+
+<details>
+<summary><b>Release notes</b></summary>
 
 ### Release Notes
 
@@ -643,6 +712,21 @@ v7 highlights:
 - Hardened tmux, Ghostty, release helper, Codex trust, and provider session restore paths.
 
 <details open>
+<summary><b>v7.6.12</b> - Claude MCP And Hook Inheritance</summary>
+
+- Managed Claude agents now inherit Claude Code MCP configuration from the
+  source `.claude.json`, including global `mcpServers` and current
+  project/workspace MCP server state.
+- Project-level MCP state is mapped only onto the current managed workspace key,
+  so unrelated source project records are not copied into the agent home.
+- Source-home Claude Code hooks are merged with CCB-managed finish/activity
+  hooks, so installed user hook tools stay visible after agent restart.
+- Managed Claude `.claude.json` is treated as secret provider state because MCP
+  definitions may include environment variables or auth-adjacent launch data.
+
+</details>
+
+<details>
 <summary><b>v7.6.11</b> - Layout Percent And Codex MCP Overlays</summary>
 
 - Adds explicit pane split ratios in layout tokens, such as
@@ -1230,6 +1314,8 @@ v7 highlights:
 - Adds real v7 terminal screenshots under `assets/readme_v7/` for the public README walkthrough.
 - Preserves the README redesign plan and supporting notes under `docs/plantree/`.
 - Keeps the v7.0.8 runtime, `ccb clear`, config overlay, and sidebar fixes intact while refreshing the GitHub-facing documentation package.
+
+</details>
 
 </details>
 
