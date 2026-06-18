@@ -122,15 +122,22 @@ tools/mobile_gateway_terminal_smoke.py \
   --route-provider cloudflare_tunnel
 ```
 
-After the preflight passes and `cloudflared tunnel run ccb-mobile` is running,
-validate the named tunnel with:
+After the preflight passes, the development smoke can start
+`cloudflared tunnel run` for the named tunnel, start a disposable CCB gateway,
+wait for public `/v1/health`, run route diagnostics and terminal streaming,
+then clean up:
 
 ```bash
 tools/mobile_gateway_terminal_smoke.py \
+  --cloudflared-named-tunnel \
   --gateway-listen 127.0.0.1:8787 \
   --gateway-public-url https://mobile.example.com \
   --route-provider cloudflare_tunnel
 ```
+
+If the tunnel is already running in another terminal, omit
+`--cloudflared-named-tunnel` and run the same smoke command against the public
+URL.
 
 The smoke is accepted only when route diagnostics are ready, ProjectView and
 terminal-open responses remain redacted, terminal input/paste/resize/close and

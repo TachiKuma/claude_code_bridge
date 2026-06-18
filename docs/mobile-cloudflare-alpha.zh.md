@@ -117,15 +117,20 @@ tools/mobile_gateway_terminal_smoke.py \
   --route-provider cloudflare_tunnel
 ```
 
-preflight 通过，并且 `cloudflared tunnel run ccb-mobile` 已经运行后，再用 named
-tunnel 做完整验证：
+preflight 通过后，开发 smoke 可以自动启动 named tunnel 的
+`cloudflared tunnel run`、启动 disposable CCB gateway、等待公网 `/v1/health`、
+执行 route diagnostics 和 terminal streaming，最后清理运行时：
 
 ```bash
 tools/mobile_gateway_terminal_smoke.py \
+  --cloudflared-named-tunnel \
   --gateway-listen 127.0.0.1:8787 \
   --gateway-public-url https://mobile.example.com \
   --route-provider cloudflare_tunnel
 ```
+
+如果 tunnel 已经在另一个终端运行，则省略 `--cloudflared-named-tunnel`，用同一个
+public URL 运行 smoke 命令。
 
 只有当 route diagnostics ready、ProjectView 和 terminal-open 响应保持脱敏、
 terminal input/paste/resize/close 与 resume reconnect 都通过，并且 cleanup 停止
