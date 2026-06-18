@@ -15,10 +15,10 @@ _DEFAULT_HOST = '127.0.0.1'
 _DEFAULT_PORT = 8787
 _SCHEMA_VERSION = 1
 _BASE_CAPABILITIES = ('http_json', 'project_view')
-_PAIRING_CAPABILITIES = ('pairing', 'device_tokens')
+_PAIRING_CAPABILITIES = ('pairing', 'device_tokens', 'focus')
 _REDACTED_NAMESPACE_KEYS = ('socket_path', 'session_name')
 _DEFAULT_ROUTE_PROVIDER = 'lan'
-_DEFAULT_PAIRING_SCOPES = ('view',)
+_DEFAULT_PAIRING_SCOPES = ('view', 'focus')
 
 
 @dataclass(frozen=True)
@@ -174,6 +174,23 @@ class MobileGatewayService:
             except MobileGatewayPairingError as exc:
                 raise MobileGatewayError(str(exc), status_code=exc.status_code) from exc
             return 201, result
+        project_route = _parse_project_action_route(route)
+        if project_route is not None:
+            project_id, action = project_route
+            if action == 'focus-agent':
+                return 200, self._focus_agent(
+                    project_id=project_id,
+                    agent=str(payload.get('agent') or ''),
+                    namespace_epoch=_optional_int(payload.get('namespace_epoch')),
+                    headers=headers,
+                )
+            if action == 'focus-window':
+                return 200, self._focus_window(
+                    project_id=project_id,
+                    window=str(payload.get('window') or ''),
+                    namespace_epoch=_optional_int(payload.get('namespace_epoch')),
+                    headers=headers,
+                )
         prefix = '/v1/devices/'
         suffix = '/revoke'
         if route.startswith(prefix) and route.endswith(suffix):
@@ -190,6 +207,57 @@ class MobileGatewayService:
 
     def _client(self):
         return self._ccbd_client_factory()
+
+    def _focus_agent(
+        self,
+        *,
+        project_id: str,
+        agent: str,
+        namespace_epoch: int | None,
+        headers: Mapping[str, object] | None,
+    ) -> dict[str, object]:
+        self._require_current_project(project_id)
+        self._authenticate(headers, required_scopes=('focus',))
+        if not str(agent or '').strip():
+            raise MobileGatewayError('agent is required', status_code=400)
+        try:
+            focus = self._client().project_focus_agent(agent=agent, namespace_epoch=namespace_epoch)
+        except CcbdClientError as exc:
+            raise MobileGatewayError(str(exc), status_code=_ccbd_focus_status(exc)) from exc
+        except Exception as exc:
+            raise MobileGatewayError(_error_text(exc), status_code=503) from exc
+        return self._focused_project_view_payload(focus)
+
+    def _focus_window(
+        self,
+        *,
+        project_id: str,
+        window: str,
+        namespace_epoch: int | None,
+        headers: Mapping[str, object] | None,
+    ) -> dict[str, object]:
+        self._require_current_project(project_id)
+        self._authenticate(headers, required_scopes=('focus',))
+        if not str(window or '').strip():
+            raise MobileGatewayError('window is required', status_code=400)
+        try:
+            focus = self._client().project_focus_window(window=window, namespace_epoch=namespace_epoch)
+        except CcbdClientError as exc:
+            raise MobileGatewayError(str(exc), status_code=_ccbd_focus_status(exc)) from exc
+        except Exception as exc:
+            raise MobileGatewayError(_error_text(exc), status_code=503) from exc
+        return self._focused_project_view_payload(focus)
+
+    def _focused_project_view_payload(self, focus: dict[str, object]) -> dict[str, object]:
+        payload = self._request_project_view()
+        redacted = _redact_project_view_payload(payload)
+        redacted['focus'] = dict(focus or {}) if isinstance(focus, dict) else {}
+        return redacted
+
+    def _require_current_project(self, project_id: str) -> None:
+        requested = str(project_id or '').strip()
+        if requested != self._project_id:
+            raise MobileGatewayError('unknown project', status_code=404)
 
     def _require_pairing_store(self) -> MobileGatewayPairingStore:
         if self._pairing_store is None:
@@ -353,6 +421,35 @@ def _error_text(exc: Exception) -> str:
 def _optional_text(value: object) -> str | None:
     text = str(value or '').strip()
     return text or None
+
+
+def _optional_int(value: object) -> int | None:
+    text = str(value or '').strip()
+    return int(text) if text else None
+
+
+def _parse_project_action_route(route: str) -> tuple[str, str] | None:
+    prefix = '/v1/projects/'
+    if not route.startswith(prefix):
+        return None
+    parts = route[len(prefix):].strip('/').split('/')
+    if len(parts) != 2:
+        return None
+    project_id, action = parts
+    if action not in {'focus-agent', 'focus-window'}:
+        return None
+    return unquote(project_id), action
+
+
+def _ccbd_focus_status(exc: Exception) -> int:
+    text = _error_text(exc)
+    if text.startswith('stale_view:'):
+        return 409
+    if text.startswith('unknown_agent:') or text.startswith('unknown_window:'):
+        return 404
+    if text.startswith('invalid_request:') or text.startswith('target_missing:'):
+        return 400
+    return 503
 
 
 def _bearer_token(headers: Mapping[str, object] | None) -> str:

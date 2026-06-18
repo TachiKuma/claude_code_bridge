@@ -45,6 +45,8 @@ def prepare_mobile_gateway(context, command) -> MobileGatewayServeHandle:
                 '/v1/pairing/claim',
                 '/v1/devices/me',
                 '/v1/devices/{device_id}/revoke',
+                '/v1/projects/{project_id}/focus-agent',
+                '/v1/projects/{project_id}/focus-window',
             ],
         },
         server=server,

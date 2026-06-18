@@ -13,7 +13,7 @@ from mobile_gateway import MobileGatewayError, MobileGatewayService, build_mobil
 
 class _FakeCcbdClient:
     def __init__(self) -> None:
-        self.calls: list[tuple[str, object]] = []
+        self.calls: list[tuple[object, ...]] = []
 
     def ping(self, target: str = 'ccbd') -> dict[str, object]:
         self.calls.append(('ping', target))
@@ -48,6 +48,26 @@ class _FakeCcbdClient:
                 'comms': [],
             },
             'cache': {'sequence': 1},
+        }
+
+    def project_focus_agent(self, *, agent: str, namespace_epoch: int | None = None) -> dict[str, object]:
+        self.calls.append(('project_focus_agent', agent, namespace_epoch))
+        return {
+            'focused': True,
+            'kind': 'agent',
+            'window': 'main',
+            'agent': agent,
+            'namespace_epoch': namespace_epoch,
+        }
+
+    def project_focus_window(self, *, window: str, namespace_epoch: int | None = None) -> dict[str, object]:
+        self.calls.append(('project_focus_window', window, namespace_epoch))
+        return {
+            'focused': True,
+            'kind': 'window',
+            'window': window,
+            'agent': None,
+            'namespace_epoch': namespace_epoch,
         }
 
 
@@ -120,7 +140,7 @@ def test_pairing_claim_creates_hashed_device_records_and_audit(tmp_path: Path) -
 
     assert status == 201
     assert claim['host_profile']['device_id'] == device_id
-    assert claim['host_profile']['scopes'] == ['view']
+    assert claim['host_profile']['scopes'] == ['focus', 'view']
     assert claim['host_profile']['route_provider'] == 'lan'
 
     status, me = service.dispatch_get('/v1/devices/me', {'Authorization': f'Bearer {device_token}'})
@@ -152,6 +172,79 @@ def test_pairing_claim_creates_hashed_device_records_and_audit(tmp_path: Path) -
     with pytest.raises(MobileGatewayError) as denied:
         service.dispatch_get('/v1/devices/me', {'Authorization': f'Bearer {device_token}'})
     assert denied.value.status_code == 401
+
+
+def test_focus_routes_require_focus_scope_and_return_redacted_project_view(tmp_path: Path) -> None:
+    fake = _FakeCcbdClient()
+    service = _service(fake, mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {
+            'pairing_code': str(pairing['pairing_code']),
+            'device_name': 'Pixel Fold',
+        },
+    )
+    token = str(claim['device_token'])
+
+    status, focused = service.dispatch_post(
+        '/v1/projects/proj-demo/focus-agent',
+        {
+            'agent': 'mobile',
+            'namespace_epoch': 4,
+        },
+        {'Authorization': f'Bearer {token}'},
+    )
+    assert status == 200
+    assert focused['focus']['focused'] is True
+    assert focused['focus']['agent'] == 'mobile'
+    assert focused['view']['namespace']['epoch'] == 4
+    assert 'socket_path' not in focused['view']['namespace']
+    assert 'session_name' not in focused['view']['namespace']
+
+    status, focused = service.dispatch_post(
+        '/v1/projects/proj-demo/focus-window',
+        {
+            'window': 'main',
+            'namespace_epoch': 4,
+        },
+        {'Authorization': f'Bearer {token}'},
+    )
+    assert status == 200
+    assert focused['focus']['kind'] == 'window'
+    assert ('project_focus_agent', 'mobile', 4) in fake.calls
+    assert ('project_focus_window', 'main', 4) in fake.calls
+
+
+def test_focus_routes_reject_missing_or_view_only_device_scope(tmp_path: Path) -> None:
+    service = _service(_FakeCcbdClient(), mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view',),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {
+            'pairing_code': str(pairing['pairing_code']),
+            'device_name': 'Pixel Fold',
+        },
+    )
+    token = str(claim['device_token'])
+
+    with pytest.raises(MobileGatewayError) as missing:
+        service.dispatch_post(
+            '/v1/projects/proj-demo/focus-agent',
+            {'agent': 'mobile', 'namespace_epoch': 4},
+        )
+    assert missing.value.status_code == 401
+
+    with pytest.raises(MobileGatewayError) as denied:
+        service.dispatch_post(
+            '/v1/projects/proj-demo/focus-agent',
+            {'agent': 'mobile', 'namespace_epoch': 4},
+            {'Authorization': f'Bearer {token}'},
+        )
+    assert denied.value.status_code == 403
 
 
 def test_http_server_exposes_g1_get_endpoints() -> None:
