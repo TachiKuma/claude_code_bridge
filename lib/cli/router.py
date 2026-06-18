@@ -314,14 +314,17 @@ _COMMAND_HELP = {
           POST /v1/devices/{device_id}/revoke
           POST /v1/projects/{project_id}/focus-agent
           POST /v1/projects/{project_id}/focus-window
+          POST /v1/projects/{project_id}/terminals
 
         Safety:
           - The gateway still only accepts loopback listen addresses.
           - It exposes current-project data only.
           - Pairing and device tokens are hashed under `.ccb/ccbd/mobile`.
           - Focus routes require a valid device token with `focus` scope.
+          - Terminal-open routes require `terminal_input` scope and mint
+            short-lived terminal tokens.
           - It does not configure Cloudflare Tunnel, terminal WebSocket
-            streaming, lifecycle, or multi-project registry.
+            frame streaming, lifecycle, or multi-project registry.
           - Stopping the gateway does not stop ccbd, provider panes, or tmux.
     """,
     "doctor": """

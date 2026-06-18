@@ -43,8 +43,26 @@ class _FakeCcbdClient:
                     'active_window': 'main',
                     'active_pane_id': '%2',
                 },
-                'windows': [],
-                'agents': [],
+                'windows': [
+                    {
+                        'name': 'main',
+                        'label': 'main',
+                        'kind': 'agents',
+                        'order': 0,
+                        'active': True,
+                        'agents': ['mobile'],
+                    }
+                ],
+                'agents': [
+                    {
+                        'name': 'mobile',
+                        'provider': 'codex',
+                        'window': 'main',
+                        'order': 0,
+                        'pane_id': '%2',
+                        'active': True,
+                    }
+                ],
                 'comms': [],
             },
             'cache': {'sequence': 1},
@@ -140,7 +158,7 @@ def test_pairing_claim_creates_hashed_device_records_and_audit(tmp_path: Path) -
 
     assert status == 201
     assert claim['host_profile']['device_id'] == device_id
-    assert claim['host_profile']['scopes'] == ['focus', 'view']
+    assert claim['host_profile']['scopes'] == ['focus', 'terminal_input', 'view']
     assert claim['host_profile']['route_provider'] == 'lan'
 
     status, me = service.dispatch_get('/v1/devices/me', {'Authorization': f'Bearer {device_token}'})
@@ -172,6 +190,127 @@ def test_pairing_claim_creates_hashed_device_records_and_audit(tmp_path: Path) -
     with pytest.raises(MobileGatewayError) as denied:
         service.dispatch_get('/v1/devices/me', {'Authorization': f'Bearer {device_token}'})
     assert denied.value.status_code == 401
+
+
+def test_terminal_open_requires_terminal_scope_and_mints_hashed_token(tmp_path: Path) -> None:
+    service = _service(_FakeCcbdClient(), mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {
+            'pairing_code': str(pairing['pairing_code']),
+            'device_name': 'Pixel Fold',
+        },
+    )
+    token = str(claim['device_token'])
+
+    status, handle = service.dispatch_post(
+        '/v1/projects/proj-demo/terminals',
+        {
+            'schema_version': 1,
+            'project_id': 'proj-demo',
+            'namespace_epoch': 4,
+            'target': {
+                'kind': 'agent',
+                'agent': 'mobile',
+                'window': 'main',
+                'pane_id': '%2',
+            },
+            'geometry': {
+                'columns': 100,
+                'rows': 30,
+                'pixel_width': 960,
+                'pixel_height': 640,
+            },
+        },
+        {
+            'Authorization': f'Bearer {token}',
+            'Host': '127.0.0.1:8787',
+        },
+    )
+
+    assert status == 201
+    assert str(handle['terminal_id']).startswith('term_')
+    assert handle['terminal_token']
+    assert handle['expires_at']
+    assert handle['websocket_url'] == f'ws://127.0.0.1:8787/v1/terminals/{handle["terminal_id"]}'
+    assert handle['target_epoch'] == 4
+    assert handle['target_summary'] == {
+        'project_id': 'proj-demo',
+        'agent': 'mobile',
+        'window': 'main',
+    }
+    assert 'tmux.sock' not in json.dumps(handle)
+    assert 'ccb-demo' not in json.dumps(handle)
+
+    stored_tokens = (tmp_path / 'mobile' / 'terminal-tokens.jsonl').read_text(encoding='utf-8')
+    stored_audit = (tmp_path / 'mobile' / 'audit.jsonl').read_text(encoding='utf-8')
+    assert str(handle['terminal_token']) not in stored_tokens
+    assert str(handle['terminal_token']) not in stored_audit
+    assert 'sha256:' in stored_tokens
+    assert '"last_input_seq": 0' in stored_tokens
+
+
+def test_terminal_open_rejects_missing_scope_and_stale_epoch(tmp_path: Path) -> None:
+    service = _service(_FakeCcbdClient(), mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view', 'focus'),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {
+            'pairing_code': str(pairing['pairing_code']),
+            'device_name': 'Pixel Fold',
+        },
+    )
+    view_only_token = str(claim['device_token'])
+    request = {
+        'schema_version': 1,
+        'project_id': 'proj-demo',
+        'namespace_epoch': 4,
+        'target': {
+            'kind': 'agent',
+            'agent': 'mobile',
+            'window': 'main',
+            'pane_id': '%2',
+        },
+        'geometry': {
+            'columns': 100,
+            'rows': 30,
+        },
+    }
+
+    with pytest.raises(MobileGatewayError) as missing:
+        service.dispatch_post('/v1/projects/proj-demo/terminals', request)
+    assert missing.value.status_code == 401
+
+    with pytest.raises(MobileGatewayError) as denied:
+        service.dispatch_post(
+            '/v1/projects/proj-demo/terminals',
+            request,
+            {'Authorization': f'Bearer {view_only_token}'},
+        )
+    assert denied.value.status_code == 403
+
+    terminal_pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
+    _, terminal_claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {
+            'pairing_code': str(terminal_pairing['pairing_code']),
+            'device_name': 'iPad',
+        },
+    )
+    terminal_token = str(terminal_claim['device_token'])
+    stale_request = dict(request)
+    stale_request['namespace_epoch'] = 3
+    with pytest.raises(MobileGatewayError) as stale:
+        service.dispatch_post(
+            '/v1/projects/proj-demo/terminals',
+            stale_request,
+            {'Authorization': f'Bearer {terminal_token}'},
+        )
+    assert stale.value.status_code == 409
 
 
 def test_focus_routes_require_focus_scope_and_return_redacted_project_view(tmp_path: Path) -> None:

@@ -13,8 +13,10 @@ from typing import Callable
 _SCHEMA_VERSION = 1
 _PAIRING_HASH_PREFIX = 'ccb-mobile-pairing-v1:'
 _DEVICE_HASH_PREFIX = 'ccb-mobile-device-v1:'
+_TERMINAL_HASH_PREFIX = 'ccb-mobile-terminal-v1:'
 _DEFAULT_PAIRING_EXPIRES_SECONDS = 10 * 60
 _DEFAULT_DEVICE_SCOPES = ('view',)
+_DEFAULT_TERMINAL_EXPIRES_SECONDS = 5 * 60
 
 
 class MobileGatewayPairingError(RuntimeError):
@@ -66,6 +68,10 @@ class MobileGatewayPairingStore:
     @property
     def pairing_tokens_path(self) -> Path:
         return self._mobile_dir / 'pairing-tokens.jsonl'
+
+    @property
+    def terminal_tokens_path(self) -> Path:
+        return self._mobile_dir / 'terminal-tokens.jsonl'
 
     @property
     def audit_path(self) -> Path:
@@ -350,6 +356,55 @@ class MobileGatewayPairingStore:
                     'device': _public_device(updated),
                 }
         raise MobileGatewayPairingError('device not found', status_code=404, reason='not_found')
+
+    def create_terminal_handle(
+        self,
+        *,
+        project_id: str,
+        device_id: str,
+        target_epoch: int,
+        target_summary: dict[str, object],
+        geometry: dict[str, object],
+        expires_seconds: int = _DEFAULT_TERMINAL_EXPIRES_SECONDS,
+    ) -> dict[str, object]:
+        now = self._clock()
+        expires_at = now + timedelta(seconds=max(1, int(expires_seconds)))
+        terminal_id = self._id_factory('term')
+        terminal_token = self._token_factory(32)
+        record = {
+            'schema_version': _SCHEMA_VERSION,
+            'terminal_id': terminal_id,
+            'project_id': str(project_id),
+            'device_id': str(device_id),
+            'token_hash': _token_hash(_TERMINAL_HASH_PREFIX, terminal_token),
+            'created_at': _iso(now),
+            'expires_at': _iso(expires_at),
+            'target_epoch': int(target_epoch),
+            'target_summary': dict(target_summary),
+            'geometry': dict(geometry),
+            'last_input_seq': 0,
+            'closed_at': None,
+            'revoked_at': None,
+        }
+        with self._lock:
+            self._ensure_dir()
+            _append_jsonl(self.terminal_tokens_path, record)
+            self._append_audit(
+                event='terminal_token_created',
+                result='ok',
+                project_id=str(project_id),
+                device_id=str(device_id),
+                terminal_id=terminal_id,
+                target_epoch=int(target_epoch),
+            )
+        return {
+            'schema_version': _SCHEMA_VERSION,
+            'terminal_id': terminal_id,
+            'terminal_token': terminal_token,
+            'expires_at': _iso(expires_at),
+            'target_epoch': int(target_epoch),
+            'target_summary': dict(target_summary),
+        }
 
     def _pairing_state_by_id(self) -> dict[str, dict[str, object]]:
         state: dict[str, dict[str, object]] = {}

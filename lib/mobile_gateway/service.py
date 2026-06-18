@@ -15,10 +15,10 @@ _DEFAULT_HOST = '127.0.0.1'
 _DEFAULT_PORT = 8787
 _SCHEMA_VERSION = 1
 _BASE_CAPABILITIES = ('http_json', 'project_view')
-_PAIRING_CAPABILITIES = ('pairing', 'device_tokens', 'focus')
+_PAIRING_CAPABILITIES = ('pairing', 'device_tokens', 'focus', 'terminal_open')
 _REDACTED_NAMESPACE_KEYS = ('socket_path', 'session_name')
 _DEFAULT_ROUTE_PROVIDER = 'lan'
-_DEFAULT_PAIRING_SCOPES = ('view', 'focus')
+_DEFAULT_PAIRING_SCOPES = ('view', 'focus', 'terminal_input')
 
 
 @dataclass(frozen=True)
@@ -191,6 +191,12 @@ class MobileGatewayService:
                     namespace_epoch=_optional_int(payload.get('namespace_epoch')),
                     headers=headers,
                 )
+            if action == 'terminals':
+                return 201, self._open_terminal(
+                    project_id=project_id,
+                    payload=payload,
+                    headers=headers,
+                )
         prefix = '/v1/devices/'
         suffix = '/revoke'
         if route.startswith(prefix) and route.endswith(suffix):
@@ -247,6 +253,38 @@ class MobileGatewayService:
         except Exception as exc:
             raise MobileGatewayError(_error_text(exc), status_code=503) from exc
         return self._focused_project_view_payload(focus)
+
+    def _open_terminal(
+        self,
+        *,
+        project_id: str,
+        payload: Mapping[str, object],
+        headers: Mapping[str, object] | None,
+    ) -> dict[str, object]:
+        self._require_current_project(project_id)
+        auth = self._authenticate(headers, required_scopes=('terminal_input',))
+        body_project_id = str(payload.get('project_id') or '').strip()
+        if body_project_id and body_project_id != self._project_id:
+            raise MobileGatewayError('request project_id does not match route', status_code=400)
+        target = _map(payload.get('target'))
+        geometry = _map(payload.get('geometry'))
+        view_payload = self._request_project_view()
+        target_payload = _validate_terminal_target(
+            self._project_id,
+            view_payload,
+            target=target,
+            namespace_epoch=_optional_int(payload.get('namespace_epoch')),
+        )
+        handle = self._require_pairing_store().create_terminal_handle(
+            project_id=self._project_id,
+            device_id=auth.device_id,
+            target_epoch=int(target_payload['target_epoch']),
+            target_summary=target_payload['target_summary'],
+            geometry=geometry,
+        )
+        terminal_id = str(handle.get('terminal_id') or '')
+        handle['websocket_url'] = _terminal_websocket_url(headers, terminal_id=terminal_id)
+        return handle
 
     def _focused_project_view_payload(self, focus: dict[str, object]) -> dict[str, object]:
         payload = self._request_project_view()
@@ -423,6 +461,12 @@ def _optional_text(value: object) -> str | None:
     return text or None
 
 
+def _map(value: object) -> dict[str, object]:
+    if isinstance(value, Mapping):
+        return {str(key): item for key, item in value.items()}
+    return {}
+
+
 def _optional_int(value: object) -> int | None:
     text = str(value or '').strip()
     return int(text) if text else None
@@ -436,9 +480,108 @@ def _parse_project_action_route(route: str) -> tuple[str, str] | None:
     if len(parts) != 2:
         return None
     project_id, action = parts
-    if action not in {'focus-agent', 'focus-window'}:
+    if action not in {'focus-agent', 'focus-window', 'terminals'}:
         return None
     return unquote(project_id), action
+
+
+def _validate_terminal_target(
+    project_id: str,
+    view_payload: dict[str, object],
+    *,
+    target: dict[str, object],
+    namespace_epoch: int | None,
+) -> dict[str, object]:
+    view = _map(view_payload.get('view'))
+    namespace = _map(view.get('namespace'))
+    actual_epoch = _optional_int(namespace.get('epoch'))
+    if actual_epoch is None:
+        raise MobileGatewayError('ProjectView namespace epoch is required', status_code=409)
+    if namespace_epoch != actual_epoch:
+        raise MobileGatewayError('stale namespace epoch', status_code=409)
+    if not _optional_text(namespace.get('socket_path')) or not _optional_text(namespace.get('session_name')):
+        raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
+
+    kind = str(target.get('kind') or '').strip()
+    agent = _optional_text(target.get('agent'))
+    window = _optional_text(target.get('window'))
+    pane_id = _optional_text(target.get('pane_id'))
+    agents = [_map(item) for item in _iterable(view.get('agents'))]
+    windows = [_map(item) for item in _iterable(view.get('windows'))]
+
+    if kind == 'agent':
+        if not agent:
+            raise MobileGatewayError('terminal target agent is required', status_code=400)
+        matched = next((item for item in agents if str(item.get('name') or '') == agent), None)
+        if matched is None:
+            raise MobileGatewayError('unknown terminal target agent', status_code=404)
+        matched_window = _optional_text(matched.get('window')) or window
+        if window and matched_window and window != matched_window:
+            raise MobileGatewayError('terminal target window does not match agent', status_code=409)
+        return {
+            'target_epoch': actual_epoch,
+            'target_summary': {
+                'project_id': project_id,
+                'agent': agent,
+                'window': matched_window,
+            },
+        }
+    if kind == 'window_active_pane':
+        if not window:
+            raise MobileGatewayError('terminal target window is required', status_code=400)
+        if not any(str(item.get('name') or '') == window for item in windows):
+            raise MobileGatewayError('unknown terminal target window', status_code=404)
+        return {
+            'target_epoch': actual_epoch,
+            'target_summary': {
+                'project_id': project_id,
+                'window': window,
+            },
+        }
+    if kind == 'pane_evidence':
+        if not agent and not window:
+            raise MobileGatewayError('pane evidence must include agent or window', status_code=400)
+        if agent and not any(str(item.get('name') or '') == agent for item in agents):
+            raise MobileGatewayError('unknown terminal target agent', status_code=404)
+        if window and not any(str(item.get('name') or '') == window for item in windows):
+            raise MobileGatewayError('unknown terminal target window', status_code=404)
+        summary = {'project_id': project_id}
+        if agent:
+            summary['agent'] = agent
+        if window:
+            summary['window'] = window
+        if pane_id:
+            summary['pane_id'] = pane_id
+        return {
+            'target_epoch': actual_epoch,
+            'target_summary': summary,
+        }
+    raise MobileGatewayError('unknown terminal target kind', status_code=400)
+
+
+def _iterable(value: object):
+    return value if isinstance(value, list) else []
+
+
+def _terminal_websocket_url(headers: Mapping[str, object] | None, *, terminal_id: str) -> str:
+    proto = _header_value(headers, 'x-forwarded-proto').lower()
+    scheme = 'wss' if proto == 'https' else 'ws'
+    host = _header_value(headers, 'x-forwarded-host') or _header_value(headers, 'host') or '127.0.0.1:8787'
+    return f'{scheme}://{host}/v1/terminals/{terminal_id}'
+
+
+def _header_value(headers: Mapping[str, object] | None, name: str) -> str:
+    if headers is None:
+        return ''
+    get = getattr(headers, 'get', None)
+    if callable(get):
+        value = get(name) or get(name.title())
+        if value:
+            return str(value).strip()
+    for key, item in headers.items():
+        if str(key).lower() == name.lower():
+            return str(item or '').strip()
+    return ''
 
 
 def _ccbd_focus_status(exc: Exception) -> int:
