@@ -383,6 +383,8 @@ class MobileGatewayPairingStore:
             'target_summary': dict(target_summary),
             'geometry': dict(geometry),
             'last_input_seq': 0,
+            'last_output_seq': 0,
+            'disconnected_at': None,
             'closed_at': None,
             'revoked_at': None,
         }
@@ -406,7 +408,13 @@ class MobileGatewayPairingStore:
             'target_summary': dict(target_summary),
         }
 
-    def authenticate_terminal_token(self, *, terminal_id: str, terminal_token: str) -> dict[str, object]:
+    def authenticate_terminal_token(
+        self,
+        *,
+        terminal_id: str,
+        terminal_token: str,
+        resume_cursor: int | None = None,
+    ) -> dict[str, object]:
         token = str(terminal_token or '').strip()
         requested = str(terminal_id or '').strip()
         if not requested or not token:
@@ -423,14 +431,75 @@ class MobileGatewayPairingStore:
                 )
                 raise MobileGatewayPairingError('invalid terminal token', status_code=401, reason='invalid_token')
             self._validate_terminal_record(record)
+            record = self._validate_resume_cursor(record, resume_cursor)
             self._append_audit(
                 event='terminal_auth_ok',
                 result='ok',
                 project_id=str(record.get('project_id') or ''),
                 device_id=str(record.get('device_id') or ''),
                 terminal_id=requested,
+                resume_cursor=resume_cursor,
             )
             return dict(record)
+
+    def _validate_resume_cursor(
+        self,
+        record: dict[str, object],
+        resume_cursor: int | None,
+    ) -> dict[str, object]:
+        terminal_id = str(record.get('terminal_id') or '')
+        project_id = str(record.get('project_id') or '')
+        device_id = str(record.get('device_id') or '')
+        disconnected = bool(record.get('disconnected_at'))
+        last_output_seq = _int(record.get('last_output_seq'), 0)
+        if disconnected and resume_cursor is None:
+            self._append_audit(
+                event='terminal_resume_denied',
+                result='denied',
+                project_id=project_id,
+                device_id=device_id,
+                terminal_id=terminal_id,
+                reason='missing_resume_cursor',
+                last_output_seq=last_output_seq,
+            )
+            raise MobileGatewayPairingError(
+                'resume_cursor is required after terminal disconnect',
+                status_code=409,
+                reason='missing_resume_cursor',
+            )
+        if resume_cursor is not None:
+            cursor = int(resume_cursor)
+            if cursor != last_output_seq:
+                self._append_audit(
+                    event='terminal_resume_denied',
+                    result='denied',
+                    project_id=project_id,
+                    device_id=device_id,
+                    terminal_id=terminal_id,
+                    reason='stale_resume_cursor',
+                    last_output_seq=last_output_seq,
+                    resume_cursor=cursor,
+                )
+                raise MobileGatewayPairingError(
+                    'terminal resume cursor is stale',
+                    status_code=409,
+                    reason='stale_resume_cursor',
+                )
+            updated = dict(record)
+            updated['disconnected_at'] = None
+            updated['resumed_at'] = _iso(self._clock())
+            updated['last_resume_cursor'] = cursor
+            _append_jsonl(self.terminal_tokens_path, updated)
+            self._append_audit(
+                event='terminal_resume_ok',
+                result='ok',
+                project_id=project_id,
+                device_id=device_id,
+                terminal_id=terminal_id,
+                resume_cursor=cursor,
+            )
+            return updated
+        return record
 
     def record_terminal_input_sequence(
         self,
@@ -476,6 +545,69 @@ class MobileGatewayPairingStore:
                 device_id=str(record.get('device_id') or ''),
                 terminal_id=requested,
                 sequence=seq,
+            )
+            return updated
+
+    def record_terminal_output_sequence(
+        self,
+        *,
+        terminal_id: str,
+        terminal_token: str,
+        sequence: int,
+    ) -> dict[str, object]:
+        requested = str(terminal_id or '').strip()
+        token_hash = _token_hash(_TERMINAL_HASH_PREFIX, str(terminal_token or '').strip())
+        seq = int(sequence)
+        with self._lock:
+            record = self._terminal_state_by_id().get(requested)
+            if record is None or record.get('token_hash') != token_hash:
+                self._append_audit(
+                    event='terminal_output_denied',
+                    result='denied',
+                    terminal_id=requested,
+                    reason='invalid_token',
+                )
+                raise MobileGatewayPairingError('invalid terminal token', status_code=401, reason='invalid_token')
+            self._validate_terminal_record(record)
+            last_seq = _int(record.get('last_output_seq'), 0)
+            if seq <= last_seq:
+                return dict(record)
+            updated = dict(record)
+            updated['last_output_seq'] = seq
+            _append_jsonl(self.terminal_tokens_path, updated)
+            return updated
+
+    def mark_terminal_disconnected(
+        self,
+        *,
+        terminal_id: str,
+        terminal_token: str,
+        reason: str = 'transport_disconnected',
+    ) -> dict[str, object]:
+        requested = str(terminal_id or '').strip()
+        token_hash = _token_hash(_TERMINAL_HASH_PREFIX, str(terminal_token or '').strip())
+        with self._lock:
+            record = self._terminal_state_by_id().get(requested)
+            if record is None or record.get('token_hash') != token_hash:
+                self._append_audit(
+                    event='terminal_disconnect_denied',
+                    result='denied',
+                    terminal_id=requested,
+                    reason='invalid_token',
+                )
+                raise MobileGatewayPairingError('invalid terminal token', status_code=401, reason='invalid_token')
+            self._validate_terminal_record(record)
+            updated = dict(record)
+            updated['disconnected_at'] = _iso(self._clock())
+            updated['disconnected_reason'] = str(reason or 'transport_disconnected')
+            _append_jsonl(self.terminal_tokens_path, updated)
+            self._append_audit(
+                event='terminal_disconnected',
+                result='ok',
+                project_id=str(record.get('project_id') or ''),
+                device_id=str(record.get('device_id') or ''),
+                terminal_id=requested,
+                reason=updated['disconnected_reason'],
             )
             return updated
 

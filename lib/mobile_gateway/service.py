@@ -229,10 +229,12 @@ class MobileGatewayService:
     def handle_terminal_websocket(self, terminal_id: str, connection: WebSocketConnection) -> None:
         store = self._require_pairing_store()
         terminal_token = ''
-        close_reason = 'client_closed'
+        close_reason = 'transport_disconnected'
         session = None
         output_stop = threading.Event()
         output_thread: threading.Thread | None = None
+        close_state: dict[str, str] = {}
+        close_handle = False
         try:
             open_frame = connection.read_json()
             if open_frame is None:
@@ -246,19 +248,40 @@ class MobileGatewayService:
                 close_reason = 'invalid_open'
                 return
             terminal_token = str(open_frame.get('token') or '')
-            record = store.authenticate_terminal_token(terminal_id=terminal_id, terminal_token=terminal_token)
+            record = store.authenticate_terminal_token(
+                terminal_id=terminal_id,
+                terminal_token=terminal_token,
+                resume_cursor=_optional_int(open_frame.get('resume_cursor')),
+            )
             attach_target = self._terminal_attach_target(record)
             session = self._terminal_session_factory(attach_target)
+            connection.send_json(
+                {
+                    'type': 'open',
+                    'terminal_id': terminal_id,
+                    'resume_cursor': _int(record.get('last_output_seq'), 0),
+                    'last_input_seq': _int(record.get('last_input_seq'), 0),
+                }
+            )
             output_thread = threading.Thread(
                 target=_pump_terminal_output,
-                args=(connection, session, output_stop),
+                args=(
+                    connection,
+                    session,
+                    output_stop,
+                    close_state,
+                    store,
+                    terminal_id,
+                    terminal_token,
+                    _int(record.get('last_output_seq'), 0),
+                ),
                 daemon=True,
             )
             output_thread.start()
             while not output_stop.is_set():
                 frame = connection.read_json()
                 if frame is None:
-                    close_reason = 'client_closed'
+                    close_reason = close_state.get('reason') or 'transport_disconnected'
                     break
                 close_reason = self._handle_terminal_frame(
                     connection=connection,
@@ -268,18 +291,26 @@ class MobileGatewayService:
                     frame=frame,
                 )
                 if close_reason:
+                    close_handle = True
                     break
+            if output_stop.is_set() and not close_handle:
+                close_reason = close_state.get('reason') or close_reason
+                close_handle = close_reason != 'transport_disconnected'
         except MobileGatewayPairingError as exc:
             close_reason = str(exc.reason or 'terminal_token_denied')
+            close_handle = True
             _safe_send_json(connection, {'type': 'error', 'code': close_reason})
         except MobileGatewayError as exc:
             close_reason = _terminal_error_code(exc)
+            close_handle = True
             _safe_send_json(connection, {'type': 'error', 'code': close_reason})
         except WebSocketProtocolError as exc:
             close_reason = 'protocol_error'
+            close_handle = True
             _safe_send_json(connection, {'type': 'error', 'code': 'protocol_error', 'message': _error_text(exc)})
         except Exception as exc:
             close_reason = 'terminal_stream_error'
+            close_handle = True
             _safe_send_json(connection, {'type': 'error', 'code': 'terminal_stream_error', 'message': _error_text(exc)})
         finally:
             output_stop.set()
@@ -290,11 +321,18 @@ class MobileGatewayService:
                     pass
             if terminal_token:
                 try:
-                    store.close_terminal_handle(
-                        terminal_id=terminal_id,
-                        terminal_token=terminal_token,
-                        reason=close_reason or 'client_closed',
-                    )
+                    if close_handle:
+                        store.close_terminal_handle(
+                            terminal_id=terminal_id,
+                            terminal_token=terminal_token,
+                            reason=close_reason or 'client_closed',
+                        )
+                    else:
+                        store.mark_terminal_disconnected(
+                            terminal_id=terminal_id,
+                            terminal_token=terminal_token,
+                            reason=close_reason or 'transport_disconnected',
+                        )
                 except MobileGatewayPairingError:
                     pass
             _safe_send_json(connection, {'type': 'closed', 'reason': close_reason or 'client_closed'})
@@ -630,8 +668,17 @@ def _map(value: object) -> dict[str, object]:
 
 
 def _optional_int(value: object) -> int | None:
-    text = str(value or '').strip()
+    if value is None:
+        return None
+    text = str(value).strip()
     return int(text) if text else None
+
+
+def _int(value: object, fallback: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return fallback
 
 
 def _parse_project_action_route(route: str) -> tuple[str, str] | None:
@@ -780,6 +827,10 @@ def _terminal_error_code(exc: MobileGatewayError) -> str:
     text = _error_text(exc)
     if text.startswith('stale namespace epoch'):
         return 'stale_namespace_epoch'
+    if text.startswith('resume_cursor is required'):
+        return 'missing_resume_cursor'
+    if text.startswith('terminal resume cursor is stale'):
+        return 'stale_resume_cursor'
     if text.startswith('unknown terminal target agent'):
         return 'unknown_agent'
     if text.startswith('unknown terminal target window'):
@@ -789,26 +840,45 @@ def _terminal_error_code(exc: MobileGatewayError) -> str:
     return 'terminal_error'
 
 
-def _pump_terminal_output(connection: WebSocketConnection, session, stop: threading.Event) -> None:
-    sequence = 0
+def _pump_terminal_output(
+    connection: WebSocketConnection,
+    session,
+    stop: threading.Event,
+    close_state: dict[str, str],
+    store: MobileGatewayPairingStore,
+    terminal_id: str,
+    terminal_token: str,
+    sequence: int,
+) -> None:
     try:
         while not stop.is_set():
             data = session.read(0.1)
             if data is None:
+                close_state['reason'] = 'pty_closed'
                 _safe_send_json(connection, {'type': 'closed', 'reason': 'pty_closed'})
                 stop.set()
                 return
             if data:
                 sequence += 1
-                _safe_send_json(
-                    connection,
-                    {
-                        'type': 'output',
-                        'seq': sequence,
-                        'bytes_b64': base64.b64encode(data).decode('ascii'),
-                    },
+                try:
+                    connection.send_json(
+                        {
+                            'type': 'output',
+                            'seq': sequence,
+                            'bytes_b64': base64.b64encode(data).decode('ascii'),
+                        },
+                    )
+                except OSError:
+                    close_state['reason'] = 'transport_disconnected'
+                    stop.set()
+                    return
+                store.record_terminal_output_sequence(
+                    terminal_id=terminal_id,
+                    terminal_token=terminal_token,
+                    sequence=sequence,
                 )
     except Exception as exc:
+        close_state['reason'] = 'terminal_output_error'
         _safe_send_json(connection, {'type': 'error', 'code': 'terminal_output_error', 'message': _error_text(exc)})
         stop.set()
 
