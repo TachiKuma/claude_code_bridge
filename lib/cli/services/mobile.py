@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 from urllib.parse import urlparse, urlunsplit
 
@@ -10,6 +11,7 @@ from mobile_gateway import (
     build_mobile_gateway_server,
     parse_listen_address,
 )
+from mobile_gateway.relay import LocalRelayServerHarness, MobileGatewayRelayOutboundClient
 
 
 @dataclass(frozen=True)
@@ -38,31 +40,35 @@ def prepare_mobile_gateway(context, command) -> MobileGatewayServeHandle:
     gateway_url = _public_gateway_url(command.public_url, fallback=local_gateway_url)
     route_provider = str(command.route_provider or 'lan')
     pairing = service.create_pairing_payload(gateway_url=gateway_url, route_provider=route_provider)
+    relay_outbound = _relay_outbound_summary(context.project.project_id) if route_provider == 'relay' else None
+    summary = {
+        'mobile_status': 'serving',
+        'listen': f'{host}:{port}',
+        'gateway_url': gateway_url,
+        'local_gateway_url': local_gateway_url,
+        'route_provider': route_provider,
+        'project_id': context.project.project_id,
+        'project_root': str(context.project.project_root),
+        'mode': 'loopback_current_project',
+        'pairing': pairing,
+        'endpoints': [
+            '/v1/health',
+            '/v1/projects',
+            '/v1/projects/{project_id}/view',
+            '/v1/pairing/claim',
+            '/v1/devices/me',
+            '/v1/devices/{device_id}/revoke',
+            '/v1/projects/{project_id}/lifecycle',
+            '/v1/projects/{project_id}/focus-agent',
+            '/v1/projects/{project_id}/focus-window',
+            '/v1/projects/{project_id}/terminals',
+            '/v1/terminals/{terminal_id}',
+        ],
+    }
+    if relay_outbound is not None:
+        summary['relay_outbound'] = relay_outbound
     return MobileGatewayServeHandle(
-        summary={
-            'mobile_status': 'serving',
-            'listen': f'{host}:{port}',
-            'gateway_url': gateway_url,
-            'local_gateway_url': local_gateway_url,
-            'route_provider': route_provider,
-            'project_id': context.project.project_id,
-            'project_root': str(context.project.project_root),
-            'mode': 'loopback_current_project',
-            'pairing': pairing,
-            'endpoints': [
-                '/v1/health',
-                '/v1/projects',
-                '/v1/projects/{project_id}/view',
-                '/v1/pairing/claim',
-                '/v1/devices/me',
-                '/v1/devices/{device_id}/revoke',
-                '/v1/projects/{project_id}/lifecycle',
-                '/v1/projects/{project_id}/focus-agent',
-                '/v1/projects/{project_id}/focus-window',
-                '/v1/projects/{project_id}/terminals',
-                '/v1/terminals/{terminal_id}',
-            ],
-        },
+        summary=summary,
         server=server,
     )
 
@@ -109,6 +115,31 @@ def _public_gateway_url(value: str | None, *, fallback: str) -> str:
     if parsed.params or parsed.query or parsed.fragment:
         raise ValueError('--public-url must not include params, query, or fragment')
     return urlunsplit((parsed.scheme, parsed.netloc, '', '', ''))
+
+
+def _relay_outbound_summary(project_id: str) -> dict[str, object]:
+    host_id = str(project_id or '').strip()
+    relay = LocalRelayServerHarness()
+    client = MobileGatewayRelayOutboundClient(
+        relay=relay,
+        host_id=host_id,
+        server_fingerprint=f'local-relay-fp:{host_id}',
+        host_pubkey_b64=_relay_demo_pubkey(host_id),
+        diagnostics={'relay_mode': 'local_harness', 'relay_host_id': host_id},
+    )
+    registration = client.connect()
+    return {
+        'status': registration['status'],
+        'mode': 'local_harness',
+        'host_id': registration['host_id'],
+        'server_fingerprint': registration['server_fingerprint'],
+        'capabilities': registration['capabilities'],
+        'diagnostics': client.diagnostics(),
+    }
+
+
+def _relay_demo_pubkey(host_id: str) -> str:
+    return base64.urlsafe_b64encode(f'ccb-mobile-relay:{host_id}:public-key'.encode('utf-8')).decode('ascii')
 
 
 __all__ = [

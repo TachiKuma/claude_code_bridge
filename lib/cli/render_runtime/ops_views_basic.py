@@ -327,6 +327,15 @@ def render_mobile_serve(summary) -> tuple[str, ...]:
                 f'pairing_claim_endpoint: {pairing.get("claim_endpoint", "")}',
             ]
         )
+    relay_outbound = payload.get('relay_outbound')
+    if isinstance(relay_outbound, Mapping):
+        lines.extend(
+            [
+                f'relay_outbound_status: {relay_outbound.get("status", "")}',
+                f'relay_outbound_mode: {relay_outbound.get("mode", "")}',
+                f'relay_outbound_host_id: {relay_outbound.get("host_id", "")}',
+            ]
+        )
     return tuple(lines)
 
 

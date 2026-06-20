@@ -167,6 +167,36 @@ def test_render_mobile_serve_includes_pairing_summary_when_present() -> None:
     )
 
 
+def test_render_mobile_serve_includes_relay_outbound_summary() -> None:
+    assert render_mobile_serve(
+        {
+            'mobile_status': 'serving',
+            'listen': '127.0.0.1:8787',
+            'gateway_url': 'https://relay.seemlab.top',
+            'route_provider': 'relay',
+            'project_id': 'proj-1',
+            'project_root': '/tmp/project',
+            'mode': 'loopback_current_project',
+            'relay_outbound': {
+                'status': 'registered',
+                'mode': 'local_harness',
+                'host_id': 'proj-1',
+            },
+        }
+    ) == (
+        'mobile_status: serving',
+        'listen: 127.0.0.1:8787',
+        'gateway_url: https://relay.seemlab.top',
+        'route_provider: relay',
+        'project_id: proj-1',
+        'project_root: /tmp/project',
+        'mode: loopback_current_project',
+        'relay_outbound_status: registered',
+        'relay_outbound_mode: local_harness',
+        'relay_outbound_host_id: proj-1',
+    )
+
+
 def test_render_mobile_devices_lists_without_tokens() -> None:
     assert render_mobile_serve(
         {
