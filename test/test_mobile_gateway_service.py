@@ -100,6 +100,14 @@ class _FakeCcbdClient:
             'namespace_epoch': namespace_epoch,
         }
 
+    def stop_all(self, *, force: bool = False) -> dict[str, object]:
+        self.calls.append(('stop_all', force))
+        return {
+            'stopped': True,
+            'force': force,
+            'summary': {'agents': ['mobile']},
+        }
+
 
 class _FakeTerminalSession:
     def __init__(self, target) -> None:
@@ -295,7 +303,7 @@ def test_pairing_claim_creates_hashed_device_records_and_audit(tmp_path: Path) -
 
     assert status == 201
     assert claim['host_profile']['device_id'] == device_id
-    assert claim['host_profile']['scopes'] == ['focus', 'terminal_input', 'view']
+    assert claim['host_profile']['scopes'] == ['focus', 'lifecycle', 'terminal_input', 'view']
     assert claim['host_profile']['route_provider'] == 'cloudflare_tunnel'
     assert claim['host_profile']['gateway_url'] == 'https://mobile.example.com'
 
@@ -844,6 +852,98 @@ def test_focus_routes_reject_missing_or_view_only_device_scope(tmp_path: Path) -
             {'Authorization': f'Bearer {token}'},
         )
     assert denied.value.status_code == 403
+
+
+def test_lifecycle_route_uses_lifecycle_scope_and_ccbd_stop_authority(tmp_path: Path) -> None:
+    fake = _FakeCcbdClient()
+    service = _service(fake, mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {
+            'pairing_code': str(pairing['pairing_code']),
+            'device_name': 'Pixel Fold',
+        },
+    )
+    token = str(claim['device_token'])
+
+    status, opened = service.dispatch_post(
+        '/v1/projects/proj-demo/lifecycle',
+        {'action': 'open', 'project_id': 'proj-demo'},
+        {'Authorization': f'Bearer {token}'},
+    )
+    assert status == 200
+    assert opened['lifecycle']['action'] == 'open'
+    assert opened['lifecycle']['effect'] == 'opened'
+    assert opened['lifecycle']['ccb_authority'] is True
+    assert opened['lifecycle']['tmux_kill_server'] is False
+    assert opened['view']['namespace']['epoch'] == 4
+    assert 'socket_path' not in opened['view']['namespace']
+
+    status, closed = service.dispatch_post(
+        '/v1/projects/proj-demo/lifecycle',
+        {'action': 'close'},
+        {'Authorization': f'Bearer {token}'},
+    )
+    assert status == 200
+    assert closed['lifecycle']['effect'] == 'mobile_view_closed'
+    assert ('stop_all', False) not in fake.calls
+
+    status, stopped = service.dispatch_post(
+        '/v1/projects/proj-demo/lifecycle',
+        {'action': 'stop'},
+        {'Authorization': f'Bearer {token}'},
+    )
+    assert status == 200
+    assert stopped['lifecycle']['effect'] == 'ccbd_stop_requested'
+    assert stopped['lifecycle']['forced'] is False
+    assert stopped['lifecycle']['result']['force'] is False
+    assert stopped['lifecycle']['tmux_kill_server'] is False
+    assert ('stop_all', False) in fake.calls
+
+
+def test_lifecycle_route_rejects_missing_scope_and_force_stop(tmp_path: Path) -> None:
+    service = _service(_FakeCcbdClient(), mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view', 'focus', 'terminal_input'),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {
+            'pairing_code': str(pairing['pairing_code']),
+            'device_name': 'Pixel Fold',
+        },
+    )
+    token = str(claim['device_token'])
+
+    with pytest.raises(MobileGatewayError) as denied:
+        service.dispatch_post(
+            '/v1/projects/proj-demo/lifecycle',
+            {'action': 'open'},
+            {'Authorization': f'Bearer {token}'},
+        )
+    assert denied.value.status_code == 403
+
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view', 'lifecycle'),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {
+            'pairing_code': str(pairing['pairing_code']),
+            'device_name': 'Pixel Fold Admin',
+        },
+    )
+    lifecycle_token = str(claim['device_token'])
+    with pytest.raises(MobileGatewayError) as unsupported:
+        service.dispatch_post(
+            '/v1/projects/proj-demo/lifecycle',
+            {'action': 'force_stop'},
+            {'Authorization': f'Bearer {lifecycle_token}'},
+        )
+    assert unsupported.value.status_code == 400
 
 
 def test_http_server_exposes_g1_get_endpoints() -> None:

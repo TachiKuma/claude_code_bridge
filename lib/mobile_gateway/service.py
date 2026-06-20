@@ -28,6 +28,7 @@ _BASE_CAPABILITIES = ('http_json', 'project_view')
 _PAIRING_CAPABILITIES = (
     'pairing',
     'device_tokens',
+    'lifecycle',
     'focus',
     'terminal_open',
     'websocket_terminal',
@@ -35,7 +36,7 @@ _PAIRING_CAPABILITIES = (
 )
 _REDACTED_NAMESPACE_KEYS = ('socket_path', 'session_name')
 _DEFAULT_ROUTE_PROVIDER = 'lan'
-_DEFAULT_PAIRING_SCOPES = ('view', 'focus', 'terminal_input')
+_DEFAULT_PAIRING_SCOPES = ('view', 'focus', 'terminal_input', 'lifecycle')
 
 
 @dataclass(frozen=True)
@@ -254,6 +255,12 @@ class MobileGatewayService:
                     namespace_epoch=_optional_int(payload.get('namespace_epoch')),
                     headers=headers,
                 )
+            if action == 'lifecycle':
+                return 200, self._project_lifecycle(
+                    project_id=project_id,
+                    payload=payload,
+                    headers=headers,
+                )
             if action == 'terminals':
                 return 201, self._open_terminal(
                     project_id=project_id,
@@ -419,6 +426,89 @@ class MobileGatewayService:
         except Exception as exc:
             raise MobileGatewayError(_error_text(exc), status_code=503) from exc
         return self._focused_project_view_payload(focus)
+
+    def _project_lifecycle(
+        self,
+        *,
+        project_id: str,
+        payload: Mapping[str, object],
+        headers: Mapping[str, object] | None,
+    ) -> dict[str, object]:
+        self._require_current_project(project_id)
+        self._authenticate(headers, required_scopes=('lifecycle',))
+        body_project_id = str(payload.get('project_id') or '').strip()
+        if body_project_id and body_project_id != self._project_id:
+            raise MobileGatewayError('request project_id does not match route', status_code=400)
+        action = str(payload.get('action') or '').strip().lower()
+        if action not in {'wake', 'open', 'close', 'stop'}:
+            raise MobileGatewayError('unsupported lifecycle action', status_code=400)
+        if action in {'wake', 'open'}:
+            result = self._lifecycle_result(
+                action=action,
+                state='running',
+                effect='already_running' if action == 'wake' else 'opened',
+                ccb_authority=True,
+            )
+            response = _redact_project_view_payload(self._request_project_view())
+            response.update({
+                'schema_version': _SCHEMA_VERSION,
+                'status': 'ok',
+                'project_id': self._project_id,
+                'lifecycle': result,
+            })
+            return response
+        if action == 'close':
+            return {
+                'schema_version': _SCHEMA_VERSION,
+                'status': 'ok',
+                'project_id': self._project_id,
+                'lifecycle': self._lifecycle_result(
+                    action='close',
+                    state='running',
+                    effect='mobile_view_closed',
+                    ccb_authority=True,
+                ),
+            }
+        try:
+            stop_result = self._client().stop_all(force=False)
+        except CcbdClientError as exc:
+            raise MobileGatewayError(str(exc), status_code=503) from exc
+        except Exception as exc:
+            raise MobileGatewayError(_error_text(exc), status_code=503) from exc
+        return {
+            'schema_version': _SCHEMA_VERSION,
+            'status': 'ok',
+            'project_id': self._project_id,
+            'lifecycle': self._lifecycle_result(
+                action='stop',
+                state='stopping',
+                effect='ccbd_stop_requested',
+                ccb_authority=True,
+                forced=False,
+                result=dict(stop_result or {}) if isinstance(stop_result, Mapping) else {},
+            ),
+        }
+
+    def _lifecycle_result(
+        self,
+        *,
+        action: str,
+        state: str,
+        effect: str,
+        ccb_authority: bool,
+        forced: bool = False,
+        result: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        return {
+            'action': action,
+            'state': state,
+            'effect': effect,
+            'forced': forced,
+            'ccb_authority': ccb_authority,
+            'tmux_kill_server': False,
+            'updated_at': self._clock(),
+            **({'result': result} if result is not None else {}),
+        }
 
     def _focus_window(
         self,
@@ -746,7 +836,7 @@ def _parse_project_action_route(route: str) -> tuple[str, str] | None:
     if len(parts) != 2:
         return None
     project_id, action = parts
-    if action not in {'focus-agent', 'focus-window', 'terminals'}:
+    if action not in {'focus-agent', 'focus-window', 'lifecycle', 'terminals'}:
         return None
     return unquote(project_id), action
 

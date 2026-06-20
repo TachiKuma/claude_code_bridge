@@ -323,6 +323,7 @@ _COMMAND_HELP = {
           POST /v1/pairing/claim
           GET /v1/devices/me
           POST /v1/devices/{device_id}/revoke
+          POST /v1/projects/{project_id}/lifecycle
           POST /v1/projects/{project_id}/focus-agent
           POST /v1/projects/{project_id}/focus-window
           POST /v1/projects/{project_id}/terminals
@@ -337,6 +338,8 @@ _COMMAND_HELP = {
           - Revoking a device also revokes its still-open terminal handles.
           - It exposes current-project data only.
           - Pairing and device tokens are hashed under `.ccb/ccbd/mobile`.
+          - Lifecycle stop requests go through ccbd `stop-all`, not raw tmux.
+          - Lifecycle routes require a valid device token with `lifecycle` scope.
           - Focus routes require a valid device token with `focus` scope.
           - Terminal-open routes require `terminal_input` scope and mint
             short-lived terminal tokens.
