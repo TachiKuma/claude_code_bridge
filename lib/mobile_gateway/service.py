@@ -8,18 +8,31 @@ import json
 from pathlib import Path
 import threading
 from typing import Callable, Mapping
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from ccbd.socket_client import CcbdClientError
 from .pairing import MobileGatewayPairingError, MobileGatewayPairingStore
-from .terminal import TerminalAttachTarget, TerminalGeometry, create_tmux_terminal_session
+from .terminal import (
+    TerminalAttachTarget,
+    TerminalGeometry,
+    TerminalHistoryTarget,
+    create_tmux_terminal_history,
+    create_tmux_terminal_session,
+)
 from .websocket import WebSocketConnection, WebSocketProtocolError, accept_websocket, is_websocket_upgrade
 
 _DEFAULT_HOST = '127.0.0.1'
 _DEFAULT_PORT = 8787
 _SCHEMA_VERSION = 1
 _BASE_CAPABILITIES = ('http_json', 'project_view')
-_PAIRING_CAPABILITIES = ('pairing', 'device_tokens', 'focus', 'terminal_open', 'websocket_terminal')
+_PAIRING_CAPABILITIES = (
+    'pairing',
+    'device_tokens',
+    'focus',
+    'terminal_open',
+    'websocket_terminal',
+    'terminal_history',
+)
 _REDACTED_NAMESPACE_KEYS = ('socket_path', 'session_name')
 _DEFAULT_ROUTE_PROVIDER = 'lan'
 _DEFAULT_PAIRING_SCOPES = ('view', 'focus', 'terminal_input')
@@ -52,12 +65,14 @@ class MobileGatewayService:
         pairing_store: MobileGatewayPairingStore | None = None,
         clock: Callable[[], str] | None = None,
         terminal_session_factory: Callable[[TerminalAttachTarget], object] | None = None,
+        terminal_history_factory: Callable[[TerminalHistoryTarget], dict[str, object]] | None = None,
     ) -> None:
         self._project_id = str(project_id)
         self._project_root = Path(project_root)
         self._ccbd_client_factory = ccbd_client_factory
         self._clock = clock or _utc_now
         self._terminal_session_factory = terminal_session_factory or create_tmux_terminal_session
+        self._terminal_history_factory = terminal_history_factory or create_tmux_terminal_history
         self._pairing_store = pairing_store
         if self._pairing_store is None and mobile_dir is not None:
             self._pairing_store = MobileGatewayPairingStore(Path(mobile_dir))
@@ -152,6 +167,14 @@ class MobileGatewayService:
         if route.startswith(prefix) and route.endswith(suffix):
             project_id = unquote(route[len(prefix):-len(suffix)].strip('/'))
             return 200, self.project_view_payload(project_id)
+        history_suffix = '/terminal-history'
+        if route.startswith(prefix) and route.endswith(history_suffix):
+            project_id = unquote(route[len(prefix):-len(history_suffix)].strip('/'))
+            return 200, self.terminal_history_payload(
+                project_id,
+                query=parse_qs(parsed.query, keep_blank_values=True),
+                headers=headers,
+            )
         if route == '/v1/devices/me':
             device = self._authenticate(headers, required_scopes=('view',))
             return 200, {
@@ -160,6 +183,40 @@ class MobileGatewayService:
                 'device': device.public_payload(),
             }
         raise MobileGatewayError('not found', status_code=404)
+
+    def terminal_history_payload(
+        self,
+        project_id: str,
+        *,
+        query: Mapping[str, object],
+        headers: Mapping[str, object] | None = None,
+    ) -> dict[str, object]:
+        self._require_current_project(project_id)
+        self._authenticate(headers, required_scopes=('view',))
+        view_payload = self._request_project_view()
+        target = _terminal_history_target(
+            project_id=self._project_id,
+            view_payload=view_payload,
+            agent=_query_text(query, 'agent'),
+            namespace_epoch=_query_int(query, 'namespace_epoch'),
+            max_lines=_query_int(query, 'max_lines') or 200,
+        )
+        try:
+            history = dict(self._terminal_history_factory(target) or {})
+        except Exception as exc:
+            raise MobileGatewayError(_error_text(exc), status_code=503) from exc
+        history.setdefault('agent', target.agent)
+        history.setdefault('history_scope', 'tmux_scrollback')
+        history.setdefault('source_pane_id', target.pane_id)
+        history.setdefault('generated_at', self._clock())
+        history.setdefault('stale', False)
+        history.setdefault('blocks', [])
+        return {
+            'schema_version': _SCHEMA_VERSION,
+            'status': 'ok',
+            'project_id': self._project_id,
+            'terminal_history': history,
+        }
 
     def dispatch_post(
         self,
@@ -780,8 +837,66 @@ def _validate_terminal_target(
     raise MobileGatewayError('unknown terminal target kind', status_code=400)
 
 
+def _terminal_history_target(
+    *,
+    project_id: str,
+    view_payload: dict[str, object],
+    agent: str | None,
+    namespace_epoch: int | None,
+    max_lines: int,
+) -> TerminalHistoryTarget:
+    view = _map(view_payload.get('view'))
+    namespace = _map(view.get('namespace'))
+    actual_epoch = _optional_int(namespace.get('epoch'))
+    if actual_epoch is None:
+        raise MobileGatewayError('ProjectView namespace epoch is required', status_code=409)
+    if namespace_epoch != actual_epoch:
+        raise MobileGatewayError('stale namespace epoch', status_code=409)
+    socket_path = _optional_text(namespace.get('socket_path'))
+    session_name = _optional_text(namespace.get('session_name'))
+    if not socket_path or not session_name:
+        raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
+    agent_name = str(agent or '').strip()
+    if not agent_name:
+        raise MobileGatewayError('agent is required', status_code=400)
+    agents = [_map(item) for item in _iterable(view.get('agents'))]
+    matched = next((item for item in agents if str(item.get('name') or '') == agent_name), None)
+    if matched is None:
+        raise MobileGatewayError('unknown terminal target agent', status_code=404)
+    pane_id = _optional_text(matched.get('pane_id'))
+    if not pane_id:
+        raise MobileGatewayError('terminal history target has no pane evidence', status_code=409)
+    return TerminalHistoryTarget(
+        project_id=project_id,
+        namespace_epoch=actual_epoch,
+        agent=agent_name,
+        window=_optional_text(matched.get('window')) or '',
+        pane_id=pane_id,
+        socket_path=socket_path,
+        session_name=session_name,
+        max_lines=min(2000, max(20, int(max_lines))),
+    )
+
+
 def _iterable(value: object):
     return value if isinstance(value, list) else []
+
+
+def _query_text(query: Mapping[str, object], name: str) -> str | None:
+    value = query.get(name)
+    if isinstance(value, list):
+        return _optional_text(value[0] if value else None)
+    return _optional_text(value)
+
+
+def _query_int(query: Mapping[str, object], name: str) -> int | None:
+    text = _query_text(query, name)
+    if text is None:
+        return None
+    try:
+        return int(text)
+    except ValueError as exc:
+        raise MobileGatewayError(f'{name} must be an integer', status_code=400) from exc
 
 
 def _required_positive_int(value: object, name: str) -> int:

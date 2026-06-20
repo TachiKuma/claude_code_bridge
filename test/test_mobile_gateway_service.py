@@ -134,6 +134,7 @@ def _service(
     *,
     mobile_dir: Path | None = None,
     terminal_session_factory=None,
+    terminal_history_factory=None,
 ) -> MobileGatewayService:
     return MobileGatewayService(
         project_id='proj-demo',
@@ -142,6 +143,7 @@ def _service(
         mobile_dir=mobile_dir,
         clock=lambda: '2026-06-18T00:00:00Z',
         terminal_session_factory=terminal_session_factory,
+        terminal_history_factory=terminal_history_factory,
     )
 
 
@@ -185,6 +187,92 @@ def test_project_view_rejects_unknown_project() -> None:
     with pytest.raises(MobileGatewayError, match='unknown project') as excinfo:
         _service(_FakeCcbdClient()).project_view_payload('other')
     assert excinfo.value.status_code == 404
+
+
+def test_terminal_history_reads_selected_agent_scrollback_without_leaking_tmux_evidence(tmp_path: Path) -> None:
+    targets = []
+
+    def history_factory(target):
+        targets.append(target)
+        return {
+            'history_scope': 'tmux_scrollback',
+            'source_pane_id': target.pane_id,
+            'blocks': [
+                {
+                    'id': 'history-1',
+                    'type': 'command',
+                    'title': 'Command',
+                    'text': '$ flutter test',
+                },
+                {
+                    'id': 'history-2',
+                    'type': 'log',
+                    'title': 'Log',
+                    'text': '54 tests passed',
+                },
+            ],
+        }
+
+    service = _service(
+        _FakeCcbdClient(),
+        mobile_dir=tmp_path / 'mobile',
+        terminal_history_factory=history_factory,
+    )
+    pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code']), 'device_name': 'Pixel Fold'},
+    )
+
+    status, payload = service.dispatch_get(
+        '/v1/projects/proj-demo/terminal-history?agent=mobile&namespace_epoch=4&max_lines=120',
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+
+    assert status == 200
+    assert payload['status'] == 'ok'
+    history = payload['terminal_history']
+    assert history['agent'] == 'mobile'
+    assert history['history_scope'] == 'tmux_scrollback'
+    assert history['source_pane_id'] == '%2'
+    assert history['generated_at'] == '2026-06-18T00:00:00Z'
+    assert history['blocks'][0]['type'] == 'command'
+    assert targets[0].project_id == 'proj-demo'
+    assert targets[0].namespace_epoch == 4
+    assert targets[0].agent == 'mobile'
+    assert targets[0].window == 'main'
+    assert targets[0].pane_id == '%2'
+    assert targets[0].socket_path == '/tmp/ccb-demo/tmux.sock'
+    assert targets[0].session_name == 'ccb-demo'
+    assert targets[0].max_lines == 120
+    public_json = json.dumps(payload)
+    assert '/tmp/ccb-demo/tmux.sock' not in public_json
+    assert 'ccb-demo' not in public_json
+
+
+def test_terminal_history_requires_view_auth_and_fresh_epoch(tmp_path: Path) -> None:
+    service = _service(_FakeCcbdClient(), mobile_dir=tmp_path / 'mobile')
+
+    with pytest.raises(MobileGatewayError) as missing_auth:
+        service.dispatch_get('/v1/projects/proj-demo/terminal-history?agent=mobile&namespace_epoch=4')
+    assert missing_auth.value.status_code == 401
+
+    pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
+    _, claim = service.dispatch_post('/v1/pairing/claim', {'pairing_code': str(pairing['pairing_code'])})
+    token = str(claim['device_token'])
+    with pytest.raises(MobileGatewayError) as stale:
+        service.dispatch_get(
+            '/v1/projects/proj-demo/terminal-history?agent=mobile&namespace_epoch=3',
+            {'Authorization': f'Bearer {token}'},
+        )
+    assert stale.value.status_code == 409
+
+    with pytest.raises(MobileGatewayError) as bad_epoch:
+        service.dispatch_get(
+            '/v1/projects/proj-demo/terminal-history?agent=mobile&namespace_epoch=bad',
+            {'Authorization': f'Bearer {token}'},
+        )
+    assert bad_epoch.value.status_code == 400
 
 
 def test_pairing_claim_creates_hashed_device_records_and_audit(tmp_path: Path) -> None:

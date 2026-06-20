@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import fcntl
 import os
 import pty
+import re
 import select
 import struct
 import subprocess
@@ -40,6 +41,54 @@ class TerminalAttachTarget:
     @property
     def command(self) -> list[str]:
         return ['tmux', '-S', self.socket_path, 'attach-session', '-t', self.session_name]
+
+
+@dataclass(frozen=True)
+class TerminalHistoryTarget:
+    project_id: str
+    namespace_epoch: int
+    agent: str
+    window: str
+    pane_id: str
+    socket_path: str
+    session_name: str
+    max_lines: int = 200
+
+    @property
+    def command(self) -> list[str]:
+        return [
+            'tmux',
+            '-S',
+            self.socket_path,
+            'capture-pane',
+            '-p',
+            '-t',
+            self.pane_id,
+            '-S',
+            f'-{max(1, int(self.max_lines))}',
+        ]
+
+
+def create_tmux_terminal_history(target: TerminalHistoryTarget) -> dict[str, object]:
+    cp = subprocess.run(
+        target.command,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        timeout=2.0,
+    )
+    if cp.returncode != 0:
+        message = (cp.stderr or '').strip() or 'tmux capture-pane failed'
+        raise RuntimeError(message)
+    text = _strip_ansi(cp.stdout or '')
+    return {
+        'agent': target.agent,
+        'history_scope': 'tmux_scrollback',
+        'source_pane_id': target.pane_id,
+        'stale': False,
+        'blocks': _readable_history_blocks(text),
+    }
 
 
 class TmuxTerminalSession:
@@ -104,6 +153,71 @@ class TmuxTerminalSession:
 
 def create_tmux_terminal_session(target: TerminalAttachTarget) -> TmuxTerminalSession:
     return TmuxTerminalSession(target)
+
+
+def _readable_history_blocks(text: str) -> list[dict[str, object]]:
+    blocks: list[dict[str, object]] = []
+    current_type = ''
+    current: list[str] = []
+
+    def flush() -> None:
+        nonlocal current_type, current
+        rendered = '\n'.join(line.rstrip() for line in current).strip()
+        if not rendered:
+            current_type = ''
+            current = []
+            return
+        block_type = current_type or _classify_line(rendered)
+        blocks.append(
+            {
+                'id': f'history-{len(blocks) + 1}',
+                'type': block_type,
+                'title': _block_title(block_type),
+                'text': rendered,
+            }
+        )
+        current_type = ''
+        current = []
+
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        if not line.strip():
+            flush()
+            continue
+        line_type = _classify_line(line)
+        if current and line_type != current_type and line_type in {'command', 'diff', 'error'}:
+            flush()
+        if not current:
+            current_type = line_type
+        current.append(line)
+    flush()
+    return blocks
+
+
+def _classify_line(text: str) -> str:
+    stripped = text.strip()
+    if stripped.startswith(('$ ', '> ', '# ')):
+        return 'command'
+    if stripped.startswith(('Traceback ', 'Error:', 'ERROR:', 'Exception:', 'FAILED')):
+        return 'error'
+    if stripped.startswith(('diff --git ', '+++ ', '--- ', '+ ', '- ', '@@ ')):
+        return 'diff'
+    if stripped.startswith(('```', 'def ', 'class ', 'import ', 'from ', 'const ', 'final ', 'Future<')):
+        return 'code'
+    return 'log'
+
+
+def _block_title(block_type: str) -> str:
+    return {
+        'command': 'Command',
+        'code': 'Code',
+        'diff': 'Diff',
+        'error': 'Error',
+    }.get(block_type, 'Log')
+
+
+def _strip_ansi(text: str) -> str:
+    return re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', text)
 
 
 def _int(value: object, fallback: int) -> int:
