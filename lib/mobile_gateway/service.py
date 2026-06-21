@@ -10,6 +10,7 @@ import threading
 from typing import Callable, Mapping
 from urllib.parse import parse_qs, unquote, urlparse
 
+from ccbd.api_models import DeliveryScope, MessageEnvelope
 from ccbd.socket_client import CcbdClientError
 from .pairing import MobileGatewayPairingError, MobileGatewayPairingStore
 from .terminal import (
@@ -36,7 +37,15 @@ _PAIRING_CAPABILITIES = (
 )
 _REDACTED_NAMESPACE_KEYS = ('socket_path', 'session_name')
 _DEFAULT_ROUTE_PROVIDER = 'lan'
-_DEFAULT_PAIRING_SCOPES = ('view', 'focus', 'terminal_input', 'lifecycle')
+_DEFAULT_PAIRING_SCOPES = (
+    'view',
+    'content',
+    'focus',
+    'ask',
+    'message_submit',
+    'terminal_input',
+    'lifecycle',
+)
 
 
 @dataclass(frozen=True)
@@ -176,6 +185,15 @@ class MobileGatewayService:
                 query=parse_qs(parsed.query, keep_blank_values=True),
                 headers=headers,
             )
+        conversation_route = _parse_project_agent_route(route, suffix='conversation')
+        if conversation_route is not None:
+            project_id, agent = conversation_route
+            return 200, self.agent_conversation_payload(
+                project_id,
+                agent=agent,
+                query=parse_qs(parsed.query, keep_blank_values=True),
+                headers=headers,
+            )
         if route == '/v1/devices/me':
             device = self._authenticate(headers, required_scopes=('view',))
             return 200, {
@@ -217,6 +235,42 @@ class MobileGatewayService:
             'status': 'ok',
             'project_id': self._project_id,
             'terminal_history': history,
+        }
+
+    def agent_conversation_payload(
+        self,
+        project_id: str,
+        *,
+        agent: str,
+        query: Mapping[str, object],
+        headers: Mapping[str, object] | None = None,
+    ) -> dict[str, object]:
+        self._require_current_project(project_id)
+        self._authenticate(headers, required_scopes=('view',))
+        view_payload = self._request_project_view()
+        target = _validate_agent_conversation_target(
+            project_id=self._project_id,
+            view_payload=view_payload,
+            agent=agent,
+            namespace_epoch=_query_int(query, 'namespace_epoch'),
+        )
+        limit = min(200, max(1, _query_int(query, 'limit') or 50))
+        items = _agent_conversation_items(
+            view_payload,
+            agent=target['agent'],
+            namespace_epoch=int(target['namespace_epoch']),
+            limit=limit,
+        )
+        return {
+            'schema_version': _SCHEMA_VERSION,
+            'status': 'ok',
+            'conversation': {
+                'project_id': self._project_id,
+                'agent': target['agent'],
+                'namespace_epoch': target['namespace_epoch'],
+                'generated_at': self._clock(),
+                'items': items,
+            },
         }
 
     def dispatch_post(
@@ -267,6 +321,15 @@ class MobileGatewayService:
                     payload=payload,
                     headers=headers,
                 )
+        message_route = _parse_project_agent_route(route, suffix='messages')
+        if message_route is not None:
+            project_id, agent = message_route
+            return 202, self._submit_agent_message(
+                project_id=project_id,
+                agent=agent,
+                payload=payload,
+                headers=headers,
+            )
         prefix = '/v1/devices/'
         suffix = '/revoke'
         if route.startswith(prefix) and route.endswith(suffix):
@@ -280,6 +343,93 @@ class MobileGatewayService:
                 raise MobileGatewayError(str(exc), status_code=exc.status_code) from exc
             return 200, result
         raise MobileGatewayError('not found', status_code=404)
+
+    def _submit_agent_message(
+        self,
+        *,
+        project_id: str,
+        agent: str,
+        payload: Mapping[str, object],
+        headers: Mapping[str, object] | None,
+    ) -> dict[str, object]:
+        self._require_current_project(project_id)
+        auth = self._authenticate_any_scope(
+            headers,
+            allowed_scopes=('ask', 'message_submit'),
+        )
+        body_project_id = str(payload.get('project_id') or '').strip()
+        if body_project_id and body_project_id != self._project_id:
+            raise MobileGatewayError('request project_id does not match route', status_code=400)
+        body_agent = str(payload.get('agent') or '').strip()
+        if body_agent and body_agent != agent:
+            raise MobileGatewayError('request agent does not match route', status_code=400)
+        idempotency_key = str(payload.get('idempotency_key') or '').strip()
+        if not idempotency_key:
+            raise MobileGatewayError('idempotency_key is required', status_code=400)
+        body = str(payload.get('body') or '').strip()
+        if not body:
+            raise MobileGatewayError('body is required', status_code=400)
+        message_format = str(payload.get('format') or 'markdown').strip() or 'markdown'
+        view_payload = self._request_project_view()
+        target = _validate_agent_conversation_target(
+            project_id=self._project_id,
+            view_payload=view_payload,
+            agent=agent,
+            namespace_epoch=_optional_int(payload.get('namespace_epoch')),
+        )
+        try:
+            receipt = self._client().submit(
+                MessageEnvelope(
+                    project_id=self._project_id,
+                    to_agent=target['agent'],
+                    from_actor='mobile',
+                    body=body,
+                    task_id=None,
+                    reply_to=None,
+                    message_type='ask',
+                    delivery_scope=DeliveryScope.SINGLE,
+                    silence_on_success=False,
+                    route_options={
+                        'source': 'mobile_gateway',
+                        'device_id': auth.device_id,
+                        'idempotency_key': idempotency_key,
+                        'format': message_format,
+                    },
+                    body_artifact=None,
+                )
+            )
+        except CcbdClientError as exc:
+            raise MobileGatewayError(str(exc), status_code=503) from exc
+        except Exception as exc:
+            raise MobileGatewayError(_error_text(exc), status_code=503) from exc
+        result = dict(receipt or {}) if isinstance(receipt, Mapping) else {}
+        job_id = str(result.get('job_id') or '')
+        state = str(result.get('status') or 'queued')
+        message_id = str(result.get('message_id') or job_id or idempotency_key)
+        return {
+            'schema_version': _SCHEMA_VERSION,
+            'status': 'ok',
+            'project_id': self._project_id,
+            'agent': target['agent'],
+            'message_submit': {
+                'accepted': True,
+                'idempotency_key': idempotency_key,
+                'message_id': message_id,
+                'job_id': job_id or None,
+                'state': state,
+                'created_at': result.get('accepted_at') or self._clock(),
+                'message': {
+                    'id': message_id,
+                    'agent': target['agent'],
+                    'kind': 'user_message',
+                    'title': 'You',
+                    'body': body,
+                    'format': message_format,
+                    'state': 'sent',
+                    'source': 'mobile',
+                },
+            },
+        }
 
     def terminal_id_from_path(self, path: str) -> str | None:
         parsed = urlparse(path)
@@ -593,6 +743,17 @@ class MobileGatewayService:
         except MobileGatewayPairingError as exc:
             raise MobileGatewayError(str(exc), status_code=exc.status_code) from exc
 
+    def _authenticate_any_scope(
+        self,
+        headers: Mapping[str, object] | None,
+        *,
+        allowed_scopes: tuple[str, ...],
+    ):
+        auth = self._authenticate(headers, required_scopes=())
+        if auth.scopes.intersection({str(scope) for scope in allowed_scopes}):
+            return auth
+        raise MobileGatewayError('device scope denied', status_code=403)
+
     def _ping_or_unavailable(self) -> dict[str, object]:
         try:
             payload = self._client().ping('ccbd')
@@ -839,6 +1000,138 @@ def _parse_project_action_route(route: str) -> tuple[str, str] | None:
     if action not in {'focus-agent', 'focus-window', 'lifecycle', 'terminals'}:
         return None
     return unquote(project_id), action
+
+
+def _parse_project_agent_route(route: str, *, suffix: str) -> tuple[str, str] | None:
+    prefix = '/v1/projects/'
+    if not route.startswith(prefix):
+        return None
+    parts = route[len(prefix):].strip('/').split('/')
+    if len(parts) != 4 or parts[1] != 'agents' or parts[3] != suffix:
+        return None
+    project_id = unquote(parts[0]).strip()
+    agent = unquote(parts[2]).strip()
+    if not project_id or not agent:
+        return None
+    return project_id, agent
+
+
+def _validate_agent_conversation_target(
+    *,
+    project_id: str,
+    view_payload: dict[str, object],
+    agent: str,
+    namespace_epoch: int | None,
+) -> dict[str, object]:
+    view = _map(view_payload.get('view'))
+    namespace = _map(view.get('namespace'))
+    actual_epoch = _optional_int(namespace.get('epoch'))
+    if actual_epoch is None:
+        raise MobileGatewayError('ProjectView namespace epoch is required', status_code=409)
+    if namespace_epoch != actual_epoch:
+        raise MobileGatewayError('stale namespace epoch', status_code=409)
+    agent_name = str(agent or '').strip()
+    if not agent_name:
+        raise MobileGatewayError('agent is required', status_code=400)
+    agents = [_map(item) for item in _iterable(view.get('agents'))]
+    matched = next((item for item in agents if str(item.get('name') or '') == agent_name), None)
+    if matched is None:
+        raise MobileGatewayError('unknown agent', status_code=404)
+    return {
+        'project_id': project_id,
+        'agent': agent_name,
+        'namespace_epoch': actual_epoch,
+        'agent_record': matched,
+    }
+
+
+def _agent_conversation_items(
+    view_payload: dict[str, object],
+    *,
+    agent: str,
+    namespace_epoch: int,
+    limit: int,
+) -> list[dict[str, object]]:
+    view = _map(view_payload.get('view'))
+    agents = [_map(item) for item in _iterable(view.get('agents'))]
+    agent_record = next((item for item in agents if str(item.get('name') or '') == agent), {})
+    items: list[dict[str, object]] = [
+        {
+            'id': f'status-{agent}',
+            'agent': agent,
+            'kind': 'status_event',
+            'title': 'Agent status',
+            'body': _agent_status_summary(agent_record),
+            'format': 'plain',
+            'source': 'project_view',
+        }
+    ]
+    content = _map(view.get('content'))
+    for item in _iterable(content.get('items')):
+        content_item = _map(item)
+        if not _conversation_item_belongs_to_agent(content_item, agent):
+            continue
+        content_id = str(content_item.get('id') or f'content-{len(items)}')
+        body = (
+            _optional_text(content_item.get('text'))
+            or _optional_text(content_item.get('body'))
+            or ''
+        )
+        if not body:
+            continue
+        items.append(
+            {
+                'id': f'reply-{content_id}',
+                'agent': agent,
+                'kind': 'agent_reply',
+                'title': _optional_text(content_item.get('title')) or 'Agent reply',
+                'body': body,
+                'format': _optional_text(content_item.get('format')) or 'plain',
+                'content_id': content_id,
+                'source': _optional_text(content_item.get('source')) or 'content',
+            }
+        )
+    for item in _iterable(view.get('comms')):
+        comm = _map(item)
+        if not _conversation_item_belongs_to_agent(comm, agent):
+            continue
+        body = (
+            _optional_text(comm.get('body'))
+            or _optional_text(comm.get('text'))
+            or _optional_text(comm.get('message'))
+        )
+        if not body:
+            continue
+        comm_id = str(comm.get('id') or f'comms-{len(items)}')
+        items.append(
+            {
+                'id': f'comms-{comm_id}',
+                'agent': agent,
+                'kind': 'comms_item',
+                'title': _optional_text(comm.get('title')) or 'Comms',
+                'body': body,
+                'format': _optional_text(comm.get('format')) or 'plain',
+                'source': _optional_text(comm.get('source')) or 'project_view',
+            }
+        )
+    if len(items) > limit:
+        return items[:limit]
+    return items
+
+
+def _conversation_item_belongs_to_agent(item: dict[str, object], agent: str) -> bool:
+    item_agent = _optional_text(item.get('agent')) or _optional_text(item.get('agent_name'))
+    return item_agent is None or item_agent == agent
+
+
+def _agent_status_summary(agent: dict[str, object]) -> str:
+    state = _optional_text(agent.get('state')) or 'idle'
+    health = _optional_text(agent.get('runtime_health')) or 'unknown'
+    queue_depth = _int(agent.get('queue_depth'), 0)
+    if queue_depth > 0:
+        suffix = '' if queue_depth == 1 else 's'
+        return f'{state}, {health}, {queue_depth} queued item{suffix}'
+    return f'{state}, {health}, no queued items'
 
 
 def _validate_terminal_summary(record: dict[str, object], view: dict[str, object]) -> None:

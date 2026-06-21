@@ -75,6 +75,19 @@ class _FakeCcbdClient:
                         'active': True,
                     }
                 ],
+                'content': {
+                    'items': [
+                        {
+                            'id': 'content-1',
+                            'kind': 'markdown',
+                            'format': 'markdown',
+                            'agent': 'mobile',
+                            'title': 'Agent reply',
+                            'text': 'Ready for the next task.',
+                            'source': 'reply',
+                        }
+                    ],
+                },
                 'comms': [],
             },
             'cache': {'sequence': 1},
@@ -106,6 +119,16 @@ class _FakeCcbdClient:
             'stopped': True,
             'force': force,
             'summary': {'agents': ['mobile']},
+        }
+
+    def submit(self, request) -> dict[str, object]:
+        record = request.to_record()
+        self.calls.append(('submit', record))
+        return {
+            'job_id': 'job_mobile_1',
+            'agent_name': record['to_agent'],
+            'status': 'queued',
+            'accepted_at': '2026-06-18T00:00:01Z',
         }
 
 
@@ -266,7 +289,10 @@ def test_terminal_history_requires_view_auth_and_fresh_epoch(tmp_path: Path) -> 
     assert missing_auth.value.status_code == 401
 
     pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
-    _, claim = service.dispatch_post('/v1/pairing/claim', {'pairing_code': str(pairing['pairing_code'])})
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
     token = str(claim['device_token'])
     with pytest.raises(MobileGatewayError) as stale:
         service.dispatch_get(
@@ -281,6 +307,170 @@ def test_terminal_history_requires_view_auth_and_fresh_epoch(tmp_path: Path) -> 
             {'Authorization': f'Bearer {token}'},
         )
     assert bad_epoch.value.status_code == 400
+
+
+def test_agent_conversation_reads_project_view_without_terminal_scope(tmp_path: Path) -> None:
+    fake = _FakeCcbdClient()
+    service = _service(fake, mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view',),
+    )
+    _, claim = service.dispatch_post('/v1/pairing/claim', {'pairing_code': str(pairing['pairing_code'])})
+
+    status, payload = service.dispatch_get(
+        '/v1/projects/proj-demo/agents/mobile/conversation?namespace_epoch=4&limit=20',
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+
+    assert status == 200
+    conversation = payload['conversation']
+    assert conversation['project_id'] == 'proj-demo'
+    assert conversation['agent'] == 'mobile'
+    assert conversation['namespace_epoch'] == 4
+    assert [item['kind'] for item in conversation['items']] == [
+        'status_event',
+        'agent_reply',
+    ]
+    assert conversation['items'][1]['body'] == 'Ready for the next task.'
+    public_json = json.dumps(payload)
+    assert 'terminal_input' not in public_json
+    assert 'tmux.sock' not in public_json
+    assert 'ccb-demo' not in public_json
+    assert fake.calls == [('project_view', 1)]
+
+
+def test_agent_conversation_requires_view_auth_and_fresh_epoch(tmp_path: Path) -> None:
+    service = _service(_FakeCcbdClient(), mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('message_submit',),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
+
+    with pytest.raises(MobileGatewayError) as missing_auth:
+        service.dispatch_get('/v1/projects/proj-demo/agents/mobile/conversation?namespace_epoch=4')
+    assert missing_auth.value.status_code == 401
+
+    with pytest.raises(MobileGatewayError) as denied:
+        service.dispatch_get(
+            '/v1/projects/proj-demo/agents/mobile/conversation?namespace_epoch=4',
+            {'Authorization': f'Bearer {claim["device_token"]}'},
+        )
+    assert denied.value.status_code == 403
+
+    view_pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view',),
+    )
+    _, view_claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(view_pairing['pairing_code'])},
+    )
+    with pytest.raises(MobileGatewayError) as stale:
+        service.dispatch_get(
+            '/v1/projects/proj-demo/agents/mobile/conversation?namespace_epoch=3',
+            {'Authorization': f'Bearer {view_claim["device_token"]}'},
+        )
+    assert stale.value.status_code == 409
+
+
+def test_agent_message_submit_uses_ccbd_submit_without_terminal_scope(tmp_path: Path) -> None:
+    fake = _FakeCcbdClient()
+    service = _service(fake, mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view', 'message_submit'),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
+
+    status, payload = service.dispatch_post(
+        '/v1/projects/proj-demo/agents/mobile/messages',
+        {
+            'schema_version': 1,
+            'project_id': 'proj-demo',
+            'agent': 'mobile',
+            'namespace_epoch': 4,
+            'idempotency_key': 'mobile-msg-1',
+            'body': 'continue with the next step',
+            'format': 'markdown',
+        },
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+
+    assert status == 202
+    result = payload['message_submit']
+    assert result['accepted'] is True
+    assert result['idempotency_key'] == 'mobile-msg-1'
+    assert result['job_id'] == 'job_mobile_1'
+    assert result['message_id'] == 'job_mobile_1'
+    assert result['state'] == 'queued'
+    submit = next(call for call in fake.calls if call[0] == 'submit')[1]
+    assert submit['project_id'] == 'proj-demo'
+    assert submit['to_agent'] == 'mobile'
+    assert submit['from_actor'] == 'mobile'
+    assert submit['body'] == 'continue with the next step'
+    assert submit['message_type'] == 'ask'
+    assert submit['delivery_scope'] == 'single'
+    assert submit['route_options']['idempotency_key'] == 'mobile-msg-1'
+    assert submit['route_options']['source'] == 'mobile_gateway'
+    response_json = json.dumps(payload)
+    assert 'terminal_input' not in response_json
+    assert 'tmux.sock' not in response_json
+
+
+def test_agent_message_submit_requires_chat_scope_not_terminal_input(tmp_path: Path) -> None:
+    service = _service(_FakeCcbdClient(), mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view', 'terminal_input'),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
+
+    with pytest.raises(MobileGatewayError) as denied:
+        service.dispatch_post(
+            '/v1/projects/proj-demo/agents/mobile/messages',
+            {
+                'project_id': 'proj-demo',
+                'agent': 'mobile',
+                'namespace_epoch': 4,
+                'idempotency_key': 'mobile-msg-1',
+                'body': 'continue',
+            },
+            {'Authorization': f'Bearer {claim["device_token"]}'},
+        )
+    assert denied.value.status_code == 403
+
+    ask_pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view', 'ask'),
+    )
+    _, ask_claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(ask_pairing['pairing_code'])},
+    )
+    status, payload = service.dispatch_post(
+        '/v1/projects/proj-demo/agents/mobile/messages',
+        {
+            'project_id': 'proj-demo',
+            'agent': 'mobile',
+            'namespace_epoch': 4,
+            'idempotency_key': 'mobile-msg-2',
+            'body': 'continue',
+        },
+        {'Authorization': f'Bearer {ask_claim["device_token"]}'},
+    )
+    assert status == 202
+    assert payload['message_submit']['idempotency_key'] == 'mobile-msg-2'
 
 
 def test_pairing_claim_creates_hashed_device_records_and_audit(tmp_path: Path) -> None:
@@ -303,7 +493,15 @@ def test_pairing_claim_creates_hashed_device_records_and_audit(tmp_path: Path) -
 
     assert status == 201
     assert claim['host_profile']['device_id'] == device_id
-    assert claim['host_profile']['scopes'] == ['focus', 'lifecycle', 'terminal_input', 'view']
+    assert claim['host_profile']['scopes'] == [
+        'ask',
+        'content',
+        'focus',
+        'lifecycle',
+        'message_submit',
+        'terminal_input',
+        'view',
+    ]
     assert claim['host_profile']['route_provider'] == 'cloudflare_tunnel'
     assert claim['host_profile']['gateway_url'] == 'https://mobile.example.com'
 
