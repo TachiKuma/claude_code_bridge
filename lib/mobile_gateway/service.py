@@ -260,6 +260,7 @@ class MobileGatewayService:
             agent=target['agent'],
             namespace_epoch=int(target['namespace_epoch']),
             limit=limit,
+            project_root=self._project_root,
         )
         return {
             'schema_version': _SCHEMA_VERSION,
@@ -1051,6 +1052,7 @@ def _agent_conversation_items(
     agent: str,
     namespace_epoch: int,
     limit: int,
+    project_root: Path,
 ) -> list[dict[str, object]]:
     view = _map(view_payload.get('view'))
     agents = [_map(item) for item in _iterable(view.get('agents'))]
@@ -1099,7 +1101,23 @@ def _agent_conversation_items(
             _optional_text(comm.get('body'))
             or _optional_text(comm.get('text'))
             or _optional_text(comm.get('message'))
+            or _optional_text(comm.get('body_preview'))
         )
+        reply = _completion_reply_for_job(project_root, _optional_text(comm.get('id')))
+        if reply:
+            comm_id = str(comm.get('id') or f'comms-{len(items)}')
+            items.append(
+                {
+                    'id': f'reply-{comm_id}',
+                    'agent': agent,
+                    'kind': 'agent_reply',
+                    'title': _optional_text(comm.get('title')) or 'Agent reply',
+                    'body': reply,
+                    'format': 'markdown',
+                    'source': 'completion_snapshot',
+                }
+            )
+            continue
         if not body:
             continue
         comm_id = str(comm.get('id') or f'comms-{len(items)}')
@@ -1120,8 +1138,34 @@ def _agent_conversation_items(
 
 
 def _conversation_item_belongs_to_agent(item: dict[str, object], agent: str) -> bool:
-    item_agent = _optional_text(item.get('agent')) or _optional_text(item.get('agent_name'))
-    return item_agent is None or item_agent == agent
+    item_agent = (
+        _optional_text(item.get('agent'))
+        or _optional_text(item.get('agent_name'))
+        or _optional_text(item.get('target'))
+        or _optional_text(item.get('target_agent'))
+    )
+    if item_agent is not None:
+        return item_agent == agent
+    targets = item.get('target_agents')
+    if isinstance(targets, (list, tuple, set)):
+        return agent in {str(target) for target in targets}
+    return True
+
+
+def _completion_reply_for_job(project_root: Path, job_id: str | None) -> str:
+    if not job_id:
+        return ''
+    path = project_root / '.ccb' / 'ccbd' / 'snapshots' / f'{job_id}.json'
+    try:
+        payload = json.loads(path.read_text(encoding='utf-8'))
+    except Exception:
+        return ''
+    latest_decision = _map(payload.get('latest_decision'))
+    return (
+        _optional_text(latest_decision.get('reply'))
+        or _optional_text(payload.get('latest_reply_preview'))
+        or ''
+    )
 
 
 def _agent_status_summary(agent: dict[str, object]) -> str:

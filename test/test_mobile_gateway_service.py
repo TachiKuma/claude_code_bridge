@@ -160,16 +160,41 @@ class _FakeTerminalSession:
         self.closed = True
 
 
+class _FakeCcbdClientWithConversationComms(_FakeCcbdClient):
+    def project_view(self, *, schema_version: int = 1) -> dict[str, object]:
+        payload = super().project_view(schema_version=schema_version)
+        payload['view']['comms'] = [
+            {
+                'id': 'job_mobile_reply',
+                'sender': 'user',
+                'target': 'mobile',
+                'status': 'completed',
+                'business_status': 'replied',
+                'body_preview': 'question from phone',
+            },
+            {
+                'id': 'job_other_reply',
+                'sender': 'user',
+                'target': 'other',
+                'status': 'completed',
+                'business_status': 'replied',
+                'body_preview': 'wrong target',
+            },
+        ]
+        return payload
+
+
 def _service(
     fake: _FakeCcbdClient,
     *,
+    project_root: Path | None = None,
     mobile_dir: Path | None = None,
     terminal_session_factory=None,
     terminal_history_factory=None,
 ) -> MobileGatewayService:
     return MobileGatewayService(
         project_id='proj-demo',
-        project_root=Path('/srv/demo'),
+        project_root=project_root or Path('/srv/demo'),
         ccbd_client_factory=lambda: fake,
         mobile_dir=mobile_dir,
         clock=lambda: '2026-06-18T00:00:00Z',
@@ -338,6 +363,52 @@ def test_agent_conversation_reads_project_view_without_terminal_scope(tmp_path: 
     assert 'tmux.sock' not in public_json
     assert 'ccb-demo' not in public_json
     assert fake.calls == [('project_view', 1)]
+
+
+def test_agent_conversation_includes_completed_comms_reply_preview(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo'
+    snapshot_dir = project_root / '.ccb' / 'ccbd' / 'snapshots'
+    snapshot_dir.mkdir(parents=True)
+    (snapshot_dir / 'job_mobile_reply.json').write_text(
+        json.dumps(
+            {
+                'latest_decision': {
+                    'reply': 'answer from mobile_probe',
+                },
+                'latest_reply_preview': 'preview fallback',
+            }
+        ),
+        encoding='utf-8',
+    )
+    service = _service(
+        _FakeCcbdClientWithConversationComms(),
+        project_root=project_root,
+        mobile_dir=tmp_path / 'mobile',
+    )
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view',),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
+
+    status, payload = service.dispatch_get(
+        '/v1/projects/proj-demo/agents/mobile/conversation?namespace_epoch=4&limit=20',
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+
+    assert status == 200
+    items = payload['conversation']['items']
+    assert [item['id'] for item in items] == [
+        'status-mobile',
+        'reply-content-1',
+        'reply-job_mobile_reply',
+    ]
+    assert items[2]['kind'] == 'agent_reply'
+    assert items[2]['body'] == 'answer from mobile_probe'
+    assert 'wrong target' not in json.dumps(payload)
 
 
 def test_agent_conversation_requires_view_auth_and_fresh_epoch(tmp_path: Path) -> None:
