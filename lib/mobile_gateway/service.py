@@ -382,7 +382,7 @@ class MobileGatewayService:
                 MessageEnvelope(
                     project_id=self._project_id,
                     to_agent=target['agent'],
-                    from_actor='mobile',
+                    from_actor='user',
                     body=body,
                     task_id=None,
                     reply_to=None,

@@ -414,7 +414,7 @@ def test_agent_message_submit_uses_ccbd_submit_without_terminal_scope(tmp_path: 
     submit = next(call for call in fake.calls if call[0] == 'submit')[1]
     assert submit['project_id'] == 'proj-demo'
     assert submit['to_agent'] == 'mobile'
-    assert submit['from_actor'] == 'mobile'
+    assert submit['from_actor'] == 'user'
     assert submit['body'] == 'continue with the next step'
     assert submit['message_type'] == 'ask'
     assert submit['delivery_scope'] == 'single'
