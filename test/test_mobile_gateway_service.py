@@ -622,6 +622,83 @@ def test_agent_conversation_maps_artifact_links_to_download_attachments(tmp_path
     ]
 
 
+def test_agent_conversation_maps_artifact_links_from_gateway_file_store(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo'
+    snapshot_dir = project_root / '.ccb' / 'ccbd' / 'snapshots'
+    snapshot_dir.mkdir(parents=True)
+    jobs_dir = project_root / '.ccb' / 'agents' / 'mobile'
+    jobs_dir.mkdir(parents=True)
+    file_store = tmp_path / 'server-mobile' / 'files'
+    file_id = 'mobile-file-shared-artifact'
+    (snapshot_dir / 'job_mobile_reply.json').write_text(
+        json.dumps(
+            {
+                'latest_decision': {
+                    'reply': (
+                        'Generated files:\n'
+                        f'- [artifact.txt](ccb-artifact://{file_id})'
+                    ),
+                },
+            }
+        ),
+        encoding='utf-8',
+    )
+    (jobs_dir / 'jobs.jsonl').write_text(
+        json.dumps(
+            {
+                'job_id': 'job_mobile_reply',
+                'request': {
+                    'route_options': {
+                        'mobile_files_dir': str(file_store),
+                    },
+                },
+            }
+        )
+        + '\n',
+        encoding='utf-8',
+    )
+    file_dir = file_store / 'proj-demo' / 'mobile' / file_id
+    file_dir.mkdir(parents=True)
+    (file_dir / 'metadata.json').write_text(
+        json.dumps(
+            {
+                'file_id': file_id,
+                'file_name': 'artifact.txt',
+                'mime_type': 'text/plain',
+                'size_bytes': 12,
+            }
+        ),
+        encoding='utf-8',
+    )
+    service = _service(
+        _FakeCcbdClientWithConversationComms(),
+        project_root=project_root,
+        mobile_dir=tmp_path / 'mobile',
+    )
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view',),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
+
+    status, payload = service.dispatch_get(
+        '/v1/projects/proj-demo/agents/mobile/conversation?namespace_epoch=4&limit=20',
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+
+    assert status == 200
+    reply = next(
+        item
+        for item in payload['conversation']['items']
+        if item['id'] == 'reply-job_mobile_reply'
+    )
+    assert reply['attachments'][0]['file_id'] == file_id
+    assert reply['attachments'][0]['file_name'] == 'artifact.txt'
+
+
 def test_agent_conversation_requires_view_auth_and_fresh_epoch(tmp_path: Path) -> None:
     service = _service(_FakeCcbdClient(), mobile_dir=tmp_path / 'mobile')
     pairing = service.create_pairing_payload(

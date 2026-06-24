@@ -1511,7 +1511,7 @@ def _completion_reply_for_job(
     if not attachments:
         attachments = _artifact_link_attachments(
             body,
-            project_root=project_root,
+            file_roots=_mobile_file_roots_for_job(project_root, agent, job_id),
             project_id=project_id,
             agent=agent,
         )
@@ -1521,7 +1521,7 @@ def _completion_reply_for_job(
 def _artifact_link_attachments(
     body: str,
     *,
-    project_root: Path,
+    file_roots: list[Path],
     project_id: str,
     agent: str,
 ) -> list[dict[str, object]]:
@@ -1531,21 +1531,43 @@ def _artifact_link_attachments(
         if file_id in seen:
             continue
         seen.add(file_id)
-        directory = (
-            project_root
-            / '.ccb'
-            / 'ccbd'
-            / 'mobile'
-            / 'files'
-            / _safe_path_segment(project_id)
-            / _safe_path_segment(agent)
-            / _safe_path_segment(file_id)
-        )
-        metadata = _read_file_metadata(directory)
-        if not metadata:
-            continue
-        attachments.extend(_attachment_records([metadata]))
+        for file_root in file_roots:
+            directory = (
+                file_root
+                / _safe_path_segment(project_id)
+                / _safe_path_segment(agent)
+                / _safe_path_segment(file_id)
+            )
+            metadata = _read_file_metadata(directory)
+            if not metadata:
+                continue
+            attachments.extend(_attachment_records([metadata]))
+            break
     return attachments
+
+
+def _mobile_file_roots_for_job(project_root: Path, agent: str, job_id: str) -> list[Path]:
+    roots: list[Path] = [project_root / '.ccb' / 'ccbd' / 'mobile' / 'files']
+    jobs_path = project_root / '.ccb' / 'agents' / agent / 'jobs.jsonl'
+    try:
+        lines = jobs_path.read_text(encoding='utf-8').splitlines()
+    except Exception:
+        return roots
+    for line in lines:
+        try:
+            record = json.loads(line)
+        except Exception:
+            continue
+        if str(_map(record).get('job_id') or '') != job_id:
+            continue
+        request = _map(_map(record).get('request'))
+        route_options = _map(request.get('route_options'))
+        mobile_files_dir = _optional_text(route_options.get('mobile_files_dir'))
+        if mobile_files_dir:
+            path = Path(mobile_files_dir).expanduser()
+            if path not in roots:
+                roots.insert(0, path)
+    return roots
 
 
 def _artifact_file_ids(body: str) -> list[str]:
