@@ -17,6 +17,8 @@ from mobile_gateway import (
     MobileGatewayError,
     MobileGatewayPairingError,
     MobileGatewayPairingStore,
+    MobileGatewayProject,
+    MobileGatewayProjectRegistry,
     MobileGatewayService,
     build_mobile_gateway_server,
     parse_listen_address,
@@ -24,13 +26,22 @@ from mobile_gateway import (
 
 
 class _FakeCcbdClient:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        project_id: str = 'proj-demo',
+        project_root: str = '/srv/demo',
+        display_name: str = 'demo',
+    ) -> None:
+        self.project_id = project_id
+        self.project_root = project_root
+        self.display_name = display_name
         self.calls: list[tuple[object, ...]] = []
 
     def ping(self, target: str = 'ccbd') -> dict[str, object]:
         self.calls.append(('ping', target))
         return {
-            'project_id': 'proj-demo',
+            'project_id': self.project_id,
             'mount_state': 'mounted',
             'health': 'healthy',
             'namespace_epoch': 4,
@@ -44,9 +55,9 @@ class _FakeCcbdClient:
         return {
             'view': {
                 'project': {
-                    'id': 'proj-demo',
-                    'root': '/srv/demo',
-                    'display_name': 'demo',
+                    'id': self.project_id,
+                    'root': self.project_root,
+                    'display_name': self.display_name,
                 },
                 'namespace': {
                     'epoch': 4,
@@ -199,6 +210,7 @@ def _service(
     *,
     project_root: Path | None = None,
     mobile_dir: Path | None = None,
+    project_registry: MobileGatewayProjectRegistry | None = None,
     terminal_session_factory=None,
     terminal_history_factory=None,
 ) -> MobileGatewayService:
@@ -207,6 +219,7 @@ def _service(
         project_root=project_root or Path('/srv/demo'),
         ccbd_client_factory=lambda: fake,
         mobile_dir=mobile_dir,
+        project_registry=project_registry,
         clock=lambda: '2026-06-18T00:00:00Z',
         terminal_session_factory=terminal_session_factory,
         terminal_history_factory=terminal_history_factory,
@@ -235,6 +248,50 @@ def test_health_and_projects_use_ccbd_without_exposing_tmux_socket() -> None:
     assert fake.calls == [('ping', 'ccbd'), ('ping', 'ccbd')]
 
 
+def test_projects_payload_lists_registry_projects_without_exposing_tmux_socket() -> None:
+    first = _FakeCcbdClient(
+        project_id='proj-one',
+        project_root='/srv/one',
+        display_name='one',
+    )
+    second = _FakeCcbdClient(
+        project_id='proj-two',
+        project_root='/srv/two',
+        display_name='two',
+    )
+    service = _service(
+        first,
+        project_registry=MobileGatewayProjectRegistry(
+            [
+                MobileGatewayProject(
+                    project_id='proj-one',
+                    project_root=Path('/srv/one'),
+                    ccbd_client_factory=lambda: first,
+                ),
+                MobileGatewayProject(
+                    project_id='proj-two',
+                    project_root=Path('/srv/two'),
+                    ccbd_client_factory=lambda: second,
+                ),
+            ]
+        ),
+    )
+
+    projects = service.projects_payload()
+
+    assert [item['id'] for item in projects['projects']] == [
+        'proj-one',
+        'proj-two',
+    ]
+    assert projects['projects'][0]['display_name'] == 'one'
+    assert projects['projects'][0]['root'] == '/srv/one'
+    assert projects['projects'][1]['display_name'] == 'two'
+    assert projects['projects'][1]['root'] == '/srv/two'
+    assert 'tmux.sock' not in json.dumps(projects)
+    assert first.calls == [('ping', 'ccbd')]
+    assert second.calls == [('ping', 'ccbd')]
+
+
 def test_project_view_redacts_server_tmux_evidence() -> None:
     fake = _FakeCcbdClient()
     payload = _service(fake).project_view_payload('proj-demo')
@@ -253,6 +310,44 @@ def test_project_view_rejects_unknown_project() -> None:
     with pytest.raises(MobileGatewayError, match='unknown project') as excinfo:
         _service(_FakeCcbdClient()).project_view_payload('other')
     assert excinfo.value.status_code == 404
+
+
+def test_project_view_routes_to_matching_registry_project() -> None:
+    first = _FakeCcbdClient(
+        project_id='proj-one',
+        project_root='/srv/one',
+        display_name='one',
+    )
+    second = _FakeCcbdClient(
+        project_id='proj-two',
+        project_root='/srv/two',
+        display_name='two',
+    )
+    service = _service(
+        first,
+        project_registry=MobileGatewayProjectRegistry(
+            [
+                MobileGatewayProject(
+                    project_id='proj-one',
+                    project_root=Path('/srv/one'),
+                    ccbd_client_factory=lambda: first,
+                ),
+                MobileGatewayProject(
+                    project_id='proj-two',
+                    project_root=Path('/srv/two'),
+                    ccbd_client_factory=lambda: second,
+                ),
+            ]
+        ),
+    )
+
+    payload = service.project_view_payload('proj-two')
+
+    assert payload['view']['project']['id'] == 'proj-two'
+    assert payload['view']['project']['root'] == '/srv/two'
+    assert 'socket_path' not in payload['view']['namespace']
+    assert first.calls == []
+    assert second.calls == [('project_view', 1)]
 
 
 def test_terminal_history_reads_selected_agent_scrollback_without_leaking_tmux_evidence(tmp_path: Path) -> None:

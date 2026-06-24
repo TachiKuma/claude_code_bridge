@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from ccbd.api_models import DeliveryScope, MessageEnvelope
 from ccbd.socket_client import CcbdClientError
 from .pairing import MobileGatewayPairingError, MobileGatewayPairingStore
+from .project_registry import MobileGatewayProject, MobileGatewayProjectRegistry
 from .terminal import (
     TerminalAttachTarget,
     TerminalGeometry,
@@ -73,6 +74,7 @@ class MobileGatewayService:
         ccbd_client_factory: Callable[[], object],
         mobile_dir: Path | None = None,
         pairing_store: MobileGatewayPairingStore | None = None,
+        project_registry: MobileGatewayProjectRegistry | None = None,
         clock: Callable[[], str] | None = None,
         terminal_session_factory: Callable[[TerminalAttachTarget], object] | None = None,
         terminal_history_factory: Callable[[TerminalHistoryTarget], dict[str, object]] | None = None,
@@ -80,6 +82,11 @@ class MobileGatewayService:
         self._project_id = str(project_id)
         self._project_root = Path(project_root)
         self._ccbd_client_factory = ccbd_client_factory
+        self._project_registry = project_registry or MobileGatewayProjectRegistry.current_project(
+            project_id=self._project_id,
+            project_root=self._project_root,
+            ccbd_client_factory=self._ccbd_client_factory,
+        )
         self._clock = clock or _utc_now
         self._terminal_session_factory = terminal_session_factory or create_tmux_terminal_session
         self._terminal_history_factory = terminal_history_factory or create_tmux_terminal_history
@@ -118,24 +125,27 @@ class MobileGatewayService:
         }
 
     def projects_payload(self) -> dict[str, object]:
-        ccbd = self._ping_or_unavailable()
-        return {
-            'schema_version': _SCHEMA_VERSION,
-            'projects': [
+        projects: list[dict[str, object]] = []
+        for project in self._project_registry.projects():
+            ccbd = self._ping_or_unavailable(project)
+            projects.append(
                 {
-                    'id': self._project_id,
-                    'display_name': self._project_root.name,
+                    'id': project.project_id,
+                    'display_name': project.public_display_name,
+                    'root': str(project.project_root),
                     'health': str(ccbd.get('health') or 'unknown'),
+                    'mount_state': str(ccbd.get('mount_state') or ''),
                     'capabilities': self._capabilities(),
                 }
-            ],
+            )
+        return {
+            'schema_version': _SCHEMA_VERSION,
+            'projects': projects,
         }
 
     def project_view_payload(self, project_id: str) -> dict[str, object]:
-        requested = str(project_id or '').strip()
-        if requested != self._project_id:
-            raise MobileGatewayError('unknown project', status_code=404)
-        payload = self._request_project_view()
+        project = self._require_project(project_id)
+        payload = self._request_project_view(project)
         return _redact_project_view_payload(payload)
 
     def create_pairing_payload(
@@ -210,11 +220,11 @@ class MobileGatewayService:
         query: Mapping[str, object],
         headers: Mapping[str, object] | None = None,
     ) -> dict[str, object]:
-        self._require_current_project(project_id)
+        project = self._require_project(project_id)
         self._authenticate(headers, required_scopes=('view',))
-        view_payload = self._request_project_view()
+        view_payload = self._request_project_view(project)
         target = _terminal_history_target(
-            project_id=self._project_id,
+            project_id=project.project_id,
             view_payload=view_payload,
             agent=_query_text(query, 'agent'),
             namespace_epoch=_query_int(query, 'namespace_epoch'),
@@ -233,7 +243,7 @@ class MobileGatewayService:
         return {
             'schema_version': _SCHEMA_VERSION,
             'status': 'ok',
-            'project_id': self._project_id,
+            'project_id': project.project_id,
             'terminal_history': history,
         }
 
@@ -245,11 +255,11 @@ class MobileGatewayService:
         query: Mapping[str, object],
         headers: Mapping[str, object] | None = None,
     ) -> dict[str, object]:
-        self._require_current_project(project_id)
+        project = self._require_project(project_id)
         self._authenticate(headers, required_scopes=('view',))
-        view_payload = self._request_project_view()
+        view_payload = self._request_project_view(project)
         target = _validate_agent_conversation_target(
-            project_id=self._project_id,
+            project_id=project.project_id,
             view_payload=view_payload,
             agent=agent,
             namespace_epoch=_query_int(query, 'namespace_epoch'),
@@ -260,13 +270,13 @@ class MobileGatewayService:
             agent=target['agent'],
             namespace_epoch=int(target['namespace_epoch']),
             limit=limit,
-            project_root=self._project_root,
+            project_root=project.project_root,
         )
         return {
             'schema_version': _SCHEMA_VERSION,
             'status': 'ok',
             'conversation': {
-                'project_id': self._project_id,
+                'project_id': project.project_id,
                 'agent': target['agent'],
                 'namespace_epoch': target['namespace_epoch'],
                 'generated_at': self._clock(),
@@ -353,13 +363,13 @@ class MobileGatewayService:
         payload: Mapping[str, object],
         headers: Mapping[str, object] | None,
     ) -> dict[str, object]:
-        self._require_current_project(project_id)
+        project = self._require_project(project_id)
         auth = self._authenticate_any_scope(
             headers,
             allowed_scopes=('ask', 'message_submit'),
         )
         body_project_id = str(payload.get('project_id') or '').strip()
-        if body_project_id and body_project_id != self._project_id:
+        if body_project_id and body_project_id != project.project_id:
             raise MobileGatewayError('request project_id does not match route', status_code=400)
         body_agent = str(payload.get('agent') or '').strip()
         if body_agent and body_agent != agent:
@@ -371,17 +381,17 @@ class MobileGatewayService:
         if not body:
             raise MobileGatewayError('body is required', status_code=400)
         message_format = str(payload.get('format') or 'markdown').strip() or 'markdown'
-        view_payload = self._request_project_view()
+        view_payload = self._request_project_view(project)
         target = _validate_agent_conversation_target(
-            project_id=self._project_id,
+            project_id=project.project_id,
             view_payload=view_payload,
             agent=agent,
             namespace_epoch=_optional_int(payload.get('namespace_epoch')),
         )
         try:
-            receipt = self._client().submit(
+            receipt = project.client().submit(
                 MessageEnvelope(
-                    project_id=self._project_id,
+                    project_id=project.project_id,
                     to_agent=target['agent'],
                     from_actor='user',
                     body=body,
@@ -410,7 +420,7 @@ class MobileGatewayService:
         return {
             'schema_version': _SCHEMA_VERSION,
             'status': 'ok',
-            'project_id': self._project_id,
+            'project_id': project.project_id,
             'agent': target['agent'],
             'message_submit': {
                 'accepted': True,
@@ -566,17 +576,17 @@ class MobileGatewayService:
         namespace_epoch: int | None,
         headers: Mapping[str, object] | None,
     ) -> dict[str, object]:
-        self._require_current_project(project_id)
+        project = self._require_project(project_id)
         self._authenticate(headers, required_scopes=('focus',))
         if not str(agent or '').strip():
             raise MobileGatewayError('agent is required', status_code=400)
         try:
-            focus = self._client().project_focus_agent(agent=agent, namespace_epoch=namespace_epoch)
+            focus = project.client().project_focus_agent(agent=agent, namespace_epoch=namespace_epoch)
         except CcbdClientError as exc:
             raise MobileGatewayError(str(exc), status_code=_ccbd_focus_status(exc)) from exc
         except Exception as exc:
             raise MobileGatewayError(_error_text(exc), status_code=503) from exc
-        return self._focused_project_view_payload(focus)
+        return self._focused_project_view_payload(project, focus)
 
     def _project_lifecycle(
         self,
@@ -585,10 +595,10 @@ class MobileGatewayService:
         payload: Mapping[str, object],
         headers: Mapping[str, object] | None,
     ) -> dict[str, object]:
-        self._require_current_project(project_id)
+        project = self._require_project(project_id)
         self._authenticate(headers, required_scopes=('lifecycle',))
         body_project_id = str(payload.get('project_id') or '').strip()
-        if body_project_id and body_project_id != self._project_id:
+        if body_project_id and body_project_id != project.project_id:
             raise MobileGatewayError('request project_id does not match route', status_code=400)
         action = str(payload.get('action') or '').strip().lower()
         if action not in {'wake', 'open', 'close', 'stop'}:
@@ -600,11 +610,11 @@ class MobileGatewayService:
                 effect='already_running' if action == 'wake' else 'opened',
                 ccb_authority=True,
             )
-            response = _redact_project_view_payload(self._request_project_view())
+            response = _redact_project_view_payload(self._request_project_view(project))
             response.update({
                 'schema_version': _SCHEMA_VERSION,
                 'status': 'ok',
-                'project_id': self._project_id,
+                'project_id': project.project_id,
                 'lifecycle': result,
             })
             return response
@@ -612,7 +622,7 @@ class MobileGatewayService:
             return {
                 'schema_version': _SCHEMA_VERSION,
                 'status': 'ok',
-                'project_id': self._project_id,
+                'project_id': project.project_id,
                 'lifecycle': self._lifecycle_result(
                     action='close',
                     state='running',
@@ -621,7 +631,7 @@ class MobileGatewayService:
                 ),
             }
         try:
-            stop_result = self._client().stop_all(force=False)
+            stop_result = project.client().stop_all(force=False)
         except CcbdClientError as exc:
             raise MobileGatewayError(str(exc), status_code=503) from exc
         except Exception as exc:
@@ -629,7 +639,7 @@ class MobileGatewayService:
         return {
             'schema_version': _SCHEMA_VERSION,
             'status': 'ok',
-            'project_id': self._project_id,
+            'project_id': project.project_id,
             'lifecycle': self._lifecycle_result(
                 action='stop',
                 state='stopping',
@@ -669,17 +679,17 @@ class MobileGatewayService:
         namespace_epoch: int | None,
         headers: Mapping[str, object] | None,
     ) -> dict[str, object]:
-        self._require_current_project(project_id)
+        project = self._require_project(project_id)
         self._authenticate(headers, required_scopes=('focus',))
         if not str(window or '').strip():
             raise MobileGatewayError('window is required', status_code=400)
         try:
-            focus = self._client().project_focus_window(window=window, namespace_epoch=namespace_epoch)
+            focus = project.client().project_focus_window(window=window, namespace_epoch=namespace_epoch)
         except CcbdClientError as exc:
             raise MobileGatewayError(str(exc), status_code=_ccbd_focus_status(exc)) from exc
         except Exception as exc:
             raise MobileGatewayError(_error_text(exc), status_code=503) from exc
-        return self._focused_project_view_payload(focus)
+        return self._focused_project_view_payload(project, focus)
 
     def _open_terminal(
         self,
@@ -688,22 +698,22 @@ class MobileGatewayService:
         payload: Mapping[str, object],
         headers: Mapping[str, object] | None,
     ) -> dict[str, object]:
-        self._require_current_project(project_id)
+        project = self._require_project(project_id)
         auth = self._authenticate(headers, required_scopes=('terminal_input',))
         body_project_id = str(payload.get('project_id') or '').strip()
-        if body_project_id and body_project_id != self._project_id:
+        if body_project_id and body_project_id != project.project_id:
             raise MobileGatewayError('request project_id does not match route', status_code=400)
         target = _map(payload.get('target'))
         geometry = _map(payload.get('geometry'))
-        view_payload = self._request_project_view()
+        view_payload = self._request_project_view(project)
         target_payload = _validate_terminal_target(
-            self._project_id,
+            project.project_id,
             view_payload,
             target=target,
             namespace_epoch=_optional_int(payload.get('namespace_epoch')),
         )
         handle = self._require_pairing_store().create_terminal_handle(
-            project_id=self._project_id,
+            project_id=project.project_id,
             device_id=auth.device_id,
             target_epoch=int(target_payload['target_epoch']),
             target_summary=target_payload['target_summary'],
@@ -713,16 +723,22 @@ class MobileGatewayService:
         handle['websocket_url'] = _terminal_websocket_url(headers, terminal_id=terminal_id)
         return handle
 
-    def _focused_project_view_payload(self, focus: dict[str, object]) -> dict[str, object]:
-        payload = self._request_project_view()
+    def _focused_project_view_payload(
+        self,
+        project: MobileGatewayProject,
+        focus: dict[str, object],
+    ) -> dict[str, object]:
+        payload = self._request_project_view(project)
         redacted = _redact_project_view_payload(payload)
         redacted['focus'] = dict(focus or {}) if isinstance(focus, dict) else {}
         return redacted
 
-    def _require_current_project(self, project_id: str) -> None:
+    def _require_project(self, project_id: str) -> MobileGatewayProject:
         requested = str(project_id or '').strip()
-        if requested != self._project_id:
+        project = self._project_registry.get(requested)
+        if project is None:
             raise MobileGatewayError('unknown project', status_code=404)
+        return project
 
     def _require_pairing_store(self) -> MobileGatewayPairingStore:
         if self._pairing_store is None:
@@ -755,18 +771,18 @@ class MobileGatewayService:
             return auth
         raise MobileGatewayError('device scope denied', status_code=403)
 
-    def _ping_or_unavailable(self) -> dict[str, object]:
+    def _ping_or_unavailable(self, project: MobileGatewayProject) -> dict[str, object]:
         try:
-            payload = self._client().ping('ccbd')
+            payload = project.client().ping('ccbd')
         except CcbdClientError as exc:
             raise MobileGatewayError(str(exc), status_code=503) from exc
         except Exception as exc:
             raise MobileGatewayError(_error_text(exc), status_code=503) from exc
         return dict(payload or {}) if isinstance(payload, dict) else {}
 
-    def _request_project_view(self) -> dict[str, object]:
+    def _request_project_view(self, project: MobileGatewayProject) -> dict[str, object]:
         try:
-            payload = self._client().project_view(schema_version=1)
+            payload = project.client().project_view(schema_version=1)
         except CcbdClientError as exc:
             raise MobileGatewayError(str(exc), status_code=503) from exc
         except Exception as exc:
@@ -774,7 +790,8 @@ class MobileGatewayService:
         return dict(payload or {}) if isinstance(payload, dict) else {}
 
     def _terminal_attach_target(self, record: dict[str, object]) -> TerminalAttachTarget:
-        view_payload = self._request_project_view()
+        project = self._require_project(str(record.get('project_id') or ''))
+        view_payload = self._request_project_view(project)
         view = _map(view_payload.get('view'))
         namespace = _map(view.get('namespace'))
         actual_epoch = _optional_int(namespace.get('epoch'))
