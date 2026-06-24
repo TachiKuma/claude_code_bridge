@@ -854,6 +854,86 @@ def test_agent_file_upload_download_round_trips_bytes_over_http(tmp_path: Path) 
         thread.join(timeout=2)
 
 
+def test_agent_file_routes_use_registry_project_id(tmp_path: Path) -> None:
+    first = _FakeCcbdClient(
+        project_id='proj-one',
+        project_root='/srv/one',
+        display_name='one',
+    )
+    second = _FakeCcbdClient(
+        project_id='proj-two',
+        project_root='/srv/two',
+        display_name='two',
+    )
+    service = _service(
+        first,
+        mobile_dir=tmp_path / 'mobile',
+        project_registry=MobileGatewayProjectRegistry(
+            [
+                MobileGatewayProject(
+                    project_id='proj-one',
+                    project_root=Path('/srv/one'),
+                    ccbd_client_factory=lambda: first,
+                ),
+                MobileGatewayProject(
+                    project_id='proj-two',
+                    project_root=Path('/srv/two'),
+                    ccbd_client_factory=lambda: second,
+                ),
+            ]
+        ),
+    )
+    pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
+    token = str(claim['device_token'])
+    data = b'server-wide file route\n'
+
+    status, upload = service.dispatch_file_upload(
+        '/v1/projects/proj-two/agents/mobile/files',
+        data,
+        {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'text/plain',
+            'X-Ccb-File-Name': 'server-wide.txt',
+        },
+    )
+
+    assert status == 201
+    file_id = str(upload['file_id'])
+    metadata_path = (
+        tmp_path
+        / 'mobile'
+        / 'files'
+        / 'proj-two'
+        / 'mobile'
+        / file_id
+        / 'metadata.json'
+    )
+    metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+    assert metadata['project_id'] == 'proj-two'
+    assert not (tmp_path / 'mobile' / 'files' / 'proj-demo' / 'mobile' / file_id).exists()
+
+    download_status, downloaded, headers = service.dispatch_file_download(
+        f'/v1/projects/proj-two/agents/mobile/files/{file_id}',
+        {'Authorization': f'Bearer {token}'},
+    )
+
+    assert download_status == 200
+    assert downloaded == data
+    assert headers['x-ccb-file-name'] == 'server-wide.txt'
+    with pytest.raises(MobileGatewayError) as wrong_project:
+        service.dispatch_file_download(
+            f'/v1/projects/proj-one/agents/mobile/files/{file_id}',
+            {'Authorization': f'Bearer {token}'},
+        )
+    assert wrong_project.value.status_code == 404
+    assert first.calls == []
+    assert second.calls == [('project_view', 1)]
+
+
 def test_agent_file_routes_require_file_scopes(tmp_path: Path) -> None:
     service = _service(_FakeCcbdClient(), mobile_dir=tmp_path / 'mobile')
     pairing = service.create_pairing_payload(

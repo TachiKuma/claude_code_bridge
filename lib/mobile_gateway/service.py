@@ -279,7 +279,7 @@ class MobileGatewayService:
         limit = min(200, max(1, _query_int(query, 'limit') or 50))
         items = _agent_conversation_items(
             view_payload,
-            project_id=self._project_id,
+            project_id=project.project_id,
             agent=target['agent'],
             namespace_epoch=int(target['namespace_epoch']),
             limit=limit,
@@ -317,18 +317,18 @@ class MobileGatewayService:
         if target is None:
             raise MobileGatewayError('not found', status_code=404)
         project_id, agent = target
-        self._require_current_project(project_id)
+        project = self._require_project(project_id)
         auth = self._authenticate_any_scope(
             headers,
             allowed_scopes=('file_upload', 'message_submit', 'ask'),
         )
         if len(body) > _MAX_MOBILE_FILE_BYTES:
             raise MobileGatewayError('file too large', status_code=413)
-        view_payload = self._request_project_view()
+        view_payload = self._request_project_view(project)
         view = _map(view_payload.get('view'))
         namespace = _map(view.get('namespace'))
         target_record = _validate_agent_conversation_target(
-            project_id=self._project_id,
+            project_id=project.project_id,
             view_payload=view_payload,
             agent=agent,
             namespace_epoch=_optional_int(namespace.get('epoch')),
@@ -340,7 +340,7 @@ class MobileGatewayService:
         record = {
             'schema_version': _SCHEMA_VERSION,
             'file_id': file_id,
-            'project_id': self._project_id,
+            'project_id': project.project_id,
             'agent': target_record['agent'],
             'device_id': auth.device_id,
             'file_name': file_name,
@@ -349,7 +349,7 @@ class MobileGatewayService:
             'sha256': digest,
             'created_at': self._clock(),
         }
-        directory = self._mobile_file_dir(self._project_id, str(target_record['agent']), file_id)
+        directory = self._mobile_file_dir(project.project_id, str(target_record['agent']), file_id)
         directory.mkdir(parents=True, exist_ok=False)
         (directory / 'content.bin').write_bytes(body)
         (directory / 'metadata.json').write_text(
@@ -375,16 +375,16 @@ class MobileGatewayService:
         if target is None:
             raise MobileGatewayError('not found', status_code=404)
         project_id, agent, file_id = target
-        self._require_current_project(project_id)
+        project = self._require_project(project_id)
         self._authenticate_any_scope(
             headers,
             allowed_scopes=('file_download', 'content', 'view'),
         )
-        directory = self._mobile_file_dir(self._project_id, agent, file_id)
+        directory = self._mobile_file_dir(project.project_id, agent, file_id)
         metadata = _read_file_metadata(directory)
         if not metadata:
             raise MobileGatewayError('unknown file', status_code=404)
-        if str(metadata.get('project_id') or '') != self._project_id:
+        if str(metadata.get('project_id') or '') != project.project_id:
             raise MobileGatewayError('unknown file', status_code=404)
         if str(metadata.get('agent') or '') != agent:
             raise MobileGatewayError('unknown file', status_code=404)
