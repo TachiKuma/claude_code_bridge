@@ -14,6 +14,7 @@ from collections.abc import Callable, Mapping, Sequence
 TAILSCALE_DOWNLOAD_URL = "https://tailscale.com/download"
 TAILSCALE_LOGIN_URL = "https://login.tailscale.com/start"
 DEFAULT_MOBILE_GATEWAY_LISTEN = "127.0.0.1:8787"
+CCB_MOBILE_APP_DOWNLOAD_URL_ENV = "CCB_MOBILE_APP_DOWNLOAD_URL"
 TAILSCALE_LINUX_INSTALL_COMMAND = ("sh", "-c", "curl -fsSL https://tailscale.com/install.sh | sh")
 
 
@@ -73,7 +74,7 @@ def run_mobile_update_onboarding(
             return install_result
         print_fn("   Then run `tailscale up` and re-run `ccb update mobile`.")
         print_fn("")
-        _print_mobile_app_steps(print_fn)
+        _print_mobile_app_steps(print_fn, environ=env)
         return 0
 
     print_fn(f"✅ Tailscale detected: {status.path or 'tailscale'}")
@@ -87,7 +88,7 @@ def run_mobile_update_onboarding(
             open_url_fn(TAILSCALE_LOGIN_URL)
             print_fn("   Opened the Tailscale login/register page.")
         print_fn("")
-        _print_mobile_app_steps(print_fn)
+        _print_mobile_app_steps(print_fn, environ=env)
         return 0
 
     print_fn("✅ Tailscale is logged in.")
@@ -100,7 +101,7 @@ def run_mobile_update_onboarding(
     print_fn(f"   {_shell_join(commands.tailscale_serve)}")
     print_fn("   This uses Tailscale Serve only; it does not enable Funnel.")
     print_fn("")
-    _print_mobile_app_steps(print_fn)
+    _print_mobile_app_steps(print_fn, environ=env)
     print_fn("")
     print_fn("After `ccb mobile serve` prints the pairing QR, scan it from CCB Mobile.")
     print_fn("")
@@ -311,12 +312,21 @@ def _print_install_confirmation_hint(print_fn: Callable[[str], None]) -> None:
     print_fn("   Re-run in an interactive terminal, or set CCB_UPDATE_MOBILE_INSTALL_TAILSCALE=1 to install.")
 
 
-def _print_mobile_app_steps(print_fn: Callable[[str], None]) -> None:
+def _print_mobile_app_steps(print_fn: Callable[[str], None], *, environ: Mapping[str, str]) -> None:
+    app_download_url = _clean_text(environ.get(CCB_MOBILE_APP_DOWNLOAD_URL_ENV))
     print_fn("Phone setup:")
     print_fn("   1. Install Tailscale on the phone and sign in to the same tailnet.")
-    print_fn("   2. Enable the Tailscale VPN on the phone.")
-    print_fn("   3. Install/open CCB Mobile.")
-    print_fn("   4. Scan the CCB Mobile pairing QR.")
+    print_fn("   2. Install CCB Mobile on the phone:")
+    if app_download_url:
+        print_fn(f"      Download APK: {app_download_url}")
+    else:
+        print_fn("      Use your team's CCB Mobile APK/release link.")
+        print_fn("      Dev/emulator build: from the ccb_mobile/app checkout, run:")
+        print_fn("         flutter build apk --debug")
+        print_fn("         adb install -r build/app/outputs/flutter-apk/app-debug.apk")
+        print_fn(f"      To print a custom APK link here, set {CCB_MOBILE_APP_DOWNLOAD_URL_ENV}.")
+    print_fn("   3. Enable the Tailscale VPN on the phone.")
+    print_fn("   4. Open CCB Mobile and scan the pairing QR.")
 
 
 def _should_open_login(environ: Mapping[str, str]) -> bool:
@@ -356,6 +366,7 @@ def _quote_shell_part(value: object) -> str:
 
 __all__ = [
     "DEFAULT_MOBILE_GATEWAY_LISTEN",
+    "CCB_MOBILE_APP_DOWNLOAD_URL_ENV",
     "TAILSCALE_LINUX_INSTALL_COMMAND",
     "TAILSCALE_DOWNLOAD_URL",
     "TAILSCALE_LOGIN_URL",
