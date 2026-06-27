@@ -948,6 +948,11 @@ Current evidence:
 - guarded provider prepare-only now covers both `window-class` and
   `resolve-preflight` for Codex+Claude, so CI validates the new project/config
   surface without requiring real provider auth;
+- guarded `resolve-preflight` provider preparation can now keep static
+  overflow filler panes on `fake` while reserving Codex/Claude for the dynamic
+  reviewer and loop worker/checker profiles, reducing the future real-provider
+  run from a large static pane startup to the actual dynamic add/release and
+  loop-capacity surfaces that need real-provider proof;
 - live provider release remains gated on busy/idle checks.
 
 Deferred:

@@ -23,6 +23,7 @@ DEFAULT_TEST_ROOT = dynamic_layout_smoke.DEFAULT_TEST_ROOT
 DEFAULT_CCB_TEST = dynamic_layout_smoke.DEFAULT_CCB_TEST
 DEFAULT_PROJECT_PREFIX = "dynamic-layout-provider-matrix"
 DEFAULT_COMMAND_TIMEOUT_S = int(os.environ.get("CCB_GUARDED_DYNAMIC_LAYOUT_TIMEOUT_S", "300"))
+DEFAULT_RESOLVE_PREFLIGHT_STATIC_PROVIDER = "fake"
 
 
 def run_guarded_provider_matrix_smoke(
@@ -34,6 +35,7 @@ def run_guarded_provider_matrix_smoke(
     flows: tuple[str, ...] = DEFAULT_FLOWS,
     provider_home_mode: str = "real-home",
     command_timeout_s: int = DEFAULT_COMMAND_TIMEOUT_S,
+    resolve_preflight_static_provider: str | None = DEFAULT_RESOLVE_PREFLIGHT_STATIC_PROVIDER,
     run: bool = False,
     reset: bool = False,
     full_output: bool = False,
@@ -48,6 +50,7 @@ def run_guarded_provider_matrix_smoke(
         flows=flows,
         provider_home_mode=provider_home_mode,
         command_timeout_s=command_timeout_s,
+        resolve_preflight_static_provider=resolve_preflight_static_provider,
         prepare_only=not run,
         reset=reset,
         keep_running=False,
@@ -70,6 +73,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Flow to run. Defaults to window-class.",
     )
     parser.add_argument("--provider-home-mode", choices=("source-home", "real-home"), default="real-home")
+    parser.add_argument(
+        "--resolve-preflight-static-provider",
+        default=DEFAULT_RESOLVE_PREFLIGHT_STATIC_PROVIDER,
+        help="Provider used only for static resolve-preflight filler panes; defaults to fake for the guarded matrix.",
+    )
     parser.add_argument("--command-timeout", type=int, default=DEFAULT_COMMAND_TIMEOUT_S)
     parser.add_argument("--reset", action="store_true")
     parser.add_argument("--run", action="store_true", help=f"Actually run providers; also requires {dynamic_layout_smoke.REAL_RUN_ENV}=1.")
@@ -88,6 +96,7 @@ def main(argv: list[str] | None = None) -> int:
         flows=tuple(args.flow or DEFAULT_FLOWS),
         provider_home_mode=args.provider_home_mode,
         command_timeout_s=int(args.command_timeout),
+        resolve_preflight_static_provider=args.resolve_preflight_static_provider,
         run=bool(args.run),
         reset=bool(args.reset),
         full_output=bool(args.full_output),

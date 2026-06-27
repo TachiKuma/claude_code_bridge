@@ -46,6 +46,17 @@ def test_build_configs_accept_provider() -> None:
     assert 'provider = "qwen"' in module.build_resolve_preflight_config(provider="qwen")
 
 
+def test_build_resolve_preflight_config_can_use_static_filler_provider() -> None:
+    module = _load_module()
+
+    text = module.build_resolve_preflight_config(provider="codex", static_provider="fake")
+
+    assert 'main = "frontdesk:fake"' in text
+    assert 'plan-orchestrate = "p1:fake, p2:fake, p3:fake, p4:fake, p5:fake, p6:fake"' in text
+    assert '[loop.role_profiles.worker]' in text
+    assert 'provider = "codex"' in text
+
+
 def test_build_window_class_config_declares_plan_orchestrate_window() -> None:
     module = _load_module()
 
@@ -136,6 +147,29 @@ def test_prepare_only_can_generate_resolve_preflight_project(tmp_path: Path) -> 
     assert 'plan-orchestrate = "p1:claude, p2:claude, p3:claude, p4:claude, p5:claude, p6:claude"' in config.read_text(encoding="utf-8")
 
 
+def test_prepare_only_can_generate_light_real_provider_resolve_preflight_project(tmp_path: Path) -> None:
+    module = _load_module()
+
+    payload = module.run_dynamic_layout_smoke(
+        test_root=tmp_path,
+        project_prefix="resolve-light",
+        ccb_test=Path(__file__),
+        provider="codex",
+        flows=("resolve-preflight",),
+        resolve_preflight_static_provider="fake",
+        prepare_only=True,
+        reset=True,
+    )
+
+    assert payload["dynamic_layout_smoke_status"] == "prepared"
+    assert payload["resolve_preflight_static_provider"] == "fake"
+    config = Path(payload["prepared"][0]["project_root"]) / ".ccb" / "ccb.config"
+    text = config.read_text(encoding="utf-8")
+    assert 'main = "frontdesk:fake"' in text
+    assert 'plan-orchestrate = "p1:fake, p2:fake, p3:fake, p4:fake, p5:fake, p6:fake"' in text
+    assert 'provider = "codex"' in text
+
+
 def test_real_provider_run_requires_explicit_opt_in(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     module = _load_module()
     monkeypatch.delenv(module.REAL_RUN_ENV, raising=False)
@@ -173,8 +207,9 @@ def test_main_passes_command_timeout_to_runner(monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setattr(module, "run_dynamic_layout_smoke", fake_runner)
 
-    assert module.main(["--command-timeout", "123", "--prepare-only"]) == 0
+    assert module.main(["--command-timeout", "123", "--prepare-only", "--resolve-preflight-static-provider", "fake"]) == 0
     assert captured["command_timeout_s"] == 123
+    assert captured["resolve_preflight_static_provider"] == "fake"
 
 
 def test_main_runs_repeated_providers_as_matrix(monkeypatch: pytest.MonkeyPatch) -> None:

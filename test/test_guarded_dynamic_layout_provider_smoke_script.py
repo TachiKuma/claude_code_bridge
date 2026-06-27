@@ -29,6 +29,7 @@ def test_guarded_provider_matrix_defaults_to_prepare_only(tmp_path: Path, monkey
             "providers": list(kwargs["providers"]),
             "flows": list(kwargs["flows"]),
             "provider_home_mode": kwargs["provider_home_mode"],
+            "resolve_preflight_static_provider": kwargs["resolve_preflight_static_provider"],
             "checks": {"codex": True, "claude": True},
             "provider_results": [],
         }
@@ -45,6 +46,7 @@ def test_guarded_provider_matrix_defaults_to_prepare_only(tmp_path: Path, monkey
     assert captured["providers"] == ("codex", "claude")
     assert captured["flows"] == ("window-class", "resolve-preflight")
     assert captured["provider_home_mode"] == "real-home"
+    assert captured["resolve_preflight_static_provider"] == "fake"
     assert captured["prepare_only"] is True
 
 
@@ -71,10 +73,22 @@ def test_guarded_provider_matrix_main_accepts_provider_overrides(monkeypatch: py
 
     monkeypatch.setattr(module, "run_guarded_provider_matrix_smoke", fake_runner)
 
-    assert module.main(["--provider", "codex", "--flow", "window-class", "--command-timeout", "123"]) == 0
+    assert module.main(
+        [
+            "--provider",
+            "codex",
+            "--flow",
+            "window-class",
+            "--command-timeout",
+            "123",
+            "--resolve-preflight-static-provider",
+            "fake",
+        ]
+    ) == 0
     assert captured["providers"] == ("codex",)
     assert captured["flows"] == ("window-class",)
     assert captured["command_timeout_s"] == 123
+    assert captured["resolve_preflight_static_provider"] == "fake"
     assert captured["run"] is False
 
 

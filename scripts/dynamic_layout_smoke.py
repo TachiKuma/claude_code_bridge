@@ -87,17 +87,18 @@ def build_window_class_config(*, provider: str = "fake") -> str:
     )
 
 
-def build_resolve_preflight_config(*, provider: str = "fake") -> str:
+def build_resolve_preflight_config(*, provider: str = "fake", static_provider: str | None = None) -> str:
+    filler_provider = static_provider or provider
     return "\n".join(
         [
             "version = 2",
             'entry_window = "main"',
             "",
             "[windows]",
-            f'main = "frontdesk:{provider}"',
+            f'main = "frontdesk:{filler_provider}"',
             (
                 'plan-orchestrate = "'
-                + ", ".join(f"p{index}:{provider}" for index in range(1, 7))
+                + ", ".join(f"p{index}:{filler_provider}" for index in range(1, 7))
                 + '"'
             ),
             "",
@@ -160,12 +161,22 @@ def prepare_window_class_project(*, test_root: Path, project_name: str, provider
     return {"project_root": str(project_root), "role_store": str(role_store)}
 
 
-def prepare_resolve_preflight_project(*, test_root: Path, project_name: str, provider: str = "fake", reset: bool = False) -> dict[str, str]:
+def prepare_resolve_preflight_project(
+    *,
+    test_root: Path,
+    project_name: str,
+    provider: str = "fake",
+    static_provider: str | None = None,
+    reset: bool = False,
+) -> dict[str, str]:
     project_root = _project_root(test_root, project_name)
     if reset and project_root.exists():
         shutil.rmtree(project_root)
     (project_root / ".ccb").mkdir(parents=True, exist_ok=True)
-    (project_root / ".ccb" / "ccb.config").write_text(build_resolve_preflight_config(provider=provider), encoding="utf-8")
+    (project_root / ".ccb" / "ccb.config").write_text(
+        build_resolve_preflight_config(provider=provider, static_provider=static_provider),
+        encoding="utf-8",
+    )
     role_store = project_root / "roles"
     _write_minimal_role(role_store, "agentroles.general", default_agent_name="general")
     _write_minimal_role(role_store, "agentroles.coder", default_agent_name="worker")
@@ -182,6 +193,7 @@ def run_dynamic_layout_smoke(
     flows: tuple[str, ...] | None = None,
     provider_home_mode: str = "source-home",
     command_timeout_s: int = DEFAULT_COMMAND_TIMEOUT_S,
+    resolve_preflight_static_provider: str | None = None,
     prepare_only: bool = False,
     reset: bool = False,
     keep_running: bool = False,
@@ -198,12 +210,14 @@ def run_dynamic_layout_smoke(
             project_prefix=project_prefix,
             provider=provider,
             flows=flow_names,
+            resolve_preflight_static_provider=resolve_preflight_static_provider,
             reset=reset,
         )
         return {
             "dynamic_layout_smoke_status": "prepared",
             "provider": provider,
             "provider_home_mode": provider_home_mode,
+            "resolve_preflight_static_provider": resolve_preflight_static_provider,
             "flows": list(flow_names),
             "preflight": preflight_payload,
             "prepared": prepared,
@@ -256,6 +270,7 @@ def run_dynamic_layout_smoke(
                 test_root=test_root,
                 project_name=f"{project_prefix}-resolve-preflight",
                 provider=provider,
+                static_provider=resolve_preflight_static_provider,
                 ccb_test=ccb_test,
                 provider_home=provider_home,
                 command_timeout_s=command_timeout_s,
@@ -268,6 +283,7 @@ def run_dynamic_layout_smoke(
         "dynamic_layout_smoke_status": "ok" if all(checks.values()) else "failed",
         "provider": provider,
         "provider_home_mode": provider_home_mode,
+        "resolve_preflight_static_provider": resolve_preflight_static_provider,
         "flows": list(flow_names),
         "preflight": preflight_payload,
         "checks": checks,
@@ -284,6 +300,7 @@ def run_dynamic_layout_provider_matrix(
     flows: tuple[str, ...] | None = None,
     provider_home_mode: str = "source-home",
     command_timeout_s: int = DEFAULT_COMMAND_TIMEOUT_S,
+    resolve_preflight_static_provider: str | None = None,
     prepare_only: bool = False,
     reset: bool = False,
     keep_running: bool = False,
@@ -300,6 +317,7 @@ def run_dynamic_layout_provider_matrix(
                 flows=flows,
                 provider_home_mode=provider_home_mode,
                 command_timeout_s=command_timeout_s,
+                resolve_preflight_static_provider=resolve_preflight_static_provider,
                 prepare_only=prepare_only,
                 reset=reset,
                 keep_running=keep_running,
@@ -311,6 +329,7 @@ def run_dynamic_layout_provider_matrix(
         "dynamic_layout_smoke_status": status,
         "providers": list(provider_names),
         "provider_home_mode": provider_home_mode,
+        "resolve_preflight_static_provider": resolve_preflight_static_provider,
         "flows": list(_normalize_flows(flows)),
         "checks": checks,
         "provider_results": results,
@@ -613,13 +632,20 @@ def _run_resolve_preflight_flow(
     test_root: Path,
     project_name: str,
     provider: str,
+    static_provider: str | None,
     ccb_test: Path,
     provider_home: Path,
     command_timeout_s: int,
     reset: bool,
     keep_running: bool,
 ) -> dict[str, Any]:
-    prepared = prepare_resolve_preflight_project(test_root=test_root, project_name=project_name, provider=provider, reset=reset)
+    prepared = prepare_resolve_preflight_project(
+        test_root=test_root,
+        project_name=project_name,
+        provider=provider,
+        static_provider=static_provider,
+        reset=reset,
+    )
     project_root = Path(prepared["project_root"])
     env = _env(provider_home=provider_home, role_store=Path(prepared["role_store"]))
     commands: list[dict[str, Any]] = []
@@ -864,6 +890,7 @@ def _prepare_selected_projects(
     project_prefix: str,
     provider: str,
     flows: tuple[str, ...],
+    resolve_preflight_static_provider: str | None,
     reset: bool,
 ) -> list[dict[str, str]]:
     prepared: list[dict[str, str]] = []
@@ -900,6 +927,7 @@ def _prepare_selected_projects(
                 test_root=test_root,
                 project_name=f"{project_prefix}-resolve-preflight",
                 provider=provider,
+                static_provider=resolve_preflight_static_provider,
                 reset=reset,
             )
         )
@@ -1058,6 +1086,7 @@ def compact_smoke_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "provider": payload.get("provider"),
         "providers": payload.get("providers"),
         "provider_home_mode": payload.get("provider_home_mode"),
+        "resolve_preflight_static_provider": payload.get("resolve_preflight_static_provider"),
         "flows": payload.get("flows"),
         "preflight": payload.get("preflight"),
         "prepared": payload.get("prepared"),
@@ -1252,6 +1281,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--provider", action="append", dest="providers", help="Provider to run; repeat for a guarded provider matrix. Defaults to fake.")
     parser.add_argument("--flow", action="append", choices=FLOW_NAMES, help="Flow to run; repeat to run multiple flows. Defaults to all flows.")
     parser.add_argument("--provider-home-mode", choices=("source-home", "real-home"), default="source-home")
+    parser.add_argument(
+        "--resolve-preflight-static-provider",
+        default=None,
+        help="Provider used only for static resolve-preflight filler panes; defaults to the selected provider.",
+    )
     parser.add_argument("--command-timeout", type=int, default=DEFAULT_COMMAND_TIMEOUT_S)
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--reset", action="store_true")
@@ -1269,6 +1303,7 @@ def main(argv: list[str] | None = None) -> int:
             flows=tuple(args.flow or ()),
             provider_home_mode=args.provider_home_mode,
             command_timeout_s=args.command_timeout,
+            resolve_preflight_static_provider=args.resolve_preflight_static_provider,
             prepare_only=args.prepare_only,
             reset=args.reset,
             keep_running=args.keep_running,
@@ -1282,6 +1317,7 @@ def main(argv: list[str] | None = None) -> int:
             flows=tuple(args.flow or ()),
             provider_home_mode=args.provider_home_mode,
             command_timeout_s=args.command_timeout,
+            resolve_preflight_static_provider=args.resolve_preflight_static_provider,
             prepare_only=args.prepare_only,
             reset=args.reset,
             keep_running=args.keep_running,
