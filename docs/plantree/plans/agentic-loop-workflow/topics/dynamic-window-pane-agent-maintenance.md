@@ -674,6 +674,11 @@ Evidence:
   both prepare-only and real guarded source-wrapper runs in
   `/home/bfly/yunwei/test_ccb2/guarded-dynamic-layout-prepare-1782568181-*`
   and `/home/bfly/yunwei/test_ccb2/guarded-dynamic-layout-real-1782568215-*`.
+- The default `Tests` workflow now runs that wrapper as a prepare-only Ubuntu
+  py3.11 gate, without `--run`, and asserts that the Codex+Claude
+  `window-class` provider matrix reaches `prepared`. This keeps real provider
+  execution behind explicit local/release opt-in while making wrapper drift a
+  normal CI failure.
 - Focused regression after connecting loop capacity to layout placement passed
   with `187 passed` across loop capacity, agent lifecycle, layout status, pane
   growth, layout runtime, reload patch/runtime mount, and config loader tests.

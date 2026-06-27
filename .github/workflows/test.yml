@@ -47,6 +47,30 @@ jobs:
         run: pytest test/ -v --tb=short -m "not provider_blackbox"
         shell: bash
 
+      - name: Guard dynamic layout provider matrix smoke
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export TERM=xterm-256color
+          smoke_root="${RUNNER_TEMP}/ccb-dynamic-layout-provider-matrix-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          python scripts/guarded_dynamic_layout_provider_smoke.py \
+            --test-root "$smoke_root" \
+            --project-prefix ci-guarded-dynamic-layout \
+            --ccb-test "$GITHUB_WORKSPACE/ccb_test" \
+            --reset \
+            --json | tee "$RUNNER_TEMP/guarded-dynamic-layout-provider-smoke.json"
+          python - "$RUNNER_TEMP/guarded-dynamic-layout-provider-smoke.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          assert payload["dynamic_layout_smoke_status"] == "prepared"
+          assert payload["providers"] == ["codex", "claude"]
+          assert payload["flows"] == ["window-class"]
+          PY
+
   provider-blackbox:
     name: Provider blackbox / ubuntu-latest / py3.11
     runs-on: ubuntu-latest

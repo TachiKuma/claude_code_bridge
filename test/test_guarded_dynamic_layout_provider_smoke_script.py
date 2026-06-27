@@ -76,3 +76,18 @@ def test_guarded_provider_matrix_main_accepts_provider_overrides(monkeypatch: py
     assert captured["flows"] == ("window-class",)
     assert captured["command_timeout_s"] == 123
     assert captured["run"] is False
+
+
+def test_tests_workflow_runs_prepare_only_guarded_provider_matrix() -> None:
+    text = Path(".github/workflows/test.yml").read_text(encoding="utf-8")
+
+    assert "Guard dynamic layout provider matrix smoke" in text
+    assert "scripts/guarded_dynamic_layout_provider_smoke.py" in text
+    assert "matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'" in text
+    assert "--project-prefix ci-guarded-dynamic-layout" in text
+    assert "--ccb-test \"$GITHUB_WORKSPACE/ccb_test\"" in text
+    assert 'payload["dynamic_layout_smoke_status"] == "prepared"' in text
+    assert 'payload["providers"] == ["codex", "claude"]' in text
+    assert 'payload["flows"] == ["window-class"]' in text
+    step = text.split("Guard dynamic layout provider matrix smoke", 1)[1].split("provider-blackbox:", 1)[0]
+    assert "--run" not in step

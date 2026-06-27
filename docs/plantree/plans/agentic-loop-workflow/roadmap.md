@@ -541,21 +541,29 @@ Date: 2026-06-24
   `/home/bfly/yunwei/test_ccb2/guarded-dynamic-layout-prepare-1782568181-*`
   and a real guarded run in
   `/home/bfly/yunwei/test_ccb2/guarded-dynamic-layout-real-1782568215-*`.
+- Wired the guarded provider matrix into the default `Tests` workflow as a
+  prepare-only Ubuntu py3.11 gate. The CI step runs
+  `scripts/guarded_dynamic_layout_provider_smoke.py` without `--run`, asserts
+  `dynamic_layout_smoke_status=prepared`, `providers=["codex","claude"]`, and
+  `flows=["window-class"]`, and therefore checks the release wrapper contract
+  without requiring real provider auth on GitHub runners. Local verification
+  passed with `44 passed`, the broader dynamic layout regression set passed
+  with `162 passed`, and the source-wrapper prepare-only command returned
+  `prepared` from `/home/bfly/yunwei/test_ccb2`.
 
 ## Next
 
-1. Wire `scripts/guarded_dynamic_layout_provider_smoke.py`, repeatable
-   workflow closure smoke, and autonomous layout-cleanup smoke into the chosen
-   release/CI guarded regression path.
+1. Wire the repeatable workflow closure smoke and autonomous layout-cleanup
+   smoke into the chosen release/CI guarded regression path.
 2. Define the V1 runtime layout manager command/state surface from
    [topics/dynamic-window-pane-agent-maintenance.md](topics/dynamic-window-pane-agent-maintenance.md):
    expose a script-friendly placement command/skill wrapper for generic
    non-loop dynamic agents while keeping loop execution capacity behind
    `ccb loop capacity`.
 3. Implement the next true hot-load slices:
-   extend pane-identity diagnostics into startup/mount reports, and only later
-   richer live reflow beyond the proven same-window and explicit-window-class
-   middle-removal cases.
+   extend pane-identity diagnostics into mount/reload transaction reports, and
+   only later richer live reflow beyond the proven same-window and
+   explicit-window-class middle-removal cases.
 4. Wire the verified deterministic layout planner and dynamic smoke behavior
    into live dynamic capacity only after `layout status` can read current pane
    metadata and release can distinguish idle from busy agents.

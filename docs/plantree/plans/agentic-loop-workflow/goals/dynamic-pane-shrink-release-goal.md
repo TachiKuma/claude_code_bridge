@@ -153,5 +153,7 @@ pane IDs, provider sessions, and CCB slot metadata must remain valid.
   status, while diagnostic failure is surfaced as
   `layout_summary_status: unavailable` without failing an otherwise successful
   start.
-- Remaining gap: wire the guarded provider wrapper into the selected
-  guarded release/CI regression path.
+- The guarded provider wrapper is now part of the default `Tests` workflow as
+  a prepare-only Ubuntu py3.11 gate. It verifies the Codex+Claude
+  `window-class` wrapper contract without `--run`, so CI catches wrapper/config
+  drift while real provider execution remains explicit.
