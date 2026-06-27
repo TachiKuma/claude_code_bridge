@@ -814,6 +814,151 @@ def test_agent_conversation_prefers_codex_native_transcript(tmp_path: Path) -> N
     assert 'stale pane answer' not in public_json
 
 
+def test_agent_conversation_groups_consecutive_codex_native_agent_messages(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / 'repo'
+    _write_codex_rollout(
+        project_root,
+        agent='mobile',
+        thread_id='thread-native',
+        records=[
+            {
+                'type': 'event_msg',
+                'payload': {
+                    'type': 'user_message',
+                    'message': 'start long task',
+                },
+            },
+            {
+                'type': 'event_msg',
+                'payload': {
+                    'type': 'agent_message',
+                    'message': 'step one complete',
+                },
+            },
+            {
+                'type': 'event_msg',
+                'payload': {
+                    'type': 'agent_message',
+                    'message': 'step two complete',
+                },
+            },
+            {
+                'type': 'event_msg',
+                'payload': {
+                    'type': 'agent_message',
+                    'message': 'final result',
+                },
+            },
+        ],
+    )
+    service = _service(
+        _FakeCcbdClient(),
+        project_root=project_root,
+        mobile_dir=tmp_path / 'mobile',
+    )
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view',),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
+
+    _, payload = service.dispatch_get(
+        '/v1/projects/proj-demo/agents/mobile/conversation?namespace_epoch=4&limit=20',
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+
+    native_items = [
+        item for item in payload['conversation']['items']
+        if item.get('source') == 'provider_native/codex'
+    ]
+    assert [(item['kind'], item['body']) for item in native_items] == [
+        ('user_message', 'start long task'),
+        ('agent_reply', 'step one complete\n\nstep two complete\n\nfinal result'),
+    ]
+
+
+def test_agent_conversation_starts_new_codex_agent_group_after_user_message(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / 'repo'
+    _write_codex_rollout(
+        project_root,
+        agent='mobile',
+        thread_id='thread-native',
+        records=[
+            {
+                'type': 'event_msg',
+                'payload': {
+                    'type': 'user_message',
+                    'message': 'first prompt',
+                },
+            },
+            {
+                'type': 'event_msg',
+                'payload': {
+                    'type': 'agent_message',
+                    'message': 'first step',
+                },
+            },
+            {
+                'type': 'event_msg',
+                'payload': {
+                    'type': 'agent_message',
+                    'message': 'first done',
+                },
+            },
+            {
+                'type': 'event_msg',
+                'payload': {
+                    'type': 'user_message',
+                    'message': 'second prompt',
+                },
+            },
+            {
+                'type': 'event_msg',
+                'payload': {
+                    'type': 'agent_message',
+                    'message': 'second done',
+                },
+            },
+        ],
+    )
+    service = _service(
+        _FakeCcbdClient(),
+        project_root=project_root,
+        mobile_dir=tmp_path / 'mobile',
+    )
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view',),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
+
+    _, payload = service.dispatch_get(
+        '/v1/projects/proj-demo/agents/mobile/conversation?namespace_epoch=4&limit=20',
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+
+    native_items = [
+        item for item in payload['conversation']['items']
+        if item.get('source') == 'provider_native/codex'
+    ]
+    assert [(item['kind'], item['body']) for item in native_items] == [
+        ('user_message', 'first prompt'),
+        ('agent_reply', 'first step\n\nfirst done'),
+        ('user_message', 'second prompt'),
+        ('agent_reply', 'second done'),
+    ]
+
+
 def test_agent_conversation_pages_latest_then_older_items(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo'
     snapshot_dir = project_root / '.ccb' / 'ccbd' / 'snapshots'

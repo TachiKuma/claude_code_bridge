@@ -1684,8 +1684,8 @@ def _codex_native_conversation_items(
                 ],
             )
         )
-    return [
-        _without_native_sort_fields(item)
+    sorted_items = [
+        item
         for _, item in sorted(
             enumerate(items),
             key=lambda indexed: (
@@ -1695,6 +1695,10 @@ def _codex_native_conversation_items(
                 indexed[0],
             ),
         )
+    ]
+    return [
+        _without_native_sort_fields(item)
+        for item in _coalesce_codex_native_agent_replies(sorted_items)
     ]
 
 
@@ -1836,6 +1840,74 @@ def _without_native_sort_fields(item: dict[str, object]) -> dict[str, object]:
     clean.pop('_native_thread_order', None)
     clean.pop('_native_line_number', None)
     return clean
+
+
+def _coalesce_codex_native_agent_replies(
+    items: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    grouped: list[dict[str, object]] = []
+    pending: dict[str, object] | None = None
+
+    def flush_pending() -> None:
+        nonlocal pending
+        if pending is not None:
+            grouped.append(pending)
+            pending = None
+
+    for item in items:
+        if not _is_codex_native_agent_reply(item):
+            flush_pending()
+            grouped.append(item)
+            continue
+        if pending is None:
+            pending = dict(item)
+            continue
+        if pending.get('_native_thread_order') != item.get('_native_thread_order'):
+            flush_pending()
+            pending = dict(item)
+            continue
+        pending['body'] = _join_native_agent_reply_bodies(
+            _optional_text(pending.get('body')) or '',
+            _optional_text(item.get('body')) or '',
+        )
+        pending['attachments'] = _merge_attachment_records(
+            pending.get('attachments'),
+            item.get('attachments'),
+        )
+        pending['_native_line_number'] = item.get('_native_line_number')
+        pending['_native_sort_timestamp'] = item.get('_native_sort_timestamp')
+    flush_pending()
+    return grouped
+
+
+def _is_codex_native_agent_reply(item: dict[str, object]) -> bool:
+    return (
+        item.get('kind') == 'agent_reply'
+        and item.get('source') == 'provider_native/codex'
+    )
+
+
+def _join_native_agent_reply_bodies(left: str, right: str) -> str:
+    parts = [part.strip() for part in (left, right) if part.strip()]
+    return '\n\n'.join(parts)
+
+
+def _merge_attachment_records(*values: object) -> list[dict[str, object]]:
+    merged: list[dict[str, object]] = []
+    seen: set[str] = set()
+    for value in values:
+        for record in _attachment_records(value):
+            key = (
+                _optional_text(record.get('file_id'))
+                or _optional_text(record.get('download_url'))
+                or _optional_text(record.get('file_name'))
+                or json.dumps(record, sort_keys=True)
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(record)
+    return merged
 
 
 def _codex_event_message_conversation_item(
