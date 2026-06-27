@@ -1118,6 +1118,10 @@ Current evidence:
   `main=[main,helper1]`, and ask acceptance for both `helper1` and `main`.
   Latest evidence:
   `/home/bfly/yunwei/test_ccb2/dynamic-layout-batch-release-latest.json`;
+- the default Ubuntu Python 3.11 fake-provider dynamic layout CI bundle now
+  includes `--flow batch-release` and asserts the batch flow result, removed
+  dynamic panes, removed single-agent windows, survivor pane preservation, and
+  ask reachability for both `helper1` and `main`;
 - `ccb agent park --agents a,b --json` and
   `ccb agent resume --agents a,b --hidden|--visible --json` now expose the
   first user-facing batch transition command for long-lived dynamic agents.

@@ -84,6 +84,7 @@ jobs:
             --ccb-test "$GITHUB_WORKSPACE/ccb_test" \
             --provider fake \
             --flow same-window-continuous \
+            --flow batch-release \
             --flow move-agent \
             --flow move-shared-source \
             --flow window-class-continuous \
@@ -97,8 +98,9 @@ jobs:
 
           payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
           assert payload["dynamic_layout_smoke_status"] == "ok"
-          assert payload["flows"] == ["same-window-continuous", "move-agent", "move-shared-source", "window-class-continuous", "arrange-window"]
+          assert payload["flows"] == ["same-window-continuous", "batch-release", "move-agent", "move-shared-source", "window-class-continuous", "arrange-window"]
           assert payload["checks"]["same_window_continuous_1_to_6_to_1"] is True
+          assert payload["checks"]["batch_release_multi_window"] is True
           assert payload["checks"]["move_agent_to_new_window"] is True
           assert payload["checks"]["move_agent_shared_source"] is True
           assert payload["checks"]["window_class_continuous_1_to_8_to_1"] is True
@@ -136,6 +138,15 @@ jobs:
           assert move["return_ask_terminal"] is True
           assert move["release_kept_main_window"] is True
           assert move["dynamic_agents_cleaned"] is True
+          batch = results["batch_release_multi_window"]["checks"]
+          assert batch["batch_remove_agent_plan"] is True
+          assert batch["batch_removed_agents"] is True
+          assert batch["batch_removed_agent_panes_match"] is True
+          assert batch["batch_removed_windows"] is True
+          assert batch["survivor_panes_preserved"] is True
+          assert batch["after_windows"] is True
+          assert batch["survivor_ask_accepted"] is True
+          assert batch["main_ask_accepted"] is True
           window_class = results["window_class_continuous_1_to_8_to_1"]["checks"]
           assert window_class["add_plan_sequence"] is True
           assert window_class["page1_order"] is True

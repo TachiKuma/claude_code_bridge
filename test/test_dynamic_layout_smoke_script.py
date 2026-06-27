@@ -1856,13 +1856,15 @@ def test_tests_workflow_runs_same_window_continuous_fake_smoke() -> None:
     assert "matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'" in text
     assert "--provider fake" in text
     assert "--flow same-window-continuous" in text
+    assert "--flow batch-release" in text
     assert "--flow move-agent" in text
     assert "--flow move-shared-source" in text
     assert "--flow window-class-continuous" in text
     assert "--flow arrange-window" in text
     assert 'payload["dynamic_layout_smoke_status"] == "ok"' in text
-    assert 'payload["flows"] == ["same-window-continuous", "move-agent", "move-shared-source", "window-class-continuous", "arrange-window"]' in text
+    assert 'payload["flows"] == ["same-window-continuous", "batch-release", "move-agent", "move-shared-source", "window-class-continuous", "arrange-window"]' in text
     assert 'payload["checks"]["same_window_continuous_1_to_6_to_1"] is True' in text
+    assert 'payload["checks"]["batch_release_multi_window"] is True' in text
     assert 'payload["checks"]["move_agent_to_new_window"] is True' in text
     assert 'payload["checks"]["move_agent_shared_source"] is True' in text
     assert 'payload["checks"]["window_class_continuous_1_to_8_to_1"] is True' in text
@@ -1880,6 +1882,13 @@ def test_tests_workflow_runs_same_window_continuous_fake_smoke() -> None:
     assert 'move["return_preserved_helper_pane"] is True' in text
     assert 'move["return_removed_review_window"] is True' in text
     assert 'move["release_kept_main_window"] is True' in text
+    assert 'batch["batch_remove_agent_plan"] is True' in text
+    assert 'batch["batch_removed_agent_panes_match"] is True' in text
+    assert 'batch["batch_removed_windows"] is True' in text
+    assert 'batch["survivor_panes_preserved"] is True' in text
+    assert 'batch["after_windows"] is True' in text
+    assert 'batch["survivor_ask_accepted"] is True' in text
+    assert 'batch["main_ask_accepted"] is True' in text
     assert 'window_class["page1_order"] is True' in text
     assert 'window_class["page2_order"] is True' in text
     assert 'window_class["page2_removed_when_empty"] is True' in text

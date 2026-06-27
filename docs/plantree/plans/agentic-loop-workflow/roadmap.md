@@ -924,6 +924,12 @@ Date: 2026-06-24
   `39 passed`; source-wrapper evidence in
   `/home/bfly/yunwei/test_ccb2/dynamic-layout-batch-release-latest.json`
   returned `dynamic_layout_smoke_status=ok`.
+- Added `batch-release` to the default Ubuntu Python 3.11 fake-provider
+  dynamic layout CI bundle, beside same-window growth/shrink, move-agent,
+  shared-source move, window-class continuous paging, and arrange-window. The
+  workflow now asserts the batch flow status plus removed-window, removed-pane,
+  survivor-pane, and ask-reachability invariants instead of relying only on
+  the standalone smoke evidence.
 - Exposed the first user-facing batch park/resume command:
   `ccb agent park --agents a,b --json` and
   `ccb agent resume --agents a,b --hidden|--visible --json`. The command
@@ -950,9 +956,7 @@ Date: 2026-06-24
    window removal. Next evaluate batch `--window-class` / node placement and
    transactions that mix moved panes with newly created agents in one target.
 3. Extend the shrink/release proof from single-agent and batch fake-provider
-   source-wrapper smokes to opt-in real-provider tolerance where useful, and
-   decide whether `batch-release` should join the default CI flow bundle next
-   to `same-window-continuous`, `move-agent`, and `window-class-continuous`.
+   source-wrapper/CI smokes to opt-in real-provider tolerance where useful.
 4. Define the minimum `ccb loop`, `ccb plan`, and `ccb question` command
    surface for creating tasks, transitioning phases, recording artifacts,
    blocking, finishing, and syncing to plan-tree.
