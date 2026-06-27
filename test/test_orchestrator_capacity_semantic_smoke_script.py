@@ -89,6 +89,53 @@ def test_preflight_reports_ok_when_required_files_exist(tmp_path: Path, monkeypa
     assert payload["checks"]["real_run_opt_in"] is False
 
 
+def test_fake_provider_prepare_preflight_does_not_require_provider_binary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+    test_root = tmp_path / "test_ccb2"
+    ccb_test = tmp_path / "ccb_test"
+    ccb_test.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    monkeypatch.setattr(module.shutil, "which", lambda _name: None)
+
+    prepared = module.prepare_project(
+        test_root=test_root,
+        project_name="orchestrator-capacity-fake-prepare",
+        provider="fake",
+        ccb_test=ccb_test,
+        reset=False,
+    )
+    payload = module.preflight(
+        test_root=test_root,
+        project_name="orchestrator-capacity-fake-prepare",
+        provider="fake",
+        ccb_test=ccb_test,
+    )
+
+    assert Path(prepared["source_home"]).is_dir()
+    assert payload["preflight_status"] == "ok"
+    assert payload["checks"]["provider_executable"] == "fake"
+    assert payload["checks"]["provider_executable_path"] is None
+    assert payload["checks"]["provider_executable_found"] is True
+    assert payload["checks"]["source_home_exists"] is True
+
+
+def test_autonomous_cleanup_contract_requires_capacity_release_and_layout_cleanup() -> None:
+    module = _load_module()
+
+    payload = module.autonomous_cleanup_contract()
+
+    assert payload["autonomous_cleanup_contract_status"] == "ok"
+    assert payload["canonical_pass"] is True
+    assert "capacity.retained_count=0" in payload["required_final_checks"]
+    assert "layout.loop_agent_count=0" in payload["required_final_checks"]
+    assert payload["rejections"]["capacity_not_released"] is True
+    assert payload["rejections"]["capacity_retained_agents"] is True
+    assert payload["rejections"]["missing_layout_payload"] is True
+    assert payload["rejections"]["layout_retains_loop_agents"] is True
+
+
 def test_run_smoke_requires_explicit_real_provider_opt_in(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     module = _load_module()
     monkeypatch.delenv(module.REAL_RUN_ENV, raising=False)
@@ -441,3 +488,21 @@ def test_main_passes_repeat_to_autonomous_runner(
     assert seen["repeat_count"] == 3
     payload = json.loads(capsys.readouterr().out)
     assert payload["autonomous"]["repeat_count"] == 3
+
+
+def test_tests_workflow_runs_prepare_only_orchestrator_autonomous_cleanup_contract() -> None:
+    text = Path(".github/workflows/test.yml").read_text(encoding="utf-8")
+
+    assert "Guard orchestrator autonomous cleanup contract" in text
+    assert "scripts/orchestrator_capacity_semantic_smoke.py" in text
+    assert "ci-orchestrator-autonomous-cleanup" in text
+    assert "matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'" in text
+    assert "--provider fake" in text
+    assert "--prepare-only" in text
+    assert 'preflight["preflight_status"] == "ok"' in text
+    assert 'contract["autonomous_cleanup_contract_status"] == "ok"' in text
+    assert 'all(contract["rejections"].values())' in text
+    assert '"config", "validate"' in text
+    step = text.split("Guard orchestrator autonomous cleanup contract", 1)[1].split("provider-blackbox:", 1)[0]
+    assert "--run" not in step
+    assert "--run-autonomous" not in step

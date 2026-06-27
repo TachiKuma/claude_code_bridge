@@ -640,43 +640,50 @@ Date: 2026-06-24
   `scripts/workflow_closure_smoke.py --run --json` and asserts workflow
   closure, auto release, zero retained loop agents, and empty namespace/pane
   reflow errors.
+- Wired the orchestrator autonomous cleanup contract into the Ubuntu py3.11
+  `Tests` workflow without requiring real provider credentials. The
+  `orchestrator_capacity_semantic_smoke.py --provider fake --prepare-only`
+  gate now prepares an isolated role store/source home, asserts the autonomous
+  success contract rejects retained capacity or layout loop-agent residue, and
+  validates the prepared `.ccb/ccb.config` through the source `ccb_test`
+  wrapper. Focused tests passed with `20 passed`; source-wrapper prepare and
+  config validation passed in
+  `/home/bfly/yunwei/test_ccb2/orchestrator-autonomous-cleanup-contract-smoke`.
 
 ## Next
 
-1. Wire the autonomous layout-cleanup smoke into the chosen release/CI guarded
-   regression path without requiring real provider credentials in default CI.
-2. Implement richer live reflow beyond the proven same-window and
+1. Implement richer live reflow beyond the proven same-window and
    explicit-window-class middle-removal cases.
-3. Wire the verified deterministic layout planner and dynamic smoke behavior
+2. Wire the verified deterministic layout planner and dynamic smoke behavior
    into live dynamic capacity only after `layout status` can read current pane
    metadata and release can distinguish idle from busy agents.
-4. Land live dynamic pane shrink/release from
+3. Land live dynamic pane shrink/release from
    [goals/dynamic-pane-shrink-release-goal.md](goals/dynamic-pane-shrink-release-goal.md):
    busy-retain behavior, idle target release, same-window compaction, and
    overflow-window collapse without respawning surviving provider panes.
-5. Define the minimum `ccb loop`, `ccb plan`, and `ccb question` command
+4. Define the minimum `ccb loop`, `ccb plan`, and `ccb question` command
    surface for creating tasks, transitioning phases, recording artifacts,
    blocking, finishing, and syncing to plan-tree.
-6. Continue the V1 `ccb loop capacity` path selected in
+5. Continue the V1 `ccb loop capacity` path selected in
    [goals/orchestrator-dynamic-capacity-goal.md](goals/orchestrator-dynamic-capacity-goal.md):
    run the guarded real-provider semantic smoke for
    `agentroles.ccb_orchestrator` when real provider usage is intentionally
    allowed; daemon-side transient capacity ownership remains deferred.
-7. Define the v1 team spec format for planner group, orchestrator, execution
+6. Define the v1 team spec format for planner group, orchestrator, execution
    node, recovery node, and monitor behavior.
-8. Define context-purity budgets for each role, including what may enter
+7. Define context-purity budgets for each role, including what may enter
    `frontdesk`, planner group, orchestrator, execution nodes, monitor, runtime
    artifacts, and long-term plan-tree.
-9. Define the v1 clarification command surface and artifact schema for
+8. Define the v1 clarification command surface and artifact schema for
    candidate questions, broker review, user display, raw answers, normalized
    answers, deferred questions, and planner wakeup.
-10. Define the v1 execution-node and round-verification artifact schemas,
+9. Define the v1 execution-node and round-verification artifact schemas,
    including node check plans, non-convergence reports, branch freeze records,
    partial loop reports, verification contracts, and round verification plans.
-11. Map the design to existing CCB communication primitives: `ask`,
+10. Map the design to existing CCB communication primitives: `ask`,
    `--callback`, `--silence`, message bureau records, dispatcher jobs,
    completion state, and queue/trace diagnostics.
-12. Identify the first implementation slice that can run with one planner, one
+11. Identify the first implementation slice that can run with one planner, one
    orchestrator, one execution node, and deterministic monitoring before
    enabling dynamic multi-node fanout.
 

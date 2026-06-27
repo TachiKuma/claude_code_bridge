@@ -27,6 +27,7 @@ DEFAULT_TEST_ROOT = Path(os.environ.get("CCB_ORCH_SMOKE_TEST_ROOT", "/home/bfly/
 REAL_RUN_ENV = "CCB_ORCH_SMOKE_RUN_REAL"
 AGENT_NAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]{0,31}$")
 PROVIDER_EXECUTABLES = {
+    "fake": "fake",
     "codex": "codex",
     "claude": "claude",
     "gemini": "gemini",
@@ -92,6 +93,8 @@ def prepare_project(
     if reset and project_root.exists():
         shutil.rmtree(project_root)
     project_root.mkdir(parents=True, exist_ok=True)
+    source_home = root / "source_home"
+    source_home.mkdir(parents=True, exist_ok=True)
     config_path = project_root / ".ccb" / "ccb.config"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(build_config(provider=provider, model=model), encoding="utf-8")
@@ -106,6 +109,7 @@ def prepare_project(
         "project_root": str(project_root),
         "config_path": str(config_path),
         "role_store": str(role_store),
+        "source_home": str(source_home),
     }
     payload.update(shim_payload)
     return payload
@@ -125,7 +129,7 @@ def preflight(*, test_root: Path, project_name: str, provider: str, ccb_test: Pa
         "project_under_test_root": root in project_root.parents or project_root == root,
         "provider_executable": executable,
         "provider_executable_path": provider_path,
-        "provider_executable_found": provider_path is not None,
+        "provider_executable_found": provider == "fake" or provider_path is not None,
         "source_home": str(source_home),
         "source_home_exists": source_home.is_dir(),
         "source_home_provider_auth_exists": _provider_auth_exists(provider=provider, home=source_home),
@@ -812,6 +816,75 @@ def _autonomous_success(
     return True
 
 
+def autonomous_cleanup_contract() -> dict[str, Any]:
+    canonical_reply = "AUTONOMOUS_LOOP_STATUS: pass release_status: released released_count: 2 retained_count: 0"
+    canonical_capacity = {"loop_capacity_status": "released", "retained_count": 0}
+    canonical_layout = {"layout_status": "ok", "loop_agent_count": 0}
+    rejections = {
+        "watch_not_completed": not _autonomous_success(
+            watch_status="running",
+            reply=canonical_reply,
+            capacity=canonical_capacity,
+            layout=canonical_layout,
+        ),
+        "missing_pass_marker": not _autonomous_success(
+            watch_status="completed",
+            reply="AUTONOMOUS_LOOP_STATUS: blocked",
+            capacity=canonical_capacity,
+            layout=canonical_layout,
+        ),
+        "capacity_not_released": not _autonomous_success(
+            watch_status="completed",
+            reply=canonical_reply,
+            capacity={"loop_capacity_status": "ensured", "retained_count": 0},
+            layout=canonical_layout,
+        ),
+        "capacity_retained_agents": not _autonomous_success(
+            watch_status="completed",
+            reply=canonical_reply,
+            capacity={"loop_capacity_status": "released", "retained_count": 1},
+            layout=canonical_layout,
+        ),
+        "missing_layout_payload": not _autonomous_success(
+            watch_status="completed",
+            reply=canonical_reply,
+            capacity=canonical_capacity,
+            layout=None,
+        ),
+        "layout_not_ok": not _autonomous_success(
+            watch_status="completed",
+            reply=canonical_reply,
+            capacity=canonical_capacity,
+            layout={"layout_status": "failed", "loop_agent_count": 0},
+        ),
+        "layout_retains_loop_agents": not _autonomous_success(
+            watch_status="completed",
+            reply=canonical_reply,
+            capacity=canonical_capacity,
+            layout={"layout_status": "ok", "loop_agent_count": 1},
+        ),
+    }
+    canonical_pass = _autonomous_success(
+        watch_status="completed",
+        reply=canonical_reply,
+        capacity=canonical_capacity,
+        layout=canonical_layout,
+    )
+    return {
+        "autonomous_cleanup_contract_status": "ok" if canonical_pass and all(rejections.values()) else "failed",
+        "canonical_pass": canonical_pass,
+        "required_final_checks": [
+            "watch_status=completed",
+            "AUTONOMOUS_LOOP_STATUS: pass",
+            "capacity.loop_capacity_status=released",
+            "capacity.retained_count=0",
+            "layout.layout_status=ok",
+            "layout.loop_agent_count=0",
+        ],
+        "rejections": rejections,
+    }
+
+
 def _autonomous_orchestrator_message(*, loop_id: str, task: str) -> str:
     return f"""Use the `orchestrator-capacity` skill and complete this as an autonomous CCB loop round.
 
@@ -885,6 +958,7 @@ def main(argv: list[str] | None = None) -> int:
     payload: dict[str, Any] = {
         "prepare": prepared,
         "preflight": preflight(test_root=test_root, project_name=args.project_name, provider=args.provider, ccb_test=ccb_test),
+        "autonomous_cleanup_contract": autonomous_cleanup_contract(),
     }
     if args.run:
         payload["run"] = run_smoke(

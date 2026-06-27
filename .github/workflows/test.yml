@@ -117,6 +117,68 @@ jobs:
           )
           PY
 
+      - name: Guard orchestrator autonomous cleanup contract
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export TERM=xterm-256color
+          smoke_root="${RUNNER_TEMP}/ccb-orchestrator-autonomous-cleanup-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          python scripts/orchestrator_capacity_semantic_smoke.py \
+            --test-root "$smoke_root" \
+            --project-name ci-orchestrator-autonomous-cleanup \
+            --ccb-test "$GITHUB_WORKSPACE/ccb_test" \
+            --provider fake \
+            --reset \
+            --prepare-only \
+            --json > "$RUNNER_TEMP/orchestrator-autonomous-cleanup-contract.json"
+          python - "$RUNNER_TEMP/orchestrator-autonomous-cleanup-contract.json" "$GITHUB_WORKSPACE/ccb_test" <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          ccb_test = Path(sys.argv[2])
+          prepare = payload["prepare"]
+          preflight = payload["preflight"]
+          contract = payload["autonomous_cleanup_contract"]
+          assert preflight["preflight_status"] == "ok"
+          assert contract["autonomous_cleanup_contract_status"] == "ok"
+          assert contract["canonical_pass"] is True
+          assert all(contract["rejections"].values())
+          config = Path(prepare["config_path"]).read_text(encoding="utf-8")
+          assert 'main = "orchestrator:fake"' in config
+          assert '[loop.role_profiles.worker]' in config
+          assert '[loop.role_profiles.code_reviewer]' in config
+          env = os.environ.copy()
+          env["HOME"] = prepare["source_home"]
+          env["CCB_SOURCE_HOME"] = prepare["source_home"]
+          env["AGENT_ROLES_STORE"] = prepare["role_store"]
+          env["CCB_NO_ATTACH"] = "1"
+          completed = subprocess.run(
+              [str(ccb_test), "--project", prepare["project_root"], "config", "validate"],
+              cwd=Path(prepare["project_root"]).parent,
+              env=env,
+              text=True,
+              capture_output=True,
+              timeout=60,
+          )
+          assert completed.returncode == 0, completed.stdout + completed.stderr
+          assert "config_status: valid" in completed.stdout
+          print(
+              json.dumps(
+                  {
+                      "preflight_status": preflight["preflight_status"],
+                      "contract_status": contract["autonomous_cleanup_contract_status"],
+                      "project_root": prepare["project_root"],
+                  },
+                  sort_keys=True,
+              )
+          )
+          PY
+
   provider-blackbox:
     name: Provider blackbox / ubuntu-latest / py3.11
     runs-on: ubuntu-latest
