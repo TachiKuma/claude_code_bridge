@@ -101,6 +101,14 @@ Date: 2026-06-24
   source `ccb_test` for `1->6->1` and `1->8->1`; all retained panes stayed
   alive, `frontdesk-dialog-2` was added at overflow and removed when shrinking
   back to six, and cleanup succeeded.
+- Landed a repeatable source-wrapper dynamic layout smoke script in the current
+  worktree: `scripts/dynamic_layout_smoke.py` prepares isolated fake-provider
+  projects, proves multi-node `worker + code_reviewer` windows can be loaded,
+  reached by `ask`, drained, and released, and proves same-window middle-pane
+  removal preserves surviving agent panes. Verified in
+  `/home/bfly/yunwei/test_ccb2/dynamic-layout-smoke-1782565-*` with source
+  `ccb_test`; both flows returned `dynamic_layout_smoke_status=ok` and cleanup
+  reached `kill_status: ok`.
 - Accepted the planner authority boundary: planner group owns semantic
   requirements, acceptance criteria, verification contract, risk notes, and
   readiness recommendations; `ccb plan` scripts own authoritative task status,

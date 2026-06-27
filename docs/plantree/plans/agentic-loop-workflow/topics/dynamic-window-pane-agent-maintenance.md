@@ -568,6 +568,19 @@ Evidence:
   `node-round1-node1`, status reports `loop_agent_count=2` with both agents as
   `source=loop`, the node panes are alive, and idle loop-capacity release
   removes the node window and returns to `loop_agent_count=0`.
+- Repeatable dynamic layout smoke script
+  `scripts/dynamic_layout_smoke.py` now covers the two high-risk mounted
+  source-wrapper flows. In
+  `/home/bfly/yunwei/test_ccb2/dynamic-layout-smoke-1782565-multi-node`,
+  `loop capacity ensure --profile worker=2 --profile code_reviewer=2`
+  created `node-round2-node1` and `node-round2-node2`, accepted asks to worker
+  and reviewer targets, waited for terminal fake jobs, released four loop
+  agents, and returned to only the `main` window with `orchestrator`. In
+  `/home/bfly/yunwei/test_ccb2/dynamic-layout-smoke-1782565-same-window`,
+  `agent add` grew `main` to `main, helper1, helper2, helper3`, removing the
+  middle `helper2` used `plan_class=remove_agent`, preserved `helper1` and
+  `helper3` pane ids, accepted asks to both survivors, and cleaned up with
+  `kill_status: ok`.
 - Focused regression after connecting loop capacity to layout placement passed
   with `187 passed` across loop capacity, agent lifecycle, layout status, pane
   growth, layout runtime, reload patch/runtime mount, and config loader tests.
