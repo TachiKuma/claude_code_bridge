@@ -233,6 +233,11 @@ Date: 2026-05-29
   - `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-claude-move-agent-latest.json`
     passed `claude` `move-agent` with the same pane-preserving move/move-back
     and unload checks.
+  - `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-claude-same-window-continuous-latest.json`
+    passed `claude` `same-window-continuous`: grow `main` from one managed
+    agent pane to six, preserve the original main pane, verify geometry/fixed
+    columns, ask a dynamic helper, unload helpers in reverse order, reflow back
+    to one pane, and keep main ask-reachable.
 - 2026-06-28 dynamic lifecycle smoke evidence:
   - `pytest -q test/test_dynamic_agent_lifecycle_smoke_script.py` passed with
     `5 passed` before workflow promotion; after adding the CI gate, targeted

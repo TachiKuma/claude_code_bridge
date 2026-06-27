@@ -172,10 +172,13 @@ Date: 2026-06-28
   `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-codex-same-window-continuous-latest.json`
   passed for `codex` with `same-window-continuous` (`1->6->1`);
   `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-claude-move-agent-latest.json`
-  passed for `claude` with `move-agent`. Together these prove pane-backed
-  managed Codex and Claude agents can remain ask-reachable after move
-  transactions, and Codex can survive same-window dynamic add/reflow/unload
-  cycles while preserving the original main pane.
+  passed for `claude` with `move-agent`;
+  `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-claude-same-window-continuous-latest.json`
+  passed for `claude` with `same-window-continuous` (`1->6->1`). Together
+  these prove pane-backed managed Codex and Claude agents can remain
+  ask-reachable after move transactions, and both providers can survive
+  same-window dynamic add/reflow/unload cycles while preserving the original
+  main pane.
 - Verified dynamic lifecycle policy smoke for park/resume and auto release:
   `pytest -q test/test_dynamic_agent_lifecycle_smoke_script.py` passed with
   `5 passed`; source-wrapper fake smoke
@@ -203,10 +206,9 @@ Date: 2026-06-28
   release, busy retain, empty dynamic-window cleanup, config-only park/resume
   dispatch toggling, compact-startup pane identity preservation, batch release,
   batch move into explicit review/loop/node windows, and mixed move-plus-add
-  explicit `[windows]` reload. Live `codex` move, live `codex` same-window
-  `1->6->1`, live `codex` and `claude` lifecycle park/resume, and live
-  `claude` move smokes have passed; broader provider lifecycle matrix
-  coverage,
+  explicit `[windows]` reload. Live `codex` and `claude` move,
+  same-window `1->6->1`, and lifecycle park/resume smokes have passed; broader
+  provider lifecycle matrix coverage,
   daemon-pushed sidebar refresh, replacement, arbitrary layout reshapes, and
   background config watching remain deferred.
 
@@ -215,9 +217,9 @@ Date: 2026-06-28
 1. Extend live-provider smoke for pane-backed `codex`/`claude` dynamic add,
    move, release, hide/park/resume. `codex` `move-agent`, `codex`
    `same-window-continuous`, `codex` lifecycle park/resume, `claude`
-   `move-agent`, and `claude` lifecycle park/resume have passed with real-home
-   auth; remaining flows need the same guarded account-boundary treatment
-   before being promoted to release gates.
+   `move-agent`, `claude` `same-window-continuous`, and `claude` lifecycle
+   park/resume have passed with real-home auth; remaining flows need the same
+   guarded account-boundary treatment before being promoted to release gates.
 2. Run or update the automatic and manual additive reload matrix in
    [topics/test-matrix.md](topics/test-matrix.md), including `test_ccb2`
    evidence for unchanged old panes, newly-mounted agents, released dynamic
