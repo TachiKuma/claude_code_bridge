@@ -1080,6 +1080,12 @@ Current evidence:
   ids, source-window survivorship, and target append order. This proof is
   intentionally below the CLI layer; a user-facing batch move command remains a
   separate product/API decision;
+- full source-window evacuation is also proven at the reload/namespace patch
+  layer: when every source-window agent is moved elsewhere, the patch plan
+  emits the moved panes in new target topology order, then kills the emptied
+  source window in the same transaction. This closes the low-level
+  `6->1`/page-collapse style invariant for moved panes without respawning
+  providers, but still does not expose a user-facing batch move command;
 - same-window middle dynamic release is proven: removing the middle helper pane
   deletes only the target pane, preserves the remaining dynamic pane ids, keeps
   their ask targets reachable, and avoids `layout_change`;
@@ -1131,6 +1137,6 @@ Deferred:
 - automatic screenshot/archive of completed node windows;
 - cross-session restoration of exact pane geometry;
 - user-facing batch movement commands, simultaneous all-agents source-window
-  removal, and transactions that mix moved panes with newly materialized panes
-  in the same target window;
+  removal as a command surface, and transactions that mix moved panes with
+  newly materialized panes in the same target window;
 - user-defined arbitrary window classes.

@@ -77,13 +77,13 @@ def move_agent_panes(
 
 def _moved_agents(old_topology, new_topology) -> tuple[tuple[str, str, str], ...]:
     old_by_agent = _agent_window_map(old_topology)
-    new_by_agent = _agent_window_map(new_topology)
     moved = []
-    for agent_name in sorted(set(old_by_agent) & set(new_by_agent)):
-        source = old_by_agent[agent_name]
-        target = new_by_agent[agent_name]
-        if source != target:
-            moved.append((agent_name, source, target))
+    for window in tuple(getattr(new_topology, 'windows', ()) or ()):
+        target = str(window.name)
+        for agent_name in window_agent_names(window):
+            source = old_by_agent.get(agent_name)
+            if source is not None and source != target:
+                moved.append((agent_name, source, target))
     return tuple(moved)
 
 

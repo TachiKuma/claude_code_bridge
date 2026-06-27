@@ -886,6 +886,13 @@ Date: 2026-06-24
   namespace patch apply, and agent lifecycle CLI coverage. This is a
   transaction-kernel proof; a user-facing batch `ccb agent move` command is
   still not exposed.
+- Extended the same transaction kernel to full source-window evacuation. A
+  reload patch can now move every agent out of a source window and remove that
+  emptied source window in the same guarded transaction, while ordering moved
+  panes by the new target topology instead of agent-name sort order. Focused
+  regression passed with `70 passed` across reload planning, namespace patch
+  apply, and lifecycle CLI tests. This still remains below the user-facing
+  command layer.
 
 ## Next
 
@@ -896,9 +903,9 @@ Date: 2026-06-24
 2. Extend `ccb agent move` beyond the bounded single-agent cycle: Codex and
    Claude opt-in real-provider movement are proven, and shared-source
    single-agent movement is proven with fake providers; the low-level kernel
-   can now move multiple source-window agents in one transaction, so next
-   evaluate whether to expose a batch command and whether mixed moved/new
-   target transactions are worth supporting.
+   can now move multiple source-window agents in one transaction and remove
+   an emptied source window, so next evaluate whether to expose a batch command
+   and whether mixed moved/new target transactions are worth supporting.
 3. Extend the shrink/release proof from fake-provider source-wrapper smokes to
    opt-in real-provider tolerance where useful, especially `layout arrange`
    after a real pane has been manually disturbed.

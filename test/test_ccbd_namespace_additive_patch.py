@@ -825,6 +825,82 @@ bottom_height = 20
     assert backend.pane_options['%4']['@ccb_window'] == 'review'
 
 
+def test_apply_moves_all_source_agents_and_removes_source_window(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    current_text = """version = 2
+entry_window = "main"
+
+[windows]
+main = "main:codex"
+review = "zeta:codex, alpha:claude"
+
+[ui.sidebar]
+mode = "every_window"
+width = "15%"
+bottom_height = 20
+"""
+    new_text = """version = 2
+entry_window = "main"
+
+[windows]
+main = "main:codex, zeta:codex, alpha:claude"
+
+[ui.sidebar]
+mode = "every_window"
+width = "15%"
+bottom_height = 20
+"""
+    current = _load_config(tmp_path / 'current-move-all-source-agents', current_text)
+    new = _load_config(tmp_path / 'new-move-all-source-agents', new_text)
+    layout = PathLayout(_project(tmp_path / 'repo-move-all-source-agents', current_text))
+    backend = _PatchFakeBackend(socket_path=str(layout.ccbd_tmux_socket_path))
+    backend.add_window(layout.ccbd_tmux_session_name, 'main')
+    review_sidebar = backend.add_window(layout.ccbd_tmux_session_name, 'review')
+    backend.sessions[layout.ccbd_tmux_session_name][1]['panes'].extend(['%3', '%4'])
+    backend.pane_counter = 4
+    _seed_agent_pane(backend, '%1', project_id='proj-1', window='main', agent='main')
+    _seed_sidebar_pane(backend, review_sidebar, project_id='proj-1', window='review')
+    _seed_agent_pane(backend, '%3', project_id='proj-1', window='review', agent='zeta')
+    _seed_agent_pane(backend, '%4', project_id='proj-1', window='review', agent='alpha')
+    _store_namespace(layout, project_id='proj-1')
+    controller = ProjectNamespaceController(layout, 'proj-1', backend_factory=lambda socket_path=None: backend)
+    _forbid_recreate_paths(monkeypatch, allow_kill_window=True)
+    plan = build_reload_dry_run_plan(current, new, project_id='proj-1', current_namespace=controller.load())
+
+    result = controller.apply_reload_patch(
+        patch_plan=plan['namespace_patch_plan'],
+        old_topology=build_namespace_topology_plan(current),
+        new_topology=build_namespace_topology_plan(new),
+        timeout_s=0.0,
+    )
+
+    assert result.status == 'applied'
+    assert result.created_windows == ()
+    assert result.created_panes == ()
+    assert result.agent_panes == {}
+    assert result.removed_agents == {}
+    assert result.removed_panes == ()
+    assert result.removed_windows == ('review',)
+    assert result.moved_agents == {'zeta': '%3', 'alpha': '%4'}
+    assert result.moved_agent_windows == {'zeta': 'main', 'alpha': 'main'}
+    assert result.reflowed_windows == ('main',)
+    assert result.reflow_errors == {}
+    assert result.preserved_before == {'alpha': '%4', 'main': '%1', 'zeta': '%3'}
+    assert result.preserved_after == {'alpha': '%4', 'main': '%1', 'zeta': '%3'}
+    assert ('move-pane', '-v', '-s', '%3', '-t', '%1') in backend.tmux_calls
+    assert ('move-pane', '-v', '-s', '%4', '-t', '%3') in backend.tmux_calls
+    assert ('kill-window', '-t', f'{layout.ccbd_tmux_session_name}:review') in backend.tmux_calls
+    assert [record['name'] for record in backend.sessions[layout.ccbd_tmux_session_name]] == ['main']
+    assert backend.sessions[layout.ccbd_tmux_session_name][0]['panes'] == ['%1', '%3', '%4']
+    assert backend.pane_options['%3']['@ccb_slot'] == 'zeta'
+    assert backend.pane_options['%3']['@ccb_window'] == 'main'
+    assert backend.pane_options['%4']['@ccb_slot'] == 'alpha'
+    assert backend.pane_options['%4']['@ccb_window'] == 'main'
+    assert review_sidebar not in backend.pane_options
+
+
 def test_apply_move_agent_to_new_window_reuses_pane_and_removes_placeholder(
     tmp_path: Path,
     monkeypatch,
