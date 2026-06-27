@@ -81,6 +81,8 @@ def run_mobile_update_onboarding(
         print_fn("⚠️  Tailscale is installed but not logged in.")
         print_fn("   Run: tailscale up")
         print_fn(f"   Login/register: {TAILSCALE_LOGIN_URL}")
+        print_fn("   After login completes, re-run: ccb update mobile")
+        print_fn("   The next run will print the mobile gateway, Tailscale Serve, and pairing QR steps.")
         if _should_open_login(env):
             open_url_fn(TAILSCALE_LOGIN_URL)
             print_fn("   Opened the Tailscale login/register page.")

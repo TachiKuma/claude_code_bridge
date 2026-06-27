@@ -211,6 +211,8 @@ def test_onboarding_logged_out_prints_login_and_can_open_url() -> None:
     assert opened == [mobile_update.TAILSCALE_LOGIN_URL]
     assert "tailscale up" in text
     assert "Login/register" in text
+    assert "After login completes, re-run: ccb update mobile" in text
+    assert "mobile gateway, Tailscale Serve, and pairing QR steps" in text
     assert "Scan the CCB Mobile pairing QR" in text
 
 
