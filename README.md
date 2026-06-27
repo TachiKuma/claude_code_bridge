@@ -79,6 +79,18 @@ Mix CLIs per agent in `.ccb/ccb.config`; actual availability depends on the loca
 
 ## Quick Start
 
+## Repository Layout
+
+This repository now carries both the CCB core and the mobile controller source:
+
+- core CLI, ccbd, mobile gateway, and Python tests live at the repository root;
+- Flutter mobile app source, mobile tools, and mobile planning docs live under
+  [`mobile/`](mobile/).
+
+The mobile app remains a separate build surface inside the monorepo. Core
+commands such as `ccb update mobile` should consume released mobile artifacts
+or the mobile release manifest, not Android build outputs checked into source.
+
 ### 1. Install or update
 
 New installs should use the npm package:
