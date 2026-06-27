@@ -165,13 +165,20 @@ pane IDs, provider sessions, and CCB slot metadata must remain valid.
   can verify hot-load/hot-unload effects without immediately re-querying raw
   tmux state.
 - `layout status --json` now exposes best-effort tmux pane geometry
-  (`pane_index`, `pane_width`, and `pane_height`) for observed panes. Dynamic
-  layout smokes use this metadata to prove same-window `1->6->1` and
-  multi-window add/remove preserve observable agent pane geometry while
-  excluding sidebar panes from agent layout counts.
+  (`pane_index`, `pane_left`, `pane_top`, `pane_width`, and `pane_height`) for
+  observed panes. Dynamic layout smokes use this metadata to prove same-window
+  `1->6->1` and multi-window add/remove preserve observable agent pane
+  geometry while excluding sidebar panes from agent layout counts.
 - Append-only `add_agent` now performs the same best-effort window reflow and
   managed sidebar width sync as idle `remove_agent`, recording
   `namespace_reflowed_windows` / `namespace_reflow_errors`. The
   same-window continuous smoke asserts a minimum observed agent pane width so
   repeated hot-load splits cannot silently collapse later panes into unusable
   columns.
+- Fully managed one-to-six agent windows now reflow to the fixed planner
+  visual order (`p1,p3,p5` left and `p2,p4,p6` right) before falling back to
+  tmux even compaction for unsupported shapes. Source-wrapper evidence in
+  `/home/bfly/yunwei/test_ccb2/fixed-reflow-smoke.json` proved the six-agent
+  same-window layout uses two columns while preserving pane IDs, and
+  `/home/bfly/yunwei/test_ccb2/fixed-reflow-combined-smoke.json` kept the
+  same-window and multi-window fake-provider flows green.

@@ -284,9 +284,14 @@ Contract:
   preserve `namespace_removed_agents` / `namespace_removed_panes` diagnostics.
 - Guarded reload should reflow a window after successful append-only
   `add_agent` and idle `remove_agent` mutations, then reapply managed sidebar
-  width. The reflow is a visual compaction step; it must preserve surviving
-  pane identity and report `namespace_reflowed_windows` or
-  `namespace_reflow_errors` in apply diagnostics.
+  width. For fully CCB-managed agent windows with one to six effective agent
+  panes, reflow should apply the fixed visual order used by the runtime layout
+  planner: `p1,p3,p5` in the left column and `p2,p4,p6` in the right column,
+  preserving pane identity through tmux movement instead of respawning
+  providers. Windows outside that safe shape fall back to tmux even compaction.
+  Reflow must preserve surviving pane identity and report
+  `namespace_reflowed_windows` or `namespace_reflow_errors` in apply
+  diagnostics.
 - Runtime layout diagnostics may observe every tmux pane in a managed window,
   including sidebar or tool panes. Agent layout checks must count only panes
   whose CCB identity matches that window's configured/effective `agent_names`;

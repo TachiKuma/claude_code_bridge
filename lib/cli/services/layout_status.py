@@ -257,7 +257,7 @@ def _observe_project_namespace(namespace: dict[str, object]) -> dict[str, object
                 '-t',
                 session_name,
                 '-F',
-                '#{window_name}\t#{window_id}\t#{pane_id}\t#{pane_title}\t#{@ccb_agent}\t#{@ccb_slot}\t#{@ccb_window}\t#{@ccb_project_id}\t#{@ccb_managed_by}\t#{pane_active}\t#{pane_dead}\t#{pane_index}\t#{pane_width}\t#{pane_height}',
+                '#{window_name}\t#{window_id}\t#{pane_id}\t#{pane_title}\t#{@ccb_agent}\t#{@ccb_slot}\t#{@ccb_window}\t#{@ccb_project_id}\t#{@ccb_managed_by}\t#{pane_active}\t#{pane_dead}\t#{pane_index}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}',
             ],
             check=True,
             capture=True,
@@ -307,8 +307,10 @@ def _observed_pane_record(line: str) -> dict[str, object] | None:
         'pane_active': parts[9] == '1',
         'pane_state': 'dead' if parts[10] == '1' else 'alive',
         'pane_index': _optional_int(parts[11]) if len(parts) > 11 else None,
-        'pane_width': _optional_int(parts[12]) if len(parts) > 12 else None,
-        'pane_height': _optional_int(parts[13]) if len(parts) > 13 else None,
+        'pane_left': _optional_int(parts[12]) if len(parts) > 12 else None,
+        'pane_top': _optional_int(parts[13]) if len(parts) > 13 else None,
+        'pane_width': _optional_int(parts[14]) if len(parts) > 14 else None,
+        'pane_height': _optional_int(parts[15]) if len(parts) > 15 else None,
     }
 
 

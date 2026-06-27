@@ -27,12 +27,47 @@ def _observed_window(pane_ids: list[str], agent_names: list[str] | None = None) 
                 "pane_id": pane_id,
                 "ccb_agent": names[index],
                 "pane_index": index,
+                "pane_left": index * 81,
+                "pane_top": 0,
                 "pane_width": 80,
                 "pane_height": 24,
             }
             for index, pane_id in enumerate(pane_ids)
         ]
     }
+
+
+def _observed_fixed_columns(pane_ids: list[str], agent_names: list[str]) -> dict[str, object]:
+    panes = []
+    left_names = agent_names[0::2]
+    right_names = agent_names[1::2]
+    left_ids = pane_ids[0::2]
+    right_ids = pane_ids[1::2]
+    for row, (pane_id, agent) in enumerate(zip(left_ids, left_names)):
+        panes.append(
+            {
+                "pane_id": pane_id,
+                "ccb_agent": agent,
+                "pane_index": len(panes),
+                "pane_left": 25,
+                "pane_top": row * 9,
+                "pane_width": 47,
+                "pane_height": 8,
+            }
+        )
+    for row, (pane_id, agent) in enumerate(zip(right_ids, right_names)):
+        panes.append(
+            {
+                "pane_id": pane_id,
+                "ccb_agent": agent,
+                "pane_index": len(panes),
+                "pane_left": 73,
+                "pane_top": row * 9,
+                "pane_width": 47,
+                "pane_height": 8,
+            }
+        )
+    return {"panes": panes}
 
 
 def test_build_multi_node_config_declares_explicit_windows_and_loop_profiles() -> None:
@@ -291,7 +326,7 @@ def test_same_window_continuous_flow_grows_to_six_and_shrinks_to_one(
                         {
                             "name": "main",
                             "agent_names": ["main", *helper_panes],
-                            "observed": _observed_window(["%1", *helper_panes.values()], ["main", *helper_panes.keys()]),
+                            "observed": _observed_fixed_columns(["%1", *helper_panes.values()], ["main", *helper_panes.keys()]),
                             "agents": [
                                 {"agent": "main", "pane_id": "%1"},
                                 *[
@@ -358,6 +393,7 @@ def test_same_window_continuous_flow_grows_to_six_and_shrinks_to_one(
     assert payload["checks"]["observed_grow_geometry"] is True
     assert payload["checks"]["observed_grow_indexes_contiguous"] is True
     assert payload["checks"]["observed_grow_min_width"] is True
+    assert payload["checks"]["observed_grow_fixed_columns"] is True
     assert payload["checks"]["shrunk_to_one_order"] is True
     assert payload["checks"]["observed_shrunk_to_one_pane"] is True
     add_names = [name for name, _command in calls if name.startswith("add_helper")]
@@ -699,8 +735,8 @@ def test_compact_payload_keeps_checks_and_window_summary_without_full_stdout() -
                                     "runtime_pane_count": 2,
                                     "observed": {
                                         "panes": [
-                                            {"pane_id": "%1", "pane_index": 0, "pane_width": 80, "pane_height": 24},
-                                            {"pane_id": "%2", "pane_index": 1, "pane_width": 80, "pane_height": 24},
+                                            {"pane_id": "%1", "pane_index": 0, "pane_left": 0, "pane_top": 0, "pane_width": 80, "pane_height": 24},
+                                            {"pane_id": "%2", "pane_index": 1, "pane_left": 81, "pane_top": 0, "pane_width": 80, "pane_height": 24},
                                         ],
                                     },
                                     "large": "ignored",
@@ -737,8 +773,8 @@ def test_compact_payload_keeps_checks_and_window_summary_without_full_stdout() -
                 "pane_count": 2,
                 "runtime_pane_count": 2,
                 "observed_panes": [
-                    {"pane_id": "%1", "pane_index": 0, "pane_width": 80, "pane_height": 24},
-                    {"pane_id": "%2", "pane_index": 1, "pane_width": 80, "pane_height": 24},
+                    {"pane_id": "%1", "pane_index": 0, "pane_left": 0, "pane_top": 0, "pane_width": 80, "pane_height": 24},
+                    {"pane_id": "%2", "pane_index": 1, "pane_left": 81, "pane_top": 0, "pane_width": 80, "pane_height": 24},
                 ],
             }
         ],
@@ -761,6 +797,7 @@ def test_tests_workflow_runs_same_window_continuous_fake_smoke() -> None:
     assert 'checks["observed_grow_geometry"] is True' in text
     assert 'checks["observed_grow_indexes_contiguous"] is True' in text
     assert 'checks["observed_grow_min_width"] is True' in text
+    assert 'checks["observed_grow_fixed_columns"] is True' in text
     assert 'checks["shrunk_to_one_order"] is True' in text
     assert 'checks["observed_shrunk_to_one_pane"] is True' in text
     assert 'checks["observed_shrink_geometry"] is True' in text

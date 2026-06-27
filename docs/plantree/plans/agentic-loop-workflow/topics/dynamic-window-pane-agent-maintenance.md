@@ -614,7 +614,10 @@ Evidence:
   `kill_status: ok`.
 - Real `remove_agent` namespace patch apply now performs best-effort visual
   reflow after same-window pane removal and then reapplies configured sidebar
-  widths. `NamespacePatchApplyResult` records `reflowed_windows` and
+  widths. For fully managed one-to-six agent windows, the reflow targets the
+  fixed visual order `p1,p3,p5` left and `p2,p4,p6` right; unsupported shapes
+  fall back to tmux even compaction. `NamespacePatchApplyResult` records
+  `reflowed_windows` and
   `reflow_errors`, and `agent remove --json` exposes them as
   `namespace_reflowed_windows` / `namespace_reflow_errors`. Focused tests cover
   reflow after pane-only removal and sidebar width restoration. The

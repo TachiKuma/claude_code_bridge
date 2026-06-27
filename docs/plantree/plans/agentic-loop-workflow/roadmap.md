@@ -704,15 +704,30 @@ Date: 2026-06-24
   `/home/bfly/yunwei/test_ccb2/add-reflow-combined-smoke.json` passed both
   same-window and multi-window flows, and focused regression passed with
   `78 passed`.
+- Landed fixed live reflow for fully managed agent windows with one to six
+  effective agent panes. Add/remove reflow now first applies a generated tmux
+  layout matching the runtime planner visual order (`p1,p3,p5` left and
+  `p2,p4,p6` right), then uses `swap-pane` to preserve existing pane IDs and
+  provider sessions; unsafe or unsupported windows fall back to tmux even
+  compaction. `layout status --json` now exposes `pane_left` and `pane_top` in
+  addition to existing pane geometry, and the same-window continuous smoke
+  rejects horizontal-only compaction via `observed_grow_fixed_columns`. Focused
+  tests passed with `34 passed` and `46 passed`; source-wrapper fake-provider
+  smoke in `/home/bfly/yunwei/test_ccb2/fixed-reflow-smoke.json` proved
+  `main/helper2/helper4` in the left column and
+  `helper1/helper3/helper5` in the right column after `1->6`, and
+  `/home/bfly/yunwei/test_ccb2/fixed-reflow-combined-smoke.json` passed both
+  same-window `1->6->1` and multi-window add/remove flows.
 
 ## Next
 
 1. Continue richer live reflow beyond the proven same-window continuous,
    single-agent-window, multi-window add/remove, and explicit-window-class
-   middle-removal cases.
-2. Decide whether the current `select-layout -E` compaction is sufficient for
-   v1, or whether CCB should add a heavier fixed `1->6` / `6->1` pane movement
-   policy for true two-column visual layouts.
+   middle-removal cases, especially overflow paging, role-class window rules,
+   and non-fake provider tolerance.
+2. Decide the next public CLI surface for dynamic rearrangement: fixed
+   auto-reflow is now proven for 1->6, but manual move/park/hide workflows
+   still need a separate command and safety contract.
 3. Land live dynamic pane shrink/release from
    [goals/dynamic-pane-shrink-release-goal.md](goals/dynamic-pane-shrink-release-goal.md):
    busy-retain behavior, idle target release, same-window compaction, and

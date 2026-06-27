@@ -799,6 +799,7 @@ def _run_same_window_continuous_flow(
             "observed_grow_geometry": _observed_panes_have_geometry(_observed_window_agent_panes(after_add, "main")),
             "observed_grow_indexes_contiguous": _observed_pane_indexes_contiguous(_observed_window_agent_panes(after_add, "main")),
             "observed_grow_min_width": _observed_panes_min_width(_observed_window_agent_panes(after_add, "main")) >= 8,
+            "observed_grow_fixed_columns": _observed_panes_match_fixed_columns(after_add, "main", ("main", *helpers)),
             "helper_ask_accepted": _accepted(helper_ask),
             "helper_ask_terminal": _watch_commands_terminal(commands),
             "release_remove_agent_plans": [apply.get("plan_class") for apply in release_apply] == ["remove_agent"] * 5,
@@ -1606,6 +1607,8 @@ def _compact_window_summary(raw: dict[str, Any]) -> dict[str, Any]:
             compact_pane = {
                 "pane_id": pane.get("pane_id"),
                 "pane_index": pane.get("pane_index"),
+                "pane_left": pane.get("pane_left"),
+                "pane_top": pane.get("pane_top"),
                 "pane_width": pane.get("pane_width"),
                 "pane_height": pane.get("pane_height"),
             }
@@ -1746,6 +1749,62 @@ def _observed_pane_indexes_contiguous(panes: list[dict[str, Any]]) -> bool:
 def _observed_panes_min_width(panes: list[dict[str, Any]]) -> int:
     widths = [pane.get("pane_width") for pane in panes if isinstance(pane.get("pane_width"), int)]
     return min(widths) if widths else 0
+
+
+def _observed_panes_match_fixed_columns(result: dict[str, Any], window_name: str, agents: tuple[str, ...]) -> bool:
+    panes = _observed_window_agent_panes(result, window_name)
+    by_agent = {
+        str(pane.get("ccb_agent") or pane.get("ccb_slot") or ""): pane
+        for pane in panes
+    }
+    if set(by_agent) != set(agents):
+        return False
+    ordered = [by_agent[agent] for agent in agents]
+    if not _observed_panes_have_position(ordered):
+        return False
+    if len(ordered) == 1:
+        return True
+    left_column = ordered[0::2]
+    right_column = ordered[1::2]
+    if not right_column:
+        return _same_left(left_column) and _strictly_increasing_top(left_column)
+    left_x = left_column[0]["pane_left"]
+    right_x = right_column[0]["pane_left"]
+    if not isinstance(left_x, int) or not isinstance(right_x, int) or right_x <= left_x:
+        return False
+    if not _same_left(left_column) or not _same_left(right_column):
+        return False
+    if not _strictly_increasing_top(left_column) or not _strictly_increasing_top(right_column):
+        return False
+    for left_pane, right_pane in zip(left_column, right_column):
+        if left_pane.get("pane_top") != right_pane.get("pane_top"):
+            return False
+    return True
+
+
+def _observed_panes_have_position(panes: list[dict[str, Any]]) -> bool:
+    if not panes:
+        return False
+    for pane in panes:
+        left = pane.get("pane_left")
+        top = pane.get("pane_top")
+        if not isinstance(left, int) or not isinstance(top, int) or left < 0 or top < 0:
+            return False
+    return True
+
+
+def _same_left(panes: list[dict[str, Any]]) -> bool:
+    if not panes:
+        return False
+    left = panes[0].get("pane_left")
+    return isinstance(left, int) and all(pane.get("pane_left") == left for pane in panes)
+
+
+def _strictly_increasing_top(panes: list[dict[str, Any]]) -> bool:
+    tops = [pane.get("pane_top") for pane in panes]
+    if not all(isinstance(top, int) for top in tops):
+        return False
+    return all(current < following for current, following in zip(tops, tops[1:]))
 
 
 def _accepted(result: dict[str, Any]) -> bool:

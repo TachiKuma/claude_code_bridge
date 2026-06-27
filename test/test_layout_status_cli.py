@@ -428,12 +428,14 @@ main = "main:fake, helper:fake"
         def _tmux_run(self, args, **_kwargs):
             assert args[:4] == ['list-panes', '-a', '-t', layout.ccbd_tmux_session_name]
             assert 'pane_index' in args[-1]
+            assert 'pane_left' in args[-1]
+            assert 'pane_top' in args[-1]
             assert 'pane_width' in args[-1]
             assert 'pane_height' in args[-1]
             return SimpleNamespace(
                 stdout=(
-                    f"main\t@1\t%1\tmain\tmain\tmain\tmain\t{layout.project_id}\tccb\t1\t0\t0\t100\t30\n"
-                    f"main\t@1\t%2\thelper\thelper\thelper\tmain\t{layout.project_id}\tccb\t0\t0\t1\t80\t30\n"
+                    f"main\t@1\t%1\tmain\tmain\tmain\tmain\t{layout.project_id}\tccb\t1\t0\t0\t0\t0\t100\t30\n"
+                    f"main\t@1\t%2\thelper\thelper\thelper\tmain\t{layout.project_id}\tccb\t0\t0\t1\t101\t0\t80\t30\n"
                 )
             )
 
@@ -455,9 +457,9 @@ main = "main:fake, helper:fake"
     assert payload['observed']['observe_status'] == 'ok'
     windows = {window['name']: window for window in payload['windows']}
     observed_panes = windows['main']['observed']['panes']
-    assert [(pane['pane_id'], pane['pane_index'], pane['pane_width'], pane['pane_height']) for pane in observed_panes] == [
-        ('%1', 0, 100, 30),
-        ('%2', 1, 80, 30),
+    assert [(pane['pane_id'], pane['pane_index'], pane['pane_left'], pane['pane_top'], pane['pane_width'], pane['pane_height']) for pane in observed_panes] == [
+        ('%1', 0, 0, 0, 100, 30),
+        ('%2', 1, 101, 0, 80, 30),
     ]
     agents = {agent['agent']: agent for agent in windows['main']['agents']}
     assert agents['main']['observed']['pane_index'] == 0

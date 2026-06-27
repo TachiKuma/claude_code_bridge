@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ccbd.reload_additive_agents import window_agent_names, window_map
 
+from .agent_window_reflow import reflow_agent_window_fixed
 from .backend import find_window, kill_window, session_window_target
 from .materialize_topology import sync_topology_sidebar_widths
 
@@ -108,6 +109,21 @@ def reflow_window_after_agent_change(
     if not callable(runner):
         result.reflow_errors[window_name] = 'tmux backend does not support select-layout'
         return
+    fixed_applied, fixed_error = reflow_agent_window_fixed(
+        backend,
+        session_name=current.tmux_session_name,
+        window_target=target,
+        topology_plan=topology_plan,
+        window_name=window_name,
+        timeout_s=timeout_s,
+    )
+    if fixed_error is not None:
+        result.reflow_errors[window_name] = fixed_error
+        return
+    if fixed_applied:
+        _append_unique(result.reflowed_windows, window_name)
+        _sync_sidebar_widths(controller, backend, current=current, topology_plan=topology_plan, window_name=window_name, result=result, timeout_s=timeout_s)
+        return
     try:
         completed = runner(
             ['select-layout', '-E', '-t', target],
@@ -123,6 +139,19 @@ def reflow_window_after_agent_change(
         result.reflow_errors[window_name] = detail or 'select-layout failed'
         return
     _append_unique(result.reflowed_windows, window_name)
+    _sync_sidebar_widths(controller, backend, current=current, topology_plan=topology_plan, window_name=window_name, result=result, timeout_s=timeout_s)
+
+
+def _sync_sidebar_widths(
+    controller,
+    backend,
+    *,
+    current,
+    topology_plan,
+    window_name: str,
+    result,
+    timeout_s: float | None,
+) -> None:
     try:
         sync_topology_sidebar_widths(
             controller,

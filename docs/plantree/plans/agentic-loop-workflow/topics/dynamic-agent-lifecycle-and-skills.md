@@ -719,11 +719,12 @@ Known V1 gap:
   instead of risking active pane drift.
 - Full live provider smoke with `codex`/`claude` remains separate from the
   controlled fake-provider tmux proof.
-- Live reflow into the 1->6 visual pattern is intentionally deferred. The
-  landed hot-load slice appends to existing windows or creates new windows
-  without rearranging preserved live panes. Unload can remove the target pane
-  and empty dynamic windows, but same-window visual compaction/reflow remains a
-  later slice.
+- Live reflow into the 1->6 visual pattern is now landed for fully managed
+  agent windows with one to six effective agent panes. The implementation
+  preserves pane IDs and provider sessions while arranging `p1,p3,p5` in the
+  left column and `p2,p4,p6` in the right column; unsupported window shapes
+  still fall back to tmux even compaction. Manual drag/drop and arbitrary
+  cross-window movement remain deferred.
 
 ## Open Questions
 
