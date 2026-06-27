@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -119,6 +120,38 @@ def test_real_home_mode_ignores_isolated_home_when_override_is_set(
     monkeypatch.setenv("CCB_REAL_HOME", str(real_home))
 
     assert module._provider_home(test_root=tmp_path, mode="real-home") == real_home
+
+
+def test_main_passes_command_timeout_to_runner(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _load_module()
+    captured = {}
+
+    def fake_runner(**kwargs):
+        captured.update(kwargs)
+        return {"dynamic_layout_smoke_status": "prepared"}
+
+    monkeypatch.setattr(module, "run_dynamic_layout_smoke", fake_runner)
+
+    assert module.main(["--command-timeout", "123", "--prepare-only"]) == 0
+    assert captured["command_timeout_s"] == 123
+
+
+def test_run_records_timeout_without_raising(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _load_module()
+
+    def fake_run(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired(cmd=["ccb"], timeout=1, output="partial out", stderr="partial err")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+
+    result = module._run("slow", ["ccb"], cwd=tmp_path, env={}, timeout=1)
+
+    assert result["returncode"] is None
+    assert result["timeout"] is True
+    assert result["stdout"] == "partial out"
+    assert result["stderr"] == "partial err"
+    compact = module._compact_command(result)
+    assert compact["timeout"] is True
 
 
 def test_payload_helpers_extract_window_agents_and_panes() -> None:

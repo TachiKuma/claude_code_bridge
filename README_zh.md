@@ -6,7 +6,7 @@
 **可见、可控的多 Agent 合作TUI工作台**
 
 <p>
-  <img src="https://img.shields.io/badge/version-7.6.16-orange.svg" alt="version">
+  <img src="https://img.shields.io/badge/version-7.7.0-orange.svg" alt="version">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WSL-lightgrey.svg" alt="platform">
   <img src="https://img.shields.io/badge/providers-15%20CLI%20families-0B7285.svg" alt="providers">
 </p>
@@ -695,6 +695,54 @@ v7 线重点：
 - 加固 tmux、Ghostty、release helper、Codex trust 和 provider 会话恢复路径。
 
 <details open>
+<summary><b>v7.7.0</b> - Runtime Accelerator 发布加固</summary>
+
+- Release artifacts 现在会携带可选 Rust `ccb-runtime-accelerator`，安装版
+  Codex agent 在预期存在 sidecar 时不再静默退回 Python 热路径。
+- 当项目路径导致 Unix socket 路径过长时，accelerator socket 会自动落到
+  短的 per-user runtime socket root。
+- 加固 callback repair 和 Codex binding cache invalidation，并记录完整
+  回归、长 idle Codex soak、Claude callback 和混合 provider 集成测试证据。
+
+</details>
+
+<details>
+<summary><b>v7.6.19</b> - 长任务 ask 默认等待策略</summary>
+
+- 普通长时间 `ask` 默认继续等待真实 provider/completion 结果，不再仅因
+  heartbeat 诊断自动 terminalize 为 `incomplete/heartbeat_timeout`。
+- Codex、Claude、Gemini 的 pane-backed no-terminal timeout 默认改为显式
+  opt-in，仍保留显式 reliability timeout 策略。
+- 已用 32 分钟 source-runtime ask smoke 验证：任务超过 30 分钟仍保持
+  running，随后以 `result_message` 完成，未出现 `heartbeat_timeout` 或
+  `incomplete` 证据。
+
+</details>
+
+<details>
+<summary><b>v7.6.18</b> - CCB UI 主题偏好</summary>
+
+- 新增顶层 `ccb theme` 主题切换命令，可调整 CCB 自有 tmux/sidebar UI，
+  并支持用 `+` / `-` 在深色和浅色 palette 间循环。
+- 新增适合浅色 terminal 背景的 tmux status、pane border、sidebar、agent
+  活动状态和 comms 状态配色。
+- 生成的 rich WezTerm profile 会读取同一个全局 CCB 主题偏好，并在下次
+  打开或 reload 时同步主题。
+
+</details>
+
+<details>
+<summary><b>v7.6.17</b> - Codex Log Symlink Target 修复</summary>
+
+- 当 `/tmp/ccb-codex-logs-*` 清理导致 managed Codex `logs_2.sqlite` 临时
+  symlink target 目录消失时，启动前会自动重建 target parent。
+- 如果坏 symlink 无法修复，CCB 会先移除 symlink 并恢复本地备份，再让
+  Codex 初始化自己的 SQLite 数据库。
+- 增加缺失 symlink target parent 启动路径的回归测试。
+
+</details>
+
+<details>
 <summary><b>v7.6.16</b> - Codex SQLite Migration 恢复修复</summary>
 
 - 修复 managed Codex `logs_2.sqlite` redirect：CCB 不再预创建 Codex 自有

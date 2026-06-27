@@ -119,10 +119,13 @@ pane IDs, provider sessions, and CCB slot metadata must remain valid.
     `planner_helper2`, reports
     `namespace_reflowed_windows=["plan-orchestrate"]`, and keeps surviving
     helpers askable.
-- Remaining gap: these are fake-provider panes. Full live pane-backed
-  `codex`/`claude` release still needs a guarded real-provider smoke before
-  treating provider-specific teardown and recovery as proven. The smoke harness
-  can now prepare and preflight real-provider projects with `--provider`,
-  `--flow`, `--provider-home-mode`, and `--prepare-only`, and it blocks
-  accidental non-fake execution unless `CCB_DYNAMIC_LAYOUT_SMOKE_RUN_REAL=1`
-  is set.
+- Guarded Codex real-provider evidence now covers explicit workflow-window
+  middle release:
+  - `frontdesk` and `planner` Codex panes started in explicit `[windows]`;
+  - `planner_helper1/2/3` hot-loaded into `plan-orchestrate`;
+  - unloading middle `planner_helper2` removed only that dynamic agent,
+    reflowed `plan-orchestrate`, preserved surviving helper panes, and kept
+    asks to the survivors accepted.
+- Remaining gap: the same live pane-backed provider release still needs a
+  guarded `claude` smoke before treating provider-specific teardown and
+  recovery as proven across the main pane-backed providers.

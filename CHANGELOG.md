@@ -2,6 +2,74 @@
 
 ## Unreleased
 
+## v7.7.0 (2026-06-27)
+
+### Runtime Accelerator Release Hardening
+
+- **Runtime Accelerator Sidecar Shipped**: release artifacts now build and
+  package `bin/ccb-runtime-accelerator`, so the default Codex accelerator path
+  is available to installed users instead of silently falling back to Python.
+- **Short Socket Fallback Added**: accelerator sockets now relocate to the
+  per-user runtime socket root when a project-local Unix socket path would
+  exceed platform limits.
+- **Callback And Binding Stability Hardened**: pending callback edges keep the
+  dispatcher in the hot loop, and Codex binding scan signatures now follow the
+  managed session root.
+- **Regression Evidence Expanded**: full Python regression, Rust sidecar gates,
+  release preview, Codex soak, Claude callback, and mixed-provider integration
+  evidence are recorded in the runtime accelerator review notes.
+- **Release Surface Synchronized**: VERSION, CLI version constants,
+  package.json, Rust crate metadata, release workflow defaults, README release
+  notes, and npm packaging metadata are aligned for 7.7.0.
+
+## v7.6.19 (2026-06-26)
+
+### Long-Running Ask Wait Policy
+
+- **Ask Heartbeat Timeout Disabled By Default**: running-job heartbeat
+  observations now remain internal diagnostics by default instead of
+  terminalizing ordinary `ask` jobs as `incomplete/heartbeat_timeout`.
+- **Pane-Backed Provider Timeouts Made Opt-In**: Codex, Claude, and Gemini
+  default `no_terminal_timeout_s` values are now `0.0`; explicit reliability
+  timeout policies remain supported.
+- **Long Runtime Evidence Recorded**: a source-runtime ask smoke ran beyond 30
+  minutes, stayed running at 1800s and 1860s, then completed at 1980s with
+  `result_message` and no `heartbeat_timeout`/`incomplete` evidence.
+- **Release Surface Synchronized**: VERSION, CLI version constants,
+  package.json, release workflow defaults, README release notes, and npm
+  packaging metadata are aligned for 7.6.19.
+
+## v7.6.18 (2026-06-26)
+
+### CCB UI Theme Preference
+
+- **Global Theme Command Added**: `ccb theme` now shows or changes the global
+  CCB UI theme, including `+` and `-` cycling across dark and light palettes.
+- **Light Tmux And Sidebar Themes Added**: CCB-owned tmux status, pane borders,
+  sidebar colors, and activity/status indicators now have readable light-mode
+  styling for light terminal backgrounds.
+- **Rich WezTerm Theme Sync Added**: generated rich WezTerm profiles read the
+  same CCB theme preference and export matching tmux/sidebar theme variables.
+- **Release Surface Synchronized**: VERSION, CLI version constants,
+  package.json, release workflow defaults, README release notes, and npm
+  packaging metadata are aligned for 7.6.18.
+
+## v7.6.17 (2026-06-25)
+
+### Codex Log Symlink Target Repair
+
+- **Codex Temp Log Symlink Repaired**: managed Codex startup now recreates the
+  `logs_2.sqlite` symlink target parent when `/tmp/ccb-codex-logs-*` cleanup
+  removes it between launches.
+- **Bad Symlink Fallback Hardened**: if the symlink target cannot be repaired,
+  CCB removes the broken symlink and restores the local backup before Codex
+  starts, avoiding startup failures in Codex-owned SQLite initialization.
+- **Regression Coverage Added**: focused tests cover missing temp target
+  parents and preserve the existing diagnostic-log redirect and restore paths.
+- **Release Surface Synchronized**: VERSION, CLI version constants,
+  package.json, release workflow defaults, README release notes, and npm
+  packaging metadata are aligned for 7.6.17.
+
 ## v7.6.16 (2026-06-23)
 
 ### Codex SQLite Migration Recovery

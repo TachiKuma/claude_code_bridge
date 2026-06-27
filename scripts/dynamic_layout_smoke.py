@@ -14,6 +14,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TEST_ROOT = Path(os.environ.get("CCB_DYNAMIC_LAYOUT_SMOKE_TEST_ROOT", "/home/bfly/yunwei/test_ccb2"))
 DEFAULT_CCB_TEST = REPO_ROOT / "ccb_test"
+DEFAULT_COMMAND_TIMEOUT_S = int(os.environ.get("CCB_DYNAMIC_LAYOUT_SMOKE_COMMAND_TIMEOUT_S", "60"))
 REAL_RUN_ENV = "CCB_DYNAMIC_LAYOUT_SMOKE_RUN_REAL"
 FLOW_NAMES = ("multi-node", "same-window", "window-class")
 PROVIDER_EXECUTABLES = {
@@ -128,6 +129,7 @@ def run_dynamic_layout_smoke(
     provider: str = "fake",
     flows: tuple[str, ...] | None = None,
     provider_home_mode: str = "source-home",
+    command_timeout_s: int = DEFAULT_COMMAND_TIMEOUT_S,
     prepare_only: bool = False,
     reset: bool = False,
     keep_running: bool = False,
@@ -165,6 +167,7 @@ def run_dynamic_layout_smoke(
                 provider=provider,
                 ccb_test=ccb_test,
                 provider_home=provider_home,
+                command_timeout_s=command_timeout_s,
                 reset=reset,
                 keep_running=keep_running,
             )
@@ -177,6 +180,7 @@ def run_dynamic_layout_smoke(
                 provider=provider,
                 ccb_test=ccb_test,
                 provider_home=provider_home,
+                command_timeout_s=command_timeout_s,
                 reset=reset,
                 keep_running=keep_running,
             )
@@ -189,6 +193,7 @@ def run_dynamic_layout_smoke(
                 provider=provider,
                 ccb_test=ccb_test,
                 provider_home=provider_home,
+                command_timeout_s=command_timeout_s,
                 reset=reset,
                 keep_running=keep_running,
             )
@@ -212,6 +217,7 @@ def _run_multi_node_flow(
     provider: str,
     ccb_test: Path,
     provider_home: Path,
+    command_timeout_s: int,
     reset: bool,
     keep_running: bool,
 ) -> dict[str, Any]:
@@ -220,8 +226,8 @@ def _run_multi_node_flow(
     env = _env(provider_home=provider_home, role_store=Path(prepared["role_store"]))
     commands: list[dict[str, Any]] = []
     try:
-        commands.append(_run("config_validate", [str(ccb_test), "--project", str(project_root), "config", "validate"], cwd=test_root, env=env))
-        commands.append(_run("start", [str(ccb_test), "--project", str(project_root)], cwd=test_root, env=env))
+        commands.append(_run("config_validate", [str(ccb_test), "--project", str(project_root), "config", "validate"], cwd=test_root, env=env, timeout=command_timeout_s))
+        commands.append(_run("start", [str(ccb_test), "--project", str(project_root)], cwd=test_root, env=env, timeout=command_timeout_s))
         ensure = _run_json(
             "ensure_multi_node",
             [
@@ -241,12 +247,13 @@ def _run_multi_node_flow(
             ],
             cwd=test_root,
             env=env,
+            timeout=command_timeout_s,
         )
         commands.append(ensure)
-        before = _run_json("layout_before_release", [str(ccb_test), "--project", str(project_root), "layout", "status", "--json"], cwd=test_root, env=env)
+        before = _run_json("layout_before_release", [str(ccb_test), "--project", str(project_root), "layout", "status", "--json"], cwd=test_root, env=env, timeout=command_timeout_s)
         commands.append(before)
-        worker_ask = _run("ask_worker1", [str(ccb_test), "--project", str(project_root), "ask", "loop-round2-worker-1"], cwd=test_root, env=env, input_text="dynamic layout smoke ping worker1\n")
-        reviewer_ask = _run("ask_reviewer2", [str(ccb_test), "--project", str(project_root), "ask", "loop-round2-code_reviewer-2"], cwd=test_root, env=env, input_text="dynamic layout smoke ping reviewer2\n")
+        worker_ask = _run("ask_worker1", [str(ccb_test), "--project", str(project_root), "ask", "loop-round2-worker-1"], cwd=test_root, env=env, input_text="dynamic layout smoke ping worker1\n", timeout=command_timeout_s)
+        reviewer_ask = _run("ask_reviewer2", [str(ccb_test), "--project", str(project_root), "ask", "loop-round2-code_reviewer-2"], cwd=test_root, env=env, input_text="dynamic layout smoke ping reviewer2\n", timeout=command_timeout_s)
         commands.extend([worker_ask, reviewer_ask])
         commands.extend(
             _watch_submitted_jobs(
@@ -255,6 +262,7 @@ def _run_multi_node_flow(
                 test_root=test_root,
                 env=env,
                 asks=(worker_ask, reviewer_ask),
+                timeout=command_timeout_s,
             )
         )
         release = _run_json(
@@ -273,9 +281,10 @@ def _run_multi_node_flow(
             ],
             cwd=test_root,
             env=env,
+            timeout=command_timeout_s,
         )
         commands.append(release)
-        after = _run_json("layout_after_release", [str(ccb_test), "--project", str(project_root), "layout", "status", "--json"], cwd=test_root, env=env)
+        after = _run_json("layout_after_release", [str(ccb_test), "--project", str(project_root), "layout", "status", "--json"], cwd=test_root, env=env, timeout=command_timeout_s)
         commands.append(after)
         checks = {
             "ensure_add_window": _payload(ensure).get("apply", {}).get("plan_class") == "add_window",
@@ -297,7 +306,7 @@ def _run_multi_node_flow(
         return {"flow": "multi_node_capacity", "flow_status": status, "checks": checks, "commands": commands}
     finally:
         if not keep_running:
-            commands.append(_run("kill", [str(ccb_test), "--project", str(project_root), "kill", "-f"], cwd=test_root, env=env))
+            commands.append(_run("kill", [str(ccb_test), "--project", str(project_root), "kill", "-f"], cwd=test_root, env=env, timeout=command_timeout_s))
 
 
 def _run_same_window_flow(
@@ -307,6 +316,7 @@ def _run_same_window_flow(
     provider: str,
     ccb_test: Path,
     provider_home: Path,
+    command_timeout_s: int,
     reset: bool,
     keep_running: bool,
 ) -> dict[str, Any]:
@@ -315,8 +325,8 @@ def _run_same_window_flow(
     env = _env(provider_home=provider_home, role_store=Path(prepared["role_store"]))
     commands: list[dict[str, Any]] = []
     try:
-        commands.append(_run("config_validate", [str(ccb_test), "--project", str(project_root), "config", "validate"], cwd=test_root, env=env))
-        commands.append(_run("start", [str(ccb_test), "--project", str(project_root)], cwd=test_root, env=env))
+        commands.append(_run("config_validate", [str(ccb_test), "--project", str(project_root), "config", "validate"], cwd=test_root, env=env, timeout=command_timeout_s))
+        commands.append(_run("start", [str(ccb_test), "--project", str(project_root)], cwd=test_root, env=env, timeout=command_timeout_s))
         for helper in ("helper1", "helper2", "helper3"):
             commands.append(
                 _run_json(
@@ -337,9 +347,10 @@ def _run_same_window_flow(
                     ],
                     cwd=test_root,
                     env=env,
+                    timeout=command_timeout_s,
                 )
             )
-        before = _run_json("layout_before_middle_release", [str(ccb_test), "--project", str(project_root), "layout", "status", "--json"], cwd=test_root, env=env)
+        before = _run_json("layout_before_middle_release", [str(ccb_test), "--project", str(project_root), "layout", "status", "--json"], cwd=test_root, env=env, timeout=command_timeout_s)
         commands.append(before)
         release = _run_json(
             "remove_middle_helper",
@@ -357,12 +368,13 @@ def _run_same_window_flow(
             ],
             cwd=test_root,
             env=env,
+            timeout=command_timeout_s,
         )
         commands.append(release)
-        after = _run_json("layout_after_middle_release", [str(ccb_test), "--project", str(project_root), "layout", "status", "--json"], cwd=test_root, env=env)
+        after = _run_json("layout_after_middle_release", [str(ccb_test), "--project", str(project_root), "layout", "status", "--json"], cwd=test_root, env=env, timeout=command_timeout_s)
         commands.append(after)
-        commands.append(_run("ask_helper1", [str(ccb_test), "--project", str(project_root), "ask", "helper1"], cwd=test_root, env=env, input_text="same-window smoke ping helper1\n"))
-        commands.append(_run("ask_helper3", [str(ccb_test), "--project", str(project_root), "ask", "helper3"], cwd=test_root, env=env, input_text="same-window smoke ping helper3\n"))
+        commands.append(_run("ask_helper1", [str(ccb_test), "--project", str(project_root), "ask", "helper1"], cwd=test_root, env=env, input_text="same-window smoke ping helper1\n", timeout=command_timeout_s))
+        commands.append(_run("ask_helper3", [str(ccb_test), "--project", str(project_root), "ask", "helper3"], cwd=test_root, env=env, input_text="same-window smoke ping helper3\n", timeout=command_timeout_s))
         before_panes = _agent_panes(before)
         after_panes = _agent_panes(after)
         checks = {
@@ -379,7 +391,7 @@ def _run_same_window_flow(
         return {"flow": "same_window_middle_release", "flow_status": status, "checks": checks, "commands": commands}
     finally:
         if not keep_running:
-            commands.append(_run("kill", [str(ccb_test), "--project", str(project_root), "kill", "-f"], cwd=test_root, env=env))
+            commands.append(_run("kill", [str(ccb_test), "--project", str(project_root), "kill", "-f"], cwd=test_root, env=env, timeout=command_timeout_s))
 
 
 def _run_window_class_flow(
@@ -389,6 +401,7 @@ def _run_window_class_flow(
     provider: str,
     ccb_test: Path,
     provider_home: Path,
+    command_timeout_s: int,
     reset: bool,
     keep_running: bool,
 ) -> dict[str, Any]:
@@ -397,8 +410,8 @@ def _run_window_class_flow(
     env = _env(provider_home=provider_home, role_store=Path(prepared["role_store"]))
     commands: list[dict[str, Any]] = []
     try:
-        commands.append(_run("config_validate", [str(ccb_test), "--project", str(project_root), "config", "validate"], cwd=test_root, env=env))
-        commands.append(_run("start", [str(ccb_test), "--project", str(project_root)], cwd=test_root, env=env))
+        commands.append(_run("config_validate", [str(ccb_test), "--project", str(project_root), "config", "validate"], cwd=test_root, env=env, timeout=command_timeout_s))
+        commands.append(_run("start", [str(ccb_test), "--project", str(project_root)], cwd=test_root, env=env, timeout=command_timeout_s))
         for helper in ("planner_helper1", "planner_helper2", "planner_helper3"):
             commands.append(
                 _run_json(
@@ -419,9 +432,10 @@ def _run_window_class_flow(
                     ],
                     cwd=test_root,
                     env=env,
+                    timeout=command_timeout_s,
                 )
             )
-        before = _run_json("layout_before_window_class_release", [str(ccb_test), "--project", str(project_root), "layout", "status", "--json"], cwd=test_root, env=env)
+        before = _run_json("layout_before_window_class_release", [str(ccb_test), "--project", str(project_root), "layout", "status", "--json"], cwd=test_root, env=env, timeout=command_timeout_s)
         commands.append(before)
         release = _run_json(
             "remove_middle_window_class_helper",
@@ -439,9 +453,10 @@ def _run_window_class_flow(
             ],
             cwd=test_root,
             env=env,
+            timeout=command_timeout_s,
         )
         commands.append(release)
-        after = _run_json("layout_after_window_class_release", [str(ccb_test), "--project", str(project_root), "layout", "status", "--json"], cwd=test_root, env=env)
+        after = _run_json("layout_after_window_class_release", [str(ccb_test), "--project", str(project_root), "layout", "status", "--json"], cwd=test_root, env=env, timeout=command_timeout_s)
         commands.append(after)
         commands.append(
             _run(
@@ -450,6 +465,7 @@ def _run_window_class_flow(
                 cwd=test_root,
                 env=env,
                 input_text="window-class smoke ping planner_helper1\n",
+                timeout=command_timeout_s,
             )
         )
         commands.append(
@@ -459,6 +475,7 @@ def _run_window_class_flow(
                 cwd=test_root,
                 env=env,
                 input_text="window-class smoke ping planner_helper3\n",
+                timeout=command_timeout_s,
             )
         )
         before_panes = _agent_panes(before)
@@ -481,7 +498,7 @@ def _run_window_class_flow(
         return {"flow": "window_class_middle_release", "flow_status": status, "checks": checks, "commands": commands}
     finally:
         if not keep_running:
-            commands.append(_run("kill", [str(ccb_test), "--project", str(project_root), "kill", "-f"], cwd=test_root, env=env))
+            commands.append(_run("kill", [str(ccb_test), "--project", str(project_root), "kill", "-f"], cwd=test_root, env=env, timeout=command_timeout_s))
 
 
 def _project_root(test_root: Path, project_name: str) -> Path:
@@ -624,8 +641,16 @@ def _env(*, provider_home: Path, role_store: Path) -> dict[str, str]:
     return env
 
 
-def _run_json(name: str, command: list[str], *, cwd: Path, env: dict[str, str], input_text: str | None = None) -> dict[str, Any]:
-    result = _run(name, command, cwd=cwd, env=env, input_text=input_text)
+def _run_json(
+    name: str,
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    timeout: int,
+    input_text: str | None = None,
+) -> dict[str, Any]:
+    result = _run(name, command, cwd=cwd, env=env, input_text=input_text, timeout=timeout)
     try:
         payload = json.loads(str(result.get("stdout") or ""))
     except json.JSONDecodeError:
@@ -634,22 +659,41 @@ def _run_json(name: str, command: list[str], *, cwd: Path, env: dict[str, str], 
     return result
 
 
-def _run(name: str, command: list[str], *, cwd: Path, env: dict[str, str], input_text: str | None = None) -> dict[str, Any]:
-    completed = subprocess.run(
-        command,
-        cwd=str(cwd),
-        env=env,
-        text=True,
-        input=input_text,
-        capture_output=True,
-        timeout=60,
-    )
+def _run(
+    name: str,
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    timeout: int,
+    input_text: str | None = None,
+) -> dict[str, Any]:
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=str(cwd),
+            env=env,
+            text=True,
+            input=input_text,
+            capture_output=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "name": name,
+            "command": command,
+            "returncode": None,
+            "stdout": exc.stdout or "",
+            "stderr": exc.stderr or "",
+            "timeout": True,
+        }
     return {
         "name": name,
         "command": command,
         "returncode": completed.returncode,
         "stdout": completed.stdout,
         "stderr": completed.stderr,
+        "timeout": False,
     }
 
 
@@ -686,6 +730,8 @@ def _compact_command(command: dict[str, Any]) -> dict[str, Any]:
         "name": command.get("name"),
         "returncode": command.get("returncode"),
     }
+    if command.get("timeout"):
+        summary["timeout"] = True
     payload_summary = _compact_payload_summary(_payload(command))
     if payload_summary:
         summary["payload"] = payload_summary
@@ -800,6 +846,7 @@ def _watch_submitted_jobs(
     test_root: Path,
     env: dict[str, str],
     asks: tuple[dict[str, Any], ...],
+    timeout: int,
 ) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     for ask in asks:
@@ -812,6 +859,7 @@ def _watch_submitted_jobs(
                 [str(ccb_test), "--project", str(project_root), "watch", job_id],
                 cwd=test_root,
                 env=env,
+                timeout=timeout,
             )
         )
     return results
@@ -842,6 +890,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--provider", default="fake")
     parser.add_argument("--flow", action="append", choices=FLOW_NAMES, help="Flow to run; repeat to run multiple flows. Defaults to all flows.")
     parser.add_argument("--provider-home-mode", choices=("source-home", "real-home"), default="source-home")
+    parser.add_argument("--command-timeout", type=int, default=DEFAULT_COMMAND_TIMEOUT_S)
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--reset", action="store_true")
     parser.add_argument("--keep-running", action="store_true")
@@ -855,6 +904,7 @@ def main(argv: list[str] | None = None) -> int:
         provider=args.provider,
         flows=tuple(args.flow or ()),
         provider_home_mode=args.provider_home_mode,
+        command_timeout_s=args.command_timeout,
         prepare_only=args.prepare_only,
         reset=args.reset,
         keep_running=args.keep_running,

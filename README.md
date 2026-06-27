@@ -6,7 +6,7 @@
 **Visible, controllable multi-agent cooperative TUI workspace**
 
 <p>
-  <img src="https://img.shields.io/badge/version-7.6.16-orange.svg" alt="version">
+  <img src="https://img.shields.io/badge/version-7.7.0-orange.svg" alt="version">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WSL-lightgrey.svg" alt="platform">
   <img src="https://img.shields.io/badge/providers-15%20CLI%20families-0B7285.svg" alt="providers">
 </p>
@@ -709,6 +709,57 @@ v7 highlights:
 - Hardened tmux, Ghostty, release helper, Codex trust, and provider session restore paths.
 
 <details open>
+<summary><b>v7.7.0</b> - Runtime Accelerator Release Hardening</summary>
+
+- Ships the optional Rust `ccb-runtime-accelerator` in release artifacts, so
+  installed Codex agents can use the sidecar hotpath instead of falling back to
+  Python when the binary is expected.
+- Adds short runtime socket fallback for long project paths that would exceed
+  Unix socket path limits.
+- Hardens callback repair and Codex binding cache invalidation, then records
+  full regression, long-idle Codex soak, Claude callback, and mixed-provider
+  integration evidence.
+
+</details>
+
+<details>
+<summary><b>v7.6.19</b> - Long-Running Ask Wait Policy</summary>
+
+- Keeps ordinary long-running `ask` jobs waiting by default instead of
+  terminalizing them as `incomplete/heartbeat_timeout` from heartbeat
+  diagnostics alone.
+- Makes Codex, Claude, and Gemini pane-backed no-terminal timeouts opt-in by
+  default while preserving explicit reliability timeout policies.
+- Validated with a 32-minute source-runtime ask smoke: the job stayed running
+  past 30 minutes, then completed with `result_message` and no
+  `heartbeat_timeout`/`incomplete` evidence.
+
+</details>
+
+<details>
+<summary><b>v7.6.18</b> - CCB UI Theme Preference</summary>
+
+- Adds `ccb theme` as the top-level theme switch for CCB-owned tmux/sidebar UI,
+  with `+` and `-` cycling across dark and light palettes.
+- Adds readable light-mode tmux status, pane border, sidebar, activity, and
+  comms status colors for light terminal backgrounds.
+- Makes generated rich WezTerm profiles follow the same global CCB theme
+  preference on the next launch/reload.
+
+</details>
+
+<details>
+<summary><b>v7.6.17</b> - Codex Log Symlink Target Repair</summary>
+
+- Repairs managed Codex `logs_2.sqlite` temp symlink targets when
+  `/tmp/ccb-codex-logs-*` cleanup removes the target directory between starts.
+- Falls back by removing an unrecoverable broken symlink and restoring the local
+  backup before Codex initializes its SQLite databases.
+- Adds regression coverage for the missing symlink target parent startup path.
+
+</details>
+
+<details>
 <summary><b>v7.6.16</b> - Codex SQLite Migration Recovery</summary>
 
 - Fixes the managed Codex `logs_2.sqlite` redirect so CCB no longer

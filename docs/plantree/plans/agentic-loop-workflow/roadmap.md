@@ -465,11 +465,25 @@ Date: 2026-06-24
   selected `--flow window-class` source-wrapper run passed, and Codex
   `--prepare-only --provider-home-mode real-home` proved executable/auth
   preflight without launching provider panes.
+- Integrated the dynamic layout line with remote `origin/main`/`v7.7.0`
+  runtime-accelerator and theme changes. Conflict-surface tests passed with
+  `105 passed`, dynamic layout regression passed with `101 passed`, runtime
+  accelerator focused checks passed, and the merged source-wrapper smoke in
+  `/home/bfly/yunwei/test_ccb2/dynamic-layout-merged-1782561461-*` kept all
+  three fake-provider layout flows green.
+- Ran the first guarded real-provider explicit-window smoke:
+  `CCB_DYNAMIC_LAYOUT_SMOKE_RUN_REAL=1 ... --provider codex --flow
+  window-class --provider-home-mode real-home --command-timeout 240`.
+  `/home/bfly/yunwei/test_ccb2/dynamic-layout-codex-window-1782561840-window-class`
+  passed: `frontdesk` and `planner` Codex panes started, three Codex helper
+  agents hot-loaded into `plan-orchestrate`, middle `planner_helper2` unloaded
+  with `namespace_reflowed_windows=["plan-orchestrate"]`, surviving helper pane
+  ids were preserved, and asks to both surviving helpers were accepted.
 
 ## Next
 
 1. Extend generic dynamic agent lifecycle beyond the landed V1:
-   full live-provider smoke for pane-backed `codex`/`claude` and richer status
+   add the matching guarded `claude` provider smoke and richer status
    diagnostics that distinguish configured/static, dynamic, loop-generated,
    parked, dispatch-disabled, and failed-apply records.
 2. Promote the repeatable workflow closure smoke and the autonomous
@@ -483,7 +497,7 @@ Date: 2026-06-24
    non-loop dynamic agents while keeping loop execution capacity behind
    `ccb loop capacity`.
 5. Implement the next true hot-load slices:
-    run the guarded `codex`/`claude` provider smoke using the new provider/flow
+    run the guarded `claude` provider smoke using the new provider/flow
     harness, add better pane-identity diagnostics at startup, and only later
     richer live reflow beyond the proven same-window and explicit-window-class
     middle-removal cases.

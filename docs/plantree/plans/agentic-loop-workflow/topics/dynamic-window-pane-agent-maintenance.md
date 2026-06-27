@@ -618,6 +618,15 @@ Evidence:
   Verification covered the unchanged default fake run, a selected
   `--flow window-class` fake run, and Codex `--prepare-only` preflight with
   real-home auth discovery under `/home/bfly`.
+- After merging remote `v7.7.0` runtime-accelerator/theme work, the dynamic
+  layout smoke still passed all fake-provider flows in
+  `/home/bfly/yunwei/test_ccb2/dynamic-layout-merged-1782561461-*`. A guarded
+  Codex real-provider `window-class` run then passed in
+  `/home/bfly/yunwei/test_ccb2/dynamic-layout-codex-window-1782561840-window-class`:
+  three Codex helpers hot-loaded into `plan-orchestrate`, middle
+  `planner_helper2` unloaded with `plan_class=remove_agent`, reflow reported
+  `namespace_reflowed_windows=["plan-orchestrate"]`, surviving panes stayed in
+  place, and asks to `planner_helper1` and `planner_helper3` were accepted.
 - Focused regression after connecting loop capacity to layout placement passed
   with `187 passed` across loop capacity, agent lifecycle, layout status, pane
   growth, layout runtime, reload patch/runtime mount, and config loader tests.
