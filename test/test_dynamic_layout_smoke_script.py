@@ -542,6 +542,173 @@ def test_multi_window_continuous_flow_adds_and_removes_windows(
     assert remove_names == ["remove_helper3", "remove_helper2", "remove_helper1"]
 
 
+def test_window_class_continuous_flow_grows_to_overflow_page_and_cleans_up(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+    project_root = tmp_path / "project"
+    role_store = tmp_path / "roles"
+    calls: list[tuple[str, str]] = []
+    helpers = tuple(f"planner_helper{index}" for index in range(1, 8))
+    helper_panes = {helper: f"%{index + 2}" for index, helper in enumerate(helpers, start=1)}
+
+    monkeypatch.setattr(
+        module,
+        "prepare_window_class_project",
+        lambda **_kwargs: {"project_root": str(project_root), "role_store": str(role_store)},
+    )
+
+    def fake_run(name, command, **_kwargs):
+        calls.append((name, " ".join(str(item) for item in command)))
+        if name.startswith("ask_planner_helper7"):
+            return {
+                "name": name,
+                "returncode": 0,
+                "stdout": "accepted job=job_helper7 target=planner_helper7\n[CCB_ASYNC_SUBMITTED job=job_helper7 target=planner_helper7]\n",
+                "stderr": "",
+            }
+        if name.startswith("watch_job_"):
+            return {
+                "name": name,
+                "returncode": 0,
+                "stdout": "watch_status: terminal\nstatus: completed\n",
+                "stderr": "",
+            }
+        return {"name": name, "returncode": 0, "stdout": "ok\n", "stderr": ""}
+
+    def fake_run_json(name, command, **_kwargs):
+        calls.append((name, " ".join(str(item) for item in command)))
+        if name.startswith("add_planner_helper"):
+            helper = name.removeprefix("add_")
+            index = helpers.index(helper)
+            plan_class = "add_window" if index == 5 else "add_agent"
+            return {
+                "name": name,
+                "returncode": 0,
+                "stdout": "{}\n",
+                "stderr": "",
+                "payload": {"apply": {"plan_class": plan_class}},
+            }
+        if name == "layout_after_window_class_grow_to_eight":
+            page1_agents = ["planner", *helpers[:5]]
+            page2_agents = list(helpers[5:])
+            return {
+                "name": name,
+                "returncode": 0,
+                "stdout": "{}\n",
+                "stderr": "",
+                "payload": {
+                    "dynamic_agent_count": 7,
+                    "windows": [
+                        {
+                            "name": "main",
+                            "agent_names": ["frontdesk"],
+                            "observed": _observed_window(["%1"], ["frontdesk"]),
+                            "agents": [{"agent": "frontdesk", "pane_id": "%1"}],
+                        },
+                        {
+                            "name": "plan-orchestrate",
+                            "agent_names": page1_agents,
+                            "observed": _observed_fixed_columns(
+                                ["%2", *[helper_panes[helper] for helper in helpers[:5]]],
+                                page1_agents,
+                            ),
+                            "agents": [
+                                {"agent": "planner", "pane_id": "%2"},
+                                *[
+                                    {"agent": helper, "pane_id": helper_panes[helper]}
+                                    for helper in helpers[:5]
+                                ],
+                            ],
+                        },
+                        {
+                            "name": "plan-orchestrate-2",
+                            "agent_names": page2_agents,
+                            "observed": _observed_fixed_columns(
+                                [helper_panes[helper] for helper in helpers[5:]],
+                                page2_agents,
+                            ),
+                            "agents": [
+                                {"agent": helper, "pane_id": helper_panes[helper]}
+                                for helper in helpers[5:]
+                            ],
+                        },
+                    ],
+                },
+            }
+        if name.startswith("remove_planner_helper"):
+            helper = name.removeprefix("remove_")
+            removed_windows = ["plan-orchestrate-2"] if helper == "planner_helper6" else []
+            return {
+                "name": name,
+                "returncode": 0,
+                "stdout": "{}\n",
+                "stderr": "",
+                "payload": {
+                    "resolved_policy": "unload",
+                    "lifecycle_state": "unloaded",
+                    "apply": {
+                        "plan_class": "remove_agent",
+                        "namespace_removed_windows": removed_windows,
+                        "namespace_removed_agents": {helper: helper_panes[helper]},
+                    },
+                },
+            }
+        if name == "layout_after_window_class_shrink_to_planner":
+            return {
+                "name": name,
+                "returncode": 0,
+                "stdout": "{}\n",
+                "stderr": "",
+                "payload": {
+                    "dynamic_agent_count": 0,
+                    "windows": [
+                        {
+                            "name": "main",
+                            "agent_names": ["frontdesk"],
+                            "observed": _observed_window(["%1"], ["frontdesk"]),
+                            "agents": [{"agent": "frontdesk", "pane_id": "%1"}],
+                        },
+                        {
+                            "name": "plan-orchestrate",
+                            "agent_names": ["planner"],
+                            "observed": _observed_window(["%2"], ["planner"]),
+                            "agents": [{"agent": "planner", "pane_id": "%2"}],
+                        },
+                    ],
+                },
+            }
+        raise AssertionError(f"unexpected json command {name}")
+
+    monkeypatch.setattr(module, "_run", fake_run)
+    monkeypatch.setattr(module, "_run_json", fake_run_json)
+
+    payload = module._run_window_class_continuous_flow(
+        test_root=tmp_path,
+        project_name="window-class-continuous",
+        provider="fake",
+        ccb_test=Path("ccb_test"),
+        provider_home=tmp_path / "home",
+        command_timeout_s=1,
+        reset=True,
+        keep_running=False,
+    )
+
+    assert payload["flow_status"] == "ok"
+    assert payload["checks"]["add_plan_sequence"] is True
+    assert payload["checks"]["page1_order"] is True
+    assert payload["checks"]["page2_order"] is True
+    assert payload["checks"]["page1_observed_fixed_columns"] is True
+    assert payload["checks"]["page2_observed_fixed_columns"] is True
+    assert payload["checks"]["page2_removed_when_empty"] is True
+    assert payload["checks"]["after_page2_removed"] is True
+    add_names = [name for name, _command in calls if name.startswith("add_planner_helper")]
+    remove_names = [name for name, _command in calls if name.startswith("remove_planner_helper")]
+    assert add_names == [f"add_{helper}" for helper in helpers]
+    assert remove_names == [f"remove_{helper}" for helper in reversed(helpers)]
+
+
 def test_prepare_only_can_generate_light_real_provider_resolve_preflight_project(tmp_path: Path) -> None:
     module = _load_module()
 
@@ -790,8 +957,11 @@ def test_tests_workflow_runs_same_window_continuous_fake_smoke() -> None:
     assert "matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'" in text
     assert "--provider fake" in text
     assert "--flow same-window-continuous" in text
+    assert "--flow window-class-continuous" in text
     assert 'payload["dynamic_layout_smoke_status"] == "ok"' in text
+    assert 'payload["flows"] == ["same-window-continuous", "window-class-continuous"]' in text
     assert 'payload["checks"]["same_window_continuous_1_to_6_to_1"] is True' in text
+    assert 'payload["checks"]["window_class_continuous_1_to_8_to_1"] is True' in text
     assert 'checks["grew_to_six_order"] is True' in text
     assert 'checks["observed_grew_to_six_panes"] is True' in text
     assert 'checks["observed_grow_geometry"] is True' in text
@@ -801,6 +971,10 @@ def test_tests_workflow_runs_same_window_continuous_fake_smoke() -> None:
     assert 'checks["shrunk_to_one_order"] is True' in text
     assert 'checks["observed_shrunk_to_one_pane"] is True' in text
     assert 'checks["observed_shrink_geometry"] is True' in text
+    assert 'window_class["page1_order"] is True' in text
+    assert 'window_class["page2_order"] is True' in text
+    assert 'window_class["page2_removed_when_empty"] is True' in text
+    assert 'window_class["after_page2_removed"] is True' in text
     step = text.split("Guard same-window continuous dynamic layout smoke", 1)[1].split("Guard workflow closure layout cleanup smoke", 1)[0]
     assert "--run" not in step
     assert "codex" not in step

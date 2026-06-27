@@ -84,6 +84,7 @@ jobs:
             --ccb-test "$GITHUB_WORKSPACE/ccb_test" \
             --provider fake \
             --flow same-window-continuous \
+            --flow window-class-continuous \
             --command-timeout 180 \
             --reset > "$RUNNER_TEMP/same-window-continuous-smoke.json"
           python - "$RUNNER_TEMP/same-window-continuous-smoke.json" <<'PY'
@@ -93,9 +94,11 @@ jobs:
 
           payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
           assert payload["dynamic_layout_smoke_status"] == "ok"
-          assert payload["flows"] == ["same-window-continuous"]
+          assert payload["flows"] == ["same-window-continuous", "window-class-continuous"]
           assert payload["checks"]["same_window_continuous_1_to_6_to_1"] is True
-          result = payload["results"][0]
+          assert payload["checks"]["window_class_continuous_1_to_8_to_1"] is True
+          results = {item["flow"]: item for item in payload["results"]}
+          result = results["same_window_continuous_1_to_6_to_1"]
           checks = result["checks"]
           assert result["flow"] == "same_window_continuous_1_to_6_to_1"
           assert checks["grew_to_six_order"] is True
@@ -112,12 +115,25 @@ jobs:
           assert checks["observed_shrink_geometry"] is True
           assert checks["dynamic_agents_cleaned"] is True
           assert checks["ask_main_accepted"] is True
+          window_class = results["window_class_continuous_1_to_8_to_1"]["checks"]
+          assert window_class["add_plan_sequence"] is True
+          assert window_class["page1_order"] is True
+          assert window_class["page2_order"] is True
+          assert window_class["page1_observed_fixed_columns"] is True
+          assert window_class["page2_observed_fixed_columns"] is True
+          assert window_class["helper7_ask_accepted"] is True
+          assert window_class["helper7_ask_terminal"] is True
+          assert window_class["release_remove_agent_plans"] is True
+          assert window_class["page2_removed_when_empty"] is True
+          assert window_class["after_page2_removed"] is True
+          assert window_class["dynamic_agents_cleaned"] is True
           print(
               json.dumps(
                   {
                       "dynamic_layout_smoke_status": payload["dynamic_layout_smoke_status"],
-                      "flow": result["flow"],
-                      "checks": checks,
+                      "flows": payload["flows"],
+                      "same_window_checks": checks,
+                      "window_class_checks": window_class,
                   },
                   sort_keys=True,
               )

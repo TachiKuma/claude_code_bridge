@@ -590,6 +590,17 @@ Evidence:
   accepted, and reverse unload removes the checker pane, removes the empty node
   window after worker unload, removes the empty overflow window, and returns
   layout status to the two configured windows with `dynamic_agent_count=0`.
+- Source-wrapper continuous window-class smoke now proves the page transition
+  under repeated dynamic agent add/remove, not only a single overflow helper:
+  `/home/bfly/yunwei/test_ccb2/window-class-continuous-smoke.json` fills
+  `plan-orchestrate` to six agents, creates and appends to
+  `plan-orchestrate-2`, verifies fixed columns on both pages, accepts an ask to
+  the overflow helper, unloads seven helpers in reverse order, removes the
+  empty overflow page, and returns to static `frontdesk` plus `planner`.
+- The CI fake-provider dynamic layout gate now runs
+  `same-window-continuous` and `window-class-continuous` together, so both
+  single-page fixed reflow and class overflow cleanup are guarded on Ubuntu
+  py3.11.
 - Focused regression after the placement-order fix passed with `185 passed`
   across agent lifecycle, layout status, pane growth, layout runtime, reload
   patch/runtime mount, config loader, and loop capacity tests.

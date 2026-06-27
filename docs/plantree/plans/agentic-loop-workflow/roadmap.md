@@ -718,13 +718,27 @@ Date: 2026-06-24
   `helper1/helper3/helper5` in the right column after `1->6`, and
   `/home/bfly/yunwei/test_ccb2/fixed-reflow-combined-smoke.json` passed both
   same-window `1->6->1` and multi-window add/remove flows.
+- Added a continuous window-class overflow regression for dynamic layout.
+  `scripts/dynamic_layout_smoke.py --flow window-class-continuous` now grows
+  `plan-orchestrate` from `planner` to a full six-agent first page, creates
+  `plan-orchestrate-2` for the seventh/eighth logical panes, verifies fixed
+  observed columns on both pages, asks the overflow helper, then unloads in
+  reverse order and requires the empty overflow page to disappear. The Ubuntu
+  py3.11 fake-provider CI gate now runs this flow alongside
+  `same-window-continuous`. Focused tests passed with `24 passed` and
+  `81 passed`; source-wrapper fake-provider evidence in
+  `/home/bfly/yunwei/test_ccb2/window-class-continuous-smoke.json` proved
+  page1=`planner, planner_helper1..5`, page2=`planner_helper6, planner_helper7`,
+  ask reachability, and cleanup to only `main` plus `plan-orchestrate`.
+  `/home/bfly/yunwei/test_ccb2/ci-combined-layout-smoke.json` passed the
+  CI-equivalent combined same-window plus window-class continuous run.
 
 ## Next
 
 1. Continue richer live reflow beyond the proven same-window continuous,
    single-agent-window, multi-window add/remove, and explicit-window-class
-   middle-removal cases, especially overflow paging, role-class window rules,
-   and non-fake provider tolerance.
+   middle-removal cases, especially role-class lifecycle policy, manual
+   rearrangement commands, and non-fake provider tolerance.
 2. Decide the next public CLI surface for dynamic rearrangement: fixed
    auto-reflow is now proven for 1->6, but manual move/park/hide workflows
    still need a separate command and safety contract.

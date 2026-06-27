@@ -182,3 +182,11 @@ pane IDs, provider sessions, and CCB slot metadata must remain valid.
   same-window layout uses two columns while preserving pane IDs, and
   `/home/bfly/yunwei/test_ccb2/fixed-reflow-combined-smoke.json` kept the
   same-window and multi-window fake-provider flows green.
+- Window-class overflow now has continuous fake-provider evidence:
+  `/home/bfly/yunwei/test_ccb2/window-class-continuous-smoke.json` grows
+  `plan-orchestrate` to a full first page, creates and appends to
+  `plan-orchestrate-2`, verifies fixed columns on both pages, asks the overflow
+  helper, unloads helpers in reverse order, and confirms the empty overflow
+  page is removed. `/home/bfly/yunwei/test_ccb2/ci-combined-layout-smoke.json`
+  proves the same guard can run with same-window `1->6->1` in one CI-style
+  pass.
