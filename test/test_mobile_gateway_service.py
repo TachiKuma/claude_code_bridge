@@ -236,6 +236,7 @@ def _service(
     project_registry: MobileGatewayProjectRegistry | None = None,
     terminal_session_factory=None,
     terminal_history_factory=None,
+    terminal_message_sender=None,
 ) -> MobileGatewayService:
     return MobileGatewayService(
         project_id='proj-demo',
@@ -246,6 +247,7 @@ def _service(
         clock=lambda: '2026-06-18T00:00:00Z',
         terminal_session_factory=terminal_session_factory,
         terminal_history_factory=terminal_history_factory,
+        terminal_message_sender=terminal_message_sender,
     )
 
 
@@ -939,9 +941,14 @@ def test_agent_conversation_requires_view_auth_and_fresh_epoch(tmp_path: Path) -
     assert stale.value.status_code == 409
 
 
-def test_agent_message_submit_uses_ccbd_submit_without_terminal_scope(tmp_path: Path) -> None:
+def test_agent_message_submit_sends_plain_text_to_agent_pane(tmp_path: Path) -> None:
     fake = _FakeCcbdClient()
-    service = _service(fake, mobile_dir=tmp_path / 'mobile')
+    sent: list[tuple[object, str]] = []
+    service = _service(
+        fake,
+        mobile_dir=tmp_path / 'mobile',
+        terminal_message_sender=lambda target, text: sent.append((target, text)) or {},
+    )
     pairing = service.create_pairing_payload(
         gateway_url='http://127.0.0.1:8787',
         scopes=('view', 'message_submit'),
@@ -969,21 +976,19 @@ def test_agent_message_submit_uses_ccbd_submit_without_terminal_scope(tmp_path: 
     result = payload['message_submit']
     assert result['accepted'] is True
     assert result['idempotency_key'] == 'mobile-msg-1'
-    assert result['job_id'] == 'job_mobile_1'
-    assert result['message_id'] == 'job_mobile_1'
-    assert result['state'] == 'queued'
-    submit = next(call for call in fake.calls if call[0] == 'submit')[1]
-    assert submit['project_id'] == 'proj-demo'
-    assert submit['to_agent'] == 'mobile'
-    assert submit['from_actor'] == 'user'
-    assert submit['body'] == 'continue with the next step'
-    assert submit['message_type'] == 'ask'
-    assert submit['delivery_scope'] == 'single'
-    assert submit['route_options']['idempotency_key'] == 'mobile-msg-1'
-    assert submit['route_options']['source'] == 'mobile_gateway'
-    assert submit['route_options']['mobile_files_dir'] == str(
-        tmp_path / 'mobile' / 'files'
-    )
+    assert result['job_id'] is None
+    assert result['message_id'] == 'mobile-msg-1'
+    assert result['state'] == 'sent'
+    assert len(sent) == 1
+    target, text = sent[0]
+    assert text == 'continue with the next step'
+    assert target.project_id == 'proj-demo'
+    assert target.agent == 'mobile'
+    assert target.window == 'main'
+    assert target.pane_id == '%2'
+    assert target.socket_path == '/tmp/ccb-demo/tmux.sock'
+    assert target.session_name == 'ccb-demo'
+    assert not any(call[0] == 'submit' for call in fake.calls)
     response_json = json.dumps(payload)
     assert 'terminal_input' not in response_json
     assert 'tmux.sock' not in response_json
@@ -991,7 +996,12 @@ def test_agent_message_submit_uses_ccbd_submit_without_terminal_scope(tmp_path: 
 
 def test_agent_message_submit_accepts_attachment_only_message(tmp_path: Path) -> None:
     fake = _FakeCcbdClient()
-    service = _service(fake, mobile_dir=tmp_path / 'mobile')
+    sent: list[tuple[object, str]] = []
+    service = _service(
+        fake,
+        mobile_dir=tmp_path / 'mobile',
+        terminal_message_sender=lambda target, text: sent.append((target, text)) or {},
+    )
     pairing = service.create_pairing_payload(
         gateway_url='http://127.0.0.1:8787',
         scopes=('view', 'message_submit'),
@@ -1028,12 +1038,50 @@ def test_agent_message_submit_accepts_attachment_only_message(tmp_path: Path) ->
     message = payload['message_submit']['message']
     assert message['body'] == ''
     assert message['attachments'][0]['file_id'] == 'mobile-file-1'
-    submit = next(call for call in fake.calls if call[0] == 'submit')[1]
-    assert submit['body'] == 'Uploaded attachment: probe.txt'
-    assert submit['route_options']['attachments'][0]['file_name'] == 'probe.txt'
+    assert sent[0][1] == 'Uploaded attachment: probe.txt'
+    assert not any(call[0] == 'submit' for call in fake.calls)
 
 
-def test_agent_message_submit_requires_chat_scope_not_terminal_input(tmp_path: Path) -> None:
+def test_agent_message_submit_requires_agent_pane_evidence(tmp_path: Path) -> None:
+    class NoPaneClient(_FakeCcbdClient):
+        def project_view(self, *, schema_version: int = 1) -> dict[str, object]:
+            payload = super().project_view(schema_version=schema_version)
+            del payload['view']['agents'][0]['pane_id']
+            return payload
+
+    sent: list[tuple[object, str]] = []
+    service = _service(
+        NoPaneClient(),
+        mobile_dir=tmp_path / 'mobile',
+        terminal_message_sender=lambda target, text: sent.append((target, text)) or {},
+    )
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view', 'message_submit'),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
+
+    with pytest.raises(MobileGatewayError) as missing_pane:
+        service.dispatch_post(
+            '/v1/projects/proj-demo/agents/mobile/messages',
+            {
+                'project_id': 'proj-demo',
+                'agent': 'mobile',
+                'namespace_epoch': 4,
+                'idempotency_key': 'mobile-msg-no-pane',
+                'body': 'continue',
+            },
+            {'Authorization': f'Bearer {claim["device_token"]}'},
+        )
+    assert missing_pane.value.status_code == 409
+    assert str(missing_pane.value) == 'message target has no pane evidence'
+    assert sent == []
+
+
+def test_agent_message_submit_requires_message_submit_scope(tmp_path: Path) -> None:
     service = _service(_FakeCcbdClient(), mobile_dir=tmp_path / 'mobile')
     pairing = service.create_pairing_payload(
         gateway_url='http://127.0.0.1:8787',
@@ -1066,19 +1114,19 @@ def test_agent_message_submit_requires_chat_scope_not_terminal_input(tmp_path: P
         '/v1/pairing/claim',
         {'pairing_code': str(ask_pairing['pairing_code'])},
     )
-    status, payload = service.dispatch_post(
-        '/v1/projects/proj-demo/agents/mobile/messages',
-        {
-            'project_id': 'proj-demo',
-            'agent': 'mobile',
-            'namespace_epoch': 4,
-            'idempotency_key': 'mobile-msg-2',
-            'body': 'continue',
-        },
-        {'Authorization': f'Bearer {ask_claim["device_token"]}'},
-    )
-    assert status == 202
-    assert payload['message_submit']['idempotency_key'] == 'mobile-msg-2'
+    with pytest.raises(MobileGatewayError) as ask_denied:
+        service.dispatch_post(
+            '/v1/projects/proj-demo/agents/mobile/messages',
+            {
+                'project_id': 'proj-demo',
+                'agent': 'mobile',
+                'namespace_epoch': 4,
+                'idempotency_key': 'mobile-msg-2',
+                'body': 'continue',
+            },
+            {'Authorization': f'Bearer {ask_claim["device_token"]}'},
+        )
+    assert ask_denied.value.status_code == 403
 
 
 def test_agent_file_upload_download_round_trips_bytes_over_http(tmp_path: Path) -> None:

@@ -13,7 +13,6 @@ from typing import Callable, Mapping
 from uuid import uuid4
 from urllib.parse import parse_qs, unquote, urlparse
 
-from ccbd.api_models import DeliveryScope, MessageEnvelope
 from ccbd.socket_client import CcbdClientError
 from .pairing import MobileGatewayPairingError, MobileGatewayPairingStore
 from .project_registry import MobileGatewayProject, MobileGatewayProjectRegistry
@@ -21,8 +20,10 @@ from .terminal import (
     TerminalAttachTarget,
     TerminalGeometry,
     TerminalHistoryTarget,
+    PaneMessageTarget,
     create_tmux_terminal_history,
     create_tmux_terminal_session,
+    send_tmux_pane_message,
 )
 from .websocket import WebSocketConnection, WebSocketProtocolError, accept_websocket, is_websocket_upgrade
 
@@ -87,6 +88,7 @@ class MobileGatewayService:
         clock: Callable[[], str] | None = None,
         terminal_session_factory: Callable[[TerminalAttachTarget], object] | None = None,
         terminal_history_factory: Callable[[TerminalHistoryTarget], dict[str, object]] | None = None,
+        terminal_message_sender: Callable[[PaneMessageTarget, str], dict[str, object]] | None = None,
     ) -> None:
         self._project_id = str(project_id)
         self._project_root = Path(project_root)
@@ -100,6 +102,7 @@ class MobileGatewayService:
         self._clock = clock or _utc_now
         self._terminal_session_factory = terminal_session_factory or create_tmux_terminal_session
         self._terminal_history_factory = terminal_history_factory or create_tmux_terminal_history
+        self._terminal_message_sender = terminal_message_sender or send_tmux_pane_message
         self._mobile_dir = Path(mobile_dir) if mobile_dir is not None else None
         self._pairing_store = pairing_store
         if self._pairing_store is None and mobile_dir is not None:
@@ -489,10 +492,7 @@ class MobileGatewayService:
         headers: Mapping[str, object] | None,
     ) -> dict[str, object]:
         project = self._require_project(project_id)
-        auth = self._authenticate_any_scope(
-            headers,
-            allowed_scopes=('ask', 'message_submit'),
-        )
+        self._authenticate_any_scope(headers, allowed_scopes=('message_submit',))
         body_project_id = str(payload.get('project_id') or '').strip()
         if body_project_id and body_project_id != project.project_id:
             raise MobileGatewayError('request project_id does not match route', status_code=400)
@@ -515,37 +515,16 @@ class MobileGatewayService:
             agent=agent,
             namespace_epoch=_optional_int(payload.get('namespace_epoch')),
         )
+        message_target = _pane_message_target(
+            project_id=project.project_id,
+            view_payload=view_payload,
+            target=target,
+        )
         try:
-            receipt = project.client().submit(
-                MessageEnvelope(
-                    project_id=project.project_id,
-                    to_agent=target['agent'],
-                    from_actor='user',
-                    body=submit_body,
-                    task_id=None,
-                    reply_to=None,
-                    message_type='ask',
-                    delivery_scope=DeliveryScope.SINGLE,
-                    silence_on_success=False,
-                    route_options={
-                        'source': 'mobile_gateway',
-                        'device_id': auth.device_id,
-                        'idempotency_key': idempotency_key,
-                        'format': message_format,
-                        'attachments': attachments,
-                        'mobile_files_dir': str(self._mobile_files_dir()),
-                    },
-                    body_artifact=None,
-                )
-            )
-        except CcbdClientError as exc:
-            raise MobileGatewayError(str(exc), status_code=503) from exc
+            self._terminal_message_sender(message_target, submit_body)
         except Exception as exc:
             raise MobileGatewayError(_error_text(exc), status_code=503) from exc
-        result = dict(receipt or {}) if isinstance(receipt, Mapping) else {}
-        job_id = str(result.get('job_id') or '')
-        state = str(result.get('status') or 'queued')
-        message_id = str(result.get('message_id') or job_id or idempotency_key)
+        message_id = idempotency_key
         return {
             'schema_version': _SCHEMA_VERSION,
             'status': 'ok',
@@ -555,9 +534,9 @@ class MobileGatewayService:
                 'accepted': True,
                 'idempotency_key': idempotency_key,
                 'message_id': message_id,
-                'job_id': job_id or None,
-                'state': state,
-                'created_at': result.get('accepted_at') or self._clock(),
+                'job_id': None,
+                'state': 'sent',
+                'created_at': self._clock(),
                 'message': {
                     'id': message_id,
                     'agent': target['agent'],
@@ -1901,6 +1880,33 @@ def _terminal_history_target(
         socket_path=socket_path,
         session_name=session_name,
         max_lines=min(2000, max(20, int(max_lines))),
+    )
+
+
+def _pane_message_target(
+    *,
+    project_id: str,
+    view_payload: dict[str, object],
+    target: dict[str, object],
+) -> PaneMessageTarget:
+    view = _map(view_payload.get('view'))
+    namespace = _map(view.get('namespace'))
+    socket_path = _optional_text(namespace.get('socket_path'))
+    session_name = _optional_text(namespace.get('session_name'))
+    if not socket_path or not session_name:
+        raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
+    agent_record = _map(target.get('agent_record'))
+    pane_id = _optional_text(agent_record.get('pane_id'))
+    if not pane_id:
+        raise MobileGatewayError('message target has no pane evidence', status_code=409)
+    return PaneMessageTarget(
+        project_id=project_id,
+        namespace_epoch=int(target.get('namespace_epoch') or 0),
+        agent=str(target.get('agent') or ''),
+        window=_optional_text(agent_record.get('window')) or '',
+        pane_id=pane_id,
+        socket_path=socket_path,
+        session_name=session_name,
     )
 
 
