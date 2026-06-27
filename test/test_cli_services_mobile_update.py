@@ -8,6 +8,14 @@ import pytest
 from cli.services import mobile_update
 
 
+def _force_linux_tailscale_install(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        mobile_update,
+        "_tailscale_install_command",
+        lambda: mobile_update.TAILSCALE_LINUX_INSTALL_COMMAND,
+    )
+
+
 def test_detect_tailscale_reports_not_installed() -> None:
     status = mobile_update.detect_tailscale(which_fn=lambda _name: None)
 
@@ -130,7 +138,8 @@ def test_onboarding_not_installed_prints_install_and_phone_steps() -> None:
     assert "Funnel and 0.0.0.0 listeners are not used" in text
 
 
-def test_onboarding_not_installed_can_install_after_prompt() -> None:
+def test_onboarding_not_installed_can_install_after_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
+    _force_linux_tailscale_install(monkeypatch)
     output: list[str] = []
     prompts: list[str] = []
     install_calls = 0
@@ -157,7 +166,8 @@ def test_onboarding_not_installed_can_install_after_prompt() -> None:
     assert "Then run `tailscale up`" in text
 
 
-def test_onboarding_not_installed_can_install_from_explicit_env() -> None:
+def test_onboarding_not_installed_can_install_from_explicit_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    _force_linux_tailscale_install(monkeypatch)
     output: list[str] = []
     install_calls = 0
 
@@ -180,7 +190,8 @@ def test_onboarding_not_installed_can_install_from_explicit_env() -> None:
     assert "Tailscale install command completed" in text
 
 
-def test_onboarding_not_installed_returns_install_failure() -> None:
+def test_onboarding_not_installed_returns_install_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    _force_linux_tailscale_install(monkeypatch)
     output: list[str] = []
 
     code = mobile_update.run_mobile_update_onboarding(

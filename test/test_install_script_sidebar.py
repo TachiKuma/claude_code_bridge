@@ -568,6 +568,15 @@ def test_release_artifacts_workflow_sets_up_rust_for_sidebar_build() -> None:
     assert '"$rs_helper" --capabilities' in text
 
 
+def test_npm_publish_workflow_skips_already_published_version() -> None:
+    text = Path('.github/workflows/npm-publish.yml').read_text(encoding='utf-8')
+    version = Path('VERSION').read_text(encoding='utf-8').strip()
+
+    assert f'default: "v{version}"' in text
+    assert 'npm view "@seemseam/ccb@$version" version' in text
+    assert "steps.npm_status.outputs.published != 'true'" in text
+
+
 def test_release_artifacts_workflow_accepts_runtime_accelerator_socket_fallback() -> None:
     text = Path('.github/workflows/release-artifacts.yml').read_text(encoding='utf-8')
 

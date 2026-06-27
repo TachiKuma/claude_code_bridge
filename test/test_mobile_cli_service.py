@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import socket
+import tempfile
 from types import SimpleNamespace
 
 import pytest
@@ -109,22 +110,24 @@ def test_host_project_registry_publish_and_loads_redacted_projects(tmp_path: Pat
 def test_running_project_discovery_reads_ccbd_main_project_cmdline(tmp_path: Path, monkeypatch) -> None:
     project_root = tmp_path / 'running-project'
     project_root.mkdir()
-    socket_path = tmp_path / 'ccbd.sock'
-    unix_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    unix_socket.bind(str(socket_path))
-    monkeypatch.setattr(
-        'mobile_gateway.project_registry._ccbd_socket_path_for_project',
-        lambda root: socket_path,
-    )
-    try:
-        projects = discover_running_mobile_gateway_projects(
-            cmdlines=[
-                ['python', '/opt/ccb/lib/ccbd/main.py', '--project', str(project_root)],
-                ['python', '/opt/ccb/lib/ccbd/keeper_main.py', '--project', str(tmp_path / 'ignored')],
-            ]
+    with tempfile.TemporaryDirectory(prefix='ccb-sock-', dir='/tmp') as socket_dir:
+        socket_path = Path(socket_dir) / 'ccbd.sock'
+        unix_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        unix_socket.bind(str(socket_path))
+        monkeypatch.setattr(
+            'mobile_gateway.project_registry._ccbd_socket_path_for_project',
+            lambda root: socket_path,
         )
-    finally:
-        unix_socket.close()
+        try:
+            projects = discover_running_mobile_gateway_projects(
+                cmdlines=[
+                    ['python', '/opt/ccb/lib/ccbd/main.py', '--project', str(project_root)],
+                    ['python', '/opt/ccb/lib/ccbd/keeper_main.py', '--project', str(tmp_path / 'ignored')],
+                ]
+            )
+        finally:
+            unix_socket.close()
+            socket_path.unlink(missing_ok=True)
 
     assert len(projects) == 1
     assert projects[0].project_id == compute_project_id(project_root)
