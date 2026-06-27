@@ -1095,6 +1095,19 @@ Current evidence:
   moved panes anchored after the prior moved pane. Source-wrapper fake-provider
   evidence is preserved in
   `/home/bfly/yunwei/test_ccb2/batch-move-*-latest.json`;
+- `ccb agent remove --agents a,b --policy unload --idle-only --json` and
+  `ccb agent release --agents a,b --idle-only --json` now expose the first
+  user-facing batch release/unload command for dynamic session agents. The
+  lifecycle layer validates all selected agents up front, treats idle retention
+  as all-or-nothing, writes one batch of lifecycle state, applies one guarded
+  reload transaction, and restores all touched lifecycle records on failure.
+  Source-wrapper fake-provider evidence is preserved in
+  `/home/bfly/yunwei/test_ccb2/batch-remove-smoke-evidence/summary.json`; it
+  proves batch removal of `helper2,helper3` from
+  `main=[main,helper1,helper2,helper3]`, `plan_class=remove_agent`,
+  `namespace_reflowed_windows=["main"]`, survivor layout
+  `main=[main,helper1]`, ask acceptance for `helper1`, and final
+  `kill_status: ok`;
 - same-window middle dynamic release is proven: removing the middle helper pane
   deletes only the target pane, preserves the remaining dynamic pane ids, keeps
   their ask targets reachable, and avoids `layout_change`;
@@ -1148,4 +1161,6 @@ Deferred:
 - batch movement for `--window-class` and execution-node placement, and
   transactions that mix moved panes with newly materialized panes in the same
   target window;
+- batch park/resume status ergonomics for long-lived frontend/planner/
+  orchestrator groups;
 - user-defined arbitrary window classes.

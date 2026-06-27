@@ -357,6 +357,48 @@ def test_namespace_patch_plan_remove_agent_kills_only_removed_agent_pane(tmp_pat
     ]
 
 
+def test_namespace_patch_plan_remove_multiple_agents_reflows_remaining_order(tmp_path: Path) -> None:
+    current = _load_config(
+        tmp_path / 'current-remove-multiple',
+        BASE_CONFIG.replace('agent1:codex, agent2:claude', 'agent1:codex, agent2:claude, agent3:codex'),
+    )
+    new = _load_config(tmp_path / 'new-remove-multiple', BASE_CONFIG.replace('agent1:codex, agent2:claude', 'agent1:codex'))
+
+    plan = build_reload_dry_run_plan(
+        current,
+        new,
+        project_id='proj-1',
+        current_namespace=_namespace('proj-1'),
+    )
+
+    patch = plan['namespace_patch_plan']
+
+    assert plan['plan_class'] == 'remove_agent'
+    assert patch['status'] == 'planned'
+    assert patch['preserved_agents'] == ['agent1']
+    assert patch['blocked_operations'] == []
+    assert patch['steps'] == [
+        {
+            'action': 'kill_agent_pane',
+            'window': 'main',
+            'agent': 'agent2',
+            'role': 'agent',
+            'slot_key': 'agent2',
+            'managed_by': 'ccbd',
+            'reason': 'agent exists only in current published config',
+        },
+        {
+            'action': 'kill_agent_pane',
+            'window': 'main',
+            'agent': 'agent3',
+            'role': 'agent',
+            'slot_key': 'agent3',
+            'managed_by': 'ccbd',
+            'reason': 'agent exists only in current published config',
+        },
+    ]
+
+
 def test_namespace_patch_plan_moves_multiple_agents_from_same_source_window(tmp_path: Path) -> None:
     current = _load_config(
         tmp_path / 'current-move-multiple',

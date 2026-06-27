@@ -76,8 +76,8 @@ def print_start_help(*, file=None) -> None:
               ccb mobile revoke <id> Revoke one paired mobile device locally.
               ccb agent add NAME:PROVIDER --role ROLE [--window NAME|--window-class CLASS] --hidden --json
                                     Hot-load one runtime dynamic agent without rewriting ccb.config.
-              ccb agent remove NAME --policy park|unload --json
-                                    Park or unload one runtime dynamic agent.
+              ccb agent remove NAME|--agents a,b --policy park|unload --json
+                                    Park or unload runtime dynamic agents.
               ccb agent park NAME --json
                                     Disable dispatch for a dynamic agent while preserving its pane.
               ccb agent resume NAME --json
@@ -246,8 +246,8 @@ _COMMAND_HELP = {
           ccb agent hide <agent> [--json]
           ccb agent park <agent> [--json]
           ccb agent resume <agent> [--visible|--hidden] [--json]
-          ccb agent remove <agent> [--policy auto|hide|park|unload|kill] [--idle-only] [--force --reason TEXT] [--json]
-          ccb agent release <agent> [--policy auto|hide|park|unload] [--idle-only] [--reason TEXT] [--json]
+          ccb agent remove <agent>|--agents a,b [--policy auto|hide|park|unload|kill] [--idle-only] [--force --reason TEXT] [--json]
+          ccb agent release <agent>|--agents a,b [--policy auto|hide|park|unload] [--idle-only] [--reason TEXT] [--json]
 
         Dynamic agent lifecycle:
           ccb agent add helper:codex --role agentroles.general --hidden --json
@@ -270,8 +270,12 @@ _COMMAND_HELP = {
               Keep long-lived context discoverable while removing it from visible active work.
           ccb agent remove helper --policy unload --idle-only --json
               Remove the dynamic overlay when the agent is idle.
+          ccb agent remove --agents worker1,checker1 --policy unload --idle-only --json
+              Unload a dynamic worker/checker group through one reload transaction.
           ccb agent release reviewer --idle-only --json
               Apply role policy without exposing the destructive kill path.
+          ccb agent release --agents worker1,checker1 --idle-only --json
+              Apply role policies to a dynamic group as one all-or-nothing lifecycle update.
           ccb agent remove helper --policy kill --force --reason "operator reset" --json
               Force destructive removal; requires an explicit reason.
     """,

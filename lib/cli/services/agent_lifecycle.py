@@ -201,6 +201,9 @@ def _add(context, command) -> dict[str, object]:
 
 
 def _remove(context, command) -> dict[str, object]:
+    batch_names = tuple(str(item) for item in tuple(getattr(command, 'agent_names', ()) or ()))
+    if batch_names:
+        return _remove_many(context, command, batch_names)
     name = _normalize_name(getattr(command, 'agent_name', None), field_name='agent')
     requested_action = str(getattr(command, 'action', None) or 'remove').strip().lower()
     state_path = _state_path(context, name)
@@ -269,6 +272,140 @@ def _remove(context, command) -> dict[str, object]:
     return dict(payload, action=requested_action)
 
 
+def _remove_many(context, command, names: tuple[str, ...]) -> dict[str, object]:
+    requested_action = str(getattr(command, 'action', None) or 'remove').strip().lower()
+    command_label = f'agent {requested_action} --agents'
+    normalized = _normalize_agent_names(names, command=command_label)
+    policy = str(getattr(command, 'policy', None) or 'auto').strip().lower()
+    if policy not in REMOVE_POLICIES:
+        raise ValueError(f'unsupported remove policy: {policy}')
+    if policy == 'kill' and (not bool(getattr(command, 'force', False)) or not _optional_text(getattr(command, 'reason', None))):
+        raise ValueError('agent remove --policy kill requires --force and --reason')
+
+    previous_by_name: dict[str, dict[str, object]] = {}
+    resolved_by_name: dict[str, str] = {}
+    next_state_by_name: dict[str, str] = {}
+    for name in normalized:
+        previous = _load_record(_state_path(context, name))
+        if previous is None:
+            raise ValueError(f'agent {name!r} is not a dynamic agent')
+        previous_state = str(previous.get('lifecycle_state') or '')
+        if previous_state not in ACTIVE_STATES:
+            raise ValueError(f'agent {name!r} is not active; current lifecycle_state={previous_state or "<empty>"}')
+        resolved_policy = _resolve_remove_policy(policy, role_class=str(previous.get('role_class') or 'unknown'))
+        resolved_by_name[name] = resolved_policy
+        next_state_by_name[name] = _state_for_policy(resolved_policy)
+        previous_by_name[name] = previous
+
+    if bool(getattr(command, 'idle_only', False)):
+        retained: dict[str, dict[str, object]] = {}
+        for name in normalized:
+            if resolved_by_name[name] not in {'unload', 'kill'}:
+                continue
+            gate = _release_gate(context, name)
+            if bool(gate.get('retained')):
+                retained[name] = gate
+        if retained:
+            records = []
+            for name in normalized:
+                record = dict(previous_by_name[name])
+                if name in retained:
+                    record['agent_lifecycle_status'] = 'retained_busy'
+                    record['retained_busy'] = True
+                    record['retain_reason'] = retained[name].get('reason')
+                    record['runtime_state'] = retained[name].get('runtime_state')
+                    record['queue_depth'] = retained[name].get('queue_depth')
+                records.append(_status_record(record, source='dynamic'))
+            return {
+                'agent_lifecycle_status': 'retained_busy',
+                'action': requested_action,
+                'requested_policy': policy,
+                'resolved_policies': dict(resolved_by_name),
+                'retained_agents': sorted(retained),
+                'agent_count': len(records),
+                'agents': records,
+                'project_id': context.project.project_id,
+                'project_root': str(context.project.project_root),
+                'runtime_agents_root': str(_agents_root(context)),
+            }
+
+    payloads: dict[str, dict[str, object]] = {}
+    try:
+        for name in normalized:
+            previous = previous_by_name[name]
+            resolved_policy = resolved_by_name[name]
+            next_state = next_state_by_name[name]
+            state_path = _state_path(context, name)
+            payload = dict(previous)
+            payload.update(
+                {
+                    'agent_lifecycle_status': 'removed' if next_state == 'unloaded' else 'active',
+                    'requested_action': requested_action,
+                    'requested_policy': policy,
+                    'resolved_policy': resolved_policy,
+                    'previous_state': previous.get('lifecycle_state'),
+                    'lifecycle_state': next_state,
+                    'visibility_state': 'hidden' if next_state in {'hidden', 'parked'} else 'unloaded',
+                    'dispatch_disabled': next_state == 'parked',
+                    'retained_busy': False,
+                    'summary_policy': _optional_text(getattr(command, 'summary_policy', None)),
+                    'force': bool(getattr(command, 'force', False)),
+                    'reason': _optional_text(getattr(command, 'reason', None)),
+                    'updated_at': _utc_now(),
+                    'last_reason': _optional_text(getattr(command, 'reason', None))
+                    or f'agent {requested_action} batch policy {resolved_policy}',
+                    'state_path': str(state_path),
+                    'events_path': str(_events_path(context)),
+                }
+            )
+            _write_state(context, name, payload)
+            payloads[name] = payload
+        for name in normalized:
+            _append_event(
+                context,
+                {
+                    'event': requested_action,
+                    'agent': name,
+                    'policy': resolved_by_name[name],
+                    'next_state': next_state_by_name[name],
+                    'batch_agents': list(normalized),
+                },
+            )
+        apply = _apply_reload_if_mounted(
+            context,
+            action=_batch_remove_apply_action(requested_action, next_state_by_name),
+        )
+        for name in normalized:
+            payload = payloads[name]
+            payload['apply'] = apply
+            if next_state_by_name[name] == 'unloaded':
+                _update_apply_evidence(context, payload)
+            else:
+                _update_transition_apply_evidence(context, payload)
+            _write_state(context, name, payload)
+    except Exception:
+        for name, previous in previous_by_name.items():
+            _restore_state(context, name, previous)
+        raise
+
+    records = [_status_record(payloads[name], source='dynamic') for name in normalized]
+    unloaded = [name for name in normalized if next_state_by_name[name] == 'unloaded']
+    return {
+        'agent_lifecycle_status': 'removed' if len(unloaded) == len(normalized) else 'active',
+        'action': requested_action,
+        'project_id': context.project.project_id,
+        'project_root': str(context.project.project_root),
+        'agent_count': len(records),
+        'removed_agents': unloaded,
+        'updated_agents': list(normalized),
+        'requested_policy': policy,
+        'resolved_policies': dict(resolved_by_name),
+        'apply': apply,
+        'agents': records,
+        'runtime_agents_root': str(_agents_root(context)),
+    }
+
+
 def _move(context, command) -> dict[str, object]:
     batch_names = tuple(str(item) for item in tuple(getattr(command, 'agent_names', ()) or ()))
     if batch_names:
@@ -334,7 +471,7 @@ def _move(context, command) -> dict[str, object]:
 
 
 def _move_many(context, command, names: tuple[str, ...]) -> dict[str, object]:
-    normalized = _normalize_agent_names(names)
+    normalized = _normalize_agent_names(names, command='agent move --agents')
     target_window = _optional_text(getattr(command, 'window_name', None))
     if target_window is None:
         raise ValueError('agent move --agents currently requires --window')
@@ -737,14 +874,25 @@ def _normalize_name(value: object, *, field_name: str) -> str:
         raise ValueError(f'{field_name} is invalid: {exc}') from exc
 
 
-def _normalize_agent_names(values: tuple[str, ...]) -> tuple[str, ...]:
+def _normalize_agent_names(values: tuple[str, ...], *, command: str) -> tuple[str, ...]:
     names = tuple(_normalize_name(value, field_name='agent') for value in values)
     deduped = tuple(dict.fromkeys(names))
     if not deduped:
-        raise ValueError('agent move --agents requires at least one agent')
+        raise ValueError(f'{command} requires at least one agent')
     if len(deduped) != len(names):
-        raise ValueError('agent move --agents cannot contain duplicate agent names')
+        raise ValueError(f'{command} cannot contain duplicate agent names')
     return deduped
+
+
+def _batch_remove_apply_action(requested_action: str, next_state_by_name: dict[str, str]) -> str:
+    if any(state == 'unloaded' for state in next_state_by_name.values()):
+        return f'agent-{requested_action}-batch'
+    states = set(next_state_by_name.values())
+    if states == {'parked'}:
+        return 'agent-park-batch'
+    if states == {'hidden'}:
+        return 'agent-hide-batch'
+    return f'agent-{requested_action}-batch'
 
 
 def _optional_text(value: object | None) -> str | None:

@@ -161,6 +161,25 @@ def test_agent_parser_supports_add_and_remove_commands() -> None:
     assert parser.parse(
         [
             'agent',
+            'remove',
+            '--agents',
+            'helper1,helper2',
+            '--policy',
+            'unload',
+            '--idle-only',
+            '--json',
+        ]
+    ) == ParsedAgentCommand(
+        project=None,
+        action='remove',
+        agent_names=('helper1', 'helper2'),
+        policy='unload',
+        idle_only=True,
+        json_output=True,
+    )
+    assert parser.parse(
+        [
+            'agent',
             'release',
             'reviewer',
             '--idle-only',
@@ -170,6 +189,23 @@ def test_agent_parser_supports_add_and_remove_commands() -> None:
         project=None,
         action='release',
         agent_name='reviewer',
+        policy='auto',
+        idle_only=True,
+        json_output=True,
+    )
+    assert parser.parse(
+        [
+            'agent',
+            'release',
+            '--agents',
+            'worker1,checker1',
+            '--idle-only',
+            '--json',
+        ]
+    ) == ParsedAgentCommand(
+        project=None,
+        action='release',
+        agent_names=('worker1', 'checker1'),
         policy='auto',
         idle_only=True,
         json_output=True,
@@ -1130,6 +1166,40 @@ def test_agent_release_auto_unloads_short_lived_dynamic_agent(
     assert 'reviewer' not in load_project_config(project_root).config.agents
 
 
+def test_agent_release_batch_auto_unloads_short_lived_dynamic_agents(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = _project_with_agent_profiles(tmp_path, monkeypatch)
+    for name in ('reviewer1', 'reviewer2'):
+        result, payload, stderr = _run_phase2(
+            ['agent', 'add', name, '--profile', 'code_reviewer', '--hidden', '--json'],
+            cwd=project_root,
+        )
+        assert result == 0, stderr
+        assert payload['role_class'] == 'short_lived_execution'
+
+    result, released, stderr = _run_phase2(
+        ['agent', 'release', '--agents', 'reviewer1,reviewer2', '--idle-only', '--json'],
+        cwd=project_root,
+    )
+
+    assert result == 0, stderr
+    assert released['action'] == 'release'
+    assert released['agent_lifecycle_status'] == 'removed'
+    assert released['requested_policy'] == 'auto'
+    assert released['resolved_policies'] == {'reviewer1': 'unload', 'reviewer2': 'unload'}
+    assert released['removed_agents'] == ['reviewer1', 'reviewer2']
+    assert released['apply']['apply_status'] == 'deferred_until_start'
+    assert {item['agent']: item['lifecycle_state'] for item in released['agents']} == {
+        'reviewer1': 'unloaded',
+        'reviewer2': 'unloaded',
+    }
+    loaded = load_project_config(project_root).config
+    assert 'reviewer1' not in loaded.agents
+    assert 'reviewer2' not in loaded.agents
+
+
 def test_agent_remove_while_mounted_unloads_and_reports_runtime_details(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1232,6 +1302,75 @@ def test_agent_remove_while_mounted_unloads_and_reports_runtime_details(
     assert removed['applied']['window_name'] == 'main'
     assert removed['applied']['unloaded_agents'] == ['helper']
     assert 'helper' not in load_project_config(project_root).config.agents
+    assert reload_results == []
+
+
+def test_agent_remove_batch_while_mounted_unloads_and_reports_runtime_details(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = _project_with_agent_profiles(tmp_path, monkeypatch)
+    for name in ('helper1', 'helper2'):
+        result, _payload, stderr = _run_phase2(
+            ['agent', 'add', f'{name}:codex', '--role', 'agentroles.general', '--window', 'main', '--hidden', '--json'],
+            cwd=project_root,
+        )
+        assert result == 0, stderr
+    reload_results = [
+        {
+            'status': 'published',
+            'stage': 'publish_transaction',
+            'plan_class': 'remove_agent',
+            'published_graph_version': 4,
+            'namespace_patch': {
+                'status': 'applied',
+                'removed_agents': {'helper1': '%3', 'helper2': '%4'},
+                'removed_panes': ['%3', '%4'],
+                'preserved_before': {'main': '%1'},
+                'preserved_after': {'main': '%1'},
+                'reflowed_windows': ['main'],
+            },
+            'runtime_mount': {
+                'status': 'unloaded',
+                'unloaded_agents': ['helper1', 'helper2'],
+                'runtime_authority_stopped_agents': ['helper1', 'helper2'],
+            },
+        },
+    ]
+    monkeypatch.setattr(
+        'cli.services.agent_lifecycle.ping_local_state',
+        lambda _context: SimpleNamespace(mount_state='mounted', socket_connectable=True, reason=None),
+    )
+    monkeypatch.setattr(
+        'cli.services.agent_lifecycle.reload_config',
+        lambda _context, _command: reload_results.pop(0),
+    )
+
+    result, removed, stderr = _run_phase2(
+        ['agent', 'remove', '--agents', 'helper1,helper2', '--policy', 'unload', '--idle-only', '--json'],
+        cwd=project_root,
+    )
+
+    assert result == 0, stderr
+    assert removed['agent_lifecycle_status'] == 'removed'
+    assert removed['removed_agents'] == ['helper1', 'helper2']
+    assert removed['resolved_policies'] == {'helper1': 'unload', 'helper2': 'unload'}
+    assert removed['apply']['apply_status'] == 'applied'
+    assert removed['apply']['plan_class'] == 'remove_agent'
+    assert removed['apply']['namespace_removed_agents'] == {'helper1': '%3', 'helper2': '%4'}
+    assert removed['apply']['namespace_removed_panes'] == ['%3', '%4']
+    assert removed['apply']['namespace_reflowed_windows'] == ['main']
+    assert removed['apply']['runtime_mount_status'] == 'unloaded'
+    assert removed['apply']['unloaded_agents'] == ['helper1', 'helper2']
+    assert removed['apply']['runtime_authority_stopped_agents'] == ['helper1', 'helper2']
+    by_agent = {item['agent']: item for item in removed['agents']}
+    assert by_agent['helper1']['apply_plan_class'] == 'remove_agent'
+    assert by_agent['helper2']['apply_plan_class'] == 'remove_agent'
+    assert by_agent['helper1']['pane_id'] is None
+    assert by_agent['helper2']['pane_id'] is None
+    loaded = load_project_config(project_root).config
+    assert 'helper1' not in loaded.agents
+    assert 'helper2' not in loaded.agents
     assert reload_results == []
 
 

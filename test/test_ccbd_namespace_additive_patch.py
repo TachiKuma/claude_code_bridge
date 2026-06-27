@@ -541,6 +541,47 @@ def test_apply_remove_agent_kills_only_removed_agent_pane(tmp_path: Path, monkey
     assert backend.pane_options['%1']['@ccb_slot'] == 'agent1'
 
 
+def test_apply_remove_multiple_agents_kills_removed_panes_and_reflows(tmp_path: Path, monkeypatch) -> None:
+    current_text = BASE_CONFIG.replace('agent1:codex, agent2:claude', 'agent1:codex, agent2:claude, agent3:codex')
+    new_text = BASE_CONFIG.replace('agent1:codex, agent2:claude', 'agent1:codex')
+    current = _load_config(tmp_path / 'current-remove-multiple-agents', current_text)
+    new = _load_config(tmp_path / 'new-remove-multiple-agents', new_text)
+    layout = PathLayout(_project(tmp_path / 'repo-remove-multiple-agents', current_text))
+    backend = _PatchFakeBackend(socket_path=str(layout.ccbd_tmux_socket_path))
+    backend.add_window(layout.ccbd_tmux_session_name, 'main')
+    backend.sessions[layout.ccbd_tmux_session_name][0]['panes'].extend(['%2', '%3'])
+    backend.pane_counter = 3
+    _seed_agent_pane(backend, '%1', project_id='proj-1', window='main', agent='agent1')
+    _seed_agent_pane(backend, '%2', project_id='proj-1', window='main', agent='agent2')
+    _seed_agent_pane(backend, '%3', project_id='proj-1', window='main', agent='agent3')
+    _store_namespace(layout, project_id='proj-1')
+    controller = ProjectNamespaceController(layout, 'proj-1', backend_factory=lambda socket_path=None: backend)
+    _forbid_recreate_paths(monkeypatch)
+    plan = build_reload_dry_run_plan(current, new, project_id='proj-1', current_namespace=controller.load())
+
+    result = controller.apply_reload_patch(
+        patch_plan=plan['namespace_patch_plan'],
+        old_topology=build_namespace_topology_plan(current),
+        new_topology=build_namespace_topology_plan(new),
+        timeout_s=0.0,
+    )
+
+    assert result.status == 'applied'
+    assert result.removed_agents == {'agent2': '%2', 'agent3': '%3'}
+    assert result.removed_panes == ('%2', '%3')
+    assert result.reflowed_windows == ('main',)
+    assert result.reflow_errors == {}
+    assert result.preserved_before == {'agent1': '%1'}
+    assert result.preserved_after == {'agent1': '%1'}
+    assert ('kill-pane', '-t', '%2') in backend.tmux_calls
+    assert ('kill-pane', '-t', '%3') in backend.tmux_calls
+    assert ('select-layout', '-E', '-t', f'{layout.ccbd_tmux_session_name}:main') in backend.tmux_calls
+    assert backend.sessions[layout.ccbd_tmux_session_name][0]['panes'] == ['%1']
+    assert '%2' not in backend.pane_options
+    assert '%3' not in backend.pane_options
+    assert backend.pane_options['%1']['@ccb_slot'] == 'agent1'
+
+
 def test_apply_remove_agent_reflows_compact_workspace_by_namespace_window_id(tmp_path: Path, monkeypatch) -> None:
     current = _load_config(tmp_path / 'current-remove-agent-compact', BASE_CONFIG)
     new = _load_config(

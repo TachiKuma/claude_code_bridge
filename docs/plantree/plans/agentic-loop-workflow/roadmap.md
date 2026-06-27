@@ -903,6 +903,18 @@ Date: 2026-06-24
   proved mounted `review=[zeta,alpha] -> archive=[zeta,alpha]`, preserved pane
   ids `%3/%4`, removed the empty `review` window, and kept both moved ask
   targets accepted.
+- Exposed the first user-facing batch release/unload command:
+  `ccb agent remove --agents a,b --policy unload --idle-only --json` and
+  `ccb agent release --agents a,b --idle-only --json`. The command validates
+  every selected dynamic agent first, treats the idle gate as all-or-nothing,
+  writes one lifecycle batch, applies one guarded reload transaction, and
+  restores all touched records if reload fails. Focused regression passed with
+  `110 passed`; source-wrapper evidence in
+  `/home/bfly/yunwei/test_ccb2/batch-remove-smoke-evidence/summary.json`
+  proved mounted `main=[main,helper1,helper2,helper3]` batch-unloads
+  `helper2,helper3`, reports `plan_class=remove_agent`,
+  `namespace_reflowed_windows=["main"]`, keeps `main,helper1`, accepts ask to
+  remaining `helper1`, and cleans up with `kill_status: ok`.
 
 ## Next
 
@@ -917,9 +929,10 @@ Date: 2026-06-24
    transaction, including newly materialized target windows and emptied source
    window removal. Next evaluate batch `--window-class` / node placement and
    transactions that mix moved panes with newly created agents in one target.
-3. Extend the shrink/release proof from fake-provider source-wrapper smokes to
-   opt-in real-provider tolerance where useful, especially `layout arrange`
-   after a real pane has been manually disturbed.
+3. Extend the shrink/release proof from single-agent and batch fake-provider
+   source-wrapper smokes to opt-in real-provider tolerance where useful,
+   especially batch worker/checker unload and `layout arrange` after a real
+   pane has been manually disturbed.
 4. Define the minimum `ccb loop`, `ccb plan`, and `ccb question` command
    surface for creating tasks, transitioning phases, recording artifacts,
    blocking, finishing, and syncing to plan-tree.

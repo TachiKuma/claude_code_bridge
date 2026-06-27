@@ -241,7 +241,8 @@ def parse_agent(tokens: list[str], *, project: str | None, error_type) -> Parsed
         )
     if action == 'remove':
         parser = argparse.ArgumentParser(prog='ccb agent remove', add_help=False)
-        parser.add_argument('agent_name')
+        parser.add_argument('agent_name', nargs='?')
+        parser.add_argument('--agents', dest='agent_names', default=None)
         parser.add_argument('--policy', default='auto', choices=('auto', 'hide', 'park', 'unload', 'kill'))
         parser.add_argument('--idle-only', dest='idle_only', action='store_true')
         parser.add_argument('--summary', dest='summary_policy', default=None, choices=('required', 'best-effort', 'none'))
@@ -249,10 +250,15 @@ def parse_agent(tokens: list[str], *, project: str | None, error_type) -> Parsed
         parser.add_argument('--reason', default=None)
         parser.add_argument('--json', dest='json_output', action='store_true')
         namespace = parse_args(parser, rest, error_message='invalid agent remove command', error_type=error_type)
+        batch_agents = _parse_csv_values(str(namespace.agent_names)) if namespace.agent_names is not None else ()
+        positional_agent = str(namespace.agent_name).strip() if namespace.agent_name is not None else ''
+        if bool(batch_agents) == bool(positional_agent):
+            raise error_type('agent remove requires exactly one <agent_name> or --agents a,b')
         return ParsedAgentCommand(
             project=project,
             action=action,
-            agent_name=str(namespace.agent_name),
+            agent_name=positional_agent or None,
+            agent_names=batch_agents,
             policy=str(namespace.policy),
             idle_only=bool(namespace.idle_only),
             summary_policy=str(namespace.summary_policy) if namespace.summary_policy is not None else None,
@@ -262,17 +268,23 @@ def parse_agent(tokens: list[str], *, project: str | None, error_type) -> Parsed
         )
     if action == 'release':
         parser = argparse.ArgumentParser(prog='ccb agent release', add_help=False)
-        parser.add_argument('agent_name')
+        parser.add_argument('agent_name', nargs='?')
+        parser.add_argument('--agents', dest='agent_names', default=None)
         parser.add_argument('--policy', default='auto', choices=('auto', 'hide', 'park', 'unload'))
         parser.add_argument('--idle-only', dest='idle_only', action='store_true')
         parser.add_argument('--summary', dest='summary_policy', default=None, choices=('required', 'best-effort', 'none'))
         parser.add_argument('--reason', default=None)
         parser.add_argument('--json', dest='json_output', action='store_true')
         namespace = parse_args(parser, rest, error_message='invalid agent release command', error_type=error_type)
+        batch_agents = _parse_csv_values(str(namespace.agent_names)) if namespace.agent_names is not None else ()
+        positional_agent = str(namespace.agent_name).strip() if namespace.agent_name is not None else ''
+        if bool(batch_agents) == bool(positional_agent):
+            raise error_type('agent release requires exactly one <agent_name> or --agents a,b')
         return ParsedAgentCommand(
             project=project,
             action=action,
-            agent_name=str(namespace.agent_name),
+            agent_name=positional_agent or None,
+            agent_names=batch_agents,
             policy=str(namespace.policy),
             idle_only=bool(namespace.idle_only),
             summary_policy=str(namespace.summary_policy) if namespace.summary_policy is not None else None,
