@@ -19,6 +19,7 @@ REAL_RUN_ENV = "CCB_DYNAMIC_LAYOUT_SMOKE_RUN_REAL"
 FLOW_NAMES = (
     "multi-node",
     "multi-window-continuous",
+    "batch-release",
     "same-window",
     "same-window-continuous",
     "single-agent-window",
@@ -270,6 +271,19 @@ def run_dynamic_layout_smoke(
             _run_multi_window_continuous_flow(
                 test_root=test_root,
                 project_name=f"{project_prefix}-multi-window-continuous",
+                provider=provider,
+                ccb_test=ccb_test,
+                provider_home=provider_home,
+                command_timeout_s=command_timeout_s,
+                reset=reset,
+                keep_running=keep_running,
+            )
+        )
+    if "batch-release" in flow_names:
+        results.append(
+            _run_batch_release_flow(
+                test_root=test_root,
+                project_name=f"{project_prefix}-batch-release",
                 provider=provider,
                 ccb_test=ccb_test,
                 provider_home=provider_home,
@@ -669,6 +683,126 @@ def _run_multi_window_continuous_flow(
         }
         status = "ok" if all(checks.values()) and _all_success(commands) else "failed"
         return {"flow": "multi_window_continuous_add_remove", "flow_status": status, "checks": checks, "commands": commands}
+    finally:
+        if not keep_running:
+            commands.append(_run("kill", [str(ccb_test), "--project", str(project_root), "kill", "-f"], cwd=test_root, env=env, timeout=command_timeout_s))
+
+
+def _run_batch_release_flow(
+    *,
+    test_root: Path,
+    project_name: str,
+    provider: str,
+    ccb_test: Path,
+    provider_home: Path,
+    command_timeout_s: int,
+    reset: bool,
+    keep_running: bool,
+) -> dict[str, Any]:
+    prepared = prepare_same_window_project(test_root=test_root, project_name=project_name, provider=provider, reset=reset)
+    project_root = Path(prepared["project_root"])
+    env = _env(provider_home=provider_home, role_store=Path(prepared["role_store"]))
+    additions = (
+        ("helper1", "main"),
+        ("helper2", "review2"),
+        ("helper3", "review3"),
+    )
+    release_targets = ("helper2", "helper3")
+    commands: list[dict[str, Any]] = []
+    try:
+        commands.append(_run("config_validate", [str(ccb_test), "--project", str(project_root), "config", "validate"], cwd=test_root, env=env, timeout=command_timeout_s))
+        commands.append(_run("start", [str(ccb_test), "--project", str(project_root)], cwd=test_root, env=env, timeout=command_timeout_s))
+        for helper, window in additions:
+            commands.append(
+                _run_json(
+                    f"add_{helper}_{window}",
+                    [
+                        str(ccb_test),
+                        "--project",
+                        str(project_root),
+                        "agent",
+                        "add",
+                        f"{helper}:{provider}",
+                        "--role",
+                        "agentroles.general",
+                        "--window",
+                        window,
+                        "--hidden",
+                        "--json",
+                    ],
+                    cwd=test_root,
+                    env=env,
+                    timeout=command_timeout_s,
+                )
+            )
+        before = _run_json("layout_before_batch_release", [str(ccb_test), "--project", str(project_root), "layout", "status", "--json"], cwd=test_root, env=env, timeout=command_timeout_s)
+        commands.append(before)
+        release = _run_json(
+            "batch_remove_helper2_helper3",
+            [
+                str(ccb_test),
+                "--project",
+                str(project_root),
+                "agent",
+                "remove",
+                "--agents",
+                ",".join(release_targets),
+                "--policy",
+                "unload",
+                "--idle-only",
+                "--json",
+            ],
+            cwd=test_root,
+            env=env,
+            timeout=command_timeout_s,
+        )
+        commands.append(release)
+        after = _run_json("layout_after_batch_release", [str(ccb_test), "--project", str(project_root), "layout", "status", "--json"], cwd=test_root, env=env, timeout=command_timeout_s)
+        commands.append(after)
+        survivor_ask = _run(
+            "ask_helper1_after_batch_release",
+            [str(ccb_test), "--project", str(project_root), "ask", "helper1"],
+            cwd=test_root,
+            env=env,
+            input_text="batch-release smoke ping helper1\n",
+            timeout=command_timeout_s,
+        )
+        commands.append(survivor_ask)
+        main_ask = _run(
+            "ask_main_after_batch_release",
+            [str(ccb_test), "--project", str(project_root), "ask", "main"],
+            cwd=test_root,
+            env=env,
+            input_text="batch-release smoke ping main\n",
+            timeout=command_timeout_s,
+        )
+        commands.append(main_ask)
+        before_panes = _agent_panes(before)
+        after_panes = _agent_panes(after)
+        release_payload = _payload(release)
+        apply_payload = dict(release_payload.get("apply") or {})
+        removed_agents = dict(apply_payload.get("namespace_removed_agents") or {})
+        checks = {
+            "add_plans": [_payload(item).get("apply", {}).get("plan_class") for item in commands[2:5]] == ["add_agent", "add_window", "add_window"],
+            "before_windows": _window_agents(before) == {
+                "main": ["main", "helper1"],
+                "review2": ["helper2"],
+                "review3": ["helper3"],
+            },
+            "batch_status_removed": release_payload.get("agent_lifecycle_status") == "removed",
+            "batch_remove_agent_plan": apply_payload.get("plan_class") == "remove_agent",
+            "batch_removed_agents": set(removed_agents) == set(release_targets),
+            "batch_removed_agent_panes_match": all(removed_agents.get(agent) == before_panes.get(agent) for agent in release_targets),
+            "batch_removed_windows": sorted(apply_payload.get("namespace_removed_windows") or ()) == ["review2", "review3"],
+            "survivor_panes_preserved": after_panes.get("main") == before_panes.get("main")
+            and after_panes.get("helper1") == before_panes.get("helper1"),
+            "after_windows": _window_agents(after) == {"main": ["main", "helper1"]},
+            "after_dynamic_count_one": _payload(after).get("dynamic_agent_count") == 1,
+            "survivor_ask_accepted": _accepted(survivor_ask),
+            "main_ask_accepted": _accepted(main_ask),
+        }
+        status = "ok" if all(checks.values()) and _all_success(commands) else "failed"
+        return {"flow": "batch_release_multi_window", "flow_status": status, "checks": checks, "commands": commands}
     finally:
         if not keep_running:
             commands.append(_run("kill", [str(ccb_test), "--project", str(project_root), "kill", "-f"], cwd=test_root, env=env, timeout=command_timeout_s))
@@ -2064,6 +2198,15 @@ def _prepare_selected_projects(
             prepare_same_window_project(
                 test_root=test_root,
                 project_name=f"{project_prefix}-multi-window-continuous",
+                provider=provider,
+                reset=reset,
+            )
+        )
+    if "batch-release" in flows:
+        prepared.append(
+            prepare_same_window_project(
+                test_root=test_root,
+                project_name=f"{project_prefix}-batch-release",
                 provider=provider,
                 reset=reset,
             )

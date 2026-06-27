@@ -1108,6 +1108,16 @@ Current evidence:
   `namespace_reflowed_windows=["main"]`, survivor layout
   `main=[main,helper1]`, ask acceptance for `helper1`, and final
   `kill_status: ok`;
+- `scripts/dynamic_layout_smoke.py --flow batch-release` makes the batch
+  release proof repeatable across the source-wrapper harness. The flow creates
+  `main=[main,helper1]`, `review2=[helper2]`, and `review3=[helper3]`, runs one
+  `ccb agent remove --agents helper2,helper3 --policy unload --idle-only
+  --json`, verifies `namespace_removed_agents` for both target panes,
+  `namespace_removed_windows=["review2","review3"]`, survivor pane
+  preservation for `main/helper1`, post-release layout
+  `main=[main,helper1]`, and ask acceptance for both `helper1` and `main`.
+  Latest evidence:
+  `/home/bfly/yunwei/test_ccb2/dynamic-layout-batch-release-latest.json`;
 - same-window middle dynamic release is proven: removing the middle helper pane
   deletes only the target pane, preserves the remaining dynamic pane ids, keeps
   their ask targets reachable, and avoids `layout_change`;

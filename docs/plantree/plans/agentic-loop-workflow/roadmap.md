@@ -915,6 +915,15 @@ Date: 2026-06-24
   `helper2,helper3`, reports `plan_class=remove_agent`,
   `namespace_reflowed_windows=["main"]`, keeps `main,helper1`, accepts ask to
   remaining `helper1`, and cleans up with `kill_status: ok`.
+- Promoted batch release into the repeatable dynamic layout smoke harness.
+  `scripts/dynamic_layout_smoke.py --flow batch-release` now hot-loads one
+  survivor in `main` plus two single-agent review windows, batch-unloads the
+  two review agents with one `remove --agents` command, proves both review
+  windows are removed, verifies survivor pane preservation, and checks ask
+  reachability for both `helper1` and `main`. Script tests passed with
+  `39 passed`; source-wrapper evidence in
+  `/home/bfly/yunwei/test_ccb2/dynamic-layout-batch-release-latest.json`
+  returned `dynamic_layout_smoke_status=ok`.
 
 ## Next
 
@@ -930,9 +939,9 @@ Date: 2026-06-24
    window removal. Next evaluate batch `--window-class` / node placement and
    transactions that mix moved panes with newly created agents in one target.
 3. Extend the shrink/release proof from single-agent and batch fake-provider
-   source-wrapper smokes to opt-in real-provider tolerance where useful,
-   especially batch worker/checker unload and `layout arrange` after a real
-   pane has been manually disturbed.
+   source-wrapper smokes to opt-in real-provider tolerance where useful, and
+   decide whether `batch-release` should join the default CI flow bundle next
+   to `same-window-continuous`, `move-agent`, and `window-class-continuous`.
 4. Define the minimum `ccb loop`, `ccb plan`, and `ccb question` command
    surface for creating tasks, transitioning phases, recording artifacts,
    blocking, finishing, and syncing to plan-tree.

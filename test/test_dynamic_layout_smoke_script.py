@@ -323,6 +323,26 @@ def test_prepare_only_can_generate_multi_window_continuous_project(tmp_path: Pat
     assert 'main = "main:fake"' in config.read_text(encoding="utf-8")
 
 
+def test_prepare_only_can_generate_batch_release_project(tmp_path: Path) -> None:
+    module = _load_module()
+
+    payload = module.run_dynamic_layout_smoke(
+        test_root=tmp_path,
+        project_prefix="batch-release-prepare",
+        ccb_test=Path(__file__),
+        provider="fake",
+        flows=("batch-release",),
+        prepare_only=True,
+        reset=True,
+    )
+
+    assert payload["dynamic_layout_smoke_status"] == "prepared"
+    assert payload["flows"] == ["batch-release"]
+    assert len(payload["prepared"]) == 1
+    config = Path(payload["prepared"][0]["project_root"]) / ".ccb" / "ccb.config"
+    assert 'main = "main:fake"' in config.read_text(encoding="utf-8")
+
+
 def test_same_window_continuous_flow_grows_to_six_and_shrinks_to_one(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -600,6 +620,148 @@ def test_multi_window_continuous_flow_adds_and_removes_windows(
     remove_names = [name for name, _command in calls if name.startswith("remove_helper")]
     assert add_names == ["add_helper1_review1", "add_helper2_review2", "add_helper3_review3"]
     assert remove_names == ["remove_helper3", "remove_helper2", "remove_helper1"]
+
+
+def test_batch_release_flow_removes_multiple_windows_in_one_transaction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+    project_root = tmp_path / "project"
+    role_store = tmp_path / "roles"
+    calls: list[tuple[str, str]] = []
+    panes = {"main": "%1", "helper1": "%2", "helper2": "%3", "helper3": "%4"}
+
+    monkeypatch.setattr(
+        module,
+        "prepare_same_window_project",
+        lambda **_kwargs: {"project_root": str(project_root), "role_store": str(role_store)},
+    )
+
+    def fake_run(name, command, **_kwargs):
+        calls.append((name, " ".join(str(item) for item in command)))
+        if name == "ask_helper1_after_batch_release":
+            return {
+                "name": name,
+                "returncode": 0,
+                "stdout": "accepted job=job_helper1 target=helper1\n[CCB_ASYNC_SUBMITTED job=job_helper1 target=helper1]\n",
+                "stderr": "",
+            }
+        if name == "ask_main_after_batch_release":
+            return {
+                "name": name,
+                "returncode": 0,
+                "stdout": "accepted job=job_main target=main\n[CCB_ASYNC_SUBMITTED job=job_main target=main]\n",
+                "stderr": "",
+            }
+        return {"name": name, "returncode": 0, "stdout": "ok\n", "stderr": ""}
+
+    def fake_run_json(name, command, **_kwargs):
+        calls.append((name, " ".join(str(item) for item in command)))
+        if name.startswith("add_helper"):
+            plan_class = "add_agent" if name == "add_helper1_main" else "add_window"
+            return {
+                "name": name,
+                "returncode": 0,
+                "stdout": "{}\n",
+                "stderr": "",
+                "payload": {"apply": {"plan_class": plan_class}},
+            }
+        if name == "layout_before_batch_release":
+            return {
+                "name": name,
+                "returncode": 0,
+                "stdout": "{}\n",
+                "stderr": "",
+                "payload": {
+                    "dynamic_agent_count": 3,
+                    "windows": [
+                        {
+                            "name": "main",
+                            "agent_names": ["main", "helper1"],
+                            "observed": _observed_window([panes["main"], panes["helper1"]], ["main", "helper1"]),
+                            "agents": [
+                                {"agent": "main", "pane_id": panes["main"]},
+                                {"agent": "helper1", "pane_id": panes["helper1"]},
+                            ],
+                        },
+                        {
+                            "name": "review2",
+                            "agent_names": ["helper2"],
+                            "observed": _observed_window([panes["helper2"]], ["helper2"]),
+                            "agents": [{"agent": "helper2", "pane_id": panes["helper2"]}],
+                        },
+                        {
+                            "name": "review3",
+                            "agent_names": ["helper3"],
+                            "observed": _observed_window([panes["helper3"]], ["helper3"]),
+                            "agents": [{"agent": "helper3", "pane_id": panes["helper3"]}],
+                        },
+                    ],
+                },
+            }
+        if name == "batch_remove_helper2_helper3":
+            return {
+                "name": name,
+                "returncode": 0,
+                "stdout": "{}\n",
+                "stderr": "",
+                "payload": {
+                    "agent_lifecycle_status": "removed",
+                    "apply": {
+                        "plan_class": "remove_agent",
+                        "namespace_removed_agents": {"helper2": panes["helper2"], "helper3": panes["helper3"]},
+                        "namespace_removed_windows": ["review2", "review3"],
+                    },
+                },
+            }
+        if name == "layout_after_batch_release":
+            return {
+                "name": name,
+                "returncode": 0,
+                "stdout": "{}\n",
+                "stderr": "",
+                "payload": {
+                    "dynamic_agent_count": 1,
+                    "windows": [
+                        {
+                            "name": "main",
+                            "agent_names": ["main", "helper1"],
+                            "observed": _observed_window([panes["main"], panes["helper1"]], ["main", "helper1"]),
+                            "agents": [
+                                {"agent": "main", "pane_id": panes["main"]},
+                                {"agent": "helper1", "pane_id": panes["helper1"]},
+                            ],
+                        }
+                    ],
+                },
+            }
+        raise AssertionError(f"unexpected json command {name}")
+
+    monkeypatch.setattr(module, "_run", fake_run)
+    monkeypatch.setattr(module, "_run_json", fake_run_json)
+
+    payload = module._run_batch_release_flow(
+        test_root=tmp_path,
+        project_name="batch-release",
+        provider="fake",
+        ccb_test=Path("ccb_test"),
+        provider_home=tmp_path / "home",
+        command_timeout_s=1,
+        reset=True,
+        keep_running=False,
+    )
+
+    assert payload["flow_status"] == "ok"
+    assert payload["checks"]["batch_remove_agent_plan"] is True
+    assert payload["checks"]["batch_removed_windows"] is True
+    assert payload["checks"]["survivor_panes_preserved"] is True
+    assert payload["checks"]["survivor_ask_accepted"] is True
+    batch_commands = [command for name, command in calls if name == "batch_remove_helper2_helper3"]
+    assert batch_commands == [
+        "ccb_test --project "
+        f"{project_root} agent remove --agents helper2,helper3 --policy unload --idle-only --json"
+    ]
 
 
 def test_move_agent_flow_moves_helper_to_new_window_and_cleans_up(
