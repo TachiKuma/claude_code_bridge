@@ -660,6 +660,13 @@ Evidence:
   `--flow window-class`, with both providers proving hot add, middle unload,
   explicit-window reflow, survivor pane preservation, ask reachability, and
   cleanup.
+- `scripts/guarded_dynamic_layout_provider_smoke.py` now provides a fixed
+  guarded entrypoint for future release/CI wiring. It defaults to prepare-only
+  Codex+Claude `window-class`, requires `--run` plus
+  `CCB_DYNAMIC_LAYOUT_SMOKE_RUN_REAL=1` for live provider execution, and passed
+  both prepare-only and real guarded source-wrapper runs in
+  `/home/bfly/yunwei/test_ccb2/guarded-dynamic-layout-prepare-1782568181-*`
+  and `/home/bfly/yunwei/test_ccb2/guarded-dynamic-layout-real-1782568215-*`.
 - Focused regression after connecting loop capacity to layout placement passed
   with `187 passed` across loop capacity, agent lifecycle, layout status, pane
   growth, layout runtime, reload patch/runtime mount, and config loader tests.

@@ -521,21 +521,28 @@ Date: 2026-06-24
   middle `planner_helper2`, reflowed only `plan-orchestrate`, preserved
   surviving panes, accepted asks to surviving helpers, and cleaned up to
   `state: unmounted`.
+- Added the fixed guarded release/local entrypoint
+  `scripts/guarded_dynamic_layout_provider_smoke.py`. It defaults to
+  prepare-only Codex+Claude `window-class`, requires both `--run` and
+  `CCB_DYNAMIC_LAYOUT_SMOKE_RUN_REAL=1` for real provider execution, and wraps
+  the provider matrix with a stable command for future release gates. The
+  wrapper passed prepare-only in
+  `/home/bfly/yunwei/test_ccb2/guarded-dynamic-layout-prepare-1782568181-*`
+  and a real guarded run in
+  `/home/bfly/yunwei/test_ccb2/guarded-dynamic-layout-real-1782568215-*`.
 
 ## Next
 
-1. Promote the provider-matrix dynamic layout smoke, repeatable workflow
-   closure smoke, and autonomous
-   layout-cleanup gate into the standard guarded regression path once the
-   release gate shape is selected.
+1. Wire `scripts/guarded_dynamic_layout_provider_smoke.py`, repeatable
+   workflow closure smoke, and autonomous layout-cleanup smoke into the chosen
+   release/CI guarded regression path.
 2. Define the V1 runtime layout manager command/state surface from
    [topics/dynamic-window-pane-agent-maintenance.md](topics/dynamic-window-pane-agent-maintenance.md):
    expose a script-friendly placement command/skill wrapper for generic
    non-loop dynamic agents while keeping loop execution capacity behind
    `ccb loop capacity`.
 3. Implement the next true hot-load slices:
-   extend pane-identity diagnostics into startup/mount reports, add standard
-   regression entrypoints for the guarded provider smokes, and only later
+   extend pane-identity diagnostics into startup/mount reports, and only later
    richer live reflow beyond the proven same-window and explicit-window-class
    middle-removal cases.
 4. Wire the verified deterministic layout planner and dynamic smoke behavior

@@ -144,6 +144,8 @@ pane IDs, provider sessions, and CCB slot metadata must remain valid.
   execution capacity still routed through `orchestrator-capacity`.
 - The guarded provider smokes now have a standard repeated-`--provider`
   matrix entrypoint and have passed for Codex+Claude on `window-class`.
-- Remaining gap: promote the provider matrix smoke into a standard guarded
-  release regression and extend startup/mount diagnostics with the same pane
+- The guarded provider matrix now also has a fixed wrapper entrypoint for
+  release/local validation: `scripts/guarded_dynamic_layout_provider_smoke.py`.
+- Remaining gap: wire that wrapper into the selected guarded release/CI
+  regression path and extend startup/mount diagnostics with the same pane
   identity vocabulary.
