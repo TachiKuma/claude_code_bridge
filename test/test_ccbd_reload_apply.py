@@ -85,6 +85,11 @@ REMOVE_AGENT_CONFIG = BASE_CONFIG.replace(
     'agent1:codex',
 )
 
+REPLACE_AGENT_CONFIG = BASE_CONFIG.replace(
+    'agent2:claude',
+    'agent2:codex',
+)
+
 ADD_TOOL_WINDOW_CONFIG = BASE_CONFIG + """
 [tool_windows.neovim]
 command = "ccb-nvim"
@@ -688,6 +693,35 @@ def test_additive_reload_apply_idle_retry_retires_busy_remove_drain_record(tmp_p
     assert drain_queue.records[0].phase == 'retired'
 
 
+def test_reload_apply_reports_deferred_replace_without_mutation(tmp_path: Path) -> None:
+    app = _started_app(tmp_path / 'repo-replace-deferred', BASE_CONFIG)
+    old_graph = app.service_graph
+    new_config = _load_config(app.project_root, REPLACE_AGENT_CONFIG)
+    _seed_runtime(app.runtime_service, 'agent1', pane_id='%1')
+    _seed_runtime(app.runtime_service, 'agent2', pane_id='%2')
+
+    result = run_additive_reload_apply(
+        app,
+        new_config,
+        current_namespace=_namespace(app),
+        apply_namespace_patch_fn=_fail_with('deferred replace must not patch namespace'),
+        run_runtime_mount_fn=_fail_with('deferred replace must not mutate runtime'),
+        publish_transaction_fn=_fail_with('deferred replace must not publish'),
+    )
+
+    assert result.status == 'blocked'
+    assert result.stage == 'plan'
+    assert result.plan_class == 'replace_agent'
+    assert result.diagnostics['reason'] == 'replace_agent_deferred'
+    assert result.diagnostics['replace_agents'] == ['agent2']
+    assert result.diagnostics['replace_drain_intents'][0]['intent_kind'] == 'replace'
+    assert result.diagnostics['replace_drain_intents'][0]['agent'] == 'agent2'
+    assert result.diagnostics['graph_published'] is False
+    assert result.diagnostics['unload_or_replace_executed'] is False
+    assert app.service_graph is old_graph
+    assert app.reload_drain_store.load().active_records_for('agent2') == ()
+
+
 def test_additive_reload_apply_namespace_patch_failure_stops_before_runtime_and_publish(
     tmp_path: Path,
 ) -> None:
@@ -1090,6 +1124,35 @@ def test_project_reload_non_dry_run_busy_remove_blocks_without_namespace_mutatio
     assert dry_run_payload['dry_run'] is True
     assert dry_run_payload['reload_drains']['active_count'] == 1
     assert dry_run_payload['reload_drains']['active_records'][0]['agent'] == 'agent2'
+
+
+def test_project_reload_non_dry_run_replace_reports_deferred_diagnostics(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    app = _started_app(tmp_path / 'repo-replace-handler', BASE_CONFIG)
+    old_graph = app.service_graph
+    _seed_runtime(app.runtime_service, 'agent2', pane_id='%2')
+    _project(app.project_root, REPLACE_AGENT_CONFIG)
+    monkeypatch.setattr(
+        'ccbd.reload_apply_service.apply_namespace_patch',
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('deferred replace must not patch namespace')),
+    )
+
+    payload = app.socket_server._handlers['project_reload_config']({'dry_run': False})
+
+    assert payload['status'] == 'blocked'
+    assert payload['stage'] == 'plan'
+    assert payload['plan_class'] == 'replace_agent'
+    assert payload['mutation_enabled'] is False
+    assert payload['diagnostics']['reason'] == 'replace_agent_deferred'
+    assert payload['diagnostics']['replace_agents'] == ['agent2']
+    assert payload['diagnostics']['replace_drain_intents'][0]['intent_kind'] == 'replace'
+    assert payload['diagnostics']['replace_drain_intents'][0]['agent'] == 'agent2'
+    assert payload['reload_drains']['active_count'] == 0
+    assert app.reload_drain_store.load().active_records_for('agent2') == ()
+    assert payload['diagnostics']['graph_published'] is False
+    assert app.service_graph is old_graph
 
 
 def test_project_reload_non_dry_run_namespace_failure_reports_residue_without_publish(

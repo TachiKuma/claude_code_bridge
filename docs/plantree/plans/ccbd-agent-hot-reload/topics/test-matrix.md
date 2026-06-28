@@ -137,6 +137,10 @@ Date: 2026-05-29
   - `timeout_s`, `max_age_s`, and `max_pending` reject or terminate bounded
     records;
   - unload and replace intents share the queue bound without unbounded growth;
+  - non-dry-run `replace_agent` returns `replace_agent_deferred` with affected
+    agents, replace drain intents, and a CLI-visible next supported action, but
+    does not yet mutate namespace/runtime/published graph or persist active
+    drain records;
   - `retired` is terminal;
   - busy/idle predicate is injectable;
   - state-machine and store tests do not call tmux, publish a service graph,

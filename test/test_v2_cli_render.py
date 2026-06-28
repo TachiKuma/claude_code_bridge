@@ -337,6 +337,72 @@ def test_render_reload_non_dry_run_apply_diagnostics() -> None:
     assert 'reload_error: runtime_mount_failed: provider launch failed' in lines
 
 
+def test_render_reload_deferred_replace_diagnostics() -> None:
+    lines = render_reload(
+        {
+            'status': 'blocked',
+            'dry_run': False,
+            'mutation_enabled': False,
+            'plan_class': 'replace_agent',
+            'stage': 'plan',
+            'safe_to_apply': False,
+            'future_safe_to_apply': False,
+            'old_config_signature': 'old',
+            'new_config_signature': 'new',
+            'operations': [
+                {
+                    'op': 'replace_agent',
+                    'agent': 'agent2',
+                    'fields': ['provider'],
+                    'reason': 'existing agent spec changed',
+                }
+            ],
+            'drain_intents': [
+                {
+                    'intent_kind': 'replace',
+                    'agent': 'agent2',
+                    'initial_phase': 'pending_replace',
+                    'dry_run_only': True,
+                    'reason': 'existing agent spec changed',
+                }
+            ],
+            'namespace_patch_plan': {
+                'status': 'blocked',
+                'apply_deferred': True,
+                'steps': [],
+                'blocked_operations': [{'op': 'replace_agent', 'agent': 'agent2'}],
+            },
+            'diagnostics': {
+                'reason': 'replace_agent_deferred',
+                'message': 'replace_agent is classified and bounded drain intents are planned, but mutating replacement is not enabled yet',
+                'replace_agents': ['agent2'],
+                'next_supported_action': 'inspect ccb reload --dry-run replace drains; restart or remove/add until replace apply lands',
+                'graph_published': False,
+                'lease_or_lifecycle_written': False,
+                'config_watch_started': False,
+                'unload_or_replace_executed': False,
+            },
+            'warnings': [],
+            'reasons': [],
+            'errors': ['replace_agent_deferred: replace_agent is classified and bounded drain intents are planned, but mutating replacement is not enabled yet'],
+        }
+    )
+
+    assert 'reload_status: blocked' in lines
+    assert 'plan_class: replace_agent' in lines
+    assert 'reload_stage: plan' in lines
+    assert 'reload_diagnostic: reason=replace_agent_deferred' in lines
+    assert 'reload_diagnostic: replace_agents=agent2' in lines
+    assert (
+        'reload_diagnostic: next_supported_action=inspect ccb reload --dry-run replace drains; '
+        'restart or remove/add until replace apply lands'
+    ) in lines
+    assert (
+        'reload_drain_intent: intent_kind=replace agent=agent2 initial_phase=pending_replace '
+        'dry_run_only=true reason=existing agent spec changed'
+    ) in lines
+
+
 def test_render_fault_commands() -> None:
     list_summary = SimpleNamespace(
         project_id='proj-1',

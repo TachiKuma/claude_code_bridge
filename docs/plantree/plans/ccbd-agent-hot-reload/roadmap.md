@@ -355,6 +355,16 @@ Date: 2026-06-28
   reload-busy-drain-sidebar-render --busy-latency-ms 15000
   --check-sidebar-render --reset` from `/home/bfly/yunwei/test_ccb2`, which
   passed all checks including `sidebar_renders_active_drain`.
+- Added the first replace-agent apply boundary: non-dry-run `replace_agent`
+  reloads now return a structured `replace_agent_deferred` plan-stage blocker
+  instead of a generic unsupported-plan message. The payload includes affected
+  `replace_agents`, planned replace drain intents, and a CLI-rendered
+  `next_supported_action`, while still avoiding namespace patch, runtime
+  mutation, service-graph publish, or persistent drain records. Verification
+  passed with `pytest -q test/test_ccbd_reload_apply.py
+  test/test_ccbd_reload_drain.py test/test_ccbd_reload_dry_run.py
+  test/test_v2_cli_render.py` (`99 passed`) and `python -m py_compile
+  lib/ccbd/reload_apply_plan.py lib/cli/render_runtime/reload_view.py`.
 
 ## In Progress
 
@@ -372,9 +382,10 @@ Date: 2026-06-28
   shared-source move, plus resolve/preflight loop-capacity smokes have passed;
   the core fake-provider dynamic layout bundle is now a CI gate. Sidebar helper
   now renders active drain status from `project_view`, and a true tmux pane
-  capture smoke verifies the marker in a running sidebar. Daemon-pushed sidebar
-  refresh, replacement, arbitrary layout reshapes, and background config
-  watching remain deferred.
+  capture smoke verifies the marker in a running sidebar. Replace-agent is
+  classified and reported through a structured deferred non-dry-run blocker,
+  but mutating replacement is still pending. Daemon-pushed sidebar refresh,
+  arbitrary layout reshapes, and background config watching remain deferred.
 
 ## Next
 
@@ -389,8 +400,9 @@ Date: 2026-06-28
    cleanup. The fake busy-remove drain path now has a dedicated CI smoke; the
    next matrix expansion should decide whether a guarded real-provider variant
    is useful or too slow for routine gates.
-3. Expose replacement only after unload semantics are safe; busy replacement
-   remains pending with explicit bounds.
+3. Implement the first idle `replace_agent` mutation slice only after the
+   deferred blocker contract remains stable: old runtime retire, same logical
+   slot remount, signature publish, and no claimed provider session continuity.
 4. Keep daemon-pushed sidebar refresh deferred unless a real tmux visual check
    shows project-view polling is too slow for drain/reload state changes.
 

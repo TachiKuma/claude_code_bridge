@@ -78,6 +78,15 @@ Phase 4 represents replacement as `pending_replace` drain intent records sharing
 the same bounded queue as unload. It does not yet execute the replacement path
 or supersede duplicate replacement requests.
 
+The first apply-boundary slice is landed: a non-dry-run `replace_agent` reload
+now returns a structured `replace_agent_deferred` blocker instead of a generic
+unsupported-plan error. The response names the affected `replace_agents`,
+includes the planned replace drain intents, and renders a next supported action
+for CLI users. It intentionally does not patch tmux namespace, mutate runtime
+authority, publish a new service graph, or persist active drain records. This
+keeps the replace contract visible while preserving the old runtime until the
+idle replacement mutation path is implemented.
+
 ## Failure Handling
 
 Failures must be explicit and recoverable:
