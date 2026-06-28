@@ -234,6 +234,18 @@ Date: 2026-06-28
   resolved target, release removes the overflow window, execution-node
   resolution predicts `node-round3-node1`, `loop capacity ensure` creates the
   real worker/reviewer node window, and `loop capacity release` removes it.
+- Promoted the fake-provider core dynamic layout smoke into the regular
+  Ubuntu/Python 3.11 CI gate as `Guard core dynamic layout smoke`. The gate now
+  covers `same-window-continuous`, `batch-release`, `move-agent`,
+  `move-shared-source`, `window-class-continuous`, `arrange-window`,
+  `mixed-move-add`, `batch-move-window-class`, and `resolve-preflight`, while
+  keeping real Codex/Claude runs as guarded manual/release evidence. Workflow
+  text coverage and script tests passed with
+  `pytest -q test/test_dynamic_layout_smoke_script.py
+  test/test_guarded_dynamic_layout_provider_smoke_script.py` (`43 passed`), and
+  the source-wrapper CI-equivalent fake smoke
+  `/home/bfly/yunwei/test_ccb2/ci-core-dynamic-layout-local-latest.json` passed
+  all nine flows with `dynamic_layout_smoke_status: ok`.
 - Verified dynamic lifecycle policy smoke for park/resume and auto release:
   `pytest -q test/test_dynamic_agent_lifecycle_smoke_script.py` passed with
   `5 passed`; source-wrapper fake smoke
@@ -332,21 +344,16 @@ Date: 2026-06-28
   lifecycle park/resume, multi-window batch-release, window-class-continuous,
   mixed move-plus-add, batch window-class move, arrange-window, and
   shared-source move, plus resolve/preflight loop-capacity smokes have passed;
-  daemon-pushed sidebar refresh, replacement, arbitrary layout reshapes, and
-  background config watching remain deferred.
+  the core fake-provider dynamic layout bundle is now a CI gate. Daemon-pushed
+  sidebar refresh, replacement, arbitrary layout reshapes, and background config
+  watching remain deferred.
 
 ## Next
 
-1. Extend live-provider smoke for pane-backed `codex`/`claude` dynamic add,
-   move, release, hide/park/resume. `codex` `move-agent`, `codex`
-   `same-window-continuous`, `codex` lifecycle park/resume, `claude`
-   `move-agent`, `claude` `same-window-continuous`, and `claude` lifecycle
-   park/resume, plus `codex`/`claude` `batch-release`,
-   `window-class-continuous`, `mixed-move-add`, `batch-move-window-class`,
-   `arrange-window`, `move-shared-source`, and `resolve-preflight` have passed
-   with real-home auth. Before promoting these to routine release gates, decide
-   which flows are cheap enough for CI and which remain manual live-provider
-   evidence only.
+1. Watch the first remote CI run for the expanded `Guard core dynamic layout
+   smoke` gate. If runtime or flake rate is too high, split the nine fake flows
+   into a stable core gate and an edge-flow gate rather than weakening
+   assertions.
 2. Run or update the automatic and manual additive reload matrix in
    [topics/test-matrix.md](topics/test-matrix.md), including `test_ccb2`
    evidence for unchanged old panes, newly-mounted agents, released dynamic

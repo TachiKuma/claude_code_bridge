@@ -2231,12 +2231,12 @@ def test_compact_payload_keeps_checks_and_window_summary_without_full_stdout() -
     }
 
 
-def test_tests_workflow_runs_same_window_continuous_fake_smoke() -> None:
+def test_tests_workflow_runs_core_dynamic_layout_fake_smoke() -> None:
     text = Path(".github/workflows/test.yml").read_text(encoding="utf-8")
 
-    assert "Guard same-window continuous dynamic layout smoke" in text
+    assert "Guard core dynamic layout smoke" in text
     assert "scripts/dynamic_layout_smoke.py" in text
-    assert "ci-same-window-continuous" in text
+    assert "ci-core-dynamic-layout" in text
     assert "matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'" in text
     assert "--provider fake" in text
     assert "--flow same-window-continuous" in text
@@ -2245,14 +2245,22 @@ def test_tests_workflow_runs_same_window_continuous_fake_smoke() -> None:
     assert "--flow move-shared-source" in text
     assert "--flow window-class-continuous" in text
     assert "--flow arrange-window" in text
+    assert "--flow mixed-move-add" in text
+    assert "--flow batch-move-window-class" in text
+    assert "--flow resolve-preflight" in text
     assert 'payload["dynamic_layout_smoke_status"] == "ok"' in text
-    assert 'payload["flows"] == ["same-window-continuous", "batch-release", "move-agent", "move-shared-source", "window-class-continuous", "arrange-window"]' in text
+    assert '"mixed-move-add",' in text
+    assert '"batch-move-window-class",' in text
+    assert '"resolve-preflight",' in text
     assert 'payload["checks"]["same_window_continuous_1_to_6_to_1"] is True' in text
     assert 'payload["checks"]["batch_release_multi_window"] is True' in text
     assert 'payload["checks"]["move_agent_to_new_window"] is True' in text
     assert 'payload["checks"]["move_agent_shared_source"] is True' in text
     assert 'payload["checks"]["window_class_continuous_1_to_8_to_1"] is True' in text
     assert 'payload["checks"]["arrange_window_disturb_restore"] is True' in text
+    assert 'payload["checks"]["mixed_move_add_explicit_windows"] is True' in text
+    assert 'payload["checks"]["batch_move_window_class"] is True' in text
+    assert 'payload["checks"]["resolve_preflight_chain"] is True' in text
     assert 'checks["grew_to_six_order"] is True' in text
     assert 'checks["observed_grew_to_six_panes"] is True' in text
     assert 'checks["observed_grow_geometry"] is True' in text
@@ -2281,7 +2289,18 @@ def test_tests_workflow_runs_same_window_continuous_fake_smoke() -> None:
     assert 'arrange["arrange_status_ok"] is True' in text
     assert 'arrange["arrange_fixed_columns"] is True' in text
     assert 'arrange["pane_ids_preserved"] is True' in text
-    step = text.split("Guard same-window continuous dynamic layout smoke", 1)[1].split("Guard workflow closure layout cleanup smoke", 1)[0]
+    assert 'mixed["reload_published"] is True' in text
+    assert 'mixed["moved_panes_preserved"] is True' in text
+    assert 'mixed["new_beta_pane_created"] is True' in text
+    assert 'mixed["review_window_removed"] is True' in text
+    assert 'batch_move["move_plan_class"] is True' in text
+    assert 'batch_move["moved_agent_panes_match"] is True' in text
+    assert 'batch_move["removed_review_window"] is True' in text
+    assert 'resolve["class_resolve_overflow"] is True' in text
+    assert 'resolve["class_add_matches_resolve"] is True' in text
+    assert 'resolve["node_resolve_execution_window"] is True' in text
+    assert 'resolve["capacity_release_clean"] is True' in text
+    step = text.split("Guard core dynamic layout smoke", 1)[1].split("Guard dynamic agent lifecycle smoke", 1)[0]
     assert "--run" not in step
     assert "codex" not in step
     assert "claude" not in step

@@ -71,16 +71,16 @@ jobs:
           assert payload["flows"] == ["window-class", "move-agent", "resolve-preflight"]
           PY
 
-      - name: Guard same-window continuous dynamic layout smoke
+      - name: Guard core dynamic layout smoke
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
         shell: bash
         run: |
           set -euo pipefail
           export TERM=xterm-256color
-          smoke_root="${RUNNER_TEMP}/ccb-same-window-continuous-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          smoke_root="${RUNNER_TEMP}/ccb-core-dynamic-layout-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           python scripts/dynamic_layout_smoke.py \
             --test-root "$smoke_root" \
-            --project-prefix ci-same-window-continuous \
+            --project-prefix ci-core-dynamic-layout \
             --ccb-test "$GITHUB_WORKSPACE/ccb_test" \
             --provider fake \
             --flow same-window-continuous \
@@ -89,22 +89,38 @@ jobs:
             --flow move-shared-source \
             --flow window-class-continuous \
             --flow arrange-window \
-            --command-timeout 180 \
-            --reset > "$RUNNER_TEMP/same-window-continuous-smoke.json"
-          python - "$RUNNER_TEMP/same-window-continuous-smoke.json" <<'PY'
+            --flow mixed-move-add \
+            --flow batch-move-window-class \
+            --flow resolve-preflight \
+            --command-timeout 240 \
+            --reset > "$RUNNER_TEMP/core-dynamic-layout-smoke.json"
+          python - "$RUNNER_TEMP/core-dynamic-layout-smoke.json" <<'PY'
           import json
           import sys
           from pathlib import Path
 
           payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
           assert payload["dynamic_layout_smoke_status"] == "ok"
-          assert payload["flows"] == ["same-window-continuous", "batch-release", "move-agent", "move-shared-source", "window-class-continuous", "arrange-window"]
+          assert payload["flows"] == [
+              "same-window-continuous",
+              "batch-release",
+              "move-agent",
+              "move-shared-source",
+              "window-class-continuous",
+              "arrange-window",
+              "mixed-move-add",
+              "batch-move-window-class",
+              "resolve-preflight",
+          ]
           assert payload["checks"]["same_window_continuous_1_to_6_to_1"] is True
           assert payload["checks"]["batch_release_multi_window"] is True
           assert payload["checks"]["move_agent_to_new_window"] is True
           assert payload["checks"]["move_agent_shared_source"] is True
           assert payload["checks"]["window_class_continuous_1_to_8_to_1"] is True
           assert payload["checks"]["arrange_window_disturb_restore"] is True
+          assert payload["checks"]["mixed_move_add_explicit_windows"] is True
+          assert payload["checks"]["batch_move_window_class"] is True
+          assert payload["checks"]["resolve_preflight_chain"] is True
           results = {item["flow"]: item for item in payload["results"]}
           result = results["same_window_continuous_1_to_6_to_1"]
           checks = result["checks"]
@@ -168,6 +184,31 @@ jobs:
           assert arrange["helper_ask_accepted"] is True
           assert arrange["helper_ask_terminal"] is True
           assert arrange["dynamic_agents_cleaned"] is True
+          mixed = results["mixed_move_add_explicit_windows"]["checks"]
+          assert mixed["reload_published"] is True
+          assert mixed["reload_move_plan"] is True
+          assert mixed["reload_namespace_planned_mixed_steps"] is True
+          assert mixed["moved_panes_preserved"] is True
+          assert mixed["new_beta_pane_created"] is True
+          assert mixed["review_window_removed"] is True
+          assert mixed["asks_terminal"] is True
+          batch_move = results["batch_move_window_class"]["checks"]
+          assert batch_move["move_plan_class"] is True
+          assert batch_move["move_target_windows"] is True
+          assert batch_move["moved_agent_panes_match"] is True
+          assert batch_move["removed_review_window"] is True
+          assert batch_move["zeta_ask_accepted"] is True
+          assert batch_move["alpha_ask_accepted"] is True
+          resolve = results["resolve_preflight_chain"]["checks"]
+          assert resolve["class_resolve_overflow"] is True
+          assert resolve["class_add_matches_resolve"] is True
+          assert resolve["class_add_window_plan"] is True
+          assert resolve["class_release_removed_window"] is True
+          assert resolve["class_after_clean"] is True
+          assert resolve["node_resolve_execution_window"] is True
+          assert resolve["capacity_add_window_plan"] is True
+          assert resolve["node_window_visible"] is True
+          assert resolve["capacity_release_clean"] is True
           print(
               json.dumps(
                   {
@@ -177,6 +218,9 @@ jobs:
                       "move_checks": move,
                       "window_class_checks": window_class,
                       "arrange_checks": arrange,
+                      "mixed_checks": mixed,
+                      "batch_move_checks": batch_move,
+                      "resolve_checks": resolve,
                   },
                   sort_keys=True,
               )
