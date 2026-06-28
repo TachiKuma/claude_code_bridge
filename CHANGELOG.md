@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## v8.0.4 (2026-06-28)
+
+### CCB Mobile Project List Stability
+
+- **Server-Wide Project Listing Accelerated**: `/v1/projects` now checks
+  mounted project health concurrently while preserving registry order, avoiding
+  phone-side aborts when many CCB projects are registered.
+- **Client Disconnect Noise Reduced**: mobile gateway responses now quietly
+  ignore ordinary BrokenPipe/connection-reset writes after a phone disconnects
+  or times out.
+- **Release Surface Synchronized**: VERSION, package metadata, mobile app
+  version metadata, README links, workflow defaults, and APK download URLs are
+  aligned for 8.0.4.
+
 ## v8.0.3 (2026-06-28)
 
 ### npm Release Metadata Fix

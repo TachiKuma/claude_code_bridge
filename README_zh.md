@@ -6,7 +6,7 @@
 **可见、可控的多 Agent 合作TUI工作台**
 
 <p>
-  <img src="https://img.shields.io/badge/version-8.0.3-orange.svg" alt="version">
+  <img src="https://img.shields.io/badge/version-8.0.4-orange.svg" alt="version">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WSL-lightgrey.svg" alt="platform">
   <img src="https://img.shields.io/badge/providers-15%20CLI%20families-0B7285.svg" alt="providers">
 </p>
@@ -210,10 +210,10 @@ ccb
 
 ### Mobile App（Android Alpha）
 
-CCB 8.0.3 已把 Flutter 版 CCB Mobile 源码放入 [`mobile/`](mobile/)，
+CCB 8.0.4 已把 Flutter 版 CCB Mobile 源码放入 [`mobile/`](mobile/)，
 并在 GitHub Release 中发布 Android APK：
 
-- [下载 CCB Mobile v8.0.3 APK](https://github.com/bfly123/claude_code_bridge/releases/download/v8.0.3/ccb-mobile-v8.0.3.apk)
+- [下载 CCB Mobile v8.0.4 APK](https://github.com/bfly123/claude_code_bridge/releases/download/v8.0.4/ccb-mobile-v8.0.4.apk)
 - App 源码：[`mobile/app`](mobile/app)
 - 服务端 gateway 源码：[`lib/mobile_gateway`](lib/mobile_gateway)
 
@@ -742,6 +742,16 @@ v7 线重点：
 - 加固 tmux、Ghostty、release helper、Codex trust 和 provider 会话恢复路径。
 
 <details open>
+<summary><b>v8.0.4</b> - CCB Mobile 项目列表稳定性</summary>
+
+- server-wide mobile gateway 的 `/v1/projects` 现在会并发检查已挂载项目健康状态，
+  同时保持 registry 顺序，避免项目较多时手机端加载超时或连接中断。
+- 手机断开或超时时，mobile gateway 不再为普通 BrokenPipe/connection reset
+  写出刷 traceback。
+
+</details>
+
+<details>
 <summary><b>v8.0.3</b> - npm Release Metadata 修复</summary>
 
 - 修复 npm provenance metadata，使 `@seemseam/ccb` 的发布仓库与 GitHub
