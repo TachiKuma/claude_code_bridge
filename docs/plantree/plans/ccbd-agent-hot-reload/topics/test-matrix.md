@@ -293,6 +293,14 @@ Date: 2026-05-29
     ask-reachable.
   - `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-claude-batch-move-window-class-latest.json`
     passed the same real-home `batch-move-window-class` checks for `claude`.
+  - `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-codex-arrange-window-latest.json`
+    passed `codex` `arrange-window`: grow `plan-orchestrate` to five agent
+    panes, intentionally disturb the window into a non-fixed horizontal layout,
+    restore the fixed-column target geometry with `ccb agent arrange`, preserve
+    pane ids and agent order, keep `planner_helper3` ask-reachable, then unload
+    helpers back to the static `frontdesk` plus `planner` topology.
+  - `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-claude-arrange-window-latest.json`
+    passed the same real-home `arrange-window` checks for `claude`.
 - 2026-06-28 dynamic lifecycle smoke evidence:
   - `pytest -q test/test_dynamic_agent_lifecycle_smoke_script.py` passed with
     `5 passed` before workflow promotion; after adding the CI gate, targeted
