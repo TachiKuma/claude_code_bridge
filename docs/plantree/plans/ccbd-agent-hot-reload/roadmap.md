@@ -179,6 +179,15 @@ Date: 2026-06-28
   ask-reachable after move transactions, and both providers can survive
   same-window dynamic add/reflow/unload cycles while preserving the original
   main pane.
+- Extended live-provider evidence to multi-window batch release:
+  `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-codex-batch-release-latest.json`
+  passed for `codex` with `batch-release`;
+  `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-claude-batch-release-latest.json`
+  passed for `claude` with `batch-release`. Together these prove a real
+  provider session can add a survivor helper to an existing window, add two
+  helpers into new windows, batch-unload two dynamic helpers, remove the empty
+  dynamic windows, preserve the survivor pane, and keep survivor/main asks
+  reachable after the release transaction.
 - Verified dynamic lifecycle policy smoke for park/resume and auto release:
   `pytest -q test/test_dynamic_agent_lifecycle_smoke_script.py` passed with
   `5 passed`; source-wrapper fake smoke
@@ -271,12 +280,13 @@ Date: 2026-06-28
   release, busy retain, empty dynamic-window cleanup, config-only park/resume
   dispatch toggling, compact-startup pane identity preservation, bounded
   busy-unload drain recording/status surfacing in reload and project-view
-  surfaces, heartbeat auto-retry for ready unload drains, batch release, batch move into explicit
-  review/loop/node windows, and mixed move-plus-add explicit `[windows]`
-  reload. Live `codex` and `claude` move, same-window `1->6->1`, and lifecycle
-  park/resume smokes have passed; broader provider lifecycle matrix coverage,
-  daemon-pushed sidebar refresh, replacement, arbitrary layout reshapes, and
-  background config watching remain deferred.
+  surfaces, heartbeat auto-retry for ready unload drains, batch release, batch
+  move into explicit review/loop/node windows, and mixed move-plus-add explicit
+  `[windows]` reload. Live `codex` and `claude` move, same-window `1->6->1`,
+  lifecycle park/resume, and multi-window batch-release smokes have passed;
+  broader provider lifecycle matrix coverage, daemon-pushed sidebar refresh,
+  replacement, arbitrary layout reshapes, and background config watching remain
+  deferred.
 
 ## Next
 
@@ -284,8 +294,11 @@ Date: 2026-06-28
    move, release, hide/park/resume. `codex` `move-agent`, `codex`
    `same-window-continuous`, `codex` lifecycle park/resume, `claude`
    `move-agent`, `claude` `same-window-continuous`, and `claude` lifecycle
-   park/resume have passed with real-home auth; remaining flows need the same
-   guarded account-boundary treatment before being promoted to release gates.
+   park/resume, plus `codex`/`claude` `batch-release`, have passed with
+   real-home auth; remaining higher-stress flows such as
+   `window-class-continuous`, `mixed-move-add`, `batch-move-window-class`, and
+   `arrange-window` need the same guarded account-boundary treatment before
+   being promoted to release gates.
 2. Run or update the automatic and manual additive reload matrix in
    [topics/test-matrix.md](topics/test-matrix.md), including `test_ccb2`
    evidence for unchanged old panes, newly-mounted agents, released dynamic

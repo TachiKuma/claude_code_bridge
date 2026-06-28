@@ -264,6 +264,13 @@ Date: 2026-05-29
     agent pane to six, preserve the original main pane, verify geometry/fixed
     columns, ask a dynamic helper, unload helpers in reverse order, reflow back
     to one pane, and keep main ask-reachable.
+  - `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-codex-batch-release-latest.json`
+    passed `codex` `batch-release`: add a survivor helper to an existing
+    window, add two helpers into new windows, batch-unload the two new-window
+    helpers, remove empty dynamic windows, preserve the survivor pane, and keep
+    survivor/main asks reachable.
+  - `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-claude-batch-release-latest.json`
+    passed the same real-home `batch-release` checks for `claude`.
 - 2026-06-28 dynamic lifecycle smoke evidence:
   - `pytest -q test/test_dynamic_agent_lifecycle_smoke_script.py` passed with
     `5 passed` before workflow promotion; after adding the CI gate, targeted
