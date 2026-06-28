@@ -271,6 +271,28 @@ Date: 2026-05-29
     survivor/main asks reachable.
   - `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-claude-batch-release-latest.json`
     passed the same real-home `batch-release` checks for `claude`.
+  - `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-codex-window-class-continuous-latest.json`
+    passed `codex` `window-class-continuous`: grow the
+    `plan-orchestrate` window class from static planner to eight real provider
+    panes across `plan-orchestrate` and `plan-orchestrate-2`, observe fixed
+    columns, ask `planner_helper7`, unload helpers in reverse order, remove the
+    empty second page, and return to only `frontdesk` plus `planner`.
+  - `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-claude-window-class-continuous-latest.json`
+    passed the same real-home `window-class-continuous` checks for `claude`.
+  - `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-codex-mixed-move-add-latest.json`
+    passed `codex` `mixed-move-add`: move existing `zeta`/`alpha` panes from
+    `review` to `archive`, mount new `beta` in the same reload transaction,
+    remove the evacuated `review` window, preserve moved pane ids, and keep all
+    three agents ask-reachable.
+  - `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-claude-mixed-move-add-latest.json`
+    passed the same real-home `mixed-move-add` checks for `claude`.
+  - `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-codex-batch-move-window-class-latest.json`
+    passed `codex` `batch-move-window-class`: add dynamic `zeta` and `alpha`
+    into `review`, batch-move them into `plan-orchestrate` class windows, remove
+    the evacuated `review` window, preserve moved pane ids, and keep both agents
+    ask-reachable.
+  - `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-claude-batch-move-window-class-latest.json`
+    passed the same real-home `batch-move-window-class` checks for `claude`.
 - 2026-06-28 dynamic lifecycle smoke evidence:
   - `pytest -q test/test_dynamic_agent_lifecycle_smoke_script.py` passed with
     `5 passed` before workflow promotion; after adding the CI gate, targeted

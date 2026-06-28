@@ -188,6 +188,24 @@ Date: 2026-06-28
   helpers into new windows, batch-unload two dynamic helpers, remove the empty
   dynamic windows, preserve the survivor pane, and keep survivor/main asks
   reachable after the release transaction.
+- Extended live-provider evidence to higher-stress explicit `[windows]` flows:
+  `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-codex-window-class-continuous-latest.json`
+  and
+  `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-claude-window-class-continuous-latest.json`
+  passed `window-class-continuous` (`1->8->1` across `plan-orchestrate` and
+  `plan-orchestrate-2`);
+  `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-codex-mixed-move-add-latest.json`
+  and
+  `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-claude-mixed-move-add-latest.json`
+  passed `mixed-move-add`; and
+  `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-codex-batch-move-window-class-latest.json`
+  plus
+  `/home/bfly/yunwei/test_ccb2/dynamic-layout-live-claude-batch-move-window-class-latest.json`
+  passed `batch-move-window-class`. Together these prove real Codex and Claude
+  sessions can grow a window-class to a second window and shrink it back, mix
+  pane moves with newly-mounted agents in one reload transaction, batch-move
+  dynamic agents into class-derived target windows, preserve moved pane ids,
+  remove evacuated dynamic windows, and keep moved/new agents ask-reachable.
 - Verified dynamic lifecycle policy smoke for park/resume and auto release:
   `pytest -q test/test_dynamic_agent_lifecycle_smoke_script.py` passed with
   `5 passed`; source-wrapper fake smoke
@@ -283,10 +301,10 @@ Date: 2026-06-28
   surfaces, heartbeat auto-retry for ready unload drains, batch release, batch
   move into explicit review/loop/node windows, and mixed move-plus-add explicit
   `[windows]` reload. Live `codex` and `claude` move, same-window `1->6->1`,
-  lifecycle park/resume, and multi-window batch-release smokes have passed;
-  broader provider lifecycle matrix coverage, daemon-pushed sidebar refresh,
-  replacement, arbitrary layout reshapes, and background config watching remain
-  deferred.
+  lifecycle park/resume, multi-window batch-release, window-class-continuous,
+  mixed move-plus-add, and batch window-class move smokes have passed; remaining
+  provider edge-flow coverage, daemon-pushed sidebar refresh, replacement,
+  arbitrary layout reshapes, and background config watching remain deferred.
 
 ## Next
 
@@ -294,10 +312,11 @@ Date: 2026-06-28
    move, release, hide/park/resume. `codex` `move-agent`, `codex`
    `same-window-continuous`, `codex` lifecycle park/resume, `claude`
    `move-agent`, `claude` `same-window-continuous`, and `claude` lifecycle
-   park/resume, plus `codex`/`claude` `batch-release`, have passed with
-   real-home auth; remaining higher-stress flows such as
-   `window-class-continuous`, `mixed-move-add`, `batch-move-window-class`, and
-   `arrange-window` need the same guarded account-boundary treatment before
+   park/resume, plus `codex`/`claude` `batch-release`,
+   `window-class-continuous`, `mixed-move-add`, and
+   `batch-move-window-class`, have passed with real-home auth. Remaining edge
+   flows such as `arrange-window`, `move-shared-source`, and
+   `resolve-preflight` need the same guarded account-boundary treatment before
    being promoted to release gates.
 2. Run or update the automatic and manual additive reload matrix in
    [topics/test-matrix.md](topics/test-matrix.md), including `test_ccb2`
