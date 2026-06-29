@@ -842,15 +842,19 @@ def test_agent_conversation_prefers_codex_native_transcript(tmp_path: Path) -> N
 
     assert status == 200
     items = payload['conversation']['items']
-    native_items = [
-        item for item in items if item.get('source') == 'provider_native/codex'
+    assert [item.get('source') for item in items] == [
+        'provider_native/codex',
+        'provider_native/codex',
+        'provider_native/codex',
     ]
-    assert [(item['kind'], item['body']) for item in native_items] == [
+    assert [(item['kind'], item['body']) for item in items] == [
         ('user_message', 'native question'),
         ('agent_reply', 'native answer'),
         ('user_message', 'clean prompt'),
     ]
     public_json = json.dumps(payload)
+    assert 'Ready for the next task.' not in public_json
+    assert 'reply-content-1' not in public_json
     assert 'hidden developer' not in public_json
     assert 'hidden context' not in public_json
     assert 'CCB_REQ_ID' not in public_json
@@ -1149,7 +1153,7 @@ def test_agent_conversation_pages_codex_native_by_record_timestamp_across_thread
         'fresh pane question',
         'fresh pane answer',
     ]
-    assert latest['conversation']['next_cursor'] == '4'
+    assert latest['conversation']['next_cursor'] == '2'
 
     _, older = service.dispatch_get(
         '/v1/projects/proj-demo/agents/mobile/conversation?namespace_epoch=4'

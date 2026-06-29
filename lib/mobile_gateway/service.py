@@ -1394,6 +1394,15 @@ def _agent_conversation_items(
     mobile_files_dir: Path | None = None,
 ) -> list[dict[str, object]]:
     view = _map(view_payload.get('view'))
+    native_items = _agent_native_conversation_items(
+        project_root,
+        project_id=project_id,
+        agent=agent,
+        mobile_files_dir=mobile_files_dir,
+    )
+    if native_items:
+        return native_items
+
     agents = [_map(item) for item in _iterable(view.get('agents'))]
     agent_record = next((item for item in agents if str(item.get('name') or '') == agent), {})
     items: list[dict[str, object]] = [
@@ -1433,21 +1442,6 @@ def _agent_conversation_items(
             }
         )
     seen_item_ids = {str(item.get('id') or '') for item in items}
-    native_items = _agent_native_conversation_items(
-        project_root,
-        project_id=project_id,
-        agent=agent,
-        mobile_files_dir=mobile_files_dir,
-    )
-    for item in native_items:
-        item_id = str(item.get('id') or '')
-        if item_id and item_id in seen_item_ids:
-            continue
-        items.append(item)
-        if item_id:
-            seen_item_ids.add(item_id)
-    if native_items:
-        return items
 
     terminal_items = _terminal_history_conversation_items(
         terminal_history,
