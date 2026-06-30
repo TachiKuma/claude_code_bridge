@@ -1939,6 +1939,7 @@ def test_terminal_open_requires_terminal_scope_and_mints_hashed_token(tmp_path: 
         'project_id': 'proj-demo',
         'agent': 'mobile',
         'window': 'main',
+        'pane_id': '%2',
     }
     assert 'tmux.sock' not in json.dumps(handle)
     assert 'ccb-demo' not in json.dumps(handle)
@@ -2073,6 +2074,15 @@ def test_terminal_websocket_streams_frames_and_rejects_replayed_input(tmp_path: 
         assert sessions
         assert sessions[0].target.socket_path == '/tmp/ccb-demo/tmux.sock'
         assert sessions[0].target.session_name == 'ccb-demo'
+        assert sessions[0].target.pane_id == '%2'
+        assert sessions[0].target.command == [
+            'tmux',
+            '-S',
+            '/tmp/ccb-demo/tmux.sock',
+            'attach-session',
+            '-t',
+            '%2',
+        ]
         assert sessions[0].target.geometry.columns == 100
         assert sessions[0].target.geometry.rows == 30
 

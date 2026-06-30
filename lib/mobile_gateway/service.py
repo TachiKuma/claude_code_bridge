@@ -982,6 +982,7 @@ class MobileGatewayService:
             terminal_id=str(record.get('terminal_id') or ''),
             socket_path=socket_path,
             session_name=session_name,
+            pane_id=_optional_text(_map(record.get('target_summary')).get('pane_id')),
             geometry=TerminalGeometry.from_mapping(record.get('geometry')),
             target_summary=_map(record.get('target_summary')),
         )
@@ -2378,6 +2379,11 @@ def _validate_terminal_summary(record: dict[str, object], view: dict[str, object
         raise MobileGatewayError('unknown terminal target agent', status_code=404)
     if window and not any(str(item.get('name') or '') == window for item in windows):
         raise MobileGatewayError('unknown terminal target window', status_code=404)
+    pane_id = _optional_text(summary.get('pane_id'))
+    if pane_id and agent:
+        matched = next((item for item in agents if str(item.get('name') or '') == agent), None)
+        if matched is None or _optional_text(matched.get('pane_id')) != pane_id:
+            raise MobileGatewayError('unknown terminal target pane', status_code=404)
 
 
 def _validate_terminal_target(
@@ -2413,12 +2419,14 @@ def _validate_terminal_target(
         matched_window = _optional_text(matched.get('window')) or window
         if window and matched_window and window != matched_window:
             raise MobileGatewayError('terminal target window does not match agent', status_code=409)
+        matched_pane_id = _optional_text(matched.get('pane_id')) or pane_id
         return {
             'target_epoch': actual_epoch,
             'target_summary': {
                 'project_id': project_id,
                 'agent': agent,
                 'window': matched_window,
+                **({'pane_id': matched_pane_id} if matched_pane_id else {}),
             },
         }
     if kind == 'window_active_pane':
