@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../agent_chat/agent_execution_status.dart';
 import '../../models/ccb_agent.dart';
 import '../../models/ccb_project_view.dart';
 import 'project_view_selection.dart';
@@ -93,14 +94,31 @@ class _WideAgentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final working = agentHasSourceWorkingActivity(agent);
+    final emphasized = selected || agent.active;
     return ListTile(
       key: ValueKey('agent-${agent.name}'),
       selected: selected,
       selectedTileColor: Theme.of(context).colorScheme.secondaryContainer,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(
+        side:
+            working
+                ? BorderSide(color: colorScheme.tertiary, width: 1.6)
+                : BorderSide.none,
+        borderRadius: BorderRadius.circular(8),
+      ),
       leading: Icon(
-        agent.active ? Icons.radio_button_checked : Icons.smart_toy,
-        size: 18,
+        emphasized ? Icons.auto_awesome_rounded : Icons.auto_awesome_outlined,
+        size: emphasized ? 20 : 18,
+        color:
+            working
+                ? colorScheme.tertiary
+                : selected
+                ? colorScheme.primary
+                : agent.active
+                ? colorScheme.tertiary
+                : colorScheme.onSurfaceVariant,
       ),
       title: Text(agent.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing:

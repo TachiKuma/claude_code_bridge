@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/ccb_mobile_localizations.dart';
 import '../../models/ccb_conversation_item.dart';
 import 'conversation_item_presentation.dart';
+
+const double _minLimitedConversationBodyHeight = 220;
+const double _conversationBodyViewportReserveHeight = 88;
 
 class ConversationBubble extends StatelessWidget {
   const ConversationBubble({
@@ -11,8 +15,11 @@ class ConversationBubble extends StatelessWidget {
     this.child,
     this.onRetry,
     this.onDownloadAttachment,
+    this.onOpenAttachment,
     this.downloadingAttachmentIds = const {},
     this.downloadedAttachmentIds = const {},
+    this.timelineViewportHeight,
+    this.isWorking = false,
     super.key,
   });
 
@@ -22,8 +29,11 @@ class ConversationBubble extends StatelessWidget {
   final Widget? child;
   final VoidCallback? onRetry;
   final ValueChanged<CcbMessageAttachment>? onDownloadAttachment;
+  final ValueChanged<CcbMessageAttachment>? onOpenAttachment;
   final Set<String> downloadingAttachmentIds;
   final Set<String> downloadedAttachmentIds;
+  final double? timelineViewportHeight;
+  final bool isWorking;
 
   void _toggleExpanded() {
     onToggleExpanded(item.id);
@@ -32,28 +42,60 @@ class ConversationBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final strings = CcbMobileLocalizations.of(context);
     final isUser = item.kind == CcbConversationItemKind.userMessage;
     final collapsible = conversationShouldCollapse(
       item,
       hasCustomChild: child != null,
     );
     final sourceLabel = visibleConversationSourceLabel(item);
-    final body = child ?? ConversationBody(
-      item: item,
-      onDownloadArtifact: onDownloadAttachment == null ? null : (fileId) {
-        final attachment = item.attachments.where((a) => a.fileId == fileId).firstOrNull;
-        if (attachment != null) {
-          onDownloadAttachment!(attachment);
-        }
-      },
+    final timestampLabel = conversationTimestampLabel(
+      context,
+      item,
+      includeDuration: MediaQuery.sizeOf(context).width >= 360,
     );
+    final body =
+        child ??
+        ConversationBody(
+          item: item,
+          onOpenArtifactActions: (fileId) {
+            final attachment =
+                item.attachments.where((a) => a.fileId == fileId).firstOrNull;
+            if (attachment == null) {
+              return;
+            }
+            _showConversationAttachmentActions(
+              context,
+              attachment: attachment,
+              onDownload:
+                  onDownloadAttachment == null
+                      ? null
+                      : () => onDownloadAttachment!(attachment),
+              onOpen:
+                  onOpenAttachment == null
+                      ? null
+                      : () => onOpenAttachment!(attachment),
+            );
+          },
+        );
     final bubbleColor =
-        isUser ? colorScheme.primaryContainer : colorScheme.surfaceContainerLow;
+        isWorking
+            ? colorScheme.tertiaryContainer.withValues(alpha: 0.54)
+            : isUser
+            ? colorScheme.primaryContainer
+            : colorScheme.surfaceContainerLow;
     final borderColor = switch (item.state) {
       CcbConversationDeliveryState.failed => colorScheme.error,
       CcbConversationDeliveryState.unconfirmed => colorScheme.tertiary,
+      _ when isWorking => colorScheme.primary,
       _ => colorScheme.outlineVariant,
     };
+    final visibleState =
+        item.state == CcbConversationDeliveryState.sent ? null : item.state;
+    final metadataColor =
+        isUser
+            ? colorScheme.onPrimaryContainer.withValues(alpha: 0.72)
+            : colorScheme.onSurfaceVariant;
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
@@ -66,87 +108,258 @@ class ConversationBubble extends StatelessWidget {
             side: BorderSide(color: borderColor),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: InkWell(
-            onTap: collapsible ? _toggleExpanded : null,
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(conversationIcon(item.kind), size: 16),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          item.title,
-                          style: Theme.of(context).textTheme.titleSmall,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (item.state != null)
-                        ConversationStateChip(
-                          key: ValueKey('conversation-state-${item.id}'),
-                          state: item.state!,
-                        ),
-                      if (collapsible)
-                        IconButton(
-                          key: ValueKey('conversation-expand-${item.id}'),
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints.tightFor(
-                            width: 32,
-                            height: 32,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: collapsible ? _toggleExpanded : null,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(conversationIcon(item.kind), size: 16),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  conversationDisplayTitle(item),
+                                  style: Theme.of(context).textTheme.titleSmall,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (timestampLabel != null) ...[
+                                const SizedBox(width: 6),
+                                Text(
+                                  timestampLabel,
+                                  key: ValueKey(
+                                    'conversation-timestamp-${item.id}',
+                                  ),
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(color: metadataColor),
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  overflow: TextOverflow.fade,
+                                ),
+                              ],
+                              if (isWorking) ...[
+                                const SizedBox(width: 8),
+                                _ConversationWorkingIndicator(
+                                  key: ValueKey(
+                                    'conversation-working-${item.id}',
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
-                          tooltip:
-                              expanded ? 'Collapse message' : 'Expand message',
-                          onPressed: _toggleExpanded,
-                          icon: Icon(
-                            expanded ? Icons.expand_less : Icons.expand_more,
-                          ),
                         ),
-                    ],
+                        if (visibleState != null)
+                          ConversationStateChip(
+                            key: ValueKey('conversation-state-${item.id}'),
+                            state: visibleState,
+                          ),
+                        if (collapsible)
+                          IconButton(
+                            key: ValueKey('conversation-expand-${item.id}'),
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints.tightFor(
+                              width: 32,
+                              height: 32,
+                            ),
+                            tooltip:
+                                expanded
+                                    ? strings.collapseMessage
+                                    : strings.expandMessage,
+                            onPressed: _toggleExpanded,
+                            icon: Icon(
+                              expanded ? Icons.expand_less : Icons.expand_more,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                  if (sourceLabel != null) ...[
-                    const SizedBox(height: 1),
-                    Text(
-                      sourceLabel,
-                      style: Theme.of(context).textTheme.bodySmall,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  const SizedBox(height: 6),
-                  if (collapsible && !expanded)
-                    ConversationPreview(item: item)
-                  else
-                    body,
-                  if (item.attachments.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    ConversationAttachmentList(
-                      item: item,
-                      onDownloadAttachment: onDownloadAttachment,
-                      downloadingAttachmentIds: downloadingAttachmentIds,
-                      downloadedAttachmentIds: downloadedAttachmentIds,
-                    ),
-                  ],
-                  if (onRetry != null) ...[
-                    const SizedBox(height: 6),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        key: ValueKey('retry-message-${item.id}'),
-                        onPressed: onRetry,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Retry'),
-                      ),
-                    ),
-                  ],
+                ),
+                if (sourceLabel != null) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    sourceLabel,
+                    style: Theme.of(context).textTheme.bodySmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
-              ),
+                const SizedBox(height: 6),
+                if (collapsible && !expanded)
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _toggleExpanded,
+                      child: ConversationPreview(item: item),
+                    ),
+                  )
+                else
+                  ConversationBodyViewport(
+                    item: item,
+                    timelineViewportHeight: timelineViewportHeight,
+                    child: body,
+                  ),
+                if (item.attachments.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  ConversationAttachmentList(
+                    item: item,
+                    onDownloadAttachment: onDownloadAttachment,
+                    onOpenAttachment: onOpenAttachment,
+                    downloadingAttachmentIds: downloadingAttachmentIds,
+                    downloadedAttachmentIds: downloadedAttachmentIds,
+                  ),
+                ],
+                if (onRetry != null) ...[
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      key: ValueKey('retry-message-${item.id}'),
+                      onPressed: onRetry,
+                      icon: const Icon(Icons.refresh),
+                      label: Text(strings.retry),
+                    ),
+                  ),
+                ],
+              ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ConversationWorkingIndicator extends StatelessWidget {
+  const _ConversationWorkingIndicator({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final label = CcbMobileLocalizations.of(context).executionStatus('Working');
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        label: label,
+        child: SizedBox.square(
+          dimension: 14,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: colorScheme.primary, width: 2),
+                ),
+              ),
+              Container(
+                width: 4,
+                height: 4,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+@visibleForTesting
+double conversationBodyViewportMaxHeight(
+  Size screenSize, {
+  double? timelineViewportHeight,
+}) {
+  final baseHeight =
+      timelineViewportHeight != null &&
+              timelineViewportHeight.isFinite &&
+              timelineViewportHeight > 0
+          ? timelineViewportHeight
+          : screenSize.height;
+  if (baseHeight <= _minLimitedConversationBodyHeight) {
+    return baseHeight;
+  }
+  return (baseHeight - _conversationBodyViewportReserveHeight)
+      .clamp(_minLimitedConversationBodyHeight, baseHeight)
+      .toDouble();
+}
+
+@visibleForTesting
+bool conversationBodyNeedsViewportLimit(
+  CcbConversationItem item, {
+  required bool hasCustomChild,
+}) {
+  if (hasCustomChild) {
+    return true;
+  }
+  return conversationShouldCollapse(item, hasCustomChild: hasCustomChild);
+}
+
+class ConversationBodyViewport extends StatefulWidget {
+  const ConversationBodyViewport({
+    required this.item,
+    required this.child,
+    this.timelineViewportHeight,
+    super.key,
+  });
+
+  final CcbConversationItem item;
+  final Widget child;
+  final double? timelineViewportHeight;
+
+  @override
+  State<ConversationBodyViewport> createState() =>
+      _ConversationBodyViewportState();
+}
+
+class _ConversationBodyViewportState extends State<ConversationBodyViewport> {
+  late final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!conversationBodyNeedsViewportLimit(
+      widget.item,
+      hasCustomChild: widget.child is! ConversationBody,
+    )) {
+      return widget.child;
+    }
+    final maxHeight = conversationBodyViewportMaxHeight(
+      MediaQuery.sizeOf(context),
+      timelineViewportHeight: widget.timelineViewportHeight,
+    );
+    return SizedBox(
+      key: ValueKey('conversation-body-viewport-${widget.item.id}'),
+      height: maxHeight,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (_) => true,
+        child: Scrollbar(
+          controller: _scrollController,
+          thumbVisibility: true,
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            primary: false,
+            padding: EdgeInsets.zero,
+            child: widget.child,
           ),
         ),
       ),
@@ -158,6 +371,7 @@ class ConversationAttachmentList extends StatelessWidget {
   const ConversationAttachmentList({
     required this.item,
     required this.onDownloadAttachment,
+    required this.onOpenAttachment,
     required this.downloadingAttachmentIds,
     required this.downloadedAttachmentIds,
     super.key,
@@ -165,6 +379,7 @@ class ConversationAttachmentList extends StatelessWidget {
 
   final CcbConversationItem item;
   final ValueChanged<CcbMessageAttachment>? onDownloadAttachment;
+  final ValueChanged<CcbMessageAttachment>? onOpenAttachment;
   final Set<String> downloadingAttachmentIds;
   final Set<String> downloadedAttachmentIds;
 
@@ -178,10 +393,14 @@ class ConversationAttachmentList extends StatelessWidget {
         for (final attachment in item.attachments)
           ConversationAttachmentChip(
             attachment: _withDownloadState(attachment),
-            onPressed:
+            onDownload:
                 onDownloadAttachment == null
                     ? null
                     : () => onDownloadAttachment!(attachment),
+            onOpen:
+                onOpenAttachment == null
+                    ? null
+                    : () => onOpenAttachment!(attachment),
           ),
       ],
     );
@@ -201,16 +420,19 @@ class ConversationAttachmentList extends StatelessWidget {
 class ConversationAttachmentChip extends StatelessWidget {
   const ConversationAttachmentChip({
     required this.attachment,
-    required this.onPressed,
+    required this.onDownload,
+    required this.onOpen,
     super.key,
   });
 
   final CcbMessageAttachment attachment;
-  final VoidCallback? onPressed;
+  final VoidCallback? onDownload;
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final strings = CcbMobileLocalizations.of(context);
     final failed = attachment.state == CcbMessageAttachmentState.failed;
     final busy =
         attachment.state == CcbMessageAttachmentState.queued ||
@@ -225,44 +447,128 @@ class ConversationAttachmentChip extends StatelessWidget {
     if (failed && errorMessage != null) {
       label.write(' - $errorMessage');
     }
-    return ActionChip(
-      key: ValueKey('conversation-attachment-chip-${attachment.fileId}'),
-      avatar:
-          busy
-              ? SizedBox.square(
-                key: ValueKey('agent-attachment-progress-${attachment.fileId}'),
-                dimension: 16,
-                child: const CircularProgressIndicator(strokeWidth: 2),
-              )
-              : Icon(
-                key: ValueKey(
-                  downloaded
-                      ? 'conversation-attachment-open-${attachment.fileId}'
-                      : 'conversation-attachment-download-${attachment.fileId}',
-                ),
-                failed
-                    ? Icons.error_outline
-                    : downloaded
-                    ? Icons.folder_open
-                    : attachment.isImage
-                    ? Icons.image_outlined
-                    : Icons.description_outlined,
-                color: failed ? theme.colorScheme.error : null,
-                size: 16,
-              ),
-      label: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 220),
-        child: Text(label.toString(), overflow: TextOverflow.ellipsis),
-      ),
-      onPressed: busy ? null : onPressed,
-      tooltip:
+    return Tooltip(
+      message:
           failed
-              ? errorMessage
+              ? errorMessage ?? ''
               : downloaded
-              ? 'Open attachment'
-              : 'Download attachment',
+              ? strings.openAttachment
+              : strings.downloadAttachment,
+      child: InkWell(
+        key: ValueKey('conversation-attachment-chip-${attachment.fileId}'),
+        borderRadius: BorderRadius.circular(16),
+        onTap:
+            busy || (onDownload == null && onOpen == null)
+                ? null
+                : () => _showAttachmentActions(context),
+        onLongPress:
+            busy || (onDownload == null && onOpen == null)
+                ? null
+                : () => _showAttachmentActions(context),
+        child: Chip(
+          avatar:
+              busy
+                  ? SizedBox.square(
+                    key: ValueKey(
+                      'agent-attachment-progress-${attachment.fileId}',
+                    ),
+                    dimension: 16,
+                    child: const CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : Icon(
+                    key: ValueKey(
+                      downloaded
+                          ? 'conversation-attachment-open-${attachment.fileId}'
+                          : 'conversation-attachment-download-${attachment.fileId}',
+                    ),
+                    failed
+                        ? Icons.error_outline
+                        : downloaded
+                        ? Icons.folder_open
+                        : attachment.isImage
+                        ? Icons.image_outlined
+                        : Icons.description_outlined,
+                    color: failed ? theme.colorScheme.error : null,
+                    size: 16,
+                  ),
+          label: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 220),
+            child: Text(label.toString(), overflow: TextOverflow.ellipsis),
+          ),
+        ),
+      ),
     );
   }
+
+  void _showAttachmentActions(BuildContext context) {
+    _showConversationAttachmentActions(
+      context,
+      attachment: attachment,
+      onDownload: onDownload,
+      onOpen: onOpen,
+    );
+  }
+}
+
+void _showConversationAttachmentActions(
+  BuildContext context, {
+  required CcbMessageAttachment attachment,
+  required VoidCallback? onDownload,
+  required VoidCallback? onOpen,
+}) {
+  final strings = CcbMobileLocalizations.of(context);
+  final download = onDownload;
+  final open = onOpen;
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) {
+      return SafeArea(
+        child: Column(
+          key: ValueKey('conversation-attachment-actions-${attachment.fileId}'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: ValueKey(
+                'conversation-attachment-action-download-${attachment.fileId}',
+              ),
+              leading: const Icon(Icons.download),
+              title: Text(strings.downloadAttachment),
+              onTap:
+                  download == null
+                      ? null
+                      : () {
+                        Navigator.of(context).pop();
+                        download();
+                      },
+            ),
+            ListTile(
+              key: ValueKey(
+                'conversation-attachment-action-open-${attachment.fileId}',
+              ),
+              leading: const Icon(Icons.open_in_new),
+              title: Text(strings.openAttachment),
+              onTap:
+                  open == null
+                      ? null
+                      : () {
+                        Navigator.of(context).pop();
+                        open();
+                      },
+            ),
+            ListTile(
+              key: ValueKey(
+                'conversation-attachment-action-cancel-${attachment.fileId}',
+              ),
+              leading: const Icon(Icons.close),
+              title: Text(strings.cancel),
+              onTap: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+      );
+    },
+  );
 }
 
 String _formatBytes(int bytes) {

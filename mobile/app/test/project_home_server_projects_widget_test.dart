@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -10,6 +12,7 @@ void main() {
   testWidgets(
     'paired gateway lists server projects before opening real project',
     (tester) async {
+      await setTestSurfaceSize(tester, const Size(390, 844));
       final profile = _pairedHost(hostId: 'server-host', deviceId: 'phone');
       final profileStore = await _profileStoreWith([profile]);
       final gatewayRepository = _ServerProjectsRepository([
@@ -70,6 +73,30 @@ void main() {
         findsOneWidget,
       );
 
+      await tester.tap(find.byKey(const ValueKey('agent-message-composer')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('agent-quick-key-tab')));
+      await tester.pumpAndSettle();
+
+      expect(gatewayTerminalTransport.requests, hasLength(1));
+      expect(
+        gatewayTerminalTransport.requests.single.attachCommand,
+        'gateway terminal stream test_ccb2/mobile',
+      );
+      expect(gatewayTerminalTransport.sessions.single.pasted, isEmpty);
+      expect(gatewayTerminalTransport.sessions.single.written, [
+        [9],
+      ]);
+
+      await tester.tap(find.byKey(const ValueKey('agent-quick-key-esc')));
+      await tester.pumpAndSettle();
+
+      expect(gatewayTerminalTransport.requests, hasLength(1));
+      expect(gatewayTerminalTransport.sessions.single.written, [
+        [9],
+        [27],
+      ]);
+
       await tester.enterText(
         find.byKey(const ValueKey('agent-message-composer')),
         'server route smoke',
@@ -77,15 +104,87 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('agent-message-send-button')));
       await tester.pumpAndSettle();
 
-      expect(gatewayRepository.submittedMessages, hasLength(1));
-      expect(
-        gatewayRepository.submittedMessages.single.body,
+      expect(gatewayRepository.submittedMessages, isEmpty);
+      expect(gatewayTerminalTransport.requests, hasLength(1));
+      expect(gatewayTerminalTransport.sessions.single.pasted, [
         'server route smoke',
+      ]);
+      expect(gatewayTerminalTransport.sessions.single.written, [
+        [9],
+        [27],
+        [13],
+      ]);
+      expect(
+        find.byKey(const ValueKey('agent-working-status')),
+        findsOneWidget,
       );
-      expect(gatewayTerminalTransport.requests, isEmpty);
-      expect(gatewayTerminalTransport.sessions, isEmpty);
+      expect(find.text('Working'), findsOneWidget);
+
+      gatewayTerminalTransport.sessions.single.addOutput('pane output ready');
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('agent-working-status')),
+        findsOneWidget,
+      );
+      expect(find.text('Working'), findsOneWidget);
+      expect(find.text('pane output ready'), findsNothing);
     },
   );
+
+  testWidgets('paired gateway auto refreshes open project execution status', (
+    tester,
+  ) async {
+    await setTestSurfaceSize(tester, const Size(390, 844));
+    final profile = _pairedHost(hostId: 'server-host', deviceId: 'phone');
+    final profileStore = await _profileStoreWith([profile]);
+    final gatewayRepository = _ServerProjectsRepository([
+      _projectFixture(
+        id: 'test_ccb2',
+        displayName: 'test_ccb2',
+        root: '/srv/ccb/test_ccb2',
+        activityState: 'idle',
+        activitySource: 'provider_pane',
+        activityReason: 'provider_prompt_idle',
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProjectHomeScreen(
+          repository: FakeMobileCcbRepository.demo(),
+          profileStore: profileStore,
+          gatewayRepositoryFactory: (_) => gatewayRepository,
+          gatewayTerminalTransportFactory: (_) => RecordingTerminalTransport(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _activatePairedGatewayListOnly(tester);
+    await tester.tap(find.byKey(const ValueKey('project-open-test_ccb2')));
+    await tester.pumpAndSettle();
+
+    expect(gatewayRepository.getProjectViewCalls, ['test_ccb2']);
+    expect(find.text('Idle'), findsOneWidget);
+
+    gatewayRepository.replaceProjects([
+      _projectFixture(
+        id: 'test_ccb2',
+        displayName: 'test_ccb2',
+        root: '/srv/ccb/test_ccb2',
+        activityState: 'active',
+        activitySource: 'codex_runtime',
+        activityReason: 'codex_working_status_line',
+      ),
+    ]);
+
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
+
+    expect(gatewayRepository.getProjectViewCalls, ['test_ccb2', 'test_ccb2']);
+    expect(find.byKey(const ValueKey('agent-working-status')), findsOneWidget);
+    expect(find.text('Working'), findsOneWidget);
+  });
 
   testWidgets('paired gateway refreshes server project list', (tester) async {
     final profile = _pairedHost(hostId: 'server-host', deviceId: 'phone');
@@ -116,6 +215,10 @@ void main() {
     expect(find.byKey(const ValueKey('project-list')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('project-list-refresh-action')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('project-list-settings-action')),
       findsOneWidget,
     );
     expect(
@@ -150,6 +253,60 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('/home/bfly/yunwei/ccb_mobile'), findsOneWidget);
+  });
+
+  testWidgets('paired gateway project list opens setup settings and returns', (
+    tester,
+  ) async {
+    final profile = _pairedHost(hostId: 'server-host', deviceId: 'phone');
+    final profileStore = await _profileStoreWith([profile]);
+    final gatewayRepository = _ServerProjectsRepository([
+      _projectFixture(
+        id: 'test_ccb2',
+        displayName: 'test_ccb2',
+        root: '/srv/ccb/test_ccb2',
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProjectHomeScreen(
+          repository: FakeMobileCcbRepository.demo(),
+          profileStore: profileStore,
+          gatewayRepositoryFactory: (_) => gatewayRepository,
+          gatewayTerminalTransportFactory: (_) => RecordingTerminalTransport(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _activatePairedGatewayListOnly(tester);
+
+    expect(find.byKey(const ValueKey('project-list')), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('project-list-settings-action')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('project-home-onboarding')),
+      findsOneWidget,
+    );
+    await expandTile(tester, const ValueKey('gateway-pairing-panel'));
+    expect(find.byKey(const ValueKey('gateway-url-field')), findsOneWidget);
+
+    tester
+        .widget<IconButton>(
+          find.byKey(const ValueKey('project-home-settings-back-button')),
+        )
+        .onPressed!();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('project-list')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('project-open-test_ccb2')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('paired gateway project list refresh failure can retry', (
@@ -199,6 +356,68 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'paired gateway project load failure can return to project list',
+    (tester) async {
+      final profile = _pairedHost(hostId: 'server-host', deviceId: 'phone');
+      final profileStore = await _profileStoreWith([profile]);
+      final gatewayRepository = _ServerProjectsRepository([
+        _projectFixture(
+          id: 'test_ccb2',
+          displayName: 'test_ccb2',
+          root: '/srv/ccb/test_ccb2',
+        ),
+      ]);
+      gatewayRepository.getProjectViewErrors['test_ccb2'] = StateError(
+        'project unavailable',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ProjectHomeScreen(
+            repository: FakeMobileCcbRepository.demo(),
+            profileStore: profileStore,
+            gatewayRepositoryFactory: (_) => gatewayRepository,
+            gatewayTerminalTransportFactory:
+                (_) => RecordingTerminalTransport(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _activatePairedGatewayListOnly(tester);
+      await tester.tap(find.byKey(const ValueKey('project-open-test_ccb2')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('project-view-load-error')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('project unavailable'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('project-view-back-to-list-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('project-view-use-fake-button')),
+        findsNothing,
+      );
+
+      gatewayRepository.getProjectViewErrors.clear();
+      await tester.tap(
+        find.byKey(const ValueKey('project-view-back-to-list-button')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('project-list')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('project-open-test_ccb2')),
+        findsOneWidget,
+      );
+      expect(gatewayRepository.listProjectsCalls, 2);
+    },
+  );
 
   testWidgets('paired back returns to server project list', (tester) async {
     final profile = _pairedHost(hostId: 'server-host', deviceId: 'phone');
@@ -269,7 +488,7 @@ GatewayPairedHost _pairedHost({
         kind: RouteProviderKind.lan,
         gatewayUrl: Uri.parse('http://127.0.0.1:8787'),
       ),
-      scopes: const {'view', 'focus', 'terminal_input', 'lifecycle'},
+      scopes: const {'view', 'focus', 'terminal_input', 'lifecycle', 'notify'},
     ),
     deviceToken: 'token-$hostId-$deviceId',
     projectId: hostId,
@@ -280,16 +499,37 @@ Map<String, Object?> _projectFixture({
   required String id,
   required String displayName,
   required String root,
+  String? activityState,
+  String? activitySource,
+  String? activityReason,
 }) {
-  final view = Map<String, Object?>.from(
-    demoProjectViewFixture['view']! as Map<String, Object?>,
-  );
+  final view =
+      jsonDecode(jsonEncode(demoProjectViewFixture['view']))
+          as Map<String, Object?>;
   view['project'] = <String, Object?>{
     'id': id,
     'root': root,
     'display_name': displayName,
     'health': 'healthy',
   };
+  if (activityState != null ||
+      activitySource != null ||
+      activityReason != null) {
+    final agents = view['agents']! as List<Object?>;
+    final targetAgent = agents.cast<Map<String, Object?>>().firstWhere(
+      (agent) => agent['name'] == 'mobile',
+      orElse: () => agents.first! as Map<String, Object?>,
+    );
+    if (activityState != null) {
+      targetAgent['activity_state'] = activityState;
+    }
+    if (activitySource != null) {
+      targetAgent['activity_source'] = activitySource;
+    }
+    if (activityReason != null) {
+      targetAgent['activity_reason'] = activityReason;
+    }
+  }
   return <String, Object?>{'view': view};
 }
 
@@ -300,6 +540,7 @@ class _ServerProjectsRepository implements MobileCcbRepository {
   final Map<String, FakeMobileCcbRepository> _delegates;
   final getProjectViewCalls = <String>[];
   final submittedMessages = <CcbAgentMessageSubmitRequest>[];
+  final getProjectViewErrors = <String, Object>{};
   Object? listProjectsError;
   var listProjectsCalls = 0;
 
@@ -323,8 +564,12 @@ class _ServerProjectsRepository implements MobileCcbRepository {
   }
 
   @override
-  Future<CcbProjectView> getProjectView(String projectId) {
+  Future<CcbProjectView> getProjectView(String projectId) async {
     getProjectViewCalls.add(projectId);
+    final error = getProjectViewErrors[projectId];
+    if (error != null) {
+      throw error;
+    }
     return _delegate(projectId).getProjectView(projectId);
   }
 

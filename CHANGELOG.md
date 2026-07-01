@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## v8.0.8 (2026-07-01)
+
+### Mobile Status And Transcript Polish
+
+- **Running Output Highlighted**: CCB Mobile now highlights the active terminal-derived output bubble when an agent is working, while avoiding stale historical reply markers.
+- **Conversation Timestamps Preserved**: submitted messages, native transcripts, comms fallback, and job-history fallback records now keep stable `sent_at` / `completed_at` / duration metadata through refreshes.
+- **Codex Runtime Status Stabilized**: source-side Codex session and pane status handling now reports interrupted turns explicitly and collapses stale no-progress display state without hiding raw diagnostics.
+- **Mobile Source Synchronized**: the Flutter app source under `mobile/app` is updated from the active mobile worktree, including scanner, theme, notification, file, transcript, and chat interaction fixes.
+- **Release Surface Synchronized**: VERSION, package.json, README mobile links, mobile app version metadata, and release notes are aligned for 8.0.8.
+
 ## v8.0.0 (2026-06-27)
 
 ### CCB Mobile Monorepo Release

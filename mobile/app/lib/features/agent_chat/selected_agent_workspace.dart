@@ -2,12 +2,14 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:file_picker/file_picker.dart';
 import 'package:mime/mime.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as p;
 
+import '../../l10n/ccb_mobile_localizations.dart';
 import '../../models/ccb_agent.dart';
 import '../../models/ccb_conversation_item.dart';
 import '../../models/ccb_project_view.dart';
@@ -22,13 +24,18 @@ import 'agent_message_submit_coordinator.dart';
 import 'agent_pane_event_coordinator.dart';
 import 'agent_pane_message_submitter.dart';
 import 'agent_terminal_history_refresh_coordinator.dart';
+import 'conversation_timeline.dart';
 import 'conversation_refresh_scheduler.dart';
+import 'pane_chat_controller.dart';
 import 'selected_agent_workspace_model.dart';
 import 'selected_agent_workspace_view.dart';
 
 const agentMessageMaxAttachments = 5;
 const agentMessageMaxAttachmentBytes = 25 * 1024 * 1024;
-const selectedAgentUserRefreshCooldown = Duration(seconds: 5);
+const selectedAgentStaleIdleRefreshThreshold = 5;
+const selectedAgentTabKeyBytes = [9];
+const selectedAgentEscapeKeyBytes = [27];
+const selectedAgentExpandScrollDuration = Duration(milliseconds: 220);
 
 class SelectedAgentWorkspace extends StatefulWidget {
   const SelectedAgentWorkspace({
@@ -39,6 +46,7 @@ class SelectedAgentWorkspace extends StatefulWidget {
     required this.agent,
     required this.enableComposerCollapse,
     required this.onRefreshView,
+    this.onUserScrollDirectionChanged,
     this.localMessageStore,
   });
 
@@ -49,6 +57,7 @@ class SelectedAgentWorkspace extends StatefulWidget {
   final CcbAgent? agent;
   final bool enableComposerCollapse;
   final Future<CcbProjectView?> Function()? onRefreshView;
+  final ValueChanged<ScrollDirection>? onUserScrollDirectionChanged;
   final AgentLocalMessageStore? localMessageStore;
 
   @override
@@ -78,7 +87,7 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
         scrollTimelineToEnd: _scrollTimelineToEnd,
       );
   late final AgentPaneMessageSubmitter _paneMessageSubmitter =
-      AgentPaneMessageSubmitter(onEvent: _paneEventCoordinator.apply);
+      AgentPaneMessageSubmitter(onEvent: _handlePaneChatEvent);
   late final AgentTerminalHistoryRefreshCoordinator
   _terminalHistoryRefreshCoordinator = AgentTerminalHistoryRefreshCoordinator(
     chatController: _chatController,
@@ -100,12 +109,18 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
       );
   late final ConversationRefreshScheduler _conversationRefreshScheduler =
       ConversationRefreshScheduler(
-        onRefresh: _loadConversation,
+        onRefresh: _refreshScheduledConversation,
         isActive: (agentName) => mounted && widget.agent?.name == agentName,
+        onStateChanged: _handleRefreshScheduleChanged,
       );
   final Set<String> _downloadingAttachmentIds = {};
   final Map<String, String> _downloadedAttachmentPaths = {};
-  final Map<String, DateTime> _lastUserRefreshAt = {};
+  final Map<String, double> _preExpansionTimelineOffsets = {};
+  final Set<String> _awaitingPaneResponseAgentNames = {};
+  final Map<String, int> _staleIdleRefreshCounts = {};
+  final Set<String> _sourceWorkingAgentNames = {};
+  final Set<String> _localExceptionStatusAgentNames = {};
+  final Map<String, String> _recentPaneOutputText = {};
   final Set<String> _pendingClearNewMessageAgents = {};
   var _nextDraftAttachmentIndex = 0;
   var _refreshingTerminalHistory = false;
@@ -145,7 +160,7 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
   void dispose() {
     unawaited(_paneMessageSubmitter.closeSessions());
     _uiControllers.dispose();
-    _conversationRefreshScheduler.cancelAll();
+    _conversationRefreshScheduler.cancelAll(notify: false);
     super.dispose();
   }
 
@@ -229,8 +244,70 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
   }
 
   void _toggleExpandedItem(String agentName, String itemId) {
+    final shouldReveal =
+        !_chatController.expandedItemIds(agentName).contains(itemId);
+    final restoreOffset =
+        shouldReveal
+            ? null
+            : _preExpansionTimelineOffsets.remove(
+              _expandedTimelineOffsetKey(agentName, itemId),
+            );
+    if (shouldReveal) {
+      final controller = _scrollController(agentName);
+      if (controller.hasClients) {
+        _preExpansionTimelineOffsets[_expandedTimelineOffsetKey(
+              agentName,
+              itemId,
+            )] =
+            controller.position.pixels;
+      }
+    }
     setState(() {
       _chatController.toggleExpandedItem(agentName, itemId);
+    });
+    if (shouldReveal) {
+      _scrollExpandedItemToTop(itemId);
+    } else if (restoreOffset != null) {
+      _restoreTimelineOffset(agentName, restoreOffset);
+    }
+  }
+
+  String _expandedTimelineOffsetKey(String agentName, String itemId) {
+    return '$agentName:$itemId';
+  }
+
+  void _scrollExpandedItemToTop(String itemId) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final itemContext = conversationTimelineItemKey(itemId).currentContext;
+      if (itemContext == null) {
+        return;
+      }
+      Scrollable.ensureVisible(
+        itemContext,
+        alignment: 0,
+        duration: selectedAgentExpandScrollDuration,
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  void _restoreTimelineOffset(String agentName, double offset) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || widget.agent?.name != agentName) {
+        return;
+      }
+      final controller = _scrollController(agentName);
+      if (!controller.hasClients) {
+        return;
+      }
+      final target = offset.clamp(
+        controller.position.minScrollExtent,
+        controller.position.maxScrollExtent,
+      );
+      controller.jumpTo(target.toDouble());
     });
   }
 
@@ -246,12 +323,15 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
   }
 
   Future<void> _refreshSelectedAgentConversationAndHistory(
-    CcbAgent agent,
-  ) async {
+    CcbAgent agent, {
+    CcbProjectView? viewOverride,
+  }) async {
     if (!mounted || widget.agent?.name != agent.name) {
       return;
     }
-    await _loadConversation(agent.name);
+    final view = viewOverride ?? widget.view;
+    final targetAgent = view.agentByName(agent.name) ?? agent;
+    await _loadConversation(agent.name, viewOverride: view);
     if (!mounted || widget.agent?.name != agent.name) {
       return;
     }
@@ -262,13 +342,30 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
         conversationHasProviderNativeItems(remoteConversation)) {
       return;
     }
-    await _refreshTerminalHistory(agent);
+    await _refreshTerminalHistory(targetAgent, viewOverride: view);
+  }
+
+  Future<void> _refreshSelectedAgentConversationAndPaneHistory(
+    CcbAgent agent, {
+    CcbProjectView? viewOverride,
+  }) async {
+    if (!mounted || widget.agent?.name != agent.name) {
+      return;
+    }
+    final view = viewOverride ?? widget.view;
+    final targetAgent = view.agentByName(agent.name) ?? agent;
+    await _loadConversation(agent.name, viewOverride: view);
+    if (!mounted || widget.agent?.name != agent.name) {
+      return;
+    }
+    await _refreshTerminalHistory(targetAgent, viewOverride: view);
   }
 
   void _collapseComposer(String agentName) {
     if (!widget.enableComposerCollapse) {
       return;
     }
+    _draftFocusNode(agentName).unfocus();
     setState(() {
       _chatController.collapseComposer(agentName);
     });
@@ -278,18 +375,25 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
     setState(() {
       _chatController.expandComposer(agentName);
     });
+    _draftFocusNode(agentName).requestFocus();
   }
 
-  Future<void> _loadConversation(String agentName) async {
+  Future<void> _loadConversation(
+    String agentName, {
+    CcbProjectView? viewOverride,
+  }) async {
     await _conversationRefreshCoordinator.load(
       repository: widget.repository,
-      view: widget.view,
+      view: viewOverride ?? widget.view,
       agentName: agentName,
       refreshView: widget.onRefreshView,
     );
   }
 
-  Future<void> _refreshTerminalHistory(CcbAgent agent) async {
+  Future<void> _refreshTerminalHistory(
+    CcbAgent agent, {
+    CcbProjectView? viewOverride,
+  }) async {
     if (_refreshingTerminalHistory) {
       return;
     }
@@ -298,7 +402,7 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
       await _terminalHistoryRefreshCoordinator.refresh(
         repository: widget.repository,
         agent: agent,
-        view: widget.view,
+        view: viewOverride ?? widget.view,
       );
     } finally {
       _refreshingTerminalHistory = false;
@@ -308,6 +412,7 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
   Future<void> _sendMessage(CcbAgent agent) async {
     final controller = _draftController(agent.name);
     final attachments = _draftAttachments(agent.name);
+    var acceptedPaneMessage = false;
 
     await _messageSubmitCoordinator.send(
       agent: agent,
@@ -321,8 +426,80 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
       onAccepted: () {
         controller.clear();
         _uiControllers.clearDraftAttachments(agent.name);
+        _localExceptionStatusAgentNames.remove(agent.name);
+        _recentPaneOutputText.remove(agent.name);
+        if (widget.usePaneInputForMessages) {
+          acceptedPaneMessage = true;
+          _awaitingPaneResponseAgentNames.add(agent.name);
+        }
       },
     );
+    if (!acceptedPaneMessage ||
+        !mounted ||
+        widget.agent?.name != agent.name ||
+        _conversationRefreshScheduler.isPending(agent.name)) {
+      return;
+    }
+    setState(() {
+      _awaitingPaneResponseAgentNames.remove(agent.name);
+    });
+  }
+
+  Future<void> _sendPaneKey(
+    CcbAgent agent, {
+    required List<int> bytes,
+    required String label,
+  }) async {
+    final outcome = await _paneMessageSubmitter.sendKey(
+      transport: widget.terminalTransport,
+      agent: agent,
+      view: widget.view,
+      refreshView: widget.onRefreshView,
+      bytes: bytes,
+    );
+    if (!mounted || widget.agent?.name != agent.name) {
+      return;
+    }
+    if (!outcome.sent) {
+      _showSnack('Could not send $label: ${outcome.error}');
+      return;
+    }
+    _refreshLatest(agent.name);
+    _scheduleConversationRefresh(agent.name);
+  }
+
+  Future<void> _sendDraftThenPaneKey(
+    CcbAgent agent, {
+    required List<int> bytes,
+    required String label,
+  }) async {
+    final controller = _draftController(agent.name);
+    final body = controller.text;
+    if (body.isEmpty) {
+      await _sendPaneKey(agent, bytes: bytes, label: label);
+      return;
+    }
+    final outcome = await _paneMessageSubmitter.sendTextThenKey(
+      transport: widget.terminalTransport,
+      agent: agent,
+      view: widget.view,
+      refreshView: widget.onRefreshView,
+      body: body,
+      bytes: bytes,
+    );
+    if (!mounted || widget.agent?.name != agent.name) {
+      return;
+    }
+    if (!outcome.sent) {
+      _showSnack('Could not send $label: ${outcome.error}');
+      return;
+    }
+    setState(() {
+      controller.clear();
+      _awaitingPaneResponseAgentNames.add(agent.name);
+    });
+    _refreshLatest(agent.name);
+    _scheduleConversationRefresh(agent.name);
   }
 
   Future<void> _pickAttachments({
@@ -431,44 +608,73 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
     }
   }
 
-  Future<void> _downloadAndOpenAttachment(
+  Future<String?> _downloadAttachment(
     CcbAgent agent,
-    CcbMessageAttachment attachment,
-  ) async {
+    CcbMessageAttachment attachment, {
+    required String projectId,
+    required bool openAfterDownload,
+  }) async {
+    if (!_isCurrentAgentSelection(projectId: projectId, agent: agent)) {
+      return null;
+    }
     try {
       final localPath = attachment.localPath;
       if (localPath != null && localPath.isNotEmpty) {
-        await _openAttachmentFile(localPath);
-        return;
+        if (openAfterDownload) {
+          await _openAttachmentFile(localPath, mimeType: attachment.mimeType);
+        }
+        return localPath;
       }
       final downloadedPath = _downloadedAttachmentPaths[attachment.fileId];
       if (downloadedPath != null) {
-        await _openAttachmentFile(downloadedPath);
-        return;
+        if (openAfterDownload) {
+          await _openAttachmentFile(
+            downloadedPath,
+            mimeType: attachment.mimeType,
+          );
+        }
+        return downloadedPath;
+      }
+      if (attachment.sizeBytes > agentMessageMaxAttachmentBytes) {
+        _showSnack('${attachment.fileName} is larger than 25 MB');
+        return null;
       }
       if (_downloadingAttachmentIds.contains(attachment.fileId)) {
-        return;
+        return null;
       }
       setState(() {
         _downloadingAttachmentIds.add(attachment.fileId);
       });
       final bytes = await widget.repository.downloadFile(
-        projectId: widget.view.project.id,
+        projectId: projectId,
         agentName: agent.name,
         fileId: attachment.fileId,
       );
+      if (bytes.length > agentMessageMaxAttachmentBytes) {
+        if (_isCurrentAgentSelection(projectId: projectId, agent: agent)) {
+          _showSnack('${attachment.fileName} is larger than 25 MB');
+        }
+        return null;
+      }
       final dir = await getApplicationDocumentsDirectory();
       final file = File(p.join(dir.path, _safeFileName(attachment.fileName)));
       await file.writeAsBytes(bytes);
-      if (!mounted) {
-        return;
+      if (!_isCurrentAgentSelection(projectId: projectId, agent: agent)) {
+        return null;
       }
       setState(() {
         _downloadedAttachmentPaths[attachment.fileId] = file.path;
       });
       _showSnack('Saved ${attachment.fileName}');
+      if (openAfterDownload) {
+        await _openAttachmentFile(file.path, mimeType: attachment.mimeType);
+      }
+      return file.path;
     } catch (error) {
-      _showSnack('Failed to open file: $error');
+      if (_isCurrentAgentSelection(projectId: projectId, agent: agent)) {
+        _showSnack('Failed to open file: $error');
+      }
+      return null;
     } finally {
       if (mounted) {
         setState(() {
@@ -478,8 +684,56 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
     }
   }
 
-  Future<void> _openAttachmentFile(String path) async {
-    await OpenFilex.open(path);
+  Future<void> _confirmAndOpenAttachment(
+    CcbAgent agent,
+    CcbMessageAttachment attachment,
+    String projectId,
+  ) async {
+    final strings = CcbMobileLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(strings.openAttachment),
+          content: Text(strings.openAttachmentQuestion(attachment.fileName)),
+          actions: [
+            TextButton(
+              key: const ValueKey('open-attachment-cancel-action'),
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(strings.cancel),
+            ),
+            FilledButton(
+              key: const ValueKey('open-attachment-confirm-action'),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(strings.open),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true ||
+        !_isCurrentAgentSelection(projectId: projectId, agent: agent)) {
+      return;
+    }
+    await _downloadAttachment(
+      agent,
+      attachment,
+      projectId: projectId,
+      openAfterDownload: true,
+    );
+  }
+
+  Future<void> _openAttachmentFile(String path, {String? mimeType}) async {
+    await OpenFilex.open(path, type: mimeType);
+  }
+
+  bool _isCurrentAgentSelection({
+    required String projectId,
+    required CcbAgent agent,
+  }) {
+    return mounted &&
+        widget.view.project.id == projectId &&
+        widget.agent?.name == agent.name;
   }
 
   void _showSnack(String message) {
@@ -489,6 +743,21 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _appendRecentPaneOutput({
+    required String agentName,
+    required String output,
+  }) {
+    final previous = _recentPaneOutputText[agentName];
+    final combined =
+        previous == null || previous.isEmpty
+            ? output
+            : '$previous${_paneOutputJoiner(previous, output)}$output';
+    final start = combined.length > 1000 ? combined.length - 1000 : 0;
+    final recent = combined.substring(start);
+    _recentPaneOutputText[agentName] = recent;
+    return recent;
   }
 
   Future<void> _retryMessage(CcbConversationItem item) async {
@@ -502,8 +771,67 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
     );
   }
 
+  void _handlePaneChatEvent(PaneChatEvent event) {
+    if (event.kind == PaneChatEventKind.output) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        final recentOutput = _appendRecentPaneOutput(
+          agentName: event.agentName,
+          output: event.body,
+        );
+        if (_paneOutputHasTerminalException(recentOutput)) {
+          _recentPaneOutputText.remove(event.agentName);
+          _clearAwaitingPaneResponse(event.agentName);
+          _localExceptionStatusAgentNames.add(event.agentName);
+        } else {
+          _localExceptionStatusAgentNames.remove(event.agentName);
+          _markAwaitingPaneResponse(event.agentName);
+        }
+      });
+      return;
+    }
+    final wasAwaiting = _awaitingPaneResponseAgentNames.contains(
+      event.agentName,
+    );
+    _clearAwaitingPaneResponse(event.agentName);
+    final changed = _paneEventCoordinator.apply(event);
+    if (wasAwaiting && mounted && !changed) {
+      setState(() {});
+    }
+  }
+
   void _scheduleConversationRefresh(String agentName) {
+    _localExceptionStatusAgentNames.remove(agentName);
+    _recentPaneOutputText.remove(agentName);
+    _markAwaitingPaneResponse(agentName);
     _conversationRefreshScheduler.schedule(agentName);
+  }
+
+  Future<void> _refreshScheduledConversation(String agentName) async {
+    final agent = widget.agent;
+    if (agent == null || agent.name != agentName) {
+      return;
+    }
+    final result = await _refreshExecutionStatusForAgent(agent);
+    if (!result.settled || !mounted || widget.agent?.name != agent.name) {
+      return;
+    }
+    _conversationRefreshScheduler.cancelAll();
+    await _refreshLatestForAgent(agent, refreshViewFirst: false);
+  }
+
+  void _handleRefreshScheduleChanged() {
+    if (!mounted) {
+      return;
+    }
+    final selectedAgentName = widget.agent?.name;
+    if (selectedAgentName != null &&
+        !_conversationRefreshScheduler.isPending(selectedAgentName)) {
+      _clearAwaitingPaneResponse(selectedAgentName);
+    }
+    setState(() {});
   }
 
   void _refreshLatest(String agentName) {
@@ -511,21 +839,103 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
     if (agent == null || agent.name != agentName) {
       return;
     }
-    unawaited(_refreshSelectedAgentConversationAndHistory(agent));
+    unawaited(_refreshLatestForAgent(agent, refreshViewFirst: true));
   }
 
-  void _refreshLatestFromUserScroll(String agentName) {
-    if (_chatController.isLoadingConversation(agentName)) {
-      return;
+  Future<void> _refreshLatestForAgent(
+    CcbAgent agent, {
+    required bool refreshViewFirst,
+  }) async {
+    var view = widget.view;
+    if (refreshViewFirst) {
+      final refreshed = await widget.onRefreshView?.call();
+      if (!mounted || widget.agent?.name != agent.name) {
+        return;
+      }
+      if (refreshed != null) {
+        view = refreshed;
+        _syncLocalExecutionStateFromView(
+          view: refreshed,
+          agentName: agent.name,
+        );
+      }
     }
-    final now = DateTime.now();
-    final previous = _lastUserRefreshAt[agentName];
-    if (previous != null &&
-        now.difference(previous) < selectedAgentUserRefreshCooldown) {
-      return;
+    await (widget.usePaneInputForMessages
+        ? _refreshSelectedAgentConversationAndPaneHistory(
+          agent,
+          viewOverride: view,
+        )
+        : _refreshSelectedAgentConversationAndHistory(
+          agent,
+          viewOverride: view,
+        ));
+  }
+
+  Future<_ExecutionSyncResult> _refreshExecutionStatusForAgent(
+    CcbAgent agent,
+  ) async {
+    final refreshed = await widget.onRefreshView?.call();
+    if (!mounted || widget.agent?.name != agent.name || refreshed == null) {
+      return _ExecutionSyncResult.pending;
     }
-    _lastUserRefreshAt[agentName] = now;
-    _refreshLatest(agentName);
+    return _syncLocalExecutionStateFromView(
+      view: refreshed,
+      agentName: agent.name,
+    );
+  }
+
+  _ExecutionSyncResult _syncLocalExecutionStateFromView({
+    required CcbProjectView view,
+    required String agentName,
+  }) {
+    final refreshedAgent = view.agentByName(agentName);
+    if (refreshedAgent == null) {
+      return _ExecutionSyncResult.pending;
+    }
+    final status = agentExecutionStatus(
+      agent: refreshedAgent,
+      isAwaitingAgentResponse: false,
+      isLoadingConversation: false,
+    );
+    if (status.state == 'working') {
+      _sourceWorkingAgentNames.add(agentName);
+      _staleIdleRefreshCounts.remove(agentName);
+      _localExceptionStatusAgentNames.remove(agentName);
+      return _ExecutionSyncResult.pending;
+    }
+    if (status.state == 'idle') {
+      final wasAwaiting = _awaitingPaneResponseAgentNames.contains(agentName);
+      final observedWorking = _sourceWorkingAgentNames.remove(agentName);
+      if (wasAwaiting && !observedWorking && !_recordStaleIdle(agentName)) {
+        return _ExecutionSyncResult.pending;
+      }
+      _clearAwaitingPaneResponse(agentName);
+      _localExceptionStatusAgentNames.remove(agentName);
+      if (wasAwaiting && observedWorking) {
+        _showSnack(
+          CcbMobileLocalizations.of(context).agentCompleted(agentName),
+        );
+        return _ExecutionSyncResult.completed;
+      }
+      return _ExecutionSyncResult.settledIdle;
+    }
+    return _ExecutionSyncResult.pending;
+  }
+
+  void _markAwaitingPaneResponse(String agentName) {
+    _awaitingPaneResponseAgentNames.add(agentName);
+    _staleIdleRefreshCounts.putIfAbsent(agentName, () => 0);
+  }
+
+  void _clearAwaitingPaneResponse(String agentName) {
+    _awaitingPaneResponseAgentNames.remove(agentName);
+    _staleIdleRefreshCounts.remove(agentName);
+  }
+
+  bool _recordStaleIdle(String agentName) {
+    final count = (_staleIdleRefreshCounts[agentName] ?? 0) + 1;
+    _staleIdleRefreshCounts[agentName] = count;
+    return count >= selectedAgentStaleIdleRefreshThreshold;
   }
 
   bool _isTimelineNearEnd(String agentName) {
@@ -611,6 +1021,12 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
       view: widget.view,
       agent: selectedAgent,
       chatController: _chatController,
+      isAwaitingAgentResponse: _awaitingPaneResponseAgentNames.contains(
+        selectedAgent.name,
+      ),
+      hasLocalExecutionException: _localExceptionStatusAgentNames.contains(
+        selectedAgent.name,
+      ),
     );
     return SelectedAgentWorkspaceView(
       repository: widget.repository,
@@ -633,7 +1049,17 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
         _removeAttachment(selectedAgent.name, localId);
       },
       onDownloadAttachment: (attachment) {
-        _downloadAndOpenAttachment(selectedAgent, attachment);
+        final projectId = widget.view.project.id;
+        _downloadAttachment(
+          selectedAgent,
+          attachment,
+          projectId: projectId,
+          openAfterDownload: false,
+        );
+      },
+      onOpenAttachment: (attachment) {
+        final projectId = widget.view.project.id;
+        _confirmAndOpenAttachment(selectedAgent, attachment, projectId);
       },
       onRetry: _retryMessage,
       onToggleExpanded: (itemId) {
@@ -646,7 +1072,10 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
         _clearNewMessageFlag(selectedAgent.name);
       },
       onUserNearEnd: () {
-        _refreshLatestFromUserScroll(selectedAgent.name);
+        _clearNewMessageFlag(selectedAgent.name);
+      },
+      onUserScrollDirectionChanged: (direction) {
+        widget.onUserScrollDirectionChanged?.call(direction);
       },
       onNearStart: () {
         _loadOlderConversation(selectedAgent.name);
@@ -662,6 +1091,20 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
       },
       onSend: () {
         _sendMessage(selectedAgent);
+      },
+      onSendTab: () {
+        _sendDraftThenPaneKey(
+          selectedAgent,
+          bytes: selectedAgentTabKeyBytes,
+          label: 'Tab',
+        );
+      },
+      onSendEscape: () {
+        _sendPaneKey(
+          selectedAgent,
+          bytes: selectedAgentEscapeKeyBytes,
+          label: 'Esc',
+        );
       },
     );
   }
@@ -716,6 +1159,51 @@ bool _isSupportedAttachment({
     return mimeType.startsWith('image/');
   }
   return _mimeTypeForExtension(extension) != null;
+}
+
+bool _paneOutputHasTerminalException(String output) {
+  final text = output.trim().toLowerCase();
+  if (text.isEmpty || text.contains('esc to interrupt')) {
+    return false;
+  }
+  return text.contains('conversation interrupted') ||
+      text.contains('request interrupted') ||
+      text.contains('interrupted by user') ||
+      text.contains('cancelled') ||
+      text.contains('canceled') ||
+      text.contains('aborted');
+}
+
+String _paneOutputJoiner(String previous, String output) {
+  if (previous.isEmpty || output.isEmpty) {
+    return '';
+  }
+  final previousEndsWithWhitespace = RegExp(r'\s$').hasMatch(previous);
+  final outputStartsWithWhitespace = RegExp(r'^\s').hasMatch(output);
+  return previousEndsWithWhitespace || outputStartsWithWhitespace ? '' : ' ';
+}
+
+class _ExecutionSyncResult {
+  const _ExecutionSyncResult({
+    required this.settled,
+    required this.isCompleted,
+  });
+
+  static const pending = _ExecutionSyncResult(
+    settled: false,
+    isCompleted: false,
+  );
+  static const settledIdle = _ExecutionSyncResult(
+    settled: true,
+    isCompleted: false,
+  );
+  static const completed = _ExecutionSyncResult(
+    settled: true,
+    isCompleted: true,
+  );
+
+  final bool settled;
+  final bool isCompleted;
 }
 
 String _safeFileName(String fileName) {

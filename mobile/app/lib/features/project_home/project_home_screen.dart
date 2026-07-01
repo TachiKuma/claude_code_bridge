@@ -1,15 +1,20 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show SynchronousFuture;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 
 import '../../app/app_factories.dart';
+import '../../app/app_theme.dart';
 import '../../app/runtime_mode.dart';
 import '../../debug/debug_profile_seed.dart';
+import '../../l10n/ccb_mobile_localizations.dart';
 import '../../models/ccb_agent.dart';
 import '../../models/ccb_notification.dart';
 import '../../models/ccb_project.dart';
 import '../../models/ccb_project_lifecycle.dart';
 import '../../models/ccb_project_view.dart';
+import '../../notifications/task_completion_notifications.dart';
 import '../../pairing/gateway_pairing.dart';
 import '../../repository/mobile_ccb_repository.dart';
 import '../../transport/gateway_route_diagnostics.dart';
@@ -19,6 +24,7 @@ import 'project_home_connection_details_panel_host.dart';
 import 'project_home_focus_coordinator.dart';
 import 'project_home_lifecycle_coordinator.dart';
 import 'project_home_notification_target.dart';
+import 'project_home_onboarding.dart';
 import 'project_home_pairing_flow.dart';
 import 'project_home_pairing_form_controller.dart';
 import 'project_home_profile_bootstrapper.dart';
@@ -28,6 +34,7 @@ import 'project_home_route_diagnostics.dart';
 import 'project_home_runtime_activation.dart';
 import 'project_home_scaffold_host.dart';
 import 'project_home_shell_state.dart';
+import 'project_home_task_completion_notifications.dart';
 import 'project_home_terminal_navigation.dart';
 import 'project_home_view_refresh.dart';
 import 'project_shell_widgets.dart';
@@ -42,6 +49,13 @@ class ProjectHomeScreen extends StatelessWidget {
     this.gatewayTerminalTransportFactory =
         defaultGatewayTerminalTransportFactory,
     this.gatewayRouteDiagnostics = defaultGatewayRouteDiagnostics,
+    this.showOnboardingWhenUnpaired = false,
+    this.autoActivateStoredProfile = false,
+    this.themePreference = CcbThemePreference.system,
+    this.onThemePreferenceChanged,
+    this.taskNotificationStreamClient,
+    this.taskCompletionLocalNotifications,
+    this.taskCompletionSeenStore,
     super.key,
   });
 
@@ -52,6 +66,14 @@ class ProjectHomeScreen extends StatelessWidget {
   final GatewayRepositoryFactory gatewayRepositoryFactory;
   final GatewayTerminalTransportFactory gatewayTerminalTransportFactory;
   final GatewayRouteDiagnosticsFactory gatewayRouteDiagnostics;
+  final bool showOnboardingWhenUnpaired;
+  final bool autoActivateStoredProfile;
+  final CcbThemePreference themePreference;
+  final ValueChanged<CcbThemePreference>? onThemePreferenceChanged;
+  final GatewayTaskCompletionNotificationStreamClient?
+  taskNotificationStreamClient;
+  final TaskCompletionLocalNotifications? taskCompletionLocalNotifications;
+  final TaskCompletionSeenDedupeStore? taskCompletionSeenStore;
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +85,13 @@ class ProjectHomeScreen extends StatelessWidget {
       gatewayRepositoryFactory: gatewayRepositoryFactory,
       gatewayTerminalTransportFactory: gatewayTerminalTransportFactory,
       gatewayRouteDiagnostics: gatewayRouteDiagnostics,
+      showOnboardingWhenUnpaired: showOnboardingWhenUnpaired,
+      autoActivateStoredProfile: autoActivateStoredProfile,
+      themePreference: themePreference,
+      onThemePreferenceChanged: onThemePreferenceChanged,
+      taskNotificationStreamClient: taskNotificationStreamClient,
+      taskCompletionLocalNotifications: taskCompletionLocalNotifications,
+      taskCompletionSeenStore: taskCompletionSeenStore,
     );
   }
 }
@@ -76,6 +105,13 @@ class _ProjectHomeView extends StatefulWidget {
     required this.gatewayRepositoryFactory,
     required this.gatewayTerminalTransportFactory,
     required this.gatewayRouteDiagnostics,
+    required this.showOnboardingWhenUnpaired,
+    required this.autoActivateStoredProfile,
+    required this.themePreference,
+    required this.onThemePreferenceChanged,
+    required this.taskNotificationStreamClient,
+    required this.taskCompletionLocalNotifications,
+    required this.taskCompletionSeenStore,
   });
 
   final MobileCcbRepository repository;
@@ -85,6 +121,14 @@ class _ProjectHomeView extends StatefulWidget {
   final GatewayRepositoryFactory gatewayRepositoryFactory;
   final GatewayTerminalTransportFactory gatewayTerminalTransportFactory;
   final GatewayRouteDiagnosticsFactory gatewayRouteDiagnostics;
+  final bool showOnboardingWhenUnpaired;
+  final bool autoActivateStoredProfile;
+  final CcbThemePreference themePreference;
+  final ValueChanged<CcbThemePreference>? onThemePreferenceChanged;
+  final GatewayTaskCompletionNotificationStreamClient?
+  taskNotificationStreamClient;
+  final TaskCompletionLocalNotifications? taskCompletionLocalNotifications;
+  final TaskCompletionSeenDedupeStore? taskCompletionSeenStore;
 
   @override
   State<_ProjectHomeView> createState() => _ProjectHomeViewState();
@@ -92,6 +136,7 @@ class _ProjectHomeView extends StatefulWidget {
 
 class _ProjectHomeViewState extends State<_ProjectHomeView> {
   static const _defaultProjectId = 'proj-demo';
+  static const _activeProjectStatusRefreshInterval = Duration(seconds: 2);
 
   final _pairingForm = ProjectHomePairingFormController();
 
@@ -112,14 +157,18 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
   bool _loadingProfiles = false;
   bool _claimingPairing = false;
   bool _checkingRoute = false;
+  bool _profilesInitialized = false;
   CcbLifecycleAction? _runningLifecycleAction;
   final _runningLifecycleActionNotifier = ValueNotifier<CcbLifecycleAction?>(
     null,
   );
+  bool _showPairingSetup = false;
   WideSidebarState _wideSidebarState = WideSidebarState.expanded;
   WideSidebarState _wideSidebarDragStartState = WideSidebarState.expanded;
   double _wideSidebarDragDelta = 0;
   bool _mobileAgentsCollapsed = false;
+  Timer? _activeProjectStatusRefreshTimer;
+  bool _activeProjectStatusRefreshInFlight = false;
 
   late final ProjectHomeProfileBootstrapper _profileBootstrapper =
       ProjectHomeProfileBootstrapper(store: widget.profileStore);
@@ -133,10 +182,22 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
   final _runtimeSessionCoordinator =
       const ProjectHomeRuntimeSessionCoordinator();
   final _viewRefreshCoordinator = const ProjectHomeViewRefreshCoordinator();
+  late final TaskCompletionNotificationController _taskNotifications;
 
   @override
   void initState() {
     super.initState();
+    _taskNotifications = TaskCompletionNotificationController(
+      streamClient:
+          widget.taskNotificationStreamClient ??
+          HttpGatewayTaskCompletionNotificationStreamClient(),
+      localNotifications:
+          widget.taskCompletionLocalNotifications ??
+          MethodChannelTaskCompletionLocalNotifications(),
+      seenStore:
+          widget.taskCompletionSeenStore ?? TaskCompletionSeenDedupeStore(),
+      onTap: _handleTaskCompletionNotificationTap,
+    );
     _activeRepository = widget.repository;
     _viewFuture = _loadActiveProjectView();
     _bootstrapProfiles();
@@ -144,7 +205,9 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
 
   @override
   void dispose() {
+    _stopActiveProjectStatusRefresh();
     _pairingForm.dispose();
+    unawaited(_taskNotifications.dispose());
     _lifecycleResultNotifier.dispose();
     _runningLifecycleActionNotifier.dispose();
     super.dispose();
@@ -152,6 +215,15 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
 
   @override
   Widget build(BuildContext context) {
+    if (_showPairingSetup) {
+      return _buildOnboardingScaffold();
+    }
+    if (_shouldShowUnpairedLoading) {
+      return const ProjectHomeOnboardingLoadingScaffold();
+    }
+    if (_shouldShowUnpairedOnboarding) {
+      return _buildOnboardingScaffold();
+    }
     final serverProjectsFuture = _serverProjectsFuture;
     if (_mode == AppRuntimeMode.pairedGateway &&
         _activeProjectId.isEmpty &&
@@ -184,7 +256,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
           selectedAgent: selectedAgent,
           repository: _activeRepository,
           terminalTransport: _terminalTransport,
-          usePaneInputForMessages: false,
+          usePaneInputForMessages: _mode == AppRuntimeMode.pairedGateway,
           mobileAgentsCollapsed: _mobileAgentsCollapsed,
           onBack: _closeProject,
           onOpenTerminal: (agentName) {
@@ -200,6 +272,8 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
           },
           onAgentSelected: _selectAgent,
           onRefreshView: _refreshActiveView,
+          onTimelineScrollDirectionChanged:
+              _handleMobileTimelineScrollDirection,
         );
       },
     );
@@ -233,7 +307,49 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
     return completer.future;
   }
 
+  bool get _shouldShowUnpairedLoading =>
+      widget.showOnboardingWhenUnpaired &&
+      _mode == AppRuntimeMode.fake &&
+      !_profilesInitialized;
+
+  bool get _shouldShowUnpairedOnboarding =>
+      widget.showOnboardingWhenUnpaired &&
+      _mode == AppRuntimeMode.fake &&
+      _profilesInitialized &&
+      _profiles.isEmpty;
+
+  Widget _buildOnboardingScaffold() {
+    return ProjectHomeOnboardingScaffold(
+      gatewayUrlController: _pairingForm.gatewayUrlController,
+      pairingCodeController: _pairingForm.pairingCodeController,
+      deviceNameController: _pairingForm.deviceNameController,
+      routeKindListenable: _pairingForm.routeKindListenable,
+      claiming: _claimingPairing,
+      loadingProfiles: _loadingProfiles,
+      themePreference: widget.themePreference,
+      onThemePreferenceChanged: widget.onThemePreferenceChanged,
+      onRouteKindChanged: (value) {
+        setState(() {
+          _setPairingRouteKind(value);
+        });
+      },
+      onScan: _scanGatewayProfile,
+      onClaim: _claimGatewayProfile,
+      onClose: _canClosePairingSetup ? _closePairingSetup : null,
+    );
+  }
+
+  bool get _canClosePairingSetup =>
+      _mode == AppRuntimeMode.pairedGateway && _profiles.isNotEmpty;
+
+  void _closePairingSetup() {
+    setState(() {
+      _showPairingSetup = false;
+    });
+  }
+
   Widget _buildProjectLoadError(Object error) {
+    final strings = CcbMobileLocalizations.of(context);
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -248,7 +364,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
                   const Icon(Icons.cloud_off_outlined, size: 48),
                   const SizedBox(height: 16),
                   Text(
-                    'Could not load project',
+                    strings.couldNotLoadProject,
                     key: const ValueKey('project-view-load-error'),
                     style: Theme.of(context).textTheme.titleLarge,
                     textAlign: TextAlign.center,
@@ -266,16 +382,24 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
                     key: const ValueKey('project-view-retry-button'),
                     onPressed: _retryActiveProjectView,
                     icon: const Icon(Icons.refresh),
-                    label: const Text('Retry'),
+                    label: Text(strings.retry),
                   ),
                   const SizedBox(height: 8),
-                  TextButton(
-                    key: const ValueKey('project-view-use-fake-button'),
-                    onPressed: () {
-                      _setRuntimeMode(AppRuntimeMode.fake);
-                    },
-                    child: const Text('Use fake demo'),
-                  ),
+                  if (_mode == AppRuntimeMode.pairedGateway)
+                    TextButton.icon(
+                      key: const ValueKey('project-view-back-to-list-button'),
+                      onPressed: _returnToServerProjectList,
+                      icon: const Icon(Icons.list_alt_outlined),
+                      label: Text(strings.backToProjects),
+                    )
+                  else
+                    TextButton(
+                      key: const ValueKey('project-view-use-fake-button'),
+                      onPressed: () {
+                        _setRuntimeMode(AppRuntimeMode.fake);
+                      },
+                      child: Text(strings.useFakeDemo),
+                    ),
                 ],
               ),
             ),
@@ -297,6 +421,16 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
     });
   }
 
+  void _returnToServerProjectList() {
+    _stopActiveProjectStatusRefresh();
+    setState(() {
+      _activeProjectId = '';
+      _openedProjectId = null;
+      _selectedAgentName = null;
+      _serverProjectsFuture = _loadServerProjects();
+    });
+  }
+
   Widget _buildServerProjectList(Future<List<CcbProject>> projectsFuture) {
     return FutureBuilder<List<CcbProject>>(
       future: projectsFuture,
@@ -314,6 +448,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
         return ProjectHomeServerProjectListHost(
           projects: projects,
           onRefreshProjects: _retryServerProjects,
+          onOpenSettings: _openPairingSettings,
           onOpenProject: _openServerProject,
         );
       },
@@ -321,6 +456,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
   }
 
   Widget _buildProjectCatalogError(Object error) {
+    final strings = CcbMobileLocalizations.of(context);
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -335,7 +471,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
                   const Icon(Icons.cloud_off_outlined, size: 48),
                   const SizedBox(height: 16),
                   Text(
-                    'Could not load projects',
+                    strings.couldNotLoadProjects,
                     key: const ValueKey('project-list-load-error'),
                     style: Theme.of(context).textTheme.titleLarge,
                     textAlign: TextAlign.center,
@@ -353,7 +489,14 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
                     key: const ValueKey('project-list-retry-button'),
                     onPressed: _retryServerProjects,
                     icon: const Icon(Icons.refresh),
-                    label: const Text('Retry'),
+                    label: Text(strings.retry),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    key: const ValueKey('project-list-back-to-setup-button'),
+                    onPressed: _returnToPairingSetup,
+                    icon: const Icon(Icons.settings_outlined),
+                    label: Text(strings.backToSetup),
                   ),
                 ],
               ),
@@ -370,7 +513,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
       selectedAgent: agent,
       repository: _activeRepository,
       terminalTransport: _terminalTransport,
-      usePaneInputForMessages: false,
+      usePaneInputForMessages: _mode == AppRuntimeMode.pairedGateway,
       sidebarState: _wideSidebarState,
       onOpenProject: () {
         _openProject(view);
@@ -486,6 +629,12 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
     });
   }
 
+  void _handleMobileTimelineScrollDirection(ScrollDirection direction) {
+    if (direction == ScrollDirection.reverse) {
+      _collapseMobileAgents();
+    }
+  }
+
   void _selectWindow(CcbProjectView view, String windowName) {
     if (_mode == AppRuntimeMode.pairedGateway) {
       _focusWindow(view, windowName);
@@ -505,6 +654,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
     setState(() {
       _openedProjectId = outcome.openedProjectId;
     });
+    _restartActiveProjectStatusRefresh();
   }
 
   void _openServerProject(CcbProject project) {
@@ -514,16 +664,12 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
       _selectedAgentName = null;
       _viewFuture = _loadActiveProjectView();
     });
+    _restartActiveProjectStatusRefresh();
   }
 
   void _closeProject() {
     if (_mode == AppRuntimeMode.pairedGateway) {
-      setState(() {
-        _activeProjectId = '';
-        _openedProjectId = null;
-        _selectedAgentName = null;
-        _serverProjectsFuture = _loadServerProjects();
-      });
+      _returnToServerProjectList();
       return;
     }
     final outcome = closeProjectHomeProject();
@@ -556,8 +702,11 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
           _profiles = result.profiles;
           _selectedProfile = result.selectedProfile;
           _loadingProfiles = false;
+          _profilesInitialized = true;
         });
-        final activateProfile = result.activateProfile;
+        final activateProfile =
+            result.activateProfile ??
+            (widget.autoActivateStoredProfile ? result.selectedProfile : null);
         if (activateProfile != null) {
           _activateGatewayProfile(activateProfile);
         }
@@ -586,10 +735,17 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
           _profiles = result.profiles;
           _selectedProfile = result.selectedProfile;
           _loadingProfiles = false;
+          _profilesInitialized = true;
         });
+        final activateProfile =
+            widget.autoActivateStoredProfile ? result.selectedProfile : null;
+        if (activateProfile != null) {
+          _activateGatewayProfile(activateProfile);
+        }
       case ProjectHomeProfileLoadKind.failure:
         setState(() {
           _loadingProfiles = false;
+          _profilesInitialized = true;
         });
     }
   }
@@ -597,6 +753,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
   void _setRuntimeMode(AppRuntimeMode mode) {
     switch (mode) {
       case AppRuntimeMode.fake:
+        _stopActiveProjectStatusRefresh();
         final reset = resetProjectHomeFakeRuntime(
           defaultProjectId: _defaultProjectId,
         );
@@ -606,6 +763,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
         );
         setState(() {
           _mode = mode;
+          _showPairingSetup = false;
           _activeRepository = session.repository;
           _activeProjectId = session.activeProjectId;
           _serverProjectsFuture = null;
@@ -614,6 +772,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
           _terminalTransport = session.terminalTransport;
           _viewFuture = session.viewFuture;
         });
+        unawaited(_taskNotifications.stop());
         _lifecycleResultNotifier.value = null;
       case AppRuntimeMode.pairedGateway:
         final selection = selectProjectHomePairedRuntimeProfile(
@@ -646,9 +805,16 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
       repositoryFactory: widget.gatewayRepositoryFactory,
       terminalTransportFactory: widget.gatewayTerminalTransportFactory,
     );
+    // FutureBuilder attaches on the next build; register an error listener now
+    // so immediate DNS/socket failures render in the error page.
+    unawaited(
+      session.projectsFuture.catchError((Object _) => const <CcbProject>[]),
+    );
     final profile = session.activation.profile;
+    _stopActiveProjectStatusRefresh();
     setState(() {
       _mode = AppRuntimeMode.pairedGateway;
+      _showPairingSetup = false;
       _selectedProfile = profile;
       _routeDiagnostics = null;
       _activeRepository = session.repository;
@@ -659,6 +825,31 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
       _terminalTransport = session.terminalTransport;
     });
     _lifecycleResultNotifier.value = null;
+    _startTaskCompletionNotifications(profile);
+  }
+
+  void _returnToPairingSetup() {
+    _stopActiveProjectStatusRefresh();
+    unawaited(_taskNotifications.stop());
+    setState(() {
+      _mode = AppRuntimeMode.fake;
+      _showPairingSetup = true;
+      _activeRepository = widget.repository;
+      _activeProjectId = _defaultProjectId;
+      _serverProjectsFuture = null;
+      _openedProjectId = null;
+      _selectedAgentName = null;
+      _terminalTransport = null;
+      _routeDiagnostics = null;
+      _viewFuture = _loadActiveProjectView();
+    });
+    _lifecycleResultNotifier.value = null;
+  }
+
+  void _openPairingSettings() {
+    setState(() {
+      _showPairingSetup = true;
+    });
   }
 
   Future<void> _scanGatewayProfile() async {
@@ -832,7 +1023,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
       }
       final refreshed = outcome.refreshedView!;
       setState(() {
-        _viewFuture = Future<CcbProjectView>.value(refreshed);
+        _viewFuture = SynchronousFuture(refreshed);
         _selectedAgentName = outcome.selectedAgentName;
       });
       return refreshed;
@@ -841,6 +1032,64 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
       _showSnack(outcome.snackMessage!);
     }
     return null;
+  }
+
+  bool get _shouldRefreshActiveProjectStatus =>
+      _mode == AppRuntimeMode.pairedGateway &&
+      !_showPairingSetup &&
+      _activeProjectId.isNotEmpty &&
+      _openedProjectId == _activeProjectId;
+
+  void _restartActiveProjectStatusRefresh() {
+    _stopActiveProjectStatusRefresh();
+    if (!_shouldRefreshActiveProjectStatus) {
+      return;
+    }
+    _activeProjectStatusRefreshTimer = Timer.periodic(
+      _activeProjectStatusRefreshInterval,
+      (_) {
+        unawaited(_refreshActiveProjectStatus());
+      },
+    );
+  }
+
+  void _stopActiveProjectStatusRefresh() {
+    _activeProjectStatusRefreshTimer?.cancel();
+    _activeProjectStatusRefreshTimer = null;
+    _activeProjectStatusRefreshInFlight = false;
+  }
+
+  Future<void> _refreshActiveProjectStatus() async {
+    if (!_shouldRefreshActiveProjectStatus ||
+        _activeProjectStatusRefreshInFlight) {
+      return;
+    }
+    _activeProjectStatusRefreshInFlight = true;
+    final projectId = _activeProjectId;
+    try {
+      final current = await _viewFuture;
+      final refreshed = await _activeRepository
+          .getProjectView(projectId)
+          .timeout(projectHomeRuntimeViewLoadTimeout);
+      if (!mounted ||
+          projectId != _activeProjectId ||
+          !_shouldRefreshActiveProjectStatus ||
+          _sameProjectViewActivity(current, refreshed)) {
+        return;
+      }
+      setState(() {
+        _viewFuture = SynchronousFuture(
+          _projectViewWithRefreshedActivity(
+            current: current,
+            refreshed: refreshed,
+          ),
+        );
+      });
+    } catch (_) {
+      // Status polling is best-effort; explicit refresh still surfaces errors.
+    } finally {
+      _activeProjectStatusRefreshInFlight = false;
+    }
   }
 
   Future<CcbProjectView?> _focusAgent(
@@ -976,24 +1225,12 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
         loadingProfiles: _loadingProfiles,
         checkingRoute: _checkingRoute,
         runningLifecycleActionListenable: _runningLifecycleActionNotifier,
-        gatewayUrlController: _pairingForm.gatewayUrlController,
-        pairingCodeController: _pairingForm.pairingCodeController,
-        deviceNameController: _pairingForm.deviceNameController,
-        routeKindListenable: _pairingForm.routeKindListenable,
-        claiming: _claimingPairing,
         onModeChanged: _setRuntimeMode,
         onProfileSelected: _selectGatewayProfile,
         onCheckRoute: _checkGatewayRoute,
         onLifecycleAction: (action) {
           _requestLifecycle(view, action);
         },
-        onRouteKindChanged: (value) {
-          setState(() {
-            _setPairingRouteKind(value);
-          });
-        },
-        onScan: _scanGatewayProfile,
-        onClaim: _claimGatewayProfile,
       ),
     );
   }
@@ -1025,9 +1262,141 @@ class _ProjectHomeViewState extends State<_ProjectHomeView> {
     _showSnack(outcome.snackMessage);
   }
 
+  void _startTaskCompletionNotifications(GatewayPairedHost profile) {
+    unawaited(
+      _taskNotifications.start(profile).then((status) {
+        if (!mounted) {
+          return;
+        }
+        if (status ==
+            TaskCompletionNotificationSubscriptionStatus.missingNotifyScope) {
+          _showSnack(taskCompletionMissingNotifyScopeMessage);
+        }
+      }),
+    );
+  }
+
+  void _handleTaskCompletionNotificationTap(TaskCompletionNotificationTap tap) {
+    unawaited(_openTaskCompletionNotificationTap(tap));
+  }
+
+  Future<void> _openTaskCompletionNotificationTap(
+    TaskCompletionNotificationTap tap,
+  ) async {
+    if (_mode != AppRuntimeMode.pairedGateway) {
+      return;
+    }
+    CcbProjectView? targetView;
+    try {
+      targetView = await _activeRepository
+          .getProjectView(tap.projectId)
+          .timeout(projectHomeRuntimeViewLoadTimeout);
+    } catch (_) {
+      targetView = null;
+    }
+    if (!mounted) {
+      return;
+    }
+    final route = resolveProjectHomeTaskCompletionNotificationTap(
+      tap: tap,
+      targetView: targetView,
+    );
+    switch (route.kind) {
+      case ProjectHomeTaskCompletionNotificationRouteKind.openProjectAgent:
+        setState(() {
+          _activeProjectId = route.projectId!;
+          _openedProjectId = route.projectId;
+          _selectedAgentName = route.agentName;
+          _serverProjectsFuture = null;
+          _viewFuture = SynchronousFuture(route.view!);
+        });
+        _restartActiveProjectStatusRefresh();
+      case ProjectHomeTaskCompletionNotificationRouteKind.projectList:
+        _stopActiveProjectStatusRefresh();
+        setState(() {
+          _activeProjectId = '';
+          _openedProjectId = null;
+          _selectedAgentName = null;
+          _serverProjectsFuture = _loadServerProjects();
+        });
+    }
+  }
+
   void _showSnack(String message) {
     final messenger = ScaffoldMessenger.of(context);
     messenger.clearSnackBars();
     messenger.showSnackBar(SnackBar(content: Text(message)));
   }
+}
+
+CcbProjectView _projectViewWithRefreshedActivity({
+  required CcbProjectView current,
+  required CcbProjectView refreshed,
+}) {
+  return CcbProjectView(
+    project: refreshed.project,
+    namespaceEpoch: refreshed.namespaceEpoch,
+    tmuxSocketPath: refreshed.tmuxSocketPath,
+    tmuxSessionName: refreshed.tmuxSessionName,
+    activeWindow: refreshed.activeWindow,
+    activePaneId: refreshed.activePaneId,
+    windows: refreshed.windows,
+    agents: refreshed.agents,
+    contentItems: current.contentItems,
+    notifications: current.notifications,
+    terminalHistories: current.terminalHistories,
+  );
+}
+
+bool _sameProjectViewActivity(
+  CcbProjectView current,
+  CcbProjectView refreshed,
+) {
+  return _projectViewActivitySignature(current) ==
+      _projectViewActivitySignature(refreshed);
+}
+
+String _projectViewActivitySignature(CcbProjectView view) {
+  final buffer =
+      StringBuffer()
+        ..write(view.namespaceEpoch)
+        ..write('|')
+        ..write(view.activeWindow)
+        ..write('|')
+        ..write(view.activePaneId);
+  for (final window in view.windows) {
+    buffer
+      ..write('|w:')
+      ..write(window.name)
+      ..write(',')
+      ..write(window.active)
+      ..write(',')
+      ..write(window.order)
+      ..write(',')
+      ..write(window.agents.join(','));
+  }
+  for (final agent in view.agents) {
+    buffer
+      ..write('|a:')
+      ..write(agent.name)
+      ..write(',')
+      ..write(agent.active)
+      ..write(',')
+      ..write(agent.queueDepth)
+      ..write(',')
+      ..write(agent.runtimeHealth)
+      ..write(',')
+      ..write(agent.activityState)
+      ..write(',')
+      ..write(agent.activitySource)
+      ..write(',')
+      ..write(agent.activityReason)
+      ..write(',')
+      ..write(agent.activitySymbol)
+      ..write(',')
+      ..write(agent.activityColor)
+      ..write(',')
+      ..write(agent.lastProgressAt);
+  }
+  return buffer.toString();
 }

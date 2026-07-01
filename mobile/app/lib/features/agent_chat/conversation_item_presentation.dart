@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
+import '../../l10n/ccb_mobile_localizations.dart';
 import '../../models/ccb_conversation_item.dart';
+import '../../platform/external_url_opener.dart';
 import 'agent_chat_state_helpers.dart';
+import 'content_text_styles.dart';
 
 class ConversationPreview extends StatelessWidget {
   const ConversationPreview({required this.item, super.key});
@@ -24,12 +27,12 @@ class ConversationPreview extends StatelessWidget {
 class ConversationBody extends StatelessWidget {
   const ConversationBody({
     required this.item,
-    this.onDownloadArtifact,
+    this.onOpenArtifactActions,
     super.key,
   });
 
   final CcbConversationItem item;
-  final ValueChanged<String>? onDownloadArtifact;
+  final ValueChanged<String>? onOpenArtifactActions;
 
   @override
   Widget build(BuildContext context) {
@@ -38,12 +41,15 @@ class ConversationBody extends StatelessWidget {
         key: ValueKey('markdown-body-conversation-${item.id}'),
         data: item.body,
         selectable: true,
+        styleSheet: ccbMarkdownStyleSheet(context),
         onTapLink: (text, href, title) {
           if (href != null && href.startsWith('ccb-artifact://')) {
             final fileId = href.replaceFirst('ccb-artifact://', '');
-            if (onDownloadArtifact != null) {
-              onDownloadArtifact!(fileId);
+            if (onOpenArtifactActions != null) {
+              onOpenArtifactActions!(fileId);
             }
+          } else if (isOpenableExternalUrl(href)) {
+            confirmAndOpenExternalUrl(context, href!);
           } else {
             showBlockedConversationLink(context, href ?? text);
           }
@@ -151,6 +157,32 @@ bool shouldRenderConversationMarkdown(CcbConversationItem item) {
   };
 }
 
+String conversationDisplayTitle(CcbConversationItem item) {
+  if (item.kind == CcbConversationItemKind.agentReply &&
+      !isTerminalDerivedConversationItem(item)) {
+    final agentName = item.agentName.trim();
+    return agentName.isEmpty ? 'Agent' : agentName;
+  }
+  return item.title;
+}
+
+String? conversationTimestampLabel(
+  BuildContext context,
+  CcbConversationItem item, {
+  bool includeDuration = true,
+}) {
+  final time = _conversationDisplayTime(item);
+  final duration =
+      includeDuration ? _conversationExecutionDuration(item) : null;
+  if (time == null && duration == null) {
+    return null;
+  }
+  return [
+    if (time != null) _formatConversationTime(context, time),
+    if (duration != null) _formatConversationDuration(duration),
+  ].join(' · ');
+}
+
 String? visibleConversationSourceLabel(CcbConversationItem item) {
   final source = item.source?.trim();
   if (source == null || source.isEmpty) {
@@ -170,6 +202,61 @@ String? visibleConversationSourceLabel(CcbConversationItem item) {
     CcbConversationItemKind.callbackRequest ||
     CcbConversationItemKind.commsItem => null,
   };
+}
+
+DateTime? _conversationDisplayTime(CcbConversationItem item) {
+  return switch (item.kind) {
+    CcbConversationItemKind.userMessage => item.sentAt,
+    CcbConversationItemKind.agentReply => item.sentAt ?? item.completedAt,
+    _ => null,
+  };
+}
+
+Duration? _conversationExecutionDuration(CcbConversationItem item) {
+  if (item.kind != CcbConversationItemKind.agentReply) {
+    return null;
+  }
+  final durationMs = item.durationMs;
+  if (durationMs != null && durationMs >= 0) {
+    return Duration(milliseconds: durationMs);
+  }
+  final startedAt = item.startedAt;
+  final completedAt = item.completedAt;
+  if (startedAt == null || completedAt == null) {
+    return null;
+  }
+  final duration = completedAt.difference(startedAt);
+  return duration.isNegative ? null : duration;
+}
+
+String _formatConversationTime(BuildContext context, DateTime value) {
+  final local = value.toLocal();
+  final mediaQuery = MediaQuery.maybeOf(context);
+  final time = MaterialLocalizations.of(context).formatTimeOfDay(
+    TimeOfDay.fromDateTime(local),
+    alwaysUse24HourFormat: mediaQuery?.alwaysUse24HourFormat ?? false,
+  );
+  final now = DateTime.now().toLocal();
+  if (local.year == now.year &&
+      local.month == now.month &&
+      local.day == now.day) {
+    return time;
+  }
+  return '${local.month}/${local.day} $time';
+}
+
+String _formatConversationDuration(Duration duration) {
+  final totalSeconds = duration.inSeconds;
+  final hours = totalSeconds ~/ 3600;
+  final minutes = (totalSeconds % 3600) ~/ 60;
+  final seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return '${hours}h ${minutes}m';
+  }
+  if (minutes > 0) {
+    return '${minutes}m ${seconds}s';
+  }
+  return '${seconds}s';
 }
 
 IconData conversationIcon(CcbConversationItemKind kind) {
@@ -199,4 +286,55 @@ void showBlockedConversationLink(BuildContext context, String text) {
   ScaffoldMessenger.of(
     context,
   ).showSnackBar(SnackBar(content: Text('Open links from raw source: $text')));
+}
+
+bool isOpenableExternalUrl(String? href) {
+  final uri = href == null ? null : Uri.tryParse(href);
+  if (uri == null || !uri.hasScheme) {
+    return false;
+  }
+  return uri.scheme == 'http' || uri.scheme == 'https';
+}
+
+Future<void> confirmAndOpenExternalUrl(BuildContext context, String url) async {
+  final strings = CcbMobileLocalizations.of(context);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: Text(strings.openUrl),
+        content: Text(strings.openUrlQuestion(url)),
+        actions: [
+          TextButton(
+            key: const ValueKey('open-url-cancel-action'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(strings.cancel),
+          ),
+          FilledButton(
+            key: const ValueKey('open-url-confirm-action'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(strings.open),
+          ),
+        ],
+      );
+    },
+  );
+  if (confirmed != true || !context.mounted) {
+    return;
+  }
+  try {
+    final opened = await openExternalUrl(url);
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(strings.couldNotOpenUrl)));
+    }
+  } catch (error) {
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${strings.couldNotOpenUrl}: $error')),
+    );
+  }
 }
