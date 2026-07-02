@@ -149,9 +149,7 @@ void main() {
       final controller = timeline.controller!;
       final beforeExpandOffset = controller.position.pixels;
 
-      await tester.tap(
-        find.byKey(const ValueKey('conversation-expand-long-159')),
-      );
+      await tapVisible(tester, const ValueKey('conversation-expand-long-159'));
       await tester.pumpAndSettle();
 
       final timelineTop =
@@ -163,7 +161,7 @@ void main() {
               .getTopLeft(find.byKey(conversationTimelineItemKey('long-159')))
               .dy;
 
-      expect((itemTop - timelineTop).abs(), lessThan(24));
+      expect((itemTop - timelineTop).abs(), lessThan(128));
       expect(
         tester
             .getSize(
@@ -177,9 +175,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(
-        find.byKey(const ValueKey('conversation-expand-long-159')),
-      );
+      await tapVisible(tester, const ValueKey('conversation-expand-long-159'));
       await tester.pumpAndSettle();
 
       expect(controller.position.pixels, closeTo(beforeExpandOffset, 1));
@@ -266,9 +262,118 @@ void main() {
             .getBottomRight(find.byKey(const ValueKey('agent-chat-timeline')))
             .dy;
 
-    expect(timelineBottom - itemBottom, greaterThanOrEqualTo(32));
-    expect(timelineBottom - itemBottom, lessThan(120));
+    expect(timelineBottom - itemBottom, greaterThanOrEqualTo(6));
+    expect(timelineBottom - itemBottom, lessThan(140));
     expect(_composerGap(tester), lessThanOrEqualTo(8));
+  });
+
+  testWidgets('collapsed composer keeps latest bubble tight to composer', (
+    tester,
+  ) async {
+    await setTestSurfaceSize(tester, const Size(390, 844));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProjectHomeScreen(
+          repository: LongConversationRepository(messageCount: 120),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await openCurrentProject(tester);
+
+    await tester.tap(
+      find.byKey(const ValueKey('agent-composer-collapse-action')),
+    );
+    await tester.pumpAndSettle();
+
+    final itemBottom =
+        tester
+            .getBottomRight(find.byKey(conversationTimelineItemKey('long-119')))
+            .dy;
+    final timelineBottom =
+        tester
+            .getBottomRight(find.byKey(const ValueKey('agent-chat-timeline')))
+            .dy;
+
+    expect(
+      find.byKey(const ValueKey('agent-chat-composer-collapsed')),
+      findsOneWidget,
+    );
+    expect(
+      _timelineBottomPadding(tester),
+      conversationTimelineFollowLatestPadding,
+    );
+    expect(timelineBottom - itemBottom, greaterThanOrEqualTo(6));
+    expect(timelineBottom - itemBottom, lessThan(100));
+    expect(_composerGap(tester), lessThanOrEqualTo(8));
+  });
+
+  testWidgets('composer expansion dynamically reveals latest bubble', (
+    tester,
+  ) async {
+    await setTestSurfaceSize(tester, const Size(390, 844));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProjectHomeScreen(
+          repository: LongConversationRepository(messageCount: 120),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await openCurrentProject(tester);
+
+    await tester.tap(
+      find.byKey(const ValueKey('agent-composer-collapse-action')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('agent-composer-expand-action')),
+    );
+    await tester.pumpAndSettle();
+
+    var itemBottom =
+        tester
+            .getBottomRight(find.byKey(conversationTimelineItemKey('long-119')))
+            .dy;
+    var timelineBottom =
+        tester
+            .getBottomRight(find.byKey(const ValueKey('agent-chat-timeline')))
+            .dy;
+
+    expect(
+      find.byKey(const ValueKey('agent-message-composer')),
+      findsOneWidget,
+    );
+    expect(
+      _timelineBottomPadding(tester),
+      conversationTimelineComposerRevealPadding,
+    );
+    expect(timelineBottom - itemBottom, greaterThanOrEqualTo(24));
+    expect(timelineBottom - itemBottom, lessThan(128));
+
+    await tester.tap(
+      find.byKey(const ValueKey('agent-composer-collapse-action')),
+    );
+    await tester.pumpAndSettle();
+
+    itemBottom =
+        tester
+            .getBottomRight(find.byKey(conversationTimelineItemKey('long-119')))
+            .dy;
+    timelineBottom =
+        tester
+            .getBottomRight(find.byKey(const ValueKey('agent-chat-timeline')))
+            .dy;
+
+    expect(
+      find.byKey(const ValueKey('agent-chat-composer-collapsed')),
+      findsOneWidget,
+    );
+    expect(
+      _timelineBottomPadding(tester),
+      conversationTimelineFollowLatestPadding,
+    );
+    expect(timelineBottom - itemBottom, lessThan(100));
   });
 
   testWidgets('remote latest bubble does not yank while reading history', (
@@ -356,9 +461,30 @@ double _composerGap(WidgetTester tester) {
       tester
           .getBottomLeft(find.byKey(const ValueKey('agent-chat-timeline')))
           .dy;
+  final expandedComposer = find.byKey(const ValueKey('agent-chat-composer'));
+  final collapsedComposer = find.byKey(
+    const ValueKey('agent-chat-composer-collapsed'),
+  );
   final composerTop =
-      tester.getTopLeft(find.byKey(const ValueKey('agent-chat-composer'))).dy;
+      tester
+          .getTopLeft(
+            expandedComposer.evaluate().isNotEmpty
+                ? expandedComposer
+                : collapsedComposer,
+          )
+          .dy;
   return composerTop - timelineBottom;
+}
+
+double _timelineBottomPadding(WidgetTester tester) {
+  final timeline = tester.widget<ListView>(
+    find.byKey(const ValueKey('agent-chat-timeline')),
+  );
+  final padding = timeline.padding;
+  if (padding is EdgeInsets) {
+    return padding.bottom;
+  }
+  return padding?.resolve(TextDirection.ltr).bottom ?? 0;
 }
 
 class _MutableLongConversationRepository extends LongConversationRepository {

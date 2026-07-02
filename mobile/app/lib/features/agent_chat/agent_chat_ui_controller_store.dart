@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 
 import '../../models/ccb_conversation_item.dart';
 import 'conversation_timeline.dart';
@@ -87,14 +86,7 @@ class AgentChatUiControllerStore {
         }
         return;
       }
-      final targetContext =
-          targetItemId == null
-              ? null
-              : conversationTimelineItemKey(targetItemId).currentContext;
-      final target =
-          targetContext == null
-              ? controller.position.maxScrollExtent
-              : _comfortableRevealOffset(controller, targetContext);
+      final target = controller.position.maxScrollExtent;
       final current = controller.position.pixels;
       if ((target - current).abs() > 1) {
         unawaited(
@@ -114,27 +106,6 @@ class AgentChatUiControllerStore {
         );
       }
     });
-  }
-
-  double _comfortableRevealOffset(
-    ScrollController controller,
-    BuildContext targetContext,
-  ) {
-    final renderObject = targetContext.findRenderObject();
-    final viewport =
-        renderObject == null
-            ? null
-            : RenderAbstractViewport.maybeOf(renderObject);
-    if (renderObject == null || viewport == null) {
-      return controller.position.maxScrollExtent;
-    }
-    final revealedBottom = viewport.getOffsetToReveal(renderObject, 1).offset;
-    return (revealedBottom + conversationTimelineFollowLatestPadding)
-        .clamp(
-          controller.position.minScrollExtent,
-          controller.position.maxScrollExtent,
-        )
-        .toDouble();
   }
 
   void dispose() {

@@ -11,7 +11,8 @@ import 'content_reader.dart';
 import 'conversation_bubble.dart';
 import 'readable_terminal_history_panel.dart';
 
-const double conversationTimelineFollowLatestPadding = 40;
+const double conversationTimelineFollowLatestPadding = 6;
+const double conversationTimelineComposerRevealPadding = 32;
 const double conversationTimelineExpandedRevealPadding = 64;
 const double conversationTimelineNearEndThreshold = 120;
 
@@ -38,6 +39,7 @@ class ConversationTimeline extends StatelessWidget {
     required this.hasOlderItems,
     required this.onDownloadAttachment,
     required this.onOpenAttachment,
+    this.bottomRevealPadding = conversationTimelineFollowLatestPadding,
     this.workingItemId,
     super.key,
   });
@@ -63,6 +65,7 @@ class ConversationTimeline extends StatelessWidget {
   final bool hasOlderItems;
   final ValueChanged<CcbMessageAttachment> onDownloadAttachment;
   final ValueChanged<CcbMessageAttachment> onOpenAttachment;
+  final double bottomRevealPadding;
   final String? workingItemId;
 
   @override
@@ -95,7 +98,7 @@ class ConversationTimeline extends StatelessWidget {
         builder: (context, constraints) {
           final bottomReadPadding =
               (expandedItemIds.isEmpty
-                      ? conversationTimelineFollowLatestPadding
+                      ? bottomRevealPadding
                       : conversationTimelineExpandedRevealPadding)
                   .clamp(0.0, constraints.maxHeight)
                   .toDouble();

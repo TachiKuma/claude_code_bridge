@@ -84,7 +84,8 @@ class SelectedAgentWorkspaceController {
   }
 }
 
-class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
+class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace>
+    with WidgetsBindingObserver {
   final AgentChatController _chatController = AgentChatController();
   final AgentChatUiControllerStore _uiControllers =
       AgentChatUiControllerStore();
@@ -134,11 +135,14 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
   final Set<String> _localExceptionStatusAgentNames = {};
   final Map<String, String> _recentPaneOutputText = {};
   final Set<String> _pendingClearNewMessageAgents = {};
+  FocusNode? _observedDraftFocusNode;
+  String? _observedDraftFocusAgentName;
   var _nextDraftAttachmentIndex = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.controller?._attachRefreshLatest(_refreshSelectedAgentLatest);
     _restoreLocalMessagesForSelectedAgent();
     _loadSelectedAgentConversation();
@@ -186,11 +190,22 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _observedDraftFocusNode?.removeListener(_handleDraftFocusChanged);
     widget.controller?._detachRefreshLatest();
     unawaited(_paneMessageSubmitter.closeSessions());
     _uiControllers.dispose();
     _conversationRefreshScheduler.cancelAll(notify: false);
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    final agentName = widget.agent?.name;
+    if (agentName != null) {
+      _keepLatestVisibleAfterComposerChange(agentName);
+    }
   }
 
   TextEditingController _draftController(String agentName) {
@@ -199,6 +214,25 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
 
   FocusNode _draftFocusNode(String agentName) {
     return _uiControllers.draftFocusNode(agentName);
+  }
+
+  void _observeDraftFocusNode(String agentName, FocusNode node) {
+    if (_observedDraftFocusNode == node &&
+        _observedDraftFocusAgentName == agentName) {
+      return;
+    }
+    _observedDraftFocusNode?.removeListener(_handleDraftFocusChanged);
+    _observedDraftFocusNode = node;
+    _observedDraftFocusAgentName = agentName;
+    node.addListener(_handleDraftFocusChanged);
+  }
+
+  void _handleDraftFocusChanged() {
+    final agentName = _observedDraftFocusAgentName;
+    if (agentName == null || !mounted || widget.agent?.name != agentName) {
+      return;
+    }
+    _keepLatestVisibleAfterComposerChange(agentName);
   }
 
   List<CcbMessageAttachment> _draftAttachments(String agentName) {
@@ -366,17 +400,25 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
     if (!widget.enableComposerCollapse) {
       return;
     }
+    final wasNearLatest = _isTimelineNearEnd(agentName);
     _draftFocusNode(agentName).unfocus();
     setState(() {
       _chatController.collapseComposer(agentName);
     });
+    if (wasNearLatest) {
+      _scrollTimelineToEnd(agentName);
+    }
   }
 
   void _expandComposer(String agentName) {
+    final wasNearLatest = _isTimelineNearEnd(agentName);
     setState(() {
       _chatController.expandComposer(agentName);
     });
     _draftFocusNode(agentName).requestFocus();
+    if (wasNearLatest) {
+      _scrollTimelineToEnd(agentName);
+    }
   }
 
   Future<void> _loadConversation(
@@ -963,6 +1005,13 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
     return _uiControllers.isTimelineNearEnd(agentName);
   }
 
+  void _keepLatestVisibleAfterComposerChange(String agentName) {
+    if (!_isTimelineNearEnd(agentName)) {
+      return;
+    }
+    _scrollTimelineToEnd(agentName);
+  }
+
   Future<void> _loadOlderConversation(String agentName) async {
     if (!_chatController.hasOlderConversation(agentName) ||
         _chatController.isLoadingConversation(agentName)) {
@@ -1078,13 +1127,15 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace> {
         selectedAgent.name,
       ),
     );
+    final draftFocusNode = _draftFocusNode(selectedAgent.name);
+    _observeDraftFocusNode(selectedAgent.name, draftFocusNode);
     return SelectedAgentWorkspaceView(
       repository: widget.repository,
       view: widget.view,
       model: model,
       timelineController: _scrollController(selectedAgent.name),
       draftController: _draftController(selectedAgent.name),
-      draftFocusNode: _draftFocusNode(selectedAgent.name),
+      draftFocusNode: draftFocusNode,
       enableComposerCollapse: widget.enableComposerCollapse,
       draftAttachments: _draftAttachments(selectedAgent.name),
       downloadingAttachmentIds: _downloadingAttachmentIds,

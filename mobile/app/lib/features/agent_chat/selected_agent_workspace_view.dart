@@ -102,55 +102,68 @@ class SelectedAgentWorkspaceView extends StatelessWidget {
       key: const ValueKey('selected-agent-workspace'),
       children: [
         Expanded(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: _ComposerDismissRegion(
-                  key: const ValueKey('agent-compose-dismiss-region'),
-                  onDismiss: onCollapseComposer,
-                  child: ConversationTimeline(
-                    key: ValueKey('agent-chat-timeline-${model.agent.name}'),
-                    repository: repository,
-                    view: view,
-                    agent: model.agent,
-                    contentItems: model.contentItems,
-                    initialHistory: model.initialHistory,
-                    items: model.timelineItems,
-                    isLoading: model.isLoadingConversation,
-                    controller: timelineController,
-                    expandedItemIds: model.expandedItemIds,
-                    workingItemId: model.workingReplyItemId,
-                    downloadingAttachmentIds: downloadingAttachmentIds,
-                    downloadedAttachmentIds: downloadedAttachmentIds,
-                    onRetry: onRetry,
-                    onDeleteFailedMessage: onDeleteFailedMessage,
-                    onToggleExpanded: onToggleExpanded,
-                    onNearEnd: onNearEnd,
-                    onUserNearEnd: onUserNearEnd,
-                    onNearStart: onNearStart,
-                    onUserScrollDirectionChanged: onUserScrollDirectionChanged,
-                    hasOlderItems: model.hasOlderConversation,
-                    onDownloadAttachment: onDownloadAttachment,
-                    onOpenAttachment: onOpenAttachment,
+          child: ListenableBuilder(
+            listenable: draftFocusNode,
+            builder: (context, _) {
+              final bottomRevealPadding =
+                  draftFocusNode.hasFocus
+                      ? conversationTimelineComposerRevealPadding
+                      : conversationTimelineFollowLatestPadding;
+              return Stack(
+                children: [
+                  Positioned.fill(
+                    child: _ComposerDismissRegion(
+                      key: const ValueKey('agent-compose-dismiss-region'),
+                      onDismiss: onCollapseComposer,
+                      child: ConversationTimeline(
+                        key: ValueKey(
+                          'agent-chat-timeline-${model.agent.name}',
+                        ),
+                        repository: repository,
+                        view: view,
+                        agent: model.agent,
+                        contentItems: model.contentItems,
+                        initialHistory: model.initialHistory,
+                        items: model.timelineItems,
+                        isLoading: model.isLoadingConversation,
+                        controller: timelineController,
+                        expandedItemIds: model.expandedItemIds,
+                        bottomRevealPadding: bottomRevealPadding,
+                        workingItemId: model.workingReplyItemId,
+                        downloadingAttachmentIds: downloadingAttachmentIds,
+                        downloadedAttachmentIds: downloadedAttachmentIds,
+                        onRetry: onRetry,
+                        onDeleteFailedMessage: onDeleteFailedMessage,
+                        onToggleExpanded: onToggleExpanded,
+                        onNearEnd: onNearEnd,
+                        onUserNearEnd: onUserNearEnd,
+                        onNearStart: onNearStart,
+                        onUserScrollDirectionChanged:
+                            onUserScrollDirectionChanged,
+                        hasOlderItems: model.hasOlderConversation,
+                        onDownloadAttachment: onDownloadAttachment,
+                        onOpenAttachment: onOpenAttachment,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              if (showInlineRefreshAction)
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: _RefreshLatestButton(
-                    enabled: !model.isLoadingConversation,
-                    onRefreshLatest: onRefreshLatest,
-                  ),
-                ),
-              if (model.hasNewMessages)
-                Positioned(
-                  right: 8,
-                  bottom: 8,
-                  child: _NewMessagesButton(onJumpToLatest: onJumpToLatest),
-                ),
-            ],
+                  if (showInlineRefreshAction)
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: _RefreshLatestButton(
+                        enabled: !model.isLoadingConversation,
+                        onRefreshLatest: onRefreshLatest,
+                      ),
+                    ),
+                  if (model.hasNewMessages)
+                    Positioned(
+                      right: 8,
+                      bottom: 8,
+                      child: _NewMessagesButton(onJumpToLatest: onJumpToLatest),
+                    ),
+                ],
+              );
+            },
           ),
         ),
         if (model.commsItems.isNotEmpty) ...[
