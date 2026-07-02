@@ -174,6 +174,91 @@ void main() {
       );
     });
 
+    testWidgets('mobile collapsed host folds project header into switcher', (
+      tester,
+    ) async {
+      final view = _view();
+      var backCalls = 0;
+      var detailsCalls = 0;
+      var expanded = false;
+      var terminalAgentName = '';
+
+      await _pump(
+        tester,
+        ProjectHomeMobileChatScaffoldHost(
+          view: view,
+          selectedAgent: view.agentByName('mobile'),
+          repository: RecordingGatewayRepository(),
+          terminalTransport: RecordingTerminalTransport(),
+          usePaneInputForMessages: true,
+          mobileAgentsCollapsed: true,
+          unreadAgentNames: const {'lead'},
+          onBack: () {
+            backCalls += 1;
+          },
+          onOpenTerminal: (agentName) {
+            terminalAgentName = agentName;
+          },
+          onOpenConnectionDetails: () {
+            detailsCalls += 1;
+          },
+          onCollapseAgents: () {},
+          onExpandAgents: () {
+            expanded = true;
+          },
+          onWindowSelected: (_) {},
+          onAgentSelected: (_) {},
+          onRefreshView: () async => null,
+          onTimelineScrollDirectionChanged: (_) {},
+        ),
+      );
+
+      expect(find.byKey(const ValueKey('project-chat-header')), findsNothing);
+      expect(find.byKey(const ValueKey('project-back-button')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('mobile-agent-switcher-collapsed')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('project-chat-title')), findsOneWidget);
+      expect(find.text('demo'), findsOneWidget);
+      expect(find.text('main / mobile'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('mobile-agent-switcher-unread-star')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('mobile-agent-switcher-expand-action')),
+      );
+      await tester.pump();
+      tester
+          .widget<IconButton>(
+            find.byKey(const ValueKey('open-agent-terminal-button')),
+          )
+          .onPressed!();
+      await tester.tap(
+        find.byKey(const ValueKey('project-chat-overflow-action')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('project-chat-projects-menu-item')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('project-chat-overflow-action')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('project-chat-diagnostics-menu-item')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(expanded, isTrue);
+      expect(terminalAgentName, 'mobile');
+      expect(backCalls, 1);
+      expect(detailsCalls, 1);
+    });
+
     testWidgets('wide host renders sidebar surfaces for each state', (
       tester,
     ) async {

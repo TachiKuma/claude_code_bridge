@@ -5,6 +5,7 @@ import '../../l10n/ccb_mobile_localizations.dart';
 import '../../models/ccb_agent.dart';
 import '../../models/ccb_project.dart';
 import '../../models/ccb_project_view.dart';
+import '../../models/ccb_window.dart';
 import '../../repository/mobile_ccb_repository.dart';
 import '../../transport/terminal_transport.dart';
 import '../agent_chat/selected_agent_workspace.dart';
@@ -225,6 +226,12 @@ class ProjectHomeMobileChatScaffoldHost extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final terminalAction =
+        selectedAgent == null
+            ? null
+            : () {
+              onOpenTerminal(selectedAgent!.name);
+            };
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -232,28 +239,35 @@ class ProjectHomeMobileChatScaffoldHost extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
           child: Column(
             children: [
-              ProjectChatHeader(
-                view: view,
-                onBack: onBack,
-                onOpenTerminal:
-                    selectedAgent == null
-                        ? null
-                        : () {
-                          onOpenTerminal(selectedAgent!.name);
-                        },
-                onOpenConnectionDetails: onOpenConnectionDetails,
-              ),
-              const SizedBox(height: 4),
-              MobileAgentSwitcherPanel(
-                view: view,
-                selectedAgent: selectedAgent,
-                collapsed: mobileAgentsCollapsed,
-                unreadAgentNames: unreadAgentNames,
-                onCollapse: onCollapseAgents,
-                onExpand: onExpandAgents,
-                onWindowSelected: onWindowSelected,
-                onAgentSelected: onAgentSelected,
-              ),
+              if (mobileAgentsCollapsed)
+                _MobileCollapsedProjectBar(
+                  view: view,
+                  selectedAgent: selectedAgent,
+                  unreadAgentNames: unreadAgentNames,
+                  onShowProjects: onBack,
+                  onExpandAgents: onExpandAgents,
+                  onOpenTerminal: terminalAction,
+                  onOpenConnectionDetails: onOpenConnectionDetails,
+                )
+              else ...[
+                ProjectChatHeader(
+                  view: view,
+                  onBack: onBack,
+                  onOpenTerminal: terminalAction,
+                  onOpenConnectionDetails: onOpenConnectionDetails,
+                ),
+                const SizedBox(height: 4),
+                MobileAgentSwitcherPanel(
+                  view: view,
+                  selectedAgent: selectedAgent,
+                  collapsed: false,
+                  unreadAgentNames: unreadAgentNames,
+                  onCollapse: onCollapseAgents,
+                  onExpand: onExpandAgents,
+                  onWindowSelected: onWindowSelected,
+                  onAgentSelected: onAgentSelected,
+                ),
+              ],
               const SizedBox(height: 4),
               Expanded(
                 child: SelectedAgentWorkspace(
@@ -273,6 +287,162 @@ class ProjectHomeMobileChatScaffoldHost extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+enum _MobileCollapsedProjectAction { projects, diagnostics }
+
+class _MobileCollapsedProjectBar extends StatelessWidget {
+  const _MobileCollapsedProjectBar({
+    required this.view,
+    required this.selectedAgent,
+    required this.unreadAgentNames,
+    required this.onShowProjects,
+    required this.onExpandAgents,
+    required this.onOpenTerminal,
+    required this.onOpenConnectionDetails,
+  });
+
+  final CcbProjectView view;
+  final CcbAgent? selectedAgent;
+  final Set<String> unreadAgentNames;
+  final VoidCallback onShowProjects;
+  final VoidCallback onExpandAgents;
+  final VoidCallback? onOpenTerminal;
+  final VoidCallback onOpenConnectionDetails;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final strings = CcbMobileLocalizations.of(context);
+    final selectedWindow = selectedWindowForView(view, selectedAgent);
+    final hasUnread = unreadAgentNames.isNotEmpty;
+    return Material(
+      key: const ValueKey('mobile-agent-switcher-collapsed'),
+      color: colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: colorScheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        height: 60,
+        child: Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: onExpandAgents,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    children: [
+                      TaskCompletionUnreadIcon(
+                        unreadKey: const ValueKey(
+                          'mobile-agent-switcher-unread-star',
+                        ),
+                        showUnread: hasUnread,
+                        child: Icon(
+                          Icons.auto_awesome_rounded,
+                          size: 20,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              view.project.displayName,
+                              key: const ValueKey('project-chat-title'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.labelLarge,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _mobileAgentSummary(
+                                selectedWindow: selectedWindow,
+                                selectedAgent: selectedAgent,
+                                agentCount: view.agents.length,
+                              ),
+                              key: const ValueKey(
+                                'mobile-agent-switcher-summary',
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: colorScheme.onSurface),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              key: const ValueKey('mobile-agent-switcher-expand-action'),
+              tooltip: 'Show agents',
+              visualDensity: VisualDensity.compact,
+              onPressed: onExpandAgents,
+              icon: const Icon(Icons.keyboard_arrow_down),
+            ),
+            IconButton(
+              key: const ValueKey('open-agent-terminal-button'),
+              tooltip: strings.openTerminal,
+              visualDensity: VisualDensity.compact,
+              onPressed: onOpenTerminal,
+              icon: const Icon(Icons.terminal),
+            ),
+            PopupMenuButton<_MobileCollapsedProjectAction>(
+              key: const ValueKey('project-chat-overflow-action'),
+              tooltip: strings.diagnostics,
+              icon: const Icon(Icons.more_vert),
+              onSelected: (action) {
+                switch (action) {
+                  case _MobileCollapsedProjectAction.projects:
+                    onShowProjects();
+                  case _MobileCollapsedProjectAction.diagnostics:
+                    onOpenConnectionDetails();
+                }
+              },
+              itemBuilder:
+                  (context) => [
+                    PopupMenuItem<_MobileCollapsedProjectAction>(
+                      key: const ValueKey('project-chat-projects-menu-item'),
+                      value: _MobileCollapsedProjectAction.projects,
+                      child: Text(strings.projects),
+                    ),
+                    PopupMenuItem<_MobileCollapsedProjectAction>(
+                      key: const ValueKey('project-chat-diagnostics-menu-item'),
+                      value: _MobileCollapsedProjectAction.diagnostics,
+                      child: Text(strings.diagnostics),
+                    ),
+                  ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _mobileAgentSummary({
+    required CcbWindow? selectedWindow,
+    required CcbAgent? selectedAgent,
+    required int agentCount,
+  }) {
+    final agent = selectedAgent;
+    if (agent == null) {
+      return '$agentCount agents';
+    }
+    final window = selectedWindow;
+    if (window == null) {
+      return agent.name;
+    }
+    return '${window.label} / ${agent.name}';
   }
 }
 
