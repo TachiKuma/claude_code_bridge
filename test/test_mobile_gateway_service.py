@@ -879,6 +879,143 @@ def test_agent_conversation_prefers_codex_native_transcript(tmp_path: Path) -> N
     assert 'stale pane answer' not in public_json
 
 
+def test_agent_conversation_keeps_codex_response_assistant_with_event_user(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / 'repo'
+    _write_codex_rollout(
+        project_root,
+        agent='mobile',
+        thread_id='thread-native',
+        records=[
+            {
+                'timestamp': '2026-06-25T12:00:00.000Z',
+                'type': 'response_item',
+                'payload': {
+                    'type': 'message',
+                    'role': 'user',
+                    'content': [{'type': 'input_text', 'text': 'hidden context'}],
+                },
+            },
+            {
+                'timestamp': '2026-06-25T12:00:01.000Z',
+                'type': 'event_msg',
+                'payload': {
+                    'type': 'user_message',
+                    'message': 'visible prompt',
+                },
+            },
+            {
+                'timestamp': '2026-06-25T12:00:02.000Z',
+                'type': 'response_item',
+                'payload': {
+                    'type': 'message',
+                    'role': 'assistant',
+                    'content': [{'type': 'output_text', 'text': 'live partial answer'}],
+                },
+            },
+        ],
+    )
+    service = _service(
+        _FakeCcbdClient(),
+        project_root=project_root,
+        mobile_dir=tmp_path / 'mobile',
+    )
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view',),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
+
+    status, payload = service.dispatch_get(
+        '/v1/projects/proj-demo/agents/mobile/conversation?namespace_epoch=4&limit=20',
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+
+    assert status == 200
+    native_items = [
+        item for item in payload['conversation']['items']
+        if item.get('source') == 'provider_native/codex'
+    ]
+    assert [(item['kind'], item['body']) for item in native_items] == [
+        ('user_message', 'visible prompt'),
+        ('agent_reply', 'live partial answer'),
+    ]
+    assert native_items[1]['sent_at'] == '2026-06-25T12:00:02.000Z'
+    assert 'completed_at' not in native_items[1]
+    assert 'hidden context' not in json.dumps(payload)
+
+
+def test_agent_conversation_completes_codex_response_assistant_from_task_marker(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / 'repo'
+    _write_codex_rollout(
+        project_root,
+        agent='mobile',
+        thread_id='thread-native',
+        records=[
+            {
+                'timestamp': '2026-06-25T12:00:00.000Z',
+                'type': 'event_msg',
+                'payload': {
+                    'type': 'user_message',
+                    'message': 'visible prompt',
+                },
+            },
+            {
+                'timestamp': '2026-06-25T12:00:01.000Z',
+                'type': 'response_item',
+                'payload': {
+                    'type': 'message',
+                    'role': 'assistant',
+                    'content': [{'type': 'output_text', 'text': 'completed answer'}],
+                },
+            },
+            {
+                'timestamp': '2026-06-25T12:00:05.000Z',
+                'type': 'event_msg',
+                'payload': {'type': 'task_complete'},
+            },
+        ],
+    )
+    service = _service(
+        _FakeCcbdClient(),
+        project_root=project_root,
+        mobile_dir=tmp_path / 'mobile',
+    )
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view',),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
+
+    status, payload = service.dispatch_get(
+        '/v1/projects/proj-demo/agents/mobile/conversation?namespace_epoch=4&limit=20',
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+
+    assert status == 200
+    native_items = [
+        item for item in payload['conversation']['items']
+        if item.get('source') == 'provider_native/codex'
+    ]
+    assert [(item['kind'], item['body']) for item in native_items] == [
+        ('user_message', 'visible prompt'),
+        ('agent_reply', 'completed answer'),
+    ]
+    assert native_items[1]['started_at'] == '2026-06-25T12:00:01.000Z'
+    assert native_items[1]['completed_at'] == '2026-06-25T12:00:05.000Z'
+    assert native_items[1]['sent_at'] == '2026-06-25T12:00:05.000Z'
+    assert native_items[1]['duration_ms'] == 4000
+
+
 def test_agent_conversation_prefers_claude_native_transcript(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo'
     snapshot_dir = project_root / '.ccb' / 'ccbd' / 'snapshots'
@@ -1171,6 +1308,11 @@ def test_agent_conversation_groups_consecutive_codex_native_agent_messages(
                     'type': 'agent_message',
                     'message': 'final result',
                 },
+            },
+            {
+                'timestamp': '2026-06-25T12:00:03.000Z',
+                'type': 'event_msg',
+                'payload': {'type': 'task_complete'},
             },
         ],
     )

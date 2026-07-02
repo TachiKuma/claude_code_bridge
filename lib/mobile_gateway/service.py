@@ -2545,6 +2545,8 @@ def _codex_rollout_conversation_items(
     line_records: list[tuple[int, str]] | None = None,
 ) -> list[dict[str, object]]:
     event_items: list[dict[str, object]] = []
+    event_user_lines: list[int] = []
+    event_agent_lines: list[int] = []
     response_items: list[dict[str, object]] = []
     if line_records is None:
         try:
@@ -2565,6 +2567,11 @@ def _codex_rollout_conversation_items(
             continue
         payload = _map(record.get('payload'))
         if record.get('type') == 'event_msg':
+            if payload.get('type') == 'task_complete':
+                completed_at = _native_record_timestamp(record) or fallback_timestamp
+                _complete_latest_codex_native_agent_reply(event_items, completed_at)
+                _complete_latest_codex_native_agent_reply(response_items, completed_at)
+                continue
             event_item = _codex_event_message_conversation_item(
                 payload,
                 project_root=project_root,
@@ -2581,8 +2588,13 @@ def _codex_rollout_conversation_items(
                     fallback_timestamp=fallback_timestamp,
                     thread_order=thread_order,
                     line_number=line_number,
+                    complete_agent_reply=False,
                 )
                 event_items.append(event_item)
+                if event_item.get('kind') == 'user_message':
+                    event_user_lines.append(line_number)
+                elif event_item.get('kind') == 'agent_reply':
+                    event_agent_lines.append(line_number)
             continue
         if record.get('type') != 'response_item':
             continue
@@ -2637,9 +2649,78 @@ def _codex_rollout_conversation_items(
             fallback_timestamp=fallback_timestamp,
             thread_order=thread_order,
             line_number=line_number,
+            complete_agent_reply=False,
         )
         response_items.append(item)
-    return event_items or response_items
+    if not event_items:
+        return response_items
+    visible_response_assistant_items = [
+        item
+        for item in response_items
+        if item.get('kind') == 'agent_reply'
+        and _codex_response_assistant_item_is_visible_with_event_items(
+            item,
+            event_user_lines=event_user_lines,
+            event_agent_lines=event_agent_lines,
+        )
+    ]
+    return _codex_sort_native_items([
+        *event_items,
+        *visible_response_assistant_items,
+    ])
+
+
+def _codex_response_assistant_item_is_visible_with_event_items(
+    item: dict[str, object],
+    *,
+    event_user_lines: list[int],
+    event_agent_lines: list[int],
+) -> bool:
+    try:
+        line_number = int(item.get('_native_line_number') or 0)
+    except Exception:
+        line_number = 0
+    lower_bound = max(
+        (line for line in event_user_lines if line < line_number),
+        default=0,
+    )
+    upper_bound = min(
+        (line for line in event_user_lines if line > line_number),
+        default=10**18,
+    )
+    return not any(
+        lower_bound < line < upper_bound
+        for line in event_agent_lines
+    )
+
+
+def _complete_latest_codex_native_agent_reply(
+    items: list[dict[str, object]],
+    completed_at: object,
+) -> None:
+    completed_timestamp = _mobile_conversation_timestamp(completed_at)
+    if not completed_timestamp:
+        return
+    for item in reversed(items):
+        if item.get('kind') != 'agent_reply':
+            if item.get('kind') == 'user_message':
+                return
+            continue
+        item['completed_at'] = completed_timestamp
+        item['sent_at'] = completed_timestamp
+        started_at = (
+            _optional_text(item.get('started_at'))
+            or _optional_text(item.get('created_at'))
+        )
+        if started_at:
+            item.setdefault('started_at', started_at)
+        duration_ms = _mobile_conversation_duration_ms(
+            started_at,
+            completed_timestamp,
+        )
+        if duration_ms is not None:
+            item['duration_ms'] = duration_ms
+        return
 
 
 def _set_native_sort_fields(
@@ -2649,6 +2730,7 @@ def _set_native_sort_fields(
     fallback_timestamp: str,
     thread_order: int,
     line_number: int,
+    complete_agent_reply: bool = True,
 ) -> None:
     timestamp = _native_record_timestamp(record) or fallback_timestamp
     created_at = _mobile_conversation_timestamp(timestamp)
@@ -2661,7 +2743,8 @@ def _set_native_sort_fields(
             item.setdefault('sent_at', created_at)
         elif item.get('kind') == 'agent_reply':
             item.setdefault('sent_at', created_at)
-            item.setdefault('completed_at', created_at)
+            if complete_agent_reply:
+                item.setdefault('completed_at', created_at)
 
 
 def _native_record_timestamp(record: dict[str, object]) -> str | None:
@@ -2846,19 +2929,15 @@ def _coalesce_provider_native_agent_replies(
             or _optional_text(pending.get('created_at'))
             or _optional_text(pending.get('sent_at'))
         )
-        completed_at = (
-            _optional_text(item.get('completed_at'))
-            or _optional_text(item.get('sent_at'))
-            or _optional_text(item.get('created_at'))
-        )
+        completed_at = _optional_text(item.get('completed_at'))
         if started_at:
             pending['started_at'] = started_at
         if completed_at:
             pending['sent_at'] = completed_at
             pending['completed_at'] = completed_at
-        duration_ms = _mobile_conversation_duration_ms(started_at, completed_at)
-        if duration_ms is not None:
-            pending['duration_ms'] = duration_ms
+            duration_ms = _mobile_conversation_duration_ms(started_at, completed_at)
+            if duration_ms is not None:
+                pending['duration_ms'] = duration_ms
         pending['_native_line_number'] = item.get('_native_line_number')
         pending['_native_sort_timestamp'] = item.get('_native_sort_timestamp')
     flush_pending()
