@@ -467,6 +467,7 @@ void main() {
     final placeholder = model.timelineItems.last;
     expect(placeholder.kind, CcbConversationItemKind.agentReply);
     expect(placeholder.body, 'Working...');
+    expect(placeholder.startedAt, DateTime.utc(2026, 7, 1, 10));
     expect(placeholder.completedAt, isNull);
   });
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../l10n/ccb_mobile_localizations.dart';
@@ -157,10 +159,11 @@ class ConversationBubble extends StatelessWidget {
                                 ],
                                 if (showWorking) ...[
                                   const SizedBox(width: 8),
-                                  _ConversationWorkingIndicator(
+                                  _ConversationWorkingStatus(
                                     key: ValueKey(
                                       'conversation-working-${item.id}',
                                     ),
+                                    startedAt: item.startedAt ?? item.sentAt,
                                   ),
                                 ],
                               ],
@@ -433,28 +436,106 @@ bool _conversationWorkingAnimationDisabled(BuildContext context) {
   return isWidgetTest || (mediaQuery?.disableAnimations ?? false);
 }
 
-class _ConversationWorkingIndicator extends StatelessWidget {
-  const _ConversationWorkingIndicator({super.key});
+class _ConversationWorkingStatus extends StatefulWidget {
+  const _ConversationWorkingStatus({required this.startedAt, super.key});
+
+  final DateTime? startedAt;
+
+  @override
+  State<_ConversationWorkingStatus> createState() =>
+      _ConversationWorkingStatusState();
+}
+
+class _ConversationWorkingStatusState
+    extends State<_ConversationWorkingStatus> {
+  Timer? _timer;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncTimer();
+  }
+
+  @override
+  void didUpdateWidget(_ConversationWorkingStatus oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.startedAt != widget.startedAt) {
+      _syncTimer();
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _syncTimer() {
+    _timer?.cancel();
+    _timer = null;
+    if (widget.startedAt == null ||
+        _conversationWorkingAnimationDisabled(context)) {
+      return;
+    }
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final label = CcbMobileLocalizations.of(context).executionStatus('Working');
+    final elapsed = _workingElapsedLabel(widget.startedAt);
+    final text = elapsed == null ? label : '$label · $elapsed';
     return Tooltip(
-      message: label,
+      message: text,
       child: Semantics(
-        label: label,
-        child: SizedBox.square(
-          dimension: 14,
-          child: Icon(
-            Icons.pending_rounded,
-            size: 14,
-            color: colorScheme.primary,
-          ),
+        label: text,
+        child: Row(
+          key: const ValueKey('conversation-working-status-label'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.pending_rounded, size: 14, color: colorScheme.primary),
+            const SizedBox(width: 3),
+            Text(
+              text,
+              key: const ValueKey('conversation-working-status-text'),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.fade,
+            ),
+          ],
         ),
       ),
     );
   }
+}
+
+String? _workingElapsedLabel(DateTime? startedAt) {
+  if (startedAt == null) {
+    return null;
+  }
+  final elapsed = DateTime.now().difference(startedAt);
+  if (elapsed.isNegative) {
+    return '00:00';
+  }
+  final totalSeconds = elapsed.inSeconds;
+  final hours = totalSeconds ~/ 3600;
+  final minutes = (totalSeconds % 3600) ~/ 60;
+  final seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return '$hours:${minutes.toString().padLeft(2, '0')}:'
+        '${seconds.toString().padLeft(2, '0')}';
+  }
+  return '${minutes.toString().padLeft(2, '0')}:'
+      '${seconds.toString().padLeft(2, '0')}';
 }
 
 @visibleForTesting

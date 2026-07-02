@@ -283,13 +283,14 @@ void main() {
   testWidgets('working reply bubble shows status glyph and active border', (
     tester,
   ) async {
-    const item = CcbConversationItem(
+    final item = CcbConversationItem(
       id: 'reply-working',
       agentName: 'lead',
       kind: CcbConversationItemKind.agentReply,
       title: 'Agent reply',
       body: 'Still running',
       source: 'provider_native/codex',
+      startedAt: DateTime.now().add(const Duration(seconds: 10)),
     );
 
     await tester.pumpWidget(
@@ -315,6 +316,7 @@ void main() {
     );
     expect(find.byIcon(Icons.pending_rounded), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('Working · 00:00'), findsOneWidget);
 
     final material = tester.widget<Material>(
       find.byKey(const ValueKey('conversation-item-reply-working')),
@@ -377,6 +379,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('1s'), findsNothing);
+    expect(find.textContaining('Working ·'), findsOneWidget);
     expect(
       find.byKey(
         const ValueKey('conversation-timestamp-reply-working-completed'),

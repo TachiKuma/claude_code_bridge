@@ -88,7 +88,10 @@ SelectedAgentWorkspaceModel selectedAgentWorkspaceModel({
       workingReplyItemId == null && executionStatus.state == 'working'
           ? [
             ...timelineItems,
-            syntheticAgentWorkingConversationItem(agent.name),
+            syntheticAgentWorkingConversationItem(
+              agent.name,
+              startedAt: _latestUserSentAt(timelineItems),
+            ),
           ]
           : timelineItems;
   final visibleWorkingReplyItemId =
@@ -120,7 +123,10 @@ SelectedAgentWorkspaceModel selectedAgentWorkspaceModel({
 String syntheticAgentWorkingConversationItemId(String agentName) =>
     'synthetic-working-reply-$agentName';
 
-CcbConversationItem syntheticAgentWorkingConversationItem(String agentName) {
+CcbConversationItem syntheticAgentWorkingConversationItem(
+  String agentName, {
+  DateTime? startedAt,
+}) {
   return CcbConversationItem(
     id: syntheticAgentWorkingConversationItemId(agentName),
     agentName: agentName,
@@ -128,7 +134,17 @@ CcbConversationItem syntheticAgentWorkingConversationItem(String agentName) {
     title: 'Agent reply',
     body: 'Working...',
     source: 'project_view',
+    startedAt: startedAt,
   );
+}
+
+DateTime? _latestUserSentAt(List<CcbConversationItem> items) {
+  for (final item in items.reversed) {
+    if (item.kind == CcbConversationItemKind.userMessage) {
+      return item.sentAt;
+    }
+  }
+  return null;
 }
 
 String? selectedAgentWorkingReplyItemId(List<CcbConversationItem> items) {

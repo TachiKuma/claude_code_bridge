@@ -114,20 +114,20 @@ void main() {
         [27],
         [13],
       ]);
+      expect(find.byKey(const ValueKey('agent-working-status')), findsNothing);
       expect(
-        find.byKey(const ValueKey('agent-working-status')),
+        find.byKey(const ValueKey('conversation-working-status-text')),
         findsOneWidget,
       );
-      expect(find.text('Working'), findsOneWidget);
 
       gatewayTerminalTransport.sessions.single.addOutput('pane output ready');
       await tester.pumpAndSettle();
 
+      expect(find.byKey(const ValueKey('agent-working-status')), findsNothing);
       expect(
-        find.byKey(const ValueKey('agent-working-status')),
+        find.byKey(const ValueKey('conversation-working-status-text')),
         findsOneWidget,
       );
-      expect(find.text('Working'), findsOneWidget);
       expect(find.text('pane output ready'), findsNothing);
     },
   );
@@ -182,8 +182,11 @@ void main() {
     await tester.pump();
 
     expect(gatewayRepository.getProjectViewCalls, ['test_ccb2', 'test_ccb2']);
-    expect(find.byKey(const ValueKey('agent-working-status')), findsOneWidget);
-    expect(find.text('Working'), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-working-status')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('conversation-working-status-text')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('paired gateway refreshes server project list', (tester) async {

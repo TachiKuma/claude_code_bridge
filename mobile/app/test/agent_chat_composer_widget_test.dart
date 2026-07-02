@@ -275,6 +275,11 @@ void main() {
         findsOneWidget,
       );
       expect(
+        find.byKey(const ValueKey('conversation-working-status-text')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('agent-working-status')), findsNothing);
+      expect(
         find.byKey(const ValueKey('conversation-working-reply-completed')),
         findsNothing,
       );
@@ -423,7 +428,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.byKey(const ValueKey('agent-working-status')), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-working-status')), findsNothing);
     expect(find.text('Working'), findsOneWidget);
   });
 
@@ -449,7 +454,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.byKey(const ValueKey('agent-working-status')), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-working-status')), findsNothing);
     expect(find.text('Working'), findsOneWidget);
     expect(find.text('Exception'), findsNothing);
   });
@@ -1734,17 +1739,30 @@ void main() {
       const Offset(0, -700),
     );
     expect(renderedTextContaining('pending pane send'), findsOneWidget);
-    expect(find.byKey(const ValueKey('agent-working-status')), findsOneWidget);
-    expect(find.text('Working'), findsOneWidget);
+    final workingPlaceholderId = syntheticAgentWorkingConversationItemId(
+      'mobile',
+    );
+    await dragUntilVisible(
+      tester,
+      ValueKey('conversation-item-$workingPlaceholderId'),
+      const Offset(0, -700),
+    );
+    expect(find.byKey(const ValueKey('agent-working-status')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('conversation-working-status-text')),
+      findsOneWidget,
+    );
 
     terminalTransport.completePaste();
     await tester.pumpAndSettle();
 
     expect(terminalTransport.sessions.single.pasted, ['pending pane send']);
     expect(terminalTransport.sessions.single.written, isEmpty);
-    expect(find.byKey(const ValueKey('agent-working-status')), findsOneWidget);
-    expect(find.text('Working'), findsOneWidget);
-    expect(find.text('Check pane'), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-working-status')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('conversation-working-status-text')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('paired terminal output updates status without chat bubble', (
@@ -1793,8 +1811,11 @@ void main() {
     terminalTransport.sessions.single.addOutput('stream-only-visible-status\n');
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('agent-working-status')), findsOneWidget);
-    expect(find.text('Working'), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-working-status')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('conversation-working-status-text')),
+      findsOneWidget,
+    );
     expect(find.text('Terminal output'), findsNothing);
     expect(find.textContaining('stream-only-visible-status'), findsNothing);
   });
@@ -1850,23 +1871,29 @@ void main() {
       expect(terminalTransport.sessions, hasLength(1));
       terminalTransport.sessions.single.addOutput('Conversation ');
       await tester.pump();
-      expect(find.text('Working'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('conversation-working-status-text')),
+        findsOneWidget,
+      );
 
       terminalTransport.sessions.single.addOutput('interrupted\n');
       await tester.pump();
 
+      expect(find.byKey(const ValueKey('agent-working-status')), findsNothing);
       expect(
-        find.byKey(const ValueKey('agent-working-status')),
+        find.byKey(const ValueKey('conversation-working-status-text')),
         findsOneWidget,
       );
-      expect(find.text('Working'), findsOneWidget);
       expect(find.text('Exception'), findsNothing);
       expect(find.textContaining('Conversation interrupted'), findsNothing);
 
       terminalTransport.sessions.single.addOutput('Working time 00:12\n');
       await tester.pump();
 
-      expect(find.text('Working'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('conversation-working-status-text')),
+        findsOneWidget,
+      );
       expect(find.text('Exception'), findsNothing);
     },
   );
@@ -1929,7 +1956,10 @@ void main() {
     await tester.pump();
 
     expect(terminalTransport.sessions.single.pasted, ['work then idle']);
-    expect(find.text('Working'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('conversation-working-status-text')),
+      findsOneWidget,
+    );
 
     terminalTransport.sessions.single.addOutput('work then idle\n');
     await tester.pump();
@@ -1937,13 +1967,19 @@ void main() {
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(refreshCalls, greaterThanOrEqualTo(1));
-    expect(find.text('Working'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('conversation-working-status-text')),
+      findsOneWidget,
+    );
     expect(find.text('mobile completed'), findsNothing);
 
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
 
-    expect(find.text('Working'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('conversation-working-status-text')),
+      findsOneWidget,
+    );
     expect(find.text('Idle'), findsNothing);
     expect(find.text('mobile completed'), findsNothing);
   });
@@ -2010,13 +2046,19 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('agent-message-send-button')));
     await tester.pump();
 
-    expect(find.text('Working'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('conversation-working-status-text')),
+      findsOneWidget,
+    );
 
     await tester.pump(const Duration(milliseconds: 120));
     await tester.pump();
 
     expect(refreshCalls, 1);
-    expect(find.text('Working'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('conversation-working-status-text')),
+      findsOneWidget,
+    );
     expect(find.text('mobile completed'), findsNothing);
 
     await tester.pump(const Duration(milliseconds: 180));
@@ -2036,7 +2078,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Idle'), findsOneWidget);
-    expect(find.text('Working'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('conversation-working-status-text')),
+      findsNothing,
+    );
     expect(find.text('mobile completed'), findsOneWidget);
   });
 
@@ -2096,7 +2141,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('agent-message-send-button')));
     await tester.pump();
 
-    expect(find.text('Working'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('conversation-working-status-text')),
+      findsOneWidget,
+    );
     expect(find.text('reply while still working'), findsNothing);
 
     await tester.pump(const Duration(milliseconds: 120));
@@ -2105,7 +2153,10 @@ void main() {
     expect(repository.conversationCalls.length, greaterThanOrEqualTo(4));
     expect(find.text('reply while still working'), findsOneWidget);
     expect(find.text('mobile completed'), findsNothing);
-    expect(find.text('Working'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('conversation-working-status-text')),
+      findsOneWidget,
+    );
   });
 
   testWidgets(
@@ -2162,7 +2213,10 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('agent-message-send-button')));
       await tester.pump();
 
-      expect(find.text('Working'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('conversation-working-status-text')),
+        findsOneWidget,
+      );
       expect(find.text('late reply under idle view'), findsOneWidget);
 
       terminalTransport.sessions.single.addOutput(
@@ -2173,13 +2227,19 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
 
-      expect(find.text('Working'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('conversation-working-status-text')),
+        findsOneWidget,
+      );
       expect(find.text('late running reply'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('conversation-working-reply-late')),
         findsOneWidget,
       );
-      expect(find.text('Working'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('conversation-working-status-text')),
+        findsOneWidget,
+      );
       expect(find.text('mobile completed'), findsNothing);
     },
   );
@@ -2244,7 +2304,8 @@ void main() {
         find.byKey(const ValueKey('conversation-working-reply-running')),
         findsOneWidget,
       );
-      expect(find.text('Working'), findsOneWidget);
+      expect(find.byKey(const ValueKey('agent-working-status')), findsNothing);
+      expect(find.textContaining('Working ·'), findsOneWidget);
     },
   );
 

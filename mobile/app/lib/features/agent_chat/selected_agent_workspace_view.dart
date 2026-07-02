@@ -97,6 +97,9 @@ class SelectedAgentWorkspaceView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = CcbMobileLocalizations.of(context);
+    final hasActiveWorkingBubble =
+        model.executionStatus?.state == 'working' &&
+        model.workingReplyItemId != null;
     return Column(
       key: const ValueKey('selected-agent-workspace'),
       children: [
@@ -148,7 +151,7 @@ class SelectedAgentWorkspaceView extends StatelessWidget {
                   height: 36,
                 ),
               ),
-              if (model.executionStatus != null)
+              if (model.executionStatus != null && !hasActiveWorkingBubble)
                 _AgentWorkingStatus(status: model.executionStatus!),
               const Spacer(),
               if (model.hasNewMessages)
