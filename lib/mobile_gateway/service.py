@@ -193,7 +193,8 @@ class MobileGatewayService:
         gateway_url: str,
         route_provider: str = _DEFAULT_ROUTE_PROVIDER,
         scopes: tuple[str, ...] = _DEFAULT_PAIRING_SCOPES,
-        expires_seconds: int = 10 * 60,
+        expires_seconds: int | None = 10 * 60,
+        reusable_claims: bool = False,
     ) -> dict[str, object]:
         store = self._require_pairing_store()
         store.write_gateway_state(
@@ -208,6 +209,7 @@ class MobileGatewayService:
             route_provider=route_provider,
             scopes=scopes,
             expires_seconds=expires_seconds,
+            reusable_claims=reusable_claims,
         )
 
     def dispatch_get(self, path: str, headers: Mapping[str, object] | None = None) -> tuple[int, dict[str, object]]:

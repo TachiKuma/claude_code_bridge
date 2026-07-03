@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 import json
 import os
@@ -18,7 +19,7 @@ from urllib.request import urlopen
 from ccbd.system import utc_now
 from cli.kill_runtime.processes import is_pid_alive, terminate_pid_tree
 from cli.services.mobile import prepare_server_mobile_gateway
-from mobile_gateway import mobile_host_state_dir
+from mobile_gateway import MobileGatewayPairingStore, mobile_host_state_dir
 from storage.atomic import atomic_write_json
 
 
@@ -26,6 +27,8 @@ MOBILE_HOST_SERVE_COMMAND = '__mobile-host-serve'
 MOBILE_HOST_SERVICE_RECORD_TYPE = 'ccb_mobile_host_service'
 MOBILE_HOST_SERVICE_SCHEMA_VERSION = 1
 MOBILE_HOST_LOCK_TTL_S = 120.0
+MOBILE_HOST_LOCK_WAIT_TIMEOUT_S = 10.0
+MOBILE_HOST_LOCK_RETRY_INTERVAL_S = 0.05
 MOBILE_HOST_STOP_TIMEOUT_S = 2.0
 MOBILE_HOST_PORT_RELEASE_TIMEOUT_S = 3.0
 MOBILE_HOST_HEALTH_TIMEOUT_S = 5.0
@@ -62,6 +65,7 @@ class MobileHostServiceResult:
     state_path: Path
     log_path: Path
     replaced_pid: int | None = None
+    pairing: Mapping[str, object] | None = None
 
     def to_record(self) -> dict[str, object]:
         record: dict[str, object] = {
@@ -79,6 +83,8 @@ class MobileHostServiceResult:
         }
         if self.replaced_pid is not None:
             record['replaced_pid'] = self.replaced_pid
+        if self.pairing is not None:
+            record['pairing'] = dict(self.pairing)
         return record
 
 
@@ -98,9 +104,16 @@ def start_or_replace_mobile_host_service(
     health_check_fn: Callable[[str], bool] | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
     monotonic_fn: Callable[[], float] = time.monotonic,
+    lock_wait_timeout_s: float = MOBILE_HOST_LOCK_WAIT_TIMEOUT_S,
 ) -> MobileHostServiceResult:
     paths = mobile_host_service_paths(state_dir)
-    lock_fd = _acquire_mobile_host_lock(paths.lock_path, process_exists_fn=process_exists_fn)
+    lock_fd = _acquire_mobile_host_lock(
+        paths.lock_path,
+        process_exists_fn=process_exists_fn,
+        timeout_s=lock_wait_timeout_s,
+        sleep_fn=sleep_fn,
+        monotonic_fn=monotonic_fn,
+    )
     if lock_fd is None:
         raise MobileHostServiceError(f'mobile host service update already in progress: {paths.lock_path}')
     replaced_pid: int | None = None
@@ -118,18 +131,57 @@ def start_or_replace_mobile_host_service(
                 state_dir=paths.state_dir,
                 process_cmdline_fn=process_cmdline_fn,
             ):
-                replaced_pid = old_pid
-                _terminate_managed_mobile_host(
+                if _mobile_host_state_matches_request(
+                    state,
+                    listen=listen,
+                    public_url=public_url,
+                    route_provider=route_provider,
+                ) and _mobile_host_state_is_healthy(
+                    state,
+                    listen=listen,
+                    health_check_fn=health_check_fn,
+                ) and _mobile_host_listen_owned_by_process(
+                    listen,
                     old_pid,
-                    terminate_pid_tree_fn=terminate_pid_tree_fn,
-                )
-                if not _wait_until(
-                    lambda: not process_exists_fn(old_pid),
-                    timeout_s=MOBILE_HOST_STOP_TIMEOUT_S,
-                    sleep_fn=sleep_fn,
-                    monotonic_fn=monotonic_fn,
+                    port_owner_fn=port_owner_fn,
                 ):
-                    raise MobileHostServiceError(f'mobile host service did not stop: pid={old_pid}')
+                    state = _mobile_host_state_with_refreshed_pairing(state, paths=paths)
+                    if state is None:
+                        replaced_pid = old_pid
+                        _terminate_managed_mobile_host(
+                            old_pid,
+                            terminate_pid_tree_fn=terminate_pid_tree_fn,
+                        )
+                        if not _wait_until(
+                            lambda: not process_exists_fn(old_pid),
+                            timeout_s=MOBILE_HOST_STOP_TIMEOUT_S,
+                            sleep_fn=sleep_fn,
+                            monotonic_fn=monotonic_fn,
+                        ):
+                            raise MobileHostServiceError(f'mobile host service did not stop: pid={old_pid}')
+                        state = read_mobile_host_service_state(paths.state_path)
+                        old_pid = None
+                    else:
+                        return _mobile_host_result_from_state(
+                            state,
+                            paths=paths,
+                            status='running',
+                        )
+                if old_pid is None:
+                    pass
+                else:
+                    replaced_pid = old_pid
+                    _terminate_managed_mobile_host(
+                        old_pid,
+                        terminate_pid_tree_fn=terminate_pid_tree_fn,
+                    )
+                    if not _wait_until(
+                        lambda: not process_exists_fn(old_pid),
+                        timeout_s=MOBILE_HOST_STOP_TIMEOUT_S,
+                        sleep_fn=sleep_fn,
+                        monotonic_fn=monotonic_fn,
+                    ):
+                        raise MobileHostServiceError(f'mobile host service did not stop: pid={old_pid}')
             else:
                 remove_mobile_host_service_state(paths.state_path)
                 state = None
@@ -183,18 +235,24 @@ def start_or_replace_mobile_host_service(
             if pid > 0:
                 _terminate_managed_mobile_host(pid, terminate_pid_tree_fn=terminate_pid_tree_fn)
             raise
-        return MobileHostServiceResult(
-            status='replaced' if replaced_pid is not None else 'started',
+        state = _matching_spawned_state(
+            read_mobile_host_service_state(paths.state_path),
             pid=pid,
             generation=generation,
-            listen=listen,
-            gateway_url=public_url or local_gateway_url,
-            local_gateway_url=local_gateway_url,
-            route_provider=route_provider,
+        )
+        return MobileHostServiceResult(
+            status='replaced' if replaced_pid is not None else 'started',
+            pid=_state_pid(state) or pid,
+            generation=_state_generation(state, generation),
+            listen=_state_listen(state, listen=listen),
+            gateway_url=_state_gateway_url(state, fallback=public_url or local_gateway_url),
+            local_gateway_url=_state_local_gateway_url(state, listen=listen),
+            route_provider=_state_route_provider(state, fallback=route_provider),
             state_dir=paths.state_dir,
             state_path=paths.state_path,
             log_path=paths.log_path,
             replaced_pid=replaced_pid,
+            pairing=_state_pairing(state),
         )
     finally:
         _release_mobile_host_lock(paths.lock_path, lock_fd)
@@ -230,6 +288,7 @@ def run_mobile_host_serve_command(args, *, script_root: Path) -> int:
     paths = mobile_host_service_paths(state_dir)
     generation = int(args.generation)
     try:
+        pairing = summary.get('pairing') if isinstance(summary.get('pairing'), dict) else None
         write_mobile_host_service_state(
             paths.state_path,
             {
@@ -243,6 +302,7 @@ def run_mobile_host_serve_command(args, *, script_root: Path) -> int:
                 'local_gateway_url': str(summary.get('local_gateway_url') or _local_gateway_url(str(args.listen))),
                 'gateway_url': str(summary.get('gateway_url') or summary.get('local_gateway_url') or ''),
                 'route_provider': str(summary.get('route_provider') or args.route_provider or 'tailnet'),
+                **({'pairing': dict(pairing)} if pairing is not None else {}),
                 'state_dir': str(paths.state_dir),
                 'started_at': utc_now(),
                 'command_kind': 'ccb_mobile_host_serve',
@@ -290,7 +350,7 @@ def read_mobile_host_service_state(path: Path) -> dict[str, object] | None:
 
 
 def write_mobile_host_service_state(path: Path, payload: dict[str, object]) -> None:
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    _ensure_private_mobile_host_state_dir(Path(path).parent)
     atomic_write_json(Path(path), payload)
 
 
@@ -416,7 +476,7 @@ def _spawn_mobile_host_service(
         command.extend(['--public-url', public_url])
     if host_id:
         command.extend(['--host-id', host_id])
-    paths.state_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_private_mobile_host_state_dir(paths.state_dir)
     env = dict(os.environ)
     env['CCB_MOBILE_HOST_STATE_HOME'] = str(paths.state_dir)
     env['CCB_SKIP_STARTUP_UPDATE_CHECK'] = '1'
@@ -425,7 +485,7 @@ def _spawn_mobile_host_service(
         spawner = spawn_fn or subprocess.Popen
         process = spawner(
             command,
-            cwd=str(paths.state_dir),
+            cwd=str(Path.cwd()),
             env=env,
             stdin=subprocess.DEVNULL,
             stdout=log,
@@ -520,13 +580,26 @@ def _acquire_mobile_host_lock(
     lock_path: Path,
     *,
     process_exists_fn: Callable[[int], bool],
+    timeout_s: float,
+    sleep_fn: Callable[[float], None],
+    monotonic_fn: Callable[[], float],
 ) -> int | None:
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    _clear_stale_lock(lock_path, process_exists_fn=process_exists_fn)
-    try:
-        fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    except FileExistsError:
-        return None
+    _ensure_private_mobile_host_state_dir(lock_path.parent)
+    deadline = monotonic_fn() + max(0.0, float(timeout_s))
+    while True:
+        _clear_stale_lock(lock_path, process_exists_fn=process_exists_fn)
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            now = monotonic_fn()
+            if now >= deadline:
+                return None
+            sleep_for = min(MOBILE_HOST_LOCK_RETRY_INTERVAL_S, max(0.0, deadline - now))
+            if sleep_for <= 0:
+                return None
+            sleep_fn(sleep_for)
+            continue
+        break
     payload = {'pid': os.getpid(), 'created_at': utc_now()}
     os.write(fd, (json.dumps(payload) + '\n').encode('utf-8'))
     return fd
@@ -541,6 +614,15 @@ def _release_mobile_host_lock(lock_path: Path, fd: int) -> None:
         lock_path.unlink(missing_ok=True)
     except OSError:
         pass
+
+
+def _ensure_private_mobile_host_state_dir(path: Path) -> None:
+    Path(path).mkdir(mode=0o700, parents=True, exist_ok=True)
+    if os.name != 'nt':
+        try:
+            Path(path).chmod(0o700)
+        except OSError:
+            pass
 
 
 def _clear_stale_lock(lock_path: Path, *, process_exists_fn: Callable[[int], bool]) -> None:
@@ -589,6 +671,15 @@ def _state_pid(state: dict[str, object] | None) -> int | None:
     return _coerce_positive_int(state.get('pid'))
 
 
+def _state_generation(state: dict[str, object] | None, fallback: int) -> int:
+    if state is None:
+        return int(fallback)
+    try:
+        return int(state.get('generation') or fallback)
+    except (TypeError, ValueError):
+        return int(fallback)
+
+
 def _coerce_positive_int(value: object) -> int | None:
     try:
         number = int(value)
@@ -605,6 +696,181 @@ def _state_matches_mobile_host_state_dir(state: dict[str, object], *, state_dir:
         return str(Path(recorded).expanduser()) == str(state_dir)
     except Exception:
         return False
+
+
+def _mobile_host_state_matches_request(
+    state: dict[str, object] | None,
+    *,
+    listen: str,
+    public_url: str | None,
+    route_provider: str,
+) -> bool:
+    if state is None:
+        return False
+    if _state_listen(state, listen='') != str(listen):
+        return False
+    expected_gateway_url = str(public_url or _local_gateway_url(listen))
+    if _state_gateway_url(state, fallback='') != expected_gateway_url:
+        return False
+    if _state_route_provider(state, fallback='') != str(route_provider or 'tailnet'):
+        return False
+    return _state_pairing(state) is not None
+
+
+def _mobile_host_state_is_healthy(
+    state: dict[str, object] | None,
+    *,
+    listen: str,
+    health_check_fn: Callable[[str], bool] | None,
+) -> bool:
+    checker = health_check_fn or _http_health_check
+    try:
+        return bool(checker(_state_local_gateway_url(state, listen=listen)))
+    except Exception:
+        return False
+
+
+def _mobile_host_listen_owned_by_process(
+    listen: str,
+    pid: int,
+    *,
+    port_owner_fn: Callable[[str], PortOwner | None] | None,
+) -> bool:
+    owner = (port_owner_fn or detect_loopback_port_owner)(listen)
+    return owner is not None and owner.pid == pid
+
+
+def _mobile_host_state_with_refreshed_pairing(
+    state: dict[str, object] | None,
+    *,
+    paths: MobileHostServicePaths,
+) -> dict[str, object] | None:
+    pairing = _state_pairing(state)
+    if pairing is None:
+        return None
+    store = MobileGatewayPairingStore(paths.state_dir)
+    refreshed = _refresh_mobile_host_pairing(state, pairing=pairing, store=store)
+    if refreshed is None:
+        return None
+    updated = dict(state or {})
+    updated['pairing'] = refreshed
+    write_mobile_host_service_state(paths.state_path, updated)
+    return updated
+
+
+def _refresh_mobile_host_pairing(
+    state: dict[str, object] | None,
+    *,
+    pairing: Mapping[str, object],
+    store: MobileGatewayPairingStore,
+) -> dict[str, object] | None:
+    project_id = _state_project_id(state, pairing=pairing)
+    gateway_url = _state_gateway_url(state, fallback=str(pairing.get('gateway_url') or ''))
+    route_provider = _state_route_provider(state, fallback=str(pairing.get('route_provider') or 'tailnet'))
+    scopes = _pairing_scopes(pairing)
+    if not project_id or not gateway_url or not route_provider or not scopes:
+        return None
+    old_pairing_id = str(pairing.get('pairing_id') or '').strip()
+    if old_pairing_id:
+        store.revoke_pairing(old_pairing_id, reason='mobile_update_refreshed')
+    return store.create_pairing_payload(
+        project_id=project_id,
+        gateway_url=gateway_url,
+        route_provider=route_provider,
+        scopes=scopes,
+        expires_seconds=None,
+        reusable_claims=True,
+    )
+
+
+def _state_project_id(state: dict[str, object] | None, *, pairing: Mapping[str, object]) -> str:
+    for value in (
+        (state or {}).get('project_id'),
+        (state or {}).get('host_id'),
+        pairing.get('project_id'),
+    ):
+        text = str(value or '').strip()
+        if text:
+            return text
+    return ''
+
+
+def _pairing_scopes(pairing: Mapping[str, object]) -> tuple[str, ...]:
+    raw = pairing.get('scopes')
+    if isinstance(raw, str):
+        values = [raw]
+    elif isinstance(raw, Iterable):
+        values = [str(item) for item in raw]
+    else:
+        values = []
+    return tuple(sorted({value.strip() for value in values if value.strip()}))
+
+
+def _matching_spawned_state(
+    state: dict[str, object] | None,
+    *,
+    pid: int,
+    generation: int,
+) -> dict[str, object] | None:
+    if _state_pid(state) != pid:
+        return None
+    if _state_generation(state, generation) != int(generation):
+        return None
+    return state
+
+
+def _mobile_host_result_from_state(
+    state: dict[str, object] | None,
+    *,
+    paths: MobileHostServicePaths,
+    status: str,
+) -> MobileHostServiceResult:
+    if state is None:
+        raise MobileHostServiceError(f'missing mobile host service state: {paths.state_path}')
+    listen = _state_listen(state, listen='')
+    return MobileHostServiceResult(
+        status=status,
+        pid=_state_pid(state) or 0,
+        generation=_state_generation(state, 0),
+        listen=listen,
+        gateway_url=_state_gateway_url(state, fallback=_state_local_gateway_url(state, listen=listen)),
+        local_gateway_url=_state_local_gateway_url(state, listen=listen),
+        route_provider=_state_route_provider(state, fallback='tailnet'),
+        state_dir=paths.state_dir,
+        state_path=paths.state_path,
+        log_path=paths.log_path,
+        pairing=_state_pairing(state),
+    )
+
+
+def _state_listen(state: dict[str, object] | None, *, listen: str) -> str:
+    value = str((state or {}).get('listen') or '').strip()
+    return value or str(listen)
+
+
+def _state_gateway_url(state: dict[str, object] | None, *, fallback: str) -> str:
+    value = str((state or {}).get('gateway_url') or '').strip()
+    return value or str(fallback)
+
+
+def _state_local_gateway_url(state: dict[str, object] | None, *, listen: str) -> str:
+    value = str((state or {}).get('local_gateway_url') or '').strip()
+    return value or _local_gateway_url(listen)
+
+
+def _state_route_provider(state: dict[str, object] | None, *, fallback: str) -> str:
+    value = str((state or {}).get('route_provider') or '').strip()
+    return value or str(fallback)
+
+
+def _state_pairing(state: dict[str, object] | None) -> dict[str, object] | None:
+    pairing = (state or {}).get('pairing')
+    if not isinstance(pairing, dict):
+        return None
+    required = ('pairing_code', 'claim_endpoint', 'gateway_url', 'route_provider')
+    if any(not str(pairing.get(key) or '').strip() for key in required):
+        return None
+    return dict(pairing)
 
 
 def _remove_mobile_host_service_state_if_current(path: Path, *, pid: int, generation: int) -> None:

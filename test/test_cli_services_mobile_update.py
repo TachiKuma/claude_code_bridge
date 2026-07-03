@@ -295,6 +295,11 @@ def test_onboarding_logged_in_starts_managed_mobile_service_when_callback_provid
             'route_provider': 'tailnet',
             'mobile_state_dir': '/tmp/mobile-state',
             'service_log_path': '/tmp/mobile-state/service.log',
+            'pairing': {
+                'pairing_code': 'stable-code',
+                'expires_at': '2026-07-02T00:10:00Z',
+                'claim_endpoint': 'https://desktop.tailnet.ts.net:8787/v1/pairing/claim',
+            },
         }
 
     code = mobile_update.run_mobile_update_onboarding(
@@ -316,6 +321,9 @@ def test_onboarding_logged_in_starts_managed_mobile_service_when_callback_provid
     assert "status: started" in text
     assert "pid: 1234" in text
     assert "service_log: /tmp/mobile-state/service.log" in text
+    assert "pairing_code: stable-code" in text
+    assert "pairing_expires_at: 2026-07-02T00:10:00Z" in text
+    assert "pairing_claim_endpoint: https://desktop.tailnet.ts.net:8787/v1/pairing/claim" in text
     assert "Start the loopback-only CCB Mobile gateway in one terminal" not in text
 
 

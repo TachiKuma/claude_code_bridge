@@ -222,6 +222,8 @@ def test_prepare_server_mobile_gateway_uses_running_projects(tmp_path: Path, mon
     try:
         assert handle.summary['project_count'] == 1
         assert handle.summary['projects'][0]['display_name'] == 'running'
+        assert handle.summary['pairing']['expires_at'] is None
+        assert handle.summary['pairing']['reusable_claims'] is True
     finally:
         handle.close()
 

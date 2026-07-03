@@ -2467,6 +2467,30 @@ def test_pairing_claim_creates_hashed_device_records_and_audit(tmp_path: Path) -
     assert denied_view.value.status_code == 401
 
 
+def test_reusable_pairing_can_claim_multiple_devices_until_revoked(tmp_path: Path) -> None:
+    store = MobileGatewayPairingStore(tmp_path / 'mobile')
+    pairing = store.create_pairing_payload(
+        project_id='host-demo',
+        gateway_url='https://mobile.example.com',
+        route_provider='tailnet',
+        scopes=('view', 'notify'),
+        expires_seconds=None,
+        reusable_claims=True,
+    )
+    pairing_code = str(pairing['pairing_code'])
+
+    first = store.claim_pairing(pairing_code=pairing_code, device_name='Phone A')
+    second = store.claim_pairing(pairing_code=pairing_code, device_name='Phone B')
+
+    assert first['device']['device_id'] != second['device']['device_id']
+    assert store.pairing_code_is_claimable(pairing_code)
+    store.revoke_pairing(str(pairing['pairing_id']), reason='mobile_update_refreshed')
+    assert not store.pairing_code_is_claimable(pairing_code)
+    with pytest.raises(MobileGatewayPairingError) as denied:
+        store.claim_pairing(pairing_code=pairing_code, device_name='Phone C')
+    assert denied.value.reason == 'revoked'
+
+
 def test_host_local_device_revoke_lists_devices_and_revokes_terminal_handles(tmp_path: Path) -> None:
     store = MobileGatewayPairingStore(tmp_path / 'mobile')
     pairing = store.create_pairing_payload(

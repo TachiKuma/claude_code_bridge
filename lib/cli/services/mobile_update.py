@@ -376,6 +376,14 @@ def _print_mobile_service_summary(print_fn: Callable[[str], None], service: Mapp
         print_fn(f"   service_log: {service.get('service_log_path')}")
     if service.get("replaced_pid"):
         print_fn(f"   replaced_pid: {service.get('replaced_pid')}")
+    pairing = service.get("pairing")
+    if isinstance(pairing, Mapping):
+        if pairing.get("pairing_code"):
+            print_fn(f"   pairing_code: {pairing.get('pairing_code')}")
+        if pairing.get("expires_at"):
+            print_fn(f"   pairing_expires_at: {pairing.get('expires_at')}")
+        if pairing.get("claim_endpoint"):
+            print_fn(f"   pairing_claim_endpoint: {pairing.get('claim_endpoint')}")
 
 
 def _should_open_login(environ: Mapping[str, str]) -> bool:

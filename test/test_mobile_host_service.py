@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from mobile_gateway import MobileGatewayPairingStore
 from cli.services import mobile_host
 from cli.services.mobile_host import (
     MOBILE_HOST_SERVE_COMMAND,
@@ -29,6 +30,33 @@ class _FakeProcess:
 
     def poll(self) -> int | None:
         return self.returncode
+
+
+def _pairing_payload() -> dict[str, object]:
+    return {
+        'pairing_code': 'stable-code',
+        'pairing_id': 'pair-stable',
+        'project_id': 'host-test',
+        'route_provider': 'tailnet',
+        'gateway_url': 'https://desktop.tailnet.ts.net:8787',
+        'claim_endpoint': 'https://desktop.tailnet.ts.net:8787/v1/pairing/claim',
+        'scopes': ['view'],
+        'expires_at': '2999-07-02T00:10:00Z',
+    }
+
+
+def _claimable_pairing_payload(state_dir: Path) -> dict[str, object]:
+    store = MobileGatewayPairingStore(
+        state_dir,
+        token_factory=lambda _bytes: 'stable-code',
+        id_factory=lambda prefix: f'{prefix}-stable',
+    )
+    return store.create_pairing_payload(
+        project_id='host-test',
+        gateway_url='https://desktop.tailnet.ts.net:8787',
+        route_provider='tailnet',
+        scopes=('view',),
+    )
 
 
 def test_mobile_host_service_clears_stale_state_and_starts(tmp_path: Path) -> None:
@@ -67,8 +95,225 @@ def test_mobile_host_service_clears_stale_state_and_starts(tmp_path: Path) -> No
     assert result.generation == 1
     assert spawned
     assert spawned[0]['command'][2] == MOBILE_HOST_SERVE_COMMAND
+    assert spawned[0]['cwd'] == str(Path.cwd())
     assert spawned[0]['env']['CCB_MOBILE_HOST_STATE_HOME'] == str(state_dir)
     assert not paths.state_path.exists()
+
+
+def test_mobile_host_service_returns_pairing_written_by_spawned_child(
+    tmp_path: Path,
+) -> None:
+    state_dir = tmp_path / 'mobile'
+    paths = mobile_host_service_paths(state_dir)
+
+    def _spawn(command, **_kwargs):
+        generation = int(command[command.index('--generation') + 1])
+        write_mobile_host_service_state(
+            paths.state_path,
+            {
+                'schema_version': 1,
+                'record_type': MOBILE_HOST_SERVICE_RECORD_TYPE,
+                'pid': 222,
+                'generation': generation,
+                'listen': '127.0.0.1:8787',
+                'local_gateway_url': 'http://127.0.0.1:8787',
+                'gateway_url': 'https://desktop.tailnet.ts.net:8787',
+                'route_provider': 'tailnet',
+                'pairing': _pairing_payload(),
+                'state_dir': str(state_dir),
+                'command_kind': 'ccb_mobile_host_serve',
+            },
+        )
+        return _FakeProcess(222)
+
+    result = start_or_replace_mobile_host_service(
+        script_root=tmp_path / 'source',
+        listen='127.0.0.1:8787',
+        public_url='https://desktop.tailnet.ts.net:8787',
+        route_provider='tailnet',
+        state_dir=state_dir,
+        process_exists_fn=lambda _pid: False,
+        port_owner_fn=lambda _listen: None,
+        spawn_fn=_spawn,
+        health_check_fn=lambda _url: True,
+    )
+
+    assert result.status == 'started'
+    assert result.pid == 222
+    assert result.generation == 1
+    assert result.pairing == _pairing_payload()
+
+
+def test_mobile_host_service_refreshes_pairing_for_live_matching_process(
+    tmp_path: Path,
+) -> None:
+    state_dir = tmp_path / 'mobile'
+    paths = mobile_host_service_paths(state_dir)
+    pairing = _claimable_pairing_payload(state_dir)
+    write_mobile_host_service_state(
+        paths.state_path,
+        {
+            'schema_version': 1,
+            'record_type': MOBILE_HOST_SERVICE_RECORD_TYPE,
+            'pid': 111,
+            'generation': 4,
+            'host_id': 'host-test',
+            'listen': '127.0.0.1:8787',
+            'local_gateway_url': 'http://127.0.0.1:8787',
+            'gateway_url': 'https://desktop.tailnet.ts.net:8787',
+            'route_provider': 'tailnet',
+            'pairing': pairing,
+            'state_dir': str(state_dir),
+            'command_kind': 'ccb_mobile_host_serve',
+        },
+    )
+    spawned: list[object] = []
+    terminated: list[int] = []
+
+    result = start_or_replace_mobile_host_service(
+        script_root=tmp_path / 'source',
+        listen='127.0.0.1:8787',
+        public_url='https://desktop.tailnet.ts.net:8787',
+        route_provider='tailnet',
+        state_dir=state_dir,
+        process_exists_fn=lambda pid: pid == 111,
+        process_cmdline_fn=lambda pid: f'python ccb.py {MOBILE_HOST_SERVE_COMMAND} --state-dir {state_dir}' if pid == 111 else '',
+        terminate_pid_tree_fn=lambda pid, **_kwargs: terminated.append(pid) or True,
+        port_owner_fn=lambda _listen: PortOwner(pid=111, command='python ccb.py __mobile-host-serve'),
+        spawn_fn=lambda *_args, **_kwargs: spawned.append(1) or _FakeProcess(222),
+        health_check_fn=lambda url: url == 'http://127.0.0.1:8787',
+    )
+
+    assert result.status == 'running'
+    assert result.pid == 111
+    assert result.generation == 4
+    assert result.replaced_pid is None
+    assert terminated == []
+    assert spawned == []
+    assert result.pairing is not None
+    assert result.pairing['pairing_code'] != pairing['pairing_code']
+    assert result.pairing['expires_at'] is None
+    assert result.pairing['reusable_claims'] is True
+    assert result.to_record()['pairing'] == result.pairing
+    store = MobileGatewayPairingStore(state_dir)
+    assert not store.pairing_code_is_claimable(str(pairing['pairing_code']))
+    assert store.pairing_code_is_claimable(str(result.pairing['pairing_code']))
+
+
+def test_mobile_host_service_refreshes_expired_pairing_without_restart(
+    tmp_path: Path,
+) -> None:
+    state_dir = tmp_path / 'mobile'
+    paths = mobile_host_service_paths(state_dir)
+    expired_pairing = {
+        **_pairing_payload(),
+        'pairing_code': 'expired-code',
+        'expires_at': '2000-01-01T00:00:00Z',
+    }
+    write_mobile_host_service_state(
+        paths.state_path,
+        {
+            'schema_version': 1,
+            'record_type': MOBILE_HOST_SERVICE_RECORD_TYPE,
+            'pid': 111,
+            'generation': 4,
+            'host_id': 'host-test',
+            'listen': '127.0.0.1:8787',
+            'local_gateway_url': 'http://127.0.0.1:8787',
+            'gateway_url': 'https://desktop.tailnet.ts.net:8787',
+            'route_provider': 'tailnet',
+            'pairing': expired_pairing,
+            'state_dir': str(state_dir),
+            'command_kind': 'ccb_mobile_host_serve',
+        },
+    )
+    spawned: list[object] = []
+    terminated: list[int] = []
+
+    result = start_or_replace_mobile_host_service(
+        script_root=tmp_path / 'source',
+        listen='127.0.0.1:8787',
+        public_url='https://desktop.tailnet.ts.net:8787',
+        route_provider='tailnet',
+        state_dir=state_dir,
+        process_exists_fn=lambda pid: pid == 111,
+        process_cmdline_fn=lambda pid: f'python ccb.py {MOBILE_HOST_SERVE_COMMAND} --state-dir {state_dir}' if pid == 111 else '',
+        terminate_pid_tree_fn=lambda pid, **_kwargs: terminated.append(pid) or True,
+        port_owner_fn=lambda _listen: PortOwner(pid=111, command='python ccb.py __mobile-host-serve'),
+        spawn_fn=lambda *_args, **_kwargs: spawned.append(1) or _FakeProcess(222),
+        health_check_fn=lambda url: url == 'http://127.0.0.1:8787',
+    )
+
+    assert result.status == 'running'
+    assert result.pid == 111
+    assert result.replaced_pid is None
+    assert terminated == []
+    assert spawned == []
+    assert result.pairing is not None
+    assert result.pairing['pairing_code'] != 'expired-code'
+    assert result.pairing['gateway_url'] == 'https://desktop.tailnet.ts.net:8787'
+    assert result.pairing['route_provider'] == 'tailnet'
+    assert result.pairing['expires_at'] is None
+    assert result.pairing['reusable_claims'] is True
+    state = json.loads(paths.state_path.read_text(encoding='utf-8'))
+    assert state['pairing'] == result.pairing
+    assert MobileGatewayPairingStore(state_dir).pairing_code_is_claimable(str(result.pairing['pairing_code']))
+
+
+def test_mobile_host_service_refreshes_claimed_pairing_without_restart(
+    tmp_path: Path,
+) -> None:
+    state_dir = tmp_path / 'mobile'
+    paths = mobile_host_service_paths(state_dir)
+    pairing = _claimable_pairing_payload(state_dir)
+    MobileGatewayPairingStore(state_dir).claim_pairing(
+        pairing_code=str(pairing['pairing_code']),
+        device_name='Pixel',
+    )
+    write_mobile_host_service_state(
+        paths.state_path,
+        {
+            'schema_version': 1,
+            'record_type': MOBILE_HOST_SERVICE_RECORD_TYPE,
+            'pid': 111,
+            'generation': 4,
+            'host_id': 'host-test',
+            'listen': '127.0.0.1:8787',
+            'local_gateway_url': 'http://127.0.0.1:8787',
+            'gateway_url': 'https://desktop.tailnet.ts.net:8787',
+            'route_provider': 'tailnet',
+            'pairing': pairing,
+            'state_dir': str(state_dir),
+            'command_kind': 'ccb_mobile_host_serve',
+        },
+    )
+    spawned: list[object] = []
+    terminated: list[int] = []
+
+    result = start_or_replace_mobile_host_service(
+        script_root=tmp_path / 'source',
+        listen='127.0.0.1:8787',
+        public_url='https://desktop.tailnet.ts.net:8787',
+        route_provider='tailnet',
+        state_dir=state_dir,
+        process_exists_fn=lambda pid: pid == 111,
+        process_cmdline_fn=lambda pid: f'python ccb.py {MOBILE_HOST_SERVE_COMMAND} --state-dir {state_dir}' if pid == 111 else '',
+        terminate_pid_tree_fn=lambda pid, **_kwargs: terminated.append(pid) or True,
+        port_owner_fn=lambda _listen: PortOwner(pid=111, command='python ccb.py __mobile-host-serve'),
+        spawn_fn=lambda *_args, **_kwargs: spawned.append(1) or _FakeProcess(222),
+        health_check_fn=lambda url: url == 'http://127.0.0.1:8787',
+    )
+
+    assert result.status == 'running'
+    assert terminated == []
+    assert spawned == []
+    assert result.pairing is not None
+    assert result.pairing['pairing_code'] != pairing['pairing_code']
+    assert result.pairing['expires_at'] is None
+    assert result.pairing['reusable_claims'] is True
+    store = MobileGatewayPairingStore(state_dir)
+    assert not store.pairing_code_is_claimable(str(pairing['pairing_code']))
+    assert store.pairing_code_is_claimable(str(result.pairing['pairing_code']))
 
 
 def test_mobile_host_service_replaces_live_managed_process(tmp_path: Path) -> None:
@@ -172,7 +417,7 @@ def test_mobile_host_service_refuses_truncated_managed_command_from_other_state_
     assert spawned == []
 
 
-def test_mobile_host_service_lock_blocks_concurrent_update(tmp_path: Path) -> None:
+def test_mobile_host_service_lock_times_out_when_concurrent_update_stays_active(tmp_path: Path) -> None:
     paths = mobile_host_service_paths(tmp_path / 'mobile')
     paths.state_dir.mkdir(parents=True)
     paths.lock_path.write_text(json.dumps({'pid': 999}) + '\n', encoding='utf-8')
@@ -188,12 +433,56 @@ def test_mobile_host_service_lock_blocks_concurrent_update(tmp_path: Path) -> No
             port_owner_fn=lambda _listen: None,
             spawn_fn=lambda *_args, **_kwargs: _FakeProcess(222),
             health_check_fn=lambda _url: True,
+            lock_wait_timeout_s=0.0,
         )
 
 
+def test_mobile_host_service_waits_for_concurrent_update_to_finish(tmp_path: Path) -> None:
+    paths = mobile_host_service_paths(tmp_path / 'mobile')
+    paths.state_dir.mkdir(parents=True)
+    paths.lock_path.write_text(json.dumps({'pid': 999}) + '\n', encoding='utf-8')
+    spawned: list[object] = []
+    sleeps: list[float] = []
+    tick = -0.01
+
+    def _monotonic() -> float:
+        nonlocal tick
+        tick += 0.01
+        return tick
+
+    def _sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        paths.lock_path.unlink()
+
+    result = start_or_replace_mobile_host_service(
+        script_root=tmp_path / 'source',
+        listen='127.0.0.1:8787',
+        public_url='https://desktop.tailnet.ts.net:8787',
+        route_provider='tailnet',
+        state_dir=paths.state_dir,
+        process_exists_fn=lambda pid: pid == 999,
+        port_owner_fn=lambda _listen: None,
+        spawn_fn=lambda *_args, **_kwargs: spawned.append(1) or _FakeProcess(222),
+        health_check_fn=lambda _url: True,
+        sleep_fn=_sleep,
+        monotonic_fn=_monotonic,
+        lock_wait_timeout_s=1.0,
+    )
+
+    assert result.status == 'started'
+    assert result.pid == 222
+    assert spawned == [1]
+    assert len(sleeps) == 1
+
+
 def test_mobile_host_service_terminates_spawned_process_when_health_never_ready(tmp_path: Path) -> None:
-    ticks = iter([0.0, 0.0, 0.0, 10.0])
+    tick = 0.0
     terminated: list[int] = []
+
+    def _monotonic() -> float:
+        nonlocal tick
+        tick += 10.0
+        return tick
 
     with pytest.raises(MobileHostServiceError, match='did not become healthy'):
         start_or_replace_mobile_host_service(
@@ -208,7 +497,7 @@ def test_mobile_host_service_terminates_spawned_process_when_health_never_ready(
             spawn_fn=lambda *_args, **_kwargs: _FakeProcess(222),
             health_check_fn=lambda _url: False,
             sleep_fn=lambda _seconds: None,
-            monotonic_fn=lambda: next(ticks),
+            monotonic_fn=_monotonic,
         )
 
     assert terminated == [222]
@@ -268,10 +557,13 @@ def test_mobile_host_serve_removes_current_state_after_server_exits(
             'local_gateway_url': 'http://127.0.0.1:8787',
             'gateway_url': 'http://127.0.0.1:8787',
             'route_provider': 'tailnet',
+            'pairing': _pairing_payload(),
         }
 
         def serve_forever(self) -> None:
             assert paths.state_path.exists()
+            state = json.loads(paths.state_path.read_text(encoding='utf-8'))
+            assert state['pairing'] == _pairing_payload()
 
         def close(self) -> None:
             closed.append(True)
