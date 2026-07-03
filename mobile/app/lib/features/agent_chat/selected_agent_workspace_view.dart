@@ -94,6 +94,7 @@ class SelectedAgentWorkspaceView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final strings = CcbMobileLocalizations.of(context);
     return Column(
       key: const ValueKey('selected-agent-workspace'),
       children: [

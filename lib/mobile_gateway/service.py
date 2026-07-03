@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
@@ -50,6 +51,7 @@ _PAIRING_CAPABILITIES = (
 )
 _REDACTED_NAMESPACE_KEYS = ('socket_path', 'session_name')
 _DEFAULT_ROUTE_PROVIDER = 'lan'
+_PROJECT_LIST_HEALTH_WORKERS = 8
 _DEFAULT_PAIRING_SCOPES = (
     'view',
     'content',
@@ -162,8 +164,11 @@ class MobileGatewayService:
 
     def projects_payload(self) -> dict[str, object]:
         projects: list[dict[str, object]] = []
-        for project in self._project_registry.projects():
-            ccbd = self._project_list_health(project)
+        registry_projects = self._project_registry.projects()
+        health_by_project = self._project_list_health_by_project(registry_projects)
+        capabilities = self._capabilities()
+        for project in registry_projects:
+            ccbd = health_by_project[project.project_id]
             if not _project_available_for_mobile_list(ccbd):
                 continue
             item = {
@@ -172,7 +177,7 @@ class MobileGatewayService:
                 'root': str(project.project_root),
                 'health': str(ccbd.get('health') or 'unknown'),
                 'mount_state': str(ccbd.get('mount_state') or ''),
-                'capabilities': self._capabilities(),
+                'capabilities': capabilities,
             }
             if ccbd.get('error'):
                 item['error'] = str(ccbd.get('error') or '')
@@ -1028,6 +1033,23 @@ class MobileGatewayService:
             raise MobileGatewayError(_error_text(exc), status_code=503) from exc
         return dict(payload or {}) if isinstance(payload, dict) else {}
 
+    def _project_list_health_by_project(
+        self,
+        projects: tuple[MobileGatewayProject, ...],
+    ) -> dict[str, dict[str, object]]:
+        if len(projects) <= 1:
+            return {
+                project.project_id: self._project_list_health(project)
+                for project in projects
+            }
+        max_workers = min(_PROJECT_LIST_HEALTH_WORKERS, len(projects))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            health_items = executor.map(self._project_list_health, projects)
+            return {
+                project.project_id: health
+                for project, health in zip(projects, health_items)
+            }
+
     def _project_list_health(self, project: MobileGatewayProject) -> dict[str, object]:
         try:
             return self._ping_or_unavailable(project)
@@ -1046,6 +1068,16 @@ class MobileGatewayService:
         except Exception as exc:
             raise MobileGatewayError(_error_text(exc), status_code=503) from exc
         return dict(payload or {}) if isinstance(payload, dict) else {}
+
+    def _notification_snapshots(self) -> list[MobileNotificationSnapshot]:
+        snapshots: list[MobileNotificationSnapshot] = []
+        for project in self._project_registry.projects():
+            try:
+                payload = self._request_project_view(project)
+            except MobileGatewayError:
+                continue
+            snapshots.extend(_notification_snapshots_for_project(project, payload, observed_at=self._clock()))
+        return snapshots
 
     def _terminal_attach_target(self, record: dict[str, object]) -> TerminalAttachTarget:
         project = self._require_project(str(record.get('project_id') or ''))
@@ -1207,7 +1239,10 @@ def build_mobile_gateway_server(listen: ListenAddress, service: MobileGatewaySer
             self.send_header('content-type', 'application/json; charset=utf-8')
             self.send_header('content-length', str(len(body)))
             self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                return
 
         def _send_notification_stream(self) -> None:
             once = service.notification_stream_once_from_path(self.path)
@@ -1267,7 +1302,62 @@ def build_mobile_gateway_server(listen: ListenAddress, service: MobileGatewaySer
                 self.send_header(key, value)
             self.send_header('content-length', str(len(body)))
             self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                return
+
+        def _send_notification_stream(self) -> None:
+            once = service.notification_stream_once_from_path(self.path)
+            try:
+                events = service.notification_events_since(self.path, self.headers)
+            except MobileGatewayError as exc:
+                self._send_json(exc.status_code, {
+                    'schema_version': _SCHEMA_VERSION,
+                    'status': 'error',
+                    'error': _error_text(exc),
+                })
+                return
+            self.send_response(200)
+            self.send_header('content-type', 'text/event-stream; charset=utf-8')
+            self.send_header('cache-control', 'no-cache')
+            self.send_header('connection', 'close' if once else 'keep-alive')
+            self.end_headers()
+            last_event_id = self._write_notification_events(events)
+            if once:
+                self.close_connection = True
+                return
+            while True:
+                try:
+                    time.sleep(_NOTIFICATION_STREAM_POLL_SECONDS)
+                    events = service.notification_events_since(
+                        self.path,
+                        self.headers,
+                        last_event_id=last_event_id,
+                    )
+                    next_id = self._write_notification_events(events)
+                    if next_id is not None:
+                        last_event_id = next_id
+                    elif not self._write_sse_bytes(b': keepalive\n\n'):
+                        return
+                except (BrokenPipeError, ConnectionError, OSError):
+                    return
+
+        def _write_notification_events(self, events: list[dict[str, object]]) -> str | None:
+            last_event_id = None
+            for event in events:
+                if not self._write_sse_bytes(encode_sse_event(event)):
+                    return last_event_id
+                last_event_id = str(event.get('id') or '') or last_event_id
+            return last_event_id
+
+        def _write_sse_bytes(self, body: bytes) -> bool:
+            try:
+                self.wfile.write(body)
+                self.wfile.flush()
+                return True
+            except (BrokenPipeError, ConnectionError, OSError):
+                return False
 
         def _read_json_body(self) -> dict[str, object]:
             length_text = self.headers.get('content-length') or '0'

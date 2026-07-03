@@ -405,6 +405,7 @@ _COMMAND_HELP = {
         Endpoints:
           GET /v1/health
           GET /v1/projects
+          GET /v1/mobile/notifications  Server-sent task completion notifications
           GET /v1/projects/{project_id}/view
           POST /v1/pairing/claim
           GET /v1/devices/me
@@ -427,6 +428,8 @@ _COMMAND_HELP = {
           - Lifecycle stop requests go through ccbd `stop-all`, not raw tmux.
           - Lifecycle routes require a valid device token with `lifecycle` scope.
           - Focus routes require a valid device token with `focus` scope.
+          - Notification streams require a valid device token with `notify`
+            scope and publish low-sensitivity task completion metadata only.
           - Terminal-open routes require `terminal_input` scope and mint
             short-lived terminal tokens.
           - Terminal WebSocket streams validate terminal tokens and monotonic

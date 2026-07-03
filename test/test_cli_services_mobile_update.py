@@ -2,10 +2,42 @@ from __future__ import annotations
 
 import json
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 
 from cli.services import mobile_update
+
+
+class _FakeGatewayHandle:
+    def __init__(self) -> None:
+        self.closed = False
+        self.served = False
+        self.summary = {
+            "mobile_status": "serving",
+            "listen": "127.0.0.1:8787",
+            "gateway_url": "https://desktop.tailnet.ts.net:8787",
+            "route_provider": "tailnet",
+            "mode": "loopback_server_registry",
+            "project_count": 2,
+            "projects": [
+                {"id": "proj-one", "display_name": "test_ccb2", "health": "healthy"},
+                {"id": "proj-two", "display_name": "ccb_mobile", "health": "healthy"},
+            ],
+            "pairing": {
+                "pairing_code": "pair-code",
+                "claim_endpoint": "https://desktop.tailnet.ts.net:8787/v1/pairing/claim",
+                "route_provider": "tailnet",
+                "gateway_url": "https://desktop.tailnet.ts.net:8787",
+                "scopes": ["project:view", "agent:message"],
+            },
+        }
+
+    def serve_forever(self) -> None:
+        self.served = True
+
+    def close(self) -> None:
+        self.closed = True
 
 
 def _force_linux_tailscale_install(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -46,7 +78,9 @@ def test_detect_tailscale_reports_logged_in_tailnet_identity() -> None:
     }
 
     def _run(command, **_kwargs):
-        return subprocess.CompletedProcess(command, 0, stdout=json.dumps(payload), stderr="")
+        return subprocess.CompletedProcess(
+            command, 0, stdout=json.dumps(payload), stderr=""
+        )
 
     status = mobile_update.detect_tailscale(
         which_fn=lambda _name: "/usr/bin/tailscale",
@@ -87,8 +121,12 @@ def test_build_tailnet_commands_keep_gateway_loopback_and_no_funnel() -> None:
         "--https=8787",
         "http://127.0.0.1:8787",
     )
-    public_port = commands.mobile_serve[commands.mobile_serve.index("--public-url") + 1].rsplit(":", 1)[1]
-    serve_https_port = commands.tailscale_serve[commands.tailscale_serve.index("--https=8787")].split("=", 1)[1]
+    public_port = commands.mobile_serve[
+        commands.mobile_serve.index("--public-url") + 1
+    ].rsplit(":", 1)[1]
+    serve_https_port = commands.tailscale_serve[
+        commands.tailscale_serve.index("--https=8787")
+    ].split("=", 1)[1]
     assert serve_https_port == public_port
     for command in (
         commands.mobile_serve,
@@ -128,17 +166,19 @@ def test_onboarding_not_installed_prints_install_and_phone_steps() -> None:
     text = "\n".join(output)
     assert code == 0
     assert install_calls == 0
-    assert "Tailscale was not found" in text
+    assert "Step 1/3: install Tailscale on this computer" in text
     assert mobile_update.TAILSCALE_DOWNLOAD_URL in text
     assert "Skipping automatic install" in text
-    assert "Install Tailscale on the phone" in text
+    assert "Install Tailscale and sign in to the same tailnet" in text
     assert f"Download APK: {mobile_update.DEFAULT_CCB_MOBILE_APP_DOWNLOAD_URL}" in text
     assert "adb install -r build/app/outputs/flutter-apk/app-debug.apk" not in text
     assert mobile_update.CCB_MOBILE_APP_DOWNLOAD_URL_ENV in text
-    assert "Funnel and 0.0.0.0 listeners are not used" in text
+    assert "no Funnel, tokens, ACLs, or grants" in text
 
 
-def test_onboarding_not_installed_can_install_after_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_onboarding_not_installed_can_install_after_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _force_linux_tailscale_install(monkeypatch)
     output: list[str] = []
     prompts: list[str] = []
@@ -163,10 +203,13 @@ def test_onboarding_not_installed_can_install_after_prompt(monkeypatch: pytest.M
     assert "curl -fsSL https://tailscale.com/install.sh | sh" in text
     assert "official Tailscale install script" in text
     assert "Tailscale install command completed" in text
-    assert "Then run `tailscale up`" in text
+    assert "Next: run `tailscale up`" in text
+    assert "The QR appears after this computer is signed in to Tailscale" in text
 
 
-def test_onboarding_not_installed_can_install_from_explicit_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_onboarding_not_installed_can_install_from_explicit_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _force_linux_tailscale_install(monkeypatch)
     output: list[str] = []
     install_calls = 0
@@ -190,7 +233,9 @@ def test_onboarding_not_installed_can_install_from_explicit_env(monkeypatch: pyt
     assert "Tailscale install command completed" in text
 
 
-def test_onboarding_not_installed_returns_install_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_onboarding_not_installed_returns_install_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _force_linux_tailscale_install(monkeypatch)
     output: list[str] = []
 
@@ -225,13 +270,14 @@ def test_onboarding_logged_out_prints_login_and_can_open_url() -> None:
     assert opened == [mobile_update.TAILSCALE_LOGIN_URL]
     assert "tailscale up" in text
     assert "Login/register" in text
-    assert "After login completes, re-run: ccb update mobile" in text
-    assert "mobile gateway, Tailscale Serve, and pairing QR steps" in text
-    assert "Open CCB Mobile and scan the pairing QR" in text
+    assert "Next: run `ccb update mobile` again" in text
+    assert "starts the gateway and prints the QR" in text
+    assert "After the next `ccb update mobile` prints a QR" in text
 
 
 def test_onboarding_prints_configured_mobile_app_download_url() -> None:
     output: list[str] = []
+    handle = _FakeGatewayHandle()
 
     code = mobile_update.run_mobile_update_onboarding(
         detect_tailscale_fn=lambda: mobile_update.TailscaleStatus(
@@ -240,8 +286,16 @@ def test_onboarding_prints_configured_mobile_app_download_url() -> None:
             logged_in=True,
             hostname="desktop.tailnet.ts.net.",
         ),
-        environ={mobile_update.CCB_MOBILE_APP_DOWNLOAD_URL_ENV: "https://example.test/ccb-mobile.apk"},
+        prepare_gateway_fn=lambda _command: handle,
+        run_fn=lambda command, **_kwargs: subprocess.CompletedProcess(
+            command, 0, stdout="", stderr=""
+        ),
+        environ={
+            mobile_update.CCB_MOBILE_APP_DOWNLOAD_URL_ENV: "https://example.test/ccb-mobile.apk"
+        },
         print_fn=output.append,
+        serve_forever=False,
+        qr_ansi=False,
     )
 
     text = "\n".join(output)
@@ -249,11 +303,14 @@ def test_onboarding_prints_configured_mobile_app_download_url() -> None:
     assert "Download APK: https://example.test/ccb-mobile.apk" in text
     assert mobile_update.DEFAULT_CCB_MOBILE_APP_DOWNLOAD_URL not in text
     assert "adb install -r build/app/outputs/flutter-apk/app-debug.apk" not in text
-    assert "Open CCB Mobile and scan the pairing QR" in text
+    assert "Open CCB Mobile, tap Scan computer QR" in text
 
 
-def test_onboarding_logged_in_prints_serve_qr_and_smoke_shapes() -> None:
+def test_onboarding_logged_in_starts_gateway_serve_and_prints_qr() -> None:
     output: list[str] = []
+    prepared: list[SimpleNamespace] = []
+    run_commands: list[tuple[str, ...]] = []
+    handle = _FakeGatewayHandle()
 
     code = mobile_update.run_mobile_update_onboarding(
         detect_tailscale_fn=lambda: mobile_update.TailscaleStatus(
@@ -262,7 +319,12 @@ def test_onboarding_logged_in_prints_serve_qr_and_smoke_shapes() -> None:
             logged_in=True,
             hostname="desktop.tailnet.ts.net.",
         ),
+        prepare_gateway_fn=lambda command: prepared.append(command) or handle,
+        run_fn=lambda command, **_kwargs: run_commands.append(tuple(command))
+        or subprocess.CompletedProcess(command, 0, stdout="", stderr=""),
         print_fn=output.append,
+        serve_forever=False,
+        qr_ansi=False,
     )
 
     text = "\n".join(output)
