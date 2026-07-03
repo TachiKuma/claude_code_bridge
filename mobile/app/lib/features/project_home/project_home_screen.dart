@@ -317,7 +317,10 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
             _selectWindow(view, windowName);
           },
           onAgentSelected: _selectAgent,
-          onRefreshView: _refreshActiveView,
+          onRefreshView:
+              () => _refreshActiveView(
+                preserveSelectedAgentName: selectedAgent?.name,
+              ),
           onTimelineScrollDirectionChanged:
               _handleMobileTimelineScrollDirection,
         );
@@ -626,7 +629,8 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
       onHorizontalDragStart: _startWideSidebarDrag,
       onHorizontalDragUpdate: _updateWideSidebarDrag,
       onHorizontalDragEnd: _endWideSidebarDrag,
-      onRefreshView: _refreshActiveView,
+      onRefreshView:
+          () => _refreshActiveView(preserveSelectedAgentName: agent?.name),
       unreadAgentNames: _unreadAgentNamesForProject(view.project.id),
       hasUnreadTaskCompletion: _projectHasUnreadTaskCompletion(view.project.id),
       hasWorkingAgents: _viewHasWorkingAgents(view),
@@ -1113,11 +1117,13 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     return confirmProjectHomeStop(context, view: view);
   }
 
-  Future<CcbProjectView?> _refreshActiveView() async {
+  Future<CcbProjectView?> _refreshActiveView({
+    String? preserveSelectedAgentName,
+  }) async {
     final outcome = await _viewRefreshCoordinator.refresh(
       repository: _activeRepository,
       projectId: _activeProjectId,
-      selectedAgentName: _selectedAgentName,
+      selectedAgentName: preserveSelectedAgentName ?? _selectedAgentName,
     );
     if (outcome.kind == ProjectHomeViewRefreshOutcomeKind.success) {
       if (!mounted) {
