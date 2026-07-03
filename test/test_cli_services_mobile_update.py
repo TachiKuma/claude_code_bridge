@@ -355,9 +355,18 @@ def test_onboarding_logged_in_starts_gateway_serve_and_prints_qr() -> None:
     assert all("0.0.0.0" not in line for line in command_lines)
 
 
-def test_onboarding_logged_in_starts_managed_mobile_service_when_callback_provided() -> None:
+def test_onboarding_logged_in_starts_managed_mobile_service_when_callback_provided(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     output: list[str] = []
     calls: list[tuple[mobile_update.TailnetOnboardingCommands, mobile_update.TailscaleStatus]] = []
+    qr_payloads: list[tuple[str, dict[str, object]]] = []
+
+    def _render_qr(payload: str, **kwargs):
+        qr_payloads.append((payload, dict(kwargs)))
+        return ("QR-LINE-1", "QR-LINE-2")
+
+    monkeypatch.setattr(mobile_update, "render_terminal_qr", _render_qr)
 
     def _start_service(commands, status):
         calls.append((commands, status))
@@ -399,7 +408,59 @@ def test_onboarding_logged_in_starts_managed_mobile_service_when_callback_provid
     assert "pairing_code: stable-code" in text
     assert "pairing_expires_at: 2026-07-02T00:10:00Z" in text
     assert "pairing_claim_endpoint: https://desktop.tailnet.ts.net:8787/v1/pairing/claim" in text
+    assert "Scan this QR in CCB Mobile" in text
+    assert "QR-LINE-1" in text
+    assert "QR-LINE-2" in text
+    assert "If scanning fails, use Manual Pairing in CCB Mobile" in text
+    assert "Gateway URL: https://desktop.tailnet.ts.net:8787" in text
+    assert "Pairing Code: stable-code" in text
+    assert len(qr_payloads) == 1
+    payload = json.loads(qr_payloads[0][0])
+    assert payload == {
+        "claim_endpoint": "https://desktop.tailnet.ts.net:8787/v1/pairing/claim",
+        "gateway_url": "https://desktop.tailnet.ts.net:8787",
+        "pairing_code": "stable-code",
+        "route_provider": "tailnet",
+        "scopes": [],
+    }
+    assert qr_payloads[0][1]["quiet_zone"] == 0
+    assert qr_payloads[0][1]["compact"] is True
     assert "Start the loopback-only CCB Mobile gateway in one terminal" not in text
+
+
+def test_onboarding_managed_service_qr_keeps_payload_and_removes_extra_border() -> None:
+    payload = json.dumps(
+        {
+            "claim_endpoint": "https://desktop.tailnet.ts.net:8787/v1/pairing/claim",
+            "gateway_url": "https://desktop.tailnet.ts.net:8787",
+            "pairing_code": "stable-code-with-realistic-length",
+            "route_provider": "tailnet",
+            "scopes": [
+                "ask",
+                "content",
+                "file_download",
+                "file_upload",
+                "focus",
+                "lifecycle",
+                "message_submit",
+                "notify",
+                "terminal_input",
+                "view",
+            ],
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+    old_qr = mobile_update.render_terminal_qr(payload, quiet_zone=2, compact=True)
+    new_qr = mobile_update.render_terminal_qr(payload, quiet_zone=0, compact=True)
+    old_area = len(old_qr) * len(old_qr[0])
+    new_area = len(new_qr) * len(new_qr[0])
+
+    assert new_area < old_area
+    assert len(new_qr) == len(old_qr) - 2
+    assert len(new_qr[0]) == len(old_qr[0]) - 4
 
 
 def test_onboarding_reports_non_mapping_mobile_service_result() -> None:

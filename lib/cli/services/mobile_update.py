@@ -22,7 +22,7 @@ DEFAULT_MOBILE_GATEWAY_LISTEN = "127.0.0.1:8787"
 CCB_MOBILE_APP_DOWNLOAD_URL_ENV = "CCB_MOBILE_APP_DOWNLOAD_URL"
 DEFAULT_CCB_MOBILE_APP_DOWNLOAD_URL = (
     "https://github.com/bfly123/claude_code_bridge/releases/download/"
-    "v8.0.12/ccb-mobile-v8.0.12.apk"
+    "v8.0.13/ccb-mobile-v8.0.13.apk"
 )
 TAILSCALE_LINUX_INSTALL_COMMAND = (
     "sh",
@@ -124,6 +124,7 @@ def run_mobile_update_onboarding(
             if not isinstance(service, Mapping):
                 raise TypeError('mobile service starter must return a mapping')
             _print_mobile_service_summary(print_fn, service)
+            qr_payload = _pairing_qr_text(service)
         except Exception as exc:
             print_fn(f"❌ CCB Mobile gateway update failed: {type(exc).__name__}: {exc}")
             return 1
@@ -134,7 +135,16 @@ def run_mobile_update_onboarding(
         print_fn("")
         _print_mobile_app_steps(print_fn, environ=env, qr_ready=True)
         print_fn("")
-        print_fn("Open CCB Mobile and scan the pairing QR printed above.")
+        print_fn("Scan this QR in CCB Mobile:")
+        use_ansi = (
+            (print_fn is print and sys.stdout.isatty()) if qr_ansi is None else qr_ansi
+        )
+        for line in render_terminal_qr(
+            qr_payload, ansi=use_ansi, quiet_zone=0, compact=True
+        ):
+            print_fn(line)
+        print_fn("")
+        _print_pairing_fallback(service, print_fn=print_fn)
         print_fn("")
         print_fn("Dry-run/simulated smoke command shapes:")
         print_fn(f"   health:       {_shell_join(commands.health_smoke)}")

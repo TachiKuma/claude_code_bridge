@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## v8.0.13 (2026-07-03)
+
+### Mobile Pairing QR
+
+- **Pairing QR Restored For Managed Mobile Update**: `ccb update mobile` now prints the pairing QR when reusing the host-wide background mobile gateway instead of only printing the pairing code.
+- **Pairing QR Display Tightened**: the terminal QR keeps the original full JSON payload but removes the extra quiet-zone border so it takes less space without changing app-side QR semantics.
+- **Mobile App Link Updated**: `ccb update mobile`, README links, package metadata, and the mobile release manifest now point to the 8.0.13 APK.
+
 ## v8.0.12 (2026-07-03)
 
 ### Release CI Portability
