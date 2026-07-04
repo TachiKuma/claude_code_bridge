@@ -7,6 +7,8 @@ class CcbProject {
     this.health = 'unknown',
     this.hasWorkingAgents = false,
     this.workingAgentCount = 0,
+    this.lastOpenedAt,
+    this.lastActivityAt,
   });
 
   final String id;
@@ -16,6 +18,8 @@ class CcbProject {
   final String health;
   final bool hasWorkingAgents;
   final int workingAgentCount;
+  final DateTime? lastOpenedAt;
+  final DateTime? lastActivityAt;
 
   factory CcbProject.fromJson(Map<String, Object?> json) {
     final workingAgentCount =
@@ -33,8 +37,46 @@ class CcbProject {
           json['has_active_agents'] == true ||
           workingAgentCount > 0,
       workingAgentCount: workingAgentCount,
+      lastOpenedAt: _optionalDateTime(json['last_opened_at']),
+      lastActivityAt: _optionalDateTime(json['last_activity_at']),
     );
   }
+}
+
+List<CcbProject> sortCcbProjectsByRecentActivity(List<CcbProject> projects) {
+  final indexed = projects.indexed.toList();
+  indexed.sort((left, right) {
+    final leftProject = left.$2;
+    final rightProject = right.$2;
+    final leftAt = ccbProjectRecentActivityAt(leftProject);
+    final rightAt = ccbProjectRecentActivityAt(rightProject);
+    if (leftAt != null && rightAt != null) {
+      final compared = rightAt.compareTo(leftAt);
+      if (compared != 0) {
+        return compared;
+      }
+    } else if (leftAt != null) {
+      return -1;
+    } else if (rightAt != null) {
+      return 1;
+    } else if (leftProject.hasWorkingAgents != rightProject.hasWorkingAgents) {
+      return leftProject.hasWorkingAgents ? -1 : 1;
+    }
+    return left.$1.compareTo(right.$1);
+  });
+  return [for (final item in indexed) item.$2];
+}
+
+DateTime? ccbProjectRecentActivityAt(CcbProject project) {
+  final openedAt = project.lastOpenedAt;
+  final activityAt = project.lastActivityAt;
+  if (openedAt == null) {
+    return activityAt;
+  }
+  if (activityAt == null) {
+    return openedAt;
+  }
+  return activityAt.isAfter(openedAt) ? activityAt : openedAt;
 }
 
 String _text(Object? value, {String fallback = ''}) {
@@ -43,3 +85,8 @@ String _text(Object? value, {String fallback = ''}) {
 }
 
 int? _optionalInt(Object? value) => int.tryParse((value ?? '').toString());
+
+DateTime? _optionalDateTime(Object? value) {
+  final parsed = DateTime.tryParse((value ?? '').toString());
+  return parsed?.toUtc();
+}

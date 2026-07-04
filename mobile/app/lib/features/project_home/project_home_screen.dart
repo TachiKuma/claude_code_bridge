@@ -381,8 +381,10 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
 
   Future<List<CcbProject>> _loadServerProjects() {
     return _deferredBuilderFuture(
-      () => _activeRepository.listProjects().timeout(
-        projectHomeRuntimeViewLoadTimeout,
+      () async => sortCcbProjectsByRecentActivity(
+        await _activeRepository.listProjects().timeout(
+          projectHomeRuntimeViewLoadTimeout,
+        ),
       ),
     );
   }

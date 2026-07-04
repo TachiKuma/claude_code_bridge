@@ -132,6 +132,59 @@ void main() {
     },
   );
 
+  testWidgets('paired gateway project list sorts by recent activity', (
+    tester,
+  ) async {
+    final profile = _pairedHost(hostId: 'server-host', deviceId: 'phone');
+    final profileStore = await _profileStoreWith([profile]);
+    final gatewayRepository = _ServerProjectsRepository([
+      _projectFixture(
+        id: 'older',
+        displayName: 'Older',
+        root: '/srv/older',
+        lastActivityAt: '2026-07-04T09:01:00Z',
+      ),
+      _projectFixture(
+        id: 'opened',
+        displayName: 'Recently opened',
+        root: '/srv/opened',
+        lastOpenedAt: '2026-07-04T09:03:00Z',
+      ),
+      _projectFixture(
+        id: 'reply',
+        displayName: 'Latest reply',
+        root: '/srv/reply',
+        lastActivityAt: '2026-07-04T09:05:00Z',
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProjectHomeScreen(
+          repository: FakeMobileCcbRepository.demo(),
+          profileStore: profileStore,
+          gatewayRepositoryFactory: (_) => gatewayRepository,
+          gatewayTerminalTransportFactory: (_) => RecordingTerminalTransport(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _activatePairedGatewayListOnly(tester);
+
+    expect(
+      tester
+          .widgetList<ListTile>(
+            find.descendant(
+              of: find.byKey(const ValueKey('project-list')),
+              matching: find.byType(ListTile),
+            ),
+          )
+          .map((tile) => (tile.title! as Text).data),
+      ['Latest reply', 'Recently opened', 'Older'],
+    );
+  });
+
   testWidgets('paired gateway auto refreshes open project execution status', (
     tester,
   ) async {
@@ -561,6 +614,8 @@ Map<String, Object?> _projectFixture({
   String? activityState,
   String? activitySource,
   String? activityReason,
+  String? lastOpenedAt,
+  String? lastActivityAt,
 }) {
   final view =
       jsonDecode(jsonEncode(demoProjectViewFixture['view']))
@@ -570,6 +625,8 @@ Map<String, Object?> _projectFixture({
     'root': root,
     'display_name': displayName,
     'health': 'healthy',
+    if (lastOpenedAt != null) 'last_opened_at': lastOpenedAt,
+    if (lastActivityAt != null) 'last_activity_at': lastActivityAt,
   };
   if (activityState != null ||
       activitySource != null ||

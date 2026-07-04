@@ -394,9 +394,22 @@ class _ConversationBubbleSurfaceState extends State<_ConversationBubbleSurface>
 @visibleForTesting
 Color conversationWorkingBubbleTint(ColorScheme colorScheme, double pulse) {
   final clampedPulse = pulse.clamp(0.0, 1.0);
-  return colorScheme.primaryContainer.withValues(
-    alpha: 0.58 + (0.08 * clampedPulse),
-  );
+  final base =
+      colorScheme.brightness == Brightness.dark
+          ? const Color(0xFF3E2A12)
+          : const Color(0xFFFFF1CC);
+  final active =
+      colorScheme.brightness == Brightness.dark
+          ? const Color(0xFF513513)
+          : const Color(0xFFFFDD8A);
+  return Color.lerp(base, active, 0.44 + (0.28 * clampedPulse))!;
+}
+
+@visibleForTesting
+Color conversationWorkingBubbleAccent(ColorScheme colorScheme) {
+  return colorScheme.brightness == Brightness.dark
+      ? const Color(0xFFFFC857)
+      : const Color(0xFFDB6E00);
 }
 
 @visibleForTesting
@@ -406,7 +419,7 @@ BorderSide conversationWorkingBubbleBorderSide(
 ) {
   final clampedPulse = pulse.clamp(0.0, 1.0);
   return BorderSide(
-    color: colorScheme.primary,
+    color: conversationWorkingBubbleAccent(colorScheme),
     width: 2.4 + (0.4 * clampedPulse),
   );
 }
@@ -417,11 +430,10 @@ List<BoxShadow> conversationWorkingBubbleGlow(
   double pulse,
 ) {
   final clampedPulse = pulse.clamp(0.0, 1.0);
+  final accent = conversationWorkingBubbleAccent(colorScheme);
   return [
     BoxShadow(
-      color: colorScheme.primary.withValues(
-        alpha: 0.14 + (0.10 * clampedPulse),
-      ),
+      color: accent.withValues(alpha: 0.16 + (0.10 * clampedPulse)),
       blurRadius: 6 + (8 * clampedPulse),
       spreadRadius: 0.5 + (1.4 * clampedPulse),
     ),

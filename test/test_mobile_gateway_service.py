@@ -241,6 +241,44 @@ class _FakeClaudeCcbdClient(_FakeCcbdClient):
         return payload
 
 
+class _FakeActivityCcbdClient(_FakeCcbdClient):
+    def project_view(self, *, schema_version: int = 1) -> dict[str, object]:
+        payload = super().project_view(schema_version=schema_version)
+        payload['view']['agents'][0].update({
+            'activity_state': 'active',
+            'activity_reason': 'codex_working_status_line',
+            'last_progress_at': '2026-07-04T09:04:00Z',
+        })
+        payload['view']['content']['items'][0]['completed_at'] = '2026-07-04T09:02:00Z'
+        payload['view']['comms'] = [
+            {
+                'id': 'job_mobile_reply',
+                'target': 'mobile',
+                'status': 'completed',
+                'updated_at': '2026-07-04T09:03:00Z',
+                'body_preview': 'reply activity',
+            }
+        ]
+        return payload
+
+
+class _SlowActivityCcbdClient(_FakeActivityCcbdClient):
+    def __init__(self, *, sleep_seconds: float = 0.2) -> None:
+        super().__init__()
+        self.sleep_seconds = sleep_seconds
+
+    def project_view(self, *, schema_version: int = 1) -> dict[str, object]:
+        self.calls.append(('project_view_start', schema_version))
+        time.sleep(self.sleep_seconds)
+        payload = _FakeCcbdClient.project_view(self, schema_version=schema_version)
+        payload['view']['agents'][0].update({
+            'activity_state': 'active',
+            'activity_reason': 'codex_working_status_line',
+            'last_progress_at': '2026-07-04T09:30:00Z',
+        })
+        return payload
+
+
 def _service(
     fake: _FakeCcbdClient,
     *,
@@ -283,7 +321,7 @@ def test_health_and_projects_use_ccbd_without_exposing_tmux_socket() -> None:
     assert health['ccbd']['namespace_epoch'] == 4
     assert projects['projects'][0]['id'] == 'proj-demo'
     assert 'tmux.sock' not in json.dumps(projects)
-    assert fake.calls == [('ping', 'ccbd'), ('ping', 'ccbd')]
+    assert fake.calls == [('ping', 'ccbd'), ('ping', 'ccbd'), ('project_view', 1)]
 
 
 def test_projects_payload_lists_registry_projects_without_exposing_tmux_socket() -> None:
@@ -326,8 +364,88 @@ def test_projects_payload_lists_registry_projects_without_exposing_tmux_socket()
     assert projects['projects'][1]['display_name'] == 'two'
     assert projects['projects'][1]['root'] == '/srv/two'
     assert 'tmux.sock' not in json.dumps(projects)
-    assert first.calls == [('ping', 'ccbd')]
-    assert second.calls == [('ping', 'ccbd')]
+    assert first.calls == [('ping', 'ccbd'), ('project_view', 1)]
+    assert second.calls == [('ping', 'ccbd'), ('project_view', 1)]
+
+
+def test_projects_payload_includes_project_activity_summary() -> None:
+    fake = _FakeActivityCcbdClient()
+    service = _service(fake)
+
+    projects = service.projects_payload()
+
+    assert projects['projects'][0]['has_working_agents'] is True
+    assert projects['projects'][0]['working_agent_count'] == 1
+    assert projects['projects'][0]['last_activity_at'] == '2026-07-04T09:04:00Z'
+    assert fake.calls == [('ping', 'ccbd'), ('project_view', 1)]
+
+
+def test_projects_payload_reuses_cached_project_activity_summary(tmp_path: Path) -> None:
+    fake = _FakeActivityCcbdClient()
+    service = _service(fake, mobile_dir=tmp_path / 'mobile')
+
+    first = service.projects_payload()
+    second = service.projects_payload()
+
+    assert first['projects'][0]['last_activity_at'] == '2026-07-04T09:04:00Z'
+    assert second['projects'][0]['last_activity_at'] == '2026-07-04T09:04:00Z'
+    assert fake.calls == [
+        ('ping', 'ccbd'),
+        ('project_view', 1),
+        ('ping', 'ccbd'),
+    ]
+
+
+def test_projects_payload_returns_cached_activity_when_refresh_is_slow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(service_module, '_PROJECT_ACTIVITY_REFRESH_TTL_SECONDS', 0)
+    monkeypatch.setattr(service_module, '_PROJECT_ACTIVITY_REFRESH_BUDGET_SECONDS', 0.03)
+    monkeypatch.setattr(service_module, '_PROJECT_ACTIVITY_REFRESH_PER_PROJECT_SECONDS', 0.02)
+    fake = _SlowActivityCcbdClient(sleep_seconds=0.2)
+    service = _service(
+        fake,
+        mobile_dir=tmp_path / 'mobile',
+        project_registry=MobileGatewayProjectRegistry(
+            [
+                MobileGatewayProject(
+                    project_id='proj-demo',
+                    project_root=Path('/srv/demo'),
+                    ccbd_client_factory=lambda: fake,
+                ),
+            ]
+        ),
+    )
+    assert service._project_activity_store is not None
+    service._project_activity_store.record_summary(
+        project_id='proj-demo',
+        summary={
+            'last_activity_at': '2026-07-04T09:05:00Z',
+            'has_working_agents': True,
+            'working_agent_count': 1,
+        },
+        checked_at='2026-06-17T23:59:00Z',
+    )
+
+    started = time.monotonic()
+    projects = service.projects_payload()
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 0.15
+    assert projects['projects'][0]['last_activity_at'] == '2026-07-04T09:05:00Z'
+    assert projects['projects'][0]['has_working_agents'] is True
+    assert fake.calls[:2] == [('ping', 'ccbd'), ('project_view_start', 1)]
+
+
+def test_project_view_records_last_opened_for_project_list(tmp_path: Path) -> None:
+    fake = _FakeCcbdClient()
+    service = _service(fake, mobile_dir=tmp_path / 'mobile')
+
+    service.project_view_payload('proj-demo')
+    projects = service.projects_payload()
+
+    assert projects['projects'][0]['last_opened_at'] == '2026-06-18T00:00:00Z'
 
 
 def test_projects_payload_omits_unreachable_registry_projects() -> None:
@@ -364,7 +482,7 @@ def test_projects_payload_omits_unreachable_registry_projects() -> None:
     assert projects['projects'][0]['health'] == 'healthy'
     assert projects['projects'][0]['mount_state'] == 'mounted'
     assert '/tmp/private.sock' not in json.dumps(projects)
-    assert healthy.calls == [('ping', 'ccbd')]
+    assert healthy.calls == [('ping', 'ccbd'), ('project_view', 1)]
     assert stale.calls == [('ping', 'ccbd')]
 
 
@@ -412,7 +530,7 @@ def test_projects_payload_omits_registered_projects_that_are_not_mounted_and_hea
     projects = service.projects_payload()
 
     assert [item['id'] for item in projects['projects']] == ['proj-one']
-    assert healthy.calls == [('ping', 'ccbd')]
+    assert healthy.calls == [('ping', 'ccbd'), ('project_view', 1)]
     assert unmounted.calls == [('ping', 'ccbd')]
     assert degraded.calls == [('ping', 'ccbd')]
 

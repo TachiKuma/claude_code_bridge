@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 import base64
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
@@ -21,6 +21,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from ccbd.socket_client import CcbdClientError
 from .notifications import MobileNotificationSnapshot, MobileNotificationStore, encode_sse_event
 from .pairing import MobileGatewayPairingError, MobileGatewayPairingStore
+from .project_activity import MobileGatewayProjectActivityStore
 from .project_registry import MobileGatewayProject, MobileGatewayProjectRegistry
 from .terminal import (
     TerminalAttachTarget,
@@ -72,6 +73,10 @@ _CODEX_NATIVE_TAIL_THREAD_LIMIT = 2
 _CODEX_NATIVE_TAIL_CHUNK_LIMIT = 48
 _CODEX_NATIVE_TAIL_READ_BLOCK_BYTES = 256 * 1024
 _CODEX_NATIVE_CURSOR_PREFIX = 'codex-before:'
+_PROJECT_ACTIVITY_REFRESH_LIMIT = 3
+_PROJECT_ACTIVITY_REFRESH_TTL_SECONDS = 10
+_PROJECT_ACTIVITY_REFRESH_BUDGET_SECONDS = 0.75
+_PROJECT_ACTIVITY_REFRESH_PER_PROJECT_SECONDS = 0.25
 
 
 @dataclass(frozen=True)
@@ -131,6 +136,9 @@ class MobileGatewayService:
         if self._pairing_store is None and mobile_dir is not None:
             self._pairing_store = MobileGatewayPairingStore(self._mobile_dir)
         self._notification_store = MobileNotificationStore(self._mobile_dir) if mobile_dir is not None else None
+        self._project_activity_store = (
+            MobileGatewayProjectActivityStore(self._mobile_dir) if mobile_dir is not None else None
+        )
 
     @property
     def project_id(self) -> str:
@@ -167,6 +175,8 @@ class MobileGatewayService:
         registry_projects = self._project_registry.projects()
         health_by_project = self._project_list_health_by_project(registry_projects)
         capabilities = self._capabilities()
+        activity_refreshes_remaining = _PROJECT_ACTIVITY_REFRESH_LIMIT
+        activity_deadline = time.monotonic() + _PROJECT_ACTIVITY_REFRESH_BUDGET_SECONDS
         for project in registry_projects:
             ccbd = health_by_project[project.project_id]
             if not _project_available_for_mobile_list(ccbd):
@@ -179,6 +189,18 @@ class MobileGatewayService:
                 'mount_state': str(ccbd.get('mount_state') or ''),
                 'capabilities': capabilities,
             }
+            allow_activity_refresh = (
+                activity_refreshes_remaining > 0
+                and time.monotonic() < activity_deadline
+            )
+            activity_summary, attempted_activity_refresh = self._project_activity_summary(
+                project,
+                allow_refresh=allow_activity_refresh,
+                deadline=activity_deadline,
+            )
+            if attempted_activity_refresh:
+                activity_refreshes_remaining -= 1
+            item.update(activity_summary)
             if ccbd.get('error'):
                 item['error'] = str(ccbd.get('error') or '')
             projects.append(item)
@@ -190,6 +212,7 @@ class MobileGatewayService:
     def project_view_payload(self, project_id: str) -> dict[str, object]:
         project = self._require_project(project_id)
         payload = self._request_project_view(project)
+        self._record_project_opened(project.project_id)
         return _redact_project_view_payload(payload)
 
     def create_pairing_payload(
@@ -1060,6 +1083,70 @@ class MobileGatewayService:
                 'error': 'project unavailable',
             }
 
+    def _project_activity_summary(
+        self,
+        project: MobileGatewayProject,
+        *,
+        allow_refresh: bool,
+        deadline: float,
+    ) -> tuple[dict[str, object], bool]:
+        store_record = (
+            self._project_activity_store.project(project.project_id)
+            if self._project_activity_store is not None
+            else {}
+        )
+        summary = _project_activity_summary_from_record(store_record)
+        if not allow_refresh:
+            return summary, False
+        if self._project_activity_store is not None and not _project_activity_record_stale(
+            store_record,
+            now_text=self._clock(),
+            max_age_seconds=_PROJECT_ACTIVITY_REFRESH_TTL_SECONDS,
+        ):
+            return summary, False
+        if time.monotonic() >= deadline:
+            return summary, False
+
+        attempted_refresh = True
+        timeout_seconds = min(
+            _PROJECT_ACTIVITY_REFRESH_PER_PROJECT_SECONDS,
+            max(0.01, deadline - time.monotonic()),
+        )
+        try:
+            view_payload = self._request_project_view_with_timeout(
+                project,
+                timeout_seconds=timeout_seconds,
+            )
+        except MobileGatewayError:
+            return summary, attempted_refresh
+        except Exception:
+            return summary, attempted_refresh
+        fresh_summary = _project_activity_summary_from_view(view_payload)
+        checked_at = self._clock()
+        if self._project_activity_store is not None:
+            try:
+                self._project_activity_store.record_summary(
+                    project_id=project.project_id,
+                    summary=fresh_summary,
+                    checked_at=checked_at,
+                )
+            except Exception:
+                pass
+        merged = dict(summary)
+        merged.update(fresh_summary)
+        return merged, attempted_refresh
+
+    def _record_project_opened(self, project_id: str) -> None:
+        if self._project_activity_store is None:
+            return
+        try:
+            self._project_activity_store.record_opened(
+                project_id=project_id,
+                opened_at=self._clock(),
+            )
+        except Exception:
+            pass
+
     def _request_project_view(self, project: MobileGatewayProject) -> dict[str, object]:
         try:
             payload = project.client().project_view(schema_version=1)
@@ -1069,15 +1156,23 @@ class MobileGatewayService:
             raise MobileGatewayError(_error_text(exc), status_code=503) from exc
         return dict(payload or {}) if isinstance(payload, dict) else {}
 
-    def _notification_snapshots(self) -> list[MobileNotificationSnapshot]:
-        snapshots: list[MobileNotificationSnapshot] = []
-        for project in self._project_registry.projects():
-            try:
-                payload = self._request_project_view(project)
-            except MobileGatewayError:
-                continue
-            snapshots.extend(_notification_snapshots_for_project(project, payload, observed_at=self._clock()))
-        return snapshots
+    def _request_project_view_with_timeout(
+        self,
+        project: MobileGatewayProject,
+        *,
+        timeout_seconds: float,
+    ) -> dict[str, object]:
+        if self._project_activity_store is None:
+            return self._request_project_view(project)
+        executor = ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(self._request_project_view, project)
+        try:
+            return future.result(timeout=max(0.01, timeout_seconds))
+        except FutureTimeoutError as exc:
+            future.cancel()
+            raise MobileGatewayError('project activity unavailable', status_code=503) from exc
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
 
     def _terminal_attach_target(self, record: dict[str, object]) -> TerminalAttachTarget:
         project = self._require_project(str(record.get('project_id') or ''))
@@ -1397,6 +1492,136 @@ def _redact_project_view_payload(payload: dict[str, object]) -> dict[str, object
             for key in _REDACTED_NAMESPACE_KEYS:
                 namespace.pop(key, None)
     return redacted
+
+
+def _project_activity_summary_from_view(payload: dict[str, object]) -> dict[str, object]:
+    view = _map(payload.get('view'))
+    agents = [_map(item) for item in _iterable(view.get('agents'))]
+    working_agents = [agent for agent in agents if _agent_has_working_activity(agent)]
+    timestamps: list[object] = []
+    for agent in agents:
+        timestamps.extend(
+            [
+                agent.get('last_progress_at'),
+                agent.get('updated_at'),
+                agent.get('created_at'),
+            ]
+        )
+    content = _map(view.get('content'))
+    for item in _iterable(content.get('items')):
+        content_item = _map(item)
+        timestamps.extend(
+            [
+                content_item.get('completed_at'),
+                content_item.get('finished_at'),
+                content_item.get('execution_completed_at'),
+                content_item.get('sent_at'),
+                content_item.get('updated_at'),
+                content_item.get('created_at'),
+            ]
+        )
+    for item in _iterable(view.get('comms')):
+        comm = _map(item)
+        timestamps.extend(
+            [
+                comm.get('completed_at'),
+                comm.get('finished_at'),
+                comm.get('sent_at'),
+                comm.get('updated_at'),
+                comm.get('created_at'),
+            ]
+        )
+    summary: dict[str, object] = {}
+    if working_agents:
+        summary['has_working_agents'] = True
+        summary['working_agent_count'] = len(working_agents)
+    last_activity_at = _latest_mobile_timestamp(timestamps)
+    if last_activity_at:
+        summary['last_activity_at'] = last_activity_at
+    return summary
+
+
+def _project_activity_summary_from_record(record: dict[str, object]) -> dict[str, object]:
+    summary: dict[str, object] = {}
+    last_opened_at = _mobile_conversation_timestamp(record.get('last_opened_at'))
+    if last_opened_at:
+        summary['last_opened_at'] = last_opened_at
+    last_activity_at = _mobile_conversation_timestamp(record.get('last_activity_at'))
+    if last_activity_at:
+        summary['last_activity_at'] = last_activity_at
+    working_agent_count = _optional_int(record.get('working_agent_count')) or 0
+    has_working_agents = bool(record.get('has_working_agents')) or working_agent_count > 0
+    if has_working_agents:
+        summary['has_working_agents'] = True
+        summary['working_agent_count'] = working_agent_count
+    return summary
+
+
+def _project_activity_record_stale(
+    record: dict[str, object],
+    *,
+    now_text: str,
+    max_age_seconds: int,
+) -> bool:
+    checked_at = _parse_mobile_conversation_timestamp(record.get('summary_checked_at'))
+    now = _parse_mobile_conversation_timestamp(now_text)
+    if checked_at is None or now is None:
+        return True
+    return (now - checked_at).total_seconds() >= max_age_seconds
+
+
+def _latest_mobile_timestamp(values: list[object]) -> str | None:
+    latest: tuple[datetime, str] | None = None
+    for value in values:
+        text = _mobile_conversation_timestamp(value)
+        parsed = _parse_mobile_conversation_timestamp(text)
+        if text is None or parsed is None:
+            continue
+        if latest is None or parsed > latest[0]:
+            latest = (parsed, text)
+    return latest[1] if latest is not None else None
+
+
+def _agent_has_working_activity(agent: dict[str, object]) -> bool:
+    state = _normalized_text(agent.get('activity_state') or agent.get('state'))
+    source = _normalized_text(agent.get('activity_source'))
+    reason = _normalized_text(agent.get('activity_reason'))
+    if state in {'active', 'busy', 'pending', 'running', 'start', 'starting', 'working'}:
+        return True
+    if state in {
+        'idle',
+        'free',
+        'completed',
+        'complete',
+        'done',
+        'failed',
+        'failure',
+        'error',
+        'faulted',
+        'offline',
+        'crashed',
+    }:
+        return False
+    text = f'{source or ""} {reason or ""}'
+    return _int(agent.get('queue_depth'), 0) > 0 or any(
+        marker in text
+        for marker in (
+            'queued',
+            'reconnect',
+            'running',
+            'start',
+            'submitted',
+            'tool',
+            'waiting',
+            'working',
+            'prompt',
+        )
+    )
+
+
+def _normalized_text(value: object) -> str | None:
+    text = str(value or '').strip().lower()
+    return text or None
 
 
 def _notification_snapshots_for_project(

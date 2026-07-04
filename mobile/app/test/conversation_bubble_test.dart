@@ -324,7 +324,10 @@ void main() {
     final shape = material.shape as RoundedRectangleBorder;
     final colorScheme = ThemeData().colorScheme;
     expect(material.color, conversationWorkingBubbleTint(colorScheme, 0));
-    expect(shape.side.color, colorScheme.primary);
+    expect(material.color, isNot(colorScheme.primaryContainer));
+    expect(shape.side.color, conversationWorkingBubbleAccent(colorScheme));
+    expect(shape.side.color, isNot(colorScheme.primary));
+    expect(shape.side.color, isNot(colorScheme.tertiary));
     expect(shape.side.width, 2.4);
 
     expect(
