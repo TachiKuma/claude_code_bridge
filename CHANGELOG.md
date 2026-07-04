@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## v8.0.14 (2026-07-04)
+
+### Mobile Runtime Polish
+
+- **Pairing QR Scanner Safety Restored**: `ccb update mobile` now keeps the
+  full pairing payload and scanner-safe quiet zone in both managed and direct
+  mobile gateway paths.
+- **Running Project Attention Strengthened**: CCB Mobile now uses brighter
+  card-level working highlights and recency-aware project ordering for active
+  agents.
+- **Working Reply Readability Preserved**: active reply bubbles keep the normal
+  readable interior surface while showing working state through border/glow
+  treatment.
+- **Conversation Pages Cached**: server-side mobile conversation paging caches
+  provider-native pages to reduce repeated Codex rollout parsing for large
+  agents such as `lead`.
+- **Release Surface Synchronized**: VERSION, package.json, mobile app version
+  metadata, update links, and the mobile release manifest are aligned for
+  8.0.14.
+
 ## v8.0.13 (2026-07-03)
 
 ### Mobile Pairing QR

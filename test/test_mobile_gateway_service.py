@@ -579,7 +579,8 @@ def test_projects_payload_checks_many_project_health_states_concurrently() -> No
         f'proj-{index:02d}' for index in range(12)
     ]
     assert activity['max_active'] > 1
-    assert all(client.calls == [('ping', 'ccbd')] for client in clients)
+    assert all(client.calls[0] == ('ping', 'ccbd') for client in clients)
+    assert sum(('project_view', 1) in client.calls for client in clients) <= 3
 
 
 def test_project_view_redacts_server_tmux_evidence() -> None:
