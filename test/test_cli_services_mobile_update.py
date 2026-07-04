@@ -423,7 +423,7 @@ def test_onboarding_logged_in_starts_managed_mobile_service_when_callback_provid
         "route_provider": "tailnet",
         "scopes": [],
     }
-    assert qr_payloads[0][1]["quiet_zone"] == 0
+    assert qr_payloads[0][1]["quiet_zone"] == 2
     assert qr_payloads[0][1]["compact"] is True
     assert "Start the loopback-only CCB Mobile gateway in one terminal" not in text
 
