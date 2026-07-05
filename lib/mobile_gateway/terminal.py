@@ -9,6 +9,7 @@ import select
 import struct
 import subprocess
 import termios
+import time
 from typing import Mapping
 
 
@@ -41,7 +42,7 @@ class TerminalAttachTarget:
 
     @property
     def command(self) -> list[str]:
-        return ['tmux', '-S', self.socket_path, 'attach-session', '-t', self.session_name]
+        return _tmux_capture_command(self, self.geometry)
 
 
 @dataclass(frozen=True)
@@ -137,33 +138,22 @@ def _tmux_run(
 class TmuxTerminalSession:
     def __init__(self, target: TerminalAttachTarget) -> None:
         self.target = target
-        self._master_fd, slave_fd = pty.openpty()
-        try:
-            self._resize(target.geometry)
-            if target.pane_id:
-                _select_tmux_terminal_pane(target)
-            self._process = subprocess.Popen(
-                target.command,
-                stdin=slave_fd,
-                stdout=slave_fd,
-                stderr=slave_fd,
-                close_fds=True,
-                env=_terminal_client_env(),
-            )
-        finally:
-            os.close(slave_fd)
+        self._geometry = target.geometry
+        self._closed = False
+        self._last_snapshot: bytes | None = None
+        if not target.pane_id:
+            raise RuntimeError('terminal target pane evidence is required')
 
     def read(self, timeout_seconds: float = 0.1) -> bytes | None:
-        ready, _, _ = select.select([self._master_fd], [], [], max(0.0, float(timeout_seconds)))
-        if not ready:
-            return b''
-        try:
-            data = os.read(self._master_fd, 65536)
-        except OSError:
-            return None if self._process.poll() is not None else b''
-        if not data and self._process.poll() is not None:
+        if self._closed:
             return None
-        return data
+        if self._last_snapshot is not None:
+            time.sleep(max(0.0, min(float(timeout_seconds), 0.25)))
+        snapshot = _capture_tmux_terminal_pane(self.target, self._geometry)
+        if snapshot == self._last_snapshot:
+            return b''
+        self._last_snapshot = snapshot
+        return _render_terminal_snapshot(snapshot)
 
     def write(self, data: bytes) -> None:
         if not data:
@@ -180,20 +170,11 @@ class TmuxTerminalSession:
         self.write(str(text).encode('utf-8'))
 
     def resize(self, geometry: TerminalGeometry) -> None:
-        self._resize(geometry)
+        self._geometry = geometry
+        self._last_snapshot = None
 
     def close(self) -> None:
-        try:
-            os.close(self._master_fd)
-        except OSError:
-            pass
-        if self._process.poll() is None:
-            self._process.terminate()
-            try:
-                self._process.wait(timeout=1)
-            except subprocess.TimeoutExpired:
-                self._process.kill()
-                self._process.wait(timeout=1)
+        self._closed = True
 
     def _resize(self, geometry: TerminalGeometry) -> None:
         rows = max(1, int(geometry.rows))
@@ -214,6 +195,52 @@ def _terminal_client_env() -> dict[str, str]:
     if not env.get('TERM') or env.get('TERM') == 'dumb':
         env['TERM'] = 'xterm-256color'
     return env
+
+
+def _tmux_capture_command(
+    target: TerminalAttachTarget,
+    geometry: TerminalGeometry,
+) -> list[str]:
+    pane_id = str(target.pane_id or '').strip()
+    if not pane_id:
+        raise RuntimeError('terminal target pane evidence is required')
+    rows = max(1, int(geometry.rows))
+    return [
+        'tmux',
+        '-S',
+        target.socket_path,
+        'capture-pane',
+        '-p',
+        '-e',
+        '-t',
+        pane_id,
+        '-S',
+        f'-{rows}',
+    ]
+
+
+def _capture_tmux_terminal_pane(
+    target: TerminalAttachTarget,
+    geometry: TerminalGeometry,
+) -> bytes:
+    cp = subprocess.run(
+        _tmux_capture_command(target, geometry),
+        text=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        timeout=2.0,
+    )
+    if cp.returncode != 0:
+        message = (cp.stderr or b'').decode('utf-8', errors='replace').strip()
+        raise RuntimeError(message or 'tmux capture-pane failed')
+    return bytes(cp.stdout or b'')
+
+
+def _render_terminal_snapshot(snapshot: bytes) -> bytes:
+    text = snapshot.decode('utf-8', errors='replace').rstrip('\n')
+    rendered = text.replace('\r\n', '\n').replace('\r', '\n').replace('\n', '\r\n')
+    return b'\x1b[?25l\x1b[H\x1b[2J' + rendered.encode('utf-8') + b'\r\n'
 
 
 def _select_tmux_terminal_pane(target: TerminalAttachTarget) -> None:

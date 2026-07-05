@@ -7,6 +7,7 @@ import pytest
 from mobile_gateway.terminal import (
     TerminalAttachTarget,
     TerminalGeometry,
+    TmuxTerminalSession,
     _send_tmux_terminal_bytes,
     _send_tmux_terminal_literal,
     _select_tmux_terminal_pane,
@@ -25,14 +26,49 @@ def _target() -> TerminalAttachTarget:
     )
 
 
-def test_terminal_attach_command_targets_session_not_pane() -> None:
+def test_terminal_output_command_captures_selected_pane_not_session() -> None:
     assert _target().command == [
         'tmux',
         '-S',
         '/tmp/ccb-test/tmux.sock',
-        'attach-session',
+        'capture-pane',
+        '-p',
+        '-e',
         '-t',
-        'ccb-test',
+        '%42',
+        '-S',
+        '-24',
+    ]
+    assert 'attach-session' not in _target().command
+
+
+def test_terminal_session_reads_selected_pane_snapshot(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command, **kwargs):
+        calls.append(list(command))
+        assert 'attach-session' not in command
+        return SimpleNamespace(returncode=0, stdout=b'pane only\nprompt$ ', stderr=b'')
+
+    monkeypatch.setattr('mobile_gateway.terminal.subprocess.run', fake_run)
+
+    session = TmuxTerminalSession(_target())
+    output = session.read(0)
+
+    assert output == b'\x1b[?25l\x1b[H\x1b[2Jpane only\r\nprompt$ \r\n'
+    assert calls == [
+        [
+            'tmux',
+            '-S',
+            '/tmp/ccb-test/tmux.sock',
+            'capture-pane',
+            '-p',
+            '-e',
+            '-t',
+            '%42',
+            '-S',
+            '-24',
+        ]
     ]
 
 

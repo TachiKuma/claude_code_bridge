@@ -1322,13 +1322,17 @@ class MobileGatewayService:
         if not socket_path or not session_name:
             raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
         _validate_terminal_summary(record, view)
+        target_summary = _map(record.get('target_summary'))
+        pane_id = _terminal_summary_pane_id(target_summary, view)
+        if not pane_id:
+            raise MobileGatewayError('terminal target pane evidence is required', status_code=409)
         return TerminalAttachTarget(
             terminal_id=str(record.get('terminal_id') or ''),
             socket_path=socket_path,
             session_name=session_name,
-            pane_id=_optional_text(_map(record.get('target_summary')).get('pane_id')),
+            pane_id=pane_id,
             geometry=TerminalGeometry.from_mapping(record.get('geometry')),
-            target_summary=_map(record.get('target_summary')),
+            target_summary=target_summary,
         )
 
     def _handle_terminal_frame(
@@ -4114,6 +4118,37 @@ def _validate_terminal_summary(record: dict[str, object], view: dict[str, object
         matched = next((item for item in agents if str(item.get('name') or '') == agent), None)
         if matched is None or _optional_text(matched.get('pane_id')) != pane_id:
             raise MobileGatewayError('unknown terminal target pane', status_code=404)
+
+
+def _terminal_summary_pane_id(
+    summary: dict[str, object],
+    view: dict[str, object],
+) -> str | None:
+    pane_id = _optional_text(summary.get('pane_id'))
+    if pane_id:
+        return pane_id
+    agent = _optional_text(summary.get('agent'))
+    agents = [_map(item) for item in _iterable(view.get('agents'))]
+    if agent:
+        matched_agent = next(
+            (item for item in agents if str(item.get('name') or '') == agent),
+            None,
+        )
+        pane_id = _optional_text(_map(matched_agent).get('pane_id'))
+        if pane_id:
+            return pane_id
+    window = _optional_text(summary.get('window'))
+    windows = [_map(item) for item in _iterable(view.get('windows'))]
+    if window:
+        matched_window = next(
+            (item for item in windows if str(item.get('name') or '') == window),
+            None,
+        )
+        pane_id = _optional_text(_map(matched_window).get('active_pane_id'))
+        if pane_id:
+            return pane_id
+    namespace = _map(view.get('namespace'))
+    return _optional_text(namespace.get('active_pane_id'))
 
 
 def _validate_terminal_target(
