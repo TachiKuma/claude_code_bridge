@@ -684,7 +684,7 @@
 
 - **Ask Skills Use Result Intent First**: inherited Claude, Codex, and Droid
   ask skills now choose `--silence`, `--compact`, `--artifact-reply`, or plain
-  `ask` from the desired result shape first, then add `--callback` only for
+  `ask` from the desired result shape first, then add `--chain` only for
   active parent dependency chains and artifact request/io flags only when exact
   content preservation is needed.
 - **Artifact Transport Guidance Tightened**: ask skill guidance now separates
@@ -1197,8 +1197,8 @@
 
 ### Callback Ask Chain Release
 
-- **Callback Ask Chains Added**: `ccb ask --callback <agent>` lets an active agent delegate work whose result is needed before finishing the original task; CCB resumes the parent as a continuation task when the child reply is ready.
-- **Nested Ask Guardrails Enforced**: plain nested `ask` from an active CCB task is rejected; use `--callback` for needed child results or `--silence` for independent no-result-needed work.
+- **Callback Ask Chains Added**: `ccb ask --chain <agent>` lets an active agent delegate work whose result is needed before finishing the original task; CCB resumes the parent as a continuation task when the child reply is ready.
+- **Nested Ask Guardrails Enforced**: plain nested `ask` from an active CCB task is rejected; use `--chain` for needed child results or `--silence` for independent no-result-needed work.
 - **Durable Callback Routing Added**: callback edges persist parent/child routing state, repair crash windows, and support chained continuations across multiple agents.
 - **Ask Skills And Memory Updated**: Claude, Codex, and Droid ask skills plus generated project memory now document callback delegation and stop-after-submit behavior.
 

@@ -39,30 +39,6 @@
 
 </div>
 
-<a id="supported-clis"></a>
-
-## Поддерживаемые CLI
-
-В `.ccb/ccb.config` можно смешивать разные CLI для разных agents. Фактическая доступность зависит от локальной установки CLI и доступа учетной записи.
-
-| CLI family | Provider id |
-| :--- | :--- |
-| Codex | `codex` |
-| Claude | `claude` |
-| Gemini | `gemini` |
-| Kimi | `kimi` |
-| MiMo | `mimo` |
-| Qwen | `qwen` |
-| Cursor | `cursor` |
-| GitHub Copilot CLI | `copilot` |
-| Crush | `crush` |
-| Kiro CLI | `kiro` |
-| Pi | `pi` |
-| Z.ai CLI | `zai` |
-| OpenCode | `opencode` |
-| Antigravity | `agy` |
-| Droid | `droid` |
-
 <a id="why-ccb"></a>
 
 ## Почему CCB?

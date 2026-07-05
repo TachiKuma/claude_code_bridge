@@ -306,7 +306,7 @@ def test_ccbd_socket_get_and_watch_resolve_callback_root_final_reply(tmp_path: P
             reply_to=None,
             message_type='ask',
             delivery_scope=DeliveryScope.SINGLE,
-            route_options={'mode': 'callback'},
+            route_options={'mode': 'chain'},
         )
     )['job_id']
     app.dispatcher.complete(parent_job_id, _decision(reply='delegated to worker'))

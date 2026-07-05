@@ -116,7 +116,7 @@ def submit_ask(
 def _route_options(command) -> dict[str, object]:
     options: dict[str, object] = {}
     if bool(getattr(command, 'callback', False)):
-        options['mode'] = 'callback'
+        options['mode'] = 'chain'
     if bool(getattr(command, 'artifact_request', False)):
         options['artifact_request'] = True
     if bool(getattr(command, 'artifact_reply', False)):

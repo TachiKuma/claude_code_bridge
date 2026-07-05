@@ -628,7 +628,7 @@ def _agent_view(
         current_job_id=getattr(job, 'job_id', None) if job is not None else None,
     )
     queue_depth = len(queued_jobs) + (1 if _is_top_activity_job(active_job) else 0)
-    callback_child_agent = _callback_child_agent(callback_wait)
+    chain_child_agent = _callback_child_agent(callback_wait)
     pane_text = None
     provider_runtime_status = None
     if provider_is_codex:
@@ -669,10 +669,10 @@ def _agent_view(
             current_job_id=job.job_id if job is not None else None,
             current_job_updated_at=job.updated_at if job is not None else None,
             queue_depth=queue_depth,
-            callback_waiting_state=callback_wait.state.value if callback_wait is not None else None,
-            callback_child_job_id=callback_wait.child_job_id if callback_wait is not None else None,
-            callback_child_agent=callback_child_agent,
-            callback_updated_at=callback_wait.updated_at if callback_wait is not None else None,
+            chain_waiting_state=callback_wait.state.value if callback_wait is not None else None,
+            chain_child_job_id=callback_wait.child_job_id if callback_wait is not None else None,
+            chain_child_agent=chain_child_agent,
+            chain_updated_at=callback_wait.updated_at if callback_wait is not None else None,
             provider_activity_state=getattr(provider_activity, 'state', None),
             provider_activity_source=getattr(provider_activity, 'source', None),
             provider_activity_reason=getattr(provider_activity, 'reason', None),
@@ -701,9 +701,9 @@ def _agent_view(
         'active': bool(active),
         'queue_depth': queue_depth,
         **activity.to_record(),
-        'callback_waiting_child_job_id': callback_wait.child_job_id if callback_wait is not None else None,
-        'callback_waiting_child_agent': callback_child_agent,
-        'callback_waiting_state': callback_wait.state.value if callback_wait is not None else None,
+        'chain_waiting_child_job_id': callback_wait.child_job_id if callback_wait is not None else None,
+        'chain_waiting_child_agent': chain_child_agent,
+        'chain_waiting_state': callback_wait.state.value if callback_wait is not None else None,
         'runtime_state': _runtime_state(runtime),
         'runtime_health': getattr(runtime, 'health', None) if runtime is not None else None,
         'reconcile_state': getattr(runtime, 'reconcile_state', None) if runtime is not None else None,
@@ -1867,7 +1867,7 @@ def _comm_record(
         'body_preview': _body_preview(job.request.body),
         'reply_status': reply_status,
         'reply_delivery_job_id': reply_delivery.job_id if reply_delivery is not None else None,
-        'callback': bool(getattr(job.request, 'reply_to', None)),
+        'chain': bool(getattr(job.request, 'reply_to', None)),
         'short_reason': _short_reason(job),
         **({'attachments': attachments} if attachments else {}),
         **recoverability.to_record(),

@@ -83,10 +83,10 @@ class AgentActivityFacts:
     current_job_id: str | None = None
     current_job_updated_at: str | None = None
     queue_depth: int = 0
-    callback_waiting_state: str | None = None
-    callback_child_job_id: str | None = None
-    callback_child_agent: str | None = None
-    callback_updated_at: str | None = None
+    chain_waiting_state: str | None = None
+    chain_child_job_id: str | None = None
+    chain_child_agent: str | None = None
+    chain_updated_at: str | None = None
     provider_activity_state: str | None = None
     provider_activity_source: str | None = None
     provider_activity_reason: str | None = None
@@ -144,7 +144,7 @@ def resolve_agent_activity(
     reconcile_state = _clean(facts.reconcile_state)
     desired_state = _clean(facts.desired_state)
     job_status = _clean(facts.current_job_status)
-    callback_state = _clean(facts.callback_waiting_state)
+    chain_state = _clean(facts.chain_waiting_state)
     provider_activity_state = _clean(facts.provider_activity_state)
 
     if not facts.namespace_mounted:
@@ -252,13 +252,13 @@ def resolve_agent_activity(
             current_job_id=facts.current_job_id,
         )
 
-    if callback_state in _WAITING_CALLBACK_STATES:
-        reason = 'callback_child_completed' if callback_state == 'child_completed' else 'callback_waiting_child'
+    if chain_state in _WAITING_CALLBACK_STATES:
+        reason = 'chain_child_completed' if chain_state == 'child_completed' else 'chain_waiting_child'
         return AgentActivity(
             ACTIVITY_PENDING,
-            'callback',
+            'chain',
             reason,
-            last_progress_at=facts.callback_updated_at,
+            last_progress_at=facts.chain_updated_at,
         )
 
     if not provider_is_codex:

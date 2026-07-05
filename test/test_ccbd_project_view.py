@@ -1980,7 +1980,7 @@ def test_project_view_marks_callback_parent_waiting_for_child(tmp_path: Path) ->
             reply_to=None,
             message_type='ask',
             delivery_scope=DeliveryScope.SINGLE,
-            route_options={'mode': 'callback'},
+            route_options={'mode': 'chain'},
         )
     ).jobs[0].job_id
     edge = CallbackEdgeStore(layout).get_latest_for_child_job(child_job_id)
@@ -2007,11 +2007,11 @@ def test_project_view_marks_callback_parent_waiting_for_child(tmp_path: Path) ->
     agent2 = next(agent for agent in view['agents'] if agent['name'] == 'agent2')
 
     assert agent1['activity_state'] == 'pending'
-    assert agent1['activity_source'] == 'callback'
-    assert agent1['activity_reason'] == 'callback_waiting_child'
-    assert agent1['callback_waiting_child_job_id'] == child_job_id
-    assert agent1['callback_waiting_child_agent'] == 'agent2'
-    assert agent1['callback_waiting_state'] == 'pending'
+    assert agent1['activity_source'] == 'chain'
+    assert agent1['activity_reason'] == 'chain_waiting_child'
+    assert agent1['chain_waiting_child_job_id'] == child_job_id
+    assert agent1['chain_waiting_child_agent'] == 'agent2'
+    assert agent1['chain_waiting_state'] == 'pending'
     assert agent2['activity_state'] == 'pending'
     assert agent2['activity_source'] == 'claude_runtime'
     assert agent2['activity_reason'] == 'prompt_submitted_waiting_for_first_signal'

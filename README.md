@@ -39,30 +39,6 @@
 
 </div>
 
-<a id="supported-clis"></a>
-
-## 支持的 CLI
-
-你可以在 `.ccb/ccb.config` 中为不同 agent 混用不同 CLI；真实可用性取决于本机 CLI 安装状态和账号权限。
-
-| CLI family | Provider id |
-| :--- | :--- |
-| Codex | `codex` |
-| Claude | `claude` |
-| Gemini | `gemini` |
-| Kimi | `kimi` |
-| MiMo | `mimo` |
-| Qwen | `qwen` |
-| Cursor | `cursor` |
-| GitHub Copilot CLI | `copilot` |
-| Crush | `crush` |
-| Kiro CLI | `kiro` |
-| Pi | `pi` |
-| Z.ai CLI | `zai` |
-| OpenCode | `opencode` |
-| Antigravity | `agy` |
-| Droid | `droid` |
-
 <a id="why-ccb"></a>
 
 ## 为什么用 CCB？

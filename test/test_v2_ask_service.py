@@ -293,8 +293,8 @@ def test_submit_ask_maps_broadcast_payload_and_submission(monkeypatch: pytest.Mo
     }
 
 
-def test_submit_ask_maps_callback_route_options(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    project_root = tmp_path / 'repo-ask-callback'
+def test_submit_ask_maps_chain_route_options(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-ask-chain'
     project_root.mkdir()
     context = _build_context(project_root)
     captured: dict[str, object] = {}
@@ -327,7 +327,7 @@ def test_submit_ask_maps_callback_route_options(monkeypatch: pytest.MonkeyPatch,
     )
 
     assert summary.jobs[0]['job_id'] == 'job_1'
-    assert captured['route_options'] == {'mode': 'callback'}
+    assert captured['route_options'] == {'mode': 'chain'}
 
 
 def test_submit_ask_maps_artifact_route_options(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -372,7 +372,7 @@ def test_submit_ask_maps_artifact_route_options(monkeypatch: pytest.MonkeyPatch,
     )
 
     assert summary.jobs[0]['job_id'] == 'job_1'
-    assert captured['route_options'] == {'mode': 'callback', 'artifact_request': True, 'artifact_reply': True}
+    assert captured['route_options'] == {'mode': 'chain', 'artifact_request': True, 'artifact_reply': True}
 
 
 def test_submit_ask_spills_large_body_before_daemon_submit(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -485,7 +485,7 @@ def test_message_with_reply_guidance_appends_compact_default() -> None:
     assert 'Answer directly and concisely.' in body
     assert 'Include only relevant conclusions' in body
     assert 'CCB nested ask routing:' not in body
-    assert 'ask --callback' not in body
+    assert 'ask --chain' not in body
     assert 'no more than' not in body
 
 
@@ -872,8 +872,8 @@ def test_persisted_watch_fallback_resolves_callback_root_final_reply(tmp_path: P
                 'diagnostics': {},
                 'delegated': True,
                 'suppress_reply': True,
-                'callback_edge_id': 'cb_1',
-                'callback_child_job_id': 'job_child',
+                'chain_edge_id': 'cb_1',
+                'chain_child_job_id': 'job_child',
             },
             cancel_requested_at=None,
             created_at='2026-03-18T00:00:00Z',

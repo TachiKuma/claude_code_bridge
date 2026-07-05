@@ -363,7 +363,7 @@ _COMMAND_HELP = {
 
         Safety:
           - Target authority comes from the current mounted daemon graph.
-          - Refuses when the agent is busy, queued, delivering a reply, or waiting on callback continuation.
+          - Refuses when the agent is busy, queued, delivering a reply, or waiting on result-chain continuation.
           - Does not support `restart all`, window-level restart, or raw tmux mutation.
     """,
     "maintenance": """
