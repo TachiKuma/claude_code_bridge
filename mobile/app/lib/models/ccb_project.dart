@@ -43,13 +43,22 @@ class CcbProject {
   }
 }
 
-List<CcbProject> sortCcbProjectsByRecentActivity(List<CcbProject> projects) {
+List<CcbProject> sortCcbProjectsByRecentActivity(
+  List<CcbProject> projects, {
+  Map<String, DateTime> optimisticActivityAt = const {},
+}) {
   final indexed = projects.indexed.toList();
   indexed.sort((left, right) {
     final leftProject = left.$2;
     final rightProject = right.$2;
-    final leftAt = ccbProjectRecentActivityAt(leftProject);
-    final rightAt = ccbProjectRecentActivityAt(rightProject);
+    final leftAt = ccbProjectRecentActivityAt(
+      leftProject,
+      optimisticActivityAt: optimisticActivityAt[leftProject.id],
+    );
+    final rightAt = ccbProjectRecentActivityAt(
+      rightProject,
+      optimisticActivityAt: optimisticActivityAt[rightProject.id],
+    );
     if (leftAt != null && rightAt != null) {
       final compared = rightAt.compareTo(leftAt);
       if (compared != 0) {
@@ -67,16 +76,13 @@ List<CcbProject> sortCcbProjectsByRecentActivity(List<CcbProject> projects) {
   return [for (final item in indexed) item.$2];
 }
 
-DateTime? ccbProjectRecentActivityAt(CcbProject project) {
+DateTime? ccbProjectRecentActivityAt(
+  CcbProject project, {
+  DateTime? optimisticActivityAt,
+}) {
   final openedAt = project.lastOpenedAt;
   final activityAt = project.lastActivityAt;
-  if (openedAt == null) {
-    return activityAt;
-  }
-  if (activityAt == null) {
-    return openedAt;
-  }
-  return activityAt.isAfter(openedAt) ? activityAt : openedAt;
+  return _latestDateTime([openedAt, activityAt, optimisticActivityAt]);
 }
 
 String _text(Object? value, {String fallback = ''}) {
@@ -89,4 +95,18 @@ int? _optionalInt(Object? value) => int.tryParse((value ?? '').toString());
 DateTime? _optionalDateTime(Object? value) {
   final parsed = DateTime.tryParse((value ?? '').toString());
   return parsed?.toUtc();
+}
+
+DateTime? _latestDateTime(Iterable<DateTime?> values) {
+  DateTime? latest;
+  for (final value in values) {
+    if (value == null) {
+      continue;
+    }
+    final normalized = value.toUtc();
+    if (latest == null || normalized.isAfter(latest)) {
+      latest = normalized;
+    }
+  }
+  return latest;
 }

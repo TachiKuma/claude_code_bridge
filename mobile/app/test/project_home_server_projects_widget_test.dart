@@ -185,6 +185,72 @@ void main() {
     );
   });
 
+  testWidgets(
+    'paired gateway locally bumps opened project when returning list',
+    (tester) async {
+      await setTestSurfaceSize(tester, const Size(390, 844));
+      final profile = _pairedHost(hostId: 'server-host', deviceId: 'phone');
+      final profileStore = await _profileStoreWith([profile]);
+      final gatewayRepository = _ServerProjectsRepository([
+        _projectFixture(
+          id: 'older',
+          displayName: 'Older',
+          root: '/srv/older',
+          lastActivityAt: '2026-07-04T09:01:00Z',
+        ),
+        _projectFixture(
+          id: 'opened',
+          displayName: 'Opened stale source',
+          root: '/srv/opened',
+          lastOpenedAt: '2026-07-04T08:00:00Z',
+        ),
+        _projectFixture(
+          id: 'reply',
+          displayName: 'Latest reply',
+          root: '/srv/reply',
+          lastActivityAt: '2026-07-04T09:05:00Z',
+        ),
+      ]);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ProjectHomeScreen(
+            repository: FakeMobileCcbRepository.demo(),
+            profileStore: profileStore,
+            gatewayRepositoryFactory: (_) => gatewayRepository,
+            gatewayTerminalTransportFactory:
+                (_) => RecordingTerminalTransport(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _activatePairedGatewayListOnly(tester);
+      await tester.tap(find.byKey(const ValueKey('project-open-opened')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('selected-agent-workspace')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('project-back-button')));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widgetList<ListTile>(
+              find.descendant(
+                of: find.byKey(const ValueKey('project-list')),
+                matching: find.byType(ListTile),
+              ),
+            )
+            .map((tile) => (tile.title! as Text).data)
+            .take(3),
+        ['Opened stale source', 'Latest reply', 'Older'],
+      );
+    },
+  );
+
   testWidgets('paired gateway auto refreshes open project execution status', (
     tester,
   ) async {

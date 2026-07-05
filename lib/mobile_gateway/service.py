@@ -229,6 +229,7 @@ class MobileGatewayService:
             if ccbd.get('error'):
                 item['error'] = str(ccbd.get('error') or '')
             projects.append(item)
+        projects = _sort_project_payloads_by_recent_activity(projects)
         return {
             'schema_version': _SCHEMA_VERSION,
             'projects': projects,
@@ -338,7 +339,9 @@ class MobileGatewayService:
         query = parse_qs(parsed.query, keep_blank_values=True)
         self._authenticate(headers, required_scopes=('notify',))
         store = self._require_notification_store()
-        store.sync_snapshots(self._notification_snapshots())
+        emitted = store.sync_snapshots(self._notification_snapshots())
+        for event in emitted:
+            self._record_project_activity(event.project_id, activity_at=event.completed_at)
         cursor = (
             last_event_id
             if last_event_id is not None
@@ -771,6 +774,8 @@ class MobileGatewayService:
         except Exception as exc:
             raise MobileGatewayError(_error_text(exc), status_code=503) from exc
         message_id = idempotency_key
+        created_at = self._clock()
+        self._record_project_activity(project.project_id, activity_at=created_at)
         return {
             'schema_version': _SCHEMA_VERSION,
             'status': 'ok',
@@ -782,7 +787,7 @@ class MobileGatewayService:
                 'message_id': message_id,
                 'job_id': None,
                 'state': 'sent',
-                'created_at': self._clock(),
+                'created_at': created_at,
                 'message': {
                     'id': message_id,
                     'agent': target['agent'],
@@ -941,7 +946,9 @@ class MobileGatewayService:
             raise MobileGatewayError(str(exc), status_code=_ccbd_focus_status(exc)) from exc
         except Exception as exc:
             raise MobileGatewayError(_error_text(exc), status_code=503) from exc
-        return self._focused_project_view_payload(project, focus)
+        payload = self._focused_project_view_payload(project, focus)
+        self._record_project_activity(project.project_id)
+        return payload
 
     def _project_lifecycle(
         self,
@@ -1044,7 +1051,9 @@ class MobileGatewayService:
             raise MobileGatewayError(str(exc), status_code=_ccbd_focus_status(exc)) from exc
         except Exception as exc:
             raise MobileGatewayError(_error_text(exc), status_code=503) from exc
-        return self._focused_project_view_payload(project, focus)
+        payload = self._focused_project_view_payload(project, focus)
+        self._record_project_activity(project.project_id)
+        return payload
 
     def _open_terminal(
         self,
@@ -1233,6 +1242,10 @@ class MobileGatewayService:
             return summary, attempted_refresh
         fresh_summary = _project_activity_summary_from_view(view_payload)
         checked_at = self._clock()
+        if fresh_summary.get('has_working_agents'):
+            fresh_summary['last_activity_at'] = _latest_mobile_timestamp(
+                [fresh_summary.get('last_activity_at'), checked_at]
+            )
         if self._project_activity_store is not None:
             try:
                 self._project_activity_store.record_summary(
@@ -1253,6 +1266,17 @@ class MobileGatewayService:
             self._project_activity_store.record_opened(
                 project_id=project_id,
                 opened_at=self._clock(),
+            )
+        except Exception:
+            pass
+
+    def _record_project_activity(self, project_id: str, *, activity_at: str | None = None) -> None:
+        if self._project_activity_store is None:
+            return
+        try:
+            self._project_activity_store.record_activity(
+                project_id=project_id,
+                activity_at=activity_at or self._clock(),
             )
         except Exception:
             pass
@@ -1649,6 +1673,35 @@ def _project_activity_summary_from_view(payload: dict[str, object]) -> dict[str,
     if last_activity_at:
         summary['last_activity_at'] = last_activity_at
     return summary
+
+
+def _sort_project_payloads_by_recent_activity(
+    projects: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    indexed = list(enumerate(projects))
+    indexed.sort(key=lambda item: _project_payload_sort_key(item[0], item[1]))
+    return [project for _, project in indexed]
+
+
+def _project_payload_sort_key(index: int, project: dict[str, object]) -> tuple[float, int, int]:
+    recent = _project_payload_recent_activity_at(project)
+    if recent is not None:
+        return (-recent.timestamp(), 0, index)
+    has_working = bool(project.get('has_working_agents')) or (
+        (_optional_int(project.get('working_agent_count')) or 0) > 0
+    )
+    return (float('inf'), 0 if has_working else 1, index)
+
+
+def _project_payload_recent_activity_at(project: dict[str, object]) -> datetime | None:
+    candidates = [
+        _parse_mobile_conversation_timestamp(project.get('last_opened_at')),
+        _parse_mobile_conversation_timestamp(project.get('last_activity_at')),
+    ]
+    parsed = [value for value in candidates if value is not None]
+    if not parsed:
+        return None
+    return max(parsed)
 
 
 def _project_activity_summary_from_record(record: dict[str, object]) -> dict[str, object]:

@@ -181,6 +181,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
   String? _visibleTaskCompletionProjectId;
   String? _visibleTaskCompletionAgentName;
   final Map<String, bool> _knownProjectWorkingAgents = {};
+  final Map<String, DateTime> _optimisticProjectActivityAt = {};
   List<TaskCompletionUnreadItem> _unreadTaskCompletions = const [];
 
   late final ProjectHomeProfileBootstrapper _profileBootstrapper =
@@ -313,6 +314,11 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
           },
           onCollapseAgents: _collapseMobileAgents,
           onExpandAgents: _expandMobileAgents,
+          onProjectActivity: () {
+            setState(() {
+              _rememberProjectUsed(view.project.id);
+            });
+          },
           onWindowSelected: (windowName) {
             _selectWindow(view, windowName);
           },
@@ -381,7 +387,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
 
   Future<List<CcbProject>> _loadServerProjects() {
     return _deferredBuilderFuture(
-      () async => sortCcbProjectsByRecentActivity(
+      () async => _sortProjectsWithLocalActivity(
         await _activeRepository.listProjects().timeout(
           projectHomeRuntimeViewLoadTimeout,
         ),
@@ -515,6 +521,22 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     });
   }
 
+  List<CcbProject> _sortProjectsWithLocalActivity(List<CcbProject> projects) {
+    return sortCcbProjectsByRecentActivity(
+      projects,
+      optimisticActivityAt: _optimisticProjectActivityAt,
+    );
+  }
+
+  void _rememberProjectUsed(String projectId, {DateTime? usedAt}) {
+    final normalized = projectId.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    _optimisticProjectActivityAt[normalized] =
+        (usedAt ?? DateTime.now()).toUtc();
+  }
+
   void _returnToServerProjectList() {
     _stopActiveProjectStatusRefresh();
     setState(() {
@@ -533,12 +555,13 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
         if (error != null) {
           return _buildProjectCatalogError(error);
         }
-        final projects = snapshot.data;
-        if (projects == null) {
+        final loadedProjects = snapshot.data;
+        if (loadedProjects == null) {
           return const Scaffold(
             body: SafeArea(child: Center(child: CircularProgressIndicator())),
           );
         }
+        final projects = _sortProjectsWithLocalActivity(loadedProjects);
         return ProjectHomeServerProjectListHost(
           projects: projects,
           onRefreshProjects: _retryServerProjects,
@@ -626,6 +649,11 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
       },
       onOpenTerminal: (agentName) {
         _openAgentTerminal(view, agentName);
+      },
+      onProjectActivity: () {
+        setState(() {
+          _rememberProjectUsed(view.project.id);
+        });
       },
       onToggleSidebar: _toggleWideSidebarLevel,
       onHorizontalDragStart: _startWideSidebarDrag,
@@ -767,6 +795,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
 
   void _openServerProject(CcbProject project) {
     setState(() {
+      _rememberProjectUsed(project.id);
       _activeProjectId = project.id;
       _openedProjectId = project.id;
       _selectedAgentName = null;
@@ -1226,6 +1255,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
       final focusedView = outcome.focusedView!;
       _rememberProjectActivity(focusedView);
       setState(() {
+        _rememberProjectUsed(focusedView.project.id);
         _selectedAgentName = outcome.selectedAgentName;
         _viewFuture = Future<CcbProjectView>.value(focusedView);
       });
@@ -1274,6 +1304,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
       final focusedView = outcome.focusedView!;
       _rememberProjectActivity(focusedView);
       setState(() {
+        _rememberProjectUsed(focusedView.project.id);
         _selectedAgentName = outcome.selectedAgentName;
         _viewFuture = Future<CcbProjectView>.value(focusedView);
       });
@@ -1429,6 +1460,11 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     TaskCompletionNotificationEvent event,
   ) async {
     if (_isTaskCompletionTargetVisible(event)) {
+      if (mounted) {
+        setState(() {
+          _rememberProjectUsed(event.projectId, usedAt: event.completedAt);
+        });
+      }
       await _clearTaskCompletionUnreadForAgent(
         projectId: event.projectId,
         agent: event.agent,
@@ -1440,6 +1476,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
       return;
     }
     setState(() {
+      _rememberProjectUsed(event.projectId, usedAt: event.completedAt);
       _unreadTaskCompletions = items;
     });
   }

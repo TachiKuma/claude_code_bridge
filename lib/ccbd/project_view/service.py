@@ -19,7 +19,15 @@ from ccbd.services.dispatcher_runtime import comms_recoverability_for_job
 from ccbd.system import parse_utc_timestamp, utc_now
 from message_bureau import CallbackEdgeState
 from provider_backends.codex.launcher_runtime.command_runtime.home import resolve_codex_home_layout
-from provider_pane_status.codex_pane import ACTIVE_STATES, normalize_screen, parse_codex_pane_status
+from provider_pane_status.codex_pane import (
+    ACTIVE_STATES as CODEX_ACTIVE_STATES,
+    normalize_screen,
+    parse_codex_pane_status,
+)
+from provider_pane_status.claude_pane import (
+    ACTIVE_STATES as CLAUDE_ACTIVE_STATES,
+    parse_claude_pane_status,
+)
 from provider_pane_status.codex_session import CodexRuntimeStatus, compose_codex_runtime_status, read_codex_session_status
 from provider_pane_status.claude_session import (
     ClaudeRuntimeStatus,
@@ -46,6 +54,7 @@ PROJECT_VIEW_TTL_MS = 1000
 PROJECT_VIEW_IDLE_TTL_MS = 5000
 PROJECT_VIEW_COMMS_LIMIT = 8
 CODEX_ACTIVE_NO_PROGRESS_FREE_AFTER_S = 60.0
+CLAUDE_ACTIVE_NO_PROGRESS_FREE_AFTER_S = 60.0
 _RECENT_JOB_RESULT_LIMIT = PROJECT_VIEW_COMMS_LIMIT * 8
 _RECENT_JOB_SCAN_LIMIT_PER_AGENT = 128
 _RECENT_JOB_INITIAL_SCAN_MIN = 8
@@ -280,7 +289,7 @@ class _CodexPaneProgressTracker:
         generated_at: str,
     ) -> CodexRuntimeStatus:
         key = self._key(agent_name, pane_id)
-        if raw_status.pane_state in ACTIVE_STATES:
+        if raw_status.pane_state in CODEX_ACTIVE_STATES:
             self._records.pop(key, None)
             return raw_status
         if raw_status.state not in {'unknown', 'working', 'tool_running'}:
@@ -289,7 +298,7 @@ class _CodexPaneProgressTracker:
         now_s = _timestamp_s(generated_at)
         if now_s is None:
             return raw_status
-        digest = _codex_meaningful_pane_digest(pane_text)
+        digest = _pane_digest(pane_text)
         record = self._records.get(key)
         if record is None or record.digest != digest:
             self._records[key] = _CodexPaneProgressRecord(digest=digest, changed_at_s=now_s)
@@ -318,11 +327,67 @@ class _CodexPaneProgressTracker:
         return (str(agent_name or '').strip(), str(pane_id or '').strip())
 
 
+class _ClaudePaneProgressTracker:
+    def __init__(self, *, stale_after_s: float = CLAUDE_ACTIVE_NO_PROGRESS_FREE_AFTER_S) -> None:
+        self._stale_after_s = max(0.0, float(stale_after_s))
+        self._records: dict[tuple[str, str], _CodexPaneProgressRecord] = {}
+
+    def status_for(
+        self,
+        *,
+        agent_name: str,
+        pane_id: object,
+        pane_text: str | None,
+        raw_status: ClaudeRuntimeStatus,
+        generated_at: str,
+    ) -> ClaudeRuntimeStatus:
+        key = self._key(agent_name, pane_id)
+        if raw_status.pane_state in CLAUDE_ACTIVE_STATES:
+            self._records.pop(key, None)
+            return raw_status
+        if raw_status.pane_state != 'terminal_summary' or raw_status.state not in {'working', 'tool_running'}:
+            self._records.pop(key, None)
+            return raw_status
+        now_s = _timestamp_s(generated_at)
+        if now_s is None:
+            return raw_status
+        digest = _pane_digest(pane_text)
+        record = self._records.get(key)
+        if record is None or record.digest != digest:
+            self._records[key] = _CodexPaneProgressRecord(digest=digest, changed_at_s=now_s)
+            return raw_status
+        stale_s = max(0.0, now_s - record.changed_at_s)
+        if stale_s < self._stale_after_s:
+            return raw_status
+        return ClaudeRuntimeStatus(
+            'free',
+            'claude_pane_no_active_stale_no_progress',
+            'stabilizer',
+            raw_status.activity_state,
+            raw_status.activity_reason,
+            raw_status.session_state,
+            raw_status.session_reason,
+            raw_status.pane_state,
+            raw_status.pane_reason,
+            notes=(
+                *raw_status.notes,
+                f'raw_state={raw_status.state}',
+                f'raw_reason={raw_status.reason}',
+                f'no_progress_s={round(stale_s, 3)}',
+            ),
+        )
+
+    @staticmethod
+    def _key(agent_name: str, pane_id: object) -> tuple[str, str]:
+        return (str(agent_name or '').strip(), str(pane_id or '').strip())
+
+
 class ProjectViewService:
     def __init__(self, deps: ProjectViewDependencies) -> None:
         self._deps = deps
         self._sequence_cache = deps.sequence_cache or ProjectViewSequenceCache()
         self._codex_pane_progress = _CodexPaneProgressTracker()
+        self._claude_pane_progress = _ClaudePaneProgressTracker()
         self._cached_response: _CachedProjectViewResponse | None = None
         self._sidebar_refresh_lock = threading.Lock()
         self._sidebar_refresh_pending = False
@@ -371,6 +436,7 @@ class ProjectViewService:
             generated_at=generated_at,
             metrics_context=metrics_context,
             codex_pane_progress=self._codex_pane_progress,
+            claude_pane_progress=self._claude_pane_progress,
         )
         response = {
             'view': view,
@@ -436,6 +502,7 @@ def build_project_view(
     generated_at: str,
     metrics_context: _ProjectViewMetricsContext | None = None,
     codex_pane_progress: _CodexPaneProgressTracker | None = None,
+    claude_pane_progress: _ClaudePaneProgressTracker | None = None,
 ) -> dict[str, object]:
     lease = deps.mount_manager.load_state()
     namespace = deps.namespace_state_store.load()
@@ -467,6 +534,7 @@ def build_project_view(
             provider_runtimes=provider_runtime_by_agent.get(agent_name, ()),
             reload_drain=active_drain_by_agent.get(agent_name),
             codex_pane_progress=codex_pane_progress,
+            claude_pane_progress=claude_pane_progress,
         )
         for order, agent_name in enumerate(_agent_order(deps.config))
     ]
@@ -608,6 +676,7 @@ def _agent_view(
     provider_runtimes: tuple[dict[str, object], ...] = (),
     reload_drain: dict[str, object] | None = None,
     codex_pane_progress: _CodexPaneProgressTracker | None = None,
+    claude_pane_progress: _ClaudePaneProgressTracker | None = None,
 ) -> dict[str, object]:
     spec = deps.config.agents[agent_name]
     runtime = deps.registry.get(agent_name)
@@ -646,10 +715,14 @@ def _agent_view(
                 progress_tracker=codex_pane_progress,
             )
     elif provider_is_claude:
+        pane_text = context.pane_text_hint(getattr(runtime, 'pane_id', None) if runtime is not None else None)
         provider_runtime_status = _claude_runtime_status(
             runtime=runtime,
             provider_activity=provider_activity,
+            pane_text=pane_text,
             current_job=job,
+            generated_at=generated_at,
+            progress_tracker=claude_pane_progress,
         )
     elif provider_activity is None or _provider_activity_needs_pane_error_probe(provider_activity, generated_at):
         pane_text = context.pane_text_hint(getattr(runtime, 'pane_id', None) if runtime is not None else None)
@@ -775,6 +848,26 @@ def _codex_runtime_status(
         )
     if (
         _job_is_running(current_job)
+        and raw_status.state == 'free'
+        and raw_status.source == 'session'
+        and raw_status.pane_state == 'unknown'
+    ):
+        return CodexRuntimeStatus(
+            'start',
+            'prompt_submitted_waiting_for_first_signal',
+            'stabilizer',
+            raw_status.pane_state,
+            raw_status.pane_reason,
+            raw_status.session_state,
+            raw_status.session_reason,
+            notes=(
+                *raw_status.notes,
+                f'raw_state={raw_status.state}',
+                f'raw_reason={raw_status.reason}',
+            ),
+        )
+    if (
+        _job_is_running(current_job)
         and raw_status.state == 'unknown'
     ):
         return CodexRuntimeStatus(
@@ -798,18 +891,36 @@ def _claude_runtime_status(
     *,
     runtime: object | None,
     provider_activity: object | None,
+    pane_text: str | None,
     current_job,
+    generated_at: str,
+    progress_tracker: _ClaudePaneProgressTracker | None = None,
 ) -> ClaudeRuntimeStatus:
     activity_status = claude_activity_status(provider_activity)
     session_status = read_claude_session_status(
         _claude_transcript_path(runtime),
         min_mtime_s=_job_updated_epoch_for_session_floor(current_job),
     )
-    return compose_claude_runtime_status(
+    pane_state = _clean_pane_state(getattr(runtime, 'pane_state', None) if runtime is not None else None)
+    pane_status = parse_claude_pane_status(
+        pane_text,
+        pane_dead=pane_state in {'missing', 'dead'},
+    )
+    raw_status = compose_claude_runtime_status(
         activity_status,
         session_status,
         job_running=_job_is_running(current_job),
+        pane_status=pane_status,
     )
+    if progress_tracker is not None:
+        raw_status = progress_tracker.status_for(
+            agent_name=getattr(runtime, 'agent_name', None) if runtime is not None else None,
+            pane_id=getattr(runtime, 'pane_id', None) if runtime is not None else None,
+            pane_text=pane_text,
+            raw_status=raw_status,
+            generated_at=generated_at,
+        )
+    return raw_status
 
 
 def _claude_transcript_path(runtime: object | None) -> Path | None:
@@ -891,7 +1002,7 @@ def _timestamp_s(value: str) -> float | None:
         return None
 
 
-def _codex_meaningful_pane_digest(pane_text: str | None) -> str:
+def _pane_digest(pane_text: str | None) -> str:
     normalized = normalize_screen(pane_text or '')
     return hashlib.sha256(normalized.encode('utf-8', errors='replace')).hexdigest()
 

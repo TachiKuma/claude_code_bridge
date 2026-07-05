@@ -48,6 +48,7 @@ class SelectedAgentWorkspace extends StatefulWidget {
     required this.enableComposerCollapse,
     required this.onRefreshView,
     this.onUserScrollDirectionChanged,
+    this.onProjectActivity,
     this.localMessageStore,
     this.controller,
   });
@@ -60,6 +61,7 @@ class SelectedAgentWorkspace extends StatefulWidget {
   final bool enableComposerCollapse;
   final Future<CcbProjectView?> Function()? onRefreshView;
   final ValueChanged<ScrollDirection>? onUserScrollDirectionChanged;
+  final VoidCallback? onProjectActivity;
   final AgentLocalMessageStore? localMessageStore;
   final SelectedAgentWorkspaceController? controller;
 
@@ -463,6 +465,7 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace>
         _uiControllers.clearDraftAttachments(agent.name);
         _localExceptionStatusAgentNames.remove(agent.name);
         _recentPaneOutputText.remove(agent.name);
+        widget.onProjectActivity?.call();
         if (widget.usePaneInputForMessages) {
           acceptedPaneMessage = true;
           _markAwaitingPaneResponse(agent.name);

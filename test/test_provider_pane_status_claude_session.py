@@ -9,6 +9,7 @@ from provider_pane_status.claude_session import (
     compose_claude_runtime_status,
     read_claude_session_status,
 )
+from provider_pane_status.claude_pane import parse_claude_pane_status
 
 
 def _append_jsonl(path: Path, *entries: dict[str, object]) -> None:
@@ -151,3 +152,40 @@ def test_claude_runtime_status_keeps_missing_bound_session_unknown(tmp_path: Pat
     assert status.state == "unknown"
     assert status.reason == "session_path_missing"
     assert status.source == "session"
+
+
+def test_claude_runtime_status_uses_pane_active_over_idle_activity() -> None:
+    activity = claude_activity_status(
+        SimpleNamespace(state="idle", reason="provider_Stop", event_name="Stop", diagnostics={})
+    )
+    session = read_claude_session_status(None)
+    pane = parse_claude_pane_status("● Thinking for 9s, running 1 shell command…\n❯\n")
+
+    status = compose_claude_runtime_status(activity, session, job_running=False, pane_status=pane)
+
+    assert status.state == "tool_running"
+    assert status.reason == "claude_pane_tool_running"
+    assert status.source == "pane"
+    assert status.activity_state == "idle"
+    assert status.pane_state == "tool_running"
+
+
+def test_claude_runtime_status_keeps_terminal_summary_observational() -> None:
+    activity = claude_activity_status(
+        SimpleNamespace(
+            state="active",
+            reason="provider_PreToolUse",
+            event_name="PreToolUse",
+            diagnostics={"tool_name": "Bash"},
+        )
+    )
+    session = read_claude_session_status(None)
+    pane = parse_claude_pane_status("Thought for 9s, ran 1 shell command\n❯\n")
+
+    status = compose_claude_runtime_status(activity, session, job_running=False, pane_status=pane)
+
+    assert status.state == "tool_running"
+    assert status.reason == "claude_activity_tool_running"
+    assert status.source == "activity"
+    assert status.pane_state == "terminal_summary"
+    assert status.pane_reason == "claude_pane_terminal_summary"

@@ -10,6 +10,7 @@ from provider_backends.claude.execution_runtime.event_reading_runtime.api_errors
     api_error_event,
     terminal_api_error_payload,
 )
+from .claude_pane import ACTIVE_STATES as PANE_ACTIVE_STATES, ClaudePaneStatus
 
 
 RUNTIME_STATUS_CATALOG: dict[str, str] = {
@@ -20,6 +21,7 @@ RUNTIME_STATUS_CATALOG: dict[str, str] = {
     "waiting_for_user": "Claude is waiting for user approval, input, or permission.",
     "api_error": "Claude reports provider/API/model/rate-limit/server failure.",
     "failed": "Claude reports a generic provider/runtime failure.",
+    "pane_dead": "The tmux pane or server is gone.",
     "unknown": "No explicit Claude hook or session evidence is available.",
 }
 
@@ -77,6 +79,8 @@ class ClaudeRuntimeStatus:
     activity_reason: str | None = None
     session_state: str | None = None
     session_reason: str | None = None
+    pane_state: str | None = None
+    pane_reason: str | None = None
     notes: tuple[str, ...] = ()
 
     def to_record(self) -> dict[str, object]:
@@ -89,6 +93,8 @@ class ClaudeRuntimeStatus:
             "activity_reason": self.activity_reason,
             "session_state": self.session_state,
             "session_reason": self.session_reason,
+            "pane_state": self.pane_state,
+            "pane_reason": self.pane_reason,
             "notes": list(self.notes),
         }
 
@@ -179,18 +185,33 @@ def compose_claude_runtime_status(
     session_status: ClaudeSessionStatus | None,
     *,
     job_running: bool,
+    pane_status: ClaudePaneStatus | None = None,
 ) -> ClaudeRuntimeStatus:
-    if activity_status is not None:
+    if activity_status is not None and activity_status.state in {"api_error", "failed", "waiting_for_user"}:
+        return _runtime_from_activity(activity_status, session_status, pane_status)
+
+    if pane_status is not None and pane_status.state in {
+        *PANE_ACTIVE_STATES,
+        "waiting_for_user",
+        "api_error",
+        "failed",
+        "pane_dead",
+    }:
         return ClaudeRuntimeStatus(
-            activity_status.state,
-            activity_status.reason,
-            "activity",
-            activity_status.activity_state,
-            activity_status.activity_reason,
+            pane_status.state,
+            pane_status.reason,
+            "pane",
+            activity_status.activity_state if activity_status is not None else None,
+            activity_status.activity_reason if activity_status is not None else None,
             session_status.state if session_status is not None else None,
             session_status.reason if session_status is not None else None,
-            notes=activity_status.notes,
+            pane_status.state,
+            pane_status.reason,
+            notes=pane_status.notes,
         )
+
+    if activity_status is not None:
+        return _runtime_from_activity(activity_status, session_status, pane_status)
 
     if session_status is not None and session_status.state != "unknown":
         return ClaudeRuntimeStatus(
@@ -201,6 +222,8 @@ def compose_claude_runtime_status(
             None,
             session_status.state,
             session_status.reason,
+            pane_status.state if pane_status is not None else None,
+            pane_status.reason if pane_status is not None else None,
             notes=session_status.notes,
         )
 
@@ -213,6 +236,8 @@ def compose_claude_runtime_status(
             None,
             session_status.state if session_status is not None else None,
             session_status.reason if session_status is not None else None,
+            pane_status.state if pane_status is not None else None,
+            pane_status.reason if pane_status is not None else None,
             notes=_raw_session_notes(session_status),
         )
 
@@ -225,6 +250,8 @@ def compose_claude_runtime_status(
             None,
             session_status.state if session_status is not None else None,
             session_status.reason if session_status is not None else None,
+            pane_status.state if pane_status is not None else None,
+            pane_status.reason if pane_status is not None else None,
             notes=_raw_session_notes(session_status),
         )
 
@@ -236,7 +263,28 @@ def compose_claude_runtime_status(
         None,
         session_status.state,
         session_status.reason,
+        pane_status.state if pane_status is not None else None,
+        pane_status.reason if pane_status is not None else None,
         notes=session_status.notes,
+    )
+
+
+def _runtime_from_activity(
+    activity_status: ClaudeActivityStatus,
+    session_status: ClaudeSessionStatus | None,
+    pane_status: ClaudePaneStatus | None,
+) -> ClaudeRuntimeStatus:
+    return ClaudeRuntimeStatus(
+        activity_status.state,
+        activity_status.reason,
+        "activity",
+        activity_status.activity_state,
+        activity_status.activity_reason,
+        session_status.state if session_status is not None else None,
+        session_status.reason if session_status is not None else None,
+        pane_status.state if pane_status is not None else None,
+        pane_status.reason if pane_status is not None else None,
+        notes=activity_status.notes,
     )
 
 

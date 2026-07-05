@@ -368,6 +368,55 @@ def test_projects_payload_lists_registry_projects_without_exposing_tmux_socket()
     assert second.calls == [('ping', 'ccbd'), ('project_view', 1)]
 
 
+def test_projects_payload_sorts_by_persisted_recent_activity(tmp_path: Path) -> None:
+    older = _FakeCcbdClient(
+        project_id='proj-older',
+        project_root='/srv/older',
+        display_name='older',
+    )
+    recent = _FakeCcbdClient(
+        project_id='proj-recent',
+        project_root='/srv/recent',
+        display_name='recent',
+    )
+    service = _service(
+        older,
+        mobile_dir=tmp_path / 'mobile',
+        project_registry=MobileGatewayProjectRegistry(
+            [
+                MobileGatewayProject(
+                    project_id='proj-older',
+                    project_root=Path('/srv/older'),
+                    ccbd_client_factory=lambda: older,
+                ),
+                MobileGatewayProject(
+                    project_id='proj-recent',
+                    project_root=Path('/srv/recent'),
+                    ccbd_client_factory=lambda: recent,
+                ),
+            ]
+        ),
+    )
+    assert service._project_activity_store is not None
+    service._project_activity_store.record_summary(
+        project_id='proj-older',
+        summary={'last_activity_at': '2026-07-04T09:00:00Z'},
+        checked_at='2026-06-18T00:00:00Z',
+    )
+    service._project_activity_store.record_summary(
+        project_id='proj-recent',
+        summary={'last_activity_at': '2026-07-04T09:05:00Z'},
+        checked_at='2026-06-18T00:00:00Z',
+    )
+
+    projects = service.projects_payload()
+
+    assert [item['id'] for item in projects['projects']] == [
+        'proj-recent',
+        'proj-older',
+    ]
+
+
 def test_projects_payload_includes_project_activity_summary() -> None:
     fake = _FakeActivityCcbdClient()
     service = _service(fake)
@@ -446,6 +495,28 @@ def test_project_view_records_last_opened_for_project_list(tmp_path: Path) -> No
     projects = service.projects_payload()
 
     assert projects['projects'][0]['last_opened_at'] == '2026-06-18T00:00:00Z'
+
+
+def test_focus_agent_records_project_activity_for_project_list(tmp_path: Path) -> None:
+    fake = _FakeCcbdClient()
+    service = _service(fake, mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view', 'focus'),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
+
+    service.dispatch_post(
+        '/v1/projects/proj-demo/focus-agent',
+        {'agent': 'mobile', 'namespace_epoch': 4},
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+    projects = service.projects_payload()
+
+    assert projects['projects'][0]['last_activity_at'] == '2026-06-18T00:00:00Z'
 
 
 def test_projects_payload_omits_unreachable_registry_projects() -> None:
@@ -2505,6 +2576,8 @@ def test_agent_message_submit_sends_plain_text_to_agent_pane(tmp_path: Path) -> 
     response_json = json.dumps(payload)
     assert 'terminal_input' not in response_json
     assert 'tmux.sock' not in response_json
+    projects = service.projects_payload()
+    assert projects['projects'][0]['last_activity_at'] == '2026-06-18T00:00:00Z'
 
 
 def test_agent_message_submit_accepts_attachment_only_message(tmp_path: Path) -> None:

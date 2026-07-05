@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 import json
 from pathlib import Path
 
@@ -27,6 +28,20 @@ class MobileGatewayProjectActivityStore:
         projects[project_id] = prior
         self._write_projects(projects)
 
+    def record_activity(self, *, project_id: str, activity_at: str) -> None:
+        project_id = str(project_id or '').strip()
+        activity_at = str(activity_at or '').strip()
+        if not project_id or not activity_at:
+            return
+        payload = self._read()
+        projects = _projects(payload)
+        prior = dict(projects.get(project_id) or {})
+        prior['project_id'] = project_id
+        current = str(prior.get('last_activity_at') or '').strip()
+        prior['last_activity_at'] = _latest_timestamp(current, activity_at) or activity_at
+        projects[project_id] = prior
+        self._write_projects(projects)
+
     def record_summary(
         self,
         *,
@@ -46,9 +61,10 @@ class MobileGatewayProjectActivityStore:
 
         last_activity_at = str(summary.get('last_activity_at') or '').strip()
         if last_activity_at:
-            prior['last_activity_at'] = last_activity_at
-        else:
-            prior.pop('last_activity_at', None)
+            current = str(prior.get('last_activity_at') or '').strip()
+            prior['last_activity_at'] = (
+                _latest_timestamp(current, last_activity_at) or last_activity_at
+            )
 
         has_working_agents = bool(summary.get('has_working_agents'))
         prior['has_working_agents'] = has_working_agents
@@ -101,4 +117,24 @@ def _optional_int(value: object) -> int | None:
     try:
         return int(str(value).strip())
     except Exception:
+        return None
+
+
+def _latest_timestamp(left: str, right: str) -> str | None:
+    left_parsed = _parse_timestamp(left)
+    right_parsed = _parse_timestamp(right)
+    if left_parsed is None:
+        return right if right_parsed is not None else left or right or None
+    if right_parsed is None:
+        return left
+    return right if right_parsed > left_parsed else left
+
+
+def _parse_timestamp(value: str) -> datetime | None:
+    text = str(value or '').strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace('Z', '+00:00'))
+    except ValueError:
         return None

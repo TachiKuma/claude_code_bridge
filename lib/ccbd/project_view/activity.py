@@ -303,6 +303,9 @@ def _provider_runtime_activity(facts: AgentActivityFacts) -> AgentActivity | Non
     if source not in {'codex_runtime', 'claude_runtime'}:
         return None
     runtime_state = _clean(facts.provider_runtime_state)
+    job_status = _clean(facts.current_job_status)
+    if runtime_state == 'free' and job_status in {'accepted', 'queued', 'running'}:
+        return None
     reason = _clean(facts.provider_runtime_reason) or f'{source}_{runtime_state or "unknown"}'
     last_progress_at = facts.current_job_updated_at
     if runtime_state == 'free':

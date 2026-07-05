@@ -208,6 +208,7 @@ class ProjectHomeMobileChatScaffoldHost extends StatefulWidget {
     required this.onRefreshView,
     required this.onTimelineScrollDirectionChanged,
     this.unreadAgentNames = const {},
+    this.onProjectActivity,
     super.key,
   });
 
@@ -222,6 +223,7 @@ class ProjectHomeMobileChatScaffoldHost extends StatefulWidget {
   final VoidCallback onOpenConnectionDetails;
   final VoidCallback onCollapseAgents;
   final VoidCallback onExpandAgents;
+  final VoidCallback? onProjectActivity;
   final ValueChanged<String> onWindowSelected;
   final ValueChanged<String> onAgentSelected;
   final Future<CcbProjectView?> Function() onRefreshView;
@@ -303,6 +305,7 @@ class _ProjectHomeMobileChatScaffoldHostState
                   onRefreshView: widget.onRefreshView,
                   onUserScrollDirectionChanged:
                       widget.onTimelineScrollDirectionChanged,
+                  onProjectActivity: widget.onProjectActivity,
                   controller: _workspaceController,
                 ),
               ),
@@ -499,6 +502,7 @@ class ProjectHomeWideScaffoldHost extends StatelessWidget {
     required this.onHorizontalDragEnd,
     required this.onRefreshView,
     this.unreadAgentNames = const {},
+    this.onProjectActivity,
     this.hasUnreadTaskCompletion = false,
     this.hasWorkingAgents = false,
     super.key,
@@ -516,6 +520,7 @@ class ProjectHomeWideScaffoldHost extends StatelessWidget {
   final VoidCallback onShowProjects;
   final ValueChanged<CcbAgent> onAgentSelected;
   final ValueChanged<String> onOpenTerminal;
+  final VoidCallback? onProjectActivity;
   final VoidCallback onToggleSidebar;
   final GestureDragStartCallback onHorizontalDragStart;
   final GestureDragUpdateCallback onHorizontalDragUpdate;
@@ -618,6 +623,7 @@ class ProjectHomeWideScaffoldHost extends StatelessWidget {
                         enableComposerCollapse: false,
                         onRefreshView: onRefreshView,
                         onUserScrollDirectionChanged: null,
+                        onProjectActivity: onProjectActivity,
                       ),
                     ),
                   ],
