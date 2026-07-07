@@ -195,11 +195,24 @@ def _refresh_reader_for_current_session_binding(submission: ProviderSubmission) 
             current_log=current_log,
         )
         if anchor_fallback is not None:
-            reader = _locked_reader_for_log(session, anchor_fallback, work_dir=work_dir)
+            anchor_fallback_log, trusted_legacy_workspace = anchor_fallback
+            if trusted_legacy_workspace:
+                switched = _submission_with_locked_reader(
+                    submission,
+                    state=state,
+                    poll_state=poll_state,
+                    session=session,
+                    work_dir=work_dir,
+                    log_path=anchor_fallback_log,
+                    fallback=True,
+                )
+                if switched is not None:
+                    return switched
+            reader = _locked_reader_for_log(session, anchor_fallback_log, work_dir=work_dir)
             return _submission_with_anchor_fallback_diagnostics(
                 submission,
                 state=state,
-                log_path=anchor_fallback,
+                log_path=anchor_fallback_log,
                 session_id=str(getattr(reader, '_session_id_filter', '') or '') if reader is not None else '',
             )
         return submission
@@ -689,7 +702,7 @@ def _anchor_fallback_log(
     session,
     work_dir: Path,
     current_log: Path,
-) -> Path | None:
+) -> tuple[Path, bool] | None:
     if bool(state.get('anchor_seen') or state.get('no_wrap')):
         return None
     if _current_log_has_unread_data(current_log, poll_state.get('offset')):
@@ -705,7 +718,7 @@ def _anchor_fallback_log(
         return None
 
     current_path = _normalized_resolved_path(current_log)
-    matches: list[Path] = []
+    matches: list[tuple[Path, bool]] = []
     try:
         candidates = sorted(root.glob('**/*.jsonl'))
     except OSError:
@@ -715,12 +728,22 @@ def _anchor_fallback_log(
             continue
         if _normalized_resolved_path(candidate) == current_path:
             continue
-        if not _log_matches_work_dir(candidate, target_work_dir):
+        log_work_dir = _log_work_dir(candidate)
+        if not log_work_dir:
+            continue
+        trusted_legacy_workspace = False
+        if log_work_dir != target_work_dir:
+            trusted_legacy_workspace = _legacy_agent_workspace_matches(
+                log_work_dir,
+                target_work_dir,
+                submission.agent_name,
+            )
+        if log_work_dir != target_work_dir and not trusted_legacy_workspace:
             continue
         if not extract_session_id(candidate):
             continue
         if _log_contains_request_anchor(candidate, request_anchor):
-            matches.append(candidate)
+            matches.append((candidate, trusted_legacy_workspace))
             if len(matches) > 1:
                 return None
     if len(matches) != 1:
@@ -746,14 +769,43 @@ def _current_log_is_drained(log_path: Path, offset: object) -> bool:
         return False
 
 
-def _log_matches_work_dir(log_path: Path, target_work_dir: str) -> bool:
+def _log_work_dir(log_path: Path) -> str | None:
     raw = extract_cwd_from_log_file(log_path)
     if not raw:
+        return None
+    try:
+        return normalize_work_dir(Path(raw).expanduser())
+    except Exception:
+        return None
+
+
+def _legacy_agent_workspace_matches(log_work_dir: str, target_work_dir: str, agent_name: str) -> bool:
+    normalized_agent = str(agent_name or '').strip()
+    if not normalized_agent:
         return False
     try:
-        return normalize_work_dir(Path(raw).expanduser()) == target_work_dir
+        log_path = Path(log_work_dir).expanduser()
+        target_path = Path(target_work_dir).expanduser()
+        root = _ccb_workspaces_root(target_path)
+        if root is None or _ccb_workspaces_root(log_path) != root:
+            return False
+        target_rel = target_path.relative_to(root)
+        log_rel = log_path.relative_to(root)
     except Exception:
         return False
+    return (
+        len(target_rel.parts) >= 2
+        and target_rel.parts[0] == 'groups'
+        and log_rel.parts == (normalized_agent,)
+    )
+
+
+def _ccb_workspaces_root(path: Path) -> Path | None:
+    parts = path.parts
+    for index in range(len(parts) - 1):
+        if parts[index] == '.ccb' and parts[index + 1] == 'workspaces':
+            return Path(*parts[: index + 2])
+    return None
 
 
 def _log_contains_request_anchor(log_path: Path, request_anchor: str) -> bool:

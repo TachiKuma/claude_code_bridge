@@ -562,6 +562,247 @@ def test_pending_guard_blocks_cleanup_for_pending_and_incomplete_authority(tmp_p
     assert not Path(str(manifest['command_log'])).exists()
 
 
+def test_command_evidence_duplicate_label_is_rejected_before_overwrite(tmp_path: Path) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    label_suffix = 'phase6b-l1-doc-direct-execution__run_direct_execution_round'
+    label, stdout_path, stderr_path = runner.command_output_paths(manifest, label_suffix)
+    command_log = Path(str(manifest['command_log']))
+    stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    stdout_path.write_text('original stdout evidence\n', encoding='utf-8')
+    stderr_path.write_text('original stderr evidence\n', encoding='utf-8')
+    command_log.write_text(json.dumps({'label': label, 'stdout': str(stdout_path)}) + '\n', encoding='utf-8')
+
+    with pytest.raises(runner.HarnessError, match='evidence_integrity_duplicate_label'):
+        runner.run_logged(manifest, label_suffix, [sys.executable, '-c', 'print("new output")'])
+
+    assert stdout_path.read_text(encoding='utf-8') == 'original stdout evidence\n'
+    assert stderr_path.read_text(encoding='utf-8') == 'original stderr evidence\n'
+
+
+def test_sequence25_pending_reviewer_checkpoint_blocks_b7_and_cleanup(tmp_path: Path) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    project = Path(str(manifest['project']))
+    task_id = 'phase6b-l1-doc-direct-execution'
+    loop_id = 'lp1b2b3a'
+    pending_payload = {
+        'schema_version': 1,
+        'record_type': 'ccb_loop_ask_first_execution_round',
+        'loop_run_status': 'pending',
+        'loop_id': loop_id,
+        'task_id': task_id,
+        'pending': {
+            'source': 'ask_job_pending',
+            'stage': 'reviewer_ask',
+            'purpose': 'reviewer',
+            'reason': 'reviewer job status running is not terminal',
+            'target': f'loop-{loop_id}-code_reviewer-1',
+            'job_id': 'job_e9edbc409b48',
+            'job_status': 'running',
+            'watch_source': 'persisted_terminal',
+            'watch_observation': 'not_terminal',
+        },
+        'reviewer': {
+            'target': f'loop-{loop_id}-code_reviewer-1',
+            'purpose': 'reviewer',
+            'job_id': 'job_e9edbc409b48',
+            'status': 'running',
+            'terminal': False,
+        },
+    }
+    runner._write_json(
+        project / '.ccb' / 'runtime' / 'loops' / loop_id / 'round.pending.json',
+        pending_payload,
+    )
+    runner._write_json(
+        project / '.ccb' / 'runtime' / 'loops' / loop_id / 'ask_first_stage_state.json',
+        {
+            'schema_version': 1,
+            'record_type': 'ccb_loop_ask_first_stage_state',
+            'status': 'pending',
+            'task_id': task_id,
+            'loop_id': loop_id,
+            'stage': 'reviewer_ask',
+            'target': f'loop-{loop_id}-code_reviewer-1',
+            'job_id': 'job_e9edbc409b48',
+            'purpose': 'reviewer',
+            'pending': pending_payload['pending'],
+        },
+    )
+
+    problems = runner.pending_authority_problems(project, task_id)
+
+    assert {problem['reason'] for problem in problems} == {
+        'round_pending',
+        'ask_first_stage_pending',
+    }
+    assert all(problem['loop_id'] == loop_id for problem in problems)
+    assert all(problem['task_id'] == task_id for problem in problems)
+    assert all(problem['stage'] == 'reviewer_ask' for problem in problems)
+    assert all(problem['job_id'] == 'job_e9edbc409b48' for problem in problems)
+
+    for command in ('b7', 'cleanup-after-b7'):
+        result = subprocess.run(
+            ['bash', str(manifest['script']), command],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert result.returncode == 2
+        assert 'runner_resume_and_evidence_integrity' in result.stderr
+        assert 'ask_first_execution_pending' in result.stderr
+        assert 'reviewer_ask' in result.stderr
+        assert 'job_e9edbc409b48' in result.stderr
+
+    checkpoint = runner.pending_checkpoint_path(manifest, task_id)
+    checkpoint_payload = json.loads(checkpoint.read_text(encoding='utf-8'))
+    assert checkpoint_payload['classification'] == 'runner_resume_and_evidence_integrity'
+    assert checkpoint_payload['claimable'] is False
+    assert checkpoint_payload['resume_command'] == ['bash', str(manifest['script']), 'resume-pending', task_id]
+    assert not Path(str(manifest['b7'])).exists()
+    assert not Path(str(manifest['rows'])).exists()
+    assert not Path(str(manifest['command_log'])).exists()
+
+
+def test_resume_pending_refuses_nonterminal_job_without_resubmitting(tmp_path: Path) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    project = Path(str(manifest['project']))
+    task_id = 'phase6b-l1-doc-direct-execution'
+    loop_id = 'lp1b2b3a'
+    target = f'loop-{loop_id}-code_reviewer-1'
+    runner._write_json(
+        project / '.ccb' / 'runtime' / 'loops' / loop_id / 'round.pending.json',
+        {
+            'loop_run_status': 'pending',
+            'loop_id': loop_id,
+            'task_id': task_id,
+            'pending': {
+                'stage': 'reviewer_ask',
+                'target': target,
+                'job_id': 'job_e9edbc409b48',
+                'job_status': 'running',
+            },
+        },
+    )
+    jobs_path = project / '.ccb' / 'agents' / target / 'jobs.jsonl'
+    jobs_path.parent.mkdir(parents=True, exist_ok=True)
+    jobs_path.write_text(
+        json.dumps({'job_id': 'job_e9edbc409b48', 'status': 'running'}) + '\n',
+        encoding='utf-8',
+    )
+
+    result = subprocess.run(
+        ['bash', str(manifest['script']), 'resume-pending', task_id],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert 'pending job is not terminal' in result.stderr
+    assert 'job_e9edbc409b48' in result.stderr
+    assert not Path(str(manifest['command_log'])).exists()
+
+
+def test_resume_pending_terminal_job_uses_resume_label_without_duplicate_ask(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    project = Path(str(manifest['project']))
+    task_id = 'phase6b-l1-doc-direct-execution'
+    loop_id = 'lp1b2b3a'
+    target = f'loop-{loop_id}-code_reviewer-1'
+    pending_path = project / '.ccb' / 'runtime' / 'loops' / loop_id / 'round.pending.json'
+    stage_path = project / '.ccb' / 'runtime' / 'loops' / loop_id / 'ask_first_stage_state.json'
+    runner._write_json(
+        pending_path,
+        {
+            'loop_run_status': 'pending',
+            'loop_id': loop_id,
+            'task_id': task_id,
+            'pending': {
+                'stage': 'reviewer_ask',
+                'target': target,
+                'job_id': 'job_e9edbc409b48',
+                'job_status': 'running',
+            },
+        },
+    )
+    runner._write_json(
+        stage_path,
+        {
+            'status': 'pending',
+            'loop_id': loop_id,
+            'task_id': task_id,
+            'pending': {
+                'stage': 'reviewer_ask',
+                'target': target,
+                'job_id': 'job_e9edbc409b48',
+                'job_status': 'running',
+            },
+        },
+    )
+    jobs_path = project / '.ccb' / 'agents' / target / 'jobs.jsonl'
+    jobs_path.parent.mkdir(parents=True, exist_ok=True)
+    jobs_path.write_text(
+        '\n'.join(
+            [
+                json.dumps({'job_id': 'job_e9edbc409b48', 'status': 'running'}),
+                json.dumps({'job_id': 'job_e9edbc409b48', 'status': 'completed'}),
+            ]
+        )
+        + '\n',
+        encoding='utf-8',
+    )
+    calls = []
+
+    def fake_run_logged(observed_manifest, label_suffix, argv):
+        calls.append((label_suffix, argv))
+        if label_suffix == f'{task_id}__resume_pending_round':
+            pending_path.unlink()
+            stage_path.unlink()
+            runner._write_json(
+                project / '.ccb' / 'runtime' / 'loops' / loop_id / 'round.json',
+                {'task_id': task_id, 'loop_id': loop_id, 'round_result': 'pass'},
+            )
+        elif label_suffix == f'{task_id}__task_show_after_resume':
+            _label, stdout_path, _stderr_path = runner.command_output_paths(
+                observed_manifest,
+                label_suffix,
+            )
+            stdout_path.parent.mkdir(parents=True, exist_ok=True)
+            stdout_path.write_text(json.dumps({'task': {'task_id': task_id, 'status': 'done'}}), encoding='utf-8')
+
+    monkeypatch.setattr(runner, 'run_logged', fake_run_logged)
+
+    runner.resume_pending_round(manifest, task_id)
+
+    assert calls == [
+        (
+            f'{task_id}__resume_pending_round',
+            [str(PROJECT_ROOT / 'ccb_test'), '--project', str(project), 'loop', 'runner', '--once', '--json'],
+        ),
+        (
+            f'{task_id}__task_show_after_resume',
+            [
+                str(PROJECT_ROOT / 'ccb_test'),
+                '--project',
+                str(project),
+                'plan',
+                'task-show',
+                '--task',
+                task_id,
+                '--json',
+            ],
+        ),
+    ]
+    assert all(not label.endswith('__run_direct_execution_round') for label, _argv in calls)
+
+
 def test_start_task_observes_existing_running_task_without_mutating_authority(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

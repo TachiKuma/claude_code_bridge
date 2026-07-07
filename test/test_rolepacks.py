@@ -15,6 +15,7 @@ import rolepacks.agent_roles_manager as agent_roles_manager
 import rolepacks.sources as role_sources
 from agents.config_loader import load_project_config
 from cli.entrypoint import run_cli_entrypoint
+from cli.services.role_command_policy import load_role_command_policy
 from project_memory import load_memory_sources
 from provider_profiles.codex_home_config import materialize_codex_home_config
 from rolepacks.manifest import RoleManifestError, load_role_manifest
@@ -1427,6 +1428,41 @@ def test_source_test_roles_install_uses_source_checkout_draft_rolepacks(
             f'docs/plantree/plans/agentic-loop-workflow/drafts/{role_id}'
         )
         assert str(tmp_path / '.roles' / 'installed') in payload['path']
+
+
+def test_frontdesk_rolepack_forbids_direct_project_artifact_implementation() -> None:
+    role_root = (
+        REPO_ROOT
+        / 'docs'
+        / 'plantree'
+        / 'plans'
+        / 'agentic-loop-workflow'
+        / 'drafts'
+        / 'agentroles.ccb_frontdesk'
+    )
+    role = load_role_manifest(role_root)
+    policy = load_role_command_policy(role)
+    role_permissions = role.table('permissions')
+    frontdesk_text = '\n'.join(
+        (
+            (role_root / 'memory.md').read_text(encoding='utf-8'),
+            (role_root / 'adapters' / 'ccb' / 'memory.md').read_text(encoding='utf-8'),
+            (role_root / 'skills' / 'frontdesk-intake' / 'SKILL.md').read_text(encoding='utf-8'),
+        )
+    ).lower()
+
+    assert role_permissions['write_files'] is False
+    assert policy is not None
+    assert policy.mode == 'deny_all_except'
+    assert policy.enforcement == 'required'
+    assert policy.generic_shell is False
+    assert policy.generic_ccb is False
+    assert policy.allowed == ()
+    assert {'project_artifact_write', 'file_write', 'shell_exec', 'implementation'} <= set(policy.forbidden_effects)
+    assert 'create `docs/runtime-retest-a.md`' in frontdesk_text
+    assert 'do not create or verify that' in frontdesk_text
+    assert '**intake evidence**' in frontdesk_text
+    assert 'planner handoff' in frontdesk_text
 
 
 def test_legacy_ccb_store_migrates_to_spec_owned_store(tmp_path: Path, monkeypatch) -> None:

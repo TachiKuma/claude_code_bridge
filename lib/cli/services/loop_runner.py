@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from cli.models import ParsedAskCommand
 from cli.models_mailbox import ParsedTraceCommand
-from storage.atomic import atomic_write_json
+from storage.atomic import atomic_write_json, atomic_write_text
 
 from .auto_runner_lock import AutoRunnerLock
 from .ask import submit_ask
@@ -128,6 +128,8 @@ def loop_runner_once(context, command, services=None) -> dict[str, object]:
         return _activate_task_detailer(context, command, deps, task)
     if runner_action == 'activate_plan_reviewer':
         return _activate_plan_reviewer(context, command, deps, task)
+    if runner_action in {'planner_next_action_required', 'blocker_evidence_required'}:
+        return _finalize_script_owned_terminal_route(context, deps, task)
     return _stop_without_activation(context, task)
 
 
@@ -306,6 +308,126 @@ def _phase4_not_ready(
         'next_owner': record.get('next_owner') or task.get('next_owner'),
         'next_activation': 'phase4_ask_first_runner_required',
     }
+
+
+def _finalize_script_owned_terminal_route(context, deps, task: dict[str, object]) -> dict[str, object]:
+    action = str(task.get('runner_action') or '')
+    record = dict(task['record'])
+    task_id = str(record.get('task_id') or '').strip()
+    if not task_id:
+        raise RuntimeError('loop runner cannot finalize script-owned route without task_id')
+    if action == 'planner_next_action_required':
+        route = 'macro_adjustment_request'
+        artifact_kind = 'macro_adjustment_request'
+        source_filename = 'macro-adjustment-request.json'
+        target_status = 'replan_required'
+        next_owner = 'planner'
+        return_action = 'imported_macro_adjustment_request'
+    elif action == 'blocker_evidence_required':
+        route = 'blocked'
+        artifact_kind = 'blocker_evidence'
+        source_filename = 'blocker-evidence.md'
+        target_status = 'blocked'
+        next_owner = 'terminal'
+        return_action = 'imported_blocker_evidence'
+    else:
+        raise RuntimeError(f'unsupported script-owned terminal route action: {action}')
+
+    reason = str(task.get('runner_reason') or f'orchestrator_route_{route}')
+    notes_ref = _orchestration_notes_ref(record)
+    evidence_path = (
+        Path(context.project.project_root)
+        / '.ccb'
+        / 'runtime'
+        / 'loops'
+        / 'route-evidence'
+        / task_id
+        / source_filename
+    )
+    evidence_payload = {
+        'task_id': task_id,
+        'route': route,
+        'source': 'loop_runner/script-owned',
+        'reason': reason,
+        'status_transition': target_status,
+        'next_owner': next_owner,
+        'orchestration_notes': {
+            'path': notes_ref.get('path', ''),
+            'sha256': notes_ref.get('sha256', ''),
+        },
+    }
+    if artifact_kind == 'macro_adjustment_request':
+        atomic_write_json(evidence_path, evidence_payload)
+    else:
+        atomic_write_text(
+            evidence_path,
+            '\n'.join(
+                [
+                    '# Blocker Evidence',
+                    '',
+                    f'task_id: {task_id}',
+                    f'route: {route}',
+                    'source: loop_runner/script-owned',
+                    f'reason: {reason}',
+                    f'status_transition: {target_status}',
+                    f'next_owner: {next_owner}',
+                    f'orchestration_notes_path: {notes_ref.get("path", "")}',
+                    f'orchestration_notes_sha256: {notes_ref.get("sha256", "")}',
+                    '',
+                ]
+            ),
+        )
+
+    imported = deps.plan_task(
+        context,
+        SimpleNamespace(
+            action='task-artifact',
+            task_id=task_id,
+            artifact_kind=artifact_kind,
+            file_path=str(evidence_path),
+            actor_source='loop_runner/script-owned',
+            actor='loop_runner',
+        ),
+    )
+    transitioned = deps.plan_task(
+        context,
+        SimpleNamespace(
+            action='task-status',
+            task_id=task_id,
+            status=target_status,
+            next_owner=next_owner,
+            activation_reason=f'{reason}:script_owned_route',
+        ),
+    )
+    return {
+        'schema_version': 1,
+        'record_type': 'ccb_loop_runner_once',
+        'loop_runner_status': 'ok',
+        'project_id': context.project.project_id,
+        'project_root': str(context.project.project_root),
+        'action': return_action,
+        'reason': reason,
+        'task_id': task_id,
+        'route': route,
+        'task_status': transitioned.get('status'),
+        'next_owner': transitioned.get('next_owner'),
+        'artifact': imported.get('artifact'),
+        'import': _compact_plan_payload(transitioned),
+        'next_activation': _next_activation(transitioned.get('status')),
+    }
+
+
+def _orchestration_notes_ref(record: dict[str, object]) -> dict[str, object]:
+    artifacts = record.get('artifacts') if isinstance(record.get('artifacts'), dict) else {}
+    notes = artifacts.get('orchestration_notes') if isinstance(artifacts, dict) else None
+    if not isinstance(notes, dict):
+        return {}
+    ref: dict[str, object] = {}
+    for key in ('path', 'sha256'):
+        value = notes.get(key)
+        if value:
+            ref[key] = value
+    return ref
 
 
 def _ask_first_round_pending(payload: dict[str, object]) -> bool:
@@ -664,7 +786,13 @@ def _auto_should_stop(payload: dict[str, object]) -> bool:
     status = str(payload.get('loop_runner_status') or '').strip()
     if action in {'activated_orchestrator', 'activated_planner', 'activated_task_detailer', 'activated_plan_reviewer'}:
         return False
-    if action in {'imported_planner_task_authority', 'imported_orchestration_notes', 'ran_one_round'}:
+    if action in {
+        'imported_planner_task_authority',
+        'imported_orchestration_notes',
+        'imported_macro_adjustment_request',
+        'imported_blocker_evidence',
+        'ran_one_round',
+    }:
         return False
     return status in {'idle', 'paused', 'blocked', 'terminal'}
 

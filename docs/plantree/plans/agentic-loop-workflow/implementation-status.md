@@ -28,6 +28,90 @@ self-approval, and reviewer1 `job_50c72bc31578` requires stronger
 frontdesk-started route mix, module-level integration, UI/sidebar,
 busy-retain, and final-report evidence. No deployment-readiness verdict is
 claimed.
+Latest active deployment-readiness retests include worker3
+`job_903e17b48e2c` for repeated single-round dynamic unload, positive
+busy-retain, UI/sidebar, and frontdesk single-authority evidence. Worker2
+`job_6f2180f706c5` returned a zero-byte artifact and left sequence25 stopped at
+L1 with pending reviewer authority and duplicate command labels; it is
+classified as `BLOCKER / runner_resume_and_evidence_integrity`, not route-mix
+evidence. Worker1 `job_6d2dbb2d8a64` landed the maintained L1-L4 runner repair:
+pending ask-first authority is now recorded as a non-claimable checkpoint, B7
+and cleanup are blocked while pending authority remains, `resume-pending
+<task_id>` is available after the persisted provider job becomes terminal, and
+duplicate command evidence labels are rejected before stdout/stderr can be
+overwritten. Talk2 verified `python -m py_compile
+scripts/phase6b_l1_l4_frontdesk_runner.py
+test/test_phase6b_l1_l4_frontdesk_runner.py` and `python -m pytest -q
+test/test_phase6b_l1_l4_frontdesk_runner.py` -> `25 passed`; no real-provider
+rerun has consumed the repair yet. A visible worker3 runtime root
+`/home/bfly/yunwei/test_ccb2/deploy-runtime-ui-dynamic-lifecycle-worker3-20260707135051`
+is also not claimable: worker3 `job_903e17b48e2c` returned `Verdict:
+BLOCKER`, with resident preflight and UI/tmux pane switching positive but no
+valid dynamic-round, busy-retain, B7, or cleanup evidence because frontdesk job
+`job_2a29c4d4d4a1` directly created `docs/runtime-retest-a.md` instead of
+handing the implementation request to planner/orchestrator/dynamic workers. A
+focused frontdesk boundary repair is assigned to worker2 as
+`job_634eaa1cfe61`. Worker2 completed that source repair: frontdesk RolePack
+instructions now forbid direct project artifact implementation, frontdesk
+Codex launch honors required command policy with `--ask-for-approval never
+--sandbox read-only`, and dispatcher finalization rejects implementation-like
+frontdesk `completed` replies without valid Intake/Blocked Evidence by writing
+`.ccb/runtime/frontdesk-boundary/<job>.json` and marking the job failed with
+`frontdesk_direct_implementation_boundary_violation`. Talk2 verified
+`python3 -m py_compile` for the touched dispatcher/launcher/tests and focused
+pytest for frontdesk dispatcher, loop capacity, runtime launch, rolepack, and
+provider hook settings. No deployment-readiness claim is made until fresh
+post-repair real-provider route-mix and dynamic/UI reruns produce valid rows,
+B7, release, and cleanup evidence. Fresh post-repair reruns have been submitted:
+worker2 `job_e96f29120464` for L1-L4 frontdesk route-mix, and worker3
+`job_3b15e482acd5` for repeated direct-execution dynamic unload, UI/sidebar,
+busy-retain, and frontdesk single-authority evidence. Both reruns failed before
+creating a business test root: their artifacts are 0 bytes, no matching fresh
+root exists under `/home/bfly/yunwei/test_ccb2`, and job diagnostics show
+`codex_prompt_delivery_failed` with
+`delivery_failure_kind=delivery_anchor_missing` in the `talk2_workers` group
+workspace. This is classified as a provider prompt-delivery blocker, not
+route-mix or lifecycle evidence. A focused delivery-layer repair has been
+assigned to worker1 as `job_4b6c21ee38c5`; fresh real-provider reruns must wait
+until that blocker is repaired and verified. That worker1 repair job also
+failed before doing work: its completion artifact is 0 bytes and has the same
+`codex_prompt_delivery_failed` / `delivery_anchor_missing` shape. Talk2 then
+cleared worker1/worker2/worker3 provider contexts with `ccb clear` and submitted
+a minimal delivery probe to worker1 as `job_f61106a0502b`. Full real-provider
+route-mix and lifecycle reruns remain held until that probe proves worker prompt
+delivery has recovered. The probe also failed with a 0-byte artifact, but local
+tmux/session-log inspection proved the prompt did reach worker1 and worker1
+replied `delivery_probe_ok`. The deeper bug was completion detection binding to
+the stale group-workspace session log while the active Codex resume wrote a new
+session under the same agent's legacy `.ccb/workspaces/worker1` cwd. A source
+repair in `lib/provider_backends/codex/execution.py` now treats that exact
+same-project legacy-agent workspace as a trusted fallback only when the log is
+under the same agent session root and contains the current `CCB_REQ_ID`.
+Regression coverage landed in `test/test_stability_regressions.py`; Talk2
+verified the focused regression plus nearby Codex fallback/quarantine tests.
+The live installed CCB worker panes still need a post-install/restart or
+equivalent runtime refresh before full worker dispatch can be considered
+restored.
+Talk2 then ran a source-runtime real-provider route-mix probe directly from
+`/home/bfly/yunwei/test_ccb2` using fresh root
+`/home/bfly/yunwei/test_ccb2/deploy-l1-l4-frontdesk-sequence20-talk2-20260707230547`
+and `/home/bfly/yunwei/ccb_source/ccb_test`, inheriting the system provider
+environment and using only a lab-local `AGENT_ROLES_STORE`. Positive evidence:
+frontdesk/codex auto-forwarded to planner/codex with `silence=true`; planner
+produced the required five-task route mix; L1 and L2 reached `done/pass`; both
+direct-execution loops released dynamic coder/reviewer nodes with
+`released_count=2`, `retained_count=0`; and L3 reached `detail_ready` after a
+source parser repair for the real task_detailer markdown shape
+(`## Readiness Recommendation` followed by `detail_ready`). Verification for
+that repair: `test/test_loop_capacity_cli.py::test_loop_runner_imports_task_detailer_markdown_heading_sections`
+passed, the focused task_detailer/needs-detail selection passed, and
+`python -m pytest test/test_loop_capacity_cli.py test/test_plan_tasks_cli.py -q`
+-> `135 passed`. Remaining deployment blocker: the same real run stopped at
+`planner_status_transition_required` for the L4
+`macro_adjustment_request` route, with the L4 `blocked` route still only at
+route evidence. Deployment readiness still needs script-owned automatic
+terminal evidence for `macro_adjustment_request -> replan_required` and
+`blocked -> blocked` in the frontdesk-started lane.
 Current partial evidence: worker1 supplemental `job_ec6a6a8b2ef8` passes the
 Frontdesk real entry E2E lane only, with fixed JSON/JSONL rows for two
 frontdesk-started direct-execution tasks. worker2 original `job_cd6b21bc5896`

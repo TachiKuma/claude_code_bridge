@@ -2063,6 +2063,26 @@ def test_codex_launcher_build_start_cmd_skips_hook_trust_bypass_in_safe_mode(mon
     assert '--dangerously-bypass-hook-trust' not in cmd
 
 
+def test_codex_launcher_build_start_cmd_uses_read_only_for_frontdesk_command_surface(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _install_frontdesk_role(tmp_path, monkeypatch)
+    runtime_dir = tmp_path / 'repo-frontdesk-codex' / '.ccb' / 'agents' / 'frontdesk' / 'provider-runtime' / 'codex'
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.delenv('CODEX_HOME', raising=False)
+
+    spec = _spec('frontdesk', role='agentroles.ccb_frontdesk')
+    command = ParsedStartCommand(project=None, agent_names=('frontdesk',), restore=False, auto_permission=True)
+
+    cmd = _codex_start_cmd(command, spec, runtime_dir, 'sess-frontdesk-codex')
+
+    assert '--ask-for-approval never' in cmd
+    assert '--sandbox read-only' in cmd
+    assert '--sandbox danger-full-access' not in cmd
+    assert '--dangerously-bypass-hook-trust' not in cmd
+
+
 def test_codex_launcher_repairs_activity_hook_trust_for_existing_home(monkeypatch, tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-codex-existing-hooks'
     runtime_dir = project_root / '.ccb' / 'agents' / 'agent1' / 'provider-runtime' / 'codex'

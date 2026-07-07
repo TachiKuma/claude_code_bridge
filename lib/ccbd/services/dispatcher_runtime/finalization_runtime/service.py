@@ -4,7 +4,7 @@ from completion.models import CompletionDecision
 
 from ..records import get_job
 from ..reply_delivery import prepare_reply_deliveries, resolve_reply_delivery_terminal
-from ..frontdesk_handoff import maybe_start_frontdesk_handoff
+from ..frontdesk_handoff import enforce_frontdesk_boundary, maybe_start_frontdesk_handoff
 from .message_bureau import record_message_bureau_completion
 from .persistence import persist_terminal_completion
 
@@ -19,6 +19,7 @@ def complete_job(dispatcher, job_id: str, decision: CompletionDecision):
         return current
 
     finished_at = decision.finished_at or dispatcher._clock()
+    decision = enforce_frontdesk_boundary(dispatcher, current, decision, finished_at=finished_at)
     terminal, decision, prior_snapshot = persist_terminal_completion(
         dispatcher,
         current,

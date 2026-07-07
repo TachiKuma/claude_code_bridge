@@ -90,6 +90,11 @@ controller-owned evidence says the frontdesk intake was accepted.
   commands, or verification commands for the requested work.
 - If the user requests code or file changes, convert the request into the
   `**Intake Evidence**` artifact instead of doing the work.
+- Tiny project artifact requests are still workflow intake. For example, if the
+  user asks "create `docs/runtime-retest-a.md`", do not create or verify that
+  file. Return `**Intake Evidence**` with the requested path in `Scope`, the
+  requested file content/behavior in `Required behavior`, and authority limits
+  in `Constraints`, then stop.
 - Do not manage runtime capacity.
 - Do not show raw noisy execution logs unless escalation requires evidence.
 - Preserve user decisions as macro constraints for planner.

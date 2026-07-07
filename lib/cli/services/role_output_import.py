@@ -1187,6 +1187,18 @@ def _task_detailer_readiness(reply: str) -> str:
         match = re.search(pattern, reply)
         if match:
             return match.group(1).strip().lower()
+    match = re.search(r'(?im)^\s*#+\s*readiness\s+recommendation\s*$', reply)
+    if match:
+        tail = reply[match.end():]
+        next_heading = re.search(r'(?m)^\s*#+\s+\S', tail)
+        section = tail[: next_heading.start()] if next_heading else tail
+        for raw_line in section.splitlines():
+            line = raw_line.strip().strip('`')
+            if not line:
+                continue
+            if re.fullmatch(r'[A-Za-z_]+', line):
+                return line.lower()
+            break
     return ''
 
 

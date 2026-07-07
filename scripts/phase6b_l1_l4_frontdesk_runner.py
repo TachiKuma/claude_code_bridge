@@ -38,6 +38,9 @@ RESIDENT_ASK_TARGETS = RESIDENT_AGENT_TARGETS
 READY_RESIDENT_AGENT_STATES = frozenset({"idle"})
 RESIDENT_PS_ATTEMPTS = 3
 RESIDENT_PS_RETRY_DELAY_SECONDS = 0.5
+TERMINAL_JOB_STATUSES = frozenset(
+    {"blocked", "canceled", "cancelled", "completed", "failed", "incomplete"}
+)
 DYNAMIC_LOOP_PROFILES = (
     "coder",
     "code_reviewer",
@@ -525,6 +528,17 @@ def log_command(
         handle.write(json.dumps(record, sort_keys=True) + "\n")
 
 
+def _command_log_has_label(log_path: Path, label: str) -> bool:
+    for line in _read_text(log_path).splitlines():
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict) and payload.get("label") == label:
+            return True
+    return False
+
+
 def _output_contains_failed_command_status(path: Path) -> bool:
     text = _read_text(path)
     if re.search(r"(?m)^\s*command_status:\s*failed\s*$", text):
@@ -548,8 +562,32 @@ def command_output_paths(manifest: dict[str, Any], label_suffix: str) -> tuple[s
     return label, stdout_path, stderr_path
 
 
+def assert_command_evidence_available(
+    manifest: dict[str, Any],
+    label: str,
+    stdout_path: Path,
+    stderr_path: Path,
+) -> None:
+    log_path = Path(str(manifest["command_log"]))
+    conflicts = []
+    if _command_log_has_label(log_path, label):
+        conflicts.append(f"command_log label already exists: {log_path}")
+    if stdout_path.exists():
+        conflicts.append(f"stdout already exists: {stdout_path}")
+    if stderr_path.exists():
+        conflicts.append(f"stderr already exists: {stderr_path}")
+    if conflicts:
+        raise HarnessError(
+            "evidence_integrity_duplicate_label: "
+            + label
+            + "; "
+            + "; ".join(conflicts)
+        )
+
+
 def run_logged(manifest: dict[str, Any], label_suffix: str, argv: list[str]) -> None:
     label, stdout_path, stderr_path = command_output_paths(manifest, label_suffix)
+    assert_command_evidence_available(manifest, label, stdout_path, stderr_path)
     stdout_path.parent.mkdir(parents=True, exist_ok=True)
     with stdout_path.open("w", encoding="utf-8") as stdout, stderr_path.open("w", encoding="utf-8") as stderr:
         completed = subprocess.run(
@@ -1237,20 +1275,77 @@ def payload_matches_task(payload: dict[str, Any], task_id: str | None) -> bool:
     return any(str(candidate or "") == task_id for candidate in candidates)
 
 
+def _loop_id_from_pending_path(path: Path) -> str:
+    try:
+        return path.parent.name
+    except IndexError:
+        return ""
+
+
+def _string_field(*values: object) -> str:
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return ""
+
+
+def _pending_problem(path: Path, reason: str, payload: dict[str, Any]) -> dict[str, str]:
+    pending = payload.get("pending") if isinstance(payload.get("pending"), dict) else {}
+    problem = {
+        "path": str(path),
+        "reason": reason,
+        "loop_id": _string_field(payload.get("loop_id"), _loop_id_from_pending_path(path)),
+        "task_id": _string_field(payload.get("task_id")),
+        "stage": _string_field(pending.get("stage"), payload.get("stage"), reason),
+        "purpose": _string_field(pending.get("purpose"), payload.get("purpose")),
+        "target": _string_field(pending.get("target"), payload.get("target")),
+        "job_id": _string_field(pending.get("job_id"), payload.get("job_id")),
+        "job_status": _string_field(pending.get("job_status"), payload.get("status")),
+        "watch_source": _string_field(pending.get("watch_source"), payload.get("watch_source")),
+        "watch_observation": _string_field(
+            pending.get("watch_observation"),
+            payload.get("watch_observation"),
+        ),
+    }
+    return {key: value for key, value in problem.items() if value}
+
+
+def _role_record_problem(
+    path: Path,
+    payload: dict[str, Any],
+    role: str,
+    record: dict[str, Any],
+) -> dict[str, str]:
+    problem = _pending_problem(path, f"{role}_job_incomplete", payload)
+    problem.update(
+        {
+            "stage": f"{role}_ask",
+            "purpose": role,
+            "target": _string_field(record.get("target"), problem.get("target")),
+            "job_id": _string_field(record.get("job_id"), problem.get("job_id")),
+            "job_status": _string_field(record.get("status"), problem.get("job_status")),
+        }
+    )
+    return {key: value for key, value in problem.items() if value}
+
+
 def pending_authority_problems(project: Path, task_id: str | None = None) -> list[dict[str, str]]:
     problems: list[dict[str, str]] = []
     loops_dir = project / ".ccb" / "runtime" / "loops"
     for path in sorted(loops_dir.glob("*/round.pending.json")):
         payload = _read_json(path)
         if isinstance(payload, dict) and payload_matches_task(payload, task_id):
-            problems.append({"path": str(path), "reason": "round_pending"})
+            problems.append(_pending_problem(path, "round_pending", payload))
     for path in sorted(loops_dir.glob("*/ask_first_stage_state.json")):
         payload = _read_json(path)
         if not isinstance(payload, dict) or not payload_matches_task(payload, task_id):
             continue
         status = str(payload.get("status") or "").strip().lower()
         if status not in {"done", "complete", "completed", "terminal"}:
-            problems.append({"path": str(path), "reason": "ask_first_stage_pending"})
+            problems.append(_pending_problem(path, "ask_first_stage_pending", payload))
     for path in sorted(loops_dir.glob("*/round.json")):
         payload = _read_json(path)
         if not isinstance(payload, dict) or not payload_matches_task(payload, task_id):
@@ -1258,25 +1353,149 @@ def pending_authority_problems(project: Path, task_id: str | None = None) -> lis
         failure = payload.get("failure") if isinstance(payload.get("failure"), dict) else {}
         source = str(payload.get("round_result_source") or failure.get("source") or "")
         if source == "ask_job_incomplete":
-            problems.append({"path": str(path), "reason": "ask_job_incomplete"})
+            problems.append(_pending_problem(path, "ask_job_incomplete", payload))
             continue
         for role in ("worker", "reviewer", "orchestrator", "ccb_round_reviewer"):
             record = payload.get(role) if isinstance(payload.get(role), dict) else {}
             if str(record.get("status") or "") == "incomplete":
-                problems.append({"path": str(path), "reason": f"{role}_job_incomplete"})
+                problems.append(_role_record_problem(path, payload, role, record))
                 break
     return problems
+
+
+def pending_checkpoint_path(manifest: dict[str, Any], task_id: str | None = None) -> Path:
+    suffix = task_id or "all"
+    return Path(str(manifest["root"])) / "pending-checkpoints" / f"{manifest['label']}__{suffix}.json"
+
+
+def _resume_command(manifest: dict[str, Any], task_id: str | None) -> list[str]:
+    if task_id:
+        return ["bash", str(manifest["script"]), "resume-pending", task_id]
+    return ["bash", str(manifest["script"]), "check-pending"]
+
+
+def write_pending_checkpoint(
+    manifest: dict[str, Any],
+    problems: list[dict[str, str]],
+    task_id: str | None = None,
+) -> Path:
+    checkpoint_task = task_id or next(
+        (problem.get("task_id") for problem in problems if problem.get("task_id")),
+        None,
+    )
+    checkpoint_path = pending_checkpoint_path(manifest, checkpoint_task)
+    payload = {
+        "schema_version": 1,
+        "record_type": "ccb_phase6b_l1_l4_pending_checkpoint",
+        "classification": "runner_resume_and_evidence_integrity",
+        "status": "checkpoint",
+        "reason": "ask_first_execution_pending",
+        "claimable": False,
+        "root": manifest["root"],
+        "project": manifest["project"],
+        "label": manifest["label"],
+        "task_id": checkpoint_task,
+        "problems": problems,
+        "resume_command": _resume_command(manifest, checkpoint_task),
+        "blocked_actions": ["b7", "cleanup-after-b7", "duplicate evidence label reuse"],
+    }
+    _write_json(checkpoint_path, payload)
+    return checkpoint_path
+
+
+def _pending_detail(problem: dict[str, str]) -> str:
+    keys = ("reason", "task_id", "loop_id", "stage", "job_id", "target", "job_status", "path")
+    return ",".join(f"{key}={problem[key]}" for key in keys if problem.get(key))
 
 
 def assert_no_pending_authority(manifest: dict[str, Any], task_id: str | None = None) -> None:
     problems = pending_authority_problems(Path(str(manifest["project"])), task_id)
     if not problems:
         return
-    detail = "; ".join(f"{item['reason']}: {item['path']}" for item in problems)
-    raise HarnessError(
-        "round authority pending/incomplete: "
-        + detail
-        + "; refuse cleanup/progress before final round authority"
+    checkpoint_path = write_pending_checkpoint(manifest, problems, task_id)
+    resume_task = task_id or next((item.get("task_id") for item in problems if item.get("task_id")), None)
+    raise HarnessBlocker(
+        classification="runner_resume_and_evidence_integrity",
+        reason="ask_first_execution_pending",
+        message=(
+            "round authority pending/incomplete: "
+            + "; ".join(_pending_detail(item) for item in problems)
+            + f"; checkpoint={checkpoint_path}"
+            + "; resume_command="
+            + " ".join(_resume_command(manifest, resume_task))
+            + "; refuse b7/cleanup/progress before final round authority"
+        ),
+    )
+
+
+def latest_job_status(project: Path, target: str, job_id: str) -> str | None:
+    jobs_path = project / ".ccb" / "agents" / target / "jobs.jsonl"
+    status: str | None = None
+    for line in _read_text(jobs_path).splitlines():
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict) or payload.get("job_id") != job_id:
+            continue
+        value = str(payload.get("status") or "").strip().lower()
+        if value:
+            status = value
+    return status
+
+
+def refresh_pending_job_statuses(
+    manifest: dict[str, Any],
+    problems: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    project = Path(str(manifest["project"]))
+    refreshed = []
+    for problem in problems:
+        item = dict(problem)
+        target = item.get("target")
+        job_id = item.get("job_id")
+        if target and job_id:
+            status = latest_job_status(project, target, job_id)
+            if status:
+                item["job_status"] = status
+        refreshed.append(item)
+    return refreshed
+
+
+def resume_pending_round(manifest: dict[str, Any], task_id: str) -> None:
+    task_id = resolve_sequence_task_id(manifest, task_id)
+    problems = pending_authority_problems(Path(str(manifest["project"])), task_id)
+    if not problems:
+        raise HarnessError(f"no pending round authority found for task: {task_id}")
+    problems = refresh_pending_job_statuses(manifest, problems)
+    nonterminal = [
+        problem
+        for problem in problems
+        if str(problem.get("job_status") or "").strip().lower() not in TERMINAL_JOB_STATUSES
+    ]
+    if nonterminal:
+        checkpoint_path = write_pending_checkpoint(manifest, nonterminal, task_id)
+        raise HarnessBlocker(
+            classification="runner_resume_and_evidence_integrity",
+            reason="ask_first_execution_pending",
+            message=(
+                "pending job is not terminal: "
+                + "; ".join(_pending_detail(item) for item in nonterminal)
+                + f"; checkpoint={checkpoint_path}"
+                + "; resume_command="
+                + " ".join(_resume_command(manifest, task_id))
+            ),
+        )
+    run_logged(
+        manifest,
+        f"{task_id}__resume_pending_round",
+        ccb_project_args(manifest, "loop", "runner", "--once", "--json"),
+    )
+    assert_no_pending_authority(manifest, task_id)
+    run_logged(
+        manifest,
+        f"{task_id}__task_show_after_resume",
+        ccb_project_args(manifest, "plan", "task-show", "--task", task_id, "--json"),
     )
 
 
@@ -1850,6 +2069,10 @@ def run_from_manifest(manifest: dict[str, Any], argv: list[str]) -> None:
         if len(argv) != 2:
             raise HarnessError("usage: continue-detail <task_id>")
         continue_detail(manifest, argv[1])
+    elif command == "resume-pending":
+        if len(argv) != 2:
+            raise HarnessError("usage: resume-pending <task_id>")
+        resume_pending_round(manifest, argv[1])
     elif command == "b7":
         write_b7_report(manifest)
     elif command == "cleanup-after-b7":

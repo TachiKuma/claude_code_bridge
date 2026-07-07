@@ -279,6 +279,69 @@ def test_codex_execution_quarantines_matching_fallback_until_official_binding_mo
     assert result.decision is None
 
 
+def test_codex_execution_accepts_agent_workspace_fallback_for_group_workspace(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from provider_execution import codex as codex_adapter_module
+
+    workspaces_root = tmp_path / ".ccb" / "workspaces"
+    group_work_dir = workspaces_root / "groups" / "talk2_workers"
+    legacy_agent_work_dir = workspaces_root / "agent1"
+    group_work_dir.mkdir(parents=True)
+    legacy_agent_work_dir.mkdir(parents=True)
+    root = tmp_path / "sessions"
+    old_id = "11111111-1111-1111-1111-111111111111"
+    new_id = "22222222-2222-2222-2222-222222222222"
+    old_log = _codex_log(root, old_id, group_work_dir, entries=())
+    new_log = _codex_log(
+        root,
+        new_id,
+        legacy_agent_work_dir,
+        entries=(
+            _codex_user_entry("job_1", "hello"),
+            _codex_assistant_entry("delivery_probe_ok"),
+            _codex_task_complete_entry("delivery_probe_ok"),
+        ),
+    )
+    os.utime(old_log, (100, 100))
+    os.utime(new_log, (200, 200))
+
+    monkeypatch.setattr(
+        codex_adapter_module,
+        "_load_session",
+        lambda work_dir_arg, agent_name: _CodexSession(
+            work_dir=work_dir_arg,
+            root=root,
+            log_path=old_log,
+            session_id=old_id,
+        ),
+    )
+
+    submission = _codex_submission(
+        reader=CodexLogReader(root=root, log_path=old_log, session_id_filter=old_id, work_dir=group_work_dir),
+        state={"log_path": old_log, "offset": old_log.stat().st_size},
+        work_dir=group_work_dir,
+        delivery=True,
+    )
+
+    result = codex_adapter_module.CodexProviderAdapter().poll(submission, now="2026-04-04T10:00:01Z")
+
+    assert result is not None
+    assert [item.kind for item in result.items] == [
+        CompletionItemKind.ANCHOR_SEEN,
+        CompletionItemKind.ASSISTANT_CHUNK,
+        CompletionItemKind.TURN_BOUNDARY,
+    ]
+    assert result.items[-1].payload["last_agent_message"] == "delivery_probe_ok"
+    assert result.submission.runtime_state["delivery_state"] == "accepted"
+    assert result.submission.runtime_state["state"]["log_path"] == new_log
+    assert result.submission.runtime_state["codex_anchor_fallback_log"] == str(new_log)
+    assert result.submission.runtime_state["codex_anchor_fallback_session_id"] == new_id
+    assert not result.submission.runtime_state.get("codex_anchor_fallback_quarantined")
+    assert result.decision is None
+
+
 def test_codex_execution_does_not_switch_without_current_anchor(
     monkeypatch,
     tmp_path: Path,

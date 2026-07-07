@@ -6,4 +6,15 @@ generic_shell = false
 generic_ccb = false
 supported_providers = ["codex", "claude"]
 allowed_effects = []
-forbidden_effects = ["task_create", "artifact_import", "status_write", "runner_start", "worker_dispatch"]
+forbidden_effects = [
+  "task_create",
+  "artifact_import",
+  "status_write",
+  "runner_start",
+  "worker_dispatch",
+  "project_artifact_write",
+  "file_write",
+  "shell_exec",
+  "test_exec",
+  "implementation",
+]

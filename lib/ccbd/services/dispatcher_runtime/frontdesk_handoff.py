@@ -10,12 +10,28 @@ import sys
 from typing import Any
 
 from ccbd.api_models import JobRecord, JobStatus
-from completion.models import CompletionDecision
+from completion.models import CompletionConfidence, CompletionDecision, CompletionStatus
 from storage.atomic import atomic_write_json, atomic_write_text
 
 from .records import append_event
 
 _PLAN_SLUG_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
+_IMPLEMENTATION_VERB_RE = re.compile(
+    r'\b('
+    r'add|build|change|create|delete|edit|fix|generate|implement|modify|patch|'
+    r'run|test|update|verify|write'
+    r')\b',
+    re.IGNORECASE,
+)
+_PROJECT_ARTIFACT_RE = re.compile(
+    r'(?i)'
+    r'('
+    r'\b(?:artifact|build|cli|code|config|doc|docs|documentation|file|files|'
+    r'implementation|module|package|script|source|test|tests)\b'
+    r'|(?:^|[\s`"\'])[\w./-]+/[\w./-]+\.[A-Za-z0-9]{1,12}\b'
+    r'|\b(?:README|AGENTS|pyproject\.toml|package\.json|setup\.py)\b'
+    r')'
+)
 
 
 def maybe_start_frontdesk_handoff(dispatcher, terminal: JobRecord, decision: CompletionDecision) -> dict[str, object] | None:
@@ -141,6 +157,89 @@ def maybe_start_frontdesk_handoff(dispatcher, terminal: JobRecord, decision: Com
         timestamp=str(payload['recorded_at']),
     )
     return payload
+
+
+def enforce_frontdesk_boundary(
+    dispatcher,
+    current: JobRecord,
+    decision: CompletionDecision,
+    *,
+    finished_at: str,
+) -> CompletionDecision:
+    if current.agent_name != 'frontdesk':
+        return decision
+    if str(getattr(current.request, 'message_type', '') or '') != 'ask':
+        return decision
+    if not decision.terminal or decision.status is not CompletionStatus.COMPLETED:
+        return decision
+    reply = decision.reply or ''
+    if not _frontdesk_intake_missing_fields(reply):
+        return decision
+    request_body = str(getattr(current.request, 'body', '') or '')
+    if not _frontdesk_request_requires_planner_handoff(request_body):
+        return decision
+    reason = 'frontdesk_direct_implementation_boundary_violation'
+    marker_path = _boundary_marker_path(dispatcher, current.job_id)
+    payload = {
+        'schema_version': 1,
+        'record_type': 'ccb_frontdesk_boundary_violation',
+        'status': 'blocked',
+        'job_id': current.job_id,
+        'agent_name': current.agent_name,
+        'project_root': str(dispatcher._layout.project_root),
+        'reason': reason,
+        'required_action': 'return_intake_evidence_for_planner_handoff',
+        'request_preview': request_body.strip()[:500],
+        'reply_preview': reply.strip()[:500],
+        'missing_intake_fields': _frontdesk_intake_missing_fields(reply),
+        'recorded_at': finished_at,
+    }
+    atomic_write_json(marker_path, payload)
+    append_event(
+        dispatcher,
+        current,
+        'frontdesk_boundary_violation',
+        {**payload, 'marker_path': str(marker_path)},
+        timestamp=finished_at,
+    )
+    diagnostics = dict(decision.diagnostics)
+    diagnostics.update(
+        {
+            'frontdesk_boundary_violation': True,
+            'boundary_marker_path': str(marker_path),
+            'required_action': payload['required_action'],
+            'original_status': decision.status.value,
+            'missing_intake_fields': payload['missing_intake_fields'],
+        }
+    )
+    return CompletionDecision(
+        terminal=True,
+        status=CompletionStatus.FAILED,
+        reason=reason,
+        confidence=CompletionConfidence.EXACT,
+        reply=(
+            'Frontdesk boundary violation: implementation-like user requests must '
+            'be returned as Intake Evidence or Blocked Evidence for controlled '
+            'planner handoff; frontdesk must not directly implement project artifacts.'
+        ),
+        anchor_seen=decision.anchor_seen,
+        reply_started=decision.reply_started,
+        reply_stable=decision.reply_stable,
+        provider_turn_ref=decision.provider_turn_ref,
+        source_cursor=decision.source_cursor,
+        finished_at=finished_at,
+        diagnostics=diagnostics,
+    )
+
+
+def _frontdesk_request_requires_planner_handoff(text: str) -> bool:
+    return bool(_IMPLEMENTATION_VERB_RE.search(text or '') and _PROJECT_ARTIFACT_RE.search(text or ''))
+
+
+def _boundary_marker_path(dispatcher, job_id: str) -> Path:
+    path = Path(dispatcher._layout.project_root) / '.ccb' / 'runtime' / 'frontdesk-boundary' / f'{job_id}.json'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def _handoff_command(dispatcher, reply: str, *, plan_slug: str) -> list[str]:
@@ -299,4 +398,4 @@ def _frontdesk_intake_missing_fields(reply: str) -> list[str]:
     return missing
 
 
-__all__ = ['maybe_start_frontdesk_handoff']
+__all__ = ['enforce_frontdesk_boundary', 'maybe_start_frontdesk_handoff']

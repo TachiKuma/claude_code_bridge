@@ -5976,10 +5976,7 @@ def test_loop_runner_imports_task_detailer_markdown_heading_sections(
         project_root,
         job_id='job_task_detailer',
         agent_name='task_detailer',
-        reply="""detail readiness recommendation: `detail_ready`
-macro-adjustment request: none
-
-## task-detail-design.md
+        reply="""## task-detail-design.md
 
 # Task Detail Design
 
@@ -5989,6 +5986,14 @@ Route: `needs_detail`
 ## Scope
 
 This task validates the needs-detail route and must stop at detail_ready.
+
+## Readiness Recommendation
+
+detail_ready
+
+## Macro Adjustment Request
+
+None.
 
 ## brief-update-summary.md
 
@@ -6070,31 +6075,37 @@ def test_loop_runner_unscoped_needs_detail_route_preempts_prior_replan_task(
 
 
 @pytest.mark.parametrize(
-    ('route', 'expected_action', 'expected_reason', 'expected_owner', 'expected_next_activation'),
+    ('route', 'expected_action', 'expected_reason', 'expected_status', 'expected_owner', 'expected_artifact', 'expected_next_activation'),
     (
         (
             'macro_adjustment_request',
-            'planner_next_action_required',
+            'imported_macro_adjustment_request',
             'orchestrator_route_macro_adjustment_request',
+            'replan_required',
             'planner',
-            'planner_status_transition_required',
+            'macro_adjustment_request',
+            'planner',
         ),
         (
             'blocked',
-            'blocker_evidence_required',
+            'imported_blocker_evidence',
             'orchestrator_route_blocked',
-            'frontdesk',
-            'blocker_evidence_required',
+            'blocked',
+            'terminal',
+            'blocker_evidence',
+            'terminal',
         ),
     ),
 )
-def test_loop_runner_unscoped_terminal_route_continuations_preempt_prior_replan_task(
+def test_loop_runner_unscoped_macro_and_blocked_routes_finalize_before_prior_replan_task(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     route: str,
     expected_action: str,
     expected_reason: str,
+    expected_status: str,
     expected_owner: str,
+    expected_artifact: str,
     expected_next_activation: str,
 ) -> None:
     project_root = _project_with_loop_capacity(tmp_path, monkeypatch)
@@ -6127,40 +6138,54 @@ def test_loop_runner_unscoped_terminal_route_continuations_preempt_prior_replan_
         ),
     )
 
-    assert payload['loop_runner_status'] == 'paused'
+    assert payload['loop_runner_status'] == 'ok'
     assert payload['action'] == expected_action
     assert payload['task_id'] == task_id
     assert payload['reason'] == expected_reason
+    assert payload['task_status'] == expected_status
     assert payload['next_owner'] == expected_owner
     assert payload['next_activation'] == expected_next_activation
+    assert payload['import']['status'] == expected_status
+    shown = plan_task(context, SimpleNamespace(action='task-show', task_id=task_id))
+    assert shown['task']['status'] == expected_status
+    assert shown['task']['next_owner'] == expected_owner
+    assert expected_artifact in shown['task']['artifacts']
+    prior = plan_task(context, SimpleNamespace(action='task-show', task_id='task-prior-macro'))
+    assert prior['task']['status'] == 'replan_required'
 
 
 @pytest.mark.parametrize(
-    ('route', 'expected_action', 'expected_reason', 'expected_owner', 'expected_next_activation'),
+    ('route', 'expected_action', 'expected_reason', 'expected_status', 'expected_owner', 'expected_artifact', 'expected_next_activation'),
     (
         (
             'macro_adjustment_request',
-            'planner_next_action_required',
+            'imported_macro_adjustment_request',
             'orchestrator_route_macro_adjustment_request',
+            'replan_required',
             'planner',
-            'planner_status_transition_required',
+            'macro_adjustment_request',
+            'planner',
         ),
         (
             'blocked',
-            'blocker_evidence_required',
+            'imported_blocker_evidence',
             'orchestrator_route_blocked',
-            'frontdesk',
-            'blocker_evidence_required',
+            'blocked',
+            'terminal',
+            'blocker_evidence',
+            'terminal',
         ),
     ),
 )
-def test_loop_runner_macro_and_blocked_routes_pause_without_mounting_workers(
+def test_loop_runner_macro_and_blocked_routes_finalize_without_mounting_workers(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     route: str,
     expected_action: str,
     expected_reason: str,
+    expected_status: str,
     expected_owner: str,
+    expected_artifact: str,
     expected_next_activation: str,
 ) -> None:
     project_root = _project_with_loop_capacity(tmp_path, monkeypatch)
@@ -6190,17 +6215,130 @@ def test_loop_runner_macro_and_blocked_routes_pause_without_mounting_workers(
         ),
     )
 
-    assert payload['loop_runner_status'] == 'paused'
+    assert payload['loop_runner_status'] == 'ok'
     assert payload['action'] == expected_action
     assert payload['reason'] == expected_reason
-    assert payload['task_status'] == 'ready_for_orchestration'
+    assert payload['task_status'] == expected_status
     assert payload['next_owner'] == expected_owner
     assert payload['next_activation'] == expected_next_activation
     shown = plan_task(context, SimpleNamespace(action='task-show', task_id=task_id))
-    assert shown['task']['status'] == 'ready_for_orchestration'
+    assert shown['task']['status'] == expected_status
+    assert shown['task']['next_owner'] == expected_owner
     assert shown['task']['current_loop'] is None
     assert shown['task']['artifacts']['orchestration_notes']['orchestrator_route'] == route
+    artifact = shown['task']['artifacts'][expected_artifact]
+    assert artifact['actor'] == {'source': 'loop_runner/script-owned', 'actor': 'loop_runner'}
+    notes = shown['task']['artifacts']['orchestration_notes']
+    artifact_text = (project_root / artifact['path']).read_text(encoding='utf-8')
+    if route == 'macro_adjustment_request':
+        evidence = json.loads(artifact_text)
+        assert evidence['task_id'] == task_id
+        assert evidence['route'] == route
+        assert evidence['source'] == 'loop_runner/script-owned'
+        assert evidence['reason'] == expected_reason
+        assert evidence['orchestration_notes']['path'] == notes['path']
+        assert evidence['orchestration_notes']['sha256'] == notes['sha256']
+    else:
+        assert f'task_id: {task_id}' in artifact_text
+        assert 'route: blocked' in artifact_text
+        assert 'source: loop_runner/script-owned' in artifact_text
+        assert f'reason: {expected_reason}' in artifact_text
+        assert f'orchestration_notes_path: {notes["path"]}' in artifact_text
+        assert f'orchestration_notes_sha256: {notes["sha256"]}' in artifact_text
     assert 'round_summary' not in shown['task']['artifacts']
+
+
+@pytest.mark.parametrize(
+    ('first_route', 'second_route'),
+    (
+        ('macro_adjustment_request', 'blocked'),
+        ('blocked', 'macro_adjustment_request'),
+    ),
+)
+def test_loop_runner_auto_continues_after_macro_and_blocked_route_finalization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    first_route: str,
+    second_route: str,
+) -> None:
+    project_root = _project_with_loop_capacity(tmp_path, monkeypatch)
+
+    def ready_artifacts(task_id: str) -> dict[str, dict[str, object]]:
+        task_root = project_root / 'docs' / 'plantree' / 'plans' / 'demo-plan' / 'tasks' / task_id
+        artifacts: dict[str, dict[str, object]] = {}
+        for kind, filename, text in (
+            ('task_packet', 'task_packet.md', f'task packet for {task_id}\n'),
+            ('execution_contract', 'execution_contract.md', f'execution contract for {task_id}\n'),
+        ):
+            path = task_root / filename
+            _write(path, text)
+            artifacts[kind] = {
+                'kind': kind,
+                'artifact_kind': kind,
+                'path': str(path.relative_to(project_root)),
+                'artifact_path': str(path.relative_to(project_root)),
+                'source_path': str(path.relative_to(project_root)),
+                'sha256': 'test',
+                'bytes': len(text.encode('utf-8')),
+                'imported_at': '2026-06-27T00:00:00Z',
+            }
+        return artifacts
+
+    first_task = f'task-{first_route.replace("_", "-")}-first'
+    second_task = f'task-{second_route.replace("_", "-")}-second'
+    _add_ready_plan_task(project_root, task_id=first_task)
+    _add_plan_task_record(
+        project_root,
+        task_id=second_task,
+        status='ready_for_orchestration',
+        artifacts=ready_artifacts(second_task),
+        next_owner='orchestrator',
+        activation_reason='test_ready_for_orchestration',
+    )
+    command = ParsedLoopRunnerCommand(
+        project=None,
+        once=False,
+        auto=True,
+        max_steps=2,
+        poll_interval_s=0.0,
+        json_output=True,
+    )
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+    _import_orchestration_notes(context, project_root, task_id=first_task, route=first_route)
+    _import_orchestration_notes(context, project_root, task_id=second_task, route=second_route)
+
+    def forbidden_submit_ask(*_args, **_kwargs):
+        raise AssertionError('macro/blocked route finalization must not activate planner, worker, or reviewer')
+
+    def forbidden_loop_run_once(*_args, **_kwargs):
+        raise AssertionError('macro/blocked route finalization must not run execution')
+
+    payload = loop_runner_auto(
+        context,
+        command,
+        services=SimpleNamespace(
+            submit_ask=forbidden_submit_ask,
+            loop_run_once=forbidden_loop_run_once,
+            plan_task=plan_task,
+            sleep=lambda _seconds: None,
+        ),
+    )
+
+    action_by_route = {
+        'macro_adjustment_request': 'imported_macro_adjustment_request',
+        'blocked': 'imported_blocker_evidence',
+    }
+    assert payload['action'] == 'auto_runner_step_limit_reached'
+    assert [step['action'] for step in payload['steps']] == [
+        action_by_route[first_route],
+        action_by_route[second_route],
+    ]
+    assert [step['loop_runner_status'] for step in payload['steps']] == ['ok', 'ok']
+    first = plan_task(context, SimpleNamespace(action='task-show', task_id=first_task))
+    second = plan_task(context, SimpleNamespace(action='task-show', task_id=second_task))
+    expected_status = {'macro_adjustment_request': 'replan_required', 'blocked': 'blocked'}
+    assert first['task']['status'] == expected_status[first_route]
+    assert second['task']['status'] == expected_status[second_route]
 
 
 def test_loop_runner_task_scoped_macro_route_ignores_prior_detail_ready_task(
@@ -6242,11 +6380,16 @@ def test_loop_runner_task_scoped_macro_route_ignores_prior_detail_ready_task(
         ),
     )
 
-    assert payload['loop_runner_status'] == 'paused'
-    assert payload['action'] == 'planner_next_action_required'
+    assert payload['loop_runner_status'] == 'ok'
+    assert payload['action'] == 'imported_macro_adjustment_request'
     assert payload['task_id'] == 'task-macro'
     assert payload['reason'] == 'orchestrator_route_macro_adjustment_request'
+    assert payload['task_status'] == 'replan_required'
     assert payload['next_owner'] == 'planner'
+    assert payload['next_activation'] == 'planner'
+    shown = plan_task(context, SimpleNamespace(action='task-show', task_id='task-macro'))
+    assert shown['task']['status'] == 'replan_required'
+    assert 'macro_adjustment_request' in shown['task']['artifacts']
     prior = plan_task(context, SimpleNamespace(action='task-show', task_id='task-prior-detail'))
     assert prior['task']['status'] == 'detail_ready'
     assert 'round_summary' not in prior['task']['artifacts']
@@ -7743,6 +7886,66 @@ Constraints:
     assert 'Frontdesk intake evidence:' in submitted[0][1]
     assert 'Macro request: Build a small local Python task-list feature.' in submitted[0][1]
     assert (project_root / 'docs' / 'plantree' / 'plans' / 'demo-plan').is_dir()
+
+
+def test_loop_runner_frontdesk_file_creation_request_hands_off_without_file_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = _project_with_loop_capacity(tmp_path, monkeypatch)
+    frontdesk_reply = """**Intake Evidence**
+
+CCB_REQ_ID: `job_runtime_retest_a`
+
+Macro request: Create a small runtime retest note at docs/runtime-retest-a.md.
+
+Scope:
+- `docs/runtime-retest-a.md`
+
+Required behavior:
+- The requested document should contain a concise runtime retest note.
+
+Constraints:
+- Frontdesk must not create, edit, inspect, or verify the file.
+- Planner/orchestrator/worker flow owns task authority, implementation, and verification.
+"""
+    _write_completion_snapshot(
+        project_root,
+        job_id='job_runtime_retest_a',
+        agent_name='frontdesk',
+        reply=frontdesk_reply,
+    )
+    command = ParsedLoopRunnerCommand(
+        project=None,
+        once=True,
+        plan_slug='demo-plan',
+        role_job_id='job_runtime_retest_a',
+        consume_role_output=True,
+        json_output=True,
+    )
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+    submitted: list[tuple[str, str]] = []
+
+    def fake_submit_ask(_context, ask_command):
+        submitted.append((ask_command.target, ask_command.message))
+        return AskSummary(
+            project_id=context.project.project_id,
+            submission_id=None,
+            jobs=({'job_id': 'job_planner_runtime_retest_a', 'agent_name': ask_command.target, 'status': 'submitted'},),
+        )
+
+    payload = loop_runner_once(
+        context,
+        command,
+        services=SimpleNamespace(submit_ask=fake_submit_ask, plan_task=plan_task),
+    )
+
+    assert payload['loop_runner_status'] == 'ok'
+    assert payload['action'] == 'activated_planner_from_frontdesk'
+    assert payload['ask'] == {'target': 'planner', 'job_id': 'job_planner_runtime_retest_a', 'status': 'submitted'}
+    assert submitted[0][0] == 'planner'
+    assert 'docs/runtime-retest-a.md' in submitted[0][1]
+    assert not (project_root / 'docs' / 'runtime-retest-a.md').exists()
 
 
 def test_loop_runner_accepts_frontdesk_labeled_intake_without_heading_from_real_provider(

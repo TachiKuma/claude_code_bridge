@@ -851,6 +851,61 @@ def test_dispatcher_frontdesk_direct_reply_does_not_start_handoff(
     assert not (project_root / '.ccb' / 'runtime' / 'frontdesk-handoff').exists()
 
 
+def test_dispatcher_frontdesk_implementation_reply_fails_boundary_guard(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / 'repo-frontdesk-boundary'
+    ctx = _bootstrap_test_project(project_root)
+    layout = PathLayout(project_root)
+    config = _frontdesk_config()
+    registry = AgentRegistry(layout, config)
+    registry.upsert(_runtime('frontdesk', project_id=ctx.project_id, layout=layout, pid=101))
+    dispatcher = JobDispatcher(layout, config, registry, clock=lambda: '2026-03-18T00:00:00Z')
+    receipt = dispatcher.submit(
+        MessageEnvelope(
+            project_id=ctx.project_id,
+            to_agent='frontdesk',
+            from_actor='user',
+            body='Create docs/runtime-retest-a.md with a small runtime retest note.',
+            task_id='task-frontdesk-direct-implementation',
+            reply_to=None,
+            message_type='ask',
+            delivery_scope=DeliveryScope.SINGLE,
+        )
+    )
+    job_id = receipt.jobs[0].job_id
+    dispatcher.tick()
+
+    terminal = dispatcher.complete(
+        job_id,
+        CompletionDecision(
+            terminal=True,
+            status=CompletionStatus.COMPLETED,
+            reason='task_complete',
+            confidence=CompletionConfidence.EXACT,
+            reply='Created docs/runtime-retest-a.md and verified the file content.',
+            anchor_seen=True,
+            reply_started=True,
+            reply_stable=True,
+            provider_turn_ref='turn-1',
+            source_cursor=None,
+            finished_at='2026-03-18T00:00:10Z',
+            diagnostics={},
+        ),
+    )
+
+    assert terminal.status is JobStatus.FAILED
+    decision = dispatcher.get_snapshot(job_id).latest_decision
+    assert decision.status is CompletionStatus.FAILED
+    assert decision.reason == 'frontdesk_direct_implementation_boundary_violation'
+    assert decision.diagnostics['frontdesk_boundary_violation'] is True
+    marker_path = project_root / '.ccb' / 'runtime' / 'frontdesk-boundary' / f'{job_id}.json'
+    marker = json.loads(marker_path.read_text(encoding='utf-8'))
+    assert marker['reason'] == 'frontdesk_direct_implementation_boundary_violation'
+    assert marker['required_action'] == 'return_intake_evidence_for_planner_handoff'
+    assert not (project_root / '.ccb' / 'runtime' / 'frontdesk-handoff').exists()
+
+
 def test_dispatcher_allows_non_mailbox_email_sender(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-allow-email-sender'
     ctx = _bootstrap_test_project(project_root)
