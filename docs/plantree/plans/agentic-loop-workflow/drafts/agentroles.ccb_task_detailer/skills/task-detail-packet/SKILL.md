@@ -1,6 +1,6 @@
 ---
 name: task-detail-packet
-description: Produce task-scoped detail artifacts and a detail packet for script-owned workflow import.
+description: Draft task-scoped detail artifacts and a detail packet as reply content for script-owned workflow import.
 ---
 
 # Task Detail Packet
@@ -14,7 +14,7 @@ orchestrator dispatch.
    tests, and prior evidence.
 2. Draft task-scoped detail design and source-evidence map.
 3. Produce detailed acceptance, verification, and worker handoff notes.
-4. Return a detail packet suitable for script import.
+4. Return a detail packet suitable for supervisor/runner script import.
 5. If detail is blocked, return clarification or macro-adjustment evidence.
 
 ## Boundaries
@@ -23,3 +23,7 @@ orchestrator dispatch.
 - Do not lower acceptance criteria.
 - Do not dispatch runtime agents.
 - Do not directly edit authoritative CCB state or runtime files.
+- Do not run `ccb plan`, `ccb loop`, `ccb ask`, `ccb_test`, or wrapper
+  commands.
+- Do not write detail artifacts into the project tree for later self-import;
+  put artifact content in the reply.

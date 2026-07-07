@@ -1,0 +1,935 @@
+from __future__ import annotations
+
+import importlib.util
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+RUNNER_PATH = PROJECT_ROOT / 'scripts' / 'phase6b_l1_l4_frontdesk_runner.py'
+
+
+def _load_runner():
+    spec = importlib.util.spec_from_file_location('phase6b_l1_l4_frontdesk_runner', RUNNER_PATH)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _materialize(tmp_path: Path, *, label: str = 'sequence19-worker1-20260707150000') -> tuple[Path, dict[str, object]]:
+    root = tmp_path / f'deploy-l1-l4-frontdesk-{label}'
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(RUNNER_PATH),
+            'materialize',
+            '--root',
+            str(root),
+            '--label',
+            label,
+            '--project-name',
+            'l1-l4-frontdesk-real-provider-lab',
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    manifest_path = Path(result.stdout.strip())
+    manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+    return root, manifest
+
+
+def _command_log_records(path: Path) -> list[dict[str, object]]:
+    if not path.is_file():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines() if line.strip()]
+
+
+def _resident_ps(state: str = 'idle') -> str:
+    return '\n'.join(
+        [
+            'project_id: test',
+            'ccbd_state: mounted',
+            f'agent: name=ccb_round_reviewer state={state} provider=claude queue=0',
+            f'agent: name=frontdesk state={state} provider=codex queue=0',
+            f'agent: name=orchestrator state={state} provider=codex queue=0',
+            f'agent: name=planner state={state} provider=codex queue=0',
+            f'agent: name=task_detailer state={state} provider=codex queue=0',
+            '',
+        ]
+    )
+
+
+def test_materializer_emits_fresh_root_manifest_and_current_label_consistently(tmp_path: Path) -> None:
+    label = 'sequence19-worker1-20260707150000'
+    root, manifest = _materialize(tmp_path, label=label)
+    script = Path(str(manifest['script']))
+    manifest_path = Path(str(manifest['manifest']))
+    active_text = json.dumps(manifest, sort_keys=True) + script.read_text(encoding='utf-8')
+
+    assert manifest['schema'] == 'ccb.phase6b_l1_l4.frontdesk_runner_manifest.v1'
+    assert manifest['label'] == label
+    assert manifest['root'] == str(root)
+    assert manifest['project'] == str(root / 'l1-l4-frontdesk-real-provider-lab')
+    assert manifest['script'] == str(root / f'run_l1_l4_frontdesk_{label}.sh')
+    assert manifest['b7'] == str(root / f'phase6b-real-provider-l1-l4-{label}-b7.md')
+    assert manifest['rows'] == str(root / 'rows' / f'phase6b_l1_l4_{label}_evidence_rows.jsonl')
+    assert manifest['command_log'] == str(root / f'phase6b_l1_l4_{label}_command_log.jsonl')
+    assert manifest['role_store'] == str(root / 'roles')
+    assert manifest_path.is_file()
+    assert script.is_file()
+    assert str(root) in active_text
+    assert label in active_text
+    assert 'sequence14' not in active_text
+    assert 'sequence17' not in active_text
+
+    commands = manifest['command_sequence']
+    assert isinstance(commands, list)
+    assert commands[0]['step'] == 'init'
+    assert commands[1]['step'] == 'frontdesk-entry'
+    assert all(str(command['label']).startswith(label + '__') for command in commands)
+    assert all(str(root) in ' '.join(command['argv']) for command in commands)
+
+
+def test_materializer_rejects_existing_root_and_stale_sequence_fragments(tmp_path: Path) -> None:
+    existing = tmp_path / 'deploy-l1-l4-frontdesk-sequence19-existing'
+    existing.mkdir()
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(RUNNER_PATH),
+            'materialize',
+            '--root',
+            str(existing),
+            '--label',
+            'sequence19-existing',
+            '--project-name',
+            'l1-l4-frontdesk-real-provider-lab',
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert 'fresh root already exists' in result.stderr
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(RUNNER_PATH),
+            'materialize',
+            '--root',
+            str(tmp_path / 'deploy-l1-l4-frontdesk-sequence17-old'),
+            '--label',
+            'sequence19-new',
+            '--project-name',
+            'l1-l4-frontdesk-real-provider-lab',
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert 'stale sequence marker' in result.stderr
+
+
+def test_provider_loop_runner_commands_are_unbounded(tmp_path: Path) -> None:
+    _root, manifest = _materialize(tmp_path)
+    source_text = RUNNER_PATH.read_text(encoding='utf-8')
+    script_text = Path(str(manifest['script'])).read_text(encoding='utf-8')
+    active_text = json.dumps(manifest, sort_keys=True) + script_text
+    provider_invocations = manifest['provider_loop_invocations']
+
+    assert 'timeout --preserve-status' not in source_text
+    assert 'timeout --preserve-status' not in active_text
+    assert provider_invocations
+    for invocation in provider_invocations:
+        argv = invocation['argv']
+        assert invocation['unbounded'] is True
+        assert argv[-4:] == ['loop', 'runner', '--once', '--json']
+        assert '--timeout' not in argv
+        assert 'timeout' not in argv
+
+
+def test_generated_config_mounts_required_resident_ask_targets_not_only_role_profiles(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    project = Path(str(manifest['project']))
+
+    runner.write_config(manifest)
+    config_text = (project / '.ccb' / 'ccb.config').read_text(encoding='utf-8')
+    resident_targets = set(runner.resident_targets_from_config_text(config_text))
+
+    assert '[windows]' in config_text
+    assert set(manifest['resident_ask_targets']) == {
+        'frontdesk',
+        'planner',
+        'orchestrator',
+        'task_detailer',
+        'ccb_round_reviewer',
+    }
+    assert resident_targets >= set(manifest['resident_ask_targets'])
+    assert 'frontdesk:codex' in config_text
+    assert 'planner:codex' in config_text
+    assert 'orchestrator:codex' in config_text
+    assert 'task_detailer:codex' in config_text
+    assert 'ccb_round_reviewer:claude' in config_text
+    assert 'coder' not in resident_targets
+    assert 'code_reviewer' not in resident_targets
+    assert '[loop.role_profiles.coder]' in config_text
+    assert '[loop.role_profiles.code_reviewer]' in config_text
+
+    worker3_broken_config = """version = 2
+entry_window = "main"
+
+[windows]
+ccb-user = "bootstrap:codex"
+
+[loop.role_profiles.frontdesk]
+role = "agentroles.ccb_frontdesk"
+provider = "codex"
+
+[loop.role_profiles.planner]
+role = "agentroles.ccb_planner"
+provider = "codex"
+
+[loop.role_profiles.orchestrator]
+role = "agentroles.ccb_orchestrator"
+provider = "codex"
+
+[loop.role_profiles.task_detailer]
+role = "agentroles.ccb_task_detailer"
+provider = "codex"
+
+[loop.role_profiles.ccb_round_reviewer]
+role = "agentroles.ccb_round_reviewer"
+provider = "claude"
+"""
+
+    assert runner.resident_targets_from_config_text(worker3_broken_config) == ['bootstrap']
+    with pytest.raises(runner.HarnessError, match='frontdesk'):
+        runner.validate_config_mounts_resident_targets(worker3_broken_config)
+
+
+def test_frontdesk_entry_rejects_resident_layout_without_mounted_agent_specs(tmp_path: Path) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    project = Path(str(manifest['project']))
+    command_log = Path(str(manifest['command_log']))
+    runner.write_config(manifest)
+    runner._write_json(project / '.ccb' / 'agents' / 'bootstrap' / 'agent.json', {'name': 'bootstrap'})
+    command_log.write_text(
+        json.dumps({'label': str(manifest['label']) + '__preexisting'}) + '\n',
+        encoding='utf-8',
+    )
+
+    assert [target for target, _path in runner.missing_resident_agent_specs(manifest)] == [
+        'frontdesk',
+        'planner',
+        'orchestrator',
+        'task_detailer',
+        'ccb_round_reviewer',
+    ]
+
+    result = subprocess.run(
+        ['bash', str(manifest['script']), 'frontdesk-entry'],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert 'resident_agents_not_mounted' in result.stderr
+    assert 'frontdesk:' in result.stderr
+    assert all(
+        record.get('label') != str(manifest['label']) + '__frontdesk_entry_ask'
+        for record in _command_log_records(command_log)
+    )
+
+
+def test_resident_agent_guard_rejects_mismatched_agent_spec_identity(tmp_path: Path) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    project = Path(str(manifest['project']))
+    runner.write_config(manifest)
+    for target in manifest['resident_agent_targets']:
+        name = 'bootstrap' if target == 'frontdesk' else str(target)
+        runner._write_json(project / '.ccb' / 'agents' / str(target) / 'agent.json', {'name': name})
+
+    problems = runner.resident_agent_mount_problems(manifest)
+
+    assert any(
+        problem['target'] == 'frontdesk'
+        and problem['reason'] == 'name_mismatch'
+        and problem.get('observed') == 'bootstrap'
+        for problem in problems
+    )
+    with pytest.raises(runner.HarnessError, match='resident_agents_not_mounted.*frontdesk.*bootstrap'):
+        runner.assert_resident_agents_mounted(manifest)
+
+
+def test_frontdesk_entry_allows_ask_path_when_all_resident_agent_specs_exist(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    project = Path(str(manifest['project']))
+    runner.write_config(manifest)
+    for target in manifest['resident_agent_targets']:
+        runner._write_json(project / '.ccb' / 'agents' / str(target) / 'agent.json', {'name': target})
+
+    runner.assert_resident_agents_mounted(manifest)
+
+    calls = []
+
+    def fake_run_logged(observed_manifest, label_suffix, argv):
+        calls.append((observed_manifest, label_suffix, argv))
+        if label_suffix == 'resident_ps_before_frontdesk_entry':
+            _label, stdout_path, _stderr_path = runner.command_output_paths(
+                observed_manifest,
+                label_suffix,
+            )
+            stdout_path.parent.mkdir(parents=True, exist_ok=True)
+            stdout_path.write_text(_resident_ps(), encoding='utf-8')
+
+    monkeypatch.setattr(runner, 'run_logged', fake_run_logged)
+
+    runner.frontdesk_entry(manifest)
+
+    assert runner.missing_resident_agent_specs(manifest) == []
+    assert runner.resident_agent_mount_problems(manifest) == []
+    assert [call[1] for call in calls] == [
+        'resident_ps_before_frontdesk_entry',
+        'frontdesk_entry_ask',
+    ]
+    assert calls[0][2] == [str(PROJECT_ROOT / 'ccb_test'), '--project', str(project), 'ps']
+    observed_manifest, label_suffix, argv = calls[1]
+    assert observed_manifest is manifest
+    assert label_suffix == 'frontdesk_entry_ask'
+    assert argv[:3] == [str(PROJECT_ROOT / 'ccb_test'), '--project', str(project)]
+    assert argv[3:6] == ['ask', 'frontdesk', '--']
+    assert Path(str(manifest['frontdesk_request'])).is_file()
+    request_text = Path(str(manifest['frontdesk_request'])).read_text(encoding='utf-8')
+    assert argv[-4:] == ['ask', 'frontdesk', '--', request_text]
+    assert 'controller-owned route-mix validation' in request_text
+    assert not Path(str(manifest['command_log'])).exists()
+
+
+def test_resident_readiness_accepts_all_idle_ps_state(tmp_path: Path) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+
+    states = runner.parse_resident_ps_states(_resident_ps())
+
+    assert states == {target: 'idle' for target in manifest['resident_agent_targets']}
+    assert runner.resident_readiness_problems(manifest, _resident_ps()) == []
+    runner.assert_resident_agents_ready_from_ps(manifest, _resident_ps())
+
+
+def test_resident_readiness_rejects_degraded_ps_state_before_frontdesk_ask(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    project = Path(str(manifest['project']))
+    runner.write_config(manifest)
+    for target in manifest['resident_agent_targets']:
+        runner._write_json(project / '.ccb' / 'agents' / str(target) / 'agent.json', {'name': target})
+    worker3_bad_ps = """project_id: 6ee7aaa7
+ccbd_state: mounted
+agent: name=ccb_round_reviewer state=degraded provider=claude queue=0
+agent: name=frontdesk state=degraded provider=codex queue=0
+agent: name=orchestrator state=degraded provider=codex queue=0
+agent: name=planner state=degraded provider=codex queue=0
+agent: name=task_detailer state=degraded provider=codex queue=0
+"""
+
+    states = runner.parse_resident_ps_states(worker3_bad_ps)
+    assert states['frontdesk'] == 'degraded'
+    problems = runner.resident_readiness_problems(manifest, worker3_bad_ps)
+
+    assert {problem['target'] for problem in problems} == set(manifest['resident_agent_targets'])
+    assert {problem['reason'] for problem in problems} == {'state_not_ready'}
+    with pytest.raises(runner.HarnessError, match='resident_agents_not_ready.*frontdesk.*degraded'):
+        runner.assert_resident_agents_ready_from_ps(manifest, worker3_bad_ps)
+    with pytest.raises(runner.HarnessError, match='resident_agents_not_ready.*frontdesk.*busy'):
+        runner.assert_resident_agents_ready_from_ps(manifest, _resident_ps('busy'))
+
+    calls = []
+
+    def fake_run_logged(observed_manifest, label_suffix, argv):
+        calls.append((label_suffix, argv))
+        if label_suffix == 'frontdesk_entry_ask':
+            pytest.fail('frontdesk ask must not run when resident ps is degraded')
+        _label, stdout_path, _stderr_path = runner.command_output_paths(
+            observed_manifest,
+            label_suffix,
+        )
+        stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        stdout_path.write_text(worker3_bad_ps, encoding='utf-8')
+
+    monkeypatch.setattr(runner, 'run_logged', fake_run_logged)
+
+    with pytest.raises(runner.HarnessError, match='resident_agents_not_ready.*frontdesk.*degraded'):
+        runner.frontdesk_entry(manifest)
+
+    assert calls == [
+        (
+            'resident_ps_before_frontdesk_entry',
+            [str(PROJECT_ROOT / 'ccb_test'), '--project', str(project), 'ps'],
+        )
+    ]
+    assert not Path(str(manifest['frontdesk_request'])).exists()
+
+
+def test_resident_readiness_retries_transient_empty_ps_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    project = Path(str(manifest['project']))
+    calls = []
+
+    def fake_run_logged(observed_manifest, label_suffix, argv):
+        calls.append((label_suffix, argv))
+        _label, stdout_path, _stderr_path = runner.command_output_paths(
+            observed_manifest,
+            label_suffix,
+        )
+        stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        if label_suffix == 'resident_ps_after_start':
+            stdout_path.write_text('', encoding='utf-8')
+        else:
+            stdout_path.write_text(_resident_ps(), encoding='utf-8')
+
+    monkeypatch.setattr(runner, 'run_logged', fake_run_logged)
+    monkeypatch.setattr(runner.time, 'sleep', lambda _seconds: None)
+
+    runner.assert_resident_agents_ready(manifest, 'resident_ps_after_start')
+
+    assert calls == [
+        (
+            'resident_ps_after_start',
+            [str(PROJECT_ROOT / 'ccb_test'), '--project', str(project), 'ps'],
+        ),
+        (
+            'resident_ps_after_start_retry_1',
+            [str(PROJECT_ROOT / 'ccb_test'), '--project', str(project), 'ps'],
+        ),
+    ]
+
+
+def test_resident_readiness_rejects_persistently_empty_ps_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    project = Path(str(manifest['project']))
+    calls = []
+
+    def fake_run_logged(observed_manifest, label_suffix, argv):
+        calls.append((label_suffix, argv))
+        _label, stdout_path, _stderr_path = runner.command_output_paths(
+            observed_manifest,
+            label_suffix,
+        )
+        stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        stdout_path.write_text('', encoding='utf-8')
+
+    monkeypatch.setattr(runner, 'run_logged', fake_run_logged)
+    monkeypatch.setattr(runner.time, 'sleep', lambda _seconds: None)
+
+    with pytest.raises(runner.HarnessError, match='resident_agents_not_ready.*frontdesk.*state_missing'):
+        runner.assert_resident_agents_ready(manifest, 'resident_ps_after_start')
+
+    assert calls == [
+        (
+            'resident_ps_after_start',
+            [str(PROJECT_ROOT / 'ccb_test'), '--project', str(project), 'ps'],
+        ),
+        (
+            'resident_ps_after_start_retry_1',
+            [str(PROJECT_ROOT / 'ccb_test'), '--project', str(project), 'ps'],
+        ),
+        (
+            'resident_ps_after_start_retry_2',
+            [str(PROJECT_ROOT / 'ccb_test'), '--project', str(project), 'ps'],
+        ),
+    ]
+
+
+def test_stale_provider_binding_snapshot_detects_log_path_outside_project(tmp_path: Path) -> None:
+    runner = _load_runner()
+    project = tmp_path / 'current-project'
+    project.mkdir()
+    snapshot = {
+        'delivery_checked_session_root': str(project),
+        'delivery_current_log_path': str(tmp_path / 'old-donor' / '.ccb' / 'codex.log'),
+    }
+
+    problems = runner.stale_provider_binding_problems(project, snapshot)
+
+    assert problems == [
+        {
+            'reason': 'stale_provider_session_log_binding',
+            'delivery_current_log_path': str(tmp_path / 'old-donor' / '.ccb' / 'codex.log'),
+            'project': str(project),
+            'delivery_checked_session_root': str(project),
+        }
+    ]
+    assert runner.stale_provider_binding_problems(
+        project,
+        {'delivery_current_log_path': str(project / '.ccb' / 'agents' / 'frontdesk' / 'codex.log')},
+    ) == []
+
+
+def test_init_writes_config_before_startup_and_validates_mount_after_startup() -> None:
+    source = RUNNER_PATH.read_text(encoding='utf-8')
+    init_start = source.index('def init_lab(')
+    init_end = source.index('\n\ndef frontdesk_entry(', init_start)
+    init_body = source[init_start:init_end]
+
+    assert init_body.index('write_config(manifest)') < init_body.index('"start_project"')
+    assert init_body.index('"start_project"') < init_body.index('assert_resident_agents_mounted(manifest)')
+    assert init_body.index('assert_resident_agents_mounted(manifest)') < init_body.index(
+        'assert_resident_agents_ready(manifest, "resident_ps_after_start")'
+    )
+
+    frontdesk_start = source.index('def frontdesk_entry(')
+    frontdesk_end = source.index('\n\ndef task_record_exists(', frontdesk_start)
+    frontdesk_body = source[frontdesk_start:frontdesk_end]
+
+    assert frontdesk_body.index('assert_resident_agents_mounted(manifest)') < frontdesk_body.index(
+        'assert_resident_agents_ready(manifest, "resident_ps_before_frontdesk_entry")'
+    )
+    assert frontdesk_body.index(
+        'assert_resident_agents_ready(manifest, "resident_ps_before_frontdesk_entry")'
+    ) < frontdesk_body.index('"frontdesk_entry_ask"')
+
+
+def test_pending_guard_blocks_cleanup_for_pending_and_incomplete_authority(tmp_path: Path) -> None:
+    runner = _load_runner()
+    root, manifest = _materialize(tmp_path)
+    project = Path(str(manifest['project']))
+    task_id = 'phase6b-l1-doc-direct-execution'
+
+    runner._write_json(
+        project / '.ccb' / 'runtime' / 'loops' / 'lp-pending-round' / 'round.pending.json',
+        {'task_id': task_id, 'round_result': 'pending'},
+    )
+    runner._write_json(
+        project / '.ccb' / 'runtime' / 'loops' / 'lp-ask-first' / 'ask_first_stage_state.json',
+        {'task_id': task_id, 'status': 'pending'},
+    )
+    runner._write_json(
+        project / '.ccb' / 'runtime' / 'loops' / 'lp-incomplete' / 'round.json',
+        {
+            'task_id': task_id,
+            'round_result_source': 'ask_job_incomplete',
+            'worker': {'status': 'incomplete'},
+        },
+    )
+
+    problems = runner.pending_authority_problems(project)
+    reasons = {problem['reason'] for problem in problems}
+
+    assert {'round_pending', 'ask_first_stage_pending', 'ask_job_incomplete'} <= reasons
+
+    result = subprocess.run(
+        ['bash', str(manifest['script']), 'cleanup-after-b7'],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert 'round authority pending/incomplete' in result.stderr
+    assert not Path(str(manifest['command_log'])).exists()
+
+
+def test_start_task_observes_existing_running_task_without_mutating_authority(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    task_id = 'phase6b-l1-doc-direct-execution'
+    calls = []
+
+    monkeypatch.setattr(runner, 'assert_planner_task_set_present', lambda _manifest: {})
+    monkeypatch.setattr(runner, 'validate_sequence_task_set_only', lambda _manifest: None)
+    monkeypatch.setattr(runner, 'task_record_exists', lambda _manifest, _task_id: True)
+
+    def fake_run_logged(observed_manifest, label_suffix, argv):
+        calls.append((label_suffix, argv))
+        assert label_suffix == f'{task_id}__task_observe_existing'
+        _label, stdout_path, _stderr_path = runner.command_output_paths(
+            observed_manifest,
+            label_suffix,
+        )
+        stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        stdout_path.write_text(
+            json.dumps(
+                {
+                    'status': 'running',
+                    'current_loop': 'lp-sequence21',
+                    'task': {
+                        'task_id': task_id,
+                        'status': 'running',
+                        'current_loop': 'lp-sequence21',
+                        'artifacts': {
+                            'task_packet': {'path': 'task_packet.md'},
+                            'execution_contract': {'path': 'execution_contract.md'},
+                            'orchestration_notes': {'orchestrator_route': 'direct_execution'},
+                        },
+                    },
+                }
+            ),
+            encoding='utf-8',
+        )
+
+    monkeypatch.setattr(runner, 'run_logged', fake_run_logged)
+
+    runner.start_task(manifest, task_id)
+
+    assert [call[0] for call in calls] == [f'{task_id}__task_observe_existing']
+    assert not (Path(str(manifest['project'])) / 'drafts').exists()
+
+
+def test_start_task_activates_existing_ready_task_without_reimporting_anchors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    task_id = 'phase6b-l2-code-test-direct-execution'
+    calls = []
+
+    monkeypatch.setattr(runner, 'assert_planner_task_set_present', lambda _manifest: {})
+    monkeypatch.setattr(runner, 'validate_sequence_task_set_only', lambda _manifest: None)
+    monkeypatch.setattr(runner, 'task_record_exists', lambda _manifest, _task_id: True)
+
+    def fake_run_logged(observed_manifest, label_suffix, argv):
+        calls.append((label_suffix, argv))
+        if label_suffix == f'{task_id}__task_observe_existing':
+            _label, stdout_path, _stderr_path = runner.command_output_paths(
+                observed_manifest,
+                label_suffix,
+            )
+            stdout_path.parent.mkdir(parents=True, exist_ok=True)
+            stdout_path.write_text(
+                json.dumps(
+                    {
+                        'task': {
+                            'task_id': task_id,
+                            'status': 'ready_for_orchestration',
+                            'current_loop': None,
+                            'artifacts': {
+                                'task_packet': {'path': 'task_packet.md'},
+                                'execution_contract': {'path': 'execution_contract.md'},
+                            },
+                        }
+                    }
+                ),
+                encoding='utf-8',
+            )
+            return
+        assert label_suffix == f'{task_id}__activate_orchestrator'
+        assert argv[-4:] == ['loop', 'runner', '--once', '--json']
+
+    monkeypatch.setattr(runner, 'run_logged', fake_run_logged)
+
+    runner.start_task(manifest, task_id)
+
+    assert [call[0] for call in calls] == [
+        f'{task_id}__task_observe_existing',
+        f'{task_id}__activate_orchestrator',
+    ]
+    assert not any('__artifact_' in call[0] for call in calls)
+    assert not any(call[0].endswith('__ready_for_orchestration') for call in calls)
+
+
+def test_existing_orchestrator_route_allows_continue_without_supervisor_route_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    task_id = 'phase6b-l1-doc-direct-execution'
+    calls = []
+
+    def fake_run_logged(observed_manifest, label_suffix, argv):
+        calls.append((label_suffix, argv))
+        assert label_suffix == f'{task_id}__route_observe_existing'
+        _label, stdout_path, _stderr_path = runner.command_output_paths(
+            observed_manifest,
+            label_suffix,
+        )
+        stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        stdout_path.write_text(
+            json.dumps(
+                {
+                    'task': {
+                        'task_id': task_id,
+                        'status': 'running',
+                        'artifacts': {
+                            'orchestration_notes': {'orchestrator_route': 'direct_execution'}
+                        },
+                    }
+                }
+            ),
+            encoding='utf-8',
+        )
+
+    monkeypatch.setattr(runner, 'run_logged', fake_run_logged)
+
+    runner.import_supervisor_route(manifest, task_id, 'direct_execution')
+
+    assert [call[0] for call in calls] == [f'{task_id}__route_observe_existing']
+    assert not (Path(str(manifest['project'])) / 'supervisor_imports' / task_id / 'route.txt').exists()
+
+
+def test_unexpected_frontdesk_meta_task_writes_invalid_harness_report(tmp_path: Path) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    project = Path(str(manifest['project']))
+    runner.materialize_plan_root(manifest)
+    meta_task_id = 'controller-owned-real-provider-l1-l4-rou-20260707063849'
+    runner._write_json(
+        project / 'docs' / 'plantree' / 'plans' / runner.PLAN_SLUG / 'tasks' / 'index.json',
+        {
+            'schema': 'ccb.plan.tasks.v1',
+            'tasks': [
+                {
+                    'task_id': meta_task_id,
+                    'status': 'blocked',
+                    'next_owner': 'terminal',
+                    'authority_trace': {
+                        'source_job': {
+                            'job_id': 'job_31e0de7cb0fd',
+                            'agent_name': 'planner',
+                            'terminal_status': 'completed',
+                        }
+                    },
+                }
+            ],
+        },
+    )
+    activation_path = (
+        project / '.ccb' / 'runtime' / 'loops' / 'activations' / 'act-frontdesk-job_ef437696100b.json'
+    )
+    runner._write_json(
+        activation_path,
+        {
+            'record_type': 'ccb_loop_frontdesk_planner_activation',
+            'request_id': 'job_ef437696100b',
+            'source_job': {'job_id': 'job_ef437696100b'},
+            'ask': {'target': 'planner', 'job_id': 'job_31e0de7cb0fd'},
+            'auto_runner': {'wait_job_id': 'job_31e0de7cb0fd'},
+        },
+    )
+    planner_snapshot_path = project / '.ccb' / 'ccbd' / 'snapshots' / 'job_31e0de7cb0fd.json'
+    runner._write_json(
+        planner_snapshot_path,
+        {'job_id': 'job_31e0de7cb0fd', 'agent_name': 'planner', 'record_type': 'completion_snapshot'},
+    )
+    planner_reply_path = (
+        project
+        / '.ccb'
+        / 'ccbd'
+        / 'artifacts'
+        / 'text'
+        / 'completion-reply'
+        / 'job_31e0de7cb0fd-art_test.txt'
+    )
+    planner_reply_path.parent.mkdir(parents=True, exist_ok=True)
+    planner_reply_path.write_text(
+        '**task-set.json**\n```json\n{"tasks":[{"task_id":"phase6b-l1-doc-direct-execution"}]}\n```\n',
+        encoding='utf-8',
+    )
+
+    with pytest.raises(
+        runner.HarnessError,
+        match='invalid_harness.*frontdesk_planner_unexpected_meta_task',
+    ):
+        runner.validate_sequence_task_set_only(manifest)
+
+    rows_path = Path(str(manifest['rows']))
+    b7_path = Path(str(manifest['b7']))
+    rows = [json.loads(line) for line in rows_path.read_text(encoding='utf-8').splitlines()]
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row['case_id'] == 'frontdesk_planner_unexpected_meta_task'
+    assert row['classification'] == 'invalid_harness'
+    assert row['reason'] == 'frontdesk_planner_unexpected_meta_task'
+    assert row['claimable_row'] is False
+    assert row['route_mix_rows_claimable'] is False
+    assert row['unexpected_plan_tasks'] == [meta_task_id]
+    assert row['frontdesk_job_id'] == 'job_ef437696100b'
+    assert row['planner_job_id'] == 'job_31e0de7cb0fd'
+    assert row['activation_path'] == str(activation_path)
+    assert row['planner_snapshot_path'] == str(planner_snapshot_path)
+    assert row['planner_reply_path'] == str(planner_reply_path)
+    assert row['fenced_task_set_present'] is True
+    assert 'route-mix rows were never generated' in row['why_no_route_mix_rows_claimable']
+    assert 'Status: invalid_harness' in b7_path.read_text(encoding='utf-8')
+
+
+def test_planner_route_equivalent_task_ids_are_aliases_not_meta_tasks(tmp_path: Path) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    project = Path(str(manifest['project']))
+    runner.materialize_plan_root(manifest)
+    records = []
+    for task_id, route in (
+        ('phase6b-l1-doc-direct-execution', 'direct_execution'),
+        ('phase6b-l2-code-test-direct-execution', 'direct_execution'),
+        ('phase6b-l3-needs-detail-detail-ready', 'needs_detail'),
+        ('phase6b-l4-macro-adjustment-replan-required', 'macro_adjustment_request'),
+        ('phase6b-l4-blocked-prerequisite', 'blocked'),
+    ):
+        task_root = project / 'docs' / 'plantree' / 'plans' / runner.PLAN_SLUG / 'tasks' / task_id
+        task_root.mkdir(parents=True, exist_ok=True)
+        (task_root / 'task_packet.md').write_text(f'# Task\nRoute: {route}\n', encoding='utf-8')
+        records.append(
+            {
+                'task_id': task_id,
+                'status': 'ready_for_orchestration',
+                'next_owner': 'orchestrator',
+                'task_root': str(task_root.relative_to(project)),
+                'artifacts': {
+                    'task_packet': {
+                        'path': str((task_root / 'task_packet.md').relative_to(project)),
+                    }
+                },
+            }
+        )
+    runner._write_json(
+        project / 'docs' / 'plantree' / 'plans' / runner.PLAN_SLUG / 'tasks' / 'index.json',
+        {'schema': 'ccb.plan.tasks.v1', 'tasks': records},
+    )
+
+    assert runner.sequence_task_aliases(manifest) == {
+        'phase6b-l3-needs-detail': 'phase6b-l3-needs-detail-detail-ready',
+        'phase6b-l4-macro-adjustment-request': 'phase6b-l4-macro-adjustment-replan-required',
+    }
+    assert runner.unexpected_plan_task_ids(manifest) == []
+    runner.validate_sequence_task_set_only(manifest)
+
+
+def test_missing_fenced_task_set_blocks_with_explicit_row(tmp_path: Path) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    project = Path(str(manifest['project']))
+    runner.materialize_plan_root(manifest)
+    planner_reply_path = (
+        project
+        / '.ccb'
+        / 'ccbd'
+        / 'artifacts'
+        / 'text'
+        / 'completion-reply'
+        / 'job_31e0de7cb0fd-art_test.txt'
+    )
+    planner_reply_path.parent.mkdir(parents=True, exist_ok=True)
+    planner_reply_path.write_text(
+        '**task-packet.md**\n```markdown\n# Task\nroute: direct_execution\n```\n',
+        encoding='utf-8',
+    )
+    runner._write_json(
+        project / '.ccb' / 'runtime' / 'loops' / 'activations' / 'act-frontdesk-job_ef437696100b.json',
+        {
+            'record_type': 'ccb_loop_frontdesk_planner_activation',
+            'request_id': 'job_ef437696100b',
+            'source_job': {'job_id': 'job_ef437696100b'},
+            'ask': {'target': 'planner', 'job_id': 'job_31e0de7cb0fd'},
+            'auto_runner': {'wait_job_id': 'job_31e0de7cb0fd'},
+        },
+    )
+    runner._write_json(
+        project / '.ccb' / 'ccbd' / 'snapshots' / 'job_31e0de7cb0fd.json',
+        {'job_id': 'job_31e0de7cb0fd', 'agent_name': 'planner', 'record_type': 'completion_snapshot'},
+    )
+
+    with pytest.raises(
+        runner.HarnessBlocker,
+        match='invalid_harness.*frontdesk_planner_missing_fenced_task_set',
+    ):
+        runner.assert_planner_task_set_present(manifest)
+
+    rows_path = Path(str(manifest['rows']))
+    row = json.loads(rows_path.read_text(encoding='utf-8').strip())
+    assert row['case_id'] == 'frontdesk_planner_missing_fenced_task_set'
+    assert row['classification'] == 'invalid_harness'
+    assert row['planner_reply_path'] == str(planner_reply_path)
+    assert row['fenced_task_set_present'] is False
+    assert 'fenced task-set.json block' in row['why_no_route_mix_rows_claimable']
+
+
+def test_manifest_paths_are_inspectable_and_internally_consistent(tmp_path: Path) -> None:
+    runner = _load_runner()
+    root, manifest = _materialize(tmp_path)
+
+    path_fields = ('project', 'script', 'manifest', 'b7', 'rows', 'command_log', 'role_store')
+    for field in path_fields:
+        path = Path(str(manifest[field]))
+        assert path.is_absolute()
+        assert path == root or root in path.parents
+
+    assert Path(str(manifest['project'])) == root / str(manifest['project_name'])
+    assert manifest['provider_environment_policy']['inherits_HOME'] is True
+    assert manifest['provider_environment_policy']['inherits_CCB_SOURCE_HOME'] is True
+    assert manifest['provider_environment_policy']['exports_HOME'] is False
+    assert manifest['provider_environment_policy']['exports_CCB_SOURCE_HOME'] is False
+    assert manifest['provider_environment_policy']['sets_CCB_SOURCE_RUNTIME_OK'] is False
+    assert manifest['provider_environment_policy']['sets_AGENT_ROLES_STORE'] == str(root / 'roles')
+    assert manifest['role_install_command_template'] == [
+        str(PROJECT_ROOT / 'ccb_test'),
+        'roles',
+        'install',
+        '<role_id>',
+        '--skip-tools',
+    ]
+    assert manifest['controller_owned_authority']['b7'] == manifest['b7']
+    assert manifest['controller_owned_authority']['rows'] == manifest['rows']
+    assert manifest['resident_agent_targets'] == [
+        'frontdesk',
+        'planner',
+        'orchestrator',
+        'task_detailer',
+        'ccb_round_reviewer',
+    ]
+    assert manifest['resident_ask_targets'] == [
+        'frontdesk',
+        'planner',
+        'orchestrator',
+        'task_detailer',
+        'ccb_round_reviewer',
+    ]
+    assert manifest['resident_agent_specs'] == {
+        target: str(root / 'l1-l4-frontdesk-real-provider-lab' / '.ccb' / 'agents' / target / 'agent.json')
+        for target in manifest['resident_ask_targets']
+    }
+    assert manifest['dynamic_loop_profiles'] == ['coder', 'code_reviewer']
+
+    broken_manifest = dict(manifest)
+    broken_manifest['resident_agent_targets'] = ['planner', 'orchestrator']
+    broken_manifest['resident_ask_targets'] = ['planner', 'orchestrator']
+    with pytest.raises(runner.HarnessError, match='manifest missing resident agent target'):
+        runner.validate_manifest(broken_manifest)

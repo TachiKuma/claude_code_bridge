@@ -6,6 +6,40 @@ import 'package:ccb_mobile/ccb_mobile.dart';
 import 'support/project_home_test_fakes.dart';
 
 void main() {
+  test('terminal protocol input filter drops xterm reports', () {
+    final filter = TerminalProtocolInputFilter();
+
+    expect(filter.filter('\x1B[?1;2c'), isEmpty);
+    expect(filter.filter('\x1B[>0;0;0c'), isEmpty);
+    expect(filter.filter('\x1BP!|00000000\x1B\\'), isEmpty);
+    expect(filter.filter('\x1B[0n'), isEmpty);
+    expect(filter.filter('\x1B[12;40R'), isEmpty);
+    expect(filter.filter('\x1B[8;24;80t'), isEmpty);
+    expect(filter.filter('\x1B[I'), isEmpty);
+    expect(filter.filter('\x1B[<69;27;21M'), isEmpty);
+    expect(filter.filter('\x1B]10;rgb:ffff/ffff/ffff\x1B\\'), isEmpty);
+  });
+
+  test('terminal protocol input filter buffers fragmented reports', () {
+    final filter = TerminalProtocolInputFilter();
+
+    expect(filter.filter('\x1B'), isEmpty);
+    expect(filter.filter('[<69;27;2'), isEmpty);
+    expect(filter.filter('1M'), isEmpty);
+    expect(filter.filter('echo ok'), 'echo ok');
+  });
+
+  test('terminal protocol input filter preserves non-protocol input', () {
+    final filter = TerminalProtocolInputFilter();
+
+    expect(filter.filter('abc'), 'abc');
+    expect(filter.filter('\x1B[A'), '\x1B[A');
+    expect(filter.filter('\x1B'), isEmpty);
+    expect(filter.filter('x'), '\x1Bx');
+    filter.clear();
+    expect(filter.filter('after clear'), 'after clear');
+  });
+
   testWidgets('terminal toolbar exposes direct pane controls on phone width', (
     tester,
   ) async {

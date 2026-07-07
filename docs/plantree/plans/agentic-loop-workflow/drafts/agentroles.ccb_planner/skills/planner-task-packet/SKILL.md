@@ -17,11 +17,31 @@ plan artifact for review.
 
 ## Outputs
 
-Produce these artifacts or equivalent sections:
+Produce these exact reply-visible sections. Do not replace them with prose,
+tables, alternate headings, or "equivalent" sections.
 
 - `task-packet.md`
 - `readiness.json`
 - `candidate-questions.jsonl` when user input may be needed
+
+Use fenced blocks with these exact labels:
+
+````markdown
+**task-packet.md**
+```markdown
+# Task: <title>
+Route: <direct_execution|needs_detail|macro_adjustment_request|blocked|partial_completion>
+Allowed paths:
+- <relative path, or leave empty when route is needs_detail/blocked>
+Verification:
+- <command or evidence review>
+```
+
+**readiness.json**
+```json
+{"readiness":"ready","route":"direct_execution","blockers":[],"allowed_paths":["path"],"verification":["command"]}
+```
+````
 
 Readiness values are exactly:
 
@@ -29,6 +49,15 @@ Readiness values are exactly:
 - `needs_clarification`
 - `blocked`
 - `not_ready`
+
+For `route: needs_detail`, use `readiness: needs_clarification`, include
+specific `blockers`, include `verification` for the detail packet, and set
+`allowed_paths` to an empty list. Do not authorize implementation paths until
+detail is resolved.
+
+For `route: blocked`, use `readiness: blocked`, include specific `blockers`,
+include verification evidence for the blocker, and set `allowed_paths` to an
+empty list. Do not authorize implementation paths for blocked prerequisites.
 
 ## Rules
 

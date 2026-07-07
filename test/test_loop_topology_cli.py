@@ -1764,6 +1764,69 @@ def test_loop_topology_missing_and_empty_release_are_safe(
     assert released['agent_count'] == 0
 
 
+def test_loop_topology_release_retries_transient_failure_and_clears_dynamic_agents(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = _project_with_topology(tmp_path, monkeypatch)
+    proposal_path = project_root / 'graph.json'
+    _write_json(proposal_path, _proposal())
+    result, _proposed, stderr = _run_phase2(
+        [
+            'loop',
+            'topology',
+            'propose',
+            '--loop-id',
+            'round1',
+            '--from',
+            str(proposal_path),
+            '--proposal-id',
+            'proposal1',
+            '--json',
+        ],
+        cwd=project_root,
+    )
+    assert result == 0, stderr
+    result, _committed, stderr = _run_phase2(
+        ['loop', 'topology', 'commit', '--loop-id', 'round1', '--proposal', 'proposal1', '--apply', '--json'],
+        cwd=project_root,
+    )
+    assert result == 0, stderr
+
+    original_release_agents = loop_topology_module._release_agents
+    call_count = 0
+
+    def flaky_release_agents(context, commands, *, policy: str):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise TimeoutError('timed out')
+        return original_release_agents(context, commands, policy=policy)
+
+    monkeypatch.setattr(loop_topology_module, '_release_agents', flaky_release_agents)
+
+    result, released, stderr = _run_phase2(
+        ['loop', 'topology', 'release', '--loop-id', 'round1', '--json'],
+        cwd=project_root,
+    )
+
+    assert result == 0, stderr
+    assert call_count == 2
+    assert released['loop_topology_status'] == 'released'
+    assert released['released_count'] == 2
+    assert released['retained_count'] == 0
+    assert released['observed']['agents'] == []
+    observed_path = Path(released['observed_path'])
+    observed = json.loads(observed_path.read_text(encoding='utf-8'))
+    assert observed['last_reconcile_status'] == 'reconciled'
+    assert observed['agents'] == []
+    assert observed['released_count'] == 2
+    assert observed['retained_count'] == 0
+    loaded = load_project_config(project_root, include_loop_overlays=True).config
+    assert 'loop-round1-coder-1' not in loaded.agents
+    assert 'loop-round1-code_reviewer-1' not in loaded.agents
+
+
 def test_loop_topology_partial_reconcile_failure_writes_observed_and_recovers(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

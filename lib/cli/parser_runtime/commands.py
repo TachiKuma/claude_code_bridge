@@ -10,6 +10,7 @@ from cli.models import (
     ParsedCleanupCommand,
     ParsedConfigValidateCommand,
     ParsedDoctorCommand,
+    ParsedFrontdeskCommand,
     ParsedInboxCommand,
     ParsedKillCommand,
     ParsedLayoutCommand,
@@ -110,6 +111,45 @@ def parse_mobile(tokens: list[str], *, project: str | None, error_type) -> Parse
         listen=str(namespace.listen),
         public_url=public_url or None,
         route_provider=str(namespace.route_provider),
+    )
+
+
+def parse_frontdesk(
+    tokens: list[str],
+    *,
+    project: str | None,
+    read_optional_stdin,
+    error_type,
+) -> ParsedFrontdeskCommand:
+    if not tokens:
+        raise error_type('frontdesk requires one of: forward-planner')
+    action = str(tokens[0] or '').strip().lower()
+    if action != 'forward-planner':
+        raise error_type('frontdesk only supports: forward-planner')
+    parser = argparse.ArgumentParser(prog='ccb frontdesk forward-planner', add_help=False)
+    parser.add_argument('--plan', dest='plan_slug', default=None)
+    parser.add_argument('--request-id', default=None)
+    parser.add_argument('--file', dest='file_path', default=None)
+    parser.add_argument('--intake-base64', dest='intake_base64', default=None)
+    parser.add_argument('--json', dest='json_output', action='store_true')
+    namespace = parse_args(
+        parser,
+        tokens[1:],
+        error_message='invalid frontdesk forward-planner command',
+        error_type=error_type,
+    )
+    stdin_text = read_optional_stdin()
+    file_path = str(namespace.file_path).strip() if namespace.file_path is not None else None
+    intake_base64 = str(namespace.intake_base64).strip() if namespace.intake_base64 is not None else None
+    return ParsedFrontdeskCommand(
+        project=project,
+        action=action,
+        plan_slug=str(namespace.plan_slug).strip() if namespace.plan_slug is not None else None,
+        request_id=str(namespace.request_id).strip() if namespace.request_id is not None else None,
+        file_path=file_path or None,
+        intake_base64=intake_base64 or None,
+        intake_text=stdin_text,
+        json_output=bool(namespace.json_output),
     )
 
 
@@ -693,13 +733,19 @@ def _parse_loop_run_once(tokens: list[str], *, project: str | None, error_type) 
         raise error_type('loop run-once requires --task or --task-id')
     if namespace.task is not None and namespace.task_id is not None:
         raise error_type('loop run-once cannot combine --task and --task-id')
+    task_value = _non_empty_task_id(
+        namespace.task if namespace.task is not None else namespace.task_id,
+        option='--task' if namespace.task is not None else '--task-id',
+        command='loop run-once',
+        error_type=error_type,
+    )
     if namespace.task is not None and namespace.loop_id is None:
         raise error_type('loop run-once --task requires --loop-id')
     return ParsedLoopRunOnceCommand(
         project=project,
         loop_id=str(namespace.loop_id) if namespace.loop_id is not None else None,
-        task=str(namespace.task) if namespace.task is not None else None,
-        task_id=str(namespace.task_id) if namespace.task_id is not None else None,
+        task=task_value if namespace.task is not None else None,
+        task_id=task_value if namespace.task_id is not None else None,
         worker_profile=str(namespace.worker_profile),
         reviewer_profile=str(namespace.reviewer_profile),
         orchestrator=str(namespace.orchestrator),
@@ -712,21 +758,63 @@ def _parse_loop_run_once(tokens: list[str], *, project: str | None, error_type) 
 def _parse_loop_runner(tokens: list[str], *, project: str | None, error_type) -> ParsedLoopRunnerCommand:
     parser = argparse.ArgumentParser(prog='ccb loop runner', add_help=False)
     parser.add_argument('--once', action='store_true')
+    parser.add_argument('--auto', action='store_true')
+    parser.add_argument('--task', default=None)
+    parser.add_argument('--task-id', default=None)
+    parser.add_argument('--plan', default=None)
+    parser.add_argument('--job', dest='role_job_id', default=None)
+    parser.add_argument('--wait-job', dest='wait_job_id', default=None)
     parser.add_argument('--timeout', type=float, default=None)
+    parser.add_argument('--max-steps', type=int, default=24)
+    parser.add_argument('--poll-interval', type=float, default=2.0)
     parser.add_argument('--consume-role-output', action='store_true')
     parser.add_argument('--json', dest='json_output', action='store_true')
     namespace = parse_args(parser, tokens, error_message='invalid loop runner command', error_type=error_type)
-    if not bool(namespace.once):
-        raise error_type('loop runner currently requires --once')
+    if bool(namespace.once) == bool(namespace.auto):
+        raise error_type('loop runner requires exactly one of --once or --auto')
+    if namespace.task is not None and namespace.task_id is not None:
+        raise error_type('loop runner cannot combine --task and --task-id')
     if namespace.timeout is not None and float(namespace.timeout) <= 0:
         raise error_type('loop runner --timeout must be positive')
+    if int(namespace.max_steps) <= 0:
+        raise error_type('loop runner --max-steps must be positive')
+    if float(namespace.poll_interval) < 0:
+        raise error_type('loop runner --poll-interval must be non-negative')
+    if bool(namespace.once) and str(namespace.wait_job_id or '').strip():
+        raise error_type('loop runner --wait-job requires --auto')
+    if bool(namespace.consume_role_output) and not str(namespace.role_job_id or '').strip():
+        raise error_type('loop runner --consume-role-output requires --job <job_id>')
+    if namespace.role_job_id is not None and not bool(namespace.consume_role_output):
+        raise error_type('loop runner --job requires --consume-role-output')
+    requested_task_id = None
+    if namespace.task is not None or namespace.task_id is not None:
+        requested_task_id = _non_empty_task_id(
+            namespace.task if namespace.task is not None else namespace.task_id,
+            option='--task' if namespace.task is not None else '--task-id',
+            command='loop runner',
+            error_type=error_type,
+        )
     return ParsedLoopRunnerCommand(
         project=project,
-        once=True,
+        once=bool(namespace.once),
+        auto=bool(namespace.auto),
+        task_id=requested_task_id,
+        plan_slug=str(namespace.plan) if namespace.plan is not None else None,
+        role_job_id=str(namespace.role_job_id) if namespace.role_job_id is not None else None,
+        wait_job_id=str(namespace.wait_job_id).strip() if namespace.wait_job_id is not None else None,
         timeout_s=float(namespace.timeout) if namespace.timeout is not None else None,
+        max_steps=int(namespace.max_steps),
+        poll_interval_s=float(namespace.poll_interval),
         consume_role_output=bool(namespace.consume_role_output),
         json_output=bool(namespace.json_output),
     )
+
+
+def _non_empty_task_id(value, *, option: str, command: str, error_type) -> str:
+    task_id = str(value or '').strip()
+    if not task_id:
+        raise error_type(f'{command} {option} requires a non-empty task id')
+    return task_id
 
 
 def _parse_agent_spec_token(
@@ -979,6 +1067,7 @@ __all__ = [
     'parse_cleanup',
     'parse_config',
     'parse_doctor',
+    'parse_frontdesk',
     'parse_inbox',
     'parse_kill',
     'parse_logs',

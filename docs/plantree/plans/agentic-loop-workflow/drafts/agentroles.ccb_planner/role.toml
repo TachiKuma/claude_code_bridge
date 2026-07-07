@@ -8,7 +8,7 @@ description = "Phase-activated semantic planner for CCB workflow task packets."
 license = "Apache-2.0"
 
 [catalog]
-level = "draft"
+level = "experimental"
 
 [identity]
 default_name = "planner"

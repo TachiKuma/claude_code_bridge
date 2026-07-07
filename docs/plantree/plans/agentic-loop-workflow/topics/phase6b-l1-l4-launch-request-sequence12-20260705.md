@@ -225,6 +225,13 @@ PHASE6B_L1L4_PLAN_SLUG=phase6b-real-provider-l1-l4
 PHASE6B_L1L4_PLAN_ROOT="$PHASE6B_L1L4_PROJECT/docs/plantree/plans/$PHASE6B_L1L4_PLAN_SLUG"
 PHASE6B_L1L4_SUPERVISION_DIR="$PHASE6B_L1L4_PROJECT/supervisor_imports"
 PHASE6B_L1L4_TIMEOUT_SECONDS="${PHASE6B_L1L4_TIMEOUT_SECONDS:-900}"
+PHASE6B_L1L4_SEQUENCE_TASK_IDS=(
+  phase6b-l1-doc-direct-execution
+  phase6b-l2-code-test-direct-execution
+  phase6b-l3-needs-detail-source-inspection
+  phase6b-l4-macro-adjustment-request
+  phase6b-l4-blocked-missing-secret
+)
 
 run_required() {
   local label="$1"
@@ -233,7 +240,11 @@ run_required() {
   local stderr_path="$PHASE6B_L1L4_ROOT/logs/${label}.stderr"
   mkdir -p "$(dirname "$stdout_path")"
   set +e
-  timeout --preserve-status "${PHASE6B_L1L4_TIMEOUT_SECONDS}s" "$@" </dev/null >"$stdout_path" 2>"$stderr_path"
+  if [ "${CCB_PHASE6B_RUN_WITHOUT_TIMEOUT:-0}" = "1" ]; then
+    "$@" </dev/null >"$stdout_path" 2>"$stderr_path"
+  else
+    timeout --preserve-status "${PHASE6B_L1L4_TIMEOUT_SECONDS}s" "$@" </dev/null >"$stdout_path" 2>"$stderr_path"
+  fi
   local rc=$?
   set -e
   if [ "$rc" -eq 0 ]; then
@@ -289,6 +300,10 @@ PY
   fi
 }
 
+run_unbounded_required() {
+  CCB_PHASE6B_RUN_WITHOUT_TIMEOUT=1 run_required "$@"
+}
+
 require_initialized() {
   test -d "$PHASE6B_L1L4_PROJECT/.ccb"
   test -d "$PHASE6B_L1L4_PLAN_ROOT"
@@ -303,6 +318,25 @@ require_supervisor_file() {
     exit 70
   fi
   printf '%s\n' "$path"
+}
+
+write_frontdesk_entry_request() {
+  cat > "$PHASE6B_L1L4_ROOT/frontdesk_l1_l4_entry_request.md" <<'EOF'
+Please start a fresh real-provider L1-L4 deployment-readiness route-mix validation for this lab project.
+
+Use frontdesk as the user-facing intake and hand off to planner automatically. Treat this as controller-owned route-mix validation, not as a worker implementation task. Planner and orchestrator should prepare and route the bounded L1-L4 task set itself: a document-only L1 direct execution, an L2 code-and-test direct execution, an L3 needs-detail case that stops at detail_ready, an L4 macro-adjustment case that stops at replan_required, and an L4 blocked-prerequisite case that remains blocked.
+
+Do not ask a worker to run the retest harness, generate B7 reports, write evidence rows, clean up runtime, or modify plan authority files. The supervisor/controller owns evidence rows, B7 reporting, cleanup, and script-owned authority imports. Preserve any provider or route failure as failure evidence.
+EOF
+}
+
+frontdesk_entry() {
+  require_initialized
+  write_frontdesk_entry_request
+  run_required frontdesk_entry_ask \
+    /home/bfly/yunwei/ccb_source/ccb_test --project "$PHASE6B_L1L4_PROJECT" \
+    ask frontdesk -- "$(cat "$PHASE6B_L1L4_ROOT/frontdesk_l1_l4_entry_request.md")"
+  printf 'STOP: wait for frontdesk auto-handoff and planner/orchestrator evidence, then validate task set before continuing.\n' >&2
 }
 
 write_config() {
@@ -448,12 +482,33 @@ seed_rolepacks() {
     agentroles.coder \
     agentroles.code_reviewer
   do
-    local src="/home/bfly/yunwei/ccb_source/docs/plantree/plans/agentic-loop-workflow/drafts/${role_id}"
-    local dst="$AGENT_ROLES_STORE/installed/${role_id}/current"
-    test -d "$src"
-    rm -rf "$dst"
-    mkdir -p "$(dirname "$dst")"
-    cp -a "$src" "$dst"
+    local label_role
+    label_role="${role_id//./_}"
+    run_required "roles_install_${label_role}" \
+      /home/bfly/yunwei/ccb_source/ccb_test roles install "$role_id" --skip-tools
+  done
+  validate_seeded_rolepacks
+}
+
+validate_seeded_rolepacks() {
+  local role_id
+  for role_id in \
+    agentroles.ccb_frontdesk \
+    agentroles.ccb_planner \
+    agentroles.ccb_orchestrator \
+    agentroles.ccb_task_detailer \
+    agentroles.ccb_round_reviewer \
+    agentroles.coder \
+    agentroles.code_reviewer
+  do
+    if [ ! -f "$AGENT_ROLES_STORE/installed/${role_id}/current/role.toml" ]; then
+      printf 'rolepack bootstrap incomplete: %s missing from %s\n' "$role_id" "$AGENT_ROLES_STORE" >&2
+      exit 74
+    fi
+    if [ ! -f "$AGENT_ROLES_STORE/installed/${role_id}/install.json" ]; then
+      printf 'rolepack bootstrap incomplete: %s missing install metadata in %s\n' "$role_id" "$AGENT_ROLES_STORE" >&2
+      exit 74
+    fi
   done
 }
 
@@ -648,10 +703,9 @@ EOF
 create_task_record() {
   local task_id="$1"
   validate_plan_root
+  validate_sequence_task_set_only
   create_task_files "$task_id"
-  run_required "${task_id}__task_create" \
-    /home/bfly/yunwei/ccb_source/ccb_test --project "$PHASE6B_L1L4_PROJECT" \
-    plan task-create --plan "$PHASE6B_L1L4_PLAN_SLUG" --title "$task_id" --task-id "$task_id" --json
+  ensure_task_record "$task_id"
   run_required "${task_id}__artifact_task_packet" \
     /home/bfly/yunwei/ccb_source/ccb_test --project "$PHASE6B_L1L4_PROJECT" \
     plan task-artifact --task "$task_id" --kind task_packet \
@@ -666,11 +720,63 @@ create_task_record() {
     --next-owner orchestrator --activation-reason phase6b_l1_l4_sequence12 --json
 }
 
+task_record_exists() {
+  local task_id="$1"
+  /home/bfly/yunwei/ccb_source/ccb_test --project "$PHASE6B_L1L4_PROJECT" \
+    plan task-show --task "$task_id" --json >/dev/null 2>/dev/null
+}
+
+ensure_task_record() {
+  local task_id="$1"
+  if task_record_exists "$task_id"; then
+    run_required "${task_id}__task_observe_existing" \
+      /home/bfly/yunwei/ccb_source/ccb_test --project "$PHASE6B_L1L4_PROJECT" \
+      plan task-show --task "$task_id" --json
+    return
+  fi
+  run_required "${task_id}__task_create" \
+    /home/bfly/yunwei/ccb_source/ccb_test --project "$PHASE6B_L1L4_PROJECT" \
+    plan task-create --plan "$PHASE6B_L1L4_PLAN_SLUG" --title "$task_id" --task-id "$task_id" --json
+}
+
+validate_sequence_task_set_only() {
+  local index_path="$PHASE6B_L1L4_PLAN_ROOT/tasks/index.json"
+  [ -f "$index_path" ] || return 0
+  python - "$index_path" "${PHASE6B_L1L4_SEQUENCE_TASK_IDS[@]}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+index = Path(sys.argv[1])
+allowed = set(sys.argv[2:])
+payload = json.loads(index.read_text(encoding="utf-8"))
+tasks = payload.get("tasks") if isinstance(payload, dict) else []
+unexpected = []
+for record in tasks if isinstance(tasks, list) else []:
+    if not isinstance(record, dict):
+        continue
+    task_id = str(record.get("task_id") or "").strip()
+    if task_id and task_id not in allowed:
+        unexpected.append(task_id)
+if unexpected:
+    print(
+        "frontdesk/planner created non-sequence task(s): " + ", ".join(sorted(unexpected)),
+        file=sys.stderr,
+    )
+    print(
+        "refuse: L1-L4 deployment harness must use one authoritative sequence task set; "
+        "do not execute a meta direct_execution retest/report task.",
+        file=sys.stderr,
+    )
+    raise SystemExit(75)
+PY
+}
+
 activate_orchestrator_and_stop() {
   local task_id="$1"
-  run_required "${task_id}__activate_orchestrator" \
+  run_unbounded_required "${task_id}__activate_orchestrator" \
     /home/bfly/yunwei/ccb_source/ccb_test --project "$PHASE6B_L1L4_PROJECT" \
-    loop runner --once --timeout "$PHASE6B_L1L4_TIMEOUT_SECONDS" --json
+    loop runner --once --json
   printf 'STOP: supervisor must create project-local route checkpoint for %s before continuing.\n' "$task_id" >&2
 }
 
@@ -695,12 +801,72 @@ import_supervisor_route() {
 
 run_direct_execution_round() {
   local task_id="$1"
-  run_required "${task_id}__run_direct_execution_round" \
+  run_unbounded_required "${task_id}__run_direct_execution_round" \
     /home/bfly/yunwei/ccb_source/ccb_test --project "$PHASE6B_L1L4_PROJECT" \
-    loop runner --once --timeout "$PHASE6B_L1L4_TIMEOUT_SECONDS" --json
+    loop runner --once --json
+  assert_no_pending_round_authority "$task_id"
   run_required "${task_id}__task_show_after_round" \
     /home/bfly/yunwei/ccb_source/ccb_test --project "$PHASE6B_L1L4_PROJECT" \
     plan task-show --task "$task_id" --json
+}
+
+assert_no_pending_round_authority() {
+  local task_id="${1:-}"
+  python - "$PHASE6B_L1L4_PROJECT" "$task_id" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+project = Path(sys.argv[1])
+task_id = sys.argv[2]
+problems = []
+def matches_task(payload):
+    return not task_id or str(payload.get("task_id") or "") == task_id
+
+def read_json(path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+for path in sorted((project / ".ccb" / "runtime" / "loops").glob("*/round.pending.json")):
+    payload = read_json(path)
+    if not isinstance(payload, dict) or not matches_task(payload):
+        continue
+    source = str(payload.get("round_result_source") or "")
+    if str(payload.get("loop_run_status") or "") == "pending" or str(payload.get("round_result") or "") == "pending":
+        problems.append((path, source or "ask_job_pending"))
+
+for path in sorted((project / ".ccb" / "runtime" / "loops").glob("*/ask_first_stage_state.json")):
+    payload = read_json(path)
+    if not isinstance(payload, dict) or not matches_task(payload):
+        continue
+    if str(payload.get("status") or "") == "pending":
+        problems.append((path, "ask_first_stage_pending"))
+
+for path in sorted((project / ".ccb" / "runtime" / "loops").glob("*/round.json")):
+    payload = read_json(path)
+    if not isinstance(payload, dict) or not matches_task(payload):
+        continue
+    failure = payload.get("failure") if isinstance(payload.get("failure"), dict) else {}
+    source = str(payload.get("round_result_source") or failure.get("source") or "")
+    if source == "ask_job_incomplete":
+        problems.append((path, "ask_job_incomplete"))
+        continue
+    for role in ("worker", "reviewer", "orchestrator", "ccb_round_reviewer"):
+        record = payload.get(role) if isinstance(payload.get(role), dict) else {}
+        if str(record.get("status") or "") == "incomplete":
+            problems.append((path, f"{role}_job_incomplete"))
+            break
+if problems:
+    for path, reason in problems:
+        print(f"round authority pending/incomplete: {reason}: {path}", file=sys.stderr)
+    print(
+        "refuse cleanup/progress: wait or resume through observer path before treating the round as terminal evidence",
+        file=sys.stderr,
+    )
+    raise SystemExit(78)
+PY
 }
 
 continue_route() {
@@ -714,9 +880,9 @@ continue_route() {
       printf 'STOP: supervisor must capture worker/reviewer/round evidence for %s before B7.\n' "$task_id" >&2
       ;;
     needs_detail)
-      run_required "${task_id}__activate_detailer" \
+      run_unbounded_required "${task_id}__activate_detailer" \
         /home/bfly/yunwei/ccb_source/ccb_test --project "$PHASE6B_L1L4_PROJECT" \
-        loop runner --once --timeout "$PHASE6B_L1L4_TIMEOUT_SECONDS" --json
+        loop runner --once --json
       printf 'STOP: supervisor must create detail checkpoint files for %s before continue-detail.\n' "$task_id" >&2
       ;;
     macro_adjustment_request)
@@ -834,6 +1000,14 @@ DIRECT_TASK_IDS = {
     "phase6b-l1-doc-direct-execution",
     "phase6b-l2-code-test-direct-execution",
 }
+EXPECTED_TASK_IDS = {case["task_id"] for case in TASKS}
+ROUND_ARTIFACT_KEYS = (
+    "round_summary",
+    "round_pass",
+    "round_partial",
+    "round_replan",
+    "round_blocker",
+)
 
 def read_text(path):
     return path.read_text(encoding="utf-8") if path.is_file() else ""
@@ -857,9 +1031,38 @@ def first_text(*values):
             return text
     return None
 
+def resolve_project_file(value):
+    text = first_text(value)
+    if not text:
+        return None
+    path = Path(text)
+    candidates = [path] if path.is_absolute() else [project / path, root / path]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
 def dict_field(value, key):
     nested = value.get(key) if isinstance(value, dict) else None
     return nested if isinstance(nested, dict) else {}
+
+def round_artifact_from(*records):
+    for item in records:
+        artifact_map = dict_field(item, "artifacts")
+        for key in ROUND_ARTIFACT_KEYS:
+            artifact = artifact_map.get(key)
+            if isinstance(artifact, dict):
+                return artifact
+    return {}
+
+def round_artifact_path_from(*records):
+    artifact = round_artifact_from(*records)
+    last_round_paths = [
+        dict_field(item, "last_round").get("artifact_path")
+        for item in records
+        if isinstance(item, dict)
+    ]
+    return first_text(artifact.get("path"), artifact.get("artifact_path"), *last_round_paths)
 
 def normalized_summary_key(value):
     return "_".join(str(value).strip().lower().replace("_", " ").split())
@@ -880,17 +1083,72 @@ def last_round_result(*records):
             return result
     return None
 
+def plan_task_index_payload():
+    return read_json_object(project / "docs" / "plantree" / "plans" / "phase6b-real-provider-l1-l4" / "tasks" / "index.json")
+
+def plan_task_index_record(task_id):
+    payload = plan_task_index_payload()
+    records = payload.get("tasks") if isinstance(payload, dict) else []
+    for record in records if isinstance(records, list) else []:
+        if isinstance(record, dict) and str(record.get("task_id") or "") == task_id:
+            return record
+    return None
+
+def unexpected_plan_tasks():
+    payload = plan_task_index_payload()
+    records = payload.get("tasks") if isinstance(payload, dict) else []
+    unexpected = []
+    for record in records if isinstance(records, list) else []:
+        if not isinstance(record, dict):
+            continue
+        task_id = str(record.get("task_id") or "").strip()
+        if task_id and task_id not in EXPECTED_TASK_IDS:
+            unexpected.append(task_id)
+    return sorted(set(unexpected))
+
+def round_json_for(task_id):
+    matches = []
+    for path in sorted((project / ".ccb" / "runtime" / "loops").glob("*/round.json")):
+        payload = read_json_object(path)
+        if payload is None or str(payload.get("task_id") or "") != task_id:
+            continue
+        matches.append((str(payload.get("finished_at") or ""), path, payload))
+    if not matches:
+        return None, None
+    _finished_at, path, payload = sorted(matches)[-1]
+    return path, payload
+
 def task_status_from_show(task_id):
     candidates = sorted((root / "logs").glob(f"{task_id}__task_show*.stdout"))
+    index_path = project / "docs" / "plantree" / "plans" / "phase6b-real-provider-l1-l4" / "tasks" / "index.json"
+    index_record = plan_task_index_record(task_id)
     result = {
         "task_show_observed": False,
-        "task_show_path": str(candidates[-1]) if candidates else None,
+        "task_show_path": str(index_path) if index_record is not None else (str(candidates[-1]) if candidates else None),
         "task_show_parse_error": None,
         "status": "missing",
         "next_owner": None,
         "round_result": None,
         "round_result_source": None,
+        "round_summary_artifact_path": None,
+        "task_show_source": "missing",
+        "task_show_stale": False,
     }
+    if index_record is not None:
+        round_artifact = round_artifact_from(index_record)
+        round_summary_path = resolve_project_file(round_artifact_path_from(index_record))
+        result.update(
+            {
+                "task_show_observed": True,
+                "task_show_source": "task_index",
+                "status": first_text(index_record.get("status")) or "missing",
+                "next_owner": first_text(index_record.get("next_owner")),
+                "round_result": first_text(round_artifact.get("round_result"), last_round_result(index_record)),
+                "round_result_source": first_text(round_artifact.get("round_result_source")),
+                "round_summary_artifact_path": str(round_summary_path) if round_summary_path else None,
+            }
+        )
+        return result
     if not candidates:
         return result
     text = read_text(candidates[-1]).strip()
@@ -907,6 +1165,8 @@ def task_status_from_show(task_id):
         return result
     record = payload.get("record") if isinstance(payload.get("record"), dict) else {}
     task = payload.get("task") if isinstance(payload.get("task"), dict) else {}
+    round_artifact = round_artifact_from(payload, task, record)
+    round_summary_path = resolve_project_file(round_artifact_path_from(payload, task, record))
     result.update(
         {
             "task_show_observed": True,
@@ -916,37 +1176,93 @@ def task_status_from_show(task_id):
                 payload.get("round_result"),
                 task.get("round_result"),
                 record.get("round_result"),
+                round_artifact.get("round_result"),
                 last_round_result(payload, task, record),
             ),
             "round_result_source": first_text(
                 payload.get("round_result_source"),
                 task.get("round_result_source"),
                 record.get("round_result_source"),
+                round_artifact.get("round_result_source"),
             ),
+            "round_summary_artifact_path": str(round_summary_path) if round_summary_path else None,
+            "task_show_source": "task_show_log",
         }
     )
+    round_json_path, round_json = round_json_for(task_id)
+    if round_json_path and result["status"] in {"draft", "ready", "ready_for_orchestration", "running"}:
+        result["task_show_stale"] = True
     return result
 
 def round_evidence_for(task_id, show):
-    summary_path = project / "supervisor_imports" / task_id / "round_summary.md"
-    summary_text = read_text(summary_path)
-    round_result = first_text(summary_field(summary_text, "round_result"), show.get("round_result"))
+    supervisor_summary_path = project / "supervisor_imports" / task_id / "round_summary.md"
+    artifact_summary_path = resolve_project_file(show.get("round_summary_artifact_path"))
+    round_json_path, round_json = round_json_for(task_id)
+    round_json_summary_path = None
+    if isinstance(round_json, dict):
+        round_json_summary_path = resolve_project_file(dict_field(round_json, "paths").get("round"))
+    task_root_summary_path = (
+        project
+        / "docs"
+        / "plantree"
+        / "plans"
+        / "phase6b-real-provider-l1-l4"
+        / "tasks"
+        / task_id
+        / "round_summary.md"
+    )
+    summary_path = first_existing_path(
+        supervisor_summary_path,
+        artifact_summary_path,
+        round_json_summary_path,
+        task_root_summary_path,
+    )
+    summary_text = read_text(summary_path) if summary_path else ""
+    round_result = first_text(
+        summary_field(summary_text, "round_result"),
+        show.get("round_result"),
+        round_json.get("round_result") if isinstance(round_json, dict) else None,
+    )
     round_result_source = first_text(
         summary_field(summary_text, "round_result_source"),
         show.get("round_result_source"),
+        round_json.get("round_result_source") if isinstance(round_json, dict) else None,
     )
     return {
-        "round_summary_observed": summary_path.is_file(),
-        "round_summary_path": str(summary_path) if summary_path.is_file() else None,
+        "round_summary_observed": bool(summary_path and summary_path.is_file()),
+        "round_summary_path": str(summary_path) if summary_path and summary_path.is_file() else None,
+        "round_json_path": str(round_json_path) if round_json_path else None,
         "round_result": round_result or "missing",
         "round_result_source": round_result_source or "missing",
     }
 
+def first_existing_path(*paths):
+    for path in paths:
+        if path and Path(path).is_file():
+            return Path(path)
+    return None
+
 def observed_topology_residue_absent():
+    residue_observed = False
     for path in project.rglob("agent_mount_topology.observed.json"):
         if observed_topology_has_dynamic_residue(path):
-            return False
-    return True
+            residue_observed = True
+            break
+    if not residue_observed:
+        return True
+    return cleanup_after_b7_unmounted()
+
+def cleanup_after_b7_unmounted():
+    path = root / "logs" / "cleanup_after_b7.stdout"
+    text = read_text(path)
+    if not text:
+        return False
+    fields = {}
+    for line in text.splitlines():
+        key, separator, value = line.partition(":")
+        if separator:
+            fields[key.strip()] = value.strip()
+    return fields.get("kill_status") == "ok" and fields.get("state") == "unmounted"
 
 def observed_topology_has_dynamic_residue(path):
     payload = read_json_object(path)
@@ -1068,6 +1384,7 @@ def add_error(errors, condition, message):
 
 rows = []
 labels = command_log_labels()
+unexpected_tasks = unexpected_plan_tasks()
 for case in TASKS:
     task_id = case["task_id"]
     expected_route = case["expected_route"]
@@ -1086,10 +1403,17 @@ for case in TASKS:
     final_status = show["status"]
     changed_files = changed_files_for(task_id)
     direct_round_ran = f"{task_id}__run_direct_execution_round" in labels
+    direct_round_observed = bool(
+        direct_round_ran
+        or (
+            round_evidence["round_summary_observed"]
+            and round_evidence["round_result"] != "missing"
+        )
+    )
     worker_reply_present = (project / "supervisor_imports" / task_id / "worker_reply.md").is_file()
     worker_reviewer_mounted = bool(
         expected_route == "direct_execution"
-        and direct_round_ran
+        and direct_round_observed
         and worker_reply_present
         and (project / "supervisor_imports" / task_id / "reviewer_verdict.md").is_file()
     )
@@ -1106,6 +1430,12 @@ for case in TASKS:
     add_error(errors, bool(route_text and route_text != expected_route), f"route mismatch: {route_text}")
     add_error(errors, not show["task_show_observed"], "missing task-show evidence")
     add_error(errors, bool(show["task_show_parse_error"]), f"task-show parse error: {show['task_show_parse_error']}")
+    add_error(errors, bool(show["task_show_stale"]), "stale pre-terminal task-show snapshot; final task index or round authority required")
+    add_error(
+        errors,
+        bool(unexpected_tasks),
+        "unexpected non-sequence task(s): " + ", ".join(unexpected_tasks),
+    )
     add_error(errors, final_status == "missing", "task-show missing status")
     add_error(
         errors,
@@ -1148,10 +1478,14 @@ for case in TASKS:
         "final_status": final_status,
         "task_show_observed": show["task_show_observed"],
         "task_show_path": show["task_show_path"],
+        "task_show_source": show["task_show_source"],
+        "task_show_stale": show["task_show_stale"],
         "round_summary_observed": round_evidence["round_summary_observed"],
         "round_summary_path": round_evidence["round_summary_path"],
+        "round_json_path": round_evidence["round_json_path"],
         "round_result": round_evidence["round_result"],
         "round_result_source": round_evidence["round_result_source"],
+        "unexpected_plan_tasks": unexpected_tasks,
         "classification": classification,
         "expected_classification": expected_classification,
         "claimable_row": classification == expected_classification,
@@ -1195,6 +1529,7 @@ PY
 }
 
 cleanup_after_b7() {
+  assert_no_pending_round_authority ""
   run_required cleanup_after_b7 \
     /home/bfly/yunwei/ccb_source/ccb_test --project "$PHASE6B_L1L4_PROJECT" kill
 }
@@ -1217,6 +1552,9 @@ main() {
     init)
       init_lab
       ;;
+    frontdesk-entry)
+      frontdesk_entry
+      ;;
     start-task)
       require_initialized
       create_task_record "${2:?task id required}"
@@ -1238,6 +1576,7 @@ main() {
       printf '%s\n' \
         'usage:' \
         '  run_l1_l4_sequence12.sh init' \
+        '  run_l1_l4_sequence12.sh frontdesk-entry' \
         '  run_l1_l4_sequence12.sh start-task <task_id>' \
         '  run_l1_l4_sequence12.sh continue-route <task_id> <expected_route>' \
         '  run_l1_l4_sequence12.sh continue-detail <task_id>' \

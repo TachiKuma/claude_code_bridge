@@ -164,6 +164,7 @@ class _LiveTerminalPaneState extends State<_LiveTerminalPane>
   Future<TerminalSession>? _sessionFuture;
   TerminalSession? _session;
   StreamSubscription<String>? _outputSubscription;
+  final _terminalInputFilter = TerminalProtocolInputFilter();
   var _openGeneration = 0;
   TerminalGeometry _lastGeometry = const TerminalGeometry(
     columns: 100,
@@ -180,7 +181,10 @@ class _LiveTerminalPaneState extends State<_LiveTerminalPane>
     _terminal = Terminal(
       maxLines: 4000,
       onOutput: (data) {
-        _writeTerminalBytes(utf8.encode(data));
+        final filtered = _terminalInputFilter.filter(data);
+        if (filtered.isNotEmpty) {
+          _writeTerminalBytes(utf8.encode(filtered));
+        }
       },
       onResize: (width, height, pixelWidth, pixelHeight) {
         final geometry = TerminalGeometry(
@@ -217,6 +221,7 @@ class _LiveTerminalPaneState extends State<_LiveTerminalPane>
     if (clearTerminal) {
       _terminal.write('\x1b[2J\x1b[H');
     }
+    _terminalInputFilter.clear();
     _setControlStatus('Connecting');
     final future = _openSession(generation);
     setState(() {
@@ -665,6 +670,77 @@ bool _sameGeometry(TerminalGeometry a, TerminalGeometry b) {
       a.rows == b.rows &&
       a.pixelWidth == b.pixelWidth &&
       a.pixelHeight == b.pixelHeight;
+}
+
+class TerminalProtocolInputFilter {
+  String _pending = '';
+
+  String filter(String input) {
+    if (input.isEmpty) {
+      return '';
+    }
+    final text = _pending + input;
+    _pending = '';
+    final output = StringBuffer();
+    var index = 0;
+    while (index < text.length) {
+      final rest = text.substring(index);
+      final complete = _matchCompleteProtocol(rest);
+      if (complete > 0) {
+        index += complete;
+        continue;
+      }
+      if (_isPossibleProtocolPrefix(rest)) {
+        _pending = rest;
+        break;
+      }
+      output.write(text[index]);
+      index += 1;
+    }
+    return output.toString();
+  }
+
+  void clear() {
+    _pending = '';
+  }
+}
+
+final _terminalProtocolPatterns = <RegExp>[
+  RegExp('^\x1B\\[\\?[0-9;]*c'),
+  RegExp('^\x1B\\[>[0-9;]*c'),
+  RegExp('^\x1BP!\\|[0-9A-Fa-f]*\x1B\\\\'),
+  RegExp('^\x1B\\[0n'),
+  RegExp('^\x1B\\[[0-9;]*R'),
+  RegExp('^\x1B\\[8;[0-9]+;[0-9]+t'),
+  RegExp('^\x1B\\[[IO]'),
+  RegExp('^\x1B\\[<[0-9;]+[mM]'),
+  RegExp('^\x1B\\]1[01];(?:rgb:)?[0-9A-Fa-f/]+(?:\x07|\x1B\\\\)'),
+];
+
+final _terminalProtocolPrefixPattern = RegExp(
+  '^\x1B(?:'
+  r'$'
+  r'|\[$'
+  r'|\[[?>]?[0-9;]*$'
+  r'|\[<[0-9;]*$'
+  r'|\]1[01];(?:rgb:)?[0-9A-Fa-f/]*$'
+  r'|P!\|[0-9A-Fa-f]*$'
+  r'|P!\|[0-9A-Fa-f]*\x1B$'
+  r')',
+);
+
+int _matchCompleteProtocol(String text) {
+  for (final pattern in _terminalProtocolPatterns) {
+    final match = pattern.matchAsPrefix(text);
+    if (match != null) {
+      return match.end;
+    }
+  }
+  return 0;
+}
+
+bool _isPossibleProtocolPrefix(String text) {
+  return _terminalProtocolPrefixPattern.hasMatch(text);
 }
 
 extension on CcbTerminalTarget {

@@ -8,7 +8,7 @@ description = "User-facing intake and reporting boundary for CCB workflows."
 license = "Apache-2.0"
 
 [catalog]
-level = "draft"
+level = "experimental"
 
 [identity]
 default_name = "frontdesk"
@@ -34,7 +34,7 @@ skills = ["skills/frontdesk-intake"]
 
 [permissions]
 read_files = true
-write_files = true
+write_files = false
 network = false
 secrets = "none"
 

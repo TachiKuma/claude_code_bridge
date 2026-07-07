@@ -129,7 +129,14 @@ def _sync_lifecycle_namespace_epoch(supervisor, *, namespace) -> None:
 
 
 def _uses_explicit_windows_topology(config, *, interactive_tmux_layout: bool) -> bool:
-    return bool(interactive_tmux_layout and getattr(config, 'windows_explicit', False))
+    if not interactive_tmux_layout:
+        return False
+    if bool(getattr(config, 'windows_explicit', False)):
+        return True
+    sidebar = getattr(config, 'sidebar', None)
+    if str(getattr(sidebar, 'mode', '') or '').strip() == 'every_window':
+        return True
+    return bool(tuple(getattr(config, 'tool_windows', ()) or ()))
 
 
 def stop_all_supervisor(

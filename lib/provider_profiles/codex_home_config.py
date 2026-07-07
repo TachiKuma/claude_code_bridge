@@ -36,6 +36,20 @@ _CODEX_PLUGIN_SHA_RELATIVE = Path('.tmp') / 'plugins.sha'
 _CODEX_SKILLS_PROJECTION_LABEL = 'codex-inherited-skills'
 _CODEX_COMMANDS_PROJECTION_LABEL = 'codex-inherited-commands'
 _CODEX_PLUGIN_PROJECTION_LABEL = 'codex-plugin-bundle'
+_CODEX_AUTH_PROJECTION_MANIFEST = '.ccb-auth-projection.json'
+_CODEX_AUTH_SIDECAR_FILENAMES = (
+    'company-codex-api-key',
+    'company-codex.config.toml',
+)
+_CODEX_AUTH_SIDECAR_REF_RE = re.compile(
+    r'(?:'
+    r'\$\{CODEX_HOME(?::-[^}]*)?\}'
+    r'|\$CODEX_HOME'
+    r'|\$\{HOME(?::-[^}]*)?\}/\.codex'
+    r'|\$HOME/\.codex'
+    r'|~/\.codex'
+    r')/(?P<name>[A-Za-z0-9][A-Za-z0-9_.-]{0,127})'
+)
 _CODEX_MANAGED_SKILL_ENTRY_LABEL_PREFIXES = (
     f'{_CODEX_SKILLS_PROJECTION_LABEL}:',
     'codex-skill-overlay:',
@@ -90,6 +104,7 @@ def materialize_codex_home_config(
     runtime_dir: Path | None = None,
     workspace_path: Path | None = None,
     shared_cache_root: Path | None = None,
+    command_policy=None,
     memory_projection_event_path: Path | None = None,
     memory_projection_marker_path: Path | None = None,
 ) -> Path:
@@ -101,6 +116,7 @@ def materialize_codex_home_config(
     target_config = target_home / 'config.toml'
     source_config = source_home / 'config.toml'
     authority = codex_api_authority(profile)
+    inherited_assets_enabled = not _role_command_policy_disables_inherited_assets(command_policy)
 
     if authority is not None:
         _write_codex_api_authority_config(
@@ -147,16 +163,25 @@ def materialize_codex_home_config(
         profile=profile,
         authority=authority,
     )
+    _materialize_auth_sidecars(
+        source_home,
+        target_home,
+        source_config=source_config,
+        profile=profile,
+        authority=authority,
+    )
     _materialize_inherited_skills(
         source_home / 'skills',
         target_home / 'skills',
         profile=profile,
+        enabled=inherited_assets_enabled,
     )
-    _materialize_skill_overlays(
-        target_home / 'skills',
-        profile=profile,
-        project_root=project_root,
-    )
+    if inherited_assets_enabled:
+        _materialize_skill_overlays(
+            target_home / 'skills',
+            profile=profile,
+            project_root=project_root,
+        )
     project_role_skills_to_home(
         project_root=project_root,
         agent_name=agent_name,
@@ -166,15 +191,16 @@ def materialize_codex_home_config(
     _route_inherited_tree(
         source_home / 'commands',
         target_home / 'commands',
-        enabled=_inherits_commands(profile),
+        enabled=_inherits_commands(profile) and inherited_assets_enabled,
         label=_CODEX_COMMANDS_PROJECTION_LABEL,
     )
-    _sync_codex_plugin_projection(
-        source_home,
-        target_home,
-        project_root=project_root,
-        shared_cache_root=shared_cache_root,
-    )
+    if inherited_assets_enabled:
+        _sync_codex_plugin_projection(
+            source_home,
+            target_home,
+            project_root=project_root,
+            shared_cache_root=shared_cache_root,
+        )
     memory_result = _materialize_codex_memory(
         source_home,
         target_home,
@@ -183,11 +209,12 @@ def materialize_codex_home_config(
         agent_name=agent_name,
         workspace_path=workspace_path,
     )
-    _install_codex_inherited_hooks(
-        target_home,
-        target_config,
-        source_home=source_home,
-    )
+    if inherited_assets_enabled:
+        _install_codex_inherited_hooks(
+            target_home,
+            target_config,
+            source_home=source_home,
+        )
     record_memory_projection_event(
         memory_result,
         provider='codex',
@@ -716,6 +743,168 @@ def _write_auth_file(target: Path, api_key: str) -> None:
     target.write_text(f'{payload}\n', encoding='utf-8')
 
 
+def _materialize_auth_sidecars(
+    source_home: Path,
+    target_home: Path,
+    *,
+    source_config: Path,
+    profile,
+    authority: CodexApiAuthority | None,
+) -> None:
+    source_home = Path(source_home).expanduser()
+    target_home = Path(target_home).expanduser()
+    previous = _read_auth_projection_manifest(target_home)
+    previous_sidecars = _manifest_sidecars(previous)
+    requested_sidecars = _codex_auth_sidecar_names(source_home, source_config)
+
+    if authority is not None:
+        _remove_projected_auth_sidecars(target_home, previous_sidecars | requested_sidecars)
+        _write_auth_projection_manifest(
+            source_home,
+            target_home,
+            projected_sidecars=(),
+            profile=profile,
+            status='explicit_api_authority',
+        )
+        return
+
+    if not _inherits_auth(profile):
+        return
+
+    projected: list[str] = []
+    for name in sorted(requested_sidecars):
+        source = source_home / name
+        target = target_home / name
+        if source.is_file():
+            _sync_secret_file(source, target)
+            projected.append(name)
+        elif name in previous_sidecars:
+            target.unlink(missing_ok=True)
+
+    for name in sorted(previous_sidecars - set(projected)):
+        if name not in requested_sidecars:
+            (target_home / name).unlink(missing_ok=True)
+
+    _write_auth_projection_manifest(
+        source_home,
+        target_home,
+        projected_sidecars=tuple(projected),
+        profile=profile,
+        status='inherited_auth',
+    )
+
+
+def _codex_auth_sidecar_names(source_home: Path, source_config: Path) -> set[str]:
+    names = set(_CODEX_AUTH_SIDECAR_FILENAMES)
+    for match in _CODEX_AUTH_SIDECAR_REF_RE.finditer(_safe_read_text(source_config)):
+        name = str(match.group('name') or '').strip()
+        if _is_safe_codex_auth_sidecar_name(name):
+            names.add(name)
+    return names
+
+
+def _is_safe_codex_auth_sidecar_name(name: str) -> bool:
+    if not name or '/' in name or '\\' in name or name in {'.', '..'} or name.startswith('.'):
+        return False
+    lower = name.lower()
+    if lower in {'auth.json', 'config.toml'}:
+        return False
+    if lower in set(_CODEX_AUTH_SIDECAR_FILENAMES):
+        return True
+    return lower.endswith('.config.toml') or any(token in lower for token in ('auth', 'credential', 'key', 'token'))
+
+
+def _sync_secret_file(source: Path, target: Path) -> None:
+    source = Path(source).expanduser()
+    target = Path(target).expanduser()
+    if _same_path(source, target):
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+    try:
+        os.chmod(target, 0o600)
+    except Exception:
+        pass
+
+
+def _read_auth_projection_manifest(target_home: Path) -> dict[str, object]:
+    path = Path(target_home).expanduser() / _CODEX_AUTH_PROJECTION_MANIFEST
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding='utf-8'))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _manifest_sidecars(payload: dict[str, object]) -> set[str]:
+    raw = payload.get('projected_sidecars')
+    if not isinstance(raw, list):
+        return set()
+    return {name for name in (str(item or '').strip() for item in raw) if _is_safe_codex_auth_sidecar_name(name)}
+
+
+def _remove_projected_auth_sidecars(target_home: Path, names: set[str]) -> None:
+    for name in sorted(names):
+        if _is_safe_codex_auth_sidecar_name(name):
+            (Path(target_home).expanduser() / name).unlink(missing_ok=True)
+
+
+def _write_auth_projection_manifest(
+    source_home: Path,
+    target_home: Path,
+    *,
+    projected_sidecars: tuple[str, ...],
+    profile,
+    status: str,
+) -> None:
+    target_home = Path(target_home).expanduser()
+    names = ('auth.json', 'config.toml', *projected_sidecars)
+    payload = {
+        'schema_version': 1,
+        'record_type': 'ccb_codex_auth_projection',
+        'status': status,
+        'source_home': str(Path(source_home).expanduser()),
+        'inherit_auth': _inherits_auth(profile),
+        'projected_sidecars': sorted(projected_sidecars),
+        'files': [
+            _auth_projection_file_record(Path(source_home).expanduser() / name, target_home / name, name=name)
+            for name in names
+        ],
+    }
+    manifest = target_home / _CODEX_AUTH_PROJECTION_MANIFEST
+    atomic_write_text(manifest, json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2) + '\n')
+    try:
+        os.chmod(manifest, 0o600)
+    except Exception:
+        pass
+
+
+def _auth_projection_file_record(source: Path, target: Path, *, name: str) -> dict[str, object]:
+    return {
+        'name': name,
+        'source_exists': source.is_file(),
+        'source_sha256': _file_sha256(source),
+        'target_exists': target.is_file(),
+        'target_sha256': _file_sha256(target),
+        'target_size_bytes': target.stat().st_size if target.is_file() else 0,
+    }
+
+
+def _file_sha256(path: Path) -> str:
+    try:
+        if not Path(path).expanduser().is_file():
+            return ''
+        digest = hashlib.sha256()
+        with Path(path).expanduser().open('rb') as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+                digest.update(chunk)
+        return digest.hexdigest()
+    except Exception:
+        return ''
+
+
 def _sync_file(source: Path, target: Path) -> None:
     if not source.is_file():
         target.unlink(missing_ok=True)
@@ -806,14 +995,14 @@ def _is_managed_skill_projection_dir(target: Path) -> bool:
     return bool(entries)
 
 
-def _materialize_inherited_skills(source: Path, target: Path, *, profile) -> None:
+def _materialize_inherited_skills(source: Path, target: Path, *, profile, enabled: bool = True) -> None:
     include = _profile_skill_patterns(profile, 'inherited_skill_include')
     exclude = _profile_skill_patterns(profile, 'inherited_skill_exclude')
     if not include and not exclude:
         _copy_inherited_tree(
             source,
             target,
-            enabled=_inherits_skills(profile),
+            enabled=_inherits_skills(profile) and enabled,
             label=_CODEX_SKILLS_PROJECTION_LABEL,
         )
         _remove_stale_skill_projection_markers(
@@ -825,11 +1014,19 @@ def _materialize_inherited_skills(source: Path, target: Path, *, profile) -> Non
     _route_filtered_skill_entries(
         source,
         target,
-        enabled=_inherits_skills(profile),
+        enabled=_inherits_skills(profile) and enabled,
         include=include,
         exclude=exclude,
         label_prefix=f'{_CODEX_SKILLS_PROJECTION_LABEL}:',
     )
+
+
+def _role_command_policy_disables_inherited_assets(command_policy) -> bool:
+    if command_policy is None:
+        return False
+    mode = str(getattr(command_policy, 'mode', '') or '').strip()
+    enforcement = str(getattr(command_policy, 'enforcement', '') or '').strip()
+    return mode == 'deny_all_except' and enforcement == 'required'
 
 
 def _route_filtered_skill_entries(

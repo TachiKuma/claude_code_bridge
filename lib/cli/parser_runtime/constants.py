@@ -31,6 +31,7 @@ SUBCOMMANDS = {
     'repair',
     'config',
     'fault',
+    'frontdesk',
     'reload',
     'restart',
 }

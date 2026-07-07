@@ -94,7 +94,7 @@ _VALID_STATUSES = _MAINLINE_STATUSES | _LEGACY_STATUSES
 _STATUS_EDGES = {
     'draft': {'draft', 'needs_clarification', 'detail_ready', 'ready', 'ready_for_orchestration'},
     'needs_clarification': {'needs_clarification', 'draft'},
-    'detail_ready': {'detail_ready', 'ready'},
+    'detail_ready': {'detail_ready', 'ready', 'ready_for_orchestration'},
     'ready': {'ready', 'running'},
     'ready_for_orchestration': {
         'ready_for_orchestration',
@@ -165,6 +165,9 @@ def _task_create(context, command) -> dict[str, object]:
         'task_root': str(task_root.relative_to(context.project.project_root)),
         'artifacts': {},
     }
+    authority_trace = getattr(command, 'authority_trace', None)
+    if isinstance(authority_trace, dict) and authority_trace:
+        record['authority_trace'] = dict(authority_trace)
     index['tasks'].append(record)
     index['updated_at'] = now
     _write_index(tasks_root, index)
@@ -532,7 +535,8 @@ def find_first_ready_task(context) -> dict[str, object] | None:
     return None
 
 
-def find_first_actionable_task(context) -> dict[str, object] | None:
+def find_first_actionable_task(context, *, task_id: str | None = None) -> dict[str, object] | None:
+    requested_task_id = str(task_id or '').strip()
     plantree_root = Path(context.project.project_root) / 'docs' / 'plantree' / 'plans'
     if not plantree_root.is_dir():
         return None
@@ -544,6 +548,8 @@ def find_first_actionable_task(context) -> dict[str, object] | None:
             if not isinstance(record, dict):
                 continue
             _validate_task_record(record)
+            if requested_task_id and str(record.get('task_id') or '') != requested_task_id:
+                continue
             action = _runner_action_for_record(record)
             if action is None:
                 continue
@@ -562,11 +568,11 @@ def find_first_actionable_task(context) -> dict[str, object] | None:
         'ask_first_execute': 0,
         'ask_first_execution_not_ready': 0,
         'execute': 0,
-        'activate_planner': 1,
-        'activate_task_detailer': 2,
+        'activate_task_detailer': 1,
+        'planner_next_action_required': 1,
+        'blocker_evidence_required': 1,
+        'activate_planner': 2,
         'activate_plan_reviewer': 3,
-        'planner_next_action_required': 4,
-        'blocker_evidence_required': 4,
         'paused': 4,
         'blocked': 5,
         'terminal': 6,

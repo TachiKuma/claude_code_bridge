@@ -305,18 +305,19 @@ def _validate_project_local_ask_context(context, command, *, configured_agents: 
     cwd = _resolve_path(Path(context.cwd))
     local_anchor = _resolve_optional(find_nearest_project_anchor(cwd))
     source = str(getattr(context.project, 'source', '') or '')
+    source_test_explicit = _is_source_test_explicit_project_ask(
+        context,
+        command,
+        project_root=project_root,
+        cwd=cwd,
+    )
 
     if str(getattr(command, 'project', '') or '').strip():
-        if local_anchor is None:
+        if local_anchor is None and not source_test_explicit:
             raise ValueError(
                 'ask is project-local; --project cannot select a CCB project from outside that project'
             )
-        if local_anchor != project_root and not _is_source_test_explicit_project_ask(
-            context,
-            command,
-            project_root=project_root,
-            cwd=cwd,
-        ):
+        if local_anchor is not None and local_anchor != project_root and not source_test_explicit:
             raise ValueError(
                 'ask is project-local; --project cannot target another .ccb project'
             )
@@ -326,7 +327,7 @@ def _validate_project_local_ask_context(context, command, *, configured_agents: 
         and local_anchor != project_root
         and source != 'caller-runtime'
         and not _is_internal_explicit_project_ask(context, command)
-        and not _is_source_test_explicit_project_ask(context, command, project_root=project_root, cwd=cwd)
+        and not source_test_explicit
     ):
         raise ValueError(
             'ask is project-local; workspace or cwd resolved to another .ccb project'

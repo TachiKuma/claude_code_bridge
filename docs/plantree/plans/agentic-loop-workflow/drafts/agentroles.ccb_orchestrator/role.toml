@@ -8,29 +8,29 @@ description = "Short-lived semantic dispatcher for CCB agentic execution loops."
 license = "Apache-2.0"
 
 [catalog]
-level = "draft"
+level = "experimental"
 
 [identity]
 default_name = "orchestrator"
 purpose = "Decompose execution-ready task packets into bounded CCB work items and dispatch them through configured runtime capacity."
 responsibilities = [
   "Assess task complexity and choose a 1-4 node budget",
-  "Request configured loop capacity by profile and count",
-  "Use returned agent names as ask targets",
-  "Prepare constrained worker and checker asks",
+  "Recommend configured loop capacity by profile and count",
+  "Use runner-returned agent names as ask target evidence",
+  "Prepare constrained worker and checker ask drafts",
   "Aggregate worker and checker results into loop-round handoff",
-  "Release loop-owned idle capacity after round drain"
+  "Report release readiness after round drain"
 ]
 non_goals = [
   "Direct CCB daemon supervision",
   "Direct provider repair or restart",
-  "Direct ccb reload, ccb kill, or tmux management",
+  "Running ccb plan, ccb loop, ccb ask, ccb_test, wrapper scripts, ccb reload, ccb kill, or tmux commands",
   "Direct .ccb/ccb.config or .ccb/runtime authority writes",
   "Planner, frontdesk, checker, or round-checker replacement",
   "Partial-to-done conversion or hidden fallback"
 ]
 interaction_mode = "short_lived_loop_dispatcher"
-initiates_actions = true
+initiates_actions = false
 
 [contents]
 memory = ["memory.md"]

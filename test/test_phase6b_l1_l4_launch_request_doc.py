@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -164,6 +165,29 @@ def _sequence12_run_required_function() -> str:
     start = driver.index('run_required() {')
     end = driver.index('\n}\n\nrequire_initialized()', start) + len('\n}')
     return driver[start:end]
+
+
+def _run_sequence12_driver_fragment(tmp_path: Path, command: str) -> subprocess.CompletedProcess[str]:
+    root = tmp_path / 'phase6-real-lab-l1-l4-sequence12-20260705'
+    project = root / 'l1-l4-real-provider-lab'
+    env = {
+        **os.environ,
+        'PHASE6B_L1L4_ROOT': str(root),
+        'PHASE6B_L1L4_PROJECT': str(project),
+        'PHASE6B_L1L4_COMMAND_LOG': str(root / 'phase6b_l1_l4_sequence12_command_log.jsonl'),
+        'PHASE6B_L1L4_ROWS': str(root / 'rows' / 'phase6b_l1_l4_sequence12_evidence_rows.jsonl'),
+        'PHASE6B_L1L4_B7': str(root / 'phase6b-real-provider-l1-l4-repeat12-b7-20260705.md'),
+        'AGENT_ROLES_STORE': str(root / 'roles'),
+    }
+    script = _sequence12_driver().replace('main "$@"', command)
+    return subprocess.run(
+        ['bash'],
+        input=script,
+        text=True,
+        capture_output=True,
+        check=False,
+        env=env,
+    )
 
 
 def _write_json(path: Path, payload: object) -> None:
@@ -575,6 +599,11 @@ def test_sequence12_command_shape_preserves_real_provider_constraints_and_repair
     assert 'source_home' not in text
     assert 'export AGENT_ROLES_STORE="$PHASE6B_L1L4_ROOT/roles"' in text
     assert ': "${AGENT_ROLES_STORE:?}"' in driver
+    assert '/home/bfly/yunwei/ccb_source/ccb_test roles install "$role_id" --skip-tools' in driver
+    assert '--project "$PHASE6B_L1L4_PROJECT" \\\n      roles install' not in driver
+    assert 'validate_seeded_rolepacks' in driver
+    assert '$AGENT_ROLES_STORE/installed/${role_id}/current/role.toml' in driver
+    assert '$AGENT_ROLES_STORE/installed/${role_id}/install.json' in driver
     assert 'frontdesk:codex; planner:codex; task_detailer:codex; orchestrator:codex; ccb_round_reviewer:claude' in driver
     assert '[loop.role_profiles.ccb_round_reviewer]' in driver
     assert 'provider = "claude"' in driver
@@ -596,7 +625,32 @@ def test_sequence12_command_shape_preserves_real_provider_constraints_and_repair
     ) in driver
     assert '--next-owner orchestrator --activation-reason phase6b_l1_l4_sequence12_detail_ready' not in driver
     assert 'timeout --preserve-status' in run_required
+    assert 'CCB_PHASE6B_RUN_WITHOUT_TIMEOUT' in run_required
+    assert 'run_unbounded_required "${task_id}__activate_orchestrator"' in driver
+    assert 'run_unbounded_required "${task_id}__run_direct_execution_round"' in driver
+    assert 'run_unbounded_required "${task_id}__activate_detailer"' in driver
+    assert 'loop runner --once --timeout "$PHASE6B_L1L4_TIMEOUT_SECONDS"' not in driver
     assert 'command_status' in run_required
+    assert 'ensure_task_record "$task_id"' in driver
+    assert 'task_record_exists()' in driver
+    assert 'plan task-show --task "$task_id" --json >/dev/null 2>/dev/null' in driver
+    assert '__task_observe_existing' in driver
+    assert 'frontdesk_l1_l4_entry_request.md' in driver
+    assert 'run_l1_l4_sequence12.sh frontdesk-entry' in driver
+    assert 'ask frontdesk -- "$(cat "$PHASE6B_L1L4_ROOT/frontdesk_l1_l4_entry_request.md")"' in driver
+    assert 'controller-owned route-mix validation, not as a worker implementation task' in driver
+    assert 'Do not ask a worker to run the retest harness' in driver
+    assert 'validate_sequence_task_set_only' in driver
+    assert 'frontdesk/planner created non-sequence task(s)' in driver
+    assert 'refuse: L1-L4 deployment harness must use one authoritative sequence task set' in driver
+    assert 'assert_no_pending_round_authority "$task_id"' in driver
+    assert 'assert_no_pending_round_authority ""' in driver
+    assert 'ask_job_incomplete' in driver
+    assert 'round authority pending/incomplete' in driver
+    assert 'task_show_source' in driver
+    assert 'task_show_stale' in driver
+    assert 'round_json_path' in driver
+    assert 'unexpected_plan_tasks' in driver
     assert 'topology_dispatch_absent' in driver
     assert 'topology_dispatch.json' in text
     assert 'communication_edges_absent' in driver
@@ -609,6 +663,9 @@ def test_sequence12_command_shape_preserves_real_provider_constraints_and_repair
     assert 'artifacts =' not in driver
     assert 'normalized_summary_key' in driver
     assert 'last_round_result' in driver
+    assert 'round_artifact_path_from' in driver
+    assert 'direct_round_observed' in driver
+    assert 'cleanup_after_b7_unmounted' in driver
     assert 'observed_topology_has_dynamic_residue' in driver
     assert '"# Phase 6B L1-L4 Repeat12 B7\\n\\n"' in driver
 
@@ -626,6 +683,197 @@ def test_sequence12_embedded_driver_and_normalizer_are_static_parseable() -> Non
 
     for embedded_python in re.findall(r"<<'PY'\n(.*?)\nPY", driver, flags=re.S):
         compile(embedded_python, '<phase6b-l1-l4-sequence12-driver-python>', 'exec')
+
+
+def test_sequence12_driver_rejects_meta_task_and_pending_round_before_cleanup(tmp_path: Path) -> None:
+    root = tmp_path / 'phase6-real-lab-l1-l4-sequence12-20260705'
+    project = root / 'l1-l4-real-provider-lab'
+    index_path = (
+        project
+        / 'docs'
+        / 'plantree'
+        / 'plans'
+        / 'phase6b-real-provider-l1-l4'
+        / 'tasks'
+        / 'index.json'
+    )
+    _write_json(
+        index_path,
+        {
+            'tasks': [
+                {'task_id': 'fresh-sequence17-real-provider-deploymen-20260707052218'},
+                {'task_id': 'phase6b-l1-doc-direct-execution'},
+            ],
+        },
+    )
+
+    result = _run_sequence12_driver_fragment(tmp_path, 'validate_sequence_task_set_only')
+
+    assert result.returncode == 75
+    assert 'frontdesk/planner created non-sequence task(s)' in result.stderr
+    assert 'fresh-sequence17-real-provider-deploymen-20260707052218' in result.stderr
+    assert 'one authoritative sequence task set' in result.stderr
+
+    _write_json(
+        project / '.ccb' / 'runtime' / 'loops' / 'lppending' / 'round.pending.json',
+        {
+            'task_id': 'phase6b-l1-doc-direct-execution',
+            'loop_run_status': 'pending',
+            'round_result': 'pending',
+            'round_result_source': 'ask_job_pending',
+            'pending': {
+                'purpose': 'worker',
+                'job_id': 'job_live_worker',
+                'watch_observation': 'timeout',
+            },
+        },
+    )
+    _write_json(
+        project / '.ccb' / 'runtime' / 'loops' / 'lppending' / 'ask_first_stage_state.json',
+        {
+            'task_id': 'phase6b-l1-doc-direct-execution',
+            'loop_id': 'lppending',
+            'status': 'pending',
+            'stage': 'worker_ask',
+            'purpose': 'worker',
+            'job_id': 'job_live_worker',
+        },
+    )
+
+    result = _run_sequence12_driver_fragment(tmp_path, 'assert_no_pending_round_authority ""')
+
+    assert result.returncode == 78
+    assert 'round authority pending/incomplete: ask_job_pending' in result.stderr
+    assert 'round.pending.json' in result.stderr
+    assert 'refuse cleanup/progress' in result.stderr
+
+    (project / '.ccb' / 'runtime' / 'loops' / 'lppending' / 'round.pending.json').unlink()
+    (project / '.ccb' / 'runtime' / 'loops' / 'lppending' / 'ask_first_stage_state.json').unlink()
+
+    _write_json(
+        project / '.ccb' / 'runtime' / 'loops' / 'lppending' / 'round.json',
+        {
+            'task_id': 'phase6b-l1-doc-direct-execution',
+            'round_result': 'blocked',
+            'round_result_source': 'ask_job_incomplete',
+            'worker': {'job_id': 'job_e26da64f009c', 'status': 'incomplete'},
+        },
+    )
+
+    result = _run_sequence12_driver_fragment(tmp_path, 'assert_no_pending_round_authority ""')
+
+    assert result.returncode == 78
+    assert 'round authority pending/incomplete: ask_job_incomplete' in result.stderr
+    assert 'refuse cleanup/progress' in result.stderr
+
+
+def test_sequence12_b7_normalizer_uses_final_index_and_round_json_not_stale_task_show(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / 'phase6-real-lab-l1-l4-sequence12-20260705'
+    project = root / 'l1-l4-real-provider-lab'
+    l1 = 'phase6b-l1-doc-direct-execution'
+    meta_task = 'fresh-sequence17-real-provider-deploymen-20260707052218'
+    round_path = (
+        project
+        / 'docs'
+        / 'plantree'
+        / 'plans'
+        / 'phase6b-real-provider-l1-l4'
+        / 'tasks'
+        / l1
+        / 'round_summary.md'
+    )
+
+    task_dir = _task_dir(project, l1)
+    (task_dir / 'route.txt').write_text('direct_execution\n', encoding='utf-8')
+    (task_dir / 'orchestration_notes.md').write_text('route: direct_execution\n', encoding='utf-8')
+    round_path.parent.mkdir(parents=True)
+    round_path.write_text(
+        'round_result: blocked\nround_result_source: ask_job_incomplete\n',
+        encoding='utf-8',
+    )
+    _write_task_show(
+        root,
+        l1,
+        {
+            'status': 'ready_for_orchestration',
+            'task': {
+                'status': 'ready_for_orchestration',
+                'next_owner': 'orchestrator',
+            },
+        },
+    )
+    _write_json(
+        project / '.ccb' / 'runtime' / 'loops' / 'lp451adf' / 'round.json',
+        {
+            'task_id': l1,
+            'finished_at': '2026-07-07T05:40:00Z',
+            'round_result': 'blocked',
+            'round_result_source': 'ask_job_incomplete',
+            'paths': {'round': str(round_path.relative_to(project))},
+            'worker': {'job_id': 'job_e26da64f009c', 'status': 'incomplete'},
+        },
+    )
+    _write_json(
+        project
+        / 'docs'
+        / 'plantree'
+        / 'plans'
+        / 'phase6b-real-provider-l1-l4'
+        / 'tasks'
+        / 'index.json',
+        {
+            'tasks': [
+                {
+                    'task_id': meta_task,
+                    'status': 'blocked',
+                    'next_owner': 'terminal',
+                },
+                {
+                    'task_id': l1,
+                    'status': 'blocked',
+                    'next_owner': 'terminal',
+                    'artifacts': {
+                        'round_summary': {
+                            'path': str(round_path.relative_to(project)),
+                            'round_result': 'blocked',
+                            'round_result_source': 'ask_job_incomplete',
+                        },
+                    },
+                    'last_round': {
+                        'result': 'blocked',
+                        'artifact_kind': 'round_summary',
+                        'artifact_path': str(round_path.relative_to(project)),
+                    },
+                },
+            ],
+        },
+    )
+
+    _b7_path, rows, report = _run_sequence12_normalizer(tmp_path)
+    row = {str(item['task_id']): item for item in rows}[l1]
+
+    assert 'Status: not_claimable' in report
+    assert row['task_show_observed'] is True
+    assert row['task_show_source'] == 'task_index'
+    assert row['task_show_path'].endswith('tasks/index.json')
+    assert row['task_show_stale'] is False
+    assert row['final_status'] == 'blocked'
+    assert row['next_owner'] == 'terminal'
+    assert row['round_summary_observed'] is True
+    assert row['round_summary_path'] == str(round_path)
+    assert row['round_json_path'] == str(project / '.ccb' / 'runtime' / 'loops' / 'lp451adf' / 'round.json')
+    assert row['round_result'] == 'blocked'
+    assert row['round_result_source'] == 'ask_job_incomplete'
+    assert row['classification'] == 'test_design_failure'
+    assert row['claimable_row'] is False
+    assert row['unexpected_plan_tasks'] == [meta_task]
+    assert 'unexpected non-sequence task(s): ' + meta_task in row['evidence_errors']
+    assert 'status mismatch: blocked' in row['evidence_errors']
+    assert 'round/result mismatch: blocked' in row['evidence_errors']
+    assert 'task-show missing status' not in row['evidence_errors']
+    assert 'missing round/result evidence' not in row['evidence_errors']
 
 
 def test_sequence12_b7_normalizer_preserves_sequence11_repairs(tmp_path: Path) -> None:
@@ -722,6 +970,144 @@ def test_sequence12_b7_normalizer_preserves_sequence11_repairs(tmp_path: Path) -
         assert by_task[task_id]['classification'] == 'test_design_failure'
         assert by_task[task_id]['claimable_row'] is False
         assert 'missing task-show evidence' in by_task[task_id]['evidence_errors']
+
+
+def test_sequence12_b7_normalizer_reads_round_summary_from_task_show_artifact_path(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / 'phase6-real-lab-l1-l4-sequence12-20260705'
+    project = root / 'l1-l4-real-provider-lab'
+    l1 = 'phase6b-l1-doc-direct-execution'
+    round_path = (
+        project
+        / 'docs'
+        / 'plantree'
+        / 'plans'
+        / 'phase6b-real-provider-l1-l4'
+        / 'tasks'
+        / l1
+        / 'round_summary.md'
+    )
+
+    (project / 'lab_docs').mkdir(parents=True)
+    (project / 'lab_docs' / 'l1_release_note.md').write_text('status: reviewed\n', encoding='utf-8')
+    task_dir = _task_dir(project, l1)
+    (task_dir / 'route.txt').write_text('direct_execution\n', encoding='utf-8')
+    (task_dir / 'orchestration_notes.md').write_text('route: direct_execution\n', encoding='utf-8')
+    (task_dir / 'worker_reply.md').write_text('used task_packet and execution_contract\n', encoding='utf-8')
+    (task_dir / 'reviewer_verdict.md').write_text(
+        'reviewed task_packet and execution_contract\n',
+        encoding='utf-8',
+    )
+    round_path.parent.mkdir(parents=True)
+    round_path.write_text(
+        'round_result: pass\nround_result_source: runtime_round_summary\n',
+        encoding='utf-8',
+    )
+    _write_task_show(
+        root,
+        l1,
+        {
+            'status': 'done',
+            'task': {
+                'status': 'done',
+                'next_owner': 'terminal',
+                'artifacts': {
+                    'round_summary': {
+                        'path': str(round_path.relative_to(project)),
+                        'round_result': 'pass',
+                    },
+                },
+                'last_round': {
+                    'result': 'pass',
+                    'artifact_kind': 'round_summary',
+                    'artifact_path': str(round_path.relative_to(project)),
+                },
+            },
+        },
+    )
+    _write_released_observed_topology(project, 'lpseq12artifact')
+
+    _b7_path, rows, _report = _run_sequence12_normalizer(tmp_path)
+    row = {str(item['task_id']): item for item in rows}[l1]
+
+    assert row['classification'] == 'pass'
+    assert row['round_summary_observed'] is True
+    assert row['round_summary_path'] == str(round_path)
+    assert row['round_result'] == 'pass'
+    assert row['round_result_source'] == 'runtime_round_summary'
+    assert row['authority_checks']['script_owned_round_imports'] is True
+    assert 'missing round/result evidence' not in row['evidence_errors']
+
+
+def test_sequence12_b7_normalizer_treats_stale_topology_as_released_after_cleanup_unmounted(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / 'phase6-real-lab-l1-l4-sequence12-20260705'
+    project = root / 'l1-l4-real-provider-lab'
+    l1 = 'phase6b-l1-doc-direct-execution'
+    loop_id = 'lpstale'
+
+    (project / 'lab_docs').mkdir(parents=True)
+    (project / 'lab_docs' / 'l1_release_note.md').write_text('status: reviewed\n', encoding='utf-8')
+    task_dir = _task_dir(project, l1)
+    (task_dir / 'route.txt').write_text('direct_execution\n', encoding='utf-8')
+    (task_dir / 'orchestration_notes.md').write_text('route: direct_execution\n', encoding='utf-8')
+    (task_dir / 'round_summary.md').write_text(
+        'round_result: pass\nround_result_source: round_reviewer_reply\n',
+        encoding='utf-8',
+    )
+    (task_dir / 'worker_reply.md').write_text('used task_packet and execution_contract\n', encoding='utf-8')
+    (task_dir / 'reviewer_verdict.md').write_text(
+        'reviewed task_packet and execution_contract\n',
+        encoding='utf-8',
+    )
+    _write_task_show(
+        root,
+        l1,
+        {
+            'status': 'done',
+            'task': {
+                'status': 'done',
+                'next_owner': 'terminal',
+                'last_round': {'result': 'pass', 'artifact_kind': 'round_summary'},
+            },
+        },
+    )
+    _write_json(
+        project / '.ccb' / 'runtime' / 'loops' / loop_id / 'agent_mount_topology.observed.json',
+        {
+            'schema': 'ccb.loop.agent_mount_topology.observed.v1',
+            'record_type': 'ccb_loop_agent_mount_topology_observed',
+            'loop_id': loop_id,
+            'agents': [{'id': f'loop-{loop_id}-coder-1'}],
+            'retained_agents': [f'loop-{loop_id}-coder-1'],
+            'retained_count': 1,
+        },
+    )
+    _write_jsonl(
+        root / 'phase6b_l1_l4_sequence12_command_log.jsonl',
+        [{'label': f'{l1}__run_direct_execution_round', 'returncode': 0}],
+    )
+
+    _b7_path, rows, _report = _run_sequence12_normalizer(tmp_path)
+    row = {str(item['task_id']): item for item in rows}[l1]
+
+    assert row['authority_checks']['observed_topology_residue_absent'] is False
+    assert 'authority check failed: observed_topology_residue_absent' in row['evidence_errors']
+
+    (root / 'logs').mkdir(parents=True, exist_ok=True)
+    (root / 'logs' / 'cleanup_after_b7.stdout').write_text(
+        'kill_status: ok\nstate: unmounted\n',
+        encoding='utf-8',
+    )
+
+    _b7_path, rows, _report = _run_sequence12_normalizer(tmp_path)
+    row = {str(item['task_id']): item for item in rows}[l1]
+
+    assert row['round_result'] == 'pass'
+    assert row['authority_checks']['observed_topology_residue_absent'] is True
+    assert 'authority check failed: observed_topology_residue_absent' not in row['evidence_errors']
 
 
 def test_sequence10_embedded_driver_and_normalizer_are_static_parseable() -> None:
@@ -1104,6 +1490,10 @@ def test_status_docs_record_final_bounded_phase6b_claim() -> None:
         assert 'production/default enablement' in text
     for text in (status_text, coverage_text, board_text, evidence_index_text):
         assert 'phase1-6-acceptance-report-20260705.md' in text
+    assert 'phase1-6-acceptance-report-20260704.md)\n   as the current Phase 1-6 reporting surface' not in status_text
+    assert 'Phase 6B remains unclaimed' not in coverage_text
+    assert 'Phase 6B remains unclaimed' not in board_text
+    assert 'Phase 6B still needs fresh approval-to-run plus real-provider' not in board_text
     assert final_report_text.startswith('# Phase 1-6 Acceptance Report')
 
     assert 'Sequence9 is consumed/non-reusable' in _flat(status_text)

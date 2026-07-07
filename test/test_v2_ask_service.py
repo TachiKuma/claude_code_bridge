@@ -53,6 +53,19 @@ def _write_config(project_root: Path, text: str = 'cmd; agent1:codex, agent2:cla
     (project_root / '.ccb' / 'ccb.config').write_text(text, encoding='utf-8')
 
 
+def _write_frontdesk_config(project_root: Path) -> None:
+    _write_config(
+        project_root,
+        (
+            'frontdesk:codex; planner:codex\n\n'
+            '[agents.frontdesk]\n'
+            'role = "agentroles.ccb_frontdesk"\n\n'
+            '[agents.planner]\n'
+            'role = "agentroles.ccb_planner"\n'
+        ),
+    )
+
+
 def test_submit_ask_rejects_unknown_target(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-ask-unknown-target'
     project_root.mkdir()
@@ -83,6 +96,25 @@ def test_submit_ask_rejects_explicit_cross_project_target(
     context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
 
     with pytest.raises(ValueError, match='ask is project-local'):
+        ask_service.submit_ask(context, command)
+
+
+def test_submit_ask_rejects_unanchored_explicit_project_without_source_test_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    caller_root = tmp_path / 'outer'
+    project_root = tmp_path / 'target'
+    caller_root.mkdir()
+    project_root.mkdir()
+    _write_config(project_root)
+    monkeypatch.delenv('CCB_TEST_ENTRYPOINT', raising=False)
+    monkeypatch.delenv('CCB_SOURCE_ALLOWED_ROOTS', raising=False)
+    monkeypatch.delenv('CCB_TEST_ROOTS', raising=False)
+    command = ParsedAskCommand(project=str(project_root), target='agent1', sender=None, message='hello')
+    context = CliContextBuilder().build(command, cwd=caller_root, bootstrap_if_missing=False)
+
+    with pytest.raises(ValueError, match='--project cannot select a CCB project from outside that project'):
         ask_service.submit_ask(context, command)
 
 
@@ -176,6 +208,61 @@ def test_submit_ask_allows_source_test_explicit_project_from_allowed_test_root(
     assert context.cwd == outer_project
     assert captured == {'project_id': context.project.project_id, 'to_agent': 'agent1'}
     assert summary.jobs[0]['job_id'] == 'job_1'
+
+
+@pytest.mark.parametrize(
+    ('target', 'expected_agent'),
+    (
+        ('frontdesk', 'frontdesk'),
+        ('agentroles.ccb_frontdesk', 'frontdesk'),
+    ),
+)
+@pytest.mark.parametrize('caller_has_anchor', (False, True))
+def test_submit_ask_allows_source_test_explicit_project_from_allowed_root(
+    target: str,
+    expected_agent: str,
+    caller_has_anchor: bool,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    test_root = tmp_path / 'test-root'
+    caller_root = test_root / 'outer'
+    project_root = test_root / 'target'
+    caller_root.mkdir(parents=True)
+    project_root.mkdir(parents=True)
+    if caller_has_anchor:
+        _write_config(caller_root, 'cmd; agent1:codex\n')
+    _write_frontdesk_config(project_root)
+    monkeypatch.setenv('CCB_TEST_ENTRYPOINT', '1')
+    monkeypatch.setenv('CCB_SOURCE_ALLOWED_ROOTS', str(test_root))
+    command = ParsedAskCommand(project=str(project_root), target=target, sender=None, message='hello')
+    context = CliContextBuilder().build(command, cwd=caller_root, bootstrap_if_missing=False)
+    captured: dict[str, object] = {}
+
+    class _FakeClient:
+        def submit(self, envelope) -> dict:
+            captured['project_id'] = envelope.project_id
+            captured['to_agent'] = envelope.to_agent
+            return {
+                'job_id': 'job_1',
+                'agent_name': envelope.to_agent,
+                'target_name': envelope.to_agent,
+                'status': 'accepted',
+            }
+
+    monkeypatch.setattr(
+        ask_service,
+        'invoke_mounted_daemon',
+        lambda context, allow_restart_stale, request_fn: request_fn(_FakeClient()),
+    )
+
+    summary = ask_service.submit_ask(context, command)
+
+    assert (caller_root / '.ccb').exists() is caller_has_anchor
+    assert context.project.source == 'explicit'
+    assert context.cwd == caller_root
+    assert captured == {'project_id': context.project.project_id, 'to_agent': expected_agent}
+    assert summary.jobs[0]['target_name'] == expected_agent
 
 
 def test_submit_ask_rejects_workspace_binding_that_escapes_current_project(

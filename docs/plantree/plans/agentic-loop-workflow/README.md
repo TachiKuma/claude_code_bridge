@@ -45,6 +45,10 @@ recoverable workflow loops.
 - [topics/phase1-6-active-supervision-board-20260704.md](topics/phase1-6-active-supervision-board-20260704.md):
   active `talk2` supervision lanes, current Phase 6B gates, and callback
   handling rules for the Phase 1-6 acceptance goal.
+- [topics/phase1-6-deployment-readiness-supervision-20260707.md](topics/phase1-6-deployment-readiness-supervision-20260707.md):
+  active post-acceptance deployment-readiness lane covering real-provider
+  frontdesk entry, L1-L4 regression, dynamic lifecycle cleanup, UI/sidebar
+  visibility, and observer behavior beyond the bounded Phase 6B claim.
 - [topics/phase6b-real-provider-claim-coverage-matrix.md](topics/phase6b-real-provider-claim-coverage-matrix.md):
   Phase 6B real-provider claim requirements mapped to current evidence,
   final aggregation state, and remaining non-production boundaries.

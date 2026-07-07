@@ -17,6 +17,11 @@ from provider_core.projected_assets import route_projected_tree
 from provider_core.source_home import current_provider_source_home
 from provider_profiles import provider_api_env_keys
 from rolepacks.projection import project_role_skills_to_home
+from cli.services.role_command_policy import (
+    claude_permission_allowlist,
+    role_command_policy_disables_inherited_assets,
+    role_command_policy_requires_enforcement,
+)
 from project_memory import (
     ensure_project_memory,
     load_memory_sources,
@@ -80,6 +85,7 @@ def prepare_claude_home_overrides(
     workspace_path: Path | None = None,
     memory_projection_event_path: Path | None = None,
     memory_projection_marker_path: Path | None = None,
+    command_policy=None,
 ) -> dict[str, str]:
     layout = resolve_claude_home_layout(runtime_dir, profile)
     if refresh_home:
@@ -90,6 +96,7 @@ def prepare_claude_home_overrides(
             agent_name=agent_name,
             workspace_path=workspace_path,
             auto_permission=auto_permission,
+            command_policy=command_policy,
             memory_projection_event_path=memory_projection_event_path,
             memory_projection_marker_path=memory_projection_marker_path,
         )
@@ -127,6 +134,7 @@ def materialize_claude_home_config(
     agent_name: str | None = None,
     workspace_path: Path | None = None,
     auto_permission: bool = False,
+    command_policy=None,
     memory_projection_event_path: Path | None = None,
     memory_projection_marker_path: Path | None = None,
 ) -> ClaudeHomeLayout:
@@ -140,6 +148,7 @@ def materialize_claude_home_config(
         agent_name=agent_name,
         workspace_path=workspace_path,
         auto_permission=auto_permission,
+        command_policy=command_policy,
     )
     record_memory_projection_event(
         memory_result,
@@ -207,6 +216,7 @@ def _prepare_managed_home(
     agent_name: str | None,
     workspace_path: Path | None,
     auto_permission: bool,
+    command_policy,
 ) -> dict[str, object]:
     target_layout.home_root.mkdir(parents=True, exist_ok=True)
     target_layout.claude_dir.mkdir(parents=True, exist_ok=True)
@@ -221,7 +231,13 @@ def _prepare_managed_home(
             path=target_layout.claude_dir / 'CLAUDE.md',
         )
 
-    _materialize_settings(source_home, target_layout, profile=profile, auto_permission=auto_permission)
+    _materialize_settings(
+        source_home,
+        target_layout,
+        profile=profile,
+        auto_permission=auto_permission,
+        command_policy=command_policy,
+    )
     _materialize_macos_keychain_preferences(source_home, target_layout, profile=profile)
     _materialize_auth(source_home, target_layout, profile=profile)
     _materialize_trust(
@@ -238,6 +254,7 @@ def _prepare_managed_home(
         project_root=project_root,
         agent_name=agent_name,
         workspace_path=workspace_path,
+        command_policy=command_policy,
     )
 
 
@@ -249,17 +266,19 @@ def _materialize_inherited_assets(
     project_root: Path | None,
     agent_name: str | None,
     workspace_path: Path | None,
+    command_policy,
 ) -> dict[str, object]:
+    inherited_assets_enabled = not role_command_policy_disables_inherited_assets(command_policy)
     _route_inherited_tree(
         source_home / '.claude' / 'commands',
         target_layout.claude_dir / 'commands',
-        enabled=_inherits_commands(profile),
+        enabled=inherited_assets_enabled and _inherits_commands(profile),
         label=_CLAUDE_COMMANDS_PROJECTION_LABEL,
     )
     _route_inherited_tree(
         source_home / '.claude' / 'skills',
         target_layout.claude_dir / 'skills',
-        enabled=_inherits_skills(profile),
+        enabled=inherited_assets_enabled and _inherits_skills(profile),
         label=_CLAUDE_SKILLS_PROJECTION_LABEL,
     )
     project_role_skills_to_home(
@@ -380,10 +399,17 @@ def _materialize_settings(
     *,
     profile,
     auto_permission: bool = False,
+    command_policy=None,
 ) -> None:
     payload = _projected_settings_payload(source_home / '.claude' / 'settings.json', profile=profile)
     existing = _read_json_object(target_layout.settings_path)
-    merged = _merge_settings_payload(payload, existing=existing, profile=profile, auto_permission=auto_permission)
+    merged = _merge_settings_payload(
+        payload,
+        existing=existing,
+        profile=profile,
+        auto_permission=auto_permission,
+        command_policy=command_policy,
+    )
     if merged is None:
         return
     target_layout.settings_path.parent.mkdir(parents=True, exist_ok=True)
@@ -801,6 +827,7 @@ def _merge_settings_payload(
     existing: dict[str, object],
     profile=None,
     auto_permission: bool = False,
+    command_policy=None,
 ) -> dict[str, object] | None:
     existing_payload = dict(existing or {})
     projected_payload = dict(projected or {})
@@ -827,6 +854,10 @@ def _merge_settings_payload(
             if key == 'permissions' and auto_permission and _is_ccb_only_permission_payload(value):
                 continue
             merged[key] = value
+
+    if role_command_policy_requires_enforcement(command_policy):
+        allowlist = list(claude_permission_allowlist(command_policy))
+        merged['permissions'] = {'allow': allowlist, 'deny': []}
 
     if merged:
         return merged

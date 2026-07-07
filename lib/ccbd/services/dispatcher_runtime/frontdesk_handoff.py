@@ -1,0 +1,302 @@
+from __future__ import annotations
+
+import base64
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+from typing import Any
+
+from ccbd.api_models import JobRecord, JobStatus
+from completion.models import CompletionDecision
+from storage.atomic import atomic_write_json, atomic_write_text
+
+from .records import append_event
+
+_PLAN_SLUG_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
+
+
+def maybe_start_frontdesk_handoff(dispatcher, terminal: JobRecord, decision: CompletionDecision) -> dict[str, object] | None:
+    if terminal.agent_name != 'frontdesk':
+        return None
+    if terminal.status is not JobStatus.COMPLETED or not decision.terminal:
+        return None
+    if str(getattr(terminal.request, 'message_type', '') or '') != 'ask':
+        return None
+    reply = decision.reply or ''
+    missing = _frontdesk_intake_missing_fields(reply)
+    if missing:
+        return None
+
+    marker_path = _marker_path(dispatcher, terminal.job_id)
+    if marker_path.exists():
+        return _load_marker(marker_path)
+
+    plan = _resolve_handoff_plan(dispatcher)
+    if plan['status'] != 'ok':
+        payload = {
+            'schema_version': 1,
+            'record_type': 'ccb_frontdesk_auto_handoff',
+            'status': 'blocked',
+            'job_id': terminal.job_id,
+            'agent_name': terminal.agent_name,
+            'project_root': str(dispatcher._layout.project_root),
+            'reason': 'frontdesk_auto_handoff_requires_plan_slug',
+            'plan_resolution': plan['reason'],
+            'existing_plan_slugs': plan['existing_plan_slugs'],
+            'hint': 'create exactly one docs/plantree/plans/<slug> plan or submit through a plan-aware intake surface',
+            'recorded_at': dispatcher._clock(),
+        }
+        if not _claim_marker(marker_path, payload):
+            return _load_marker(marker_path)
+        append_event(
+            dispatcher,
+            terminal,
+            'frontdesk_auto_handoff_blocked',
+            {
+                'reason': payload['reason'],
+                'plan_resolution': plan['reason'],
+                'existing_plan_slugs': plan['existing_plan_slugs'],
+                'marker_path': str(marker_path),
+            },
+            timestamp=str(payload['recorded_at']),
+        )
+        return payload
+
+    plan_slug = str(plan['plan_slug'])
+    command = _handoff_command(dispatcher, reply, plan_slug=plan_slug)
+    log_dir = marker_path.parent / 'logs'
+    log_dir.mkdir(parents=True, exist_ok=True)
+    stdout_path = log_dir / f'{terminal.job_id}.stdout.log'
+    stderr_path = log_dir / f'{terminal.job_id}.stderr.log'
+    starter = {
+        'schema_version': 1,
+        'record_type': 'ccb_frontdesk_auto_handoff',
+        'status': 'starting',
+        'job_id': terminal.job_id,
+        'agent_name': terminal.agent_name,
+        'project_root': str(dispatcher._layout.project_root),
+        'plan_slug': plan_slug,
+        'command': command,
+        'stdout_path': str(stdout_path),
+        'stderr_path': str(stderr_path),
+    }
+    if not _claim_marker(marker_path, starter):
+        return _load_marker(marker_path)
+
+    try:
+        env = dict(os.environ)
+        env['PYTHONUNBUFFERED'] = '1'
+        with open(stdout_path, 'ab') as stdout, open(stderr_path, 'ab') as stderr:
+            process = subprocess.Popen(
+                command,
+                cwd=str(dispatcher._layout.project_root),
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=stdout,
+                stderr=stderr,
+                start_new_session=True,
+            )
+    except Exception as exc:
+        payload = {
+            **starter,
+            'status': 'failed',
+            'reason': 'frontdesk_auto_handoff_spawn_failed',
+            'error': str(exc),
+            'recorded_at': dispatcher._clock(),
+        }
+        atomic_write_json(marker_path, payload)
+        append_event(
+            dispatcher,
+            terminal,
+            'frontdesk_auto_handoff_failed',
+            {
+                'reason': payload['reason'],
+                'marker_path': str(marker_path),
+                'error': str(exc),
+            },
+            timestamp=str(payload['recorded_at']),
+        )
+        return payload
+
+    payload = {
+        **starter,
+        'status': 'started',
+        'pid': process.pid,
+        'recorded_at': dispatcher._clock(),
+    }
+    atomic_write_json(marker_path, payload)
+    append_event(
+        dispatcher,
+        terminal,
+        'frontdesk_auto_handoff_started',
+        {
+            'marker_path': str(marker_path),
+            'pid': process.pid,
+            'stdout_path': str(stdout_path),
+            'stderr_path': str(stderr_path),
+        },
+        timestamp=str(payload['recorded_at']),
+    )
+    return payload
+
+
+def _handoff_command(dispatcher, reply: str, *, plan_slug: str) -> list[str]:
+    source_root = Path(__file__).resolve().parents[4]
+    encoded = base64.b64encode(reply.encode('utf-8')).decode('ascii')
+    return [
+        sys.executable,
+        str(source_root / 'ccb.py'),
+        '--project',
+        str(dispatcher._layout.project_root),
+        'frontdesk',
+        'forward-planner',
+        '--intake-base64',
+        encoded,
+        '--plan',
+        plan_slug,
+        '--json',
+    ]
+
+
+def _resolve_handoff_plan(dispatcher) -> dict[str, object]:
+    plans_dir = Path(dispatcher._layout.project_root) / 'docs' / 'plantree' / 'plans'
+    slugs = []
+    if plans_dir.is_dir():
+        slugs = sorted(
+            path.name
+            for path in plans_dir.iterdir()
+            if path.is_dir() and _PLAN_SLUG_RE.match(path.name)
+        )
+    if len(slugs) == 1:
+        return {
+            'status': 'ok',
+            'plan_slug': slugs[0],
+            'reason': 'single_plan_root',
+            'existing_plan_slugs': slugs,
+        }
+    if not slugs:
+        slug = _default_plan_slug()
+        _bootstrap_plan_root(Path(dispatcher._layout.project_root), slug)
+        return {
+            'status': 'ok',
+            'plan_slug': slug,
+            'reason': 'script_bootstrap_default_plan',
+            'existing_plan_slugs': [],
+            'created_plan_root': str(plans_dir / slug),
+        }
+    return {
+        'status': 'blocked',
+        'plan_slug': None,
+        'reason': 'multiple_plan_roots',
+        'existing_plan_slugs': slugs,
+    }
+
+
+def _default_plan_slug() -> str:
+    for env_name in ('CCB_ACTIVE_PLAN', 'CCB_PLAN_SLUG', 'CCB_REAL_PLAN'):
+        value = str(os.environ.get(env_name) or '').strip()
+        if value and _PLAN_SLUG_RE.match(value):
+            return value
+    return 'frontdesk-intake'
+
+
+def _bootstrap_plan_root(project_root: Path, plan_slug: str) -> None:
+    plan_root = project_root / 'docs' / 'plantree' / 'plans' / plan_slug
+    plan_root.mkdir(parents=True, exist_ok=True)
+    readme = plan_root / 'README.md'
+    brief = plan_root / 'brief.md'
+    if not readme.exists():
+        atomic_write_text(readme, f'# {plan_slug}\n\nScript-owned plan root created by frontdesk auto handoff.\n')
+    if not brief.exists():
+        atomic_write_text(brief, f'# {plan_slug} Brief\n\nCreated for frontdesk-to-planner intake handoff.\n')
+
+
+def _marker_path(dispatcher, job_id: str) -> Path:
+    path = Path(dispatcher._layout.project_root) / '.ccb' / 'runtime' / 'frontdesk-handoff' / f'{job_id}.json'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _claim_marker(path: Path, payload: dict[str, object]) -> bool:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with path.open('x', encoding='utf-8') as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+            handle.write('\n')
+        return True
+    except FileExistsError:
+        return False
+
+
+def _load_marker(path: Path) -> dict[str, object] | None:
+    try:
+        payload: Any = json.loads(path.read_text(encoding='utf-8'))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _has_heading(text: str, heading: str) -> bool:
+    escaped = re.escape(heading)
+    return bool(re.search(rf'(?mi)^\s*(?:#+\s*)?(?:\*\*)?\s*{escaped}\s*(?:\*\*)?\s*$', text))
+
+
+def _has_label(text: str, label: str) -> bool:
+    escaped = re.escape(label)
+    return bool(re.search(rf'(?mi)^\s*(?:[-*]\s*)?(?:\*\*)?\s*{escaped}\s*(?:\*\*)?\s*:', text))
+
+
+def _has_structured_blocked_evidence(reply: str) -> bool:
+    return (
+        _has_heading(reply, 'Blocked Evidence')
+        and _has_label(reply, 'Requested validation')
+        and _has_label(reply, 'Blocker')
+        and _has_label(reply, 'Routing recommendation')
+        and (
+            _has_label(reply, 'Prohibited actions')
+            or _has_label(reply, 'Constraints')
+            or _has_label(reply, 'Required behavior')
+        )
+    )
+
+
+def _frontdesk_intake_missing_fields(reply: str) -> list[str]:
+    has_blocked_evidence = _has_structured_blocked_evidence(reply)
+    has_request_detail = any(
+        (
+            _has_heading(reply, 'Macro Task Request'),
+            _has_heading(reply, 'User Request'),
+            _has_heading(reply, 'User Intent'),
+            _has_label(reply, 'Requested validation'),
+            _has_label(reply, 'Macro request'),
+            _has_label(reply, 'User request'),
+            _has_label(reply, 'User intent'),
+        )
+    )
+    has_legacy_contract = _has_heading(reply, 'Execution Contract') or _has_heading(reply, 'Acceptance Criteria')
+    has_intake_contract = _has_label(reply, 'Required behavior') and (
+        _has_label(reply, 'Scope') or _has_label(reply, 'Constraints')
+    )
+    has_request_anchor = any(
+        (
+            _has_heading(reply, 'Macro Task Request'),
+            _has_heading(reply, 'User Request'),
+            _has_heading(reply, 'Intake Evidence'),
+            has_blocked_evidence,
+            has_request_detail and (has_legacy_contract or has_intake_contract),
+        )
+    )
+    missing = []
+    if not has_request_anchor:
+        missing.append('Macro Task Request, User Request, or Intake Evidence')
+    if not has_request_detail:
+        missing.append('Macro request or User request detail')
+    if not has_legacy_contract and not has_intake_contract and not has_blocked_evidence:
+        missing.append('Execution Contract, Acceptance Criteria, or Required behavior with Scope/Constraints')
+    return missing
+
+
+__all__ = ['maybe_start_frontdesk_handoff']

@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 import hashlib
 from pathlib import Path
+import shutil
 from types import SimpleNamespace
+
+import pytest
 
 try:  # pragma: no cover - version shim
     import tomllib
@@ -12,15 +15,35 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
 
 from agents.models import AgentSpec, PermissionMode, ProviderProfileSpec, QueuePolicy, RestoreMode, RuntimeMode, WorkspaceMode
 from cli.services.provider_hooks import prepare_provider_workspace
+from provider_core.caller_env import caller_context_env
 import provider_core.source_home as source_home_module
 from provider_hooks.settings import build_hook_command, install_workspace_activity_hooks, install_workspace_completion_hooks
 from storage.paths import PathLayout
 
 
-def _spec(name: str, provider: str = "claude", *, provider_profile: ProviderProfileSpec | None = None) -> AgentSpec:
+REPO_ROOT = Path(__file__).resolve().parents[1]
+FRONTDESK_ROLE_ROOT = (
+    REPO_ROOT
+    / 'docs'
+    / 'plantree'
+    / 'plans'
+    / 'agentic-loop-workflow'
+    / 'drafts'
+    / 'agentroles.ccb_frontdesk'
+)
+
+
+def _spec(
+    name: str,
+    provider: str = "claude",
+    *,
+    role: str | None = None,
+    provider_profile: ProviderProfileSpec | None = None,
+) -> AgentSpec:
     return AgentSpec(
         name=name,
         provider=provider,
+        role=role,
         target='.',
         workspace_mode=WorkspaceMode.GIT_WORKTREE,
         workspace_root=None,
@@ -36,6 +59,14 @@ def _write_project_memory(project_root: Path, text: str) -> None:
     path = project_root / '.ccb' / 'ccb_memory.md'
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding='utf-8')
+
+
+def _install_frontdesk_role(tmp_path: Path, monkeypatch) -> None:
+    role_store = tmp_path / '.roles'
+    monkeypatch.setenv('AGENT_ROLES_STORE', str(role_store))
+    installed = role_store / 'installed' / 'agentroles.ccb_frontdesk' / 'current'
+    installed.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(FRONTDESK_ROLE_ROOT, installed)
 
 
 def test_build_hook_command_includes_completion_dir_and_workspace(tmp_path: Path) -> None:
@@ -203,6 +234,191 @@ def test_prepare_provider_workspace_materializes_claude_settings_before_hooks(tm
     assert payload['theme'] == 'light'
     assert payload['hooks']['Stop'][0]['hooks'][0]['command']
     assert not (workspace / '.claude').exists()
+
+
+def test_prepare_provider_workspace_removes_frontdesk_provider_command_permissions(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _install_frontdesk_role(tmp_path, monkeypatch)
+    project_root = tmp_path / 'repo'
+    workspace = project_root / 'workspace'
+    (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
+    (project_root / '.ccb' / 'ccb.config').write_text(
+        '\n'.join(
+            [
+                'version = 2',
+                'entry_window = "main"',
+                '',
+                '[windows]',
+                'main = "frontdesk:claude"',
+                '',
+                '[agents.frontdesk]',
+                'role = "agentroles.ccb_frontdesk"',
+            ]
+        )
+        + '\n',
+        encoding='utf-8',
+    )
+    system_home = tmp_path / 'system-home'
+    system_claude = system_home / '.claude'
+    (system_claude / 'commands').mkdir(parents=True, exist_ok=True)
+    (system_claude / 'skills' / 'ask').mkdir(parents=True, exist_ok=True)
+    (system_claude / 'commands' / 'unsafe.md').write_text('run arbitrary ccb commands\n', encoding='utf-8')
+    (system_claude / 'skills' / 'ask' / 'SKILL.md').write_text('generic ask skill\n', encoding='utf-8')
+    (system_claude / 'settings.json').write_text(
+        json.dumps(
+            {
+                'permissions': {
+                    'allow': ['Bash(ccb *)', 'Bash(bash *)'],
+                    'deny': [],
+                },
+                'theme': 'light',
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+    monkeypatch.setenv('HOME', str(system_home))
+
+    prepare_provider_workspace(
+        layout=PathLayout(project_root),
+        spec=_spec('frontdesk', provider='claude', role='agentroles.ccb_frontdesk'),
+        workspace_path=workspace,
+        completion_dir=project_root / '.ccb' / 'agents' / 'frontdesk' / 'provider-runtime' / 'claude' / 'completion',
+        agent_name='frontdesk',
+        refresh_profile=True,
+        auto_permission=True,
+    )
+
+    home = project_root / '.ccb' / 'agents' / 'frontdesk' / 'provider-state' / 'claude' / 'home'
+    settings_path = home / '.claude' / 'settings.json'
+    payload = json.loads(settings_path.read_text(encoding='utf-8'))
+    assert payload['permissions'] == {
+        'allow': [],
+        'deny': [],
+    }
+    assert payload['theme'] == 'light'
+    assert not (home / '.claude' / 'commands' / 'unsafe.md').exists()
+    assert not (home / '.claude' / 'skills' / 'ask' / 'SKILL.md').exists()
+    assert (home / '.claude' / 'skills' / 'frontdesk-intake' / 'SKILL.md').is_file()
+    assert not (workspace / '.claude').exists()
+
+
+def test_prepare_provider_workspace_installs_source_test_ccb_shim_for_provider_commands(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _install_frontdesk_role(tmp_path, monkeypatch)
+    project_root = tmp_path / 'repo'
+    workspace = project_root / 'workspace'
+    monkeypatch.setenv('CCB_TEST_ENTRYPOINT', '1')
+
+    prepare_provider_workspace(
+        layout=PathLayout(project_root),
+        spec=_spec('frontdesk', provider='claude', role='agentroles.ccb_frontdesk'),
+        workspace_path=workspace,
+        completion_dir=project_root / '.ccb' / 'agents' / 'frontdesk' / 'provider-runtime' / 'claude' / 'completion',
+        agent_name='frontdesk',
+        refresh_profile=True,
+    )
+
+    shim = project_root / '.ccb' / 'bin' / 'ccb'
+    assert shim.is_file()
+    shim_text = shim.read_text(encoding='utf-8')
+    assert 'ccb_test' in shim_text
+    assert '"$@"' in shim_text
+    env = caller_context_env(
+        actor='frontdesk',
+        runtime_dir=project_root / '.ccb' / 'agents' / 'frontdesk' / 'provider-runtime' / 'claude',
+        launch_session_id='session-frontdesk',
+    )
+    assert str(env['PATH']).split(':', 1)[0] == str(project_root / '.ccb' / 'bin')
+
+
+def test_prepare_provider_workspace_materializes_frontdesk_codex_with_hard_command_surface(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _install_frontdesk_role(tmp_path, monkeypatch)
+    project_root = tmp_path / 'repo'
+    workspace = project_root / 'workspace'
+    (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
+    (project_root / '.ccb' / 'ccb.config').write_text(
+        '\n'.join(
+            [
+                'version = 2',
+                'entry_window = "main"',
+                '',
+                '[windows]',
+                'main = "frontdesk:codex"',
+                '',
+                '[agents.frontdesk]',
+                'role = "agentroles.ccb_frontdesk"',
+            ]
+        )
+        + '\n',
+        encoding='utf-8',
+    )
+    system_home = tmp_path / 'system-home'
+    system_codex = system_home / '.codex'
+    (system_codex / 'skills' / 'ask').mkdir(parents=True, exist_ok=True)
+    (system_codex / 'commands').mkdir(parents=True, exist_ok=True)
+    (system_codex / 'AGENTS.md').write_text('system codex memory\n', encoding='utf-8')
+    (system_codex / 'skills' / 'ask' / 'SKILL.md').write_text('generic ask skill\n', encoding='utf-8')
+    (system_codex / 'commands' / 'unsafe.md').write_text('run arbitrary ccb commands\n', encoding='utf-8')
+    (system_codex / 'config.toml').write_text(
+        '[hooks]\n'
+        'UserPromptSubmit = [{ command = "echo inherited-hook" }]\n',
+        encoding='utf-8',
+    )
+    stale_home = (
+        project_root
+        / '.ccb'
+        / 'agents'
+        / 'frontdesk'
+        / 'provider-state'
+        / 'codex'
+        / 'home'
+    )
+    stale_skill = stale_home / 'skills' / 'bug-fix-prove-it'
+    stale_skill.mkdir(parents=True, exist_ok=True)
+    (stale_skill / 'SKILL.md').write_text('stale coder skill\n', encoding='utf-8')
+    (stale_home / 'skills' / 'bug-fix-prove-it.ccb-projection.json').write_text(
+        json.dumps(
+            {
+                'schema_version': 1,
+                'record_type': 'ccb_projected_asset',
+                'label': 'codex-role-skill:agentroles.coder:bug-fix-prove-it',
+                'source': '/tmp/stale-coder-skill',
+                'mode': 'copy',
+            },
+            ensure_ascii=True,
+            sort_keys=True,
+        )
+        + '\n',
+        encoding='utf-8',
+    )
+    monkeypatch.setenv('CODEX_HOME', str(system_codex))
+
+    prepare_provider_workspace(
+        layout=PathLayout(project_root),
+        spec=_spec('frontdesk', provider='codex', role='agentroles.ccb_frontdesk'),
+        workspace_path=workspace,
+        completion_dir=project_root / '.ccb' / 'agents' / 'frontdesk' / 'provider-runtime' / 'codex' / 'completion',
+        agent_name='frontdesk',
+        refresh_profile=True,
+    )
+
+    home = project_root / '.ccb' / 'agents' / 'frontdesk' / 'provider-state' / 'codex' / 'home'
+    assert (home / 'AGENTS.md').is_file()
+    assert (home / 'skills' / 'frontdesk-intake' / 'SKILL.md').is_file()
+    assert not (home / 'skills' / 'ask' / 'SKILL.md').exists()
+    assert not (home / 'skills' / 'bug-fix-prove-it' / 'SKILL.md').exists()
+    assert not (home / 'skills' / 'bug-fix-prove-it.ccb-projection.json').exists()
+    assert not (home / 'commands' / 'unsafe.md').exists()
+    assert 'inherited-hook' not in (home / 'config.toml').read_text(encoding='utf-8')
 
 
 def test_prepare_provider_workspace_materializes_claude_mcp_from_source_home(

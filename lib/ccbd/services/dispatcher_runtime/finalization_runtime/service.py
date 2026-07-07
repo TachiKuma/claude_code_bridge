@@ -4,6 +4,7 @@ from completion.models import CompletionDecision
 
 from ..records import get_job
 from ..reply_delivery import prepare_reply_deliveries, resolve_reply_delivery_terminal
+from ..frontdesk_handoff import maybe_start_frontdesk_handoff
 from .message_bureau import record_message_bureau_completion
 from .persistence import persist_terminal_completion
 
@@ -33,6 +34,7 @@ def complete_job(dispatcher, job_id: str, decision: CompletionDecision):
         prior_snapshot=prior_snapshot,
     )
     resolve_reply_delivery_terminal(dispatcher, terminal, finished_at=finished_at)
+    maybe_start_frontdesk_handoff(dispatcher, terminal, decision)
     if retry_scheduled:
         return terminal
     if bool(getattr(dispatcher, '_auto_reply_delivery_on_complete', False)):

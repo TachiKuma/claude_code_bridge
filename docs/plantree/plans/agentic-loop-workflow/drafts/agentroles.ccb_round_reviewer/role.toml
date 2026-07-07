@@ -8,7 +8,7 @@ description = "Whole-round reviewer for CCB workflow execution loops."
 license = "Apache-2.0"
 
 [catalog]
-level = "draft"
+level = "experimental"
 
 [identity]
 default_name = "ccb_round_reviewer"
@@ -17,7 +17,7 @@ responsibilities = [
   "Read planner verification contract, orchestrator summary, and node reports",
   "Design and run or specify whole-round verification",
   "Audit hidden fallback, degradation, and partial success",
-  "Return pass, rework_node, partial, replan_required, or global_blocker"
+  "Return pass, partial, replan_required, or blocked as the first non-empty machine line"
 ]
 non_goals = [
   "Fixing code",

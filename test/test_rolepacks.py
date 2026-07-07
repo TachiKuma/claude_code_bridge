@@ -1391,6 +1391,44 @@ print(json.dumps({{
     assert not (tmp_path / 'xdg-data' / 'ccb' / 'roles' / 'agentroles.archi' / 'install.json').exists()
 
 
+def test_source_test_roles_install_uses_source_checkout_draft_rolepacks(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv('XDG_DATA_HOME', str(tmp_path / 'xdg-data'))
+    monkeypatch.setenv('AGENT_ROLES_STORE', str(tmp_path / '.roles'))
+    monkeypatch.setenv('CCB_TEST_ENTRYPOINT', '1')
+
+    required_roles = (
+        'agentroles.ccb_frontdesk',
+        'agentroles.ccb_planner',
+        'agentroles.ccb_orchestrator',
+        'agentroles.ccb_task_detailer',
+        'agentroles.ccb_round_reviewer',
+        'agentroles.coder',
+        'agentroles.code_reviewer',
+    )
+
+    for role_id in required_roles:
+        payload = install_role(role_id, with_tools=False)
+        role = load_installed_role(role_id)
+        metadata = json.loads(
+            (tmp_path / '.roles' / 'installed' / role_id / 'install.json').read_text(
+                encoding='utf-8',
+            )
+        )
+
+        assert payload['role_status'] == 'installed'
+        assert payload['role_id'] == role_id
+        assert role is not None
+        assert role.id == role_id
+        assert metadata['source'] == 'path'
+        assert metadata['source_path'].endswith(
+            f'docs/plantree/plans/agentic-loop-workflow/drafts/{role_id}'
+        )
+        assert str(tmp_path / '.roles' / 'installed') in payload['path']
+
+
 def test_legacy_ccb_store_migrates_to_spec_owned_store(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv('XDG_DATA_HOME', str(tmp_path / 'xdg-data'))
     monkeypatch.setenv('AGENT_ROLES_STORE', str(tmp_path / '.roles'))

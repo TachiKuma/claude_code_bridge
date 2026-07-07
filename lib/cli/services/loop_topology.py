@@ -247,7 +247,12 @@ def _release(context, command) -> dict[str, object]:
         desired['release_policy'] = _release_policy_record(command)
         _mark_all_agents_absent(desired)
     atomic_write_json(_desired_path(context, loop_id), desired)
-    payload = _reconcile_desired(context, loop_id, desired=desired)
+    try:
+        payload = _reconcile_desired(context, loop_id, desired=desired)
+    except Exception:
+        if not _retry_release_after_failed_reconcile(context, loop_id):
+            raise
+        payload = _reconcile_desired(context, loop_id, desired=desired)
     payload = _prune_released_authority(context, loop_id, desired=desired, payload=payload)
     payload = _prune_drained_release_authority(context, loop_id, payload=payload)
     payload = _mark_release_residue(context, loop_id, payload=payload)
@@ -270,6 +275,18 @@ def _release(context, command) -> dict[str, object]:
         },
     )
     return payload
+
+
+def _retry_release_after_failed_reconcile(context, loop_id: str) -> bool:
+    observed = _load_json_optional(_observed_path(context, loop_id))
+    if not isinstance(observed, Mapping):
+        return False
+    if str(observed.get('last_reconcile_status') or '') != 'failed':
+        return False
+    if int(observed.get('retained_count') or 0) != 0:
+        return False
+    blockers = _release_residue_blockers(observed)
+    return bool(blockers)
 
 
 def _reconcile_desired(context, loop_id: str, *, desired: Mapping[str, object]) -> dict[str, object]:

@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import shutil
 import sqlite3
 import subprocess
 import pytest
@@ -52,12 +53,14 @@ def _spec(
     name: str,
     provider: str = 'codex',
     *,
+    role: str | None = None,
     startup_args: tuple[str, ...] = (),
     provider_command_template: str | None = None,
 ) -> AgentSpec:
     return AgentSpec(
         name=name,
         provider=provider,
+        role=role,
         target='.',
         workspace_mode=WorkspaceMode.GIT_WORKTREE,
         workspace_root=None,
@@ -68,6 +71,23 @@ def _spec(
         provider_command_template=provider_command_template,
         startup_args=startup_args,
     )
+
+
+def _install_frontdesk_role(tmp_path: Path, monkeypatch) -> None:
+    role_root = (
+        Path(__file__).resolve().parents[1]
+        / 'docs'
+        / 'plantree'
+        / 'plans'
+        / 'agentic-loop-workflow'
+        / 'drafts'
+        / 'agentroles.ccb_frontdesk'
+    )
+    role_store = tmp_path / '.roles'
+    monkeypatch.setenv('AGENT_ROLES_STORE', str(role_store))
+    installed = role_store / 'installed' / 'agentroles.ccb_frontdesk' / 'current'
+    installed.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(role_root, installed)
 
 
 def _context(project_root: Path, command: ParsedStartCommand) -> CliContext:
@@ -957,6 +977,55 @@ def test_ensure_agent_runtime_launches_named_claude_session(monkeypatch, tmp_pat
     )
     assert tmux_state['title'] == ('%44', 'reviewer')
     assert tmux_state['user_option'] == ('%44', '@ccb_project_id', ctx.project.project_id)
+
+
+def test_ensure_agent_runtime_forces_safe_permission_for_frontdesk_command_surface(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _install_frontdesk_role(tmp_path, monkeypatch)
+    project_root = tmp_path / 'repo-frontdesk'
+    (project_root / '.ccb').mkdir(parents=True)
+    system_home = tmp_path / 'system-home'
+    system_settings = system_home / '.claude' / 'settings.json'
+    system_settings.parent.mkdir(parents=True, exist_ok=True)
+    system_settings.write_text(
+        json.dumps(
+            {
+                'permissions': {'allow': ['Bash(ccb *)'], 'deny': []},
+                'theme': 'light',
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+    monkeypatch.setenv('HOME', str(system_home))
+    ctx = _context(
+        project_root,
+        ParsedStartCommand(project=None, agent_names=('frontdesk',), restore=True, auto_permission=True),
+    )
+    spec = _spec('frontdesk', provider='claude', role='agentroles.ccb_frontdesk')
+    plan = WorkspacePlanner().plan(spec, ctx.project)
+    plan.workspace_path.mkdir(parents=True, exist_ok=True)
+    captured: dict[str, object] = {}
+
+    def fake_ensure_impl(context, command, *args, runtime_launch_result_cls, **kwargs):
+        captured['auto_permission'] = command.auto_permission
+        return runtime_launch_result_cls(launched=False, binding=None)
+
+    monkeypatch.setattr(runtime_launch, '_ensure_agent_runtime_impl', fake_ensure_impl)
+
+    result = ensure_agent_runtime(ctx, ctx.command, spec, plan, None)
+
+    assert result.launched is False
+    assert captured['auto_permission'] is False
+    home = ctx.paths.agent_provider_state_dir('frontdesk', 'claude') / 'home'
+    settings_payload = json.loads((home / '.claude' / 'settings.json').read_text(encoding='utf-8'))
+    assert settings_payload['permissions'] == {
+        'allow': [],
+        'deny': [],
+    }
 
 
 def test_ensure_agent_runtime_launches_named_opencode_session(monkeypatch, tmp_path: Path) -> None:

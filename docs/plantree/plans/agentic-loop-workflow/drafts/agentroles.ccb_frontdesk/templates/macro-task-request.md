@@ -1,20 +1,22 @@
-# Macro Task Request
+**Intake Evidence**
 
-source: user
-frontdesk: <agent-name>
+CCB_REQ_ID: `<job/request id when available>`
 
-## User Intent
+Macro request: <one-sentence macro request>
 
-<macro request>
+Scope:
+- <file, component, or work area>
 
-## Constraints
+Required behavior:
+- <acceptance behavior>
 
-- <constraint>
+Constraints:
+- <authority, verification, provider, or non-goal constraint>
 
-## Non-Goals
+Next step: forward_to_planner
+Next role: planner
 
-- <non-goal>
-
-## Next Role
-
-planner
+For blocked prerequisites, prefer the same `**Intake Evidence**` shape and put
+the blocker in `Constraints`. If using `**Blocked Evidence**`, use exact labels:
+`Requested validation:`, `Blocker:`, `Routing recommendation:`, and
+`Prohibited actions:`.

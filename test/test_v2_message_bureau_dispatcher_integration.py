@@ -133,6 +133,23 @@ def _failed_decision(*, reason: str = 'api_error', diagnostics: dict[str, object
     )
 
 
+def _empty_provider_reply_decision() -> CompletionDecision:
+    return CompletionDecision(
+        terminal=True,
+        status=CompletionStatus.INCOMPLETE,
+        reason='task_complete_empty_reply',
+        confidence=CompletionConfidence.DEGRADED,
+        reply='',
+        anchor_seen=True,
+        reply_started=False,
+        reply_stable=False,
+        provider_turn_ref='turn-empty-provider-reply',
+        source_cursor=None,
+        finished_at='2026-03-30T00:00:10Z',
+        diagnostics={'empty_reply': True, 'error_type': 'empty_provider_reply'},
+    )
+
+
 class ActiveReplyDeliveryExecutionService:
     def __init__(self) -> None:
         self.started: list[str] = []
@@ -2437,6 +2454,72 @@ def test_dispatcher_auto_retries_retryable_api_failures_before_delivering_failed
     ack = dispatcher.ack_reply('claude')
     assert ack['reply_terminal_status'] == 'failed'
     assert 'failed after 3 attempts' in ack['reply']
+
+
+def test_dispatcher_auto_retries_empty_provider_replies_before_delivering_incomplete_reply(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-auto-retry-empty-provider-reply'
+    ctx = _bootstrap_test_project(project_root)
+    layout = PathLayout(project_root)
+    config = _provider_config('codex', 'claude', 'gemini')
+    registry = AgentRegistry(layout, config)
+    registry.upsert(_runtime('codex', project_id=ctx.project_id, layout=layout, pid=101))
+    registry.upsert(_runtime('claude', project_id=ctx.project_id, layout=layout, pid=102))
+    dispatcher = JobDispatcher(layout, config, registry, clock=lambda: '2026-03-30T00:00:00Z')
+
+    receipt = dispatcher.submit(
+        MessageEnvelope(
+            project_id=ctx.project_id,
+            to_agent='codex',
+            from_actor='claude',
+            body='empty provider reply retry test',
+            task_id='task-auto-retry-empty-provider-reply',
+            reply_to=None,
+            message_type='ask',
+            delivery_scope=DeliveryScope.SINGLE,
+        )
+    )
+    message = MessageStore(layout).list_all()[-1]
+    job_id = receipt.jobs[0].job_id
+
+    for expected_retry_index in (1, 2):
+        dispatcher.tick()
+        dispatcher.complete(job_id, _empty_provider_reply_decision())
+
+        claude_inbox = dispatcher.inbox('claude')
+        assert claude_inbox['item_count'] == 0
+
+        latest_attempts = {}
+        for record in AttemptStore(layout).list_message(message.message_id):
+            latest_attempts[record.attempt_id] = record
+        pending_retry = next(
+            attempt
+            for attempt in latest_attempts.values()
+            if attempt.retry_index == expected_retry_index and attempt.attempt_state is AttemptState.PENDING
+        )
+        job_id = pending_retry.job_id
+
+    dispatcher.tick()
+    dispatcher.complete(job_id, _empty_provider_reply_decision())
+
+    claude_inbox = dispatcher.inbox('claude')
+    assert claude_inbox['item_count'] == 1
+    assert claude_inbox['head']['event_type'] == 'task_reply'
+
+    latest_attempts = {}
+    for record in AttemptStore(layout).list_message(message.message_id):
+        latest_attempts[record.attempt_id] = record
+    assert len(latest_attempts) == 3
+    assert {attempt.retry_index for attempt in latest_attempts.values()} == {0, 1, 2}
+    assert {attempt.attempt_state for attempt in latest_attempts.values()} == {AttemptState.INCOMPLETE}
+
+    replies = ReplyStore(layout).list_message(message.message_id)
+    assert len(replies) == 1
+    assert replies[0].terminal_status is ReplyTerminalStatus.INCOMPLETE
+    assert 'empty reply after 3 attempts' in replies[0].reply
+
+    ack = dispatcher.ack_reply('claude')
+    assert ack['reply_terminal_status'] == 'incomplete'
+    assert 'empty reply after 3 attempts' in ack['reply']
 
 
 def test_dispatcher_auto_retries_resumable_pane_failures_before_delivering_failed_reply(tmp_path: Path) -> None:

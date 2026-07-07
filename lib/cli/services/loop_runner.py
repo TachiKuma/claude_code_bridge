@@ -1,38 +1,108 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
+import time
 from types import SimpleNamespace
 from uuid import uuid4
 
 from cli.models import ParsedAskCommand
+from cli.models_mailbox import ParsedTraceCommand
 from storage.atomic import atomic_write_json
 
+from .auto_runner_lock import AutoRunnerLock
 from .ask import submit_ask
 from .loop_ask_first import release_ask_first_execution_round, run_ask_first_execution_round
 from .loop_run_once import loop_run_once
 from .plan_tasks import find_first_actionable_task, plan_task
 from .questions import question_refs
+from .role_output_import import consume_activation_role_output, consume_explicit_role_output
+from .trace import trace_target
 
 _ORCHESTRATOR_ROUTES = ('direct_execution', 'needs_detail', 'macro_adjustment_request', 'blocked', 'partial_completion')
 _ROUND_REVIEWER_FIELD = 'ccb_round_reviewer'
 _LEGACY_ROUND_CHECKER_FIELD = 'round_checker'
 
 
-def loop_runner_once(context, command, services=None) -> dict[str, object]:
-    if bool(getattr(command, 'consume_role_output', False)):
-        return _consume_role_output_disabled(context)
+def loop_runner_auto(context, command, services=None) -> dict[str, object]:
     deps = _deps(services)
-    task = find_first_actionable_task(context)
-    if task is None:
+    lock = AutoRunnerLock(context.project.project_root)
+    if not lock.acquire():
+        state = lock.existing_state
         return {
+            'schema_version': 1,
+            'record_type': 'ccb_loop_runner_auto',
+            'loop_runner_status': 'paused',
+            'project_id': context.project.project_id,
+            'project_root': str(context.project.project_root),
+            'action': 'auto_runner_already_active',
+            'lock_path': str(lock.path),
+            'pid': state.pid if state is not None else None,
+            'next_activation': 'existing_auto_runner',
+        }
+    steps: list[dict[str, object]] = []
+    try:
+        wait_job = str(getattr(command, 'wait_job_id', None) or '').strip()
+        if wait_job:
+            _wait_for_job_terminal(context, wait_job, deps, command)
+        max_steps = max(1, int(getattr(command, 'max_steps', 24) or 24))
+        once_command = replace(command, once=True, auto=False, wait_job_id=None, json_output=True)
+        for _index in range(max_steps):
+            payload = loop_runner_once(context, once_command, deps.services)
+            steps.append(_auto_step(payload))
+            if _auto_should_stop(payload):
+                break
+            job_id = _payload_wait_job_id(payload)
+            if job_id:
+                _wait_for_job_terminal(context, job_id, deps, command)
+        else:
+            return _auto_payload(
+                context,
+                status='paused',
+                action='auto_runner_step_limit_reached',
+                steps=steps,
+                extra={'max_steps': max_steps, 'next_activation': 'rerun_auto_runner'},
+            )
+        final = steps[-1] if steps else {}
+        return _auto_payload(
+            context,
+            status=str(final.get('loop_runner_status') or 'idle'),
+            action='auto_runner_finished',
+            steps=steps,
+            extra={'final_action': final.get('action'), 'final_reason': final.get('reason')},
+        )
+    finally:
+        lock.release()
+
+
+def loop_runner_once(context, command, services=None) -> dict[str, object]:
+    deps = _deps(services)
+    requested_task_id = str(getattr(command, 'task_id', None) or '').strip() or None
+    if bool(getattr(command, 'consume_role_output', False)):
+        return deps.consume_explicit_role_output(context, command, deps.services)
+    pending_role_output = None
+    if requested_task_id is None:
+        role_output = deps.consume_activation_role_output(context, command, deps.services)
+        if role_output is not None:
+            if role_output.get('loop_runner_status') != 'pending':
+                return role_output
+            pending_role_output = role_output
+    task = find_first_actionable_task(context, task_id=requested_task_id)
+    if task is None:
+        if pending_role_output is not None:
+            return pending_role_output
+        payload = {
             'schema_version': 1,
             'record_type': 'ccb_loop_runner_once',
             'loop_runner_status': 'idle',
             'project_id': context.project.project_id,
             'project_root': str(context.project.project_root),
             'action': 'none',
-            'reason': 'no_actionable_task',
+            'reason': 'no_actionable_task_for_task' if requested_task_id else 'no_actionable_task',
         }
+        if requested_task_id:
+            payload['task_id'] = requested_task_id
+        return payload
 
     runner_action = str(task.get('runner_action') or '')
     if runner_action == 'activate_orchestrator':
@@ -42,6 +112,8 @@ def loop_runner_once(context, command, services=None) -> dict[str, object]:
     if runner_action == 'ask_first_execution_not_ready':
         record = task['record']
         current_loop = str(record.get('current_loop') or '').strip()
+        if current_loop and _task_has_ask_first_execution_route(record):
+            return _run_ask_first_execution_round(context, command, deps, task)
         return _phase4_not_ready(
             context,
             task,
@@ -64,17 +136,14 @@ def _run_ask_first_execution_round(context, command, deps, task: dict[str, objec
     task_id = str(record.get('task_id') or '')
     current_loop = str(record.get('current_loop') or '').strip()
     if current_loop:
-        return _phase4_not_ready(
+        loop_id = current_loop
+        bind = None
+    else:
+        loop_id = f'lp{uuid4().hex[:6]}'
+        bind = deps.plan_task(
             context,
-            task,
-            loop_id=current_loop,
-            reason='running_task_bound_to_loop',
+            SimpleNamespace(action='task-bind-loop', task_id=task_id, loop_id=loop_id),
         )
-    loop_id = f'lp{uuid4().hex[:6]}'
-    bind = deps.plan_task(
-        context,
-        SimpleNamespace(action='task-bind-loop', task_id=task_id, loop_id=loop_id),
-    )
     round_payload = deps.ask_first_execution(
         context,
         SimpleNamespace(
@@ -87,6 +156,14 @@ def _run_ask_first_execution_round(context, command, deps, task: dict[str, objec
         ),
         deps.services,
     )
+    if _ask_first_round_pending(round_payload):
+        return _ask_first_pending_response(
+            context,
+            task_id=task_id,
+            loop_id=loop_id,
+            bind=bind,
+            round_payload=round_payload,
+        )
     round_result, round_result_source = _round_result(round_payload)
     report_path = _round_report_path(round_payload)
     imported = deps.plan_task(
@@ -229,6 +306,59 @@ def _phase4_not_ready(
         'next_owner': record.get('next_owner') or task.get('next_owner'),
         'next_activation': 'phase4_ask_first_runner_required',
     }
+
+
+def _ask_first_round_pending(payload: dict[str, object]) -> bool:
+    return str(payload.get('loop_run_status') or '').strip() == 'pending'
+
+
+def _ask_first_pending_response(
+    context,
+    *,
+    task_id: str,
+    loop_id: str,
+    bind: dict[str, object] | None,
+    round_payload: dict[str, object],
+) -> dict[str, object]:
+    paths = round_payload.get('paths') if isinstance(round_payload.get('paths'), dict) else {}
+    pending = round_payload.get('pending') if isinstance(round_payload.get('pending'), dict) else {}
+    return {
+        'schema_version': 1,
+        'record_type': 'ccb_loop_runner_once',
+        'loop_runner_status': 'paused',
+        'project_id': context.project.project_id,
+        'project_root': str(context.project.project_root),
+        'action': 'ask_first_execution_pending',
+        'dispatch_source': round_payload.get('dispatch_source') or 'ask_first_mount_topology',
+        'execution_mode': 'ask_first_direct_execution',
+        'task_id': task_id,
+        'loop_id': loop_id,
+        'round_result': 'pending',
+        'round_result_source': 'ask_job_pending',
+        'task_status': 'running',
+        'bind': _compact_plan_payload(bind),
+        'round': {
+            'loop_run_status': round_payload.get('loop_run_status'),
+            'pending_json_path': str(paths.get('pending_json') or ''),
+        },
+        'topology': _compact_topology_payload(round_payload.get('topology')),
+        'pending': dict(pending),
+        'next_activation': 'phase4_ask_first_runner_required',
+    }
+
+
+def _task_has_ask_first_execution_route(record: dict[str, object]) -> bool:
+    return _orchestrator_route_for_record(record) in {'direct_execution', 'partial_completion'}
+
+
+def _orchestrator_route_for_record(record: dict[str, object]) -> str:
+    artifacts = record.get('artifacts') if isinstance(record.get('artifacts'), dict) else {}
+    notes = artifacts.get('orchestration_notes') if isinstance(artifacts, dict) else None
+    route = str(notes.get('orchestrator_route') or '').strip().lower() if isinstance(notes, dict) else ''
+    if route and route not in _ORCHESTRATOR_ROUTES:
+        known = ', '.join(sorted(_ORCHESTRATOR_ROUTES))
+        raise ValueError(f'unknown orchestrator route {route!r}; expected one of: {known}')
+    return route
 
 
 def _activate_orchestrator(context, command, deps, task: dict[str, object]) -> dict[str, object]:
@@ -479,9 +609,120 @@ def _deps(services):
         ask_first_release=getattr(services, 'ask_first_release', release_ask_first_execution_round),
         loop_run_once=getattr(services, 'loop_run_once', loop_run_once),
         plan_task=getattr(services, 'plan_task', plan_task),
+        consume_activation_role_output=getattr(
+            services,
+            'consume_activation_role_output',
+            consume_activation_role_output,
+        ),
+        consume_explicit_role_output=getattr(
+            services,
+            'consume_explicit_role_output',
+            consume_explicit_role_output,
+        ),
         submit_ask=getattr(services, 'submit_ask', submit_ask),
+        trace_target=getattr(services, 'trace_target', trace_target),
+        sleep=getattr(services, 'sleep', time.sleep),
         services=services,
     )
+
+
+def _wait_for_job_terminal(context, job_id: str, deps, command) -> None:
+    poll_interval = max(0.0, float(getattr(command, 'poll_interval_s', 2.0) or 0.0))
+    while True:
+        payload = deps.trace_target(context, ParsedTraceCommand(project=None, target=job_id))
+        job = payload.get('job') if isinstance(payload, dict) else None
+        status = str(job.get('status') or '').strip().lower() if isinstance(job, dict) else ''
+        if status in {'completed', 'failed', 'cancelled', 'timed_out'}:
+            return
+        deps.sleep(poll_interval)
+
+
+def _payload_ask_job_id(payload: dict[str, object]) -> str | None:
+    ask = payload.get('ask') if isinstance(payload.get('ask'), dict) else None
+    if not ask:
+        return None
+    job_id = str(ask.get('job_id') or '').strip()
+    return job_id or None
+
+
+def _payload_wait_job_id(payload: dict[str, object]) -> str | None:
+    ask_job_id = _payload_ask_job_id(payload)
+    if ask_job_id:
+        return ask_job_id
+    if (
+        str(payload.get('action') or '').strip() == 'role_output_pending'
+        and str(payload.get('loop_runner_status') or '').strip() == 'pending'
+    ):
+        job_id = str(payload.get('job_id') or '').strip()
+        if job_id:
+            return job_id
+    return None
+
+
+def _auto_should_stop(payload: dict[str, object]) -> bool:
+    action = str(payload.get('action') or '').strip()
+    status = str(payload.get('loop_runner_status') or '').strip()
+    if action in {'activated_orchestrator', 'activated_planner', 'activated_task_detailer', 'activated_plan_reviewer'}:
+        return False
+    if action in {'imported_planner_task_authority', 'imported_orchestration_notes', 'ran_one_round'}:
+        return False
+    return status in {'idle', 'paused', 'blocked', 'terminal'}
+
+
+def _auto_step(payload: dict[str, object]) -> dict[str, object]:
+    step = {
+        'loop_runner_status': payload.get('loop_runner_status'),
+        'action': payload.get('action'),
+        'task_id': payload.get('task_id'),
+        'task_status': payload.get('task_status'),
+        'next_activation': payload.get('next_activation'),
+        'reason': payload.get('reason'),
+    }
+    job_id = _payload_ask_job_id(payload)
+    if job_id:
+        step['ask_job_id'] = job_id
+        ask = payload.get('ask') if isinstance(payload.get('ask'), dict) else {}
+        step['ask_target'] = ask.get('target')
+    source_job_id = str(payload.get('job_id') or '').strip()
+    if source_job_id:
+        step['job_id'] = source_job_id
+    retry_source_job_id = str(payload.get('retry_source_job_id') or '').strip()
+    if retry_source_job_id:
+        step['retry_source_job_id'] = retry_source_job_id
+    retry_successor_job_id = str(payload.get('retry_successor_job_id') or '').strip()
+    if retry_successor_job_id:
+        step['retry_successor_job_id'] = retry_successor_job_id
+    if payload.get('round_result') is not None:
+        step['round_result'] = payload.get('round_result')
+        step['round_result_source'] = payload.get('round_result_source')
+    if payload.get('release') is not None:
+        release = payload.get('release') if isinstance(payload.get('release'), dict) else {}
+        step['released_count'] = release.get('released_count')
+        step['retained_count'] = release.get('retained_count')
+    return {key: value for key, value in step.items() if value is not None}
+
+
+def _auto_payload(
+    context,
+    *,
+    status: str,
+    action: str,
+    steps: list[dict[str, object]],
+    extra: dict[str, object] | None = None,
+) -> dict[str, object]:
+    payload = {
+        'schema_version': 1,
+        'record_type': 'ccb_loop_runner_auto',
+        'loop_runner_status': status,
+        'project_id': context.project.project_id,
+        'project_root': str(context.project.project_root),
+        'action': action,
+        'steps': steps,
+        'step_count': len(steps),
+    }
+    if extra:
+        payload.update(extra)
+    return payload
 
 
 def _round_result(payload: dict[str, object]) -> tuple[str, str]:
@@ -546,7 +787,9 @@ def _round_report_path(payload: dict[str, object]) -> str:
     return path
 
 
-def _compact_plan_payload(payload: dict[str, object]) -> dict[str, object]:
+def _compact_plan_payload(payload: dict[str, object] | None) -> dict[str, object]:
+    if payload is None:
+        return {}
     return {
         'action': payload.get('action'),
         'task_id': payload.get('task_id'),
@@ -710,9 +953,11 @@ def _planner_activation_packet(
         ),
         'open_question_refs': _planner_question_refs(context, record),
         'script_write_rules': [
-            'Do not edit task status, index, or current_loop directly.',
-            'Use ccb plan task-artifact and ccb plan task-status for authoritative writes.',
-            'Planner may import brief and macro task-packet artifacts; detail bodies belong to task_detailer.',
+            'Reply only; do not run ccb, ccb_test, artifact import commands, or wrapper commands.',
+            'Return plan brief, macro task-packet artifacts, readiness recommendation, and blocker reports for supervisor-owned import.',
+            'Planner may propose brief and macro task-packet artifacts; detail bodies belong to task_detailer.',
+            'Supervisor/runner scripts own authoritative writes and route/status imports.',
+            'Do not edit task status, index, current_loop, runtime topology, or task artifacts directly.',
             'Return needs_clarification, blocked, not_ready, or ready instead of lowering acceptance criteria.',
         ],
         'stop_limits': [
@@ -798,9 +1043,10 @@ def _plan_reviewer_activation_packet(
             if isinstance(artifact, dict) and str(kind).startswith('detail_') and artifact.get('path')
         },
         'script_write_rules': [
-            'Do not edit task status, index, or current_loop directly.',
-            'Use ccb plan task-artifact --kind review to import the review.',
-            'Use ccb plan task-status --status ready only after review is imported.',
+            'Reply only; do not run ccb, ccb_test, artifact import commands, or wrapper commands.',
+            'Return the review artifact and readiness recommendation for supervisor-owned import.',
+            'Supervisor/runner scripts own review artifact import and task status transitions.',
+            'Do not edit task status, index, current_loop, runtime topology, or task artifacts directly.',
             'Return not_ready, needs_clarification, blocked, or ready without lowering acceptance criteria.',
         ],
         'stop_limits': [
@@ -893,8 +1139,10 @@ def _planner_message(activation: dict[str, object]) -> str:
         '- keep brief.md compact; do not include task_detailer detail bodies\n'
         '- readiness recommendation: ready|needs_clarification|blocked|not_ready\n'
         '- candidate questions only when current-phase user input is blocking\n\n'
-        'Script write rules:\n'
-        '- use CCB plan commands or host-provided wrappers for authoritative writes\n'
+        'Authority boundary:\n'
+        '- reply only with semantic artifacts, readiness recommendations, and blocker reports\n'
+        '- do not run ccb, ccb_test, ccb plan, ccb loop, ccb ask, wrapper commands, or provider/runtime mutation commands\n'
+        '- supervisor/runner scripts own authoritative writes and route/status imports\n'
         '- do not edit task index, status, current_loop, runtime capacity, or tmux state directly\n'
         '- do not start worker/checker/orchestrator execution from this activation'
     )
@@ -915,9 +1163,12 @@ def _task_detailer_message(activation: dict[str, object]) -> str:
         '- task-scoped detail design, stable brief-update summary, and detail packet manifest\n'
         '- detail readiness recommendation: detail_ready|needs_clarification|blocked|not_ready\n'
         '- macro-adjustment request only as an artifact/ref when macro assumptions need planner review\n\n'
-        'Script write rules:\n'
-        '- use CCB plan commands or host-provided wrappers for authoritative writes\n'
+        'Authority boundary:\n'
+        '- reply only with task-scoped detail artifact content and recommendations\n'
+        '- do not run ccb, ccb_test, ccb plan, ccb loop, ccb ask, wrapper commands, or provider/runtime mutation commands\n'
+        '- supervisor/runner scripts own detail artifact import and task status transitions\n'
         '- do not edit roadmap, task index, status, current_loop, runtime capacity, or tmux state directly\n'
+        '- do not write supervisor import files into the project tree for later self-import\n'
         '- do not start worker/checker/orchestrator execution from this activation'
     )
 
@@ -934,8 +1185,10 @@ def _plan_reviewer_message(activation: dict[str, object]) -> str:
         'Required next output:\n'
         '- review artifact covering ambiguity, risk, acceptance, and verification\n'
         '- readiness recommendation: ready|needs_clarification|blocked|not_ready\n\n'
-        'Script write rules:\n'
-        '- use CCB plan commands or host-provided wrappers for authoritative writes\n'
+        'Authority boundary:\n'
+        '- reply only with the review artifact and readiness recommendation\n'
+        '- do not run ccb, ccb_test, ccb plan, ccb loop, ccb ask, wrapper commands, or provider/runtime mutation commands\n'
+        '- supervisor/runner scripts own review artifact import and task status transitions\n'
         '- do not edit task index, status, current_loop, runtime capacity, or tmux state directly\n'
         '- do not start worker/checker/orchestrator execution from this activation'
     )
@@ -962,4 +1215,4 @@ def _first_job_id(payload: dict[str, object]) -> str:
     return ''
 
 
-__all__ = ['loop_runner_once']
+__all__ = ['loop_runner_auto', 'loop_runner_once']

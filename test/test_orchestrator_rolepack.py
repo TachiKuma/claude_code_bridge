@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 
 from provider_profiles.codex_home_config import materialize_codex_home_config
+from cli.services.role_command_policy import load_role_command_policy
 from rolepacks.manifest import load_role_manifest
 
 
@@ -26,6 +27,7 @@ ROLE_EXPECTATIONS = {
         'default': 'frontdesk',
         'skill': 'skills/frontdesk-intake',
         'templates': ('templates/macro-task-request.md',),
+        'providers': ('codex', 'claude'),
     },
     'agentroles.ccb_planner': {
         'default': 'planner',
@@ -48,10 +50,7 @@ ROLE_EXPECTATIONS = {
     },
     'agentroles.ccb_orchestrator': {
         'default': 'orchestrator',
-        'skills': (
-            'adapters/ccb/skills/orchestrator-capacity',
-            'adapters/ccb/skills/dynamic-agent-lifecycle',
-        ),
+        'skills': (),
         'templates': (
             'templates/capacity-request.json',
             'templates/worker-ask.md',
@@ -103,20 +102,16 @@ def role_root(role_id: str) -> Path:
 
 def test_orchestrator_rolepack_translates_ccb_skills() -> None:
     manifest = load_role_manifest(ORCHESTRATOR_ROLE)
-    expected_skills = [
-        'adapters/ccb/skills/orchestrator-capacity',
-        'adapters/ccb/skills/dynamic-agent-lifecycle',
-    ]
 
     assert manifest.id == 'agentroles.ccb_orchestrator'
     assert manifest.default_agent_name == 'orchestrator'
     assert {'codex', 'claude', 'qwen', 'zai'} <= set(manifest.providers)
     assert manifest.manifest['memory']['files'] == ['memory.md', 'adapters/ccb/memory.md']
-    assert manifest.manifest['skills']['codex'] == expected_skills
-    assert manifest.manifest['skills']['qwen'] == expected_skills
+    assert manifest.manifest['skills']['codex'] == []
+    assert manifest.manifest['skills']['qwen'] == []
 
 
-def test_orchestrator_capacity_skill_declares_command_boundary() -> None:
+def test_orchestrator_rolepack_is_reply_only_for_capacity_and_lifecycle() -> None:
     skill = (
         ORCHESTRATOR_ROLE
         / 'adapters'
@@ -126,31 +121,44 @@ def test_orchestrator_capacity_skill_declares_command_boundary() -> None:
         / 'SKILL.md'
     ).read_text(encoding='utf-8')
 
-    assert 'ccb loop capacity ensure --loop-id <id>' in skill
-    assert 'ccb loop capacity status --loop-id <id> --json' in skill
-    assert 'ccb loop capacity release --loop-id <id> --policy auto --json' in skill
-    assert 'ccb layout status --json' in skill
-    assert 'loop_capacity_status = "ensured"' in skill
-    assert 'apply.apply_status = "applied"' in skill
-    assert 'source=loop' in skill
-    assert 'expected `loop_id`/`node_id`' in skill
-    assert 'CCB-owned evidence only' in skill
-    assert 'runtime layout manager owns window naming' in skill
-    assert 'Do not use `ccb loop run-once`' in skill
-    assert 'command ask --chain "$WORKER_AGENT"' in skill
-    assert 'Never:' in skill
-    assert 'edit `.ccb/ccb.config`' in skill
-    assert 'ccb agent add --window' in skill
-    assert 'ccb agent add --window-class' in skill
-    assert 'call raw `ccb reload`' in skill
-    assert 'call raw `ccb kill`' in skill
-    assert 'run `tmux` commands' in skill
-    assert 'exceed `max_nodes`, profile `max_instances`, or four total nodes' in skill
-    assert 'capacity requests are advisory' in skill
-    assert 'Use this skill only from an execution-ready loop round' in skill
-    assert 'replan_required' in skill
-    assert 'replan_needed' not in skill
-    assert 'dynamic-agent-lifecycle' in skill
+    role_memory = (ORCHESTRATOR_ROLE / 'memory.md').read_text(encoding='utf-8')
+    adapter_memory = (ORCHESTRATOR_ROLE / 'adapters' / 'ccb' / 'memory.md').read_text(encoding='utf-8')
+    adapter = (ORCHESTRATOR_ROLE / 'adapters' / 'ccb' / 'adapter.toml').read_text(encoding='utf-8')
+    dynamic_skill = (
+        ORCHESTRATOR_ROLE
+        / 'adapters'
+        / 'ccb'
+        / 'skills'
+        / 'dynamic-agent-lifecycle'
+        / 'SKILL.md'
+    ).read_text(encoding='utf-8')
+    capacity_reference = (
+        ORCHESTRATOR_ROLE / 'references' / 'capacity-boundary.md'
+    ).read_text(encoding='utf-8')
+
+    assert 'skills = []' in adapter
+    for text in (role_memory, adapter_memory, skill, dynamic_skill, capacity_reference):
+        assert (
+            'Do not run CCB commands' in text
+            or 'Do not run `ccb plan`' in text
+            or 'Never run `ccb plan`' in text
+        )
+        assert 'runner owns' in text.lower() or 'supervisor/runner owns' in text.lower()
+        assert 'evidence only' in text
+    forbidden = (
+        'ccb loop capacity ensure --loop-id',
+        'ccb loop capacity status --loop-id',
+        'ccb loop capacity release --loop-id',
+        'ccb agent add <name>',
+        'ccb agent release <agent>',
+        'command ask --chain',
+        'Allowed commands:',
+        'Use only CCB-owned loop capacity commands',
+        'ccb layout status --json',
+    )
+    for text in (role_memory, adapter_memory, skill, dynamic_skill, capacity_reference):
+        for item in forbidden:
+            assert item not in text
 
 
 def test_dynamic_agent_lifecycle_skill_declares_non_loop_command_boundary() -> None:
@@ -163,32 +171,22 @@ def test_dynamic_agent_lifecycle_skill_declares_non_loop_command_boundary() -> N
         / 'SKILL.md'
     ).read_text(encoding='utf-8')
 
-    assert 'ccb agent status --json' in skill
-    assert 'ccb agent show <agent> --json' in skill
-    assert 'ccb layout resolve <agent>' in skill
-    assert 'ccb layout resolve planner_helper1 --window-class plan-orchestrate --json' in skill
-    assert 'resolved_window_name' in skill
-    assert 'will_create_window' in skill
-    assert 'ccb agent add <name>:<provider>' in skill
-    assert '--window-class <class>' in skill
-    assert 'ccb agent park <agent> --json' in skill
-    assert 'ccb agent resume <agent> --hidden --json' in skill
-    assert 'ccb agent release <agent> --idle-only --json' in skill
-    assert 'ccb layout status --json' in skill
-    assert 'agent_kind' in skill
-    assert 'ownership_class' in skill
-    assert 'dispatch_state' in skill
-    assert 'pane_identity_source' in skill
-    assert 'failed_apply' in skill
-    assert 'retained_busy' in skill
-    assert 'namespace_reflowed_windows' in skill
-    assert 'source=loop' in skill
-    assert 'orchestrator-capacity' in skill
-    assert 'Never edit `.ccb/ccb.config`' in skill
-    assert 'call raw `ccb reload`' in skill
-    assert 'call raw `ccb kill`' in skill
-    assert 'run `tmux`' in skill
-    assert 'remove --policy kill' in skill
+    assert 'not projected' in skill
+    assert 'active provider skill' in skill
+    assert 'Do not run CCB commands' in skill
+    assert 'runner owns command execution' in skill.lower()
+    for forbidden in (
+        'ccb agent status --json',
+        'ccb agent show <agent> --json',
+        'ccb layout resolve <agent>',
+        'ccb agent add <name>:<provider>',
+        'ccb agent park <agent>',
+        'ccb agent resume <agent>',
+        'ccb agent release <agent>',
+        'ccb layout status --json',
+        'remove --policy kill',
+    ):
+        assert forbidden not in skill
 
 
 def test_orchestrator_capacity_template_keeps_placement_ccb_owned() -> None:
@@ -215,11 +213,17 @@ def test_workflow_rolepacks_translate_and_project_role_skills() -> None:
 
         assert manifest.id == role_id
         assert manifest.default_agent_name == expectation['default']
-        assert {'codex', 'claude', 'qwen', 'zai'} <= set(manifest.providers)
+        expected_providers = expectation.get('providers')
+        if expected_providers is None:
+            assert {'codex', 'claude', 'qwen', 'zai'} <= set(manifest.providers)
+            skill_providers = ('codex', 'qwen')
+        else:
+            assert manifest.providers == tuple(expected_providers)
+            skill_providers = tuple(expected_providers)
         assert manifest.manifest['memory']['files'] == ['memory.md', 'adapters/ccb/memory.md']
-        expected_skills = tuple(expectation.get('skills') or (expectation['skill'],))
-        assert manifest.manifest['skills']['codex'] == list(expected_skills)
-        assert manifest.manifest['skills']['qwen'] == list(expected_skills)
+        expected_skills = tuple(expectation['skills']) if 'skills' in expectation else (expectation['skill'],)
+        for provider in skill_providers:
+            assert manifest.manifest['skills'][provider] == list(expected_skills)
         for skill in expected_skills:
             assert (manifest.root / skill / 'SKILL.md').is_file()
 
@@ -232,12 +236,142 @@ def test_workflow_rolepacks_include_common_authority_rule_and_templates() -> Non
 
     for role_id, expectation in ROLE_EXPECTATIONS.items():
         root = role_root(role_id)
-        memory = (root / 'memory.md').read_text(encoding='utf-8')
+        memory_files = [root / 'memory.md']
+        adapter_memory = root / 'adapters' / 'ccb' / 'memory.md'
+        if adapter_memory.is_file():
+            memory_files.append(adapter_memory)
+        memory = '\n'.join(path.read_text(encoding='utf-8') for path in memory_files)
         assert 'You may author semantic artifacts and recommend transitions.' in memory
         assert 'You must not directly edit authoritative state' in memory
         assert 'hand-edit state files' in memory
+        assert 'supervisor/runner' in memory
+        assert 'Do not run CCB' in memory or 'Do not use CCB `ask`' in memory or 'Never run `ccb plan task-artifact`' in memory
+        for forbidden in (
+            'Use CCB-owned commands',
+            'host-provided skill wrappers',
+            'for authoritative writes',
+        ):
+            assert forbidden not in memory
         for template in expectation['templates']:
             assert (root / template).is_file(), f'{role_id} missing {template}'
+
+
+def test_frontdesk_planner_and_task_detailer_are_reply_only_for_authority_and_routing() -> None:
+    for role_id in ('agentroles.ccb_frontdesk', 'agentroles.ccb_planner', 'agentroles.ccb_task_detailer'):
+        root = role_root(role_id)
+        combined = '\n'.join(
+            [
+                (root / 'memory.md').read_text(encoding='utf-8'),
+                (root / 'adapters' / 'ccb' / 'memory.md').read_text(encoding='utf-8'),
+            ]
+        )
+
+        assert (
+            'Return semantic artifacts' in combined
+            or 'Return semantic detail artifacts' in combined
+            or 'Reply only with macro task requests' in combined
+            or 'reply-visible artifacts' in combined
+        )
+        assert (
+            'Do not run CCB authority commands' in combined
+            or 'Do not use CCB `ask`' in combined
+            or 'Never run `ccb plan task-artifact`' in combined
+        )
+        assert 'supervisor/runner' in combined
+        for forbidden in (
+            'Allowed CCB surfaces',
+            'Use CCB-owned commands',
+            'host-provided skill wrappers',
+            'Produce task-local detail artifacts for `ccb plan task-artifact` import',
+            'Use CCB `ask` only for macro delegation',
+        ):
+            assert forbidden not in combined
+        if role_id == 'agentroles.ccb_task_detailer':
+            assert 'Do not write detail artifacts into the project tree for later self-import' in combined
+            assert 'supervisor import files' in combined
+            assert 'later self-import' in combined
+
+
+def test_frontdesk_rolepack_is_read_only_intake_not_implementation() -> None:
+    root = role_root('agentroles.ccb_frontdesk')
+    manifest = load_role_manifest(root)
+    combined = '\n'.join(
+        [
+            (root / 'memory.md').read_text(encoding='utf-8'),
+            (root / 'adapters' / 'ccb' / 'memory.md').read_text(encoding='utf-8'),
+            (root / 'skills' / 'frontdesk-intake' / 'SKILL.md').read_text(encoding='utf-8'),
+        ]
+    )
+
+    assert manifest.manifest['permissions']['read_files'] is True
+    assert manifest.manifest['permissions']['write_files'] is False
+    assert manifest.manifest['compatibility']['providers'] == ['codex', 'claude']
+    assert manifest.manifest['adapters']['ccb']['command_surface'] == 'adapters/ccb/command-surface.toml'
+    assert 'first non-empty line exactly\n  `**Intake Evidence**`' in combined
+    assert 'Every turn, classify the user message first' in combined
+    assert 'ccbd controller validates' in combined
+    assert 'completed reply and performs' in combined
+    assert 'script-owned handoff to planner' in combined
+    assert 'Do not run `ccb frontdesk forward-planner`' in combined
+    assert '--intake-base64 <base64-utf8-artifact>' not in combined
+    assert "<<'EOF'" not in combined
+    assert 'frontdesk_intake_status: ok' not in combined
+    assert 'ordinary `ccb ask`' in combined
+    assert 'Do not implement the request' in combined or 'Do not perform implementation' in combined
+    assert 'Do not create, edit, delete, or format' in combined
+    assert 'Do not run tests, builds, linters' in combined
+    assert 'Convert implementation requests' in combined
+    for forbidden in (
+        'write_files = true',
+        'Implemented the',
+        'Changed:',
+        'Verification:',
+        'ccb ask planner',
+        'command ask planner',
+        'Bash(',
+    ):
+        assert forbidden not in combined
+
+
+def test_frontdesk_rolepack_declares_hard_forward_planner_command_surface() -> None:
+    manifest = load_role_manifest(role_root('agentroles.ccb_frontdesk'))
+    policy = load_role_command_policy(manifest)
+
+    assert policy is not None
+    assert policy.mode == 'deny_all_except'
+    assert policy.enforcement == 'required'
+    assert policy.if_unsupported == 'fail_mount'
+    assert policy.generic_shell is False
+    assert policy.generic_ccb is False
+    assert policy.supported_providers == ('codex', 'claude')
+    assert policy.allowed_effects == ()
+    assert {'task_create', 'artifact_import', 'status_write', 'runner_start', 'worker_dispatch'} <= set(
+        policy.forbidden_effects
+    )
+    assert policy.allowed == ()
+
+
+def test_coder_rolepack_is_workspace_only_and_reply_only_for_workflow_authority() -> None:
+    root = role_root('agentroles.coder')
+    combined = '\n'.join(
+        [
+            (root / 'memory.md').read_text(encoding='utf-8'),
+            (root / 'adapters' / 'ccb' / 'memory.md').read_text(encoding='utf-8'),
+            (root / 'skills' / 'bounded-work-item' / 'SKILL.md').read_text(encoding='utf-8'),
+        ]
+    )
+
+    assert 'Do not run CCB commands' in combined
+    assert 'supervisor/runner owns' in combined
+    assert 'After the final required verification command completes' in combined
+    assert 'send the final answer immediately' in combined
+    for forbidden in (
+        'Use CCB-owned commands',
+        'host-provided skill wrappers',
+        'for authoritative writes',
+        'such as `ccb plan`',
+    ):
+        assert forbidden not in combined
 
 
 def test_round_reviewer_and_orchestrator_templates_share_result_contract() -> None:
@@ -246,6 +380,25 @@ def test_round_reviewer_and_orchestrator_templates_share_result_contract() -> No
         / 'agentroles.ccb_round_reviewer'
         / 'templates'
         / 'round-result.md'
+    ).read_text(encoding='utf-8')
+    accepted_round_memory = (
+        WORKFLOW_DRAFTS
+        / 'agentroles.ccb_round_reviewer'
+        / 'memory.md'
+    ).read_text(encoding='utf-8')
+    accepted_round_adapter = (
+        WORKFLOW_DRAFTS
+        / 'agentroles.ccb_round_reviewer'
+        / 'adapters'
+        / 'ccb'
+        / 'memory.md'
+    ).read_text(encoding='utf-8')
+    accepted_round_skill = (
+        WORKFLOW_DRAFTS
+        / 'agentroles.ccb_round_reviewer'
+        / 'skills'
+        / 'round-verification'
+        / 'SKILL.md'
     ).read_text(encoding='utf-8')
     legacy_round_template = (
         WORKFLOW_DRAFTS
@@ -262,14 +415,25 @@ def test_round_reviewer_and_orchestrator_templates_share_result_contract() -> No
         encoding='utf-8'
     )
 
-    result_line = 'round result: pass|rework_node|partial|replan_required|global_blocker'
-    assert result_line in accepted_round_template
-    assert result_line in legacy_round_template
+    result_line = 'round result: pass|partial|replan_required|blocked'
+    legacy_result_line = 'round result: pass|rework_node|partial|replan_required|global_blocker'
+    assert accepted_round_template.startswith(result_line)
+    for text in (accepted_round_template, accepted_round_memory, accepted_round_adapter, accepted_round_skill):
+        assert result_line in text
+        assert 'first non-empty line' in text
+        assert 'preamble' in text
+        assert 'Markdown fence' in text
+        assert 'Do not run tests' in text
+        assert legacy_result_line not in text
+    assert legacy_result_line in legacy_round_template
     assert 'aggregation result: complete|partial|blocked|replan_required' in aggregation_template
     assert 'pass`, `rework_required`, `blocked`, `non_converged' in checker_ask
 
 
-def test_orchestrator_rolepack_projects_capacity_skill_to_codex_home(tmp_path: Path, monkeypatch) -> None:
+def test_orchestrator_rolepack_does_not_project_command_skills_to_codex_home(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
     monkeypatch.setenv('HOME', str(tmp_path / 'home'))
     monkeypatch.setenv('AGENT_ROLES_STORE', str(tmp_path / '.roles'))
     installed = tmp_path / '.roles' / 'installed' / 'agentroles.ccb_orchestrator' / 'current'
@@ -305,14 +469,8 @@ def test_orchestrator_rolepack_projects_capacity_skill_to_codex_home(tmp_path: P
         workspace_path=project,
     )
 
-    projected = target_home / 'skills' / 'orchestrator-capacity' / 'SKILL.md'
-    assert projected.is_file()
-    assert 'ccb loop capacity ensure' in projected.read_text(encoding='utf-8')
-    dynamic_projected = target_home / 'skills' / 'dynamic-agent-lifecycle' / 'SKILL.md'
-    assert dynamic_projected.is_file()
-    dynamic_text = dynamic_projected.read_text(encoding='utf-8')
-    assert 'ccb layout resolve <agent>' in dynamic_text
-    assert 'ccb agent add <name>:<provider>' in dynamic_text
+    assert not (target_home / 'skills' / 'orchestrator-capacity').exists()
+    assert not (target_home / 'skills' / 'dynamic-agent-lifecycle').exists()
 
 
 def test_planner_rolepack_projects_planner_skill_to_codex_home(tmp_path: Path, monkeypatch) -> None:

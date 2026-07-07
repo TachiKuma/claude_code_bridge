@@ -144,7 +144,14 @@ class ParsedLoopRunOnceCommand:
 class ParsedLoopRunnerCommand:
     project: str | None
     once: bool = True
+    auto: bool = False
+    task_id: str | None = None
+    plan_slug: str | None = None
+    role_job_id: str | None = None
+    wait_job_id: str | None = None
     timeout_s: float | None = None
+    max_steps: int = 24
+    poll_interval_s: float = 2.0
     consume_role_output: bool = False
     json_output: bool = False
     kind: str = 'loop-runner'
@@ -167,6 +174,19 @@ class ParsedPlanTaskCommand:
     result: str | None = None
     json_output: bool = False
     kind: str = 'plan-task'
+
+
+@dataclass(frozen=True)
+class ParsedFrontdeskCommand:
+    project: str | None
+    action: str
+    plan_slug: str | None = None
+    request_id: str | None = None
+    file_path: str | None = None
+    intake_base64: str | None = None
+    intake_text: str = ''
+    json_output: bool = False
+    kind: str = 'frontdesk'
 
 
 @dataclass(frozen=True)
@@ -235,6 +255,7 @@ __all__ = [
     'ParsedCleanupCommand',
     'ParsedConfigValidateCommand',
     'ParsedDoctorCommand',
+    'ParsedFrontdeskCommand',
     'ParsedKillCommand',
     'ParsedLayoutCommand',
     'ParsedLogsCommand',

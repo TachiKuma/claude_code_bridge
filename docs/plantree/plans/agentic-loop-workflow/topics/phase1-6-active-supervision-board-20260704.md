@@ -17,6 +17,165 @@ handoff aid. The acceptance verdict is recorded separately in
 - Phase 6B is claimable for initial real-provider, single-round capability
   after `talk2` final aggregation on 2026-07-05. The accepted evidence set is
   L0 repeat6, L1-L4 repeat12, and L5 partial repeat4.
+- A separate post-acceptance deployment-readiness lane is now active at
+  [phase1-6-deployment-readiness-supervision-20260707.md](phase1-6-deployment-readiness-supervision-20260707.md).
+  It does not retract the bounded Phase 6B claim; it tracks the stricter
+  operator-facing standard requested on 2026-07-07: frontdesk-started real
+  tasks, L1-L4 regression after later source changes, dynamic release under
+  pressure, UI/sidebar visibility, and observer behavior.
+- That deployment-readiness lane is currently blocked. reviewer2
+  `job_7c18b7d9e333` requires independent deployment audit ownership, and
+  reviewer1 `job_50c72bc31578` requires stronger frontdesk route mix,
+  module-level, UI/sidebar, busy-retain, and final-report evidence before any
+  deployment-ready verdict.
+- Current partial deployment evidence: worker1 `job_ec6a6a8b2ef8` passes only
+  the Frontdesk real entry E2E lane. worker2 `job_cd6b21bc5896` provides useful
+  raw L1-L4/sequence13 regression evidence, but it is not deployment-ready
+  evidence because it did not start from frontdesk intake and does not use the
+  fixed row schema. worker3 `job_153786148bfd` provides useful raw
+  UI/sidebar, observer, resident-reachability, and dynamic-unload evidence, but
+  it is not deployment-ready evidence because task authority was
+  script-created/imported after frontdesk asks, fixed evidence rows are
+  missing, and positive busy-retain evidence is still absent. As of the
+  2026-07-07T11:50:57+08:00 local state check, worker1
+  `job_e6cffc269af4` is completed and passes the Frontdesk=Codex
+  direct-execution retest lane with fixed rows for one L2 task reaching
+  `done/pass` and clean dynamic release. It does not cover L1-L4 route mix,
+  UI/sidebar, or positive busy-retain. worker2 `job_a8d5fddd2a67` is completed
+  and is `BLOCKER / not_claimable` for the stricter L1-L4 lane. Fresh root
+  `/home/bfly/yunwei/test_ccb2/deploy-l1-l4-frontdesk-sequence15-worker2-20260707113648`
+  proves the frontdesk/planner entry path, inherited provider home, explicit
+  positive timeout diagnostic, default watch beyond the old 10 second window,
+  and dynamic release for the frontdesk-created combined task. Formal L1 then
+  stopped after worker/reviewer success because final round orchestrator
+  provider delivery failed with `codex_prompt_delivery_failed /
+  delivery_anchor_missing`; L2-L4 were not reached. worker2 applied a focused
+  retry-policy source repair in
+  `lib/ccbd/services/dispatcher_runtime/finalization_retry_runtime/policy.py`
+  so `decision.diagnostics.delivery_retryable=true` can trigger automatic
+  retry without overriding non-retryable API failures. Talk2 re-ran
+  `test/test_ccbd_retry_failure_detail.py` (`4 passed`),
+  `test/test_stability_regressions.py::test_codex_delivery_guard_times_out_after_anchor_never_appears`
+  (`1 passed`), and py_compile for the touched retry files. A new fresh L1-L4
+  frontdesk-started retest after this repair was assigned to worker2 as
+  `job_93f0288df5f7`; sequence15 is consumed failure evidence and must not be
+  reused. A separate frontdesk auto-runner role-output issue was already
+  repaired: an earlier failed planner job `job_ce2490255a5a` had been logged
+  repeatedly as `role_output_import_blocked`, then a later auto-runner for
+  successful planner job `job_03c5c271f243` stopped on the old failed job
+  instead of consuming the requested wait job. The source bug was that blocked
+  role-output imports were not treated as settled for future auto-runner scans.
+  A focused source repair was assigned to worker1 as `job_9e95855157d1`;
+  completion artifact
+  `job_9e95855157d1-art_2036e8fd9d6d4770.txt` is accepted for that focused
+  repair. The scanner path now treats prior `role_output_import_blocked`
+  records as settled while leaving explicit consume `ok`-only, so blocked
+  evidence is not rewritten as pass. Talk2 re-ran `py_compile`, the new
+  regression, the focused `loop_runner_auto or role_output_import` selection
+  (`9 passed`), and the full `test/test_loop_capacity_cli.py` file
+  (`109 passed`). The older queued worker2 ask `job_ac5fef15fa2a` failed with
+  an empty artifact and is not evidence; the active post-repair retest is
+  worker2 `job_93f0288df5f7`. Later worker3 ask `job_731bc4142333` also failed
+  with an empty artifact and is not evidence.
+- Worker2 `job_93f0288df5f7` completed the fresh sequence16 retest after
+  worker1's explicit-project ask repair. The frontdesk target blocker is
+  cleared, but sequence16 is still `not_claimable`: L1 reached
+  `direct_execution -> done/pass`; L3 reached `needs_detail -> detail_ready`;
+  L4 macro reached `macro_adjustment_request -> replan_required`; L4 blocked
+  reached `blocked -> blocked`; L2 reached `direct_execution` but became
+  terminally `blocked` before worker/reviewer execution because rolepack/bootstrap
+  setup failed. Logs show `roles_install_all.stderr` reporting `role source not
+  found` for all required CCB route roles, and the generated B7 missed
+  task-show/round evidence for direct rows while preserving stale dynamic
+  residue despite post-B7 cleanup returning `state: unmounted`. This is a
+  sequence driver/B7 evidence blocker, not an accepted L1-L4 result. worker3
+  `job_553ecdfb89ca` returned
+  `BLOCKER / not deployment-ready`: positive rows cover busy-retain,
+  UI/sidebar switching, and observer timeout behavior, but direct execution can
+  leave dynamic release residue after auto-release timeout, `needs_detail` can
+  repeatedly reactivate task_detailer instead of settling to `detail_ready`, and
+  provider delivery failures prevented the full route mix. Focused repair
+  `job_fb4475224824` is accepted as source repair: task_detailer output imports
+  detail artifacts once and settles `detail_ready`, and release reconcile now
+  performs one bounded non-busy residue retry. The real-provider stress harness
+  still needs a fresh rerun before deployment readiness. These are triage
+  observations only, not acceptance evidence.
+- Worker1 `job_df3c9451c8b5` is accepted as source repair for the sequence16
+  rolepack/bootstrap and B7 evidence blocker. Source-test role installation now
+  discovers source-checkout draft RolePacks, required draft manifests use
+  installer-valid `catalog.level = "experimental"`, the maintained sequence
+  packet seeds roles via `ccb_test roles install --skip-tools`, duplicate task
+  creation is handled by observing/reusing existing task authority, and B7 can
+  read round evidence from task-show artifact paths while keeping stale topology
+  residue failing unless authoritative cleanup evidence says `kill_status: ok`
+  and `state: unmounted`. Talk2 verified the targeted 94-test bundle,
+  py_compile, invalid-level scan, and a source-wrapper role-seed smoke for all
+  seven required roles from `/home/bfly/yunwei/test_ccb2`. This is source
+  repair evidence only; a fresh sequence17 real-provider L1-L4 retest is
+  required.
+- Worker2 `job_6437d7ef41ea` consumed sequence17 from fresh root
+  `/home/bfly/yunwei/test_ccb2/deploy-l1-l4-frontdesk-sequence17-worker2-20260707-131428`.
+  It is `not_claimable`. Role seeding and final cleanup were fixed, but the
+  harness split into two task flows: frontdesk created the meta task
+  `fresh-sequence17-real-provider-deploymen-20260707052218`, which blocked on
+  `isolated_workspace_deletions_unsupported`, while the supervisor then created
+  manual L1 task `phase6b-l1-doc-direct-execution` and killed the project while
+  that worker job was still incomplete, producing `ask_job_incomplete`. The
+  B7/equivalent report also read stale pre-terminal task-show evidence. This is
+  a harness/controller blocker, not a provider-task pass or a valid L1 failure.
+- Talk2 audited worker1 `job_08f4c86e3973` as the sequence17
+  harness/controller source repair and added one stricter guard before any
+  fresh provider run: live ask-first pending authority in `round.pending.json`
+  or `ask_first_stage_state.json` now stops progress/cleanup with rc 78, and
+  provider-running `loop runner --once` paths in the sequence12 driver no
+  longer pass explicit timeout values or use shell timeout wrapping. Verified:
+  sequence12 doc tests (`30 passed`), rolepack tests (`66 passed`), and focused
+  pending/timeout loop regressions (`78 passed, 128 deselected`). Fresh
+  real-provider asks are in flight as worker2 `job_a1edbee23686` for
+  frontdesk-started L1-L4 sequence18 and worker3 `job_89215d1865e5` for
+  single-round dynamic-node unload stress.
+- Worker2 `job_a1edbee23686` returned an invalid evidence report: the claimed
+  sequence18 fresh root and its B7/rows/command-log paths do not exist on
+  disk, and only the old sequence17 root is present. Worker3
+  `job_89215d1865e5` exposed a separate harness blocker: the generated config
+  mounted only `bootstrap:codex`, so `ccb_test ask frontdesk` failed with
+  `unknown agent: frontdesk`; role profiles alone do not create ask targets.
+  Worker1 follow-up job `job_a0fac3efdb4c` produced a parameterized,
+  non-stale runner with inspectable manifest paths and no provider timeout, but
+  talk2 audit found the worker3 resident-agent blocker still uncovered.
+  Follow-up jobs `job_e19d3a0c25a5`, `job_c515d0f1736e`, and
+  `job_83494eb661b7` require the runner to write resident-agent config before
+  startup or reload it before use, and to validate mounted resident
+  frontdesk/planner/orchestrator/task_detailer/ccb_round_reviewer
+  `agent.json` authority before any further L1-L4 retest is accepted.
+  Worker1 `job_e19d3a0c25a5` completed only the config/static portion; talk2
+  rejected it as complete because it still did not check actual
+  `.ccb/agents/<target>/agent.json` mounted authority. A stricter follow-up
+  `job_7ebb314a7bcc` / `job_c515d0f1736e` added the negative
+  `resident_agents_not_mounted` guard before `frontdesk-entry`. Worker1
+  `job_83494eb661b7` completed the positive source/static coverage proving all
+  resident `agent.json` files allow `frontdesk_entry` to reach the ask command
+  path, but worker3 `job_89215d1865e5` then exposed the next readiness blocker:
+  resident `agent.json` files can exist while `ps` reports every resident as
+  `state=degraded`, and frontdesk delivery can fail with
+  `codex_prompt_delivery_failed / delivery_anchor_missing` because the current
+  provider log path points to an old donor root. Worker1 `job_c82254482242`
+  plus talk2 local hardening now add the missing source/static resident
+  readiness guard: the runner parses `ccb_test --project <project> ps`, and
+  `init` / `frontdesk-entry` fail with `resident_agents_not_ready` unless all
+  five resident roles are live and `state=idle`. `degraded`, `busy`, and
+  missing ps entries now block before any `ask frontdesk`. Verified:
+  `test/test_phase6b_l1_l4_frontdesk_runner.py` -> `13 passed` and py_compile
+  for the runner/test. No fresh real-provider retest has consumed this repair.
+- Fresh post-guard real-provider retests were submitted for the next evidence
+  wave: worker1 `job_df0ee0c52429` for frontdesk=codex direct-execution smoke,
+  worker2 `job_e8f28dbc52f5` for L1-L4 route-mix regression with the maintained
+  runner, and worker3 `job_1c6a378536be` for UI/lifecycle pressure. These jobs
+  are in flight only. Acceptance requires inspectable fresh roots under
+  `/home/bfly/yunwei/test_ccb2`, inherited provider environment, no fake
+  provider, live resident `ps` all idle before frontdesk ask, fixed evidence
+  rows, script-owned authority imports, dynamic release/retention evidence,
+  cleanup after B7, and no missing evidence paths.
 - This claim does not approve production/default enablement, post-detail
   execution, reviewer-rework stability, long-running multi-round workflows, or
   arbitrary workflow authoring.
@@ -324,7 +483,9 @@ Accept only if the callback and reviewer artifact prove:
   `test_design_failure` because of a later blocked-row issue;
 - L3 remains route/detail-only at `detail_ready` unless a fresh reviewer
   approval explicitly expands it;
-- L5 reviewer-rework/partial remains excluded and Phase 6B remains unclaimed;
+- L5 reviewer-rework/partial remains excluded from this historical L1-L4
+  packet; the current bounded Phase 6B claim is based on L0 repeat6, L1-L4
+  repeat12, L5 partial repeat4, and the 2026-07-05 final aggregation;
 - real-provider command shape inherits the current system provider environment
   and does not export lab-local `HOME` or `CCB_SOURCE_HOME`;
 - `python -m pytest test/test_phase6b_l1_l4_launch_request_doc.py -q` is green
@@ -512,9 +673,10 @@ acceptance. The callback and reviewer2 artifact satisfy the intended checks:
   release blockers, and release-incomplete agents.
 - Static tests or extraction checks prove the documented schema and embedded
   normalizer output do not drift.
-- Nearby status/index docs state that the work remains plan/doc/test readiness
-  only, and that Phase 6B still needs fresh approval-to-run plus real-provider
-  L1-L4/L5 B7 evidence.
+- Nearby status/index docs stated at that time that the work remained
+  plan/doc/test readiness only. Current active status now points to the
+  2026-07-05 final aggregation for the bounded Phase 6B claim and keeps future
+  real-provider runs behind fresh root/launch decisions.
 
 ## Worker1 L1-L4 Approval-Packet Callback Checklist
 
@@ -750,3 +912,38 @@ approval-to-run packet and have reviewer2 audit it. This active lane is
 request preparation only: if approval is granted, the command must not be run
 until talk2 reads the full reviewer artifact and confirms the exact approved
 root, task tranche, and command shape.
+
+## 2026-07-07 Current Effective Gate
+
+The current deployment-readiness lane has moved past launch-packet approval
+reviews and is blocked on real frontdesk-started behavior.
+
+- Latest route-mix real run evidence is worker2 `job_e8f28dbc52f5`:
+  `invalid_harness`. It proves resident-idle preflight, natural-language
+  frontdesk entry, automatic planner handoff, and real planner activation, but
+  planner returned one controller-owned validation meta task instead of the
+  intended L1-L4 task set. No claimable B7/rows were produced.
+- The source contract still asks planner for one `task-packet.md` plus one
+  `readiness.json`; current code inspection shows no accepted `task-set`
+  schema yet. This is a product contract blocker for multi-task/route-mix
+  workflows, not a reporting issue.
+- worker2 `job_d54ea15ed764` failed with `pane_dead` and a zero-byte artifact;
+  it is invalid worker evidence. The follow-up source-only repair
+  `job_d67e88548023` now passes the focused invalid-harness regression and
+  hardens the runner/B7 path. A later retry request `job_fa7e24e69871`
+  failed again with a zero-byte artifact and is not evidence.
+- worker3 `job_4666f8642b59` completed file-only evidence audit and confirms
+  none of the visible roots is deployment-readiness pass evidence. worker1 is
+  blocked by missing plan root in the first observed handoff path, worker2 is
+  non-claimable because the route matrix collapsed into a meta task, and
+  worker3 is invalid due stale sequence37 root reuse. UI/sidebar evidence is
+  still unproven.
+- worker1 `job_8ee629a6634f` completed source repair and is accepted for the
+  multi-task handoff contract only. The focused source tests pass, but this is
+  not deployment readiness evidence.
+
+Do not claim deployment readiness or run another broad real-provider stress
+lane until the source contract and runner evidence hardening land, pass source
+tests, and a fresh real-provider rerun proves frontdesk intake through planner
+decomposition, route execution/review, dynamic-agent release, and B7 rows
+before cleanup.

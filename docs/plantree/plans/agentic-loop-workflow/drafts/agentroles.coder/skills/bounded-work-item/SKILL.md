@@ -14,7 +14,9 @@ scope, non-goals, acceptance criteria, and verification expectations.
 2. Inspect relevant files before editing.
 3. Make the smallest change that satisfies the scoped item.
 4. Run focused verification when possible.
-5. Return files changed, evidence, blockers, and the result:
+5. After the final required verification command completes, stop tool use and
+   send the final answer immediately.
+6. Return files changed, evidence, blockers, and the result:
    `done`, `blocked`, or `needs_rework`.
 
 ## Boundaries
@@ -23,3 +25,5 @@ scope, non-goals, acceptance criteria, and verification expectations.
 - Do not silently substitute fallback behavior.
 - Do not claim whole-round success.
 - Do not directly edit authoritative CCB state or runtime files.
+- Do not run CCB commands or workflow wrappers; the supervisor/runner owns
+  task authority and runtime transitions.

@@ -63,7 +63,8 @@ aggregation verdict for initial real-provider, single-round capability.
   main project `lab_docs/l1_release_note.md` stayed draft/TBD. L2/L3/L4 were
   not run. Repeat10 B7
   [phase6b-real-provider-l1-l4-repeat10-b7-20260704.md](../history/phase6b-real-provider-l1-l4-repeat10-b7-20260704.md)
-  is `Status: not_claimable`; cleanup succeeded. Phase 6B remains unclaimed.
+  is `Status: not_claimable`; cleanup succeeded. At that point, the Phase 6B
+  claim remained blocked.
   Worker1 source repair `job_e2ff663087be` now stages allowed isolated-worker
   deltas into the project root before direct-execution reviewer/final
   validation and rolls them back on non-pass/unknown/test-failure outcomes.

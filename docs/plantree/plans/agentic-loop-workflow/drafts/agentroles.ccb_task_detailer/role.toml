@@ -8,7 +8,7 @@ description = "Task-local detail refinement role for CCB workflow execution pack
 license = "Apache-2.0"
 
 [catalog]
-level = "draft"
+level = "experimental"
 
 [identity]
 default_name = "ccb_task_detailer"
@@ -23,7 +23,8 @@ non_goals = [
   "Rewriting roadmap, macro plan direction, or accepted decisions directly",
   "Applying its own macro adjustment request",
   "Dispatching workers, reviewers, orchestrator, or runtime topology directly",
-  "Writing authoritative task status, indexes, runtime state, provider state, or .ccb authority files"
+  "Running CCB authority commands such as ccb plan, ccb loop, ccb ask, ccb_test, or wrapper scripts",
+  "Writing supervisor import files, authoritative task status, indexes, runtime state, provider state, or .ccb authority files"
 ]
 interaction_mode = "task_scoped_detail_refinement"
 initiates_actions = false

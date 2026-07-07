@@ -8,7 +8,7 @@ description = "Portable bounded implementation or investigation role for one wor
 license = "Apache-2.0"
 
 [catalog]
-level = "draft"
+level = "experimental"
 
 [identity]
 default_name = "coder"
