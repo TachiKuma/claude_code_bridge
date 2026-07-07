@@ -2362,9 +2362,10 @@ def test_execution_service_codex_adapter_adopts_new_session_after_delayed_fallba
         CompletionItemKind.TURN_BOUNDARY,
     ]
     assert update.items[-1].payload['last_agent_message'] == 'new session reply'
-    assert update.submission.runtime_state['delivery_state'] == 'accepted'
-    assert update.submission.runtime_state['session_path'] == str(new_log)
-    assert 'codex_anchor_fallback_log' not in update.submission.runtime_state
+    active_state = service._active[job.job_id].runtime_state
+    assert active_state['delivery_state'] == 'accepted'
+    assert active_state['session_path'] == str(new_log)
+    assert 'codex_anchor_fallback_log' not in active_state
     assert update.decision is None
 
 
