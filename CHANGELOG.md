@@ -1,14 +1,53 @@
 # Changelog
 
-## Unreleased
+## v8.1.0 (2026-07-10)
 
-### Provider Hook Launchers
+### Configuration Control And Lighter Defaults
 
+- **Visual Config Control Added**: the sidebar's top-left `⚙` action and
+  `ccb config ui` now open a loopback-only project control panel for windows,
+  pane splits, providers, models, thinking levels, API overrides, workspaces,
+  Rich mode, sidebar settings, validation, diff review, save, and guarded hot
+  reload.
+- **Blank Projects Start With One Agent**: when project and user config are
+  absent, CCB now mounts exactly one agent named `demo` and selects the first
+  locally available supported CLI, preferring Codex, Claude, and Gemini. An
+  explicit project or user config remains fully authoritative for custom
+  single- or multi-agent topologies.
+- **Config Documentation Refreshed**: the English homepage and all localized
+  READMEs now show the settings entry, the real control-panel UI, and the new
+  lightweight default; localized files live under `README/` with Chinese at
+  `README/zh.md`.
+
+### Provider Integration And Reliability
+
+- **Grok CLI Integrated**: Grok is available as a managed native CLI provider
+  with isolated home/session state, readiness and completion handling,
+  diagnostics, tests, and public README badge coverage.
+- **Kimi Readiness Updated**: Kimi Code v0.23.1 startup detection no longer
+  depends on the removed K2.7 brand banner.
+- **OpenCode Fresh Sessions Honored**: explicit fresh/new-context launches no
+  longer auto-continue an older OpenCode session.
 - **Claude And Gemini Hook Interpreter Fixed**: managed completion and
-  activity hooks now execute the CCB bash launchers directly, allowing their
-  shebang and `_ccb-python` resolver to select a compatible Python runtime.
-  Extensionless launchers are no longer incorrectly prefixed with `python3`,
-  preventing the bash syntax error reported in GitHub issue #249.
+  activity hooks execute the CCB bash launchers directly, allowing their
+  shebang and `_ccb-python` resolver to select a compatible Python runtime and
+  avoiding the extensionless-launcher failure reported in GitHub issue #249.
+
+### Mobile Performance And Resilience
+
+- **Gateway Profiles Persisted**: preferred Mobile gateway profiles and paired
+  credentials survive temporary gateway outages instead of being discarded.
+- **Project Discovery Kept Responsive**: server project health is cached and
+  the previous project list remains visible while refreshes warm, reducing
+  repeated health checks and transient empty states.
+- **Terminal UI Work Reduced**: working-indicator repaints and terminal input
+  state scans are reduced without changing input or activity behavior.
+
+### Release Surface
+
+- **Release Metadata Synchronized**: VERSION, source CLI metadata,
+  `package.json`, Mobile app metadata and download links, workflow dispatch
+  defaults, README variants, and release notes are aligned for 8.1.0.
 
 ## v8.0.19 (2026-07-07)
 

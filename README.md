@@ -6,7 +6,7 @@
 **Coordinate Codex, Claude, Gemini, and other CLI agents in visible, controllable workflows you can take over**
 
 <p>
-  <img src="https://img.shields.io/badge/version-8.0.19-orange.svg" alt="version">
+  <img src="https://img.shields.io/badge/version-8.1.0-orange.svg" alt="version">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WSL-lightgrey.svg" alt="platform">
   <img src="https://img.shields.io/badge/providers-17%20CLI%20families-0B7285.svg" alt="providers">
 </p>
@@ -180,9 +180,9 @@ This command guides installation and configuration.
 <details>
 <summary><b>Mobile App details, safety boundary, and source</b></summary>
 
-CCB 8.0.19 includes the Flutter CCB Mobile source in [`mobile/`](mobile/) and publishes the Android APK through GitHub Releases:
+CCB 8.1.0 includes the Flutter CCB Mobile source in [`mobile/`](mobile/) and publishes the Android APK through GitHub Releases:
 
-- [Download CCB Mobile v8.0.19 APK](https://github.com/SeemSeam/claude_codex_bridge/releases/download/v8.0.19/ccb-mobile-v8.0.19.apk)
+- [Download CCB Mobile v8.1.0 APK](https://github.com/SeemSeam/claude_codex_bridge/releases/download/v8.1.0/ccb-mobile-v8.1.0.apk)
 - App source: [`mobile/app`](mobile/app)
 - Server gateway source: [`lib/mobile_gateway`](lib/mobile_gateway)
 
@@ -266,6 +266,17 @@ Thanks to [tmux-agent-sidebar](https://github.com/hiroppy/tmux-agent-sidebar) fo
 ## Release Notes
 
 <details open>
+<summary><b>v8.1.0</b> - Config control plane and lighter defaults</summary>
+
+- Added a visual project configuration control panel, opened from the sidebar's top-left **⚙ Settings** action or with `ccb config ui`, with validation, diff review, save, reload dry-run, and guarded hot reload.
+- Blank projects now mount exactly one agent named `demo`, selecting the first locally available supported CLI; explicit project and user configs still support any single- or multi-agent topology.
+- Added managed Grok CLI integration, Kimi Code v0.23.1 readiness support, correct OpenCode fresh-session behavior, and reliable Claude/Gemini hook launcher execution.
+- Improved CCB Mobile gateway profile persistence, paired-credential retention, project health caching, warm-list visibility, and terminal UI efficiency.
+- Reorganized localized READMEs under `README/`, added the real config-control screenshot, and synchronized package, Mobile, workflow, and release metadata for 8.1.0.
+
+</details>
+
+<details>
 <summary><b>v8.0.19</b> - Mobile host startup health-check fix</summary>
 
 - `ccb update mobile` now uses more tolerant per-request and overall startup timeouts for the server-wide loopback `/v1/health` endpoint, avoiding false failures when many projects are mounted.
