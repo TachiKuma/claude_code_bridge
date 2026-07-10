@@ -1,7 +1,7 @@
 # Single-Lane Multi-Workgroup Modification And Test Plan
 
 Date: 2026-07-11
-Status: R1/G1 complete; Config V3 and RolePack Wave 1 packages pending
+Status: Wave 1 complete; Wave 2 Git integration/topology/evidence active
 
 F1 authority interfaces and adaptive group selection are frozen by
 [Decision 026](../decisions/026-authority-envelope-and-adaptive-workgroup-selection.md).
@@ -13,6 +13,9 @@ the orchestrator from complexity and cutability rather than by test scripts.
 
 R1 landed in commit `0c2f19ef`; direct evidence is recorded in
 [single-lane-r1-authority-runtime-closure-20260711.md](../history/single-lane-r1-authority-runtime-closure-20260711.md).
+Config V3 and adaptive RolePack contracts landed in `615460ec`, `95d9a409`,
+`6c2a15ad`, and `fcf07b3a`; direct evidence is recorded in
+[single-lane-wave1-config-rolepack-closure-20260711.md](../history/single-lane-wave1-config-rolepack-closure-20260711.md).
 The controller still rejects multi-node execution before bind, so the next
 runtime implementation gate is G2 integration followed by G3 scheduling, not
 real-provider fanout yet.

@@ -1,7 +1,7 @@
 # Single-Lane Multi-Workgroup Release Goal
 
 Date: 2026-07-11
-Status: In progress; F1/R1 and generalized one-node G1 kernel landed
+Status: In progress; Wave 1 F1/R1/C1/P1 landed, Wave 2 active
 
 ## Goal
 
@@ -50,6 +50,11 @@ Already available and preserved:
   enforcement, V2 replan-safe compatibility, and removal of the normal
   post-worker orchestrator call. Evidence is recorded in
   [../history/single-lane-r1-authority-runtime-closure-20260711.md](../history/single-lane-r1-authority-runtime-closure-20260711.md).
+- commits `615460ec`, `95d9a409`, `6c2a15ad`, and `fcf07b3a` close C1/P1:
+  strict Config V3 and sanitized effective authority, V2 migration preview,
+  complete RolePack/provider validation, adaptive bundle/node role contracts,
+  and install/projection tests. Evidence is recorded in
+  [../history/single-lane-wave1-config-rolepack-closure-20260711.md](../history/single-lane-wave1-config-rolepack-closure-20260711.md).
 
 Blocking gaps:
 
@@ -63,8 +68,8 @@ Blocking gaps:
   shared project root;
 - `max_nodes` currently counts physical profile instances, not semantic
   workgroups;
-- Config V3 is design-only and its older draft incorrectly treats immaculate
-  roles as resident.
+- Config V3 is implemented but remains runtime-gated until multi-node bind,
+  integration, scheduling, and acceptance are complete.
 
 ## Scope
 

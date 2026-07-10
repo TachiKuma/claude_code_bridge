@@ -7,9 +7,11 @@ Date: 2026-06-24
 - F1/R1 and the generalized one-node G1 kernel landed in `0c2f19ef`.
   Direct evidence is in
   [history/single-lane-r1-authority-runtime-closure-20260711.md](history/single-lane-r1-authority-runtime-closure-20260711.md).
-- Current work is C1 Config V3 plus P1 RolePack projection. G2 Git integration
-  and G3 ready-frontier scheduling remain gated until Wave 1 is combined and
-  green.
+- C1 Config V3 and P1 adaptive RolePack projection are integrated in
+  `6c2a15ad`/`fcf07b3a` and `615460ec`/`95d9a409`. Direct evidence is in
+  [history/single-lane-wave1-config-rolepack-closure-20260711.md](history/single-lane-wave1-config-rolepack-closure-20260711.md).
+- Current work is Wave 2: G2 Git integration, topology/capacity generalization,
+  and evidence/failure harnesses, before the central G3 scheduler.
 - Real one-to-four workgroup provider runs are intentionally unopened until
   multi-node bind, integration, recovery, lifecycle, and result gates exist.
 
