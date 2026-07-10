@@ -265,6 +265,165 @@ def test_install_watchdog_for_python_uses_real_virtualenv_scope(tmp_path: Path) 
     assert "--user" not in pip_argv
 
 
+def test_install_watchdog_retries_macos_tls_failure_with_fallback_index(tmp_path: Path) -> None:
+    completed = _run_install_snippet(
+        tmp_path,
+        """
+        venv_dir="$HOME/managed-venv"
+        fake_modules="$HOME/fake-modules"
+        pip_argv_marker="$HOME/pip-argv.txt"
+        python3 -m venv "$venv_dir"
+        mkdir -p "$fake_modules"
+        cat > "$fake_modules/pip.py" <<'PY'
+        import os
+        import pathlib
+        import sys
+
+        marker = pathlib.Path(os.environ["PIP_ARGV_MARKER"])
+        with marker.open("a", encoding="utf-8") as stream:
+            stream.write(" ".join(sys.argv[1:]) + "\\n")
+        fallback = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
+        if fallback not in sys.argv:
+            print("SSL: CERTIFICATE_VERIFY_FAILED unable to get local issuer certificate")
+            raise SystemExit(1)
+        pathlib.Path(os.environ["FAKE_MODULES_DIR"], "watchdog.py").write_text(
+            "__version__ = 'test'\\n", encoding="utf-8"
+        )
+        raise SystemExit(0)
+        PY
+        detect_platform() { echo macos; }
+        PIP_ARGV_MARKER="$pip_argv_marker" \
+        FAKE_MODULES_DIR="$fake_modules" \
+        PYTHONPATH="$fake_modules" \
+          install_watchdog_for_python "$venv_dir/bin/python"
+        cat "$pip_argv_marker"
+        """,
+    )
+
+    assert completed.returncode == 0, completed.stderr or completed.stdout
+    assert "retrying with" in completed.stdout
+    assert "watchdog installed" in completed.stdout
+    pip_calls = (tmp_path / "home" / "pip-argv.txt").read_text(encoding="utf-8").splitlines()
+    assert len(pip_calls) == 2
+    assert "--index-url" not in pip_calls[0]
+    assert "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" in pip_calls[1]
+
+
+def test_install_watchdog_uses_configured_primary_index_without_retry(tmp_path: Path) -> None:
+    completed = _run_install_snippet(
+        tmp_path,
+        """
+        venv_dir="$HOME/managed-venv"
+        fake_modules="$HOME/fake-modules"
+        pip_argv_marker="$HOME/pip-argv.txt"
+        python3 -m venv "$venv_dir"
+        mkdir -p "$fake_modules"
+        cat > "$fake_modules/pip.py" <<'PY'
+        import os
+        import pathlib
+        import sys
+
+        marker = pathlib.Path(os.environ["PIP_ARGV_MARKER"])
+        with marker.open("a", encoding="utf-8") as stream:
+            stream.write(" ".join(sys.argv[1:]) + "\\n")
+        expected = "https://packages.example.test/simple"
+        if expected not in sys.argv:
+            raise SystemExit(9)
+        pathlib.Path(os.environ["FAKE_MODULES_DIR"], "watchdog.py").write_text(
+            "__version__ = 'test'\\n", encoding="utf-8"
+        )
+        raise SystemExit(0)
+        PY
+        CCB_PIP_INDEX_URL="https://packages.example.test/simple" \
+        PIP_ARGV_MARKER="$pip_argv_marker" \
+        FAKE_MODULES_DIR="$fake_modules" \
+        PYTHONPATH="$fake_modules" \
+          install_watchdog_for_python "$venv_dir/bin/python"
+        """,
+    )
+
+    assert completed.returncode == 0, completed.stderr or completed.stdout
+    assert "watchdog installed" in completed.stdout
+    pip_calls = (tmp_path / "home" / "pip-argv.txt").read_text(encoding="utf-8").splitlines()
+    assert len(pip_calls) == 1
+    assert "--index-url https://packages.example.test/simple" in pip_calls[0]
+
+
+def test_install_watchdog_can_disable_macos_fallback_index(tmp_path: Path) -> None:
+    completed = _run_install_snippet(
+        tmp_path,
+        """
+        venv_dir="$HOME/managed-venv"
+        fake_modules="$HOME/fake-modules"
+        pip_argv_marker="$HOME/pip-argv.txt"
+        python3 -m venv "$venv_dir"
+        mkdir -p "$fake_modules"
+        cat > "$fake_modules/pip.py" <<'PY'
+        import os
+        import pathlib
+        import sys
+
+        marker = pathlib.Path(os.environ["PIP_ARGV_MARKER"])
+        with marker.open("a", encoding="utf-8") as stream:
+            stream.write(" ".join(sys.argv[1:]) + "\\n")
+        print("SSL: CERTIFICATE_VERIFY_FAILED unable to get local issuer certificate")
+        raise SystemExit(1)
+        PY
+        detect_platform() { echo macos; }
+        CCB_PIP_FALLBACK_INDEX_URL=0 \
+        PIP_ARGV_MARKER="$pip_argv_marker" \
+        FAKE_MODULES_DIR="$fake_modules" \
+        PYTHONPATH="$fake_modules" \
+          install_watchdog_for_python "$venv_dir/bin/python"
+        """,
+    )
+
+    assert completed.returncode == 0, completed.stderr or completed.stdout
+    assert "watchdog install failed" in completed.stdout
+    assert "retrying with" not in completed.stdout
+    pip_calls = (tmp_path / "home" / "pip-argv.txt").read_text(encoding="utf-8").splitlines()
+    assert len(pip_calls) == 1
+
+
+def test_preserve_managed_venv_moves_it_into_staging_tree(tmp_path: Path) -> None:
+    completed = _run_install_snippet(
+        tmp_path,
+        """
+        staging="$HOME/staging"
+        mkdir -p "$CODEX_INSTALL_PREFIX/.venv" "$staging"
+        echo keep > "$CODEX_INSTALL_PREFIX/.venv/marker"
+        preserve_managed_venv_in_staging "$staging"
+        test ! -e "$CODEX_INSTALL_PREFIX/.venv"
+        cat "$staging/.venv/marker"
+        """,
+    )
+
+    assert completed.returncode == 0, completed.stderr or completed.stdout
+    assert "Preserving managed Python venv" in completed.stdout
+    assert "keep" in completed.stdout
+
+
+def test_install_managed_venv_reuses_healthy_environment(tmp_path: Path) -> None:
+    completed = _run_install_snippet(
+        tmp_path,
+        """
+        CCB_SOURCE_KIND=release
+        CCB_USE_MANAGED_VENV=1
+        CCB_INSTALL_TOMLI=0
+        CCB_INSTALL_WATCHDOG=0
+        mkdir -p "$CODEX_INSTALL_PREFIX"
+        python3 -m venv "$CODEX_INSTALL_PREFIX/.venv"
+        echo keep > "$CODEX_INSTALL_PREFIX/.venv/marker"
+        install_managed_venv
+        cat "$CODEX_INSTALL_PREFIX/.venv/marker"
+        """,
+    )
+
+    assert completed.returncode == 0, completed.stderr or completed.stdout
+    assert "Reusing managed Python venv" in completed.stdout
+    assert "keep" in completed.stdout
+
+
 def test_release_managed_venv_wraps_installed_python_entrypoints(tmp_path: Path) -> None:
     completed = _run_install_snippet(
         tmp_path,
