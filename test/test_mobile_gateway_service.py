@@ -2802,6 +2802,82 @@ def test_agent_conversation_maps_artifact_links_from_gateway_file_store(tmp_path
     assert payload['conversation']['items'] == []
 
 
+def test_non_native_conversation_resolves_project_file_links(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo'
+    snapshot_dir = project_root / '.ccb' / 'ccbd' / 'snapshots'
+    jobs_dir = project_root / '.ccb' / 'agents' / 'mobile'
+    docs_dir = project_root / 'docs'
+    snapshot_dir.mkdir(parents=True)
+    jobs_dir.mkdir(parents=True)
+    docs_dir.mkdir(parents=True)
+    report_path = docs_dir / 'report.txt'
+    hidden_path = project_root / '.ccb' / 'secret.txt'
+    report_path.write_text('report body\n', encoding='utf-8')
+    hidden_path.write_text('hidden\n', encoding='utf-8')
+    (jobs_dir / 'jobs.jsonl').write_text(
+        json.dumps(
+            {
+                'job_id': 'job_mobile_reply',
+                'status': 'completed',
+                'agent_name': 'mobile',
+                'request': {'body': 'create report'},
+            }
+        )
+        + '\n',
+        encoding='utf-8',
+    )
+    (snapshot_dir / 'job_mobile_reply.json').write_text(
+        json.dumps(
+            {
+                'latest_decision': {
+                    'reply': (
+                        'Generated files:\n'
+                        '- [report](docs/report.txt)\n'
+                        '- [hidden](.ccb/secret.txt)\n'
+                        '- [outside](/etc/hosts)\n'
+                    ),
+                },
+            }
+        ),
+        encoding='utf-8',
+    )
+
+    class _KimiClient(_FakeCcbdClientWithConversationComms):
+        def project_view(self, *, schema_version: int = 1) -> dict[str, object]:
+            payload = super().project_view(schema_version=schema_version)
+            payload['view']['agents'][0]['provider'] = 'kimi'
+            return payload
+
+    service = _service(
+        _KimiClient(),
+        project_root=project_root,
+        mobile_dir=tmp_path / 'mobile',
+    )
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view',),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
+
+    _, payload = service.dispatch_get(
+        '/v1/projects/proj-demo/agents/mobile/conversation?namespace_epoch=4&limit=20',
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+
+    reply = next(
+        item
+        for item in payload['conversation']['items']
+        if item['id'] == 'reply-job_mobile_reply'
+    )
+    assert 'ccb-artifact://' in reply['body']
+    assert '[hidden](.ccb/secret.txt)' in reply['body']
+    assert '[outside](/etc/hosts)' in reply['body']
+    assert [item['file_name'] for item in reply['attachments']] == ['report.txt']
+
+
 def test_agent_conversation_requires_view_auth_and_fresh_epoch(tmp_path: Path) -> None:
     service = _service(_FakeCcbdClient(), mobile_dir=tmp_path / 'mobile')
     pairing = service.create_pairing_payload(
@@ -2992,8 +3068,30 @@ def test_agent_message_submit_accepts_attachment_only_message(tmp_path: Path) ->
     message = payload['message_submit']['message']
     assert message['body'] == ''
     assert message['attachments'][0]['file_id'] == 'mobile-file-1'
-    assert sent[0][1] == 'Uploaded attachment: probe.txt'
+    assert sent[0][1] == (
+        'Attached files:\n'
+        '- probe.txt (text/plain, 11 bytes, file id: mobile-file-1)'
+    )
     assert not any(call[0] == 'submit' for call in fake.calls)
+
+
+def test_message_submit_body_keeps_text_and_project_attachment_link() -> None:
+    assert service_module._message_submit_body(
+        'review this',
+        [
+            {
+                'file_id': 'mobile-file-1',
+                'file_name': 'probe.txt',
+                'mime_type': 'text/plain',
+                'size_bytes': 11,
+                'project_relative_path': '.ccb/mobile/uploads/mobile/mobile-file-1-probe.txt',
+            }
+        ],
+    ) == (
+        'review this\n\nAttached files:\n'
+        '- [probe.txt](.ccb/mobile/uploads/mobile/mobile-file-1-probe.txt) '
+        '(text/plain, 11 bytes, file id: mobile-file-1)'
+    )
 
 
 def test_agent_message_submit_requires_agent_pane_evidence(tmp_path: Path) -> None:
@@ -3084,7 +3182,12 @@ def test_agent_message_submit_requires_message_submit_scope(tmp_path: Path) -> N
 
 
 def test_agent_file_upload_download_round_trips_bytes_over_http(tmp_path: Path) -> None:
-    service = _service(_FakeCcbdClient(), mobile_dir=tmp_path / 'mobile')
+    project_root = tmp_path / 'repo'
+    service = _service(
+        _FakeCcbdClient(),
+        project_root=project_root,
+        mobile_dir=tmp_path / 'mobile',
+    )
     pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
     _, claim = service.dispatch_post(
         '/v1/pairing/claim',
@@ -3116,6 +3219,10 @@ def test_agent_file_upload_download_round_trips_bytes_over_http(tmp_path: Path) 
         assert upload['file_name'] == 'probe file.txt'
         assert upload['mime_type'] == 'text/plain'
         assert upload['size_bytes'] == len(data)
+        assert upload['project_relative_path'].startswith(
+            '.ccb/mobile/uploads/mobile/'
+        )
+        assert (project_root / upload['project_relative_path']).read_bytes() == data
 
         download_request = Request(
             f'{base}/v1/projects/proj-demo/agents/mobile/files/{file_id}',
@@ -3136,14 +3243,18 @@ def test_agent_file_upload_download_round_trips_bytes_over_http(tmp_path: Path) 
 
 
 def test_agent_file_routes_use_registry_project_id(tmp_path: Path) -> None:
+    first_root = tmp_path / 'one'
+    second_root = tmp_path / 'two'
+    first_root.mkdir()
+    second_root.mkdir()
     first = _FakeCcbdClient(
         project_id='proj-one',
-        project_root='/srv/one',
+        project_root=str(first_root),
         display_name='one',
     )
     second = _FakeCcbdClient(
         project_id='proj-two',
-        project_root='/srv/two',
+        project_root=str(second_root),
         display_name='two',
     )
     service = _service(
@@ -3153,12 +3264,12 @@ def test_agent_file_routes_use_registry_project_id(tmp_path: Path) -> None:
             [
                 MobileGatewayProject(
                     project_id='proj-one',
-                    project_root=Path('/srv/one'),
+                    project_root=first_root,
                     ccbd_client_factory=lambda: first,
                 ),
                 MobileGatewayProject(
                     project_id='proj-two',
-                    project_root=Path('/srv/two'),
+                    project_root=second_root,
                     ccbd_client_factory=lambda: second,
                 ),
             ]
@@ -3195,6 +3306,7 @@ def test_agent_file_routes_use_registry_project_id(tmp_path: Path) -> None:
     )
     metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
     assert metadata['project_id'] == 'proj-two'
+    assert (second_root / metadata['project_relative_path']).read_bytes() == data
     assert not (tmp_path / 'mobile' / 'files' / 'proj-demo' / 'mobile' / file_id).exists()
 
     download_status, downloaded, headers = service.dispatch_file_download(

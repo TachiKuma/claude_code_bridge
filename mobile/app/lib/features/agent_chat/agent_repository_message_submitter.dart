@@ -127,6 +127,8 @@ class AgentRepositoryMessageSubmitter {
           sizeBytes: result.sizeBytes ?? attachment.sizeBytes,
           kind: attachment.effectiveKind,
           state: CcbMessageAttachmentState.available,
+          projectRelativePath: result.projectRelativePath,
+          projectPath: result.projectPath,
         ),
       );
     }

@@ -98,6 +98,7 @@ _PROJECT_ACTIVITY_REFRESH_BUDGET_SECONDS = 0.75
 _PROJECT_ACTIVITY_REFRESH_PER_PROJECT_SECONDS = 0.25
 _CONVERSATION_PAGE_CACHE_MAX_ENTRIES = 64
 _CONVERSATION_PAGE_CACHE_MAX_BYTES = 8 * 1024 * 1024
+_MOBILE_PROJECT_UPLOAD_DIR = ('.ccb', 'mobile', 'uploads')
 
 
 @dataclass(frozen=True)
@@ -993,6 +994,16 @@ class MobileGatewayService:
         directory = self._mobile_file_dir(project.project_id, str(target_record['agent']), file_id)
         directory.mkdir(parents=True, exist_ok=False)
         (directory / 'content.bin').write_bytes(body)
+        project_relative_path = _mobile_project_upload_relative_path(
+            agent=str(target_record['agent']),
+            file_id=file_id,
+            file_name=file_name,
+        )
+        project_path = (project.project_root / project_relative_path).resolve(strict=False)
+        project_path.parent.mkdir(parents=True, exist_ok=True)
+        project_path.write_bytes(body)
+        record['project_relative_path'] = project_relative_path.as_posix()
+        record['project_path'] = str(project_path)
         (directory / 'metadata.json').write_text(
             json.dumps(record, ensure_ascii=False, sort_keys=True),
             encoding='utf-8',
@@ -1005,6 +1016,8 @@ class MobileGatewayService:
             'mime_type': mime_type,
             'size_bytes': len(body),
             'sha256': digest,
+            'project_relative_path': project_relative_path.as_posix(),
+            'project_path': str(project_path),
         }
 
     def dispatch_file_download(
@@ -1137,7 +1150,7 @@ class MobileGatewayService:
         attachments = _attachment_records(payload.get('attachments'))
         if not body and not attachments:
             raise MobileGatewayError('body or attachments are required', status_code=400)
-        submit_body = body or _attachment_submit_body(attachments)
+        submit_body = _message_submit_body(body, attachments)
         message_format = str(payload.get('format') or 'markdown').strip() or 'markdown'
         view_payload = self._request_project_view(project)
         target = _validate_agent_conversation_target(
@@ -2523,22 +2536,63 @@ def _attachment_records(value: object) -> list[dict[str, object]]:
                 'mime_type': mime_type,
                 'size_bytes': _int(record.get('size_bytes'), 0),
                 'kind': _optional_text(record.get('kind')) or ('image' if mime_type.startswith('image/') else 'document'),
+                **(
+                    {'project_relative_path': project_relative_path}
+                    if (project_relative_path := _optional_text(record.get('project_relative_path')))
+                    else {}
+                ),
+                **(
+                    {'project_path': project_path}
+                    if (project_path := _optional_text(record.get('project_path')))
+                    else {}
+                ),
             }
         )
     return records
 
 
+def _message_submit_body(body: str, attachments: list[dict[str, object]]) -> str:
+    attachment_body = _attachment_submit_body(attachments)
+    if not body:
+        return attachment_body
+    if not attachments:
+        return body
+    return f'{body}\n\n{attachment_body}'
+
+
 def _attachment_submit_body(attachments: list[dict[str, object]]) -> str:
-    names = [
-        str(item.get('file_name') or 'attachment')
-        for item in attachments
-        if str(item.get('file_name') or '').strip()
-    ]
-    if not names:
+    lines: list[str] = []
+    for item in attachments:
+        name = str(item.get('file_name') or 'attachment').strip() or 'attachment'
+        mime_type = str(item.get('mime_type') or 'application/octet-stream')
+        size_bytes = _int(item.get('size_bytes'), 0)
+        file_id = str(item.get('file_id') or '').strip()
+        project_relative_path = str(item.get('project_relative_path') or '').strip()
+        if project_relative_path:
+            lines.append(
+                f'- [{name}]({project_relative_path}) '
+                f'({mime_type}, {size_bytes} bytes, file id: {file_id})'
+            )
+        else:
+            lines.append(f'- {name} ({mime_type}, {size_bytes} bytes, file id: {file_id})')
+    if not lines:
         return 'Uploaded attachment'
-    if len(names) == 1:
-        return f'Uploaded attachment: {names[0]}'
-    return f'Uploaded attachments: {", ".join(names)}'
+    return 'Attached files:\n' + '\n'.join(lines)
+
+
+def _mobile_project_upload_relative_path(*, agent: str, file_id: str, file_name: str) -> Path:
+    return Path(*_MOBILE_PROJECT_UPLOAD_DIR) / _safe_path_segment(agent) / (
+        f'{_safe_path_segment(file_id)}-{_safe_path_segment(file_name)}'
+    )
+
+
+def _workspace_artifact_relative_path_allowed(relative_path: Path) -> bool:
+    parts = relative_path.parts
+    if not parts or parts[0] == '.git':
+        return False
+    if parts[0] != '.ccb':
+        return True
+    return parts[: len(_MOBILE_PROJECT_UPLOAD_DIR)] == _MOBILE_PROJECT_UPLOAD_DIR
 
 
 def _safe_path_segment(value: object) -> str:
@@ -2692,6 +2746,7 @@ def _agent_conversation_items(
         project_root=project_root,
         project_id=project_id,
         agent=agent,
+        mobile_files_dir=mobile_files_dir,
     )
 
 
@@ -2701,6 +2756,7 @@ def _agent_structured_fallback_conversation_items(
     project_root: Path,
     project_id: str,
     agent: str,
+    mobile_files_dir: Path | None,
 ) -> _ConversationItemsResult:
     """Safe fallback for providers without a provider-native transcript.
 
@@ -2711,7 +2767,12 @@ def _agent_structured_fallback_conversation_items(
     view = _map(view_payload.get('view'))
     items: list[dict[str, object]] = []
     seen: set[str] = set()
-    for item in _agent_history_conversation_items(project_root, project_id=project_id, agent=agent):
+    for item in _agent_history_conversation_items(
+        project_root,
+        project_id=project_id,
+        agent=agent,
+        mobile_files_dir=mobile_files_dir,
+    ):
         item_id = str(item.get('id') or '')
         if item_id and item_id not in seen:
             items.append(item)
@@ -2747,7 +2808,11 @@ def _agent_structured_fallback_conversation_items(
             items.append(user)
             seen.add(str(user['id']))
         completion = _completion_reply_for_job(
-            project_root, comm_id, project_id=project_id, agent=agent
+            project_root,
+            comm_id,
+            project_id=project_id,
+            agent=agent,
+            mobile_files_dir=mobile_files_dir,
         )
         reply = _optional_text(completion.get('body')) or ''
         reply_id = f'reply-{comm_id}'
@@ -4148,7 +4213,7 @@ def _inject_workspace_artifacts(
                 relative_path = target_path.relative_to(project_root_resolved)
             except ValueError:
                 return match.group(0)
-            if relative_path.parts and relative_path.parts[0] in {'.ccb', '.git'}:
+            if not _workspace_artifact_relative_path_allowed(relative_path):
                 return match.group(0)
             if not target_path.is_file():
                 return match.group(0)
@@ -4228,6 +4293,7 @@ def _agent_history_conversation_items(
     *,
     project_id: str,
     agent: str,
+    mobile_files_dir: Path | None = None,
 ) -> list[dict[str, object]]:
     latest_by_job: dict[str, dict[str, object]] = {}
     path = project_root / '.ccb' / 'agents' / agent / 'jobs.jsonl'
@@ -4298,6 +4364,7 @@ def _agent_history_conversation_items(
             record,
             project_id=project_id,
             agent=agent,
+            mobile_files_dir=mobile_files_dir,
         )
         reply = str(reply_dict.get('body') or '')
         if reply:
@@ -4356,6 +4423,7 @@ def _completion_reply_from_history_job(
     *,
     project_id: str,
     agent: str,
+    mobile_files_dir: Path | None = None,
 ) -> dict[str, object]:
     job_id = _optional_text(record.get('job_id'))
     terminal_decision = _map(record.get('terminal_decision'))
@@ -4365,6 +4433,7 @@ def _completion_reply_from_history_job(
         job_id,
         project_id=project_id,
         agent=agent,
+        mobile_files_dir=mobile_files_dir,
     )
     if not body:
         return reply_dict
@@ -4424,6 +4493,7 @@ def _completion_reply_for_job(
     *,
     project_id: str,
     agent: str,
+    mobile_files_dir: Path | None = None,
 ) -> dict[str, object]:
     if not job_id:
         return {'body': '', 'attachments': []}
@@ -4437,6 +4507,13 @@ def _completion_reply_for_job(
         _optional_text(latest_decision.get('reply'))
         or _optional_text(payload.get('latest_reply_preview'))
         or ''
+    )
+    body = _inject_workspace_artifacts(
+        body,
+        project_root=project_root,
+        project_id=project_id,
+        agent=agent,
+        mobile_files_dir=mobile_files_dir,
     )
     started_at = _first_mobile_conversation_timestamp(
         latest_decision.get('started_at'),
@@ -4474,7 +4551,14 @@ def _completion_reply_for_job(
     if not attachments:
         attachments = _artifact_link_attachments(
             body,
-            file_roots=_mobile_file_roots_for_job(project_root, agent, job_id),
+            file_roots=[
+                path
+                for path in (
+                    mobile_files_dir,
+                    *_mobile_file_roots_for_job(project_root, agent, job_id),
+                )
+                if path is not None
+            ],
             project_id=project_id,
             agent=agent,
         )

@@ -320,8 +320,16 @@ String _paneBodyForMessage(CcbConversationItem message) {
     if (body.isNotEmpty) body,
     'Attached files:',
     for (final attachment in message.attachments)
-      '- ${attachment.fileName} (${attachment.mimeType}, '
+      '- ${_paneAttachmentLabel(attachment)} (${attachment.mimeType}, '
           '${attachment.sizeBytes} bytes, file id: ${attachment.fileId})',
   ];
   return lines.join('\n');
+}
+
+String _paneAttachmentLabel(CcbMessageAttachment attachment) {
+  final projectPath = attachment.projectRelativePath;
+  if (projectPath != null && projectPath.trim().isNotEmpty) {
+    return '[${attachment.fileName}]($projectPath)';
+  }
+  return attachment.fileName;
 }
