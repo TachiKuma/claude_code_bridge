@@ -3,7 +3,7 @@
 node id: <node-id>
 workgroup id: <workgroup-id>
 code reviewer: <agent-name>
-check result: pass|rework_required|blocked|non_converged
+status: pass|rework_required|blocked|non_converged
 
 ## Exact Node Workspace
 

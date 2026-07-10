@@ -503,6 +503,10 @@ def test_p1_node_rolepacks_bind_canonical_packet_and_exact_review_tree() -> None
         assert manifest.table('activation')['history_reuse'] is False
     assert coder.manifest['permissions']['write_files'] is True
     assert reviewer.manifest['permissions']['write_files'] is False
+    assert 'status: done|blocked|needs_rework' in coder_template
+    assert '\nresult: done|blocked|needs_rework' not in coder_template
+    assert 'status: pass|rework_required|blocked|non_converged' in reviewer_template
+    assert 'check result:' not in reviewer_template
     for required in (
         'canonical node work packet',
         'declared refs',

@@ -3,7 +3,7 @@
 node id: <node-id>
 workgroup id: <workgroup-id>
 coder: <agent-name>
-result: done|blocked|needs_rework
+status: done|blocked|needs_rework
 canonical node work packet: <ref>
 
 ## Assigned Boundary
