@@ -178,7 +178,7 @@ void main() {
 
     expect(repository.focusAgentCalls, isEmpty);
     expect(find.byType(TerminalView), findsOneWidget);
-    expect(find.text('demo / lead'), findsNWidgets(2));
+    expect(find.text('demo / lead'), findsOneWidget);
   });
 
   testWidgets('focus failure preserves previous view and shows error', (

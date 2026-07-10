@@ -937,10 +937,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(TerminalView), findsOneWidget);
-    expect(find.text('demo / lead'), findsNWidgets(2));
+    expect(find.text('demo / lead'), findsOneWidget);
     expect(
       find.text('tmux -S /tmp/ccb-demo/tmux.sock attach-session -t ccb-demo'),
-      findsOneWidget,
+      findsNothing,
     );
   });
 
