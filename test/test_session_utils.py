@@ -104,10 +104,12 @@ def test_safe_write_session_atomic_write(tmp_path: Path) -> None:
     assert ok is True
     assert err is None
     assert target.read_text(encoding="utf-8") == '{"hello":"world"}\n'
+    assert target.stat().st_mode & 0o777 == 0o600
     assert not target.with_suffix(".tmp").exists()
 
     ok2, err2 = safe_write_session(target, '{"hello":"again"}\n')
     assert ok2 is True
     assert err2 is None
     assert target.read_text(encoding="utf-8") == '{"hello":"again"}\n'
+    assert target.stat().st_mode & 0o777 == 0o600
     assert not target.with_suffix(".tmp").exists()

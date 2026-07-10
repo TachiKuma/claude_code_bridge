@@ -48,6 +48,22 @@ Direct verification: provider/session suite `92 passed`, project suite
 The project remains mounted for inspection; no release was published and
 production/default enablement remains a separate decision.
 
+## 2026-07-10 Five-Task Resilience Checkpoint
+
+The same visible project later completed five additional planner tasks, each
+`done/pass` with fresh coder, code reviewer, orchestrator, and round reviewer
+capacity released `4/0`. Direct acceptance passed 32 product tests. A real
+planner job survived an in-flight ccbd restart with the same job and pane PID,
+and a separate dynamic Claude mount proved correct sidebar state, private
+session persistence, and release `1/0`. The run exposed and repaired current
+turn frontdesk request binding, seed-job authority, Codex readiness, same-live
+runtime restore, bounded Claude result recovery, Claude sidebar false failure,
+and provider-session file permissions. Evidence and remaining secure
+credential-rehydration limits are recorded in
+[history/visible-five-task-workflow-resilience-e2e-20260710.md](history/visible-five-task-workflow-resilience-e2e-20260710.md).
+The project remains mounted; release publication and production/default
+enablement remain separate gates.
+
 2026-07-08 talk2 checkpoint: the latest source tree is locally test-clean
 after the sequence29/frontdesk/detailer/B7 fixes and the phase2 provider
 blackbox environment-isolation regression. Verified:
@@ -2136,3 +2152,19 @@ coder/reviewer work units, verifies all auto-assigned add commands are
 `visibility="visible"`, checks the seventh execution pane creates
 `ccb-exec-2`, and checks release compaction moves surviving execution agents
 back into `ccb-exec` while removing the empty overflow page.
+
+## 2026-07-10 Visible Workflow Resilience And Provider Gate
+
+`talk2` directly completed and audited the visible five-task workflow,
+same-turn daemon restart, dynamic Claude lifecycle, and AGY first-project trust
+probes. The evidence report is
+[history/visible-five-task-workflow-resilience-e2e-20260710.md](history/visible-five-task-workflow-resilience-e2e-20260710.md).
+
+The full repository gate excluding Gemini nodes passed with `3854 passed, 2
+skipped, 124 deselected`. OpenCode/Grok/AGY focused backend coverage passed
+with `117 passed`. AGY then completed a real source-wrapper ask using Claude
+Sonnet 4.6, including one bounded auto-mode trust confirmation and durable
+`turn_boundary` evidence; safe mode did not confirm or deliver. OpenCode
+remains blocked by an OpenAI OAuth refresh 401, and Grok remains blocked by a
+missing active login. Gemini is no longer part of the current workflow
+production gate; it must not be used to hide failures in shared provider code.

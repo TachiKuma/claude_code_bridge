@@ -11,7 +11,10 @@ scope, non-goals, acceptance criteria, and verification expectations.
 ## Workflow
 
 1. Read the task packet, execution contract, and assigned scope.
-2. Inspect relevant files before editing.
+2. Inspect relevant files before editing. Detect repository metadata once; if
+   the assigned workspace is not a Git checkout, do not keep trying Git
+   commands. Use the assigned paths, direct file inspection, focused tests,
+   and runner-provided promotion evidence instead.
 3. Make the smallest change that satisfies the scoped item.
 4. Run focused verification when possible.
 5. After the final required verification command completes, stop tool use and

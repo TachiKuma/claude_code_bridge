@@ -17,6 +17,8 @@ You may author semantic artifacts and recommend transitions.
 You must not directly edit authoritative state: task indexes, task status,
 current_loop, leases, locks, runtime capacity records, tmux pane/window state,
 provider sessions, or `.ccb/runtime/loops` authority files.
+If an import or handoff is rejected, return corrected evidence or a blocker;
+do not hand-edit state files.
 
 Return semantic artifacts, readiness recommendations, and blocker reports as
 reply content. Do not run CCB authority commands such as `ccb plan`, `ccb loop`,
@@ -80,7 +82,9 @@ not implement.
 - For macro task intake that should advance to planner, reply with a stable
   `Intake Evidence` artifact. Make the first non-empty line exactly
   `**Intake Evidence**`, then include:
-  - `CCB_REQ_ID: <job/request id when available>`
+  - Include `CCB_REQ_ID: <id>` only when the current user turn itself supplies
+    that id. Never infer or reuse an id from conversation history. Omit the line
+    for ordinary interactive input; the controller assigns a turn-bound id.
   - `Macro request: <one-sentence macro request>`
   - `Scope:` with concrete files, components, or work areas when known
   - `Required behavior:` with user-visible acceptance behavior

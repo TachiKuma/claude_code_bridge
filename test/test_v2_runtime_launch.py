@@ -7,6 +7,7 @@ import shlex
 import shutil
 import sqlite3
 import subprocess
+from types import SimpleNamespace
 import pytest
 try:  # pragma: no cover - version shim
     import tomllib
@@ -975,13 +976,16 @@ def test_ensure_agent_runtime_launches_named_claude_session(monkeypatch, tmp_pat
             encoding='utf-8'
         )
     )
+    settings_path = ctx.paths.agent_dir('reviewer') / 'provider-runtime' / 'claude' / 'claude-settings.json'
     assert settings_payload['skipDangerousModePermissionPrompt'] is True
-    assert json.loads(_claude_settings_arg(payload['start_cmd'])) == settings_payload
+    assert Path(_claude_settings_arg(payload['start_cmd'])) == settings_path
+    assert json.loads(settings_path.read_text(encoding='utf-8')) == settings_payload
     assert payload['start_cmd'].endswith(
         f'claude --setting-sources user,project,local --settings '
-        f'{shlex.quote(json.dumps(settings_payload, ensure_ascii=False))} '
+        f'{shlex.quote(str(settings_path))} '
         '--permission-mode bypassPermissions --continue'
     )
+    assert expected_session.stat().st_mode & 0o777 == 0o600
     assert tmux_state['title'] == ('%44', 'reviewer')
     assert tmux_state['user_option'] == ('%44', '@ccb_project_id', ctx.project.project_id)
 
@@ -2381,6 +2385,51 @@ def test_claude_launcher_build_start_cmd_uses_overlay_and_drops_dead_local_user_
         f'claude --setting-sources user,project,local --settings {shlex.quote(json.dumps(settings_payload, ensure_ascii=False))} '
         '--permission-mode bypassPermissions --continue'
     )
+
+
+def test_claude_session_payload_does_not_persist_auth_or_inline_settings(tmp_path: Path) -> None:
+    from provider_backends.claude.launcher_runtime.service import build_session_payload
+
+    runtime_dir = tmp_path / 'runtime'
+    runtime_dir.mkdir()
+    settings_path = runtime_dir / 'claude-settings.json'
+    settings_path.write_text(
+        json.dumps({'env': {'ANTHROPIC_API_KEY': 'secret-api', 'ANTHROPIC_AUTH_TOKEN': 'secret-auth'}}),
+        encoding='utf-8',
+    )
+    inline_settings = settings_path.read_text(encoding='utf-8')
+    start_cmd = (
+        "export ANTHROPIC_API_KEY=secret-api ANTHROPIC_AUTH_TOKEN=secret-auth "
+        "ANTHROPIC_BASE_URL=https://provider.invalid; "
+        "export HOME=/tmp/claude-home; "
+        f"claude --settings {shlex.quote(inline_settings)} --continue"
+    )
+    context = SimpleNamespace(project=SimpleNamespace(project_id='project-1', project_root=tmp_path))
+    spec = SimpleNamespace(name='reviewer')
+    plan = SimpleNamespace(workspace_path=tmp_path)
+
+    payload = build_session_payload(
+        context,
+        spec,
+        plan,
+        runtime_dir,
+        tmp_path,
+        '%1',
+        'marker',
+        start_cmd,
+        'session-1',
+        {},
+    )
+
+    for key in ('start_cmd', 'claude_start_cmd'):
+        persisted = payload[key]
+        assert 'secret-api' not in persisted
+        assert 'secret-auth' not in persisted
+        assert 'ANTHROPIC_API_KEY=' not in persisted
+        assert 'ANTHROPIC_AUTH_TOKEN=' not in persisted
+        assert 'ANTHROPIC_BASE_URL=https://provider.invalid' in persisted
+        assert f'--settings {settings_path}' in persisted
+        assert 'HOME=/tmp/claude-home' in persisted
 
 
 def test_claude_launcher_omits_unsupported_cli_flags(monkeypatch, tmp_path: Path) -> None:

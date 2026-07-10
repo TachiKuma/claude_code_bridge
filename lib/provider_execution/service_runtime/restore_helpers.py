@@ -73,6 +73,8 @@ def restarted_runtime_without_pending_result(service, job: JobRecord, persisted,
         'failed',
     }:
         return None
+    if _same_runtime_identity(getattr(persisted, 'runtime_context', None), restored_context):
+        return None
     return abandon_restore(
         service,
         job,
@@ -80,6 +82,25 @@ def restarted_runtime_without_pending_result(service, job: JobRecord, persisted,
         resume_capable=persisted.resume_capable,
         pending_items_count=0,
     )
+
+
+def _same_runtime_identity(persisted_context, restored_context) -> bool:
+    if persisted_context is None or restored_context is None:
+        return False
+    persisted_pid = getattr(persisted_context, 'runtime_pid', None)
+    restored_pid = getattr(restored_context, 'runtime_pid', None)
+    try:
+        same_pid = int(persisted_pid or 0) > 0 and int(persisted_pid) == int(restored_pid)
+    except (TypeError, ValueError):
+        return False
+    if not same_pid:
+        return False
+    for field in ('runtime_ref', 'session_ref', 'workspace_path'):
+        persisted_value = str(getattr(persisted_context, field, '') or '').strip()
+        restored_value = str(getattr(restored_context, field, '') or '').strip()
+        if not persisted_value or persisted_value != restored_value:
+            return False
+    return True
 
 
 def resume_or_result(adapter, service, job: JobRecord, persisted, pending_items: list, restored_context):

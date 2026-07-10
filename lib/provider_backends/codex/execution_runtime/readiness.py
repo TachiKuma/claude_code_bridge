@@ -10,6 +10,8 @@ _UNUSABLE_LINE_PATTERNS = (
     re.compile(r'^(?:error:\s*)?(?:pane is dead|pane dead)\b[.!:;\-\s]*$', re.IGNORECASE),
     re.compile(r'^(?:codex\s+)?shutting down(?:\.\.\.)?[.!:;\-\s]*$', re.IGNORECASE),
 )
+_IDLE_PROMPT_RE = re.compile(r'^\s*›\s+\S.*$', re.MULTILINE)
+_ACTIVE_STATUS_RE = re.compile(r'^\s*•\s+(?:Working|Thinking|Running)\b', re.MULTILINE | re.IGNORECASE)
 
 
 def looks_unusable(text: str) -> bool:
@@ -28,7 +30,8 @@ def looks_ready(text: str) -> bool:
     if looks_unusable(normalized):
         return False
     if 'openai codex' not in lowered:
-        return False
+        tail = '\n'.join(normalized.splitlines()[-24:])
+        return bool(_IDLE_PROMPT_RE.search(tail)) and not bool(_ACTIVE_STATUS_RE.search(tail))
     if 'model:' in lowered and 'loading' in lowered:
         return False
     return '›' in normalized or '>_' in normalized or '/model to change' in lowered

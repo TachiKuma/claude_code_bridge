@@ -51,6 +51,12 @@ recoverable workflow loops.
   sequential direct-execution loops, visible window creation/removal, two
   resident roles, four dynamic roles per round, and repaired Claude session
   rotation after `/clear`.
+- [history/visible-five-task-workflow-resilience-e2e-20260710.md](history/visible-five-task-workflow-resilience-e2e-20260710.md):
+  direct `talk2` evidence from the same visible project after a five-task
+  frontdesk/planner workflow, including bounded rework, four-agent release per
+  round, same-turn ccbd restart recovery, dynamic Claude UI/session-security
+  probing, performance attribution, and explicit credential-rehydration
+  residuals.
 - [history/phase1-6-deployment-readiness-p2-frontdesk-pressure-20260708.md](history/phase1-6-deployment-readiness-p2-frontdesk-pressure-20260708.md):
   P2 post-acceptance deployment-readiness evidence for real-project
   frontdesk macro-intake pressure across direct, detail, macro-adjustment, and

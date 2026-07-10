@@ -94,6 +94,9 @@ def inherit_api_env(
     if profile is not None and not profile.inherit_api:
         return explicit_env
     inherited = filtered_api_env(dict(inherited_env or {}), api_keys=api_keys)
+    # Base URL precedence is resolved separately so user settings can override
+    # ambient shell state without overriding an explicit profile value.
+    inherited.pop("ANTHROPIC_BASE_URL", None)
     if profile is not None and not getattr(profile, "inherit_auth", True):
         inherited.pop("ANTHROPIC_AUTH_TOKEN", None)
         inherited.pop("ANTHROPIC_API_KEY", None)

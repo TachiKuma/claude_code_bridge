@@ -62,12 +62,33 @@ def loop_runner_auto(context, command, services=None) -> dict[str, object]:
     steps: list[dict[str, object]] = []
     try:
         wait_job = str(getattr(command, 'wait_job_id', None) or '').strip()
+        seed_command = None
         if wait_job:
-            _wait_for_job_terminal(context, wait_job, deps, command)
+            wait_result = _wait_for_job_terminal(context, wait_job, deps, command)
+            if str(wait_result.get('status') or '') != 'completed':
+                return _auto_payload(
+                    context,
+                    status='blocked',
+                    action='auto_runner_seed_job_failed',
+                    steps=steps,
+                    extra={
+                        'wait_job_id': wait_job,
+                        'wait_job_status': wait_result.get('status'),
+                        'wait_job_reason': wait_result.get('reason'),
+                        'next_activation': 'repair_or_resubmit_seed_job',
+                    },
+                )
         max_steps = max(1, int(getattr(command, 'max_steps', 24) or 24))
         once_command = replace(command, once=True, auto=False, wait_job_id=None, json_output=True)
-        for _index in range(max_steps):
-            payload = loop_runner_once(context, once_command, deps.services)
+        if wait_job:
+            seed_command = replace(
+                once_command,
+                role_job_id=wait_job,
+                consume_role_output=True,
+            )
+        for index in range(max_steps):
+            step_command = seed_command if index == 0 and seed_command is not None else once_command
+            payload = loop_runner_once(context, step_command, deps.services)
             steps.append(_auto_step(payload))
             if _auto_should_stop(payload):
                 break
@@ -1043,14 +1064,16 @@ def _release_consumed_activation_topology(context, deps, payload: dict[str, obje
     return payload
 
 
-def _wait_for_job_terminal(context, job_id: str, deps, command) -> None:
+def _wait_for_job_terminal(context, job_id: str, deps, command) -> dict[str, object]:
     poll_interval = max(0.0, float(getattr(command, 'poll_interval_s', 2.0) or 0.0))
     while True:
         payload = deps.trace_target(context, ParsedTraceCommand(project=None, target=job_id))
         job = payload.get('job') if isinstance(payload, dict) else None
         status = str(job.get('status') or '').strip().lower() if isinstance(job, dict) else ''
         if status in {'completed', 'failed', 'cancelled', 'timed_out'}:
-            return
+            decision = job.get('terminal_decision') if isinstance(job, dict) else None
+            reason = str(decision.get('reason') or '') if isinstance(decision, dict) else ''
+            return {'job_id': job_id, 'status': status, 'reason': reason or None}
         deps.sleep(poll_interval)
 
 

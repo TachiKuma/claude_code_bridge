@@ -3011,6 +3011,44 @@ def test_execution_service_restore_abandons_restarted_runtime_without_pending_re
     assert state_store.load(job.job_id) is None
 
 
+def test_execution_service_restore_resumes_same_live_runtime_without_resubmitting(tmp_path: Path) -> None:
+    layout = PathLayout(tmp_path / 'repo-same-runtime-resume')
+    state_store = ExecutionStateStore(layout)
+    registry = ProviderExecutionRegistry([_ResumableNoProgressAdapter()])
+    original_context = _runtime_context(tmp_path)
+    service = ExecutionService(
+        registry,
+        clock=lambda: '2026-03-18T00:00:00Z',
+        state_store=state_store,
+    )
+    job = _job_for_provider('resume-no-progress', job_id='job_same_runtime', body='continue me')
+    service.start(job, runtime_context=original_context)
+
+    restored_context = ProviderRuntimeContext(
+        agent_name=original_context.agent_name,
+        workspace_path=original_context.workspace_path,
+        backend_type=original_context.backend_type,
+        runtime_ref=original_context.runtime_ref,
+        session_ref=original_context.session_ref,
+        runtime_pid=original_context.runtime_pid,
+        runtime_health='restored',
+    )
+    restarted = ExecutionService(
+        registry,
+        clock=lambda: '2026-03-18T00:00:01Z',
+        state_store=state_store,
+    )
+
+    restored = restarted.restore(job, runtime_context=restored_context)
+
+    assert restored.restored is True
+    assert restored.status == 'restored'
+    assert restored.reason == 'provider_resumed'
+    persisted = state_store.load(job.job_id)
+    assert persisted is not None
+    assert persisted.submission.runtime_state['request_anchor'] == job.job_id
+
+
 def test_execution_service_restore_abandons_non_resumable_submission(tmp_path: Path) -> None:
     layout = PathLayout(tmp_path / 'repo-noresume')
     state_store = ExecutionStateStore(layout)

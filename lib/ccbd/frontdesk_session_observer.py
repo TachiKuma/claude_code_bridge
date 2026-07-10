@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 from pathlib import Path
+import re
 
 from cli.services.role_output_import import frontdesk_intake_missing_fields
 from storage.atomic import atomic_write_json
 
 from .frontdesk_handler import build_frontdesk_forward_planner_handler
+
+
+_REQUEST_ID_RE = re.compile(
+    r'(?mi)^\s*CCB_REQ_ID\s*:\s*`?([A-Za-z0-9][A-Za-z0-9_-]{0,79})`?\s*$'
+)
 
 
 def observe_frontdesk_session(app) -> dict[str, object] | None:
@@ -36,6 +43,9 @@ def observe_frontdesk_session(app) -> dict[str, object] | None:
     if str(state.get('last_observed_turn_id') or state.get('last_turn_id') or state.get('turn_id') or '') == turn_id:
         return None
     reply = str(latest.get('last_agent_message') or '')
+    request = _request_context_for_turn(session_path, turn_id)
+    request_id = str(request['request_id'])
+    reply = _normalize_intake_request_id(reply, request_id)
     missing = frontdesk_intake_missing_fields(reply)
     if missing:
         if _has_successful_handoff(state):
@@ -76,6 +86,7 @@ def observe_frontdesk_session(app) -> dict[str, object] | None:
     payload = handler(
         {
             'intake_base64': base64.b64encode(reply.encode('utf-8')).decode('ascii'),
+            'request_id': request_id,
             'json_output': True,
         }
     )
@@ -90,6 +101,9 @@ def observe_frontdesk_session(app) -> dict[str, object] | None:
             'turn_id': turn_id,
             'last_observed_turn_id': turn_id,
             'session_path': str(session_path),
+            'request_id': request_id,
+            'request_id_source': request['source'],
+            'user_message_sha256': request.get('user_message_sha256'),
             'frontdesk_intake': _compact_intake_payload(payload),
         },
     )
@@ -140,6 +154,75 @@ def _latest_task_complete(session_path: Path) -> dict[str, object] | None:
             continue
         latest = payload
     return latest
+
+
+def _request_context_for_turn(session_path: Path, turn_id: str) -> dict[str, object]:
+    user_messages: list[str] = []
+    try:
+        lines = session_path.read_text(encoding='utf-8').splitlines()
+    except Exception:
+        lines = []
+    for line in lines:
+        try:
+            record = json.loads(line)
+        except Exception:
+            continue
+        if str(record.get('type') or '') != 'response_item':
+            continue
+        payload = record.get('payload')
+        if not isinstance(payload, dict) or str(payload.get('type') or '') != 'message':
+            continue
+        if str(payload.get('role') or '') != 'user':
+            continue
+        metadata = payload.get('internal_chat_message_metadata_passthrough')
+        if not isinstance(metadata, dict) or str(metadata.get('turn_id') or '') != turn_id:
+            continue
+        content = payload.get('content')
+        if not isinstance(content, list):
+            continue
+        parts = []
+        for item in content:
+            if not isinstance(item, dict) or str(item.get('type') or '') != 'input_text':
+                continue
+            text = str(item.get('text') or '')
+            if text:
+                parts.append(text)
+        if parts:
+            user_messages.append('\n'.join(parts))
+
+    user_message = '\n'.join(user_messages)
+    request_ids: list[str] = []
+    for message in user_messages:
+        match = re.match(
+            r'(?is)^\s*CCB_REQ_ID\s*:\s*`?([A-Za-z0-9][A-Za-z0-9_-]{0,79})`?(?:\s|$)',
+            message,
+        )
+        if match:
+            request_ids.append(match.group(1))
+    if request_ids:
+        request_id = request_ids[-1]
+        source = 'current_user_turn'
+    else:
+        normalized_turn_id = re.sub(r'[^A-Za-z0-9_-]+', '-', turn_id).strip('-_')
+        request_id = f'frontdesk-{normalized_turn_id}'
+        if len(request_id) > 80:
+            request_id = f'frontdesk-{hashlib.sha256(turn_id.encode("utf-8")).hexdigest()[:16]}'
+        source = 'codex_turn_id'
+    return {
+        'request_id': request_id,
+        'source': source,
+        'user_message_sha256': hashlib.sha256(user_message.encode('utf-8')).hexdigest() if user_message else None,
+    }
+
+
+def _normalize_intake_request_id(reply: str, request_id: str) -> str:
+    without_ids = _REQUEST_ID_RE.sub('', reply).strip()
+    if not without_ids:
+        return f'CCB_REQ_ID: {request_id}'
+    lines = without_ids.splitlines()
+    insert_at = 1 if lines else 0
+    lines[insert_at:insert_at] = ['', f'CCB_REQ_ID: {request_id}']
+    return '\n'.join(lines).strip()
 
 
 def _state_path(app) -> Path:

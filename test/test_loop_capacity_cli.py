@@ -1754,6 +1754,53 @@ def test_loop_runner_auto_waits_for_seed_and_activation_jobs_without_duplicate_a
     assert not (project_root / '.ccb' / 'runtime' / 'loops' / 'auto-runner.lock').exists()
 
 
+def test_loop_runner_auto_failed_seed_job_does_not_consume_stale_tasks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = _project_with_loop_capacity(tmp_path, monkeypatch)
+    _add_ready_plan_task(project_root, task_id='stale-ready-task')
+    command = ParsedLoopRunnerCommand(
+        project=None,
+        once=False,
+        auto=True,
+        wait_job_id='job_planner_failed',
+        max_steps=4,
+        poll_interval_s=0.0,
+        json_output=True,
+    )
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+
+    def fake_trace(_context, trace_command):
+        assert trace_command.target == 'job_planner_failed'
+        return {
+            'job': {
+                'job_id': trace_command.target,
+                'status': 'failed',
+                'terminal_decision': {'reason': 'runtime_unavailable'},
+            }
+        }
+
+    def forbidden_runner_once(*_args, **_kwargs):
+        raise AssertionError('a failed seed job must not consume an older actionable task')
+
+    monkeypatch.setattr(loop_runner_module, 'loop_runner_once', forbidden_runner_once)
+
+    payload = loop_runner_auto(
+        context,
+        command,
+        services=SimpleNamespace(trace_target=fake_trace, sleep=lambda _seconds: None),
+    )
+
+    assert payload['loop_runner_status'] == 'blocked'
+    assert payload['action'] == 'auto_runner_seed_job_failed'
+    assert payload['wait_job_id'] == 'job_planner_failed'
+    assert payload['wait_job_status'] == 'failed'
+    assert payload['wait_job_reason'] == 'runtime_unavailable'
+    assert payload['steps'] == []
+    assert payload['next_activation'] == 'repair_or_resubmit_seed_job'
+
+
 def test_loop_runner_auto_pending_later_frontdesk_handoff_does_not_starve_ready_task(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -8845,6 +8892,26 @@ def test_frontdesk_session_observer_handoffs_latest_codex_intake_once(
         session_jsonl,
         json.dumps(
             {
+                'type': 'response_item',
+                'payload': {
+                    'type': 'message',
+                    'role': 'user',
+                    'content': [
+                        {
+                            'type': 'input_text',
+                            'text': 'CCB_REQ_ID: req_frontdesk_direct\n\nBuild a compact local task list feature.',
+                        }
+                    ],
+                    'internal_chat_message_metadata_passthrough': {
+                        'turn_id': 'turn_frontdesk_observer_1'
+                    },
+                },
+            }
+        )
+        + '\n'
+        +
+        json.dumps(
+            {
                 'type': 'event_msg',
                 'payload': {
                     'type': 'task_complete',
@@ -8870,11 +8937,16 @@ def test_frontdesk_session_observer_handoffs_latest_codex_intake_once(
 
         def submit(self, envelope):
             submitted.append(envelope)
+            job_id = (
+                'job_planner_observed_frontdesk'
+                if len(submitted) == 1
+                else f'job_planner_observed_frontdesk_{len(submitted)}'
+            )
             return SubmitReceipt(
                 accepted_at='2026-07-09T00:00:00Z',
                 jobs=(
                     AcceptedJobReceipt(
-                        job_id='job_planner_observed_frontdesk',
+                        job_id=job_id,
                         agent_name='planner',
                         status=JobStatus.QUEUED,
                         accepted_at='2026-07-09T00:00:00Z',
@@ -8950,6 +9022,60 @@ def test_frontdesk_session_observer_handoffs_latest_codex_intake_once(
     assert state['status'] == 'ok'
     assert state['frontdesk_intake']['planner_job_id'] == 'job_planner_observed_frontdesk'
     assert state['last_ignored']['reason'] == 'frontdesk_reply_not_intake_evidence'
+
+    second_turn_id = 'turn_frontdesk_observer_2'
+    stale_id_intake = _valid_frontdesk_intake().replace(
+        'Build a compact local task list feature.',
+        'Extend the compact task list with deterministic archive support.',
+    )
+    with session_jsonl.open('a', encoding='utf-8') as fh:
+        fh.write(
+            json.dumps(
+                {
+                    'type': 'response_item',
+                    'payload': {
+                        'type': 'message',
+                        'role': 'user',
+                        'content': [
+                            {
+                                'type': 'input_text',
+                                'text': 'Extend the compact task list with deterministic archive support.',
+                            }
+                        ],
+                        'internal_chat_message_metadata_passthrough': {'turn_id': second_turn_id},
+                    },
+                }
+            )
+            + '\n'
+        )
+        fh.write(
+            json.dumps(
+                {
+                    'type': 'event_msg',
+                    'payload': {
+                        'type': 'task_complete',
+                        'turn_id': second_turn_id,
+                        'last_agent_message': stale_id_intake,
+                    },
+                }
+            )
+            + '\n'
+        )
+
+    second_handoff = observe_frontdesk_session(app)
+
+    assert second_handoff['status'] == 'ok'
+    assert second_handoff['request_id'] == 'frontdesk-turn_frontdesk_observer_2'
+    assert second_handoff['request_id_source'] == 'codex_turn_id'
+    assert second_handoff['frontdesk_intake']['planner_job_id'] == 'job_planner_observed_frontdesk_2'
+    assert len(submitted) == 2
+    assert submitted[1].task_id == 'act-frontdesk-frontdesk-turn_frontdesk_observer_2'
+    assert 'CCB_REQ_ID: frontdesk-turn_frontdesk_observer_2' in submitted[1].body
+    assert 'CCB_REQ_ID: `req_frontdesk_direct`' not in submitted[1].body
+    assert auto_runner_calls[-1] == {
+        'activation_id': 'act-frontdesk-frontdesk-turn_frontdesk_observer_2',
+        'wait_job_id': 'job_planner_observed_frontdesk_2',
+    }
 
 
 def test_frontdesk_forward_planner_rejects_mixed_base64_and_stdin(

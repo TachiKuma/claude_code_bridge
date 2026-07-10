@@ -3055,7 +3055,7 @@ def test_materialize_claude_home_config_clears_stale_managed_auth_when_auth_is_n
     )
 
     payload = json.loads(layout.settings_path.read_text(encoding='utf-8'))
-    assert payload == {}
+    assert payload == {'allowedTools': []}
     assert not layout.auth_path.exists()
     assert not layout.credentials_path.exists()
 

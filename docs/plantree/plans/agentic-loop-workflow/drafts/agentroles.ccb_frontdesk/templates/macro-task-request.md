@@ -1,7 +1,5 @@
 **Intake Evidence**
 
-CCB_REQ_ID: `<job/request id when available>`
-
 Macro request: <one-sentence macro request>
 
 Scope:

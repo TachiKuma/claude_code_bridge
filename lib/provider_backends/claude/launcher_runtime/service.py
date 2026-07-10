@@ -17,6 +17,8 @@ from provider_core.runtime_shared import apply_provider_command_template
 
 _ROOT_SANDBOX_ENV = {'IS_SANDBOX': '1'}
 _ROOT_SKIP_PERMISSIONS_FLAG = '--dangerously-skip-permissions'
+_SENSITIVE_PERSISTED_ENV = {'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'}
+_SHELL_OPERATORS = {';', '&&', '||', '|', '&', '<', '>', '<<', '>>'}
 
 
 def build_runtime_launcher(
@@ -155,6 +157,10 @@ def build_session_payload(
     prepared_state: dict[str, object],
 ) -> dict[str, object]:
     layout = prepared_state.get('claude_home_layout')
+    persisted_start_cmd = _persistable_start_cmd(
+        start_cmd,
+        settings_path=runtime_dir / 'claude-settings.json',
+    )
     payload = {
         'ccb_session_id': launch_session_id,
         'agent_name': spec.name,
@@ -168,14 +174,59 @@ def build_session_payload(
         'workspace_path': str(plan.workspace_path),
         'work_dir': str(run_cwd),
         'start_dir': str(context.project.project_root),
-        'claude_start_cmd': start_cmd,
-        'start_cmd': start_cmd,
+        'claude_start_cmd': persisted_start_cmd,
+        'start_cmd': persisted_start_cmd,
     }
     if layout is not None:
         payload['claude_home'] = str(layout.home_root)
         payload['claude_projects_root'] = str(layout.projects_root)
         payload['claude_session_env_root'] = str(layout.session_env_root)
     return payload
+
+
+def _persistable_start_cmd(start_cmd: str, *, settings_path: Path) -> str:
+    """Return a restart command without persisting provider credentials."""
+    lexer = shlex.shlex(str(start_cmd or ''), posix=True, punctuation_chars=';&|<>')
+    lexer.whitespace_split = True
+    lexer.commenters = ''
+    tokens = list(lexer)
+    filtered: list[str] = []
+    replace_settings_value = False
+    for token in tokens:
+        if replace_settings_value:
+            filtered.append(str(settings_path))
+            replace_settings_value = False
+            continue
+        if token == '--settings':
+            filtered.append(token)
+            replace_settings_value = True
+            continue
+        if any(token.startswith(f'{key}=') for key in _SENSITIVE_PERSISTED_ENV):
+            continue
+        filtered.append(token)
+    if replace_settings_value:
+        filtered.pop()
+
+    compact: list[str] = []
+    for index, token in enumerate(filtered):
+        if token != 'export':
+            compact.append(token)
+            continue
+        next_token = filtered[index + 1] if index + 1 < len(filtered) else ''
+        if next_token in _SHELL_OPERATORS or not next_token:
+            continue
+        compact.append(token)
+
+    rendered = ''
+    for token in compact:
+        if token in _SHELL_OPERATORS:
+            separator = f'{token} ' if token == ';' else f' {token} '
+            rendered = rendered.rstrip() + separator
+        else:
+            rendered += f'{shlex.quote(token)} '
+    command = rendered.strip()
+    command = command.replace(' ; ; ', ' ; ')
+    return command.strip(' ;')
 
 
 __all__ = ['build_runtime_launcher', 'build_session_payload', 'build_start_cmd', 'prepare_runtime', 'resolve_run_cwd']

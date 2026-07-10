@@ -11,6 +11,28 @@ def test_codex_looks_ready_accepts_ready_banner() -> None:
     assert looks_ready('>_ OpenAI Codex\nmodel: gpt-5.5 xhigh /model to change\n› Implement {feature}')
 
 
+def test_codex_looks_ready_accepts_idle_prompt_after_banner_scrolls_out() -> None:
+    text = (
+        'planner output filled the visible scrollback\n'
+        '─ Worked for 1m 48s ─\n'
+        '› Write tests for @filename\n'
+        'gpt-5.6-sol xhigh · ~/project\n'
+    )
+
+    assert looks_ready(text)
+
+
+def test_codex_looks_ready_rejects_active_prompt_after_banner_scrolls_out() -> None:
+    text = (
+        'planner output filled the visible scrollback\n'
+        '• Working (2s • esc to interrupt)\n'
+        '› Implement {feature}\n'
+        'gpt-5.6-sol xhigh · ~/project\n'
+    )
+
+    assert not looks_ready(text)
+
+
 def test_codex_looks_ready_uses_latest_banner_when_scrollback_has_stale_loading() -> None:
     text = (
         '>_ OpenAI Codex\n'

@@ -3293,6 +3293,7 @@ def test_ccb_two_named_codex_agents_recover_after_ccbd_restart(monkeypatch, tmp_
                 'work_dir_norm': str(project_root / '.ccb' / 'workspaces' / 'agent1'),
                 'codex_session_id': 'agent1-session-id',
                 'codex_session_path': str(tmp_path / 'agent1-session.jsonl'),
+                'runtime_pid': 1111,
             },
             ensure_ascii=False,
             indent=2,
@@ -3308,6 +3309,7 @@ def test_ccb_two_named_codex_agents_recover_after_ccbd_restart(monkeypatch, tmp_
                 'work_dir_norm': str(project_root / '.ccb' / 'workspaces' / 'agent2'),
                 'codex_session_id': 'agent2-session-id',
                 'codex_session_path': str(tmp_path / 'agent2-session.jsonl'),
+                'runtime_pid': 2222,
             },
             ensure_ascii=False,
             indent=2,
@@ -3326,8 +3328,17 @@ def test_ccb_two_named_codex_agents_recover_after_ccbd_restart(monkeypatch, tmp_
             return pane_id in {'%11', '%22'}
 
     class FakeSession:
-        def __init__(self, *, pane_id: str, session_id: str, log_path: Path, work_dir: Path) -> None:
-            self.data = {'pane_id': pane_id}
+        def __init__(
+            self,
+            *,
+            pane_id: str,
+            session_id: str,
+            log_path: Path,
+            work_dir: Path,
+            runtime_pid: int,
+        ) -> None:
+            self.data = {'pane_id': pane_id, 'runtime_pid': runtime_pid}
+            self.runtime_pid = runtime_pid
             self.codex_session_path = str(log_path)
             self.codex_session_id = session_id
             self.work_dir = str(work_dir)
@@ -3415,6 +3426,7 @@ def test_ccb_two_named_codex_agents_recover_after_ccbd_restart(monkeypatch, tmp_
                 session_id='agent1-session-id',
                 log_path=tmp_path / 'agent1-session.jsonl',
                 work_dir=work_dir,
+                runtime_pid=1111,
             )
         if instance == 'agent2':
             return FakeSession(
@@ -3422,6 +3434,7 @@ def test_ccb_two_named_codex_agents_recover_after_ccbd_restart(monkeypatch, tmp_
                 session_id='agent2-session-id',
                 log_path=tmp_path / 'agent2-session.jsonl',
                 work_dir=work_dir,
+                runtime_pid=2222,
             )
         raise AssertionError(f'unexpected instance: {instance}')
 
@@ -4508,7 +4521,7 @@ def test_ccb_claude_real_adapter_recovers_after_ccbd_restart(monkeypatch, tmp_pa
     project_root = tmp_path / 'repo-claude-resume'
     _write(project_root / '.ccb' / 'ccb.config', _single_agent_config_text('claude'))
     _write(
-        project_root / '.ccb' / '.claude-session',
+        project_root / '.ccb' / '.claude-demo-session',
         json.dumps(
             {
                 'terminal': 'tmux',
@@ -4516,6 +4529,7 @@ def test_ccb_claude_real_adapter_recovers_after_ccbd_restart(monkeypatch, tmp_pa
                 'work_dir': str(project_root),
                 'claude_session_id': 'claude-session-id',
                 'claude_session_path': str(tmp_path / 'claude-session.jsonl'),
+                'runtime_pid': 3001,
             },
             ensure_ascii=False,
             indent=2,
@@ -4530,7 +4544,8 @@ def test_ccb_claude_real_adapter_recovers_after_ccbd_restart(monkeypatch, tmp_pa
             return pane_id == '%2'
 
     class FakeSession:
-        data = {}
+        data = {'runtime_pid': 3001}
+        runtime_pid = 3001
         claude_session_path = str(tmp_path / 'claude-session.jsonl')
         claude_session_id = 'claude-session-id'
         claude_projects_root = None
@@ -4799,7 +4814,7 @@ def test_ccb_claude_real_adapter_recovers_after_ccbd_restart_rotate_and_subagent
     new_session_path = str(tmp_path / 'rcsn.jsonl')
     _write(project_root / '.ccb' / 'ccb.config', _single_agent_config_text('claude'))
     _write(
-        project_root / '.ccb' / '.claude-session',
+        project_root / '.ccb' / '.claude-demo-session',
         json.dumps(
             {
                 'terminal': 'tmux',
@@ -4807,6 +4822,7 @@ def test_ccb_claude_real_adapter_recovers_after_ccbd_restart_rotate_and_subagent
                 'work_dir': str(project_root),
                 'claude_session_id': 'claude-session-id',
                 'claude_session_path': old_session_path,
+                'runtime_pid': 3002,
             },
             ensure_ascii=False,
             indent=2,
@@ -4821,7 +4837,8 @@ def test_ccb_claude_real_adapter_recovers_after_ccbd_restart_rotate_and_subagent
             return pane_id == '%2'
 
     class FakeSession:
-        data = {}
+        data = {'runtime_pid': 3002}
+        runtime_pid = 3002
         claude_session_path = old_session_path
         claude_session_id = 'claude-session-id'
         claude_projects_root = None

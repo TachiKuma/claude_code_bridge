@@ -10,7 +10,10 @@ Use this skill when reviewing a bounded coder result.
 ## Workflow
 
 1. Read the assigned execution contract and coder evidence.
-2. Build a focused check plan from acceptance criteria.
+2. Build a focused check plan from acceptance criteria. Detect repository
+   metadata once; if the assigned workspace is not a Git checkout, do not keep
+   retrying Git commands. Review the contract paths, direct file evidence,
+   focused tests, and runner-provided promotion evidence instead.
 3. Run or specify the smallest useful verification.
 4. Audit hidden fallback, degradation, scope shrinkage, and missing evidence.
 5. Return `pass`, `rework_required`, `blocked`, or `non_converged`.

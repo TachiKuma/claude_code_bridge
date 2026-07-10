@@ -37,8 +37,6 @@ For a planner-ready macro task request, make the first non-empty line exactly
 ```markdown
 **Intake Evidence**
 
-CCB_REQ_ID: `<job/request id when available>`
-
 Macro request: <one-sentence macro request>
 
 Scope:
@@ -53,6 +51,11 @@ Constraints:
 Next step: controller_observed_planner_handoff
 Next role: planner
 ```
+
+Include `CCB_REQ_ID: <id>` immediately after the heading only when the current
+user turn itself contains that request id. Never copy one from earlier
+conversation. For ordinary interactive input, omit it; the controller binds the
+completed turn to a fresh request id.
 
 For a request that appears blocked by unavailable credentials, private endpoint
 access, missing external approval, or another prerequisite, still return an
