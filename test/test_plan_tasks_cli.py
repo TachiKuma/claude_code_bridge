@@ -186,6 +186,134 @@ def test_plan_parser_supports_v1_task_commands() -> None:
     )
 
 
+def test_plan_task_imports_validated_single_node_orchestration_bundle(tmp_path: Path) -> None:
+    project_root = _project_with_plan(tmp_path)
+    _make_ready_task(project_root, task_id='bundle-task')
+    drafts = project_root / 'drafts'
+    notes_path = drafts / 'orchestration_notes.md'
+    _write(notes_path, 'route: direct_execution\norchestration_notes: one bounded workgroup\n')
+    code, _payload, _out, err = _run_phase2(
+        [
+            'plan',
+            'task-artifact',
+            '--task',
+            'bundle-task',
+            '--kind',
+            'orchestration_notes',
+            '--file',
+            str(notes_path),
+            '--route',
+            'direct_execution',
+            '--json',
+        ],
+        cwd=project_root,
+    )
+    assert code == 0, err
+    task_root = 'docs/plantree/plans/demo-plan/tasks/bundle-task'
+    execution_contract_ref = f'{task_root}/execution_contract.md'
+    candidate = {
+        'schema': 'ccb.loop.orchestration_bundle_candidate.v1',
+        'task_id': 'bundle-task',
+        'bundle_revision': 1,
+        'nodes': [
+            {
+                'node_id': 'node-001',
+                'workgroup_id': 'wg-001',
+                'worker_profile': 'coder',
+                'reviewer_profile': 'code_reviewer',
+                'depends_on': [],
+                'parallel_group': 'wave-1',
+                'work_packet': 'Implement the bounded task and report verification.',
+                'allowed_paths': [],
+                'acceptance_refs': [execution_contract_ref],
+                'verification_refs': [execution_contract_ref],
+                'integration_order': 10,
+            }
+        ],
+        'integration': {
+            'verification_refs': [execution_contract_ref],
+            'project_root_verification_refs': [execution_contract_ref],
+        },
+        'policy': {
+            'max_node_rework_rounds': 1,
+            'on_required_node_failure': 'partial_or_blocked',
+            'on_structural_failure': 'replan_required',
+        },
+    }
+    candidate_path = drafts / 'orchestration_bundle.candidate.json'
+    _write(candidate_path, json.dumps(candidate, indent=2) + '\n')
+
+    code, payload, _out, err = _run_phase2(
+        [
+            'plan',
+            'task-artifact',
+            '--task',
+            'bundle-task',
+            '--kind',
+            'orchestration_bundle',
+            '--file',
+            str(candidate_path),
+            '--json',
+        ],
+        cwd=project_root,
+    )
+
+    assert code == 0, err
+    artifact = payload['artifact']
+    assert artifact['bundle_schema'] == 'ccb.loop.orchestration_bundle.v1'
+    assert artifact['bundle_revision'] == 1
+    assert artifact['node_count'] == 1
+    assert artifact['node_ids'] == ['node-001']
+    bundle_path = project_root / artifact['path']
+    bundle = json.loads(bundle_path.read_text(encoding='utf-8'))
+    assert bundle['task_id'] == 'bundle-task'
+    assert bundle['source'] == 'script_owned_import'
+    assert bundle['nodes'][0]['work_packet_ref'] == f'{task_root}/orchestration/work-packets/node-001.md'
+    assert (project_root / bundle['nodes'][0]['work_packet_ref']).read_text(encoding='utf-8') == (
+        'Implement the bounded task and report verification.\n'
+    )
+    code, repeated, _out, err = _run_phase2(
+        [
+            'plan',
+            'task-artifact',
+            '--task',
+            'bundle-task',
+            '--kind',
+            'orchestration_bundle',
+            '--file',
+            str(candidate_path),
+            '--json',
+        ],
+        cwd=project_root,
+    )
+    assert code == 0, err
+    assert repeated['idempotent'] is True
+    assert repeated['artifact']['bundle_digest'] == artifact['bundle_digest']
+
+    packet_path = project_root / bundle['nodes'][0]['work_packet_ref']
+    original_packet = packet_path.read_text(encoding='utf-8')
+    candidate['nodes'][0]['work_packet'] = 'Conflicting packet must not become current.'
+    conflicting_path = drafts / 'orchestration_bundle.conflicting.json'
+    _write(conflicting_path, json.dumps(candidate, indent=2) + '\n')
+    code, _payload, _out, err = _run_phase2(
+        [
+            'plan',
+            'task-artifact',
+            '--task',
+            'bundle-task',
+            '--kind',
+            'orchestration_bundle',
+            '--file',
+            str(conflicting_path),
+            '--json',
+        ],
+        cwd=project_root,
+    )
+    assert code == 1
+    assert 'conflicts with existing bundle' in err
+    assert packet_path.read_text(encoding='utf-8') == original_packet
+
+
 def test_plan_task_ready_for_orchestration_can_pause_for_clarification(tmp_path: Path) -> None:
     project_root = _project_with_plan(tmp_path)
     _make_ready_task(project_root, task_id='external-sync-contract')

@@ -11,6 +11,13 @@ from uuid import uuid4
 from storage.atomic import atomic_write_json, atomic_write_text
 from storage.locks import file_lock
 
+from .loop_orchestration_bundle import (
+    bundle_digest,
+    bundle_text,
+    load_task_orchestration_bundle,
+    normalize_bundle_candidate,
+)
+
 
 _SEGMENT_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$')
 _SLUG_RE = re.compile(r'[^A-Za-z0-9_-]+')
@@ -19,6 +26,7 @@ _ARTIFACT_FILES = {
     'task_packet': 'task_packet.md',
     'execution_contract': 'execution_contract.md',
     'orchestration_notes': 'orchestration_notes.md',
+    'orchestration_bundle': 'orchestration_bundle.json',
     'round_summary': 'round_summary.md',
     'requirements': 'requirements.md',
     'acceptance': 'acceptance-criteria.md',
@@ -192,6 +200,16 @@ def _task_artifact(context, command) -> dict[str, object]:
         if artifact_kind != 'orchestration_notes':
             raise ValueError('plan task artifact --route is only valid for orchestration_notes')
         extra['orchestrator_route'] = route
+    if artifact_kind == 'orchestration_bundle':
+        with file_lock(_task_lock_path(context, record)):
+            locked_task = _require_task(context, command.task_id)
+            locked_record = dict(locked_task['record'])
+            return _task_orchestration_bundle_artifact(
+                context,
+                command,
+                task=locked_task,
+                record=locked_record,
+            )
     record, artifact = _import_text_artifact(
         context,
         record,
@@ -206,6 +224,85 @@ def _task_artifact(context, command) -> dict[str, object]:
     _write_task_readme(context, record)
     payload = _payload(context, action='task-artifact', record=record)
     payload['artifact'] = artifact
+    return payload
+
+
+def _task_orchestration_bundle_artifact(
+    context,
+    command,
+    *,
+    task: dict[str, object],
+    record: dict[str, object],
+) -> dict[str, object]:
+    route = _orchestrator_route_for_record(record)
+    if route not in {'direct_execution', 'partial_completion'}:
+        raise ValueError('orchestration_bundle requires direct_execution or partial_completion orchestration_notes')
+    source_path = _safe_project_file(context.project.project_root, command.file_path)
+    source_text = _read_utf8_artifact(source_path)
+    try:
+        candidate = json.loads(source_text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f'orchestration bundle candidate must be valid JSON: {exc}') from exc
+    source = _first_text(
+        getattr(command, 'actor_source', None),
+        os.environ.get('CCB_ARTIFACT_SOURCE'),
+        'script_owned_import',
+    )
+    normalized, work_packets = normalize_bundle_candidate(
+        candidate,
+        record=record,
+        project_root=Path(context.project.project_root),
+        source=source,
+    )
+    normalized_text = bundle_text(normalized)
+    normalized_digest = bundle_digest(normalized)
+    artifacts = record.get('artifacts') if isinstance(record.get('artifacts'), dict) else {}
+    existing = artifacts.get('orchestration_bundle') if isinstance(artifacts, dict) else None
+    if isinstance(existing, dict):
+        existing_digest = str(existing.get('bundle_digest') or existing.get('sha256') or '').strip()
+        if existing_digest != normalized_digest:
+            raise ValueError('plan task orchestration_bundle conflicts with existing bundle')
+        existing_bundle, _existing_artifact = load_task_orchestration_bundle(
+            Path(context.project.project_root),
+            record,
+        )
+        if bundle_digest(existing_bundle) != normalized_digest:
+            raise ValueError('plan task existing orchestration_bundle does not match its recorded digest')
+        payload = _payload(context, action='task-artifact', record=record)
+        payload['artifact'] = dict(existing)
+        payload['idempotent'] = True
+        return payload
+
+    for relative_path, packet_text in sorted(work_packets.items()):
+        packet_path = Path(context.project.project_root) / relative_path
+        packet_path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_text(packet_path, packet_text)
+
+    nodes = normalized.get('nodes') if isinstance(normalized.get('nodes'), list) else []
+    record, artifact = _import_text_artifact(
+        context,
+        record,
+        artifact_kind='orchestration_bundle',
+        file_path=source_path,
+        text=normalized_text,
+        extra={
+            'bundle_schema': normalized.get('schema'),
+            'bundle_revision': normalized.get('bundle_revision'),
+            'bundle_digest': normalized_digest,
+            'task_digest': normalized.get('task_digest'),
+            'bundle_source': normalized.get('source'),
+            'node_count': len(nodes),
+            'node_ids': [str(node.get('node_id') or '') for node in nodes if isinstance(node, dict)],
+        },
+        actor=_artifact_actor_metadata(context, command),
+    )
+    now = str(artifact['imported_at'])
+    record['updated_at'] = now
+    _replace_record(task['tasks_root'], task['index'], record)
+    _write_task_readme(context, record)
+    payload = _payload(context, action='task-artifact', record=record)
+    payload['artifact'] = artifact
+    payload['idempotent'] = False
     return payload
 
 

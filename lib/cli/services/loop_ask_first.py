@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import filecmp
-import fnmatch
 from io import StringIO
 import json
 from pathlib import Path
@@ -19,6 +18,13 @@ from storage.atomic import atomic_write_json, atomic_write_text
 
 from .ask import submit_ask, watch_ask_job
 from .clear import clear_agent_context
+from .loop_execution_scope import (
+    declared_allowed_change_paths,
+    path_allowed_by_scope,
+    safe_relative_path,
+    split_declared_paths,
+)
+from .loop_orchestration_bundle import bundle_summary, load_task_orchestration_bundle
 from .loop_topology import loop_topology
 from .plan_tasks import plan_task, task_execution_text
 from .watch_fallback import load_persisted_terminal_watch_payload
@@ -40,14 +46,6 @@ TEST_COMMAND_PREFIXES = (
     'test command:',
     'verification_command:',
     'verification command:',
-)
-ALLOWED_CHANGE_PATH_PREFIXES = (
-    'allowed_change_paths:',
-    'allowed change paths:',
-    'allowed_change_path:',
-    'allowed change path:',
-    'changed_files:',
-    'changed files:',
 )
 WORKER_CHANGED_FILE_PREFIXES = (
     'changed_files:',
@@ -85,6 +83,18 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
     _ensure_loop_dirs(loop_dir)
     task_text = task_execution_text(context, task_id)
     task_record = _task_record(deps.plan_task(context, SimpleNamespace(action='task-show', task_id=task_id)))
+    orchestration_bundle, bundle_artifact = load_task_orchestration_bundle(
+        Path(context.project.project_root),
+        task_record,
+    )
+    bundle_nodes = orchestration_bundle.get('nodes') if isinstance(orchestration_bundle.get('nodes'), list) else []
+    if len(bundle_nodes) != 1:
+        raise ValueError(
+            f'ask-first compatibility engine requires exactly one orchestration bundle node; got {len(bundle_nodes)}'
+        )
+    bundle_node = dict(bundle_nodes[0])
+    node_id = str(bundle_node.get('node_id') or '')
+    orchestration_bundle_summary = bundle_summary(orchestration_bundle, bundle_artifact)
     artifact_refs = _artifact_refs(task_record)
     project_root_authority_required = _requires_project_root_authority(task_record, task_text)
     orchestrator_agent, orchestrator_is_configured = _agent_for_role(
@@ -101,6 +111,7 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
     reviewer_agent = f'loop-{loop_id}-{REVIEWER_PROFILE}-1'
     stage_state = _load_stage_state(loop_dir, loop_id=loop_id, task_id=task_id)
     state_artifacts = _state_current_artifacts(stage_state)
+    node_artifacts = _state_node_artifacts(state_artifacts, node_id=node_id)
     started_at = str(stage_state.get('round_started_at') or '').strip() or _utc_now()
     _append_event(
         loop_dir,
@@ -139,11 +150,13 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
             round_result='blocked',
             round_result_source=str(topology_failure.get('source') or 'topology_not_ready'),
             failure=topology_failure,
+            orchestration_bundle=orchestration_bundle_summary,
+            node_id=node_id,
         )
 
-    worker = _artifact_dict(state_artifacts.get('worker'))
-    reviewer = _artifact_dict(state_artifacts.get('reviewer'))
-    rework = _rework_artifacts(state_artifacts.get('rework'))
+    worker = _artifact_dict(node_artifacts.get('worker'))
+    reviewer = _artifact_dict(node_artifacts.get('reviewer'))
+    rework = _rework_artifacts(node_artifacts.get('rework'))
     orchestrator = _artifact_dict(state_artifacts.get('orchestrator'))
     round_reviewer = _artifact_dict(state_artifacts.get(ROUND_REVIEWER_FIELD))
     authority_update = _optional_artifact_dict(state_artifacts.get('authority_update'))
@@ -170,6 +183,8 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
             round_reviewer=round_reviewer,
             pending=pending,
             authority_update=_public_authority_update(authority_update),
+            orchestration_bundle=orchestration_bundle_summary,
+            node_id=node_id,
         )
 
     stage = 'worker_ask'
@@ -219,6 +234,8 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
                 round_result='blocked',
                 round_result_source=str(worker_status_failure.get('source') or 'ask_job_incomplete'),
                 failure=worker_status_failure,
+                orchestration_bundle=orchestration_bundle_summary,
+                node_id=node_id,
             )
         if project_root_authority_required and authority_update is None:
             promoted, authority_failure = _promote_project_root_authority(
@@ -248,6 +265,8 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
                     round_result='blocked',
                     round_result_source=str(authority_failure.get('source') or 'round_authority'),
                     failure=authority_failure,
+                    orchestration_bundle=orchestration_bundle_summary,
+                    node_id=node_id,
             )
             authority_update = _merge_authority_updates(authority_update, promoted)
         stage = 'reviewer_ask'
@@ -335,6 +354,8 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
                     round_result_source=str(worker_rework_status_failure.get('source') or 'ask_job_incomplete'),
                     failure=worker_rework_status_failure,
                     authority_update=_public_authority_update(authority_update),
+                    orchestration_bundle=orchestration_bundle_summary,
+                    node_id=node_id,
                 )
             if project_root_authority_required:
                 promoted, authority_failure = _promote_project_root_authority(
@@ -372,6 +393,8 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
                         round_result_source=str(authority_failure.get('source') or 'round_authority'),
                         failure=authority_failure,
                         authority_update=_public_authority_update(authority_update),
+                        orchestration_bundle=orchestration_bundle_summary,
+                        node_id=node_id,
                     )
                 authority_update = _merge_authority_updates(authority_update, promoted)
             stage = 'reviewer_recheck_ask'
@@ -532,6 +555,8 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
             round_result_source=str(failure.get('source') or 'ask_failure'),
             failure=failure,
             authority_update=_public_authority_update(authority_update),
+            orchestration_bundle=orchestration_bundle_summary,
+            node_id=node_id,
         )
 
     status_items = [worker, reviewer, *rework.values(), orchestrator, round_reviewer]
@@ -562,6 +587,8 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
             round_result_source=str(status_failure.get('source') or 'ask_job_incomplete'),
             failure=status_failure,
             authority_update=_public_authority_update(authority_update),
+            orchestration_bundle=orchestration_bundle_summary,
+            node_id=node_id,
         )
     round_result, round_result_source, failure = _round_result(
         {'loop_run_status': status, ROUND_REVIEWER_FIELD: round_reviewer}
@@ -617,6 +644,8 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
         failure=failure,
         authority_update=authority_update,
         project_root_test=project_root_test,
+        orchestration_bundle=orchestration_bundle_summary,
+        node_id=node_id,
     )
 
 
@@ -877,6 +906,8 @@ def _write_round_payload(
     round_reviewer: dict[str, object],
     round_result: str,
     round_result_source: str,
+    orchestration_bundle: dict[str, object],
+    node_id: str,
     failure: dict[str, object] | None = None,
     authority_update: dict[str, object] | None = None,
     project_root_test: dict[str, object] | None = None,
@@ -907,6 +938,7 @@ def _write_round_payload(
     payload = {
         'schema_version': 1,
         'record_type': 'ccb_loop_ask_first_execution_round',
+        'workgroup_state_schema': 'ccb.loop.workgroup_round_state.v1',
         'loop_run_status': status,
         'dispatch_source': 'ask_first_mount_topology',
         'loop_id': loop_id,
@@ -933,7 +965,18 @@ def _write_round_payload(
             }
         },
         'artifact_refs': artifact_refs,
+        'orchestration_bundle': orchestration_bundle,
         'topology': topology,
+        'workgroups': {
+            node_id: _workgroup_record(
+                node_id=node_id,
+                worker_agent=worker_agent,
+                reviewer_agent=reviewer_agent,
+                worker=worker,
+                reviewer=reviewer,
+                rework=rework,
+            )
+        },
         'worker': worker,
         'reviewer': reviewer,
         'rework': rework or {},
@@ -984,6 +1027,8 @@ def _write_pending_payload(
     orchestrator: dict[str, object],
     round_reviewer: dict[str, object],
     pending: dict[str, object],
+    orchestration_bundle: dict[str, object],
+    node_id: str,
     authority_update: dict[str, object] | None = None,
     orchestrator_agent: str | None = None,
     round_reviewer_agent: str | None = None,
@@ -993,6 +1038,14 @@ def _write_pending_payload(
     observed_at = _utc_now()
     current_artifacts = {
         'artifact_refs': artifact_refs,
+        'orchestration_bundle': orchestration_bundle,
+        'nodes': {
+            node_id: {
+                'worker': worker,
+                'reviewer': reviewer,
+                'rework': rework or {},
+            }
+        },
         'worker': worker,
         'reviewer': reviewer,
         'rework': rework or {},
@@ -1004,6 +1057,7 @@ def _write_pending_payload(
     state_payload = {
         'schema_version': 1,
         'record_type': 'ccb_loop_ask_first_stage_state',
+        'workgroup_state_schema': 'ccb.loop.workgroup_round_state.v1',
         'status': 'pending',
         'task_id': task_id,
         'loop_id': loop_id,
@@ -1015,11 +1069,13 @@ def _write_pending_payload(
         'purpose': pending.get('purpose'),
         'submitted_at': pending.get('submitted_at'),
         'current_artifacts': current_artifacts,
+        'orchestration_bundle': orchestration_bundle,
         'pending': pending,
     }
     payload = {
         'schema_version': 1,
         'record_type': 'ccb_loop_ask_first_execution_round',
+        'workgroup_state_schema': 'ccb.loop.workgroup_round_state.v1',
         'loop_run_status': 'pending',
         'dispatch_source': 'ask_first_mount_topology',
         'loop_id': loop_id,
@@ -1046,7 +1102,18 @@ def _write_pending_payload(
             }
         },
         'artifact_refs': artifact_refs,
+        'orchestration_bundle': orchestration_bundle,
         'topology': topology,
+        'workgroups': {
+            node_id: _workgroup_record(
+                node_id=node_id,
+                worker_agent=worker_agent,
+                reviewer_agent=reviewer_agent,
+                worker=worker,
+                reviewer=reviewer,
+                rework=rework,
+            )
+        },
         'worker': worker,
         'reviewer': reviewer,
         'rework': rework or {},
@@ -1083,6 +1150,36 @@ def _write_pending_payload(
     return payload
 
 
+def _workgroup_record(
+    *,
+    node_id: str,
+    worker_agent: str,
+    reviewer_agent: str,
+    worker: dict[str, object],
+    reviewer: dict[str, object],
+    rework: dict[str, dict[str, object]],
+) -> dict[str, object]:
+    if reviewer and bool(reviewer.get('terminal')):
+        status = 'review_complete'
+    elif reviewer:
+        status = 'reviewer_pending'
+    elif worker and bool(worker.get('terminal')):
+        status = 'worker_complete'
+    elif worker:
+        status = 'worker_pending'
+    else:
+        status = 'created'
+    return {
+        'node_id': node_id,
+        'status': status,
+        'worker_agent': worker_agent,
+        'reviewer_agent': reviewer_agent,
+        'worker': worker,
+        'reviewer': reviewer,
+        'rework': rework or {},
+    }
+
+
 def _stage_state_path(loop_dir: Path) -> Path:
     return loop_dir / 'ask_first_stage_state.json'
 
@@ -1102,6 +1199,19 @@ def _load_stage_state(loop_dir: Path, *, loop_id: str, task_id: str) -> dict[str
 def _state_current_artifacts(stage_state: dict[str, object]) -> dict[str, object]:
     current = stage_state.get('current_artifacts') if isinstance(stage_state, dict) else {}
     return dict(current) if isinstance(current, dict) else {}
+
+
+def _state_node_artifacts(current_artifacts: dict[str, object], *, node_id: str) -> dict[str, object]:
+    nodes = current_artifacts.get('nodes')
+    if isinstance(nodes, dict):
+        node = nodes.get(node_id)
+        if isinstance(node, dict):
+            return dict(node)
+    return {
+        'worker': current_artifacts.get('worker'),
+        'reviewer': current_artifacts.get('reviewer'),
+        'rework': current_artifacts.get('rework'),
+    }
 
 
 def _artifact_dict(value: object) -> dict[str, object]:
@@ -3074,90 +3184,15 @@ def _copy_workspace_files(workspace_path: Path, project_root: Path, changed_file
 
 
 def _declared_allowed_change_paths(task_text: str) -> list[str]:
-    declared: list[str] = []
-    collecting_allowed_block = False
-    for raw_line in task_text.splitlines():
-        stripped = raw_line.strip()
-        line = stripped.lstrip('-*').strip()
-        lower = line.lower()
-        prefix_match = False
-        for prefix in ALLOWED_CHANGE_PATH_PREFIXES:
-            if lower.startswith(prefix):
-                prefix_match = True
-                collecting_allowed_block = True
-                declared.extend(_split_declared_paths(line.split(':', 1)[1]))
-                break
-        if prefix_match:
-            continue
-        if _is_allowed_change_paths_heading(stripped):
-            collecting_allowed_block = True
-            continue
-        if collecting_allowed_block:
-            if not stripped:
-                continue
-            if stripped.startswith(('-', '*')):
-                declared.extend(_split_declared_paths(line))
-                continue
-            collecting_allowed_block = False
-        for marker in ('update only ', 'fix only ', 'edit only ', 'change only ', 'modify only '):
-            marker_index = lower.find(marker)
-            if marker_index < 0:
-                continue
-            tail = line[marker_index + len(marker):]
-            first_sentence = tail.split('.', 1)[0]
-            declared.extend(_split_declared_paths(first_sentence))
-    normalized: list[str] = []
-    seen: set[str] = set()
-    for path in declared:
-        directory_scope = path.strip().strip('`"\'').endswith(('/', '\\'))
-        relative = _safe_relative_path(path).as_posix()
-        if directory_scope:
-            relative = relative.rstrip('/') + '/'
-        if relative in seen:
-            continue
-        normalized.append(relative)
-        seen.add(relative)
-    return normalized
-
-
-def _is_allowed_change_paths_heading(line: str) -> bool:
-    heading = line.strip().lstrip('#').strip().rstrip(':').lower()
-    return heading in {
-        prefix.rstrip(':')
-        for prefix in ALLOWED_CHANGE_PATH_PREFIXES
-    }
+    return declared_allowed_change_paths(task_text)
 
 
 def _split_declared_paths(value: str) -> list[str]:
-    paths: list[str] = []
-    for raw in value.replace(';', ',').split(','):
-        token = raw.strip().strip('`"\'')
-        if not token:
-            continue
-        if ' ' in token:
-            token = token.split()[0].strip('`"\'')
-        token = token.rstrip('.,')
-        if '/' not in token and not token.endswith('/') and not Path(token).suffix:
-            continue
-        paths.append(token)
-    return paths
+    return split_declared_paths(value)
 
 
 def _path_allowed_by_scope(changed_file: str, allowed_change_paths: list[str]) -> bool:
-    changed = _safe_relative_path(changed_file).as_posix()
-    changed_path = Path(changed)
-    for allowed in allowed_change_paths:
-        scope = _safe_relative_path(allowed).as_posix()
-        scope_path = Path(scope)
-        if changed == scope:
-            return True
-        if _scope_has_glob(scope) and fnmatch.fnmatchcase(changed, scope):
-            return True
-        if changed_path.suffix and not scope_path.suffix and changed_path.with_suffix('').as_posix() == scope:
-            return True
-        if allowed.endswith('/') and changed.startswith(scope.rstrip('/') + '/'):
-            return True
-    return False
+    return path_allowed_by_scope(changed_file, allowed_change_paths)
 
 
 def _ignore_copy_workspace_control_drift(
@@ -3237,10 +3272,6 @@ def _copy_workspace_control_drift_relative(relative: Path) -> bool:
     if relative.as_posix() == 'command_log.tsv':
         return True
     return len(parts) >= 3 and parts[:3] == ('docs', 'plantree', 'plans')
-
-
-def _scope_has_glob(scope: str) -> bool:
-    return any(marker in scope for marker in ('*', '?', '['))
 
 
 def _capture_project_files(project_root: Path, changed_files: list[str]) -> dict[str, bytes | None]:
@@ -3365,10 +3396,7 @@ def _unapplied_workspace_files(workspace_path: Path, project_root: Path, changed
 
 
 def _safe_relative_path(value: str) -> Path:
-    relative = Path(value)
-    if relative.is_absolute() or '..' in relative.parts:
-        raise ValueError(f'unsafe workspace relative path {value!r}')
-    return relative
+    return safe_relative_path(value)
 
 
 def _ignore_workspace_relative(relative: Path) -> bool:
@@ -3600,7 +3628,7 @@ def _single_job(jobs: tuple[dict, ...], *, target: str) -> dict:
 def _artifact_refs(record: dict[str, object]) -> dict[str, str]:
     artifacts = record.get('artifacts') if isinstance(record.get('artifacts'), dict) else {}
     refs: dict[str, str] = {}
-    for kind in ('task_packet', 'execution_contract', 'orchestration_notes'):
+    for kind in ('task_packet', 'execution_contract', 'orchestration_notes', 'orchestration_bundle'):
         artifact = artifacts.get(kind) if isinstance(artifacts, dict) else None
         if isinstance(artifact, dict) and str(artifact.get('path') or '').strip():
             refs[kind] = str(artifact['path'])

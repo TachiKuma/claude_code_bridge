@@ -13,6 +13,10 @@ from cli.models import ParsedAskCommand
 from storage.atomic import atomic_write_json, atomic_write_text
 
 from .ask import submit_ask
+from .loop_orchestration_bundle import (
+    ORCHESTRATION_BUNDLE_CANDIDATE_SCHEMA,
+    build_single_node_candidate,
+)
 from .plan_tasks import plan_task
 
 
@@ -892,6 +896,31 @@ def _consume_orchestrator(
             job_id=job_id,
         ),
     )
+    bundle_import: dict[str, object] | None = None
+    if str(parsed['route']) in _EXECUTION_ROUTES:
+        task_record = imported.get('task') if isinstance(imported.get('task'), dict) else {}
+        candidate = parsed.get('orchestration_bundle_candidate')
+        bundle_source = 'loop_runner_role_output_import'
+        if not isinstance(candidate, dict):
+            candidate = build_single_node_candidate(
+                task_record,
+                project_root=Path(context.project.project_root),
+            )
+            bundle_source = 'loop_runner_deterministic_single_node'
+        candidate_path = import_root / 'orchestration_bundle.candidate.json'
+        atomic_write_json(candidate_path, candidate)
+        bundle_import = deps.plan_task(
+            context,
+            SimpleNamespace(
+                action='task-artifact',
+                task_id=task_id,
+                artifact_kind='orchestration_bundle',
+                file_path=str(candidate_path),
+                actor_source=bundle_source,
+                actor='loop_runner',
+                job_id=job_id,
+            ),
+        )
     record = _log_import(
         context,
         {
@@ -901,6 +930,7 @@ def _consume_orchestrator(
             'task_id': task_id,
             'route': parsed['route'],
             'artifact': imported.get('artifact'),
+            'orchestration_bundle': bundle_import.get('artifact') if isinstance(bundle_import, dict) else None,
         },
     )
     return _base_payload(
@@ -915,6 +945,9 @@ def _consume_orchestrator(
             'next_owner': imported.get('next_owner'),
             'route': parsed['route'],
             'import': _compact_plan_payload(imported),
+            'orchestration_bundle': (
+                bundle_import.get('artifact') if isinstance(bundle_import, dict) else None
+            ),
             'role_output_import': record,
             'next_activation': _next_activation_for_route(str(parsed['route'])),
         },
@@ -1873,13 +1906,37 @@ def _parse_orchestrator_reply(reply: str) -> dict[str, object]:
         return {'status': 'blocked', 'reason': 'unknown_route', 'route': route, 'expected_routes': sorted(_VALID_ROUTES)}
     if not re.search(r'(?mi)^\s*[-*]?\s*orchestration[_ ]notes\s*:', reply):
         return {'status': 'blocked', 'reason': 'orchestrator_reply_missing_orchestration_notes'}
-    return {'status': 'ok', 'route': route, 'orchestration_notes': reply.strip() + '\n'}
+    parsed: dict[str, object] = {'status': 'ok', 'route': route, 'orchestration_notes': reply.strip() + '\n'}
+    has_bundle_label = bool(re.search(r'(?mi)^\s*[-*]?\s*orchestration[_ ]bundle\s*:', reply))
+    bundle_text = _fenced_section(reply, ('orchestration_bundle', 'orchestration bundle'))
+    if has_bundle_label and not bundle_text:
+        return {'status': 'blocked', 'reason': 'orchestrator_reply_bundle_requires_fenced_json'}
+    if bundle_text:
+        try:
+            candidate = json.loads(bundle_text)
+        except json.JSONDecodeError as exc:
+            return {
+                'status': 'blocked',
+                'reason': 'orchestrator_reply_bundle_invalid_json',
+                'error': str(exc),
+            }
+        if not isinstance(candidate, dict):
+            return {'status': 'blocked', 'reason': 'orchestrator_reply_bundle_not_object'}
+        if str(candidate.get('schema') or '') != ORCHESTRATION_BUNDLE_CANDIDATE_SCHEMA:
+            return {
+                'status': 'blocked',
+                'reason': 'orchestrator_reply_bundle_unknown_schema',
+                'schema': candidate.get('schema'),
+                'expected_schema': ORCHESTRATION_BUNDLE_CANDIDATE_SCHEMA,
+            }
+        parsed['orchestration_bundle_candidate'] = candidate
+    return parsed
 
 
 def _fenced_section(text: str, names: tuple[str, ...]) -> str:
     for name in names:
         pattern = (
-            rf'(?is)(?:^|\n)\s*{_label_heading_fragment(name)}\s*\n'
+            rf'(?is)(?:^|\n)\s*{_label_heading_fragment(name)}\s*:?\s*\n'
             r'```[A-Za-z0-9_-]*\s*\n(.*?)\n```'
         )
         match = re.search(pattern, text)

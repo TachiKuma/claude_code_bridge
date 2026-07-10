@@ -18,6 +18,7 @@ from .auto_runner_lock import AutoRunnerLock
 from .ask import submit_ask
 from .clear import clear_agent_context
 from .loop_ask_first import release_ask_first_execution_round, run_ask_first_execution_round
+from .loop_orchestration_bundle import bundle_summary, load_task_orchestration_bundle
 from .loop_run_once import loop_run_once
 from .loop_topology import loop_topology
 from .plan_tasks import find_first_actionable_task, plan_task
@@ -178,6 +179,26 @@ def loop_runner_once(context, command, services=None) -> dict[str, object]:
 def _run_ask_first_execution_round(context, command, deps, task: dict[str, object]) -> dict[str, object]:
     record = task['record']
     task_id = str(record.get('task_id') or '')
+    try:
+        orchestration_bundle, bundle_artifact = load_task_orchestration_bundle(
+            Path(context.project.project_root),
+            record,
+        )
+    except ValueError as exc:
+        return _ask_first_bundle_not_ready(context, record=record, reason=str(exc))
+    bundle_nodes = orchestration_bundle.get('nodes') if isinstance(orchestration_bundle.get('nodes'), list) else []
+    if len(bundle_nodes) != 1:
+        return _ask_first_bundle_not_ready(
+            context,
+            record=record,
+            reason=(
+                f'orchestration bundle contains {len(bundle_nodes)} workgroups; '
+                'multi-workgroup scheduler is not landed in the current source slice'
+            ),
+            action='multi_workgroup_execution_not_ready',
+            bundle=orchestration_bundle,
+            bundle_artifact=bundle_artifact,
+        )
     current_loop = str(record.get('current_loop') or '').strip()
     if current_loop:
         loop_id = current_loop
@@ -239,6 +260,7 @@ def _run_ask_first_execution_round(context, command, deps, task: dict[str, objec
         'round_result': round_result,
         'round_result_source': round_result_source,
         'task_status': imported.get('status'),
+        'orchestration_bundle': bundle_summary(orchestration_bundle, bundle_artifact),
         'bind': _compact_plan_payload(bind),
         'round': {
             'loop_run_status': round_payload.get('loop_run_status'),
@@ -250,6 +272,33 @@ def _run_ask_first_execution_round(context, command, deps, task: dict[str, objec
         'import': _compact_plan_payload(imported),
         'next_activation': _next_activation(imported.get('status')),
     }
+
+
+def _ask_first_bundle_not_ready(
+    context,
+    *,
+    record: dict[str, object],
+    reason: str,
+    action: str = 'ask_first_execution_not_ready',
+    bundle: dict[str, object] | None = None,
+    bundle_artifact: dict[str, object] | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        'schema_version': 1,
+        'record_type': 'ccb_loop_runner_once',
+        'loop_runner_status': 'paused',
+        'project_id': context.project.project_id,
+        'project_root': str(context.project.project_root),
+        'action': action,
+        'reason': reason,
+        'task_id': record.get('task_id'),
+        'task_status': record.get('status'),
+        'next_owner': record.get('next_owner'),
+        'next_activation': 'orchestration_bundle_required',
+    }
+    if bundle is not None:
+        payload['orchestration_bundle'] = bundle_summary(bundle, bundle_artifact)
+    return payload
 
 
 def _run_execution_round(context, command, deps, task: dict[str, object]) -> dict[str, object]:
@@ -1413,7 +1462,10 @@ def _orchestrator_activation_packet(
         'task_status': record.get('status'),
         'action': 'activate_orchestrator',
         'reason_for_activation': reason,
-        'required_next_output': 'reply-only route decision and compact orchestration notes for supervisor-owned import',
+        'required_next_output': (
+            'reply-only route decision, compact orchestration notes, and an orchestration bundle candidate '
+            'for multi-workgroup execution routes'
+        ),
         'task_packet_root': str(task_root.relative_to(context.project.project_root)),
         'artifact_refs': refs,
         'compact_artifacts': _compact_artifacts(
@@ -1427,7 +1479,8 @@ def _orchestrator_activation_packet(
             'Reply only; do not run ccb, ccb_test, artifact import commands, or wrapper commands.',
             'Choose exactly one route: direct_execution, needs_detail, macro_adjustment_request, blocked, or partial_completion.',
             'Provide compact orchestration notes with citations to task_packet and execution_contract refs.',
-            'Supervisor/script-owned import will record orchestration_notes with the selected route after reviewing this reply.',
+            'For direct_execution or partial_completion, include a fenced JSON orchestration_bundle candidate when more than one workgroup or any dependency is required.',
+            'Supervisor/script-owned import validates and records orchestration_notes, work packets, and orchestration_bundle; provider text is not authority.',
             'Do not edit task status, index, current_loop, runtime topology, or task artifacts directly.',
             'Do not rely on provider reply text as durable route/status authority.',
             'Do not start task_detailer, worker, reviewer, loop_run_once, or topology dispatch from this activation.',
@@ -1770,10 +1823,18 @@ def _orchestrator_message(activation: dict[str, object]) -> str:
         f"Allowed routes: {', '.join(_ORCHESTRATOR_ROUTES)}\n\n"
         'Required reply-only output:\n'
         '- route: <one of direct_execution|needs_detail|macro_adjustment_request|blocked|partial_completion>\n'
-        '- orchestration_notes: compact rationale and citations to task_packet and execution_contract refs\n\n'
+        '- orchestration_notes: compact rationale and citations to task_packet and execution_contract refs\n'
+        '- for an execution route that needs multiple workgroups or dependencies, add:\n'
+        '  orchestration_bundle:\n'
+        '  ```json\n'
+        '  {"schema":"ccb.loop.orchestration_bundle_candidate.v1","task_id":"<task-id>","bundle_revision":1,"nodes":[...],"integration":{...},"policy":{...}}'
+        '\n  ```\n'
+        '- candidate root fields are exactly schema, task_id, bundle_revision, nodes, integration, and policy\n'
+        '- each node must include node_id, workgroup_id, coder/code_reviewer profiles, depends_on, parallel_group, work_packet, allowed_paths, acceptance_refs, verification_refs, and integration_order\n'
+        '- omit orchestration_bundle only for a deterministic one-workgroup task; the controller records that compatibility source explicitly\n\n'
         'Authority boundary:\n'
         '- Reply only; do not run ccb, ccb_test, artifact import commands, or wrapper commands.\n'
-        '- Supervisor/script-owned import will record orchestration_notes with the selected route after reviewing this reply.\n'
+        '- Supervisor/script-owned import validates and records orchestration_notes, work packets, and orchestration_bundle.\n'
         '- do not edit task index, status, current_loop, runtime capacity, topology, or task artifacts directly\n'
         '- do not rely on provider reply text as durable route/status authority\n'
         '- do not start task_detailer, worker, reviewer, loop_run_once, or topology dispatch from this activation'

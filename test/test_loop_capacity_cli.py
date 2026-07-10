@@ -36,6 +36,7 @@ from cli.services import loop_runner as loop_runner_module
 from cli.services.ask_runtime import AskSummary
 from cli.services.loop_run_once import loop_run_once
 from cli.services.loop_runner import loop_runner_auto, loop_runner_once
+from cli.services.loop_orchestration_bundle import build_single_node_candidate
 from cli.services.plan_tasks import plan_task
 from cli.services.frontdesk_intake import frontdesk_intake
 import cli.services.frontdesk_intake_command as frontdesk_intake_command_module
@@ -616,7 +617,7 @@ def _import_orchestration_notes(
 ) -> dict[str, object]:
     notes = project_root / 'drafts' / f'{task_id}-{route}-orchestration-notes.md'
     _write(notes, text or f'route: {route}\n')
-    return plan_task(
+    imported = plan_task(
         context,
         SimpleNamespace(
             action='task-artifact',
@@ -626,6 +627,26 @@ def _import_orchestration_notes(
             route=route,
         ),
     )
+    if route in {'direct_execution', 'partial_completion'}:
+        candidate = build_single_node_candidate(
+            imported['task'],
+            project_root=project_root,
+        )
+        candidate_path = project_root / 'drafts' / f'{task_id}-{route}-orchestration-bundle.json'
+        _write_json(candidate_path, candidate)
+        plan_task(
+            context,
+            SimpleNamespace(
+                action='task-artifact',
+                task_id=task_id,
+                artifact_kind='orchestration_bundle',
+                file_path=str(candidate_path),
+                actor_source='test_deterministic_single_node',
+                actor='loop_runner',
+            ),
+        )
+        imported = plan_task(context, SimpleNamespace(action='task-show', task_id=task_id))
+    return imported
 
 
 def _run_phase2(argv: list[str], *, cwd: Path) -> tuple[int, dict[str, object], str]:
@@ -1359,7 +1380,7 @@ def test_loop_runner_once_ready_for_orchestration_activates_orchestrator_only(
         ),
     )
 
-    assert payload['loop_runner_status'] == 'ok'
+    assert payload['loop_runner_status'] == 'ok', payload
     assert payload['action'] == 'activated_orchestrator'
     assert payload['task_id'] == 'task-runner'
     assert payload['task_status'] == 'ready_for_orchestration'
@@ -1379,9 +1400,11 @@ def test_loop_runner_once_ready_for_orchestration_activates_orchestrator_only(
     )
     assert 'Reply only; do not run ccb, ccb_test, artifact import commands, or wrapper commands.' in message
     assert (
-        'Supervisor/script-owned import will record orchestration_notes with the selected route after reviewing this reply.'
-        in message
+        'Supervisor/script-owned import validates and records orchestration_notes, work packets, and '
+        'orchestration_bundle.' in message
     )
+    assert 'ccb.loop.orchestration_bundle_candidate.v1' in message
+    assert 'omit orchestration_bundle only for a deterministic one-workgroup task' in message
     assert 'do not rely on provider reply text' in message
     assert 'do not start task_detailer, worker, reviewer, loop_run_once, or topology dispatch' in message
     assert 'ccb plan task-artifact' not in message
@@ -1395,7 +1418,10 @@ def test_loop_runner_once_ready_for_orchestration_activates_orchestrator_only(
     assert 'route_import_command' not in activation
     assert (
         activation['required_next_output']
-        == 'reply-only route decision and compact orchestration notes for supervisor-owned import'
+        == (
+            'reply-only route decision, compact orchestration notes, and an orchestration bundle candidate '
+            'for multi-workgroup execution routes'
+        )
     )
     assert activation['artifact_refs'] == {
         'execution_contract': 'docs/plantree/plans/demo-plan/tasks/task-runner/execution_contract.md',
@@ -1413,9 +1439,10 @@ def test_loop_runner_once_ready_for_orchestration_activates_orchestrator_only(
     script_write_rules = '\n'.join(str(rule) for rule in activation['script_write_rules'])
     assert 'Reply only; do not run ccb, ccb_test, artifact import commands, or wrapper commands.' in script_write_rules
     assert (
-        'Supervisor/script-owned import will record orchestration_notes with the selected route after reviewing this reply.'
-        in script_write_rules
+        'Supervisor/script-owned import validates and records orchestration_notes, work packets, and '
+        'orchestration_bundle; provider text is not authority.' in script_write_rules
     )
+    assert 'include a fenced JSON orchestration_bundle candidate' in script_write_rules
     assert 'ccb plan task-artifact' not in script_write_rules
     assert 'plan task-artifact' not in script_write_rules
     assert 'Import the stable route' not in script_write_rules
@@ -1507,10 +1534,140 @@ def test_loop_runner_dynamic_orchestrator_mounts_imports_and_unloads(
 
     assert imported['action'] == 'imported_orchestration_notes'
     assert imported['route'] == 'direct_execution'
+    assert imported['orchestration_bundle']['bundle_schema'] == 'ccb.loop.orchestration_bundle.v1'
+    assert imported['orchestration_bundle']['bundle_source'] == 'loop_runner_deterministic_single_node'
+    assert imported['orchestration_bundle']['node_count'] == 1
     assert imported['activation_topology_release']['loop_topology_status'] == 'released'
     assert imported['activation_topology_release']['released_agents'] == ['orchestrator']
     lifecycle = json.loads(lifecycle_path.read_text(encoding='utf-8'))
     assert lifecycle['lifecycle_state'] == 'unloaded'
+    shown = plan_task(context, SimpleNamespace(action='task-show', task_id='task-dynamic-orchestrator'))
+    assert set(shown['task']['artifacts']) == {
+        'task_packet',
+        'execution_contract',
+        'orchestration_notes',
+        'orchestration_bundle',
+    }
+
+
+def test_loop_runner_multi_workgroup_bundle_pauses_before_binding_or_asking(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = _project_with_workflow_topology(tmp_path, monkeypatch)
+    task_id = 'task-multi-workgroup'
+    _add_ready_plan_task(
+        project_root,
+        task_id=task_id,
+        execution_contract_text=(
+            'execution contract text\n'
+            'allowed_change_paths:\n'
+            '- src/core/\n'
+            '- src/cli/\n'
+        ),
+    )
+    command = ParsedLoopRunnerCommand(
+        project=None,
+        once=True,
+        task_id=task_id,
+        timeout_s=11.0,
+        json_output=True,
+    )
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+    notes_path = project_root / 'drafts' / f'{task_id}-orchestration-notes.md'
+    _write(notes_path, 'route: direct_execution\norchestration_notes: two independent workgroups\n')
+    imported = plan_task(
+        context,
+        SimpleNamespace(
+            action='task-artifact',
+            task_id=task_id,
+            artifact_kind='orchestration_notes',
+            file_path=str(notes_path),
+            route='direct_execution',
+        ),
+    )
+    task_root = str(imported['task']['task_root'])
+    execution_contract_ref = f'{task_root}/execution_contract.md'
+    candidate_path = project_root / 'drafts' / f'{task_id}-orchestration-bundle.json'
+    _write_json(
+        candidate_path,
+        {
+            'schema': 'ccb.loop.orchestration_bundle_candidate.v1',
+            'task_id': task_id,
+            'bundle_revision': 1,
+            'nodes': [
+                {
+                    'node_id': 'node-001',
+                    'workgroup_id': 'wg-core',
+                    'worker_profile': 'coder',
+                    'reviewer_profile': 'code_reviewer',
+                    'depends_on': [],
+                    'parallel_group': 'wave-1',
+                    'work_packet': 'Implement the bounded core change.',
+                    'allowed_paths': ['src/core/'],
+                    'acceptance_refs': [execution_contract_ref],
+                    'verification_refs': [execution_contract_ref],
+                    'integration_order': 10,
+                },
+                {
+                    'node_id': 'node-002',
+                    'workgroup_id': 'wg-cli',
+                    'worker_profile': 'coder',
+                    'reviewer_profile': 'code_reviewer',
+                    'depends_on': [],
+                    'parallel_group': 'wave-1',
+                    'work_packet': 'Implement the bounded CLI change.',
+                    'allowed_paths': ['src/cli/'],
+                    'acceptance_refs': [execution_contract_ref],
+                    'verification_refs': [execution_contract_ref],
+                    'integration_order': 20,
+                },
+            ],
+            'integration': {
+                'verification_refs': [execution_contract_ref],
+                'project_root_verification_refs': [execution_contract_ref],
+            },
+            'policy': {
+                'max_node_rework_rounds': 1,
+                'on_required_node_failure': 'partial_or_blocked',
+                'on_structural_failure': 'replan_required',
+            },
+        },
+    )
+    bundle_import = plan_task(
+        context,
+        SimpleNamespace(
+            action='task-artifact',
+            task_id=task_id,
+            artifact_kind='orchestration_bundle',
+            file_path=str(candidate_path),
+            actor_source='test_multi_workgroup_bundle',
+            actor='loop_runner',
+        ),
+    )
+    assert bundle_import['artifact']['node_count'] == 2
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError('multi-workgroup bundle must pause before binding, asking, or executing')
+
+    payload = loop_runner_once(
+        context,
+        command,
+        services=SimpleNamespace(
+            ask_first_execution=forbidden,
+            plan_task=forbidden,
+            submit_ask=forbidden,
+        ),
+    )
+
+    assert payload['loop_runner_status'] == 'paused'
+    assert payload['action'] == 'multi_workgroup_execution_not_ready'
+    assert 'multi-workgroup scheduler is not landed' in payload['reason']
+    assert payload['orchestration_bundle']['node_count'] == 2
+    assert payload['orchestration_bundle']['node_ids'] == ['node-001', 'node-002']
+    shown = plan_task(context, SimpleNamespace(action='task-show', task_id=task_id))
+    assert shown['task']['status'] == 'ready_for_orchestration'
+    assert shown['task']['current_loop'] is None
 
 
 def test_loop_runner_dynamic_task_detailer_mounts_imports_and_unloads(
@@ -2576,6 +2733,10 @@ def test_loop_runner_direct_execution_bound_loop_without_ask_resumes_on_existing
     assert state['stage'] == 'worker_ask'
     assert state['purpose'] == 'worker'
     assert state['job_id'] == 'job_1'
+    assert state['workgroup_state_schema'] == 'ccb.loop.workgroup_round_state.v1'
+    assert state['orchestration_bundle']['node_ids'] == ['node-001']
+    assert set(state['current_artifacts']['nodes']) == {'node-001'}
+    assert state['current_artifacts']['nodes']['node-001']['worker']['job_id'] == 'job_1'
     assert not (loop_dir / 'round.json').exists()
     shown = plan_task(context, SimpleNamespace(action='task-show', task_id='task-direct'))
     assert shown['task']['status'] == 'running'
@@ -2863,6 +3024,8 @@ def test_loop_runner_direct_execution_route_runs_ask_first_round_without_dispatc
     assert payload['round_result_source'] == 'round_reviewer_reply'
     assert payload['task_status'] == 'done'
     assert payload['next_activation'] == 'stop'
+    assert payload['orchestration_bundle']['node_count'] == 1
+    assert payload['orchestration_bundle']['node_ids'] == ['node-001']
     assert payload['release']['released_count'] == 4
     assert payload['release']['retained_count'] == 0
     assert payload['topology']['status'] == 'ready'
@@ -2911,6 +3074,13 @@ def test_loop_runner_direct_execution_route_runs_ask_first_round_without_dispatc
     assert 'Reviewer reply content:' in round_reviewer_message
     assert 'Orchestrator reply content:' in round_reviewer_message
     round_json = json.loads(Path(str(payload['round']['round_json_path'])).read_text(encoding='utf-8'))
+    assert round_json['workgroup_state_schema'] == 'ccb.loop.workgroup_round_state.v1'
+    assert round_json['orchestration_bundle']['node_count'] == 1
+    assert set(round_json['workgroups']) == {'node-001'}
+    assert round_json['workgroups']['node-001']['worker_agent'].startswith(f'loop-{payload["loop_id"]}-coder-')
+    assert round_json['workgroups']['node-001']['reviewer_agent'].startswith(
+        f'loop-{payload["loop_id"]}-code_reviewer-'
+    )
     assert round_json['worker']['freshness']['status'] == 'cleared'
     assert round_json['reviewer']['freshness']['status'] == 'cleared'
     assert round_json['orchestrator']['freshness']['status'] == 'cleared'
@@ -11238,6 +11408,106 @@ def test_loop_runner_role_output_import_blocks_unknown_orchestrator_route_withou
     assert payload['evidence']['route'] == 'mystery'
     shown = plan_task(context, SimpleNamespace(action='task-show', task_id='task-route'))
     assert set(shown['task']['artifacts']) == {'task_packet', 'execution_contract'}
+
+
+def test_loop_runner_role_output_imports_explicit_multi_workgroup_bundle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = _project_with_loop_capacity(tmp_path, monkeypatch)
+    task_id = 'task-explicit-bundle'
+    _add_ready_plan_task(
+        project_root,
+        task_id=task_id,
+        execution_contract_text=(
+            'execution contract text\n'
+            'allowed_change_paths:\n'
+            '- src/core/\n'
+            '- src/cli/\n'
+        ),
+    )
+    task_root = f'docs/plantree/plans/demo-plan/tasks/{task_id}'
+    contract_ref = f'{task_root}/execution_contract.md'
+    candidate = {
+        'schema': 'ccb.loop.orchestration_bundle_candidate.v1',
+        'task_id': task_id,
+        'bundle_revision': 1,
+        'nodes': [
+            {
+                'node_id': 'node-001',
+                'workgroup_id': 'wg-core',
+                'worker_profile': 'coder',
+                'reviewer_profile': 'code_reviewer',
+                'depends_on': [],
+                'parallel_group': 'wave-1',
+                'work_packet': 'Implement the core slice.',
+                'allowed_paths': ['src/core/'],
+                'acceptance_refs': [contract_ref],
+                'verification_refs': [contract_ref],
+                'integration_order': 10,
+            },
+            {
+                'node_id': 'node-002',
+                'workgroup_id': 'wg-cli',
+                'worker_profile': 'coder',
+                'reviewer_profile': 'code_reviewer',
+                'depends_on': [],
+                'parallel_group': 'wave-1',
+                'work_packet': 'Implement the CLI slice.',
+                'allowed_paths': ['src/cli/'],
+                'acceptance_refs': [contract_ref],
+                'verification_refs': [contract_ref],
+                'integration_order': 20,
+            },
+        ],
+        'integration': {
+            'verification_refs': [contract_ref],
+            'project_root_verification_refs': [contract_ref],
+        },
+        'policy': {
+            'max_node_rework_rounds': 1,
+            'on_required_node_failure': 'partial_or_blocked',
+            'on_structural_failure': 'replan_required',
+        },
+    }
+    _write_completion_snapshot(
+        project_root,
+        job_id='job_explicit_bundle',
+        agent_name='orchestrator',
+        reply=(
+            'route: direct_execution\n\n'
+            'orchestration_notes: two independent bounded workgroups.\n\n'
+            'orchestration_bundle:\n'
+            '```json\n'
+            f'{json.dumps(candidate, ensure_ascii=False, indent=2)}\n'
+            '```\n'
+        ),
+    )
+    command = ParsedLoopRunnerCommand(
+        project=None,
+        once=True,
+        task_id=task_id,
+        role_job_id='job_explicit_bundle',
+        consume_role_output=True,
+        json_output=True,
+    )
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+
+    payload = loop_runner_once(context, command, services=SimpleNamespace(plan_task=plan_task))
+
+    assert payload['loop_runner_status'] == 'ok'
+    assert payload['action'] == 'imported_orchestration_notes'
+    assert payload['route'] == 'direct_execution'
+    assert payload['orchestration_bundle']['bundle_source'] == 'loop_runner_role_output_import'
+    assert payload['orchestration_bundle']['node_count'] == 2
+    assert payload['orchestration_bundle']['node_ids'] == ['node-001', 'node-002']
+    shown = plan_task(context, SimpleNamespace(action='task-show', task_id=task_id))
+    assert set(shown['task']['artifacts']) == {
+        'task_packet',
+        'execution_contract',
+        'orchestration_notes',
+        'orchestration_bundle',
+    }
 
 
 def test_loop_runner_once_activates_planner_with_round_evidence_for_partial_task(
