@@ -772,6 +772,32 @@ def test_explicit_nonpass_rollback_after_root_verification(tmp_path: Path) -> No
     assert not (root / spec.allowed_paths[0]).exists()
 
 
+def test_nonpromoted_partial_closure_is_durable_and_cleanup_eligible(tmp_path: Path) -> None:
+    root = _init_repo(tmp_path)
+    spec = _node(1)
+    unstarted = _node(2)
+    kernel = _kernel(root, (spec, unstarted))
+    kernel.preflight()
+    kernel.prepare_integration()
+    kernel.prepare_node(spec.node_id)
+
+    closed = kernel.close_without_promotion(
+        result='partial',
+        reason='worker_failed',
+    )
+    replay = kernel.close_without_promotion(
+        result='partial',
+        reason='worker_failed',
+    )
+    readiness = kernel.cleanup_readiness(evidence_captured=True)
+
+    assert closed['status'] == 'integration_failed'
+    assert replay['closure'] == closed['closure']
+    assert readiness['eligible'] is True
+    assert closed['root']['promotion'] is None
+    assert closed['nodes'][unstarted.node_id]['status'] == 'planned'
+
+
 @pytest.mark.parametrize(
     'checkpoint',
     ('after_node_commit_intent', 'after_node_commit', 'after_node_state_write'),

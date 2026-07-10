@@ -982,6 +982,42 @@ class WorkgroupGitIntegration:
             self._rollback_locked(state, reason=rollback_reason)
             return deepcopy(state)
 
+    def close_without_promotion(self, *, result: str, reason: str) -> dict[str, object]:
+        normalized_result = str(result or '').strip()
+        if normalized_result not in {'partial', 'blocked', 'replan_required'}:
+            raise ValueError('non-promoted integration closure requires partial, blocked, or replan_required')
+        closure_reason = _required_text(reason, field_name='closure reason')
+        with file_lock(self.lock_path):
+            state = self._load_state()
+            root = _mapping(state['root'])
+            promotion = root.get('promotion')
+            if isinstance(promotion, dict) and promotion.get('status') == 'applied':
+                raise self._error(
+                    'nonpromoted_closure_after_promotion',
+                    'integration.closure',
+                    'promoted integration must use rollback before non-pass closure',
+                )
+            existing = state.get('closure')
+            if isinstance(existing, dict):
+                if existing.get('result') != normalized_result or existing.get('reason') != closure_reason:
+                    raise self._error(
+                        'integration_closure_authority_drift',
+                        'integration.closure',
+                        'durable non-pass closure does not match replayed authority',
+                    )
+                return deepcopy(state)
+            state['closure'] = {
+                'schema': 'ccb.loop.workgroup_git_closure.v1',
+                'result': normalized_result,
+                'reason': closure_reason,
+                'recorded_at': _now(),
+            }
+            state['status'] = (
+                'replan_required' if normalized_result == 'replan_required' else 'integration_failed'
+            )
+            self._save_state(state)
+            return deepcopy(state)
+
     def cleanup_readiness(
         self,
         *,
@@ -1003,10 +1039,7 @@ class WorkgroupGitIntegration:
                     'cleanup execution has a durable intent and must be resumed with cleanup()',
                 )
             active = {str(Path(path).expanduser().resolve()) for path in active_workspaces}
-            records = [
-                _mapping(state['integration']),
-                *[_mapping(value) for value in _mapping(state['nodes']).values()],
-            ]
+            records = self._owned_cleanup_records(state)
             owned_paths = {str(Path(str(record['worktree_path'])).resolve()) for record in records}
             active_owned = sorted(active & owned_paths)
             dirty: list[str] = []
@@ -1064,10 +1097,7 @@ class WorkgroupGitIntegration:
             if cleanup.get('status') == 'complete':
                 return deepcopy(cleanup)
             active = {str(Path(path).expanduser().resolve()) for path in active_workspaces}
-            records = [
-                _mapping(state['integration']),
-                *[_mapping(value) for value in _mapping(state['nodes']).values()],
-            ]
+            records = self._owned_cleanup_records(state)
             owned_paths = {
                 str(Path(str(record['worktree_path'])).resolve()) for record in records
             }
@@ -1136,6 +1166,7 @@ class WorkgroupGitIntegration:
             *[
                 (str(spec.node_id), self._state_node(state, spec.node_id))
                 for spec in self.ordered_nodes
+                if self._state_node(state, spec.node_id).get('status') != 'planned'
             ],
         ]
         owned_worktrees: list[dict[str, object]] = []
@@ -1359,6 +1390,16 @@ class WorkgroupGitIntegration:
             f'controller-owned cleanup blocked: {subject}',
             details=details,
         )
+
+    def _owned_cleanup_records(self, state: dict[str, object]) -> list[dict[str, object]]:
+        return [
+            _mapping(state['integration']),
+            *[
+                self._state_node(state, spec.node_id)
+                for spec in self.ordered_nodes
+                if self._state_node(state, spec.node_id).get('status') != 'planned'
+            ],
+        ]
 
     def _git(self) -> GitOperations:
         try:

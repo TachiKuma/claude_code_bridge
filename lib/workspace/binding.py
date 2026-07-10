@@ -38,3 +38,26 @@ class WorkspaceBindingStore:
         )
         atomic_write_json(plan.binding_path, binding.to_record())
         return plan.binding_path
+
+    def bind_controller_worktree(
+        self,
+        path: Path,
+        *,
+        target_project: Path,
+        project_id: str,
+        workspace_group: str,
+        workspace_path: Path,
+        branch_name: str,
+    ) -> Path:
+        from agents.models import WorkspaceMode
+
+        binding = WorkspaceBinding(
+            target_project=str(Path(target_project).resolve()),
+            project_id=str(project_id),
+            agent_name=str(workspace_group),
+            workspace_mode=WorkspaceMode.GIT_WORKTREE,
+            workspace_path=str(Path(workspace_path).resolve()),
+            branch_name=str(branch_name),
+        )
+        atomic_write_json(path, binding.to_record())
+        return path

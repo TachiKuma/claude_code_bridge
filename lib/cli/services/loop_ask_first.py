@@ -689,6 +689,60 @@ def release_ask_first_execution_round(context, round_payload: dict[str, object],
     return release
 
 
+def submit_or_recover_ask_once(
+    context,
+    *,
+    loop_dir: Path,
+    loop_id: str,
+    target: str,
+    sender: str,
+    purpose: str,
+    bundle_revision: int,
+    node_id: str,
+    attempt: int,
+    task_id: str,
+    message: str,
+    services=None,
+) -> dict[str, object]:
+    """Submit once or consume persisted terminal state without live provider polling."""
+    try:
+        return _submit_and_watch(
+            context,
+            _deps(services),
+            loop_dir=loop_dir,
+            loop_id=loop_id,
+            target=target,
+            sender=sender,
+            purpose=purpose,
+            bundle_revision=bundle_revision,
+            node_id=node_id,
+            attempt=attempt,
+            task_id=task_id,
+            message=message,
+            timeout=None,
+            defer_observation=True,
+        )
+    except _AskSubmissionError as exc:
+        return {
+            'target': target,
+            'sender': RUNNER_ASK_SENDER,
+            'logical_sender': sender,
+            'purpose': purpose,
+            'job_id': None,
+            'status': 'failed',
+            'reply': '',
+            'terminal': True,
+            'watch_source': 'submission_failure',
+            'observation_error': str(exc),
+            'submission_identity': _submission_identity(
+                bundle_revision=bundle_revision,
+                node_id=node_id,
+                purpose=_intent_purpose(purpose),
+                attempt=attempt,
+            ),
+        }
+
+
 def _deps(services):
     services = services or SimpleNamespace()
     return SimpleNamespace(
@@ -3905,9 +3959,7 @@ def _sys_path_project_first(project_root: Path) -> bool:
 
 
 def _python_command_args(args: list[str]) -> list[str]:
-    if args and Path(args[0]).name in {'python', 'python3'}:
-        return [sys.executable, *args[1:]]
-    return args
+    return list(args)
 
 
 def _path_within(path: Path, root: Path) -> bool:

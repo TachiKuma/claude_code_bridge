@@ -20,6 +20,10 @@ from .clear import clear_agent_context
 from .loop_ask_first import release_ask_first_execution_round, run_ask_first_execution_round
 from .loop_orchestration_bundle import bundle_summary, load_task_orchestration_bundle, task_revision
 from .loop_effective_capacity import compile_project_effective_capacity_snapshot
+from .multi_workgroup_scheduler import (
+    resume_pending_multi_workgroup_scheduler,
+    run_multi_workgroup_scheduler,
+)
 from .loop_run_once import loop_run_once
 from .loop_topology import loop_topology
 from .plan_tasks import find_first_actionable_task, plan_task
@@ -123,6 +127,13 @@ def loop_runner_once(context, command, services=None) -> dict[str, object]:
     if bool(getattr(command, 'consume_role_output', False)):
         payload = deps.consume_explicit_role_output(context, command, deps.services)
         return _release_consumed_activation_topology(context, deps, payload)
+    if requested_task_id is None:
+        resumed_scheduler = deps.resume_multi_workgroup_scheduler(
+            context,
+            services=deps.services,
+        )
+        if resumed_scheduler is not None:
+            return resumed_scheduler
     pending_role_output = None
     if requested_task_id is None:
         role_output = deps.consume_activation_role_output(context, command, deps.services)
@@ -180,27 +191,16 @@ def loop_runner_once(context, command, services=None) -> dict[str, object]:
 def _run_ask_first_execution_round(context, command, deps, task: dict[str, object]) -> dict[str, object]:
     record = task['record']
     task_id = str(record.get('task_id') or '')
+    capacity_snapshot = deps.effective_capacity_snapshot(context)
     try:
         orchestration_bundle, bundle_artifact = load_task_orchestration_bundle(
             Path(context.project.project_root),
             record,
-            capacity_snapshot=deps.effective_capacity_snapshot(context),
+            capacity_snapshot=capacity_snapshot,
         )
     except ValueError as exc:
         return _ask_first_bundle_not_ready(context, record=record, reason=str(exc))
     bundle_nodes = orchestration_bundle.get('nodes') if isinstance(orchestration_bundle.get('nodes'), list) else []
-    if len(bundle_nodes) != 1:
-        return _ask_first_bundle_not_ready(
-            context,
-            record=record,
-            reason=(
-                f'orchestration bundle contains {len(bundle_nodes)} workgroups; '
-                'multi-workgroup scheduler is not landed in the current source slice'
-            ),
-            action='multi_workgroup_execution_not_ready',
-            bundle=orchestration_bundle,
-            bundle_artifact=bundle_artifact,
-        )
     current_loop = str(record.get('current_loop') or '').strip()
     if current_loop:
         loop_id = current_loop
@@ -216,6 +216,23 @@ def _run_ask_first_execution_round(context, command, deps, task: dict[str, objec
                 expected_task_revision=task_revision(record),
             ),
         )
+    if len(bundle_nodes) > 1 or int(capacity_snapshot.get('config_version') or 0) == 3:
+        payload = deps.multi_workgroup_scheduler(
+            context,
+            loop_id=loop_id,
+            task_record=record,
+            bundle=orchestration_bundle,
+            bundle_artifact=bundle_artifact,
+            services=deps.services,
+        )
+        payload['bind'] = _compact_plan_payload(bind)
+        payload['orchestration_bundle'] = bundle_summary(orchestration_bundle, bundle_artifact)
+        payload['next_activation'] = (
+            'callback_or_runner_once'
+            if payload.get('loop_runner_status') == 'pending'
+            else _next_activation(payload.get('task_status'))
+        )
+        return payload
     round_payload = deps.ask_first_execution(
         context,
         SimpleNamespace(
@@ -962,6 +979,16 @@ def _deps(services):
                 Path(context.project.project_root)
             ),
         ),
+        multi_workgroup_scheduler=getattr(
+            services,
+            'multi_workgroup_scheduler',
+            run_multi_workgroup_scheduler,
+        ),
+        resume_multi_workgroup_scheduler=getattr(
+            services,
+            'resume_multi_workgroup_scheduler',
+            resume_pending_multi_workgroup_scheduler,
+        ),
         sleep=getattr(services, 'sleep', time.sleep),
         services=services,
     )
@@ -1328,6 +1355,8 @@ def _auto_should_stop(payload: dict[str, object]) -> bool:
         round_result = str(payload.get('round_result') or '').strip()
         task_status = str(payload.get('task_status') or '').strip()
         return not (round_result == 'pass' and task_status == 'done')
+    if action == 'multi_workgroup_execution_pending':
+        return True
     if action in {
         'imported_planner_task_authority',
         'imported_orchestration_notes',

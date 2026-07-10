@@ -1709,7 +1709,7 @@ def test_loop_runner_dynamic_orchestrator_mounts_imports_and_unloads(
     }
 
 
-def test_loop_runner_multi_workgroup_bundle_pauses_before_binding_or_asking(
+def test_loop_runner_multi_workgroup_bundle_binds_and_enters_scheduler(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1814,28 +1814,40 @@ def test_loop_runner_multi_workgroup_bundle_pauses_before_binding_or_asking(
     )
     assert bundle_import['artifact']['node_count'] == 2
 
-    def forbidden(*_args, **_kwargs):
-        raise AssertionError('multi-workgroup bundle must pause before binding, asking, or executing')
+    scheduler_calls: list[dict[str, object]] = []
+
+    def fake_scheduler(_context, **kwargs):
+        scheduler_calls.append(kwargs)
+        return {
+            'schema': 'ccb.loop.workgroup_round_state.v1',
+            'loop_runner_status': 'pending',
+            'action': 'multi_workgroup_execution_pending',
+            'task_id': task_id,
+            'loop_id': kwargs['loop_id'],
+            'round_result': 'pending',
+            'round_result_source': 'scheduler_pending',
+        }
 
     payload = loop_runner_once(
         context,
         command,
-        services=SimpleNamespace(
-            ask_first_execution=forbidden,
-            plan_task=forbidden,
-            submit_ask=forbidden,
-            effective_capacity_snapshot=lambda _context: _multi_workgroup_capacity_snapshot(),
-        ),
-    )
+            services=SimpleNamespace(
+                multi_workgroup_scheduler=fake_scheduler,
+                plan_task=plan_task,
+                effective_capacity_snapshot=lambda _context: _multi_workgroup_capacity_snapshot(),
+            ),
+        )
 
-    assert payload['loop_runner_status'] == 'paused'
-    assert payload['action'] == 'multi_workgroup_execution_not_ready'
-    assert 'multi-workgroup scheduler is not landed' in payload['reason']
+    assert payload['loop_runner_status'] == 'pending'
+    assert payload['action'] == 'multi_workgroup_execution_pending'
     assert payload['orchestration_bundle']['node_count'] == 2
     assert payload['orchestration_bundle']['node_ids'] == ['node-001', 'node-002']
+    assert len(scheduler_calls) == 1
+    assert scheduler_calls[0]['bundle']['selection']['workgroup_count'] == 2
+    assert scheduler_calls[0]['task_record']['task_id'] == task_id
     shown = plan_task(context, SimpleNamespace(action='task-show', task_id=task_id))
-    assert shown['task']['status'] == 'ready_for_orchestration'
-    assert shown['task']['current_loop'] is None
+    assert shown['task']['status'] == 'running'
+    assert shown['task']['current_loop'] == payload['loop_id']
 
 
 def test_loop_runner_dynamic_task_detailer_mounts_imports_and_unloads(

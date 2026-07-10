@@ -149,6 +149,36 @@ def test_workspace_group_binding_allows_multiple_agents(tmp_path: Path) -> None:
     assert result.errors == ()
 
 
+def test_workspace_group_binding_can_target_controller_owned_worktree(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo'
+    project_root.mkdir()
+    ctx = bootstrap_project(project_root)
+    controller_path = tmp_path / 'controller-node-worktree'
+    binding_path = PathLayout(project_root).workspace_group_binding_path('compact-node-001')
+    WorkspaceBindingStore().bind_controller_worktree(
+        binding_path,
+        target_project=project_root,
+        project_id=ctx.project_id,
+        workspace_group='compact-node-001',
+        workspace_path=controller_path,
+        branch_name='ccb/workgroup/tx/node-001',
+    )
+
+    worker = WorkspacePlanner().plan(
+        _spec(name='worker', workspace_group='compact-node-001'),
+        ctx,
+    )
+    reviewer = WorkspacePlanner().plan(
+        _spec(name='reviewer', workspace_group='compact-node-001'),
+        ctx,
+    )
+
+    assert worker.workspace_path == controller_path.resolve()
+    assert reviewer.workspace_path == controller_path.resolve()
+    assert worker.branch_name == 'ccb/workgroup/tx/node-001'
+    assert reviewer.branch_name == worker.branch_name
+
+
 def test_workspace_validator_reports_missing_binding(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo'
     project_root.mkdir()
