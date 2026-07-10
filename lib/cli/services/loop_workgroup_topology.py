@@ -131,7 +131,7 @@ def compile_workgroup_mount_demand(
         if window_name not in execution_windows:
             execution_windows.append(window_name)
         pane_base = (pair_index % pairs_per_window) * 2
-        workspace_group = _name(f'loop-{loop_name}-{node_id}', field=f'{node_id}.workspace_group')
+        workspace_group = _generated_name(f'loop-{loop_name}-{node_id}')
         worker_profile = _resolve_profile('coder', capacity=capacity)
         reviewer_profile = _resolve_profile('code_reviewer', capacity=capacity)
         worker_name = _render_agent_name(

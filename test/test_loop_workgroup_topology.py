@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from copy import deepcopy
 from types import SimpleNamespace
 
 import pytest
@@ -379,6 +380,22 @@ def test_compile_workgroup_mount_demand_uses_deterministic_attempt_names() -> No
     )
 
 
+def test_compile_workgroup_mount_demand_compacts_long_workspace_group_names_stably() -> None:
+    snapshot = _snapshot()
+    bundle = _bundle(snapshot, 2)
+    loop_id = 'abcdefghijklmnopqrstuvwx123456'
+
+    first = compile_workgroup_mount_demand(bundle, loop_id=loop_id, capacity_snapshot=snapshot)
+    second = compile_workgroup_mount_demand(bundle, loop_id=loop_id, capacity_snapshot=snapshot)
+    groups = [binding['workspace_group'] for binding in first['bindings']]
+
+    assert first == second
+    assert len(set(groups)) == 2
+    assert all(len(group) <= 32 for group in groups)
+    for binding, node in zip(first['bindings'], first['mount_topology']['nodes'], strict=True):
+        assert {agent['workspace_group'] for agent in node['agents']} == {binding['workspace_group']}
+
+
 def test_compile_workgroup_mount_demand_preserves_v2_one_group_compatibility(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -538,6 +555,11 @@ def test_v3_mount_plan_validation_binds_capacity_digest_and_excludes_residents(
     wrong_agent_loop['nodes'][0]['agents'][0]['loop_id'] = 'other'
     with pytest.raises(ValueError, match='agent .* loop_id=other.*loop_id=v3plan'):
         loop_topology_module._validate_topology(context, wrong_agent_loop, loop_id='v3plan')
+
+    out_of_range_pane = deepcopy(demand['mount_topology'])
+    out_of_range_pane['nodes'][0]['agents'][0]['pane_order'] = 6
+    with pytest.raises(ValueError, match='pane_order=6.*max_panes=6'):
+        loop_topology_module._validate_topology(context, out_of_range_pane, loop_id='v3plan')
 
 
 def test_v3_rejects_legacy_profile_count_capacity_ensure(monkeypatch: pytest.MonkeyPatch) -> None:

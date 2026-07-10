@@ -1136,6 +1136,12 @@ def _validate_mount_placement(agents: Iterable[Mapping[str, object]], *, windows
                 raise ValueError(f'topology agent {agent.get("id")} pane_order must be an integer') from exc
             if normalized_order < 0:
                 raise ValueError(f'topology agent {agent.get("id")} pane_order must be >= 0')
+            pane_limit = window_limits.get(window_name, MAX_TOPOLOGY_PANES_PER_WINDOW)
+            if normalized_order >= pane_limit:
+                raise ValueError(
+                    f'topology agent {agent.get("id")} pane_order={normalized_order} '
+                    f'exceeds window {window_name} max_panes={pane_limit}'
+                )
             seen_orders = pane_orders.setdefault(window_name, set())
             if normalized_order in seen_orders:
                 raise ValueError(f'duplicate pane_order {normalized_order} in mount topology window {window_name}')
