@@ -59,6 +59,37 @@ class WorkspacePlanner:
             workspace_scope=workspace_scope,
         )
 
+    def plan_controller_worktree(
+        self,
+        project_ctx: ProjectContext,
+        *,
+        agent_name: str,
+        workspace_path: Path,
+        branch_name: str,
+        base_commit: str,
+    ) -> WorkspacePlan:
+        branch = str(branch_name or '').strip()
+        if not branch:
+            raise ValueError('controller worktree branch_name cannot be empty')
+        base = str(base_commit or '').strip()
+        if not base:
+            raise ValueError('controller worktree base_commit cannot be empty')
+        return WorkspacePlan(
+            project_id=project_ctx.project_id,
+            project_root=project_ctx.project_root,
+            project_slug=PathLayout(project_ctx.project_root).project_slug,
+            agent_name=agent_name,
+            workspace_mode=WorkspaceMode.GIT_WORKTREE,
+            workspace_path=workspace_path,
+            binding_path=None,
+            source_root=project_ctx.project_root,
+            branch_name=branch,
+            branch_template=None,
+            unsafe_shared_workspace=False,
+            workspace_scope='controller',
+            base_commit=base,
+        )
+
     def _render_branch_name(self, agent_spec: AgentSpec, project_slug: str) -> str:
         template = agent_spec.branch_template or _DEFAULT_BRANCH_TEMPLATE
         variables = set(_PLACEHOLDER_RE.findall(template))
