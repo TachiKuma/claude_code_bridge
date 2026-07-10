@@ -165,6 +165,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
   bool _loadingProfiles = false;
   bool _claimingPairing = false;
   bool _checkingRoute = false;
+  bool _gatewayProfileActivationSucceeded = false;
   bool _profilesInitialized = false;
   CcbLifecycleAction? _runningLifecycleAction;
   final _runningLifecycleActionNotifier = ValueNotifier<CcbLifecycleAction?>(
@@ -377,23 +378,53 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
   }
 
   Future<CcbProjectView> _loadActiveProjectView() {
+    final profile = _selectedProfile;
     return _deferredBuilderFuture(() async {
-      final view = await _activeRepository
-          .getProjectView(_activeProjectId)
-          .timeout(projectHomeRuntimeViewLoadTimeout);
-      _rememberProjectActivity(view);
-      return view;
+      try {
+        final view = await _activeRepository
+            .getProjectView(_activeProjectId)
+            .timeout(projectHomeRuntimeViewLoadTimeout);
+        _rememberProjectActivity(view);
+        return view;
+      } catch (error) {
+        throw await _gatewayRequestFailure(profile, error);
+      }
     });
   }
 
   Future<List<CcbProject>> _loadServerProjects() {
-    return _deferredBuilderFuture(
-      () async => _sortProjectsWithLocalActivity(
-        await _activeRepository.listProjects().timeout(
-          projectHomeRuntimeViewLoadTimeout,
-        ),
-      ),
-    );
+    final profile = _selectedProfile;
+    return _deferredBuilderFuture(() async {
+      try {
+        return _sortProjectsWithLocalActivity(
+          await _activeRepository.listProjects().timeout(
+            projectHomeRuntimeViewLoadTimeout,
+          ),
+        );
+      } catch (error) {
+        throw await _gatewayRequestFailure(profile, error);
+      }
+    });
+  }
+
+  Future<Object> _gatewayRequestFailure(
+    GatewayPairedHost? profile,
+    Object error,
+  ) async {
+    if (_mode != AppRuntimeMode.pairedGateway ||
+        error is ProjectHomeGatewayActivationException) {
+      if (error is ProjectHomeGatewayActivationException &&
+          error.kind == ProjectHomeGatewayActivationFailureKind.tokenInvalid) {
+        await _invalidateGatewayProfile(profile);
+      }
+      return error;
+    }
+    final normalized = projectHomeGatewayActivationExceptionFor(error);
+    if (normalized.kind ==
+        ProjectHomeGatewayActivationFailureKind.tokenInvalid) {
+      await _invalidateGatewayProfile(profile);
+    }
+    return normalized;
   }
 
   Future<T> _deferredBuilderFuture<T>(Future<T> Function() load) {
@@ -517,6 +548,11 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
   }
 
   void _retryServerProjects() {
+    final profile = _selectedProfile;
+    if (!_gatewayProfileActivationSucceeded && profile != null) {
+      _activateGatewayProfile(profile);
+      return;
+    }
     setState(() {
       _serverProjectsFuture = _loadServerProjects();
     });
@@ -577,6 +613,9 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
 
   Widget _buildProjectCatalogError(Object error) {
     final strings = CcbMobileLocalizations.of(context);
+    final tokenInvalid =
+        error is ProjectHomeGatewayActivationException &&
+        error.kind == ProjectHomeGatewayActivationFailureKind.tokenInvalid;
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -605,12 +644,20 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
                     ),
                   ),
                   const SizedBox(height: 20),
-                  FilledButton.icon(
-                    key: const ValueKey('project-list-retry-button'),
-                    onPressed: _retryServerProjects,
-                    icon: const Icon(Icons.refresh),
-                    label: Text(strings.retry),
-                  ),
+                  if (tokenInvalid)
+                    FilledButton.icon(
+                      key: const ValueKey('project-list-repair-button'),
+                      onPressed: _returnToPairingSetup,
+                      icon: const Icon(Icons.qr_code_scanner_outlined),
+                      label: Text(strings.rePair),
+                    )
+                  else
+                    FilledButton.icon(
+                      key: const ValueKey('project-list-retry-button'),
+                      onPressed: _retryServerProjects,
+                      icon: const Icon(Icons.refresh),
+                      label: Text(strings.retry),
+                    ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
                     key: const ValueKey('project-list-back-to-setup-button'),
@@ -903,6 +950,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     switch (mode) {
       case AppRuntimeMode.fake:
         _stopActiveProjectStatusRefresh();
+        _gatewayProfileActivationSucceeded = false;
         final reset = resetProjectHomeFakeRuntime(
           defaultProjectId: _defaultProjectId,
         );
@@ -941,11 +989,12 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
   }
 
   void _activateGatewayProfile(GatewayPairedHost profile) {
-    unawaited(widget.profileStore.markSelected(profile));
     _activateGateway(activateProjectHomeGatewayProfile(profile));
   }
 
   void _activateGateway(ProjectHomeGatewayActivationData activation) {
+    _gatewayProfileActivationSucceeded = false;
+    unawaited(_taskNotifications.stop());
     _pairingForm.applyGatewayActivation(
       gatewayUrlText: activation.gatewayUrlText,
       routeKind: activation.routeKind,
@@ -955,25 +1004,12 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
       repositoryFactory: widget.gatewayRepositoryFactory,
       terminalTransportFactory: widget.gatewayTerminalTransportFactory,
     );
-    // FutureBuilder attaches on the next build; register an error listener now
-    // so immediate DNS/socket failures render in the error page.
-    unawaited(
-      session.projectsFuture.catchError((Object _) => const <CcbProject>[]),
-    );
     final profile = session.activation.profile;
+    if (!profile.profile.scopes.contains('notify')) {
+      _startTaskCompletionNotifications(profile);
+    }
     unawaited(
-      session.projectsFuture
-          .then<void>((_) async {
-            if (!mounted ||
-                _mode != AppRuntimeMode.pairedGateway ||
-                _selectedProfile == null ||
-                projectHomeGatewayProfileKey(_selectedProfile!) !=
-                    projectHomeGatewayProfileKey(profile)) {
-              return;
-            }
-            await widget.profileStore.markSuccessful(profile);
-          })
-          .catchError((Object _) {}),
+      _completeGatewayProfileActivation(profile, session.projectsFuture),
     );
     _stopActiveProjectStatusRefresh();
     setState(() {
@@ -989,7 +1025,62 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
       _terminalTransport = session.terminalTransport;
     });
     _lifecycleResultNotifier.value = null;
-    _startTaskCompletionNotifications(profile);
+  }
+
+  Future<void> _completeGatewayProfileActivation(
+    GatewayPairedHost profile,
+    Future<List<CcbProject>> projectsFuture,
+  ) async {
+    try {
+      await projectsFuture;
+    } catch (error) {
+      await _gatewayRequestFailure(profile, error);
+      return;
+    }
+    if (!_isActiveGatewayProfile(profile)) {
+      return;
+    }
+    _gatewayProfileActivationSucceeded = true;
+    await widget.profileStore.markSuccessful(profile);
+    if (_isActiveGatewayProfile(profile) &&
+        profile.profile.scopes.contains('notify')) {
+      _startTaskCompletionNotifications(profile);
+    }
+  }
+
+  bool _isActiveGatewayProfile(GatewayPairedHost profile) {
+    return mounted &&
+        _mode == AppRuntimeMode.pairedGateway &&
+        _selectedProfile != null &&
+        projectHomeGatewayProfileKey(_selectedProfile!) ==
+            projectHomeGatewayProfileKey(profile);
+  }
+
+  Future<void> _invalidateGatewayProfile(GatewayPairedHost? profile) async {
+    if (profile == null) {
+      return;
+    }
+    try {
+      await widget.profileStore.delete(
+        hostId: profile.profile.hostId,
+        deviceId: profile.profile.deviceId,
+      );
+    } catch (_) {
+      return;
+    }
+    if (!_isActiveGatewayProfile(profile)) {
+      return;
+    }
+    setState(() {
+      _profiles = _profiles
+          .where(
+            (candidate) =>
+                projectHomeGatewayProfileKey(candidate) !=
+                projectHomeGatewayProfileKey(profile),
+          )
+          .toList(growable: false);
+      _selectedProfile = null;
+    });
   }
 
   void _returnToPairingSetup() {

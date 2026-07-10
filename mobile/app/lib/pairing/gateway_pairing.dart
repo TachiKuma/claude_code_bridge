@@ -220,7 +220,6 @@ class GatewayPairingClient {
       deviceId: deviceId,
     );
     await store.save(paired);
-    await store.markSuccessful(paired);
     return paired;
   }
 
@@ -344,10 +343,10 @@ class GatewayHostProfileStore {
     return result;
   }
 
-  /// Returns the persisted selection, falling back to a deterministic legacy
-  /// migration. The migration chooses the most recently stored profile, then
-  /// server creation time, then a stable profile key; it never relies on map
-  /// iteration or encrypted-index ordering.
+  /// Returns the most recently verified profile, falling back to a persisted
+  /// selection and then a deterministic legacy choice. A legacy fallback is
+  /// intentionally not persisted as a selection: only a completed gateway
+  /// activation may establish a new preferred profile.
   Future<GatewayPairedHost?> resolvePreferred(
     Iterable<GatewayPairedHost> profiles,
   ) async {
@@ -355,7 +354,7 @@ class GatewayHostProfileStore {
     if (candidates.isEmpty) {
       return null;
     }
-    for (final preferenceKey in [_lastSelectedKey, _lastSuccessfulKey]) {
+    for (final preferenceKey in [_lastSuccessfulKey, _lastSelectedKey]) {
       final profile = await _readPreferredFrom(
         preferenceKey: preferenceKey,
         profiles: candidates,
@@ -364,9 +363,7 @@ class GatewayHostProfileStore {
         return profile;
       }
     }
-    final migrated = _mostRecentProfile(candidates);
-    await markSelected(migrated);
-    return migrated;
+    return _mostRecentProfile(candidates);
   }
 
   /// Returns a device ID that may be included in a fresh one-time pairing
@@ -382,7 +379,7 @@ class GatewayHostProfileStore {
     if (matches.isEmpty) {
       return null;
     }
-    for (final preferenceKey in [_lastSelectedKey, _lastSuccessfulKey]) {
+    for (final preferenceKey in [_lastSuccessfulKey, _lastSelectedKey]) {
       final profile = await _readPreferredFrom(
         preferenceKey: preferenceKey,
         profiles: matches,

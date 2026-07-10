@@ -132,6 +132,38 @@ void main() {
   );
 
   test(
+    'an unverified selected profile cannot displace the last successful route',
+    () async {
+      final store = GatewayHostProfileStore(secureStore: MemorySecureStore());
+      final successful = _pairedHost(
+        hostId: 'host-demo',
+        deviceId: 'phone',
+        gatewayUrl: Uri.parse('http://127.0.0.1:8787'),
+      );
+      final failed = _pairedHost(
+        hostId: 'host-demo',
+        deviceId: 'tablet',
+        gatewayUrl: Uri.parse('https://host-demo.example.test'),
+      );
+      await store.save(successful);
+      await store.markSuccessful(successful);
+      await store.save(failed);
+      // Represents a selection made before the gateway can be verified.
+      await store.markSelected(failed);
+
+      final restored = await ProjectHomeProfileBootstrapper(
+        store: store,
+      ).load(selectedProfile: null);
+
+      expect(restored.selectedProfile?.profile.deviceId, 'phone');
+      expect(
+        restored.selectedProfile?.profile.routeProvider.gatewayUrl,
+        Uri.parse('http://127.0.0.1:8787'),
+      );
+    },
+  );
+
+  test(
     'legacy profiles migrate to their most recently saved route deterministically',
     () async {
       final secureStore = MemorySecureStore();
