@@ -66,7 +66,7 @@ frontdesk
   -> optional detail/global-consistency gate
   -> optional orchestrator bundle
   -> controller mount and exact-once dispatch
-  -> worker/reviewer
+  -> one or more worker/reviewer workgroups
   -> round/integration evidence
   -> script-owned completion
   -> clean immaculate-role release
@@ -94,4 +94,5 @@ stable baseline and explicit acceptance evidence.
 - [020-mount-topology-and-ask-first-orchestration.md](020-mount-topology-and-ask-first-orchestration.md)
 - [022-semantic-orchestration-bundle-and-controller-execution.md](022-semantic-orchestration-bundle-and-controller-execution.md)
 - [023-roadmap-graph-and-workflow-lanes.md](023-roadmap-graph-and-workflow-lanes.md)
+- [025-single-lane-multi-workgroup-release-gate.md](025-single-lane-multi-workgroup-release-gate.md)
 - [../topics/parallel-roadmap-lanes-and-planner-authority.md](../topics/parallel-roadmap-lanes-and-planner-authority.md)

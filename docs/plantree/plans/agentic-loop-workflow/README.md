@@ -110,10 +110,11 @@ recoverable workflow loops.
   UI/sidebar, resident survival, observer timeout evidence, B7 row shape, and
   stop conditions.
 - [topics/config-v3-dynamic-workflow.md](topics/config-v3-dynamic-workflow.md):
-  follow-up design lane for keeping `version = 2` static CCB config intact
-  while adding opt-in `version = 3` dynamic workflow config with required
-  workflow roles, provider/model settings, rolepack checks, validation rules,
-  migration direction, and source/runtime acceptance criteria.
+  implementation-ready release dependency for keeping `version = 2` static
+  CCB config intact while adding opt-in `version = 3` dynamic workflow config
+  with two resident roles, five immaculate dynamic profiles, provider/model
+  settings, workgroup/physical capacity, rolepack checks, migration dry-run,
+  and source/runtime acceptance criteria.
 - [topics/config-v2-static-control-panel.md](topics/config-v2-static-control-panel.md):
   companion design topic for a `version = 2` static layout control panel that
   edits `[windows]` through a visual split builder, exposes agent overlays only
@@ -131,6 +132,11 @@ recoverable workflow loops.
   historical implementation and real-test goal for the `loop.role_profiles`
   and `ccb loop capacity` substrate, now superseded as the
   orchestrator-facing path by topology proposal and reconciliation.
+- [goals/single-lane-multi-workgroup-release-goal.md](goals/single-lane-multi-workgroup-release-goal.md):
+  current release goal for one task lane, one orchestration bundle, one to four
+  independently reviewed worker/reviewer workgroups, deterministic Git
+  integration, Config V3, visible real-provider acceptance, and package/
+  install/publication gates while preserving Config V2.
 - [goals/planner-plan-script-goal.md](goals/planner-plan-script-goal.md):
   implementation and source-test goal for the first planner role boundary and
   `ccb plan` task-packet command surface.
@@ -227,6 +233,10 @@ recoverable workflow loops.
   global impact, orchestrator emits one coupled workgraph/task-assignment
   bundle, and the controller performs physical dispatch without semantic
   reinterpretation.
+- [topics/single-lane-multi-workgroup-modification-and-test-plan.md](topics/single-lane-multi-workgroup-modification-and-test-plan.md):
+  implementation-ready source map, bundle and node-state contracts, exact-once
+  scheduler, Git worktree/integration protocol, failure semantics, 1-4 pair
+  topology, direct/fake/real test matrix, B7 evidence, and release stop rules.
 - [topics/runtime-workflow-graph-and-reconciler.md](topics/runtime-workflow-graph-and-reconciler.md):
   landed desired-state topology controller and earlier broader workflow-graph
   direction; Decision 020 narrows the preferred future scope to mount
@@ -419,6 +429,10 @@ recoverable workflow loops.
   decision that lanes own independent immaculate orchestration and topology
   state, one deterministic project Topology Controller owns physical runtime
   reconciliation, and single-lane production closure precedes multi-lane code.
+- [decisions/025-single-lane-multi-workgroup-release-gate.md](decisions/025-single-lane-multi-workgroup-release-gate.md):
+  decision that the next release gate is one task lane with one semantic bundle
+  and one to four Git-isolated `Worker + Reviewer` workgroups, controlled
+  integration, Config V3, V2 compatibility, and real/package acceptance.
 - [history/review-2026-06-26-loop-runner-readiness.md](history/review-2026-06-26-loop-runner-readiness.md):
   reviewer/coworker readiness review that narrowed the next implementation
   slice to task-loop binding, round-result import, `run-once --task-id`, and

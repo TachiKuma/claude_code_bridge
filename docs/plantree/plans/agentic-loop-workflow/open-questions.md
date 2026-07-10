@@ -1,6 +1,6 @@
 # Agentic Loop Workflow Open Questions
 
-Date: 2026-07-04
+Date: 2026-07-10
 
 ## Product Questions
 
@@ -89,10 +89,14 @@ Date: 2026-07-04
 2. Resolved V1 direction: temporary execution agents use generated
    `loop-<loop-id>-<profile>-<index>` names, are scoped by loop capacity or
    topology records, and are released through script-owned idle/evidence gates.
-3. What is the hard maximum for per-loop nodes, recovery rounds, and total
-   runtime after default per-node rework is bounded separately?
-4. Should the orchestrator be released and recreated after each loop round, or
-   can it persist across multiple rounds with state rehydration?
+3. Resolved for the next release: V3 supports `max_workgroups` in `1..4`,
+   separates parallel workgroups and physical dynamic-agent ceilings, and
+   defaults node rework to one bounded round. There is no business timeout for
+   provider completion; observer health policy diagnoses runtime failure
+   separately.
+4. Resolved: orchestrator is immaculate and activation-scoped. One activation
+   produces one bundle; normal worker completion does not reactivate it.
+   Structural replan creates a fresh activation.
 5. Should the first `ccb loop capacity` implementation use daemon-side
    transient runtime overlays immediately, or start with a generated config
    block over the existing guarded `ccb reload` transaction?
@@ -120,79 +124,22 @@ Date: 2026-07-04
 13. What measured planning-queue latency should permit multiple scoped planner
     instances, and what default maximum should config validation enforce?
 
-## Phase 6B Real-Provider Launch Questions
+## Multi-Workgroup Release Questions
 
-Phase 6B remains unclaimed. Historical L0 runs are recorded in
-[topics/phase6b-l0-launch-request-20260704.md](topics/phase6b-l0-launch-request-20260704.md)
-and current handoff state is in
-[implementation-status.md](implementation-status.md). The latest B-only
-repeat6 run was approved once by reviewer2 in `job_8c7b404ad63c`, executed
-once under `talk2` supervision, and consumed that approval. It reached the
-intended B-only resident planning group ask path and produced an L0
-runtime-sanity `pass` B7 report:
-[history/phase6b-real-provider-l0-b-only-repeat6-b7-20260704.md](history/phase6b-real-provider-l0-b-only-repeat6-b7-20260704.md).
-This is not Phase 6B readiness, and any further real-provider command requires
-fresh launch-specific reviewer approval.
+Resolved implementation direction is recorded in
+[decisions/025-single-lane-multi-workgroup-release-gate.md](decisions/025-single-lane-multi-workgroup-release-gate.md)
+and
+[topics/single-lane-multi-workgroup-modification-and-test-plan.md](topics/single-lane-multi-workgroup-modification-and-test-plan.md).
 
-Resolved owner answers:
-
-- Provider map: `ccb_round_reviewer -> claude`; `ccb_frontdesk`,
-  `ccb_planner`, `ccb_orchestrator`, `ccb_task_detailer`, `coder`, and
-  `code_reviewer -> codex`.
-- Provider home/account policy: inherit the current real provider home, with
-  external-root execution under `/home/bfly/yunwei/test_ccb2` and isolated
-  `HOME` / `CCB_SOURCE_HOME`.
-- RolePack seeding scope: seed only the seven required roles.
-- L0 topology scope after user decision "方案 2：只跑 B": mount only the B
-  resident planning group `ccb_frontdesk + ccb_planner + ccb_orchestrator +
-  ccb_task_detailer`; do not run the historical A minimal orchestrator probe.
-- Ask schema for the latest L0 shape: submit-only compact ask to the mounted
-  B orchestrator target (`p6bl0b-orchestrator` in repeat6), runtime sanity
-  prompt, 600 second timeout.
-- B7 normalization owner: `talk2`; provider replies are evidence only.
-- Launch reviewer scope: Phase 6B L0 runtime sanity only.
-
-Current open questions before any further launch approval:
-
-Resolved after worker1 `job_d239b74ee4a6` and reviewer2
-`job_50ce63ab373b`: parked resident planning-group agents may be pruned from
-loop topology authority as `drained_agents` while lifecycle records remain
-parked and dispatch-disabled. This is a source-side readiness repair only; no
-fresh real-provider L0 run has yet proved that path.
-
-Resolved after reviewer1 `job_ebe46ce6cd8b`: the accepted matrix/report rule is
-that `release_incomplete_agents` plus bounded `release_blockers` classifies as
-`valid_non_success`, while missing, vague, or unbounded blocker evidence remains
-a hard failure. Future B7 normalizers must emit bounded reason text from the
-accepted marker vocabulary.
-
-Resolved after reviewer2 `job_8c7b404ad63c` and package approval
-`job_c7ebe2d2dade`: repeat6 B-only L0 launch was approved exactly once,
-executed exactly once, and produced L0 `pass` evidence. That approval is
-consumed.
-
-Resolved after reviewer2 `job_c0fac249749e`: the first L1-L4 frozen request is
-`DOC-ONLY ACCEPTED`, not approved to run. It uses L3 route/detail-only
-`detail_ready`, materializes fixture paths and hashes, and keeps
-reviewer-rework/partial observations as explicit blockers for a Phase 6B claim.
-The current claim coverage matrix is
-[topics/phase6b-real-provider-claim-coverage-matrix.md](topics/phase6b-real-provider-claim-coverage-matrix.md).
-
-Resolved after worker1 callback `job_307d5f834a1a` and reviewer2
-`job_d023a883a62d`: the static L1-L4 B7 normalizer now emits the declared
-shared and task-specific fields with conservative placeholders. This does not
-approve runtime.
-
-Resolved after worker3 `job_82d723ec0f89` and reviewer2 `job_f20daf37898d`:
-the B7 normalizer now has accepted static `authority_checks.*` output and the
-L5 tranche has an accepted embedded normalizer shape. This does not approve
-runtime.
-
-1. For the next launch-specific request, should talk2 request the bounded
-   partial candidate only, or include both the partial and reviewer-rework
-   candidates as an ordered L5 observation tranche? Worker2 `job_e6456cf4a072`
-   and reviewer2 `job_3824dde8454e` accepted both candidates as plan-only
-   readiness, but no runtime approval exists.
+1. What is the exact next unused npm version after querying the registry from
+   the final clean release commit?
+2. Will OpenCode and Grok credentials be available for provider-specific
+   release evidence? Missing credentials do not block the Codex/Claude core
+   release, but they block claims that those adapters were real-tested in this
+   version.
+3. Which authenticated publication path is active at release time: the
+   repository's existing npm flow, Trusted Publishing, or an explicitly
+   approved local publish? This must be resolved without exposing tokens.
 
 ## Execution Verification Questions
 

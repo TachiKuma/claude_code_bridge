@@ -1,6 +1,6 @@
 # Agentic Loop Workflow Implementation Status
 
-Date: 2026-07-05
+Date: 2026-07-10
 
 ## Current Phase
 
@@ -18,7 +18,17 @@ observation. The final acceptance report is
 [history/phase1-6-acceptance-report-20260705.md](history/phase1-6-acceptance-report-20260705.md).
 Production/default enablement, post-detail execution, reviewer-rework
 stability, long-running multi-round workflows, arbitrary workflow authoring,
-and final source-control packaging remain out of scope.
+and final source-control packaging remain outside that bounded Phase 6 claim.
+
+The active post-baseline release target is now
+[goals/single-lane-multi-workgroup-release-goal.md](goals/single-lane-multi-workgroup-release-goal.md).
+It keeps one Workflow Lane but replaces the scalar single-pair engine with one
+orchestration bundle driving one to four Git-isolated `Worker + Reviewer`
+workgroups, deterministic reviewed integration, project-root verification and
+rollback, exact-once recovery, and complete dynamic release. Config V3 is part
+of the same release gate; Config V2 remains the static compatibility contract.
+No multi-lane scheduler implementation or package publication starts before
+this goal's source/fake/visible-real/package gates pass.
 
 Post-acceptance deployment readiness is a separate active gate at
 [topics/phase1-6-deployment-readiness-supervision-20260707.md](topics/phase1-6-deployment-readiness-supervision-20260707.md).
@@ -1441,95 +1451,35 @@ Evidence:
 
 ## Active TODO
 
-1. Use the dated acceptance report
-   [history/phase1-6-acceptance-report-20260705.md](history/phase1-6-acceptance-report-20260705.md)
-   as the current Phase 1-6 reporting surface. The 20260704 report remains
-   historical for the earlier Phase 6A-only gate.
-2. Use the dry-run final staging manifest
-   [topics/phase1-6-final-staging-manifest-20260704.md](topics/phase1-6-final-staging-manifest-20260704.md)
-   for human package-owner review before staging. It has been tightened and
-   package-audited with no blocker/high/medium findings, then refreshed for
-   the current 61-entry status, ignored `dist/`, and the Phase 6B L0
-   owner-decision packet. Reviewer2 accepted the refresh audit in
-   `job_2f61849ef1a4`. Final staged-file review and commit remain separate
-   human package-owner steps.
-3. Treat the repeat6 L0 pass as consumed L0-only evidence. Do not rerun L0 from
-   the repeat6 root or reuse `job_8c7b404ad63c` / `job_c7ebe2d2dade` approval.
-   Any further L0 rerun or L1-L4 command needs a fresh frozen launch packet and
-   launch-specific reviewer approval.
-4. Treat the Phase 6B L1-L4 frozen request as doc-only accepted, not as
-   approval to run:
-   [topics/phase6b-l1-l4-launch-request-20260704.md](topics/phase6b-l1-l4-launch-request-20260704.md).
-   Reviewer2 `job_c0fac249749e` returned `DOC-ONLY ACCEPTED`, no launch
-   approval. The request fixed L3 at route/detail-only `detail_ready` and
-   materialized fixtures, but excluded reviewer rework/partial and did not by
-   itself satisfy Phase 6B. The current bounded Phase 6B claim is instead
-   recorded in the 20260705 final report. Worker1 callback `job_307d5f834a1a`,
-   accepted by reviewer2 `job_d023a883a62d`, tightened the embedded B7
-   normalizer so declared shared and task-specific fields are emitted with
-   conservative placeholders. Worker3 `job_82d723ec0f89`, accepted by
-   reviewer2 `job_f20daf37898d`, added conservative `authority_checks.*` output
-   and targeted static tests as a closed static pre-approval gate. Use
-   [topics/phase6b-real-provider-claim-coverage-matrix.md](topics/phase6b-real-provider-claim-coverage-matrix.md)
-   to audit any future runtime packet or reviewer callback.
-5. Treat the reviewed L5 reviewer-rework/partial packet as planning readiness
-   only:
-   [topics/phase6b-reviewer-rework-partial-observation-tranche.md](topics/phase6b-reviewer-rework-partial-observation-tranche.md).
-   Worker2 callback `job_e6456cf4a072` and reviewer2 `job_3824dde8454e`
-   accepted the bounded partial and reviewer-rework candidates without launch
-   approval. Future launch work must still bind exact root, command shape,
-   executable normalizer, and approval-to-run.
-6. Treat L5 repeat3 approval `job_de6263827473` and root
-   `/home/bfly/yunwei/test_ccb2/phase6-real-lab-l5-partial-only-repeat3-20260704`
-   as consumed. The run produced a worker partial signal but no reviewer-gated
-   partial row: reviewer ask submission failed because CCB chain routing
-   required an active parent job for the sender. Worker1 source-only repair
-   `job_52ec099f6427` is accepted by reviewer2 `job_766050825b27`: watched
-   ask-first child asks now submit from runner-owned `system` sender with no
-   callback/chain and no silence. Worker3 repeat4 packet `job_2faf4fd57789`
-   received reviewer2 approval-to-run in `job_5dd131a6ea7e`; talk2 consumed it
-   once. The repeat4 B7 is `valid_non_success` with partial observed; do not
-   reuse the approval or root.
-7. Treat the worker3 static launch-packet/normalizer hardening lane
-   `job_82d723ec0f89` as accepted by reviewer2 `job_f20daf37898d` for
-   docs/tests readiness only. Future approval-to-run requests must restate L3
-   is route/detail-only unless a separate detail-to-execution request is
-   reviewed, and they must preserve the accepted authority checks.
-8. Treat L1-L4 approvals `job_7800c403f864` and `job_0c8596e0895d` as
-   consumed. Sequence12 is also consumed/non-reusable: talk2 self-reviewed and
-   ran it exactly once from
-   `/home/bfly/yunwei/test_ccb2/phase6-real-lab-l1-l4-sequence12-20260705`,
-   generated `history/phase6b-real-provider-l1-l4-repeat12-b7-20260705.md`
-   with `Status: pass`, and cleaned up with `kill_status: ok`,
-   `state: unmounted`.
-9. Prepare any final acceptance commit/package with slice-aware staging using
-   [topics/phase1-6-final-packaging-hygiene.md](topics/phase1-6-final-packaging-hygiene.md)
-   and the dry-run manifest: include selected Satinoos assets and reviewed
-   Phase 1-6 docs, exclude `dist/` and `dist-mobile/`, and keep deferred
-   provider-pane files out of the package.
+1. Freeze the current one-workgroup execution and Config V2 regression corpus,
+   then land the structured orchestration-bundle and node-state contracts.
+2. Generalize the direct engine to a node map and one-node synthetic bundle,
+   preserving current behavior before enabling fanout.
+3. Add node worktree/reviewed-commit/integration/promotion/rollback support,
+   then enable exact-once ready-frontier scheduling for 2-4 workgroups.
+4. Implement Config V3 with two resident roles, five immaculate dynamic
+   profiles, provider/model/RolePack validation, explicit semantic/physical
+   capacity, effective JSON, migration dry-run, and V2 compatibility.
+5. Run direct `talk2` source/fake/visible-real/package acceptance and publish
+   only after the clean candidate, exact npm version/tag, install/update/
+   rollback evidence, and registry intent agree.
 
 ## Next Gate
 
-Continue from
-[goals/mount-topology-ask-first-landing-goal.md](goals/mount-topology-ask-first-landing-goal.md):
-Phase 4A direct execution, Phase 5A failure cleanup, Phase 5 lifecycle closure,
-and the Phase 6A fake-provider program-matrix scope are accepted. The next gate
-is final source-control packaging hygiene; Phase 6B remains a separate
-real-provider lab gate.
+Complete G0 and G1 in
+[goals/single-lane-multi-workgroup-release-goal.md](goals/single-lane-multi-workgroup-release-goal.md):
+freeze baseline evidence, implement/validate the bundle contract, and prove the
+current one-workgroup route uses the generalized node engine before adding
+parallel workgroups.
 
 ## Blocked By
 
-The minimal topology dispatch slice is no longer blocked on agent/window
-reconciliation, but it should not be broadened as the mainline workflow DSL.
-Phase 1 mount-topology split is formally accepted but is not yet committed or
-default-enabled. The L0 release/drain product blocker has an accepted source fix,
-and repeat6 proved the corrected L0 real-provider runtime-sanity path. Phase 6B
-now has usable L1-L4 repeat12 evidence, usable L5 partial-observation repeat4
-evidence, and a `talk2` final aggregation report. The claim remains bounded to
-initial real-provider, single-round capability. The L5 partial-observation lane
-has consumed repeat4 evidence and does not approve L1-L4 reruns. Remaining
-work is default enablement policy, final source-control packaging hygiene,
-post-detail/reviewer-rework/multi-round follow-up, and user-facing workflow UI.
+No external dependency blocks G0. Source implementation is blocked only on
+keeping the new bundle/controller boundary and Config V3 lifecycle contract
+coherent. Multi-lane work, default enablement, and publication remain blocked
+until the single-lane multi-workgroup goal passes. Exact release version and
+registry state are intentionally resolved at the final clean release gate so a
+published version is never guessed or reused.
 
 ## Last Verified
 
