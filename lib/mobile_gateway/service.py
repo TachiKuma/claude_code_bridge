@@ -313,12 +313,10 @@ class _ProjectHealthCache:
         elif age <= _PROJECT_HEALTH_CACHE_MAX_STALE_SECONDS:
             freshness = 'stale'
         else:
-            return {
-                'health': 'unknown',
-                'mount_state': 'unknown',
-                'health_freshness': 'unknown',
-                'health_refreshing': project_id in self._refreshing,
-            }
+            # Keep the last observed state visible while it is revalidated.
+            # Returning unknown here makes every idle cache interval briefly
+            # collapse the mobile project list to zero entries.
+            freshness = 'expired'
         return {
             **entry.payload,
             'health_freshness': freshness,
@@ -517,6 +515,11 @@ class MobileGatewayService:
             health_by_project = self._project_health_cache.health_by_project(registry_projects)
         else:
             health_by_project = self._project_list_health_by_project(registry_projects)
+        unknown_project_count = sum(
+            1
+            for health in health_by_project.values()
+            if str(health.get('health_freshness') or 'unknown') == 'unknown'
+        )
         capabilities = self._capabilities()
         activity_refreshes_remaining = _PROJECT_ACTIVITY_REFRESH_LIMIT
         activity_deadline = time.monotonic() + _PROJECT_ACTIVITY_REFRESH_BUDGET_SECONDS
@@ -556,6 +559,9 @@ class MobileGatewayService:
         return {
             'schema_version': _SCHEMA_VERSION,
             'projects': projects,
+            'registry_project_count': len(registry_projects),
+            'health_warming': unknown_project_count > 0,
+            'health_unknown_project_count': unknown_project_count,
         }
 
     def project_view_payload(self, project_id: str) -> dict[str, object]:

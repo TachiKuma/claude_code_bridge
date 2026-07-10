@@ -844,6 +844,35 @@ def test_server_projects_marks_ttl_expiry_stale_and_refreshes_asynchronously() -
     assert client.calls == [('ping', 'ccbd'), ('ping', 'ccbd')]
 
 
+def test_server_projects_keeps_expired_health_visible_while_revalidating() -> None:
+    clock = _ManualClock()
+    executor = _ManualExecutor()
+    client = _ToggleHealthCcbdClient(
+        project_id='proj-one',
+        project_root='/srv/one',
+        display_name='one',
+    )
+    service = _server_registry_service([client], clock=clock, executor=executor)
+    cold = service.projects_payload()
+    assert cold['projects'] == []
+    assert cold['health_warming'] is True
+    assert cold['health_unknown_project_count'] == 1
+    executor.run_all()
+    clock.advance(service_module._PROJECT_HEALTH_CACHE_MAX_STALE_SECONDS + 0.1)
+
+    expired = service.projects_payload()
+
+    assert [item['id'] for item in expired['projects']] == ['proj-one']
+    assert expired['projects'][0]['health_freshness'] == 'expired'
+    assert expired['health_warming'] is False
+    assert expired['health_unknown_project_count'] == 0
+    assert len(executor.pending) == 1
+
+    client.available = False
+    executor.run_all()
+    assert service.projects_payload()['projects'] == []
+
+
 def test_server_projects_health_failure_and_recovery_converge() -> None:
     clock = _ManualClock()
     executor = _ManualExecutor()
