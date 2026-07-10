@@ -1233,6 +1233,12 @@ the one-node engine uses node state exclusively and the normal post-worker
 orchestrator call is removed. See
 [history/single-lane-multi-workgroup-g1-foundation-20260710.md](history/single-lane-multi-workgroup-g1-foundation-20260710.md).
 
+2026-07-11 F1 checkpoint: Decision 026 freezes task revision, effective
+capacity snapshots, semantic bundle/provenance boundaries, adaptive one-to-four
+selection, node state, exact-once intent, and result ownership. Wave 1 R1/C1/P1
+implementation may now proceed in parallel; real multi-workgroup execution
+remains gated until the runtime packages are integrated and directly tested.
+
 1. Freeze the current one-workgroup and Config V2 source/test baselines and
    land the orchestration-bundle/node-state/evidence contracts from
    [topics/single-lane-multi-workgroup-modification-and-test-plan.md](topics/single-lane-multi-workgroup-modification-and-test-plan.md).

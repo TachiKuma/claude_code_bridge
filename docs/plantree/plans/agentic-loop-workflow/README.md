@@ -434,6 +434,10 @@ recoverable workflow loops.
   decision that the next release gate is one task lane with one semantic bundle
   and one to four Git-isolated `Worker + Reviewer` workgroups, controlled
   integration, Config V3, V2 compatibility, and real/package acceptance.
+- [decisions/026-authority-envelope-and-adaptive-workgroup-selection.md](decisions/026-authority-envelope-and-adaptive-workgroup-selection.md):
+  decision that freezes task revision, effective capacity digest, semantic
+  bundle fields, node-keyed exact-once state, and orchestrator-owned adaptive
+  one-to-four workgroup selection with V2-only one-group fallback.
 - [history/review-2026-06-26-loop-runner-readiness.md](history/review-2026-06-26-loop-runner-readiness.md):
   reviewer/coworker readiness review that narrowed the next implementation
   slice to task-loop binding, round-result import, `run-once --task-id`, and

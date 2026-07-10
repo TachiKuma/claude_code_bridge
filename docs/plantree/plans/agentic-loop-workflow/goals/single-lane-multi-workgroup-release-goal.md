@@ -1,7 +1,7 @@
 # Single-Lane Multi-Workgroup Release Goal
 
-Date: 2026-07-10
-Status: In progress; G1 foundation landed
+Date: 2026-07-11
+Status: In progress; F1 frozen and G1 foundation landed
 
 ## Goal
 
@@ -157,12 +157,14 @@ authority and not for several agents editing the same kernel concurrently.
 Each package has one owner, one dedicated Git worktree/branch, an explicit
 file boundary, focused tests, and a clean commit.
 
-### Wave 0: Talk2 Contract Freeze
+### Wave 0: Talk2 Contract Freeze - Landed
 
-`talk2` owns F1 and does not delegate it. Freeze the remaining V1 authority
-fields, capacity snapshot interface, node-state enum, exact-once intent key,
-result mapping, and ownership boundaries. Update the goal/topic/decision first
-if implementation discovers a contradiction.
+`talk2` owns F1 and does not delegate it. The remaining V1 authority fields,
+capacity snapshot interface, node-state enum, exact-once intent key, result
+mapping, ownership boundaries, and adaptive one-to-four selection rules are
+frozen by
+[Decision 026](../decisions/026-authority-envelope-and-adaptive-workgroup-selection.md).
+Implementation must update the decision first if it discovers a contradiction.
 
 ### Wave 1: Three Parallel Whole Blocks
 

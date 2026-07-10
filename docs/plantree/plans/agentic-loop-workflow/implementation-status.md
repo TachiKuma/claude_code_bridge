@@ -1,6 +1,6 @@
 # Agentic Loop Workflow Implementation Status
 
-Date: 2026-07-10
+Date: 2026-07-11
 Status: In progress
 Branch: `workflow/agentic-loop-topology`
 Worktree: `/home/bfly/yunwei/ccb_worktrees/agentic-loop-topology`
@@ -12,12 +12,15 @@ frontdesk-started macro task, one semantic orchestration bundle, and one to
 four independently reviewed `Worker + Reviewer` workgroups. Multi-lane
 Roadmap scheduling remains out of scope.
 
-G0 design is accepted and the first G1 foundation is landed. Commit
+G0 design and F1 authority interfaces are accepted, and the first G1
+foundation is landed. Commit
 `34027943` provides strict bundle import/validation, canonical work packets,
 deterministic ordering, explicit orchestrator candidate import, one-node
 compatibility evidence, and a multi-node pre-bind pause. It does not execute
-multiple workgroups. The current phase is F1 authority-interface freeze and
-remaining G1 one-node kernel closure.
+multiple workgroups. Decision 026 freezes task revision, capacity digest,
+bundle/node/intent authority, result mapping, and adaptive one-to-four group
+selection. The current phase is Wave 1 implementation and remaining G1
+one-node kernel closure.
 
 ## Authority
 
@@ -27,6 +30,8 @@ remaining G1 one-node kernel closure.
   [topics/single-lane-multi-workgroup-modification-and-test-plan.md](topics/single-lane-multi-workgroup-modification-and-test-plan.md)
 - Accepted release boundary:
   [decisions/025-single-lane-multi-workgroup-release-gate.md](decisions/025-single-lane-multi-workgroup-release-gate.md)
+- Frozen F1 interfaces:
+  [decisions/026-authority-envelope-and-adaptive-workgroup-selection.md](decisions/026-authority-envelope-and-adaptive-workgroup-selection.md)
 
 Provider replies remain evidence only. Scripts own bundle, task, node,
 integration, topology, round, and release authority. Mount topology remains
@@ -45,22 +50,14 @@ Foundation evidence:
 
 ## Next Target
 
-Freeze F1 before dispatching parallel implementation packages:
-
-1. define task revision identity and increment/binding semantics;
-2. define the effective capacity snapshot and canonical digest inputs;
-3. freeze final bundle/node/provenance fields and normalized digest rules;
-4. freeze node state transitions and exact-once intent key
-   `(bundle_revision, node_id, purpose, attempt)`;
-5. freeze result mapping, structural-replan boundary, and controller ownership.
-
-F1 closes only when design, source models, rejection cases, and one-node
-compatibility tests agree. No G2/G3 fanout starts before that gate.
+Implement and integrate the three Wave 1 packages against Decision 026: R1
+runtime closure, C1 Config V3 core, and P1 RolePack contract. R1 lands first;
+C1 and P1 follow one at a time after direct diff review and focused tests.
 
 ## Execution Queue
 
-- Wave 0, active: `talk2` completes F1 directly.
-- Wave 1, pending after F1: parallel whole blocks R1 runtime closure, C1 Config
+- Wave 0, complete: F1 is frozen by Decision 026.
+- Wave 1, active: parallel whole blocks R1 runtime closure, C1 Config
   V3 core, and P1 RolePack contract in separate worktrees/branches.
 - Wave 1 integration: `talk2` reviews and integrates R1, then C1, then P1;
   focused and non-Gemini repository gates run on the combined branch.
@@ -73,17 +70,17 @@ compatibility tests agree. No G2/G3 fanout starts before that gate.
 
 ## Active TODO
 
-1. Complete and record F1 authority-interface freeze.
-2. Dispatch R1/C1/P1 as bounded whole-block code packages.
-3. Review each returned commit against file ownership and invariants; integrate
+1. Dispatch R1/C1/P1 as bounded whole-block code packages.
+2. Review each returned commit against file ownership and invariants; integrate
    one at a time and rerun adjacent tests.
-4. Close G1 with sole node-state one-group execution, node-keyed recovery, and
+3. Close G1 with sole node-state one-group execution, node-keyed recovery, and
    removal of the normal post-worker orchestrator activation.
-5. Start G2/G3 only after the combined Wave 1 gate is green.
+4. Start G2/G3 only after the combined Wave 1 gate is green.
+5. Keep real 1-4 group roots unopened until the multi-node runtime gate passes.
 
 ## Blocked By
 
-No external dependency blocks F1/G1. Internal gates intentionally block
+No external dependency blocks Wave 1. Internal gates intentionally block
 multi-workgroup execution, Config V3 runtime enablement, package publication,
 and multi-lane work until their predecessor phases pass. Exact package version,
 registry, tag, and publication remain explicit release-time decisions.
@@ -112,6 +109,8 @@ agree with B7; script output cannot substitute for the opened project.
   `77ca803a`.
 - Current status/Goal/archive relative-link audit and `git diff --check`:
   passed before this handoff commit.
+- F1 Decision 026 defines the frozen implementation contract; link and
+  whitespace verification is pending its commit.
 
 ## Non-Claims And History
 

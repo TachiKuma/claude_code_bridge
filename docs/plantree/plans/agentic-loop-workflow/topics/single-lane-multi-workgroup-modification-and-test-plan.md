@@ -3,6 +3,14 @@
 Date: 2026-07-10
 Status: Implementation-ready design
 
+F1 authority interfaces and adaptive group selection are frozen by
+[Decision 026](../decisions/026-authority-envelope-and-adaptive-workgroup-selection.md).
+That decision controls where this older topic is less specific: Config V3
+always requires an explicit one-to-four-node candidate, Config V2 alone may
+use the deterministic one-node compatibility bundle, provenance is artifact
+metadata rather than semantic bundle content, and node count is selected by
+the orchestrator from complexity and cutability rather than by test scripts.
+
 ## Objective
 
 Generalize the current one-pair direct-execution path into one task-round
@@ -468,8 +476,12 @@ behavior, then add worktree integration, then fanout.
   Role store, and visible UI/sidebar/panes.
 - Frontdesk receives ordinary user requests; no explicit routing/group-count
   instructions.
-- Separate 2/3/4-workgroup implementation tasks with Codex workers/reviewers
-  and configured Claude round review where available.
+- An atomic task must naturally produce one group; separate tasks with two,
+  three, and four independently reviewable surfaces must naturally produce
+  2/3/4 groups. Test setup never injects or overrides the count.
+- Codex workers/reviewers and configured Claude round review are used where
+  available; raw candidate selection evidence must explain complexity,
+  cutability, execution shape, and the observed count.
 - Raw timestamps prove real overlap; Git history proves review-before-merge;
   project tests and outputs are directly inspectable.
 - One in-flight ccbd restart, one node/provider failure, one reviewer rework,
