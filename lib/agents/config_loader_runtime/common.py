@@ -56,6 +56,7 @@ ALLOWED_AGENT_KEYS = {
     'permission',
     'queue_policy',
     'model',
+    'thinking',
     'key',
     'url',
     'startup_args',

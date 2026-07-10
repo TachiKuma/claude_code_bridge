@@ -16,6 +16,10 @@ _PROVIDER_API_SHORTCUT_ENV = {
         'key': 'GEMINI_API_KEY',
         'url': 'GOOGLE_GEMINI_BASE_URL',
     },
+    'deepseek': {
+        'key': 'DEEPCODE_API_KEY',
+        'url': 'DEEPCODE_BASE_URL',
+    },
 }
 
 

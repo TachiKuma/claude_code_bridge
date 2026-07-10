@@ -38,6 +38,10 @@ _API_ENV_KEYS = {
         'GOOGLE_CLOUD_LOCATION',
         'GOOGLE_APPLICATION_CREDENTIALS',
     },
+    'deepseek': {
+        'DEEPCODE_API_KEY',
+        'DEEPCODE_BASE_URL',
+    },
 }
 
 
