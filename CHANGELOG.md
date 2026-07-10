@@ -1,5 +1,34 @@
 # Changelog
 
+## v8.1.2 (2026-07-11)
+
+### Mobile Conversation And Terminal Reliability
+
+- **Invalidation Recovery Hardened**: snapshots, invalidation cursors, live
+  conversation refreshes, task-completion notifications, and attachment echo
+  reconciliation now recover consistently without duplicate or stale items.
+- **Conversation Navigation Restored**: expanded bubbles scroll correctly and
+  project-backed file links resolve through the authenticated gateway.
+- **Terminal Controls Simplified**: compact terminal controls remove redundant
+  shortcuts and duplicate headers while preserving navigation and input.
+
+### macOS Installer Certificate Recovery
+
+- **Legacy pip Is Refreshed Safely**: reused managed environments with pip older
+  than 24.2 refresh pip before optional dependencies are installed, enabling
+  current system-certificate behavior.
+- **truststore Is Capability-Gated**: pip 22.2 through 24.1 opts into system
+  trust only when the truststore backend is actually available.
+- **HTTPS Fallback Coverage Expanded**: common macOS DNS, proxy, timeout,
+  connection, and certificate errors trigger the configurable HTTPS mirror
+  retry without adding HTTP indexes or disabling TLS verification.
+
+### Release Surface
+
+- **Release Metadata Synchronized**: VERSION, source CLI metadata,
+  `package.json`, Mobile app metadata and download links, workflow dispatch
+  defaults, README variants, and release notes are aligned for 8.1.2.
+
 ## v8.1.1 (2026-07-10)
 
 ### Mobile Realtime Recovery

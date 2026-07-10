@@ -6,7 +6,7 @@
 **Coordinate Codex, Claude, Gemini, and other CLI agents in visible, controllable workflows you can take over**
 
 <p>
-  <img src="https://img.shields.io/badge/version-8.1.1-orange.svg" alt="version">
+  <img src="https://img.shields.io/badge/version-8.1.2-orange.svg" alt="version">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WSL-lightgrey.svg" alt="platform">
   <img src="https://img.shields.io/badge/providers-17%20CLI%20families-0B7285.svg" alt="providers">
 </p>
@@ -180,9 +180,9 @@ This command guides installation and configuration.
 <details>
 <summary><b>Mobile App details, safety boundary, and source</b></summary>
 
-CCB 8.1.1 includes the Flutter CCB Mobile source in [`mobile/`](mobile/) and publishes the Android APK through GitHub Releases:
+CCB 8.1.2 includes the Flutter CCB Mobile source in [`mobile/`](mobile/) and publishes the Android APK through GitHub Releases:
 
-- [Download CCB Mobile v8.1.1 APK](https://github.com/SeemSeam/claude_codex_bridge/releases/download/v8.1.1/ccb-mobile-v8.1.1.apk)
+- [Download CCB Mobile v8.1.2 APK](https://github.com/SeemSeam/claude_codex_bridge/releases/download/v8.1.2/ccb-mobile-v8.1.2.apk)
 - App source: [`mobile/app`](mobile/app)
 - Server gateway source: [`lib/mobile_gateway`](lib/mobile_gateway)
 
@@ -266,6 +266,16 @@ Thanks to [tmux-agent-sidebar](https://github.com/hiroppy/tmux-agent-sidebar) fo
 ## Release Notes
 
 <details open>
+<summary><b>v8.1.2</b> - Mobile conversation reliability and installer certificate recovery</summary>
+
+- Hardened Mobile invalidation recovery, snapshots, live conversation updates, attachment echo reconciliation, and task-completion notifications.
+- Restored expanded-message scrolling and project file links while simplifying terminal shortcuts, compacting controls, and removing duplicate terminal headers.
+- Reused managed Python environments now refresh legacy pip versions for system certificate support and opt into truststore only when its backend is available.
+- Expanded guarded HTTPS mirror fallback detection for macOS DNS, proxy, timeout, and certificate failures without disabling TLS verification.
+
+</details>
+
+<details>
 <summary><b>v8.1.1</b> - Mobile realtime recovery and macOS installer resilience</summary>
 
 - Added a bounded Mobile gateway SSE invalidation stream so project, activity, and conversation changes refresh authoritative state without active-view polling.
