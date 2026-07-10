@@ -15,6 +15,7 @@ from uuid import uuid4
 from agents.config_loader import load_project_config
 from cli.models import ParsedAskCommand, ParsedClearCommand
 from storage.atomic import atomic_write_json, atomic_write_text
+from storage.locks import file_lock
 
 from .ask import submit_ask, watch_ask_job
 from .clear import clear_agent_context
@@ -25,6 +26,7 @@ from .loop_execution_scope import (
     split_declared_paths,
 )
 from .loop_orchestration_bundle import bundle_summary, load_task_orchestration_bundle
+from .loop_effective_capacity import compile_project_effective_capacity_snapshot
 from .loop_topology import loop_topology
 from .plan_tasks import plan_task, task_execution_text
 from .watch_fallback import load_persisted_terminal_watch_payload
@@ -70,6 +72,20 @@ class _AskWatchError(RuntimeError):
         self.job_id = job_id
 
 
+class _ImmaculateActivationError(RuntimeError):
+    def __init__(self, *, target: str, purpose: str, stage: str, freshness: dict[str, object]) -> None:
+        status = str(freshness.get('status') or 'missing')
+        detail = str(freshness.get('reason_detail') or '').strip()
+        message = f'immaculate activation freshness is not proven for {target}: status={status}'
+        if detail:
+            message = f'{message}; {detail}'
+        super().__init__(message)
+        self.target = target
+        self.purpose = purpose
+        self.stage = stage
+        self.freshness = dict(freshness)
+
+
 def run_ask_first_execution_round(context, command, services=None) -> dict[str, object]:
     deps = _deps(services)
     loop_id = str(getattr(command, 'loop_id', None) or '').strip()
@@ -86,6 +102,7 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
     orchestration_bundle, bundle_artifact = load_task_orchestration_bundle(
         Path(context.project.project_root),
         task_record,
+        capacity_snapshot=deps.effective_capacity_snapshot(context),
     )
     bundle_nodes = orchestration_bundle.get('nodes') if isinstance(orchestration_bundle.get('nodes'), list) else []
     if len(bundle_nodes) != 1:
@@ -94,10 +111,15 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
         )
     bundle_node = dict(bundle_nodes[0])
     node_id = str(bundle_node.get('node_id') or '')
+    bundle_revision = int(orchestration_bundle['bundle_revision'])
+    node_work_packet_ref, node_work_packet = _node_work_packet(
+        Path(context.project.project_root),
+        bundle_node,
+    )
     orchestration_bundle_summary = bundle_summary(orchestration_bundle, bundle_artifact)
     artifact_refs = _artifact_refs(task_record)
     project_root_authority_required = _requires_project_root_authority(task_record, task_text)
-    orchestrator_agent, orchestrator_is_configured = _agent_for_role(
+    orchestrator_agent, _orchestrator_is_configured = _agent_for_role(
         context,
         ORCHESTRATOR_ROLE_ID,
         fallback=ORCHESTRATOR_TARGET,
@@ -111,7 +133,7 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
     reviewer_agent = f'loop-{loop_id}-{REVIEWER_PROFILE}-1'
     stage_state = _load_stage_state(loop_dir, loop_id=loop_id, task_id=task_id)
     state_artifacts = _state_current_artifacts(stage_state)
-    node_artifacts = _state_node_artifacts(state_artifacts, node_id=node_id)
+    node_artifacts = _state_node_artifacts(stage_state, node_id=node_id)
     started_at = str(stage_state.get('round_started_at') or '').strip() or _utc_now()
     _append_event(
         loop_dir,
@@ -126,7 +148,6 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
         loop_id=loop_id,
         worker_agent=worker_agent,
         reviewer_agent=reviewer_agent,
-        orchestrator_agent=None if orchestrator_is_configured else orchestrator_agent,
         round_reviewer_agent=None if round_reviewer_is_configured else round_reviewer_agent,
     )
     topology_failure = _topology_blocker(topology)
@@ -157,7 +178,7 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
     worker = _artifact_dict(node_artifacts.get('worker'))
     reviewer = _artifact_dict(node_artifacts.get('reviewer'))
     rework = _rework_artifacts(node_artifacts.get('rework'))
-    orchestrator = _artifact_dict(state_artifacts.get('orchestrator'))
+    orchestrator: dict[str, object] = {}
     round_reviewer = _artifact_dict(state_artifacts.get(ROUND_REVIEWER_FIELD))
     authority_update = _optional_artifact_dict(state_artifacts.get('authority_update'))
     project_root_test: dict[str, object] | None = None
@@ -198,12 +219,18 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
                 target=worker_agent,
                 sender=orchestrator_agent,
                 purpose='worker',
+                bundle_revision=bundle_revision,
+                node_id=node_id,
+                attempt=1,
                 task_id=f'{loop_id}-worker',
                 message=_worker_message(
                     loop_id=loop_id,
                     task_id=task_id,
                     task_text=task_text,
                     artifact_refs=artifact_refs,
+                    node_id=node_id,
+                    work_packet_ref=node_work_packet_ref,
+                    work_packet=node_work_packet,
                 ),
                 timeout=timeout,
                 defer_observation=bool(resume_progress['consumed_persisted_terminal']),
@@ -279,12 +306,18 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
                 target=reviewer_agent,
                 sender=worker_agent,
                 purpose='reviewer',
+                bundle_revision=bundle_revision,
+                node_id=node_id,
+                attempt=1,
                 task_id=f'{loop_id}-reviewer',
                 message=_reviewer_message(
                     loop_id=loop_id,
                     task_id=task_id,
                     task_text=task_text,
                     artifact_refs=artifact_refs,
+                    node_id=node_id,
+                    work_packet_ref=node_work_packet_ref,
+                    work_packet=node_work_packet,
                     worker=worker,
                     authority_update=authority_update,
                 ),
@@ -308,12 +341,18 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
                     target=worker_agent,
                     sender=reviewer_agent,
                     purpose='worker_rework',
+                    bundle_revision=bundle_revision,
+                    node_id=node_id,
+                    attempt=1,
                     task_id=f'{loop_id}-worker-rework',
                     message=_worker_rework_message(
                         loop_id=loop_id,
                         task_id=task_id,
                         task_text=task_text,
                         artifact_refs=artifact_refs,
+                        node_id=node_id,
+                        work_packet_ref=node_work_packet_ref,
+                        work_packet=node_work_packet,
                         worker=worker,
                         reviewer=reviewer,
                     ),
@@ -408,12 +447,18 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
                     target=reviewer_agent,
                     sender=worker_agent,
                     purpose='reviewer_recheck',
+                    bundle_revision=bundle_revision,
+                    node_id=node_id,
+                    attempt=1,
                     task_id=f'{loop_id}-reviewer-recheck',
                     message=_reviewer_recheck_message(
                         loop_id=loop_id,
                         task_id=task_id,
                         task_text=task_text,
                         artifact_refs=artifact_refs,
+                        node_id=node_id,
+                        work_packet_ref=node_work_packet_ref,
+                        work_packet=node_work_packet,
                         worker=worker,
                         reviewer=reviewer,
                         worker_rework=worker_rework,
@@ -428,35 +473,6 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
             reviewer_recheck_pending = _round_pending(reviewer_recheck)
             if reviewer_recheck_pending is not None:
                 return pending_payload(reviewer_recheck_pending)
-        stage = 'orchestrator_ask'
-        if not orchestrator:
-            orchestrator = _submit_and_watch(
-                context,
-                deps,
-                loop_dir=loop_dir,
-                loop_id=loop_id,
-                target=orchestrator_agent,
-                sender='system',
-                purpose='orchestrator',
-                task_id=f'{loop_id}-orchestrator',
-                message=_orchestrator_message(
-                    loop_id=loop_id,
-                    task_id=task_id,
-                    task_text=task_text,
-                    artifact_refs=artifact_refs,
-                    worker=worker,
-                    reviewer=reviewer,
-                    rework=rework,
-                    authority_update=authority_update,
-                ),
-                timeout=timeout,
-                defer_observation=bool(resume_progress['consumed_persisted_terminal']),
-            )
-            if orchestrator.get('watch_source') == 'persisted_terminal':
-                resume_progress['consumed_persisted_terminal'] = True
-        orchestrator_pending = _round_pending(orchestrator)
-        if orchestrator_pending is not None:
-            return pending_payload(orchestrator_pending)
         stage = 'ccb_round_reviewer_ask'
         if not round_reviewer:
             round_reviewer = _submit_and_watch(
@@ -467,6 +483,9 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
                 target=round_reviewer_agent,
                 sender='system',
                 purpose=ROUND_REVIEWER_FIELD,
+                bundle_revision=bundle_revision,
+                node_id='round',
+                attempt=1,
                 task_id=f'{loop_id}-round-reviewer',
                 message=_round_reviewer_message(
                     loop_id=loop_id,
@@ -476,7 +495,6 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
                     worker=worker,
                     reviewer=reviewer,
                     rework=rework,
-                    orchestrator=orchestrator,
                     authority_update=authority_update,
                 ),
                 timeout=timeout,
@@ -515,6 +533,9 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
                 target=round_reviewer_agent,
                 sender='system',
                 purpose=ROUND_REVIEWER_CORRECTION_PURPOSE,
+                bundle_revision=bundle_revision,
+                node_id='round',
+                attempt=2,
                 task_id=f'{loop_id}-round-reviewer-correction',
                 message=_round_reviewer_correction_message(
                     task_id=task_id,
@@ -559,7 +580,7 @@ def run_ask_first_execution_round(context, command, services=None) -> dict[str, 
             node_id=node_id,
         )
 
-    status_items = [worker, reviewer, *rework.values(), orchestrator, round_reviewer]
+    status_items = [worker, reviewer, *rework.values(), round_reviewer]
     status_pending = _round_pending(*status_items)
     if status_pending is not None:
         return pending_payload(status_pending)
@@ -681,6 +702,13 @@ def _deps(services):
             'load_persisted_terminal_watch_payload',
             load_persisted_terminal_watch_payload,
         ),
+        effective_capacity_snapshot=getattr(
+            services,
+            'effective_capacity_snapshot',
+            lambda context: compile_project_effective_capacity_snapshot(
+                Path(context.project.project_root)
+            ),
+        ),
     )
 
 
@@ -709,7 +737,6 @@ def _apply_mount_topology(
     loop_id: str,
     worker_agent: str,
     reviewer_agent: str,
-    orchestrator_agent: str | None,
     round_reviewer_agent: str | None,
 ) -> dict[str, object]:
     proposal_path = loop_dir / 'ask_first_mount_topology.proposal.json'
@@ -745,10 +772,7 @@ def _apply_mount_topology(
             },
         ],
     }
-    control_agents = (
-        (orchestrator_agent, 'ccb_orchestrator', 0),
-        (round_reviewer_agent, 'ccb_round_reviewer', 1),
-    )
+    control_agents = ((round_reviewer_agent, 'ccb_round_reviewer', 0),)
     if any(agent_name for agent_name, _profile, _pane_order in control_agents):
         proposal['windows'].append(
             {
@@ -869,7 +893,9 @@ def _topology_status_retained(status_payload: dict[str, object]) -> object:
 
 def _ask_failure_record(exc: Exception, *, default_stage: str) -> dict[str, object]:
     source = 'ask_failure'
-    if isinstance(exc, _AskSubmissionError):
+    if isinstance(exc, _ImmaculateActivationError):
+        source = 'immaculate_activation_failed'
+    elif isinstance(exc, _AskSubmissionError):
         source = 'ask_submission_failed'
     elif isinstance(exc, _AskWatchError):
         source = 'watch_failed'
@@ -884,6 +910,9 @@ def _ask_failure_record(exc: Exception, *, default_stage: str) -> dict[str, obje
         failure['job_id'] = str(job_id)
     if purpose:
         failure['purpose'] = str(purpose)
+    freshness = getattr(exc, 'freshness', None)
+    if isinstance(freshness, dict):
+        failure['freshness'] = dict(freshness)
     return failure
 
 
@@ -935,7 +964,17 @@ def _write_round_payload(
         ),
     )
     finished_at = _utc_now()
+    node_record = _workgroup_record(
+        node_id=node_id,
+        worker_agent=worker_agent,
+        reviewer_agent=reviewer_agent,
+        worker=worker,
+        reviewer=reviewer,
+        rework=rework,
+        round_result=round_result,
+    )
     payload = {
+        'schema': 'ccb.loop.workgroup_round_state.v1',
         'schema_version': 1,
         'record_type': 'ccb_loop_ask_first_execution_round',
         'workgroup_state_schema': 'ccb.loop.workgroup_round_state.v1',
@@ -966,17 +1005,12 @@ def _write_round_payload(
         },
         'artifact_refs': artifact_refs,
         'orchestration_bundle': orchestration_bundle,
+        'bundle_revision': orchestration_bundle.get('bundle_revision'),
+        'bundle_digest': orchestration_bundle.get('bundle_digest'),
+        'controller_status': round_result,
         'topology': topology,
-        'workgroups': {
-            node_id: _workgroup_record(
-                node_id=node_id,
-                worker_agent=worker_agent,
-                reviewer_agent=reviewer_agent,
-                worker=worker,
-                reviewer=reviewer,
-                rework=rework,
-            )
-        },
+        'nodes': {node_id: node_record},
+        'workgroups': {node_id: node_record},
         'worker': worker,
         'reviewer': reviewer,
         'rework': rework or {},
@@ -1036,16 +1070,19 @@ def _write_pending_payload(
     pending_path = loop_dir / 'round.pending.json'
     state_path = _stage_state_path(loop_dir)
     observed_at = _utc_now()
+    node_record = _workgroup_record(
+        node_id=node_id,
+        worker_agent=worker_agent,
+        reviewer_agent=reviewer_agent,
+        worker=worker,
+        reviewer=reviewer,
+        rework=rework,
+        pending=pending,
+    )
     current_artifacts = {
         'artifact_refs': artifact_refs,
         'orchestration_bundle': orchestration_bundle,
-        'nodes': {
-            node_id: {
-                'worker': worker,
-                'reviewer': reviewer,
-                'rework': rework or {},
-            }
-        },
+        'nodes': {node_id: node_record},
         'worker': worker,
         'reviewer': reviewer,
         'rework': rework or {},
@@ -1055,12 +1092,16 @@ def _write_pending_payload(
     if authority_update is not None:
         current_artifacts['authority_update'] = authority_update
     state_payload = {
+        'schema': 'ccb.loop.workgroup_round_state.v1',
         'schema_version': 1,
         'record_type': 'ccb_loop_ask_first_stage_state',
         'workgroup_state_schema': 'ccb.loop.workgroup_round_state.v1',
-        'status': 'pending',
+        'status': 'executing',
+        'legacy_status': 'pending',
         'task_id': task_id,
         'loop_id': loop_id,
+        'bundle_revision': orchestration_bundle.get('bundle_revision'),
+        'bundle_digest': orchestration_bundle.get('bundle_digest'),
         'round_started_at': started_at,
         'updated_at': observed_at,
         'stage': pending.get('stage'),
@@ -1069,10 +1110,12 @@ def _write_pending_payload(
         'purpose': pending.get('purpose'),
         'submitted_at': pending.get('submitted_at'),
         'current_artifacts': current_artifacts,
+        'nodes': {node_id: node_record},
         'orchestration_bundle': orchestration_bundle,
         'pending': pending,
     }
     payload = {
+        'schema': 'ccb.loop.workgroup_round_state.v1',
         'schema_version': 1,
         'record_type': 'ccb_loop_ask_first_execution_round',
         'workgroup_state_schema': 'ccb.loop.workgroup_round_state.v1',
@@ -1103,17 +1146,12 @@ def _write_pending_payload(
         },
         'artifact_refs': artifact_refs,
         'orchestration_bundle': orchestration_bundle,
+        'bundle_revision': orchestration_bundle.get('bundle_revision'),
+        'bundle_digest': orchestration_bundle.get('bundle_digest'),
+        'controller_status': 'executing',
         'topology': topology,
-        'workgroups': {
-            node_id: _workgroup_record(
-                node_id=node_id,
-                worker_agent=worker_agent,
-                reviewer_agent=reviewer_agent,
-                worker=worker,
-                reviewer=reviewer,
-                rework=rework,
-            )
-        },
+        'nodes': {node_id: node_record},
+        'workgroups': {node_id: node_record},
         'worker': worker,
         'reviewer': reviewer,
         'rework': rework or {},
@@ -1158,17 +1196,16 @@ def _workgroup_record(
     worker: dict[str, object],
     reviewer: dict[str, object],
     rework: dict[str, dict[str, object]],
+    pending: dict[str, object] | None = None,
+    round_result: str | None = None,
 ) -> dict[str, object]:
-    if reviewer and bool(reviewer.get('terminal')):
-        status = 'review_complete'
-    elif reviewer:
-        status = 'reviewer_pending'
-    elif worker and bool(worker.get('terminal')):
-        status = 'worker_complete'
-    elif worker:
-        status = 'worker_pending'
-    else:
-        status = 'created'
+    status = _node_status(
+        worker=worker,
+        reviewer=reviewer,
+        rework=rework,
+        pending=pending,
+        round_result=round_result,
+    )
     return {
         'node_id': node_id,
         'status': status,
@@ -1178,6 +1215,39 @@ def _workgroup_record(
         'reviewer': reviewer,
         'rework': rework or {},
     }
+
+
+def _node_status(
+    *,
+    worker: dict[str, object],
+    reviewer: dict[str, object],
+    rework: dict[str, dict[str, object]],
+    pending: dict[str, object] | None,
+    round_result: str | None,
+) -> str:
+    if round_result == 'pass':
+        return 'integrated'
+    if round_result in {'partial', 'replan_required', 'blocked'}:
+        return 'blocked'
+    pending = pending or {}
+    purpose = str(pending.get('purpose') or '')
+    submission_unknown = str(pending.get('source') or '') == 'ask_submission_unknown'
+    if purpose in {'reviewer', 'reviewer_recheck'}:
+        return 'reviewer_submission_unknown' if submission_unknown else 'reviewer_pending'
+    if purpose in {'worker', 'worker_rework'}:
+        return 'worker_submission_unknown' if submission_unknown else 'worker_pending'
+    recheck = rework.get('reviewer_recheck') or {}
+    if recheck:
+        if str(recheck.get('status') or '') != 'completed':
+            return 'review_failed'
+        return 'reviewer_rework' if _reviewer_requires_rework(recheck) else 'review_passed'
+    if reviewer:
+        if str(reviewer.get('status') or '') != 'completed':
+            return 'review_failed'
+        return 'reviewer_rework' if _reviewer_requires_rework(reviewer) else 'review_passed'
+    if worker:
+        return 'worker_complete' if str(worker.get('status') or '') == 'completed' else 'worker_failed'
+    return 'created'
 
 
 def _stage_state_path(loop_dir: Path) -> Path:
@@ -1201,17 +1271,13 @@ def _state_current_artifacts(stage_state: dict[str, object]) -> dict[str, object
     return dict(current) if isinstance(current, dict) else {}
 
 
-def _state_node_artifacts(current_artifacts: dict[str, object], *, node_id: str) -> dict[str, object]:
-    nodes = current_artifacts.get('nodes')
+def _state_node_artifacts(stage_state: dict[str, object], *, node_id: str) -> dict[str, object]:
+    nodes = stage_state.get('nodes')
     if isinstance(nodes, dict):
         node = nodes.get(node_id)
         if isinstance(node, dict):
             return dict(node)
-    return {
-        'worker': current_artifacts.get('worker'),
-        'reviewer': current_artifacts.get('reviewer'),
-        'rework': current_artifacts.get('rework'),
-    }
+    return {}
 
 
 def _artifact_dict(value: object) -> dict[str, object]:
@@ -1237,7 +1303,7 @@ def _rework_artifacts(value: object) -> dict[str, dict[str, object]]:
 
 
 def _clear_stage_state(loop_dir: Path) -> None:
-    for path in (_stage_state_path(loop_dir), loop_dir / 'round.pending.json', _submission_intent_path(loop_dir)):
+    for path in (_stage_state_path(loop_dir), loop_dir / 'round.pending.json'):
         try:
             path.unlink()
         except FileNotFoundError:
@@ -1245,7 +1311,7 @@ def _clear_stage_state(loop_dir: Path) -> None:
 
 
 def _submission_intent_path(loop_dir: Path) -> Path:
-    return loop_dir / 'ask_first_submission_intent.json'
+    return loop_dir / 'ask_first_submission_intents.jsonl'
 
 
 def _write_submission_intent(
@@ -1255,44 +1321,74 @@ def _write_submission_intent(
     target: str,
     sender: str,
     purpose: str,
+    intent_purpose: str,
     stage: str,
     ask_task_id: str,
+    bundle_revision: int,
+    node_id: str,
+    attempt: int,
     job_id: str | None = None,
-    status: str = 'submitting',
+    status: str = 'prepared',
     freshness: dict[str, object] | None = None,
 ) -> dict[str, object]:
     path = _submission_intent_path(loop_dir)
-    existing = _load_submission_intent(path)
+    identity = _submission_identity(
+        bundle_revision=bundle_revision,
+        node_id=node_id,
+        purpose=intent_purpose,
+        attempt=attempt,
+    )
+    existing = _load_submission_intent(path, identity=identity)
     now = _utc_now()
-    created_at = now
-    if (
-        existing
-        and str(existing.get('loop_id') or '') == loop_id
-        and str(existing.get('target') or '') == target
-        and str(existing.get('purpose') or '') == purpose
-        and str(existing.get('stage') or '') == stage
-    ):
-        created_at = str(existing.get('created_at') or now)
+    if status not in {'prepared', 'accepted', 'terminal', 'consumed', 'unknown'}:
+        raise ValueError(f'unknown ask-first submission intent status: {status}')
+    if not existing and status != 'prepared':
+        raise RuntimeError(f'ask-first submission intent must start at prepared, not {status}')
+    if existing:
+        if str(existing.get('loop_id') or '') != loop_id:
+            raise RuntimeError(f'ask-first submission intent does not match loop: {path}')
+        if str(existing.get('target') or '') != target:
+            raise RuntimeError('ask-first submission intent target changed for the same identity')
+        existing_job_id = str(existing.get('job_id') or '').strip()
+        if existing_job_id and job_id and existing_job_id != job_id:
+            raise RuntimeError('ask-first submission intent job_id is already bound')
+        if str(existing.get('status') or '') == status and (not job_id or existing_job_id == job_id):
+            return existing
+        allowed_next = {
+            'prepared': {'accepted', 'unknown'},
+            'accepted': {'terminal'},
+            'terminal': {'consumed'},
+            'unknown': set(),
+            'consumed': set(),
+        }
+        current_status = str(existing.get('status') or '')
+        if status not in allowed_next.get(current_status, set()):
+            raise RuntimeError(
+                f'invalid ask-first submission intent transition: {current_status or "missing"} -> {status}'
+            )
     payload: dict[str, object] = {
         'schema_version': 1,
         'record_type': 'ccb_loop_ask_first_submission_intent',
+        'intent_id': ':'.join(str(identity[key]) for key in ('bundle_revision', 'node_id', 'purpose', 'attempt')),
         'status': status,
         'loop_id': loop_id,
+        **identity,
         'stage': stage,
         'target': target,
         'sender': RUNNER_ASK_SENDER,
         'logical_sender': sender,
-        'purpose': purpose,
+        'ask_purpose': purpose,
         'ask_task_id': ask_task_id,
-        'created_at': created_at,
-        'updated_at': now,
+        'ts': now,
     }
-    if job_id:
-        payload['job_id'] = job_id
-        payload['accepted_at'] = now
+    bound_job_id = job_id or (str(existing.get('job_id') or '').strip() if existing else '')
+    if bound_job_id:
+        payload['job_id'] = bound_job_id
     if freshness is not None:
         payload['freshness'] = freshness
-    atomic_write_json(path, payload)
+    elif existing and isinstance(existing.get('freshness'), dict):
+        payload['freshness'] = dict(existing['freshness'])
+    _append_jsonl(path, payload)
     return payload
 
 
@@ -1301,40 +1397,70 @@ def _matching_submission_intent(
     *,
     loop_id: str,
     target: str,
-    purpose: str,
-    stage: str,
+    bundle_revision: int,
+    node_id: str,
+    intent_purpose: str,
+    attempt: int,
 ) -> dict[str, object] | None:
     path = _submission_intent_path(loop_dir)
-    payload = _load_submission_intent(path)
+    identity = _submission_identity(
+        bundle_revision=bundle_revision,
+        node_id=node_id,
+        purpose=intent_purpose,
+        attempt=attempt,
+    )
+    payload = _load_submission_intent(path, identity=identity)
     if not payload:
         return None
     if str(payload.get('loop_id') or '') != loop_id:
         raise RuntimeError(f'ask-first submission intent does not match loop: {path}')
     if str(payload.get('target') or '') != target:
-        return None
-    if str(payload.get('purpose') or '') != purpose:
-        return None
-    if str(payload.get('stage') or '') != stage:
-        return None
+        raise RuntimeError('ask-first submission intent target changed for the same identity')
     return payload
 
 
-def _load_submission_intent(path: Path) -> dict[str, object]:
+def _load_submission_intent(
+    path: Path,
+    *,
+    identity: dict[str, object],
+) -> dict[str, object]:
     if not path.is_file():
         return {}
-    payload = json.loads(path.read_text(encoding='utf-8'))
-    if not isinstance(payload, dict):
-        raise RuntimeError(f'ask-first submission intent is not an object: {path}')
-    if payload.get('record_type') != 'ccb_loop_ask_first_submission_intent':
-        raise RuntimeError(f'unknown ask-first submission intent record_type: {path}')
-    return dict(payload)
+    latest: dict[str, object] = {}
+    for raw_line in path.read_text(encoding='utf-8').splitlines():
+        if not raw_line.strip():
+            continue
+        payload = json.loads(raw_line)
+        if not isinstance(payload, dict):
+            raise RuntimeError(f'ask-first submission intent line is not an object: {path}')
+        if payload.get('record_type') != 'ccb_loop_ask_first_submission_intent':
+            raise RuntimeError(f'unknown ask-first submission intent record_type: {path}')
+        if all(payload.get(key) == value for key, value in identity.items()):
+            latest = dict(payload)
+    return latest
 
 
-def _clear_submission_intent(loop_dir: Path) -> None:
-    try:
-        _submission_intent_path(loop_dir).unlink()
-    except FileNotFoundError:
-        pass
+def _submission_identity(
+    *,
+    bundle_revision: int,
+    node_id: str,
+    purpose: str,
+    attempt: int,
+) -> dict[str, object]:
+    if isinstance(bundle_revision, bool) or not isinstance(bundle_revision, int) or bundle_revision <= 0:
+        raise ValueError('submission intent bundle_revision must be a positive integer')
+    if purpose not in {'worker', 'reviewer', 'worker_rework', 'reviewer_recheck', 'round_reviewer'}:
+        raise ValueError(f'unsupported submission intent purpose: {purpose}')
+    if not node_id or (purpose == 'round_reviewer') != (node_id == 'round'):
+        raise ValueError('submission intent node_id must be canonical, with round reserved for round review')
+    if isinstance(attempt, bool) or not isinstance(attempt, int) or attempt <= 0:
+        raise ValueError('submission intent attempt must be a positive integer')
+    return {
+        'bundle_revision': bundle_revision,
+        'node_id': node_id,
+        'purpose': purpose,
+        'attempt': attempt,
+    }
 
 
 def _submission_unknown_result(
@@ -1344,7 +1470,12 @@ def _submission_unknown_result(
     target: str,
     sender: str,
     purpose: str,
+    intent_purpose: str,
     stage: str,
+    ask_task_id: str,
+    bundle_revision: int,
+    node_id: str,
+    attempt: int,
     intent: dict[str, object],
 ) -> dict[str, object]:
     reason = (
@@ -1362,13 +1493,27 @@ def _submission_unknown_result(
             'reason': reason,
         },
     )
+    unknown = _write_submission_intent(
+        loop_dir,
+        loop_id=loop_id,
+        target=target,
+        sender=sender,
+        purpose=purpose,
+        intent_purpose=intent_purpose,
+        stage=stage,
+        ask_task_id=ask_task_id,
+        bundle_revision=bundle_revision,
+        node_id=node_id,
+        attempt=attempt,
+        status='unknown',
+    )
     return {
         'target': target,
         'sender': RUNNER_ASK_SENDER,
         'logical_sender': sender,
         'purpose': purpose,
         'job_id': None,
-        'submitted_at': intent.get('created_at'),
+        'submitted_at': intent.get('ts'),
         'status': 'submission_unknown',
         'reply': '',
         'terminal': False,
@@ -1377,7 +1522,13 @@ def _submission_unknown_result(
         'pending_source': 'ask_submission_unknown',
         'observation_error': reason,
         'intent_path': str(_submission_intent_path(loop_dir)),
-        'freshness': intent.get('freshness'),
+        'freshness': unknown.get('freshness'),
+        'submission_identity': _submission_identity(
+            bundle_revision=bundle_revision,
+            node_id=node_id,
+            purpose=intent_purpose,
+            attempt=attempt,
+        ),
     }
 
 
@@ -1512,15 +1663,63 @@ def _submit_and_watch(
     target: str,
     sender: str,
     purpose: str,
+    bundle_revision: int,
+    node_id: str,
+    attempt: int,
+    task_id: str,
+    message: str,
+    timeout: float | None,
+    defer_observation: bool = False,
+) -> dict[str, object]:
+    # The intent check and daemon submission are one exact-once critical section.
+    # Direct `runner --once` callers are not covered by AutoRunnerLock.
+    with file_lock(loop_dir / 'ask_first_submission.lock'):
+        return _submit_and_watch_locked(
+            context,
+            deps,
+            loop_dir=loop_dir,
+            loop_id=loop_id,
+            target=target,
+            sender=sender,
+            purpose=purpose,
+            bundle_revision=bundle_revision,
+            node_id=node_id,
+            attempt=attempt,
+            task_id=task_id,
+            message=message,
+            timeout=timeout,
+            defer_observation=defer_observation,
+        )
+
+
+def _submit_and_watch_locked(
+    context,
+    deps,
+    *,
+    loop_dir: Path,
+    loop_id: str,
+    target: str,
+    sender: str,
+    purpose: str,
+    bundle_revision: int,
+    node_id: str,
+    attempt: int,
     task_id: str,
     message: str,
     timeout: float | None,
     defer_observation: bool = False,
 ) -> dict[str, object]:
     stage = f'{purpose}_ask'
-    existing = _latest_submitted_ask(loop_dir, target=target, purpose=purpose)
+    intent_purpose = _intent_purpose(purpose)
+    identity = _submission_identity(
+        bundle_revision=bundle_revision,
+        node_id=node_id,
+        purpose=intent_purpose,
+        attempt=attempt,
+    )
+    existing = _latest_submitted_ask(loop_dir, target=target, identity=identity)
     if existing is not None:
-        return _watch_or_recover_job(
+        result = _watch_or_recover_job(
             context,
             deps,
             loop_dir=loop_dir,
@@ -1534,12 +1733,29 @@ def _submit_and_watch(
             timeout=timeout,
             allow_live_watch=False,
         )
+        _settle_submission_intent(
+            loop_dir,
+            loop_id=loop_id,
+            target=target,
+            sender=sender,
+            purpose=purpose,
+            intent_purpose=intent_purpose,
+            stage=stage,
+            ask_task_id=task_id,
+            identity=identity,
+            job_id=str(existing['job_id']),
+            result=result,
+        )
+        result['submission_identity'] = identity
+        return result
     intent = _matching_submission_intent(
         loop_dir,
         loop_id=loop_id,
         target=target,
-        purpose=purpose,
-        stage=stage,
+        bundle_revision=bundle_revision,
+        node_id=node_id,
+        intent_purpose=intent_purpose,
+        attempt=attempt,
     )
     if intent is not None:
         intent_job_id = str(intent.get('job_id') or '').strip()
@@ -1554,12 +1770,26 @@ def _submit_and_watch(
                 purpose=purpose,
                 stage=stage,
                 job_id=intent_job_id,
-                submitted_at=str(intent.get('accepted_at') or intent.get('created_at') or ''),
+                submitted_at=str(intent.get('ts') or ''),
                 timeout=timeout,
                 allow_live_watch=False,
             )
             if isinstance(intent.get('freshness'), dict):
                 result['freshness'] = dict(intent['freshness'])
+            _settle_submission_intent(
+                loop_dir,
+                loop_id=loop_id,
+                target=target,
+                sender=sender,
+                purpose=purpose,
+                intent_purpose=intent_purpose,
+                stage=stage,
+                ask_task_id=task_id,
+                identity=identity,
+                job_id=intent_job_id,
+                result=result,
+            )
+            result['submission_identity'] = identity
             return result
         return _submission_unknown_result(
             loop_dir,
@@ -1567,7 +1797,12 @@ def _submit_and_watch(
             target=target,
             sender=sender,
             purpose=purpose,
+            intent_purpose=intent_purpose,
             stage=stage,
+            ask_task_id=task_id,
+            bundle_revision=bundle_revision,
+            node_id=node_id,
+            attempt=attempt,
             intent=intent,
         )
     freshness = _prepare_immaculate_activation(
@@ -1580,14 +1815,25 @@ def _submit_and_watch(
         stage=stage,
         ask_task_id=task_id,
     )
+    if str(freshness.get('status') or '') != 'cleared':
+        raise _ImmaculateActivationError(
+            target=target,
+            purpose=purpose,
+            stage=stage,
+            freshness=freshness,
+        )
     _write_submission_intent(
         loop_dir,
         loop_id=loop_id,
         target=target,
         sender=sender,
         purpose=purpose,
+        intent_purpose=intent_purpose,
         stage=stage,
         ask_task_id=task_id,
+        bundle_revision=bundle_revision,
+        node_id=node_id,
+        attempt=attempt,
         freshness=freshness,
     )
     try:
@@ -1612,8 +1858,12 @@ def _submit_and_watch(
             target=target,
             sender=sender,
             purpose=purpose,
+            intent_purpose=intent_purpose,
             stage=stage,
             ask_task_id=task_id,
+            bundle_revision=bundle_revision,
+            node_id=node_id,
+            attempt=attempt,
             job_id=job_id,
             status='accepted',
             freshness=freshness,
@@ -1638,6 +1888,7 @@ def _submit_and_watch(
             sender=RUNNER_ASK_SENDER,
             purpose=purpose,
             job_id=job_id,
+            identity=identity,
             freshness=freshness,
         )
     except Exception as exc:
@@ -1649,10 +1900,9 @@ def _submit_and_watch(
             purpose=purpose,
             stage=stage,
             job_id=job_id,
-            submitted_at=str(accepted_intent.get('accepted_at') or accepted_intent.get('created_at') or ''),
+            submitted_at=str(accepted_intent.get('ts') or ''),
             reason=f'local ask log append failed after daemon accepted job: {exc}',
         )
-    _clear_submission_intent(loop_dir)
     if defer_observation:
         reason = 'submitted after persisted terminal recovery; waiting for a later runner invocation'
         result = {
@@ -1669,6 +1919,7 @@ def _submit_and_watch(
             'watch_observation': 'deferred_after_persisted_recovery',
             'observation_error': reason,
             'freshness': freshness,
+            'submission_identity': identity,
         }
         _append_event(
             loop_dir,
@@ -1699,7 +1950,64 @@ def _submit_and_watch(
         allow_live_watch=not defer_observation,
     )
     result['freshness'] = freshness
+    _settle_submission_intent(
+        loop_dir,
+        loop_id=loop_id,
+        target=target,
+        sender=sender,
+        purpose=purpose,
+        intent_purpose=intent_purpose,
+        stage=stage,
+        ask_task_id=task_id,
+        identity=identity,
+        job_id=job_id,
+        result=result,
+    )
+    result['submission_identity'] = identity
     return result
+
+
+def _intent_purpose(ask_purpose: str) -> str:
+    if ask_purpose in {ROUND_REVIEWER_FIELD, ROUND_REVIEWER_CORRECTION_PURPOSE}:
+        return 'round_reviewer'
+    return ask_purpose
+
+
+def _settle_submission_intent(
+    loop_dir: Path,
+    *,
+    loop_id: str,
+    target: str,
+    sender: str,
+    purpose: str,
+    intent_purpose: str,
+    stage: str,
+    ask_task_id: str,
+    identity: dict[str, object],
+    job_id: str,
+    result: dict[str, object],
+) -> None:
+    if not bool(result.get('terminal')):
+        return
+    latest = _load_submission_intent(_submission_intent_path(loop_dir), identity=identity)
+    if str(latest.get('status') or '') == 'consumed':
+        return
+    common = {
+        'loop_id': loop_id,
+        'target': target,
+        'sender': sender,
+        'purpose': purpose,
+        'intent_purpose': intent_purpose,
+        'stage': stage,
+        'ask_task_id': ask_task_id,
+        'bundle_revision': int(identity['bundle_revision']),
+        'node_id': str(identity['node_id']),
+        'attempt': int(identity['attempt']),
+        'job_id': job_id,
+    }
+    if str(latest.get('status') or '') == 'accepted':
+        _write_submission_intent(loop_dir, status='terminal', **common)
+    _write_submission_intent(loop_dir, status='consumed', **common)
 
 
 def _watch_or_recover_job(
@@ -2026,7 +2334,12 @@ def _payload_value(payload, key: str):
     return getattr(payload, key, None)
 
 
-def _latest_submitted_ask(loop_dir: Path, *, target: str, purpose: str) -> dict[str, object] | None:
+def _latest_submitted_ask(
+    loop_dir: Path,
+    *,
+    target: str,
+    identity: dict[str, object],
+) -> dict[str, object] | None:
     path = loop_dir / 'asks.jsonl'
     if not path.is_file():
         return None
@@ -2041,7 +2354,7 @@ def _latest_submitted_ask(loop_dir: Path, *, target: str, purpose: str) -> dict[
             continue
         if str(record.get('target') or '') != target:
             continue
-        if str(record.get('purpose') or '') != purpose:
+        if any(record.get(key) != value for key, value in identity.items()):
             continue
         if not str(record.get('job_id') or '').strip():
             continue
@@ -2065,13 +2378,20 @@ def _worker_message(
     task_id: str,
     task_text: str,
     artifact_refs: dict[str, str],
+    node_id: str,
+    work_packet_ref: str,
+    work_packet: str,
 ) -> str:
     return (
         f'Loop: {loop_id}\n'
         'Role: worker\n'
         f'Task: {task_id}\n'
+        f'Node: {node_id}\n'
+        f'node_work_packet: {work_packet_ref}\n'
         f"task_packet: {artifact_refs.get('task_packet')}\n"
         f"execution_contract: {artifact_refs.get('execution_contract')}\n\n"
+        'Canonical node work packet:\n'
+        f'{work_packet}\n\n'
         'Task packet and execution contract evidence:\n'
         f'{task_text}\n\n'
         'Output requirements:\n'
@@ -2093,6 +2413,9 @@ def _reviewer_message(
     task_id: str,
     task_text: str,
     artifact_refs: dict[str, str],
+    node_id: str,
+    work_packet_ref: str,
+    work_packet: str,
     worker: dict[str, object],
     authority_update: dict[str, object] | None = None,
 ) -> str:
@@ -2101,11 +2424,15 @@ def _reviewer_message(
         f'Loop: {loop_id}\n'
         'Role: code_reviewer\n'
         f'Task: {task_id}\n'
+        f'Node: {node_id}\n'
+        f'node_work_packet: {work_packet_ref}\n'
         f"task_packet: {artifact_refs.get('task_packet')}\n"
         f"execution_contract: {artifact_refs.get('execution_contract')}\n"
         f'Worker job: {worker.get("job_id")}\n'
         f'Worker reply artifact: {worker.get("artifact")}\n\n'
         f'{authority_lines}'
+        'Canonical node work packet:\n'
+        f'{work_packet}\n\n'
         'Task packet and execution contract evidence:\n'
         f'{task_text}\n\n'
         'Required contract audit:\n'
@@ -2138,6 +2465,9 @@ def _worker_rework_message(
     task_id: str,
     task_text: str,
     artifact_refs: dict[str, str],
+    node_id: str,
+    work_packet_ref: str,
+    work_packet: str,
     worker: dict[str, object],
     reviewer: dict[str, object],
 ) -> str:
@@ -2146,11 +2476,15 @@ def _worker_rework_message(
         'Role: worker\n'
         'Purpose: bounded_rework\n'
         f'Task: {task_id}\n'
+        f'Node: {node_id}\n'
+        f'node_work_packet: {work_packet_ref}\n'
         f"task_packet: {artifact_refs.get('task_packet')}\n"
         f"execution_contract: {artifact_refs.get('execution_contract')}\n"
         f'Initial worker job: {worker.get("job_id")} status={worker.get("status")}\n'
         f'Reviewer rejection job: {reviewer.get("job_id")} status={reviewer.get("status")}\n'
         f'Reviewer rejection artifact: {reviewer.get("artifact")}\n\n'
+        'Canonical node work packet:\n'
+        f'{work_packet}\n\n'
         'Task packet and execution contract evidence:\n'
         f'{task_text}\n\n'
         'Output requirements:\n'
@@ -2167,6 +2501,9 @@ def _reviewer_recheck_message(
     task_id: str,
     task_text: str,
     artifact_refs: dict[str, str],
+    node_id: str,
+    work_packet_ref: str,
+    work_packet: str,
     worker: dict[str, object],
     reviewer: dict[str, object],
     worker_rework: dict[str, object],
@@ -2178,6 +2515,8 @@ def _reviewer_recheck_message(
         'Role: code_reviewer\n'
         'Purpose: bounded_rework_recheck\n'
         f'Task: {task_id}\n'
+        f'Node: {node_id}\n'
+        f'node_work_packet: {work_packet_ref}\n'
         f"task_packet: {artifact_refs.get('task_packet')}\n"
         f"execution_contract: {artifact_refs.get('execution_contract')}\n"
         f'Initial worker job: {worker.get("job_id")} status={worker.get("status")}\n'
@@ -2185,48 +2524,14 @@ def _reviewer_recheck_message(
         f'Rework worker job: {worker_rework.get("job_id")} status={worker_rework.get("status")}\n'
         f'Rework artifact: {worker_rework.get("artifact")}\n\n'
         f'{authority_lines}'
+        'Canonical node work packet:\n'
+        f'{work_packet}\n\n'
         'Task packet and execution contract evidence:\n'
         f'{task_text}\n\n'
         'Output requirements:\n'
         '- status: pass|rework_required|blocked|non_converged\n'
         '- this is the only bounded rework recheck for the round\n'
         '- cite execution_contract and rework evidence before accepting'
-    )
-
-
-def _orchestrator_message(
-    *,
-    loop_id: str,
-    task_id: str,
-    task_text: str,
-    artifact_refs: dict[str, str],
-    worker: dict[str, object],
-    reviewer: dict[str, object],
-    rework: dict[str, dict[str, object]],
-    authority_update: dict[str, object] | None = None,
-) -> str:
-    rework_lines = _rework_evidence_lines(rework)
-    authority_lines = _authority_update_evidence_lines(authority_update)
-    return (
-        f'Loop: {loop_id}\n'
-        'Role: ccb_orchestrator\n'
-        f'Task: {task_id}\n'
-        f"task_packet: {artifact_refs.get('task_packet')}\n"
-        f"execution_contract: {artifact_refs.get('execution_contract')}\n"
-        f'Worker job: {worker.get("job_id")} status={worker.get("status")}\n'
-        f'Reviewer job: {reviewer.get("job_id")} status={reviewer.get("status")}\n\n'
-        f'{rework_lines}'
-        f'{authority_lines}'
-        'Task packet and execution contract evidence:\n'
-        f'{task_text}\n\n'
-        'Authority boundary:\n'
-        '- Reply only with semantic round aggregation and release-readiness evidence.\n'
-        '- Do not run ccb, ccb_test, ccb loop, ccb plan, ccb ask, wrapper commands, or provider/runtime mutation commands.\n'
-        '- The runner owns capacity release, task status, artifact import, and runtime authority.\n\n'
-        'Output requirements:\n'
-        '- summarize worker/reviewer evidence without changing task authority\n'
-        '- cite task_packet and execution_contract\n'
-        '- release readiness for ephemeral execution agents'
     )
 
 
@@ -2239,7 +2544,6 @@ def _round_reviewer_message(
     worker: dict[str, object],
     reviewer: dict[str, object],
     rework: dict[str, dict[str, object]],
-    orchestrator: dict[str, object],
     authority_update: dict[str, object] | None = None,
 ) -> str:
     rework_lines = _rework_evidence_lines(rework)
@@ -2250,7 +2554,6 @@ def _round_reviewer_message(
         for label, evidence in (
             ('Worker', worker),
             ('Reviewer', reviewer),
-            ('Orchestrator', orchestrator),
         )
     )
     return (
@@ -2273,8 +2576,7 @@ def _round_reviewer_message(
         f"task_packet: {artifact_refs.get('task_packet')}\n"
         f"execution_contract: {artifact_refs.get('execution_contract')}\n"
         f'Worker job: {worker.get("job_id")} status={worker.get("status")}\n'
-        f'Reviewer job: {reviewer.get("job_id")} status={reviewer.get("status")}\n'
-        f'Orchestrator job: {orchestrator.get("job_id")} status={orchestrator.get("status")}\n\n'
+        f'Reviewer job: {reviewer.get("job_id")} status={reviewer.get("status")}\n\n'
         f'{rework_lines}'
         f'{authority_lines}'
         'Supplied round evidence artifacts:\n'
@@ -2284,7 +2586,7 @@ def _round_reviewer_message(
         'Repeat the machine output protocol:\n'
         '- Your first non-empty line must be `round result: <pass|partial|replan_required|blocked>`.\n'
         '- No preamble, no Markdown fence, no backticks around the machine line.\n\n'
-        '- Do not run tests or tools before answering; use the worker/reviewer/orchestrator evidence already supplied.\n'
+        '- Do not run tests or tools before answering; use the worker/reviewer evidence already supplied.\n'
         '- If evidence is insufficient, the first line must be `round result: blocked`.\n\n'
         'Output requirements:\n'
         '- validate final result against project-root evidence, not isolated worker workspace evidence\n'
@@ -3635,6 +3937,20 @@ def _artifact_refs(record: dict[str, object]) -> dict[str, str]:
     return refs
 
 
+def _node_work_packet(project_root: Path, node: dict[str, object]) -> tuple[str, str]:
+    reference = str(node.get('work_packet_ref') or '').strip()
+    if not reference:
+        raise ValueError('orchestration bundle node work_packet_ref is missing')
+    relative = safe_relative_path(reference)
+    path = Path(project_root) / relative
+    if not path.is_file():
+        raise ValueError(f'orchestration bundle node work packet is missing: {reference}')
+    text = path.read_text(encoding='utf-8').strip()
+    if not text:
+        raise ValueError(f'orchestration bundle node work packet is empty: {reference}')
+    return relative.as_posix(), text
+
+
 def _requires_project_root_authority(record: dict[str, object], task_text: str) -> bool:
     artifacts = record.get('artifacts') if isinstance(record.get('artifacts'), dict) else {}
     orchestration_notes = artifacts.get('orchestration_notes') if isinstance(artifacts, dict) else None
@@ -3670,6 +3986,7 @@ def _append_ask(
     sender: str,
     purpose: str,
     job_id: str,
+    identity: dict[str, object],
     freshness: dict[str, object] | None = None,
 ) -> dict[str, object]:
     record = {
@@ -3680,7 +3997,9 @@ def _append_ask(
         'loop_id': loop_id,
         'target': target,
         'sender': sender,
+        'ask_purpose': purpose,
         'purpose': purpose,
+        **identity,
         'job_id': job_id,
         'status': 'submitted',
     }

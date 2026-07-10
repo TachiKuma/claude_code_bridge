@@ -16,7 +16,9 @@ from .loop_orchestration_bundle import (
     bundle_text,
     load_task_orchestration_bundle,
     normalize_bundle_candidate,
+    task_revision,
 )
+from .loop_effective_capacity import compile_project_effective_capacity_snapshot
 
 
 _SEGMENT_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$')
@@ -48,6 +50,16 @@ _ARTIFACT_FILES = {
     'round_blocker': 'round-blocker.md',
 }
 _PLAN_ROOT_ARTIFACTS = frozenset({'brief'})
+_SEMANTIC_TASK_ARTIFACTS = frozenset(
+    {
+        'task_packet',
+        'execution_contract',
+        'detail_design',
+        'detail_summary',
+        'detail_packet',
+        'orchestration_notes',
+    }
+)
 _DETAIL_READY_REQUIRED = frozenset({'detail_design', 'detail_summary', 'detail_packet'})
 _ORCHESTRATION_READY_REQUIRED = frozenset({'task_packet', 'execution_contract'})
 _READY_REQUIRED = frozenset({'requirements', 'acceptance', 'verification', 'handoff', 'review'})
@@ -166,6 +178,7 @@ def _task_create(context, command) -> dict[str, object]:
         'plan_slug': plan_slug,
         'plan_root': str(plan_root.relative_to(context.project.project_root)),
         'status': 'draft',
+        'task_revision': 1,
         'current_loop': None,
         'owner': 'planner',
         'next_owner': 'planner',
@@ -187,44 +200,71 @@ def _task_create(context, command) -> dict[str, object]:
 
 def _task_artifact(context, command) -> dict[str, object]:
     task = _require_task(context, command.task_id)
-    record = dict(task['record'])
     artifact_kind = str(command.artifact_kind or '').strip().lower()
     if artifact_kind not in _ARTIFACT_FILES:
         known = ', '.join(sorted(_ARTIFACT_FILES))
         raise ValueError(f'unknown plan artifact kind {artifact_kind!r}; expected one of: {known}')
     if artifact_kind == 'round_summary':
         raise ValueError('plan task-artifact cannot import round_summary directly; use plan task-import-round')
-    extra: dict[str, object] = _planner_compact_import_extra(artifact_kind)
-    route = _optional_orchestrator_route(command)
-    if route:
-        if artifact_kind != 'orchestration_notes':
-            raise ValueError('plan task artifact --route is only valid for orchestration_notes')
-        extra['orchestrator_route'] = route
-    if artifact_kind == 'orchestration_bundle':
-        with file_lock(_task_lock_path(context, record)):
-            locked_task = _require_task(context, command.task_id)
-            locked_record = dict(locked_task['record'])
+    with file_lock(_task_lock_path(context, task['record'])):
+        locked_task = _require_task(context, command.task_id)
+        record = _materialize_task_revision(locked_task['record'])
+        _assert_expected_task_revision(command, record)
+        if artifact_kind == 'orchestration_bundle':
             return _task_orchestration_bundle_artifact(
                 context,
                 command,
                 task=locked_task,
-                record=locked_record,
+                record=record,
             )
-    record, artifact = _import_text_artifact(
-        context,
-        record,
-        artifact_kind=artifact_kind,
-        file_path=command.file_path,
-        extra=extra,
-        actor=_artifact_actor_metadata(context, command),
-    )
-    now = str(artifact['imported_at'])
-    record['updated_at'] = now
-    _replace_record(task['tasks_root'], task['index'], record)
-    _write_task_readme(context, record)
-    payload = _payload(context, action='task-artifact', record=record)
-    payload['artifact'] = artifact
-    return payload
+        extra: dict[str, object] = _planner_compact_import_extra(artifact_kind)
+        route = _optional_orchestrator_route(command)
+        if route:
+            if artifact_kind != 'orchestration_notes':
+                raise ValueError('plan task artifact --route is only valid for orchestration_notes')
+            extra['orchestrator_route'] = route
+        source_path = _safe_project_file(context.project.project_root, command.file_path)
+        text = _read_utf8_artifact(source_path)
+        text_sha = hashlib.sha256(text.encode('utf-8')).hexdigest()
+        existing = _artifact_record(record, artifact_kind)
+        if (
+            artifact_kind in _SEMANTIC_TASK_ARTIFACTS
+            and existing is not None
+            and str(existing.get('sha256') or '') == text_sha
+        ):
+            if route and str(existing.get('orchestrator_route') or '') != route:
+                raise ValueError('semantic artifact metadata conflicts with byte-identical import')
+            if 'task_revision' not in locked_task['record']:
+                record['updated_at'] = _utc_now()
+                _replace_record(locked_task['tasks_root'], locked_task['index'], record)
+                _write_task_readme(context, record)
+            payload = _payload(context, action='task-artifact', record=record)
+            payload['artifact'] = dict(existing)
+            payload['idempotent'] = True
+            return payload
+        if artifact_kind in _SEMANTIC_TASK_ARTIFACTS:
+            _reject_running_semantic_mutation(record)
+            if existing is not None:
+                record['task_revision'] = task_revision(record) + 1
+            extra['task_revision'] = task_revision(record)
+        record, artifact = _import_text_artifact(
+            context,
+            record,
+            artifact_kind=artifact_kind,
+            file_path=source_path,
+            text=text,
+            extra=extra,
+            actor=_artifact_actor_metadata(context, command),
+        )
+        now = str(artifact['imported_at'])
+        record['updated_at'] = now
+        _replace_record(locked_task['tasks_root'], locked_task['index'], record)
+        _write_task_readme(context, record)
+        payload = _payload(context, action='task-artifact', record=record)
+        payload['artifact'] = artifact
+        if artifact_kind in _SEMANTIC_TASK_ARTIFACTS:
+            payload['idempotent'] = False
+        return payload
 
 
 def _task_orchestration_bundle_artifact(
@@ -248,11 +288,17 @@ def _task_orchestration_bundle_artifact(
         os.environ.get('CCB_ARTIFACT_SOURCE'),
         'script_owned_import',
     )
+    supplied_capacity = getattr(command, 'effective_capacity_snapshot', None)
+    capacity_snapshot = (
+        supplied_capacity
+        if supplied_capacity is not None
+        else compile_project_effective_capacity_snapshot(Path(context.project.project_root))
+    )
     normalized, work_packets = normalize_bundle_candidate(
         candidate,
         record=record,
         project_root=Path(context.project.project_root),
-        source=source,
+        capacity_snapshot=capacity_snapshot,
     )
     normalized_text = bundle_text(normalized)
     normalized_digest = bundle_digest(normalized)
@@ -260,18 +306,31 @@ def _task_orchestration_bundle_artifact(
     existing = artifacts.get('orchestration_bundle') if isinstance(artifacts, dict) else None
     if isinstance(existing, dict):
         existing_digest = str(existing.get('bundle_digest') or existing.get('sha256') or '').strip()
-        if existing_digest != normalized_digest:
+        existing_revision = _positive_record_int(existing.get('bundle_revision'), field='bundle_revision')
+        normalized_revision = int(normalized['bundle_revision'])
+        if normalized_revision == existing_revision and existing_digest != normalized_digest:
             raise ValueError('plan task orchestration_bundle conflicts with existing bundle')
-        existing_bundle, _existing_artifact = load_task_orchestration_bundle(
-            Path(context.project.project_root),
-            record,
-        )
-        if bundle_digest(existing_bundle) != normalized_digest:
-            raise ValueError('plan task existing orchestration_bundle does not match its recorded digest')
-        payload = _payload(context, action='task-artifact', record=record)
-        payload['artifact'] = dict(existing)
-        payload['idempotent'] = True
-        return payload
+        if normalized_revision == existing_revision:
+            existing_bundle, _existing_artifact = load_task_orchestration_bundle(
+                Path(context.project.project_root),
+                record,
+                capacity_snapshot=capacity_snapshot,
+            )
+            if bundle_digest(existing_bundle) != normalized_digest:
+                raise ValueError('plan task existing orchestration_bundle does not match its recorded digest')
+            payload = _payload(context, action='task-artifact', record=record)
+            payload['artifact'] = dict(existing)
+            payload['idempotent'] = True
+            return payload
+        if normalized_revision != existing_revision + 1:
+            raise ValueError(
+                'plan task orchestration_bundle revision must increase exactly once: '
+                f'expected {existing_revision + 1}, got {normalized_revision}'
+            )
+        if str(record.get('status') or '') == 'running' or str(record.get('current_loop') or '').strip():
+            raise ValueError('plan task cannot replace orchestration_bundle while task is bound to running loop')
+    elif int(normalized['bundle_revision']) != 1:
+        raise ValueError('plan task first orchestration_bundle revision must be 1')
 
     for relative_path, packet_text in sorted(work_packets.items()):
         packet_path = Path(context.project.project_root) / relative_path
@@ -289,8 +348,15 @@ def _task_orchestration_bundle_artifact(
             'bundle_schema': normalized.get('schema'),
             'bundle_revision': normalized.get('bundle_revision'),
             'bundle_digest': normalized_digest,
+            'task_revision': normalized.get('task_revision'),
             'task_digest': normalized.get('task_digest'),
-            'bundle_source': normalized.get('source'),
+            'capacity_digest': normalized.get('capacity_digest'),
+            'capacity_snapshot': capacity_snapshot,
+            'bundle_source': source,
+            'source_reply_digest': _first_text(
+                getattr(command, 'source_reply_digest', None),
+                hashlib.sha256(source_text.encode('utf-8')).hexdigest(),
+            ),
             'node_count': len(nodes),
             'node_ids': [str(node.get('node_id') or '') for node in nodes if isinstance(node, dict)],
         },
@@ -308,28 +374,31 @@ def _task_orchestration_bundle_artifact(
 
 def _task_status(context, command) -> dict[str, object]:
     task = _require_task(context, command.task_id)
-    record = dict(task['record'])
-    status = str(command.status or '').strip().lower()
-    if status not in _VALID_STATUSES:
-        known = ', '.join(sorted(_VALID_STATUSES))
-        raise ValueError(f'unknown plan task status {status!r}; expected one of: {known}')
-    current = str(record.get('status') or 'draft')
-    if status not in _STATUS_EDGES.get(current, ()):
-        raise ValueError(f'invalid plan task status transition: {current} -> {status}')
-    _validate_status_requirements(record, status)
-    next_owner = _next_owner_for_status_command(command, status=status)
-    now = _utc_now()
-    record['status'] = status
-    record['owner'] = _owner_for_status(status)
-    record['next_owner'] = next_owner
-    record['activation_reason'] = _activation_reason_for_command(
-        command,
-        default=f'status:{current}->{status}',
-    )
-    record['updated_at'] = now
-    _replace_record(task['tasks_root'], task['index'], record)
-    _write_task_readme(context, record)
-    return _payload(context, action='task-status', record=record)
+    with file_lock(_task_lock_path(context, task['record'])):
+        task = _require_task(context, command.task_id)
+        record = _materialize_task_revision(task['record'])
+        _assert_expected_task_revision(command, record)
+        status = str(command.status or '').strip().lower()
+        if status not in _VALID_STATUSES:
+            known = ', '.join(sorted(_VALID_STATUSES))
+            raise ValueError(f'unknown plan task status {status!r}; expected one of: {known}')
+        current = str(record.get('status') or 'draft')
+        if status not in _STATUS_EDGES.get(current, ()):
+            raise ValueError(f'invalid plan task status transition: {current} -> {status}')
+        _validate_status_requirements(record, status)
+        next_owner = _next_owner_for_status_command(command, status=status)
+        now = _utc_now()
+        record['status'] = status
+        record['owner'] = _owner_for_status(status)
+        record['next_owner'] = next_owner
+        record['activation_reason'] = _activation_reason_for_command(
+            command,
+            default=f'status:{current}->{status}',
+        )
+        record['updated_at'] = now
+        _replace_record(task['tasks_root'], task['index'], record)
+        _write_task_readme(context, record)
+        return _payload(context, action='task-status', record=record)
 
 
 def _task_bind_loop(context, command) -> dict[str, object]:
@@ -337,7 +406,8 @@ def _task_bind_loop(context, command) -> dict[str, object]:
     task = _require_task(context, command.task_id)
     with file_lock(_task_lock_path(context, task['record'])):
         task = _require_task(context, command.task_id)
-        record = dict(task['record'])
+        record = _materialize_task_revision(task['record'])
+        _assert_expected_task_revision(command, record)
         current_status = str(record.get('status') or 'draft')
         current_loop = str(record.get('current_loop') or '').strip()
         if current_status in _TERMINAL_STATUSES:
@@ -386,7 +456,8 @@ def _task_import_round(context, command) -> dict[str, object]:
     task = _require_task(context, command.task_id)
     with file_lock(_task_lock_path(context, task['record'])):
         task = _require_task(context, command.task_id)
-        record = dict(task['record'])
+        record = _materialize_task_revision(task['record'])
+        _assert_expected_task_revision(command, record)
         existing = _existing_round_import(record, loop_id=loop_id, result=result, sha256=text_sha)
         if existing is not None:
             payload = _payload(context, action='task-import-round', record=record)
@@ -589,6 +660,7 @@ def _optional_orchestrator_route(command) -> str:
 
 
 def _payload(context, *, action: str, record: dict[str, object]) -> dict[str, object]:
+    record = _materialize_task_revision(record)
     task_root = Path(context.project.project_root) / str(record.get('task_root') or '')
     _validate_task_record(record)
     return {
@@ -837,6 +909,7 @@ def _validate_task_record(record: dict[str, object]) -> None:
     reason = record.get('activation_reason')
     if reason is not None:
         _validate_activation_reason_text(str(reason))
+    task_revision(record)
 
 
 def _ready_for_plan_review(record: dict[str, object]) -> bool:
@@ -1157,6 +1230,7 @@ def _write_task_readme(context, record: dict[str, object]) -> None:
     lines = [
         f'Task: {record.get("title", "")}',
         f'Task ID: {record.get("task_id", "")}',
+        f'Task Revision: {task_revision(record)}',
         f'Plan Root: {record.get("plan_slug", "")}',
         f'Status: {record.get("status", "")}',
         f'Current Loop: {record.get("current_loop") or "none"}',
@@ -1255,6 +1329,43 @@ def _read_json_object(path: Path) -> dict[str, object]:
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
+
+
+def _materialize_task_revision(record: dict[str, object]) -> dict[str, object]:
+    materialized = dict(record)
+    materialized['task_revision'] = task_revision(record)
+    return materialized
+
+
+def _assert_expected_task_revision(command, record: dict[str, object]) -> None:
+    expected = getattr(command, 'expected_task_revision', None)
+    if expected is None:
+        return
+    if isinstance(expected, bool) or not isinstance(expected, int) or expected <= 0:
+        raise ValueError('expected_task_revision must be a positive integer')
+    current = task_revision(record)
+    if expected != current:
+        raise ValueError(
+            'stale managed activation task_revision: '
+            f'expected {expected}, current {current}'
+        )
+
+
+def _artifact_record(record: dict[str, object], artifact_kind: str) -> dict[str, object] | None:
+    artifacts = record.get('artifacts') if isinstance(record.get('artifacts'), dict) else {}
+    artifact = artifacts.get(artifact_kind) if isinstance(artifacts, dict) else None
+    return dict(artifact) if isinstance(artifact, dict) else None
+
+
+def _reject_running_semantic_mutation(record: dict[str, object]) -> None:
+    if str(record.get('status') or '') == 'running' or str(record.get('current_loop') or '').strip():
+        raise ValueError('cannot replace semantic artifact while task is bound to running loop')
+
+
+def _positive_record_int(value: object, *, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError(f'plan task {field} must be a positive integer')
+    return value
 
 
 __all__ = ['find_first_actionable_task', 'find_first_ready_task', 'plan_task', 'task_execution_text']

@@ -18,7 +18,8 @@ from .auto_runner_lock import AutoRunnerLock
 from .ask import submit_ask
 from .clear import clear_agent_context
 from .loop_ask_first import release_ask_first_execution_round, run_ask_first_execution_round
-from .loop_orchestration_bundle import bundle_summary, load_task_orchestration_bundle
+from .loop_orchestration_bundle import bundle_summary, load_task_orchestration_bundle, task_revision
+from .loop_effective_capacity import compile_project_effective_capacity_snapshot
 from .loop_run_once import loop_run_once
 from .loop_topology import loop_topology
 from .plan_tasks import find_first_actionable_task, plan_task
@@ -183,6 +184,7 @@ def _run_ask_first_execution_round(context, command, deps, task: dict[str, objec
         orchestration_bundle, bundle_artifact = load_task_orchestration_bundle(
             Path(context.project.project_root),
             record,
+            capacity_snapshot=deps.effective_capacity_snapshot(context),
         )
     except ValueError as exc:
         return _ask_first_bundle_not_ready(context, record=record, reason=str(exc))
@@ -207,7 +209,12 @@ def _run_ask_first_execution_round(context, command, deps, task: dict[str, objec
         loop_id = f'lp{uuid4().hex[:6]}'
         bind = deps.plan_task(
             context,
-            SimpleNamespace(action='task-bind-loop', task_id=task_id, loop_id=loop_id),
+            SimpleNamespace(
+                action='task-bind-loop',
+                task_id=task_id,
+                loop_id=loop_id,
+                expected_task_revision=task_revision(record),
+            ),
         )
     round_payload = deps.ask_first_execution(
         context,
@@ -242,6 +249,7 @@ def _run_ask_first_execution_round(context, command, deps, task: dict[str, objec
             actor_source='loop_runner',
             actor='loop_runner',
             job_id=str(_first_job_id(round_payload) or ''),
+            expected_task_revision=task_revision(record),
         ),
     )
     release = deps.ask_first_release(context, round_payload, deps.services)
@@ -292,6 +300,7 @@ def _ask_first_bundle_not_ready(
         'action': action,
         'reason': reason,
         'task_id': record.get('task_id'),
+        'task_revision': task_revision(record),
         'task_status': record.get('status'),
         'next_owner': record.get('next_owner'),
         'next_activation': 'orchestration_bundle_required',
@@ -316,7 +325,12 @@ def _run_execution_round(context, command, deps, task: dict[str, object]) -> dic
         loop_id = f'lp{uuid4().hex[:6]}'
         bind = deps.plan_task(
             context,
-            SimpleNamespace(action='task-bind-loop', task_id=task_id, loop_id=loop_id),
+            SimpleNamespace(
+                action='task-bind-loop',
+                task_id=task_id,
+                loop_id=loop_id,
+                expected_task_revision=task_revision(record),
+            ),
         )
         round_payload = deps.loop_run_once(
             context,
@@ -348,6 +362,7 @@ def _run_execution_round(context, command, deps, task: dict[str, object]) -> dic
             actor_source='loop_runner',
             actor='loop_runner',
             job_id=str(_first_job_id(round_payload) or ''),
+            expected_task_revision=task_revision(record),
         ),
     )
     return {
@@ -478,6 +493,7 @@ def _finalize_script_owned_terminal_route(context, deps, task: dict[str, object]
             file_path=str(evidence_path),
             actor_source='loop_runner/script-owned',
             actor='loop_runner',
+            expected_task_revision=task_revision(record),
         ),
     )
     transitioned = deps.plan_task(
@@ -488,6 +504,7 @@ def _finalize_script_owned_terminal_route(context, deps, task: dict[str, object]
             status=target_status,
             next_owner=next_owner,
             activation_reason=f'{reason}:script_owned_route',
+            expected_task_revision=task_revision(record),
         ),
     )
     return {
@@ -598,6 +615,7 @@ def _activate_orchestrator(context, command, deps, task: dict[str, object]) -> d
         record,
         activation_id=activation_id,
         reason=str(task.get('runner_reason') or 'ready_for_orchestration'),
+        effective_capacity_snapshot=deps.effective_capacity_snapshot(context),
     )
     activation_path = _activation_path(context, activation_id)
     activation['topology'] = _mount_activation_topology(
@@ -622,6 +640,13 @@ def _activate_orchestrator(context, command, deps, task: dict[str, object]) -> d
     )
     activation['freshness'] = freshness
     atomic_write_json(activation_path, activation)
+    if str(freshness.get('status') or '') != 'cleared':
+        return _activation_freshness_failure(
+            context,
+            deps,
+            activation,
+            activation_path=activation_path,
+        )
     summary = deps.submit_ask(
         context,
         ParsedAskCommand(
@@ -819,6 +844,13 @@ def _activate_task_detailer(context, command, deps, task: dict[str, object]) -> 
     )
     activation['freshness'] = freshness
     atomic_write_json(activation_path, activation)
+    if str(freshness.get('status') or '') != 'cleared':
+        return _activation_freshness_failure(
+            context,
+            deps,
+            activation,
+            activation_path=activation_path,
+        )
     summary = deps.submit_ask(
         context,
         ParsedAskCommand(
@@ -876,6 +908,7 @@ def _stop_without_activation(context, task: dict[str, object]) -> dict[str, obje
         'action': action,
         'reason': task.get('runner_reason'),
         'task_id': record.get('task_id'),
+        'task_revision': task_revision(record),
         'task_status': record.get('status'),
         'next_owner': task.get('next_owner'),
         'next_activation': next_activation,
@@ -922,6 +955,13 @@ def _deps(services):
         loop_topology=getattr(services, 'loop_topology', loop_topology),
         submit_ask=getattr(services, 'submit_ask', submit_ask),
         trace_target=getattr(services, 'trace_target', trace_target),
+        effective_capacity_snapshot=getattr(
+            services,
+            'effective_capacity_snapshot',
+            lambda context: compile_project_effective_capacity_snapshot(
+                Path(context.project.project_root)
+            ),
+        ),
         sleep=getattr(services, 'sleep', time.sleep),
         services=services,
     )
@@ -1062,6 +1102,60 @@ def _activation_topology_failure(context, activation: dict[str, object], *, acti
         'topology': topology,
         'next_activation': 'repair_activation_topology',
     }
+
+
+def _activation_freshness_failure(
+    context,
+    deps,
+    activation: dict[str, object],
+    *,
+    activation_path: Path,
+) -> dict[str, object]:
+    freshness = activation.get('freshness') if isinstance(activation.get('freshness'), dict) else {}
+    topology = activation.get('topology') if isinstance(activation.get('topology'), dict) else {}
+    release: dict[str, object] | None = None
+    if str(topology.get('mode') or '') == 'dynamic':
+        loop_id = str(topology.get('loop_id') or activation.get('activation_id') or '').strip()
+        if loop_id:
+            try:
+                release = deps.loop_topology(
+                    context,
+                    SimpleNamespace(
+                        action='release',
+                        loop_id=loop_id,
+                        policy='auto',
+                        idle_only=True,
+                        json_output=True,
+                    ),
+                )
+            except Exception as exc:
+                release = {
+                    'loop_topology_status': 'release_failed',
+                    'error': str(exc),
+                }
+            activation['topology_release'] = release
+            activation['topology_released_at'] = _utc_now()
+            atomic_write_json(activation_path, activation)
+    status = str(freshness.get('status') or 'missing')
+    payload: dict[str, object] = {
+        'schema_version': 1,
+        'record_type': 'ccb_loop_runner_once',
+        'loop_runner_status': 'blocked',
+        'project_id': context.project.project_id,
+        'project_root': str(context.project.project_root),
+        'action': 'activation_freshness_not_ready',
+        'reason': f'immaculate activation freshness is not proven: {status}',
+        'task_id': activation.get('task_id'),
+        'task_status': activation.get('task_status'),
+        'activation_id': activation.get('activation_id'),
+        'activation_path': str(activation_path),
+        'freshness': freshness,
+        'topology': topology,
+        'next_activation': 'repair_activation_freshness',
+    }
+    if release is not None:
+        payload['activation_topology_release'] = release
+    return payload
 
 
 def _release_consumed_activation_topology(context, deps, payload: dict[str, object]) -> dict[str, object]:
@@ -1442,6 +1536,7 @@ def _orchestrator_activation_packet(
     *,
     activation_id: str,
     reason: str,
+    effective_capacity_snapshot: dict[str, object],
 ) -> dict[str, object]:
     artifacts = record.get('artifacts') if isinstance(record.get('artifacts'), dict) else {}
     task_root = Path(context.project.project_root) / str(record.get('task_root') or '')
@@ -1459,12 +1554,13 @@ def _orchestrator_activation_packet(
         'project_id': context.project.project_id,
         'project_root': str(context.project.project_root),
         'task_id': record.get('task_id'),
+        'task_revision': task_revision(record),
         'task_status': record.get('status'),
         'action': 'activate_orchestrator',
         'reason_for_activation': reason,
         'required_next_output': (
             'reply-only route decision, compact orchestration notes, and an orchestration bundle candidate '
-            'for multi-workgroup execution routes'
+            'for Config V3 execution routes or any decomposed Config V2 execution route'
         ),
         'task_packet_root': str(task_root.relative_to(context.project.project_root)),
         'artifact_refs': refs,
@@ -1475,11 +1571,15 @@ def _orchestrator_activation_packet(
             content_limit=_INLINE_COMPACT_ARTIFACT_CONTENT_LIMIT,
         ),
         'allowed_routes': _ORCHESTRATOR_ROUTES,
+        'effective_capacity_snapshot': effective_capacity_snapshot,
+        'expected_bundle_revision': _expected_next_bundle_revision(record),
         'script_write_rules': [
             'Reply only; do not run ccb, ccb_test, artifact import commands, or wrapper commands.',
             'Choose exactly one route: direct_execution, needs_detail, macro_adjustment_request, blocked, or partial_completion.',
             'Provide compact orchestration notes with citations to task_packet and execution_contract refs.',
-            'For direct_execution or partial_completion, include a fenced JSON orchestration_bundle candidate when more than one workgroup or any dependency is required.',
+            'For Config V3 direct_execution or partial_completion, always include one fenced JSON orchestration_bundle candidate, including one-node tasks.',
+            'Config V2 route-only compatibility may omit a candidate only for one deterministic workgroup.',
+            'Select the smallest workgroup count justified by task complexity, cutability, independent scopes, and effective capacity; capacity is a ceiling, not a target.',
             'Supervisor/script-owned import validates and records orchestration_notes, work packets, and orchestration_bundle; provider text is not authority.',
             'Do not edit task status, index, current_loop, runtime topology, or task artifacts directly.',
             'Do not rely on provider reply text as durable route/status authority.',
@@ -1515,6 +1615,7 @@ def _planner_activation_packet(
         'project_id': context.project.project_id,
         'project_root': str(context.project.project_root),
         'task_id': record.get('task_id'),
+        'task_revision': task_revision(record),
         'task_status': record.get('status'),
         'action': action,
         'reason_for_activation': reason,
@@ -1576,6 +1677,7 @@ def _task_detailer_activation_packet(
         'project_id': context.project.project_id,
         'project_root': str(context.project.project_root),
         'task_id': record.get('task_id'),
+        'task_revision': task_revision(record),
         'task_status': record.get('status'),
         'action': 'activate_task_detailer',
         'reason_for_activation': reason,
@@ -1620,6 +1722,7 @@ def _plan_reviewer_activation_packet(
         'project_id': context.project.project_id,
         'project_root': str(context.project.project_root),
         'task_id': record.get('task_id'),
+        'task_revision': task_revision(record),
         'task_status': record.get('status'),
         'action': 'activate_plan_reviewer',
         'reason_for_activation': reason,
@@ -1811,6 +1914,7 @@ def _detail_ready_stop_contract(compact_artifacts: dict[str, dict[str, object]])
 
 
 def _orchestrator_message(activation: dict[str, object]) -> str:
+    bundle_revision = activation.get('expected_bundle_revision')
     return (
         'Role: ccb_orchestrator\n'
         f"Activation id: {activation.get('activation_id')}\n"
@@ -1820,18 +1924,21 @@ def _orchestrator_message(activation: dict[str, object]) -> str:
         f"Task packet root: {activation.get('task_packet_root')}\n"
         f"Artifact refs: {activation.get('artifact_refs')}\n"
         f"Compact artifacts: {activation.get('compact_artifacts')}\n"
+        f"Effective capacity snapshot: {activation.get('effective_capacity_snapshot')}\n"
+        f"Expected bundle revision: {bundle_revision}\n"
         f"Allowed routes: {', '.join(_ORCHESTRATOR_ROUTES)}\n\n"
         'Required reply-only output:\n'
         '- route: <one of direct_execution|needs_detail|macro_adjustment_request|blocked|partial_completion>\n'
         '- orchestration_notes: compact rationale and citations to task_packet and execution_contract refs\n'
-        '- for an execution route that needs multiple workgroups or dependencies, add:\n'
+        '- for every Config V3 execution route, add an orchestration_bundle candidate; Config V2 may omit it only for one deterministic workgroup:\n'
         '  orchestration_bundle:\n'
         '  ```json\n'
-        '  {"schema":"ccb.loop.orchestration_bundle_candidate.v1","task_id":"<task-id>","bundle_revision":1,"nodes":[...],"integration":{...},"policy":{...}}'
+        f'  {{"schema":"ccb.loop.orchestration_bundle_candidate.v1","task_id":"<task-id>","bundle_revision":{bundle_revision},"selection":{{"workgroup_count":"<integer within effective capacity>","complexity":"<atomic|bounded|complex|very_complex>","cutability":"<none|limited|high>","execution_shape":"<single_unit|parallel|serial|mixed_dag>","rationale":"<short semantic reason>"}},"nodes":[...],"integration":{{...}},"policy":{{...}}}}'
         '\n  ```\n'
-        '- candidate root fields are exactly schema, task_id, bundle_revision, nodes, integration, and policy\n'
+        '- candidate root fields are exactly schema, task_id, bundle_revision, selection, nodes, integration, and policy\n'
+        '- selection.workgroup_count must equal node count; choose the smallest justified count from 1 to 4 without trying to fill capacity\n'
         '- each node must include node_id, workgroup_id, coder/code_reviewer profiles, depends_on, parallel_group, work_packet, allowed_paths, acceptance_refs, verification_refs, and integration_order\n'
-        '- omit orchestration_bundle only for a deterministic one-workgroup task; the controller records that compatibility source explicitly\n\n'
+        '- independent nodes need disjoint allowed_paths; coupled scopes need explicit depends_on ordering\n\n'
         'Authority boundary:\n'
         '- Reply only; do not run ccb, ccb_test, artifact import commands, or wrapper commands.\n'
         '- Supervisor/script-owned import validates and records orchestration_notes, work packets, and orchestration_bundle.\n'
@@ -1839,6 +1946,17 @@ def _orchestrator_message(activation: dict[str, object]) -> str:
         '- do not rely on provider reply text as durable route/status authority\n'
         '- do not start task_detailer, worker, reviewer, loop_run_once, or topology dispatch from this activation'
     )
+
+
+def _expected_next_bundle_revision(record: dict[str, object]) -> int:
+    artifacts = record.get('artifacts') if isinstance(record.get('artifacts'), dict) else {}
+    bundle = artifacts.get('orchestration_bundle') if isinstance(artifacts, dict) else None
+    if not isinstance(bundle, dict):
+        return 1
+    value = bundle.get('bundle_revision')
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError('existing orchestration_bundle bundle_revision must be a positive integer')
+    return value + 1
 
 
 def _planner_message(activation: dict[str, object]) -> str:

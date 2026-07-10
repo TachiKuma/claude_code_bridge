@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from itertools import combinations
 import json
 from pathlib import Path
 import re
@@ -12,6 +13,10 @@ from .loop_execution_scope import (
     path_allowed_by_scope,
     safe_relative_path,
     scopes_overlap,
+)
+from .loop_effective_capacity import (
+    effective_capacity_digest,
+    normalize_effective_capacity_snapshot,
 )
 
 
@@ -28,7 +33,15 @@ _TASK_INPUT_ARTIFACTS = (
     'detail_packet',
     'orchestration_notes',
 )
-_CANDIDATE_ROOT_KEYS = frozenset({'schema', 'task_id', 'bundle_revision', 'nodes', 'integration', 'policy'})
+_CANDIDATE_ROOT_KEYS = frozenset(
+    {'schema', 'task_id', 'bundle_revision', 'selection', 'nodes', 'integration', 'policy'}
+)
+_SELECTION_KEYS = frozenset(
+    {'workgroup_count', 'complexity', 'cutability', 'execution_shape', 'rationale'}
+)
+_SELECTION_COMPLEXITIES = frozenset({'atomic', 'bounded', 'complex', 'very_complex'})
+_SELECTION_CUTABILITIES = frozenset({'none', 'limited', 'high'})
+_SELECTION_SHAPES = frozenset({'single_unit', 'parallel', 'serial', 'mixed_dag'})
 _CANDIDATE_NODE_KEYS = frozenset(
     {
         'node_id',
@@ -50,9 +63,11 @@ _NORMALIZED_ROOT_KEYS = frozenset(
     {
         'schema',
         'task_id',
+        'task_revision',
         'task_digest',
+        'capacity_digest',
         'bundle_revision',
-        'source',
+        'selection',
         'nodes',
         'integration',
         'policy',
@@ -90,7 +105,14 @@ def build_single_node_candidate(
     return {
         'schema': ORCHESTRATION_BUNDLE_CANDIDATE_SCHEMA,
         'task_id': task_id,
-        'bundle_revision': 1,
+        'bundle_revision': _compatibility_bundle_revision(record),
+        'selection': {
+            'workgroup_count': 1,
+            'complexity': 'atomic',
+            'cutability': 'none',
+            'execution_shape': 'single_unit',
+            'rationale': 'The task is one tightly coupled implementation unit.',
+        },
         'nodes': [
             {
                 'node_id': 'node-001',
@@ -121,13 +143,28 @@ def build_single_node_candidate(
     }
 
 
+def _compatibility_bundle_revision(record: dict[str, object]) -> int:
+    artifacts = _artifact_records(record)
+    existing = artifacts.get('orchestration_bundle')
+    if not isinstance(existing, dict):
+        return 1
+    current_revision = _positive_int(existing.get('bundle_revision'), field_name='bundle_revision')
+    current_task_revision = task_revision(record)
+    current_task_digest = task_input_digest(record)
+    if (
+        existing.get('task_revision') == current_task_revision
+        and str(existing.get('task_digest') or '') == current_task_digest
+    ):
+        return current_revision
+    return current_revision + 1
+
+
 def normalize_bundle_candidate(
     candidate: object,
     *,
     record: dict[str, object],
     project_root: Path,
-    source: str,
-    max_workgroups: int = MAX_WORKGROUPS,
+    capacity_snapshot: object,
 ) -> tuple[dict[str, object], dict[str, str]]:
     if not isinstance(candidate, dict):
         raise ValueError('orchestration bundle candidate must be a JSON object')
@@ -142,11 +179,15 @@ def normalize_bundle_candidate(
     if candidate_task_id != task_id:
         raise ValueError(f'orchestration bundle task_id mismatch: expected {task_id}, got {candidate_task_id or "missing"}')
     bundle_revision = _positive_int(candidate.get('bundle_revision'), field_name='bundle_revision')
+    capacity = normalize_effective_capacity_snapshot(capacity_snapshot)
+    capacity_limits = capacity['limits']
+    max_workgroups = int(capacity_limits['max_workgroups'])
     nodes_raw = candidate.get('nodes')
     if not isinstance(nodes_raw, list) or not nodes_raw:
         raise ValueError('orchestration bundle nodes must be a non-empty list')
     if len(nodes_raw) > max_workgroups:
         raise ValueError(f'orchestration bundle exceeds max_workgroups={max_workgroups}: requested {len(nodes_raw)}')
+    selection = _normalize_selection(candidate.get('selection'), node_count=len(nodes_raw))
 
     artifacts = _artifact_records(record)
     declared_paths = declared_allowed_change_paths(
@@ -240,14 +281,17 @@ def normalize_bundle_candidate(
     normalized_nodes.sort(key=lambda node: (int(node['integration_order']), str(node['node_id'])))
     _validate_dependencies(normalized_nodes)
     _validate_parallel_scopes(normalized_nodes)
+    _validate_capacity(normalized_nodes, capacity)
     integration = _normalize_integration(candidate.get('integration'), known_refs=known_refs)
     policy = _normalize_policy(candidate.get('policy'))
     normalized = {
         'schema': ORCHESTRATION_BUNDLE_SCHEMA,
         'task_id': task_id,
+        'task_revision': task_revision(record),
         'task_digest': task_input_digest(record),
+        'capacity_digest': effective_capacity_digest(capacity),
         'bundle_revision': bundle_revision,
-        'source': str(source or '').strip() or 'script_owned_import',
+        'selection': selection,
         'nodes': normalized_nodes,
         'integration': integration,
         'policy': policy,
@@ -258,6 +302,8 @@ def normalize_bundle_candidate(
 def load_task_orchestration_bundle(
     project_root: Path,
     record: dict[str, object],
+    *,
+    capacity_snapshot: object,
 ) -> tuple[dict[str, object], dict[str, object]]:
     artifacts = _artifact_records(record)
     artifact = artifacts.get('orchestration_bundle')
@@ -276,7 +322,12 @@ def load_task_orchestration_bundle(
         bundle = json.loads(text)
     except json.JSONDecodeError as exc:
         raise ValueError(f'orchestration_bundle artifact is not valid JSON: {exc}') from exc
-    validate_normalized_bundle(bundle, record=record, project_root=project_root)
+    validate_normalized_bundle(
+        bundle,
+        record=record,
+        project_root=project_root,
+        capacity_snapshot=capacity_snapshot,
+    )
     expected_bundle_digest = str(artifact.get('bundle_digest') or '').strip()
     actual_bundle_digest = bundle_digest(bundle)
     if expected_bundle_digest and expected_bundle_digest != actual_bundle_digest:
@@ -284,6 +335,12 @@ def load_task_orchestration_bundle(
     artifact_task_digest = str(artifact.get('task_digest') or '').strip()
     if artifact_task_digest and artifact_task_digest != str(bundle.get('task_digest') or ''):
         raise ValueError('orchestration_bundle artifact task_digest mismatch')
+    artifact_task_revision = artifact.get('task_revision')
+    if artifact_task_revision is not None and artifact_task_revision != bundle.get('task_revision'):
+        raise ValueError('orchestration_bundle artifact task_revision mismatch')
+    artifact_capacity_digest = str(artifact.get('capacity_digest') or '').strip()
+    if artifact_capacity_digest and artifact_capacity_digest != str(bundle.get('capacity_digest') or ''):
+        raise ValueError('orchestration_bundle artifact capacity_digest mismatch')
     return dict(bundle), dict(artifact)
 
 
@@ -292,6 +349,7 @@ def validate_normalized_bundle(
     *,
     record: dict[str, object],
     project_root: Path,
+    capacity_snapshot: object,
 ) -> None:
     if not isinstance(bundle, dict):
         raise ValueError('orchestration_bundle artifact must be a JSON object')
@@ -300,14 +358,20 @@ def validate_normalized_bundle(
         raise ValueError(f'orchestration_bundle schema must be {ORCHESTRATION_BUNDLE_SCHEMA}')
     if str(bundle.get('task_id') or '') != _task_id(record):
         raise ValueError('orchestration_bundle task_id does not match task')
+    if bundle.get('task_revision') != task_revision(record):
+        raise ValueError('orchestration_bundle task_revision is stale')
     if str(bundle.get('task_digest') or '') != task_input_digest(record):
         raise ValueError('orchestration_bundle task_digest is stale')
+    capacity = normalize_effective_capacity_snapshot(capacity_snapshot)
+    if str(bundle.get('capacity_digest') or '') != effective_capacity_digest(capacity):
+        raise ValueError('orchestration_bundle capacity_digest is stale')
     _positive_int(bundle.get('bundle_revision'), field_name='bundle_revision')
-    if not str(bundle.get('source') or '').strip():
-        raise ValueError('orchestration_bundle source must be non-empty')
     nodes = bundle.get('nodes')
-    if not isinstance(nodes, list) or not nodes or len(nodes) > MAX_WORKGROUPS:
-        raise ValueError(f'orchestration_bundle nodes must contain 1..{MAX_WORKGROUPS} entries')
+    max_workgroups = int(capacity['limits']['max_workgroups'])
+    if not isinstance(nodes, list) or not nodes or len(nodes) > max_workgroups:
+        raise ValueError(f'orchestration_bundle nodes must contain 1..{max_workgroups} entries')
+    if _normalize_selection(bundle.get('selection'), node_count=len(nodes)) != bundle.get('selection'):
+        raise ValueError('orchestration_bundle selection is not canonically normalized')
     artifacts = _artifact_records(record)
     declared_paths = declared_allowed_change_paths(
         _artifact_text(project_root, artifacts, ('task_packet', 'execution_contract'))
@@ -409,6 +473,7 @@ def validate_normalized_bundle(
         raise ValueError('orchestration_bundle nodes are not in canonical integration order')
     _validate_dependencies(normalized_nodes)
     _validate_parallel_scopes(normalized_nodes)
+    _validate_capacity(normalized_nodes, capacity)
     if _normalize_integration(bundle.get('integration'), known_refs=known_refs) != bundle.get('integration'):
         raise ValueError('orchestration_bundle integration is not canonically normalized')
     if _normalize_policy(bundle.get('policy')) != bundle.get('policy'):
@@ -430,6 +495,11 @@ def task_input_digest(record: dict[str, object]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def task_revision(record: dict[str, object]) -> int:
+    value = record.get('task_revision', 1)
+    return _positive_int(value, field_name='task_revision')
+
+
 def bundle_text(bundle: dict[str, object]) -> str:
     return json.dumps(bundle, ensure_ascii=False, indent=2, sort_keys=True) + '\n'
 
@@ -444,12 +514,61 @@ def bundle_summary(bundle: dict[str, object], artifact: dict[str, object] | None
         'schema': bundle.get('schema'),
         'bundle_revision': bundle.get('bundle_revision'),
         'bundle_digest': str((artifact or {}).get('bundle_digest') or bundle_digest(bundle)),
+        'task_revision': bundle.get('task_revision'),
         'task_digest': bundle.get('task_digest'),
-        'source': bundle.get('source'),
+        'capacity_digest': bundle.get('capacity_digest'),
+        'selection': bundle.get('selection'),
+        'source': (artifact or {}).get('bundle_source'),
         'node_count': len(nodes),
         'node_ids': [str(node.get('node_id') or '') for node in nodes if isinstance(node, dict)],
         'artifact_path': (artifact or {}).get('path'),
     }
+
+
+def _normalize_selection(value: object, *, node_count: int) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError('selection must be an object')
+    _reject_unknown_keys(value, _SELECTION_KEYS, field_name='selection')
+    missing = sorted(_SELECTION_KEYS - set(value))
+    if missing:
+        raise ValueError(f'selection missing fields: {", ".join(missing)}')
+    workgroup_count = _positive_int(value.get('workgroup_count'), field_name='selection.workgroup_count')
+    if not 1 <= workgroup_count <= MAX_WORKGROUPS:
+        raise ValueError(f'selection.workgroup_count must be between 1 and {MAX_WORKGROUPS}')
+    if workgroup_count != node_count:
+        raise ValueError('selection.workgroup_count must equal node count')
+    complexity = _enum_value(
+        value.get('complexity'),
+        allowed=_SELECTION_COMPLEXITIES,
+        field_name='selection.complexity',
+    )
+    cutability = _enum_value(
+        value.get('cutability'),
+        allowed=_SELECTION_CUTABILITIES,
+        field_name='selection.cutability',
+    )
+    execution_shape = _enum_value(
+        value.get('execution_shape'),
+        allowed=_SELECTION_SHAPES,
+        field_name='selection.execution_shape',
+    )
+    rationale = str(value.get('rationale') or '').strip()
+    if not rationale or '\n' in rationale or '\r' in rationale or len(rationale) > 500:
+        raise ValueError('selection.rationale must be a non-empty single line of at most 500 characters')
+    return {
+        'workgroup_count': workgroup_count,
+        'complexity': complexity,
+        'cutability': cutability,
+        'execution_shape': execution_shape,
+        'rationale': rationale,
+    }
+
+
+def _enum_value(value: object, *, allowed: frozenset[str], field_name: str) -> str:
+    text = str(value or '').strip()
+    if text not in allowed:
+        raise ValueError(f'{field_name} must be one of: {", ".join(sorted(allowed))}')
+    return text
 
 
 def _normalize_integration(value: object, *, known_refs: set[str]) -> dict[str, list[str]]:
@@ -557,6 +676,79 @@ def _validate_parallel_scopes(nodes: list[dict[str, object]]) -> None:
                             f'parallel nodes {left_id} and {right_id} have overlapping allowed paths: '
                             f'{left_scope} <-> {right_scope}'
                         )
+
+
+def _validate_capacity(
+    nodes: list[dict[str, object]],
+    capacity: dict[str, object],
+) -> None:
+    limits = capacity['limits']
+    dynamic_profiles = capacity['dynamic_profiles']
+    aliases = capacity['profile_aliases']
+    max_parallel = int(limits['max_parallel_workgroups'])
+    max_agents = int(limits['max_active_dynamic_agents'])
+    frontier = _widest_dependency_frontier(nodes)
+    if len(frontier) > max_parallel:
+        raise ValueError(
+            f'orchestration bundle exceeds max_parallel_workgroups={max_parallel}: '
+            f'dependency frontier requests {len(frontier)} ({", ".join(str(node["node_id"]) for node in frontier)})'
+        )
+    requested: dict[str, int] = {}
+    for node in frontier:
+        for key in ('worker_profile', 'reviewer_profile'):
+            logical_profile = str(node.get(key) or '')
+            profile = str(aliases.get(logical_profile) or logical_profile)
+            profile_record = dynamic_profiles.get(profile)
+            if not isinstance(profile_record, dict):
+                raise ValueError(
+                    f'orchestration bundle requires effective dynamic profile: {logical_profile}'
+                )
+            requested[profile] = requested.get(profile, 0) + 1
+    for profile, count in sorted(requested.items()):
+        maximum = int(dynamic_profiles[profile]['max_instances'])
+        if count > maximum:
+            raise ValueError(
+                f'orchestration bundle profile {profile} exceeds max_instances={maximum}: '
+                f'dependency frontier requests {count}'
+            )
+    requested_agents = sum(requested.values())
+    if requested_agents > max_agents:
+        raise ValueError(
+            'orchestration bundle exceeds max_active_dynamic_agents='
+            f'{max_agents}: dependency frontier requests {requested_agents}'
+        )
+
+
+def _widest_dependency_frontier(nodes: list[dict[str, object]]) -> list[dict[str, object]]:
+    nodes_by_id = {str(node['node_id']): node for node in nodes}
+    dependencies = {
+        node_id: {str(item) for item in node.get('depends_on') or []}
+        for node_id, node in nodes_by_id.items()
+    }
+
+    def reaches(start: str, target: str) -> bool:
+        pending = list(dependencies.get(start, set()))
+        seen: set[str] = set()
+        while pending:
+            current = pending.pop()
+            if current == target:
+                return True
+            if current in seen:
+                continue
+            seen.add(current)
+            pending.extend(dependencies.get(current, set()))
+        return False
+
+    ordered = [nodes_by_id[node_id] for node_id in sorted(nodes_by_id)]
+    for size in range(len(ordered), 0, -1):
+        for candidate in combinations(ordered, size):
+            ids = [str(node['node_id']) for node in candidate]
+            if all(
+                not reaches(left, right) and not reaches(right, left)
+                for left, right in combinations(ids, 2)
+            ):
+                return list(candidate)
+    return []
 
 
 def _artifact_ref_list(value: object, *, field_name: str, known_refs: set[str]) -> list[str]:
@@ -671,5 +863,6 @@ __all__ = [
     'load_task_orchestration_bundle',
     'normalize_bundle_candidate',
     'task_input_digest',
+    'task_revision',
     'validate_normalized_bundle',
 ]

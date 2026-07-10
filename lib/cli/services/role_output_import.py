@@ -16,6 +16,11 @@ from .ask import submit_ask
 from .loop_orchestration_bundle import (
     ORCHESTRATION_BUNDLE_CANDIDATE_SCHEMA,
     build_single_node_candidate,
+    task_revision,
+)
+from .loop_effective_capacity import (
+    allows_v2_missing_candidate,
+    compile_project_effective_capacity_snapshot,
 )
 from .plan_tasks import plan_task
 
@@ -193,6 +198,15 @@ def _consume_job(context, command, deps, *, job_id: str, activation: dict[str, o
     if not reply.strip():
         return _blocked_payload(context, job_id=job_id, agent_name=agent_name, reason='missing_reply')
     normalized_agent = _base_agent_name(agent_name)
+    stale_activation = _stale_activation_revision(context, deps, activation=activation)
+    if stale_activation is not None:
+        return _blocked_payload(
+            context,
+            job_id=job_id,
+            agent_name=agent_name,
+            reason='stale_managed_activation_task_revision',
+            evidence=stale_activation,
+        )
     def _with_retry_metadata(payload: dict[str, object]) -> dict[str, object]:
         return _attach_retry_metadata(payload, snapshot=snapshot, original_job_id=original_job_id)
 
@@ -463,6 +477,7 @@ def _consume_planner(
     title = str(parsed.get('title') or 'Planner task').strip()
     task_payload = _ensure_task(context, deps, plan_slug=plan_slug, title=title, task_id=task_id, snapshot=snapshot, reply=reply)
     task_id = str(task_payload.get('task_id') or '')
+    expected_revision = _task_payload_revision(task_payload)
     import_root = _role_import_dir(context, job_id)
     task_packet_path = import_root / 'task_packet.md'
     execution_contract_path = import_root / 'execution_contract.md'
@@ -478,8 +493,10 @@ def _consume_planner(
             actor_source='loop_runner_role_output_import',
             actor='loop_runner',
             job_id=job_id,
+            expected_task_revision=expected_revision,
         ),
     )
+    expected_revision = _task_payload_revision(task_packet_import)
     execution_contract_import = deps.plan_task(
         context,
         SimpleNamespace(
@@ -490,8 +507,10 @@ def _consume_planner(
             actor_source='loop_runner_role_output_import',
             actor='loop_runner',
             job_id=job_id,
+            expected_task_revision=expected_revision,
         ),
     )
+    expected_revision = _task_payload_revision(execution_contract_import)
     ready = deps.plan_task(
         context,
         SimpleNamespace(
@@ -500,6 +519,7 @@ def _consume_planner(
             status='ready_for_orchestration',
             next_owner='orchestrator',
             activation_reason='planner_reply_imported',
+            expected_task_revision=expected_revision,
         ),
     )
     source_task_settlement = _settle_frontdesk_single_task_source_task(
@@ -589,6 +609,7 @@ def _consume_planner_task_set(
             reply=reply,
         )
         task_id = str(task_payload.get('task_id') or task_id)
+        expected_revision = _task_payload_revision(task_payload)
         task_import_root = import_root / task_id
         task_packet_path = task_import_root / 'task_packet.md'
         execution_contract_path = task_import_root / 'execution_contract.md'
@@ -604,8 +625,10 @@ def _consume_planner_task_set(
                 actor_source='loop_runner_role_output_import',
                 actor='loop_runner',
                 job_id=job_id,
+                expected_task_revision=expected_revision,
             ),
         )
+        expected_revision = _task_payload_revision(task_packet_import)
         execution_contract_import = deps.plan_task(
             context,
             SimpleNamespace(
@@ -616,8 +639,10 @@ def _consume_planner_task_set(
                 actor_source='loop_runner_role_output_import',
                 actor='loop_runner',
                 job_id=job_id,
+                expected_task_revision=expected_revision,
             ),
         )
+        expected_revision = _task_payload_revision(execution_contract_import)
         ready = deps.plan_task(
             context,
             SimpleNamespace(
@@ -626,6 +651,7 @@ def _consume_planner_task_set(
                 status='ready_for_orchestration',
                 next_owner='orchestrator',
                 activation_reason='planner_task_set_imported',
+                expected_task_revision=expected_revision,
             ),
         )
         imported_tasks.append(
@@ -829,8 +855,10 @@ def _settle_frontdesk_source_task(
             actor_source='loop_runner_role_output_import',
             actor='loop_runner',
             job_id=job_id,
+            expected_task_revision=_activation_task_revision(activation),
         ),
     )
+    expected_revision = _task_payload_revision(imported)
     transitioned = deps.plan_task(
         context,
         SimpleNamespace(
@@ -839,6 +867,7 @@ def _settle_frontdesk_source_task(
             status='done',
             next_owner='terminal',
             activation_reason=activation_reason,
+            expected_task_revision=expected_revision,
         ),
     )
     return {
@@ -880,6 +909,28 @@ def _consume_orchestrator(
             reason=str(parsed.get('reason') or 'orchestrator_reply_invalid'),
             evidence=dict(parsed),
         )
+    capacity_snapshot: dict[str, object] | None = None
+    candidate = parsed.get('orchestration_bundle_candidate')
+    if str(parsed['route']) in _EXECUTION_ROUTES:
+        capacity_snapshot = deps.effective_capacity_snapshot(context)
+        if not isinstance(candidate, dict) and not allows_v2_missing_candidate(capacity_snapshot):
+            return _blocked_payload(
+                context,
+                job_id=job_id,
+                agent_name=str(snapshot.get('agent_name') or ''),
+                reason='orchestrator_bundle_candidate_required',
+                evidence={
+                    'route': parsed['route'],
+                    'config_version': capacity_snapshot.get('config_version'),
+                    'workflow_mode': capacity_snapshot.get('workflow_mode'),
+                },
+            )
+    expected_revision = _expected_revision_for_task(
+        context,
+        deps,
+        activation=activation,
+        task_id=task_id,
+    )
     import_root = _role_import_dir(context, job_id)
     notes_path = import_root / 'orchestration_notes.md'
     atomic_write_text(notes_path, str(parsed['orchestration_notes']))
@@ -894,12 +945,12 @@ def _consume_orchestrator(
             actor_source='loop_runner_role_output_import',
             actor='loop_runner',
             job_id=job_id,
+            expected_task_revision=expected_revision,
         ),
     )
     bundle_import: dict[str, object] | None = None
     if str(parsed['route']) in _EXECUTION_ROUTES:
         task_record = imported.get('task') if isinstance(imported.get('task'), dict) else {}
-        candidate = parsed.get('orchestration_bundle_candidate')
         bundle_source = 'loop_runner_role_output_import'
         if not isinstance(candidate, dict):
             candidate = build_single_node_candidate(
@@ -919,6 +970,9 @@ def _consume_orchestrator(
                 actor_source=bundle_source,
                 actor='loop_runner',
                 job_id=job_id,
+                expected_task_revision=task_revision(task_record),
+                effective_capacity_snapshot=capacity_snapshot,
+                source_reply_digest=hashlib.sha256(reply.encode('utf-8')).hexdigest(),
             ),
         )
     record = _log_import(
@@ -1049,6 +1103,12 @@ def _consume_task_detailer(
             agent_name=str(snapshot.get('agent_name') or ''),
             reason='task_detailer_import_requires_task_id',
         )
+    expected_revision = _expected_revision_for_task(
+        context,
+        deps,
+        activation=activation,
+        task_id=task_id,
+    )
     parsed = _parse_task_detailer_reply(
         reply,
         detail_ready_stop_contract=activation.get('detail_ready_stop_contract') if isinstance(activation, dict) else None,
@@ -1066,6 +1126,7 @@ def _consume_task_detailer(
             reply=reply,
             job_id=job_id,
             task_id=task_id,
+            expected_revision=expected_revision,
         )
     if (
         parsed.get('status') == 'blocked'
@@ -1080,6 +1141,7 @@ def _consume_task_detailer(
             reply=reply,
             job_id=job_id,
             task_id=task_id,
+            expected_revision=expected_revision,
         )
     if parsed.get('status') != 'ok':
         return _blocked_payload(
@@ -1106,8 +1168,10 @@ def _consume_task_detailer(
             actor_source='loop_runner_role_output_import',
             actor='loop_runner',
             job_id=job_id,
+            expected_task_revision=expected_revision,
         ),
     )
+    expected_revision = _task_payload_revision(detail_design_import)
     detail_summary_import = deps.plan_task(
         context,
         SimpleNamespace(
@@ -1118,8 +1182,10 @@ def _consume_task_detailer(
             actor_source='loop_runner_role_output_import',
             actor='loop_runner',
             job_id=job_id,
+            expected_task_revision=expected_revision,
         ),
     )
+    expected_revision = _task_payload_revision(detail_summary_import)
     detail_packet_import = deps.plan_task(
         context,
         SimpleNamespace(
@@ -1130,8 +1196,10 @@ def _consume_task_detailer(
             actor_source='loop_runner_role_output_import',
             actor='loop_runner',
             job_id=job_id,
+            expected_task_revision=expected_revision,
         ),
     )
+    expected_revision = _task_payload_revision(detail_packet_import)
     ready = deps.plan_task(
         context,
         SimpleNamespace(
@@ -1140,6 +1208,7 @@ def _consume_task_detailer(
             status='detail_ready',
             next_owner='planner',
             activation_reason='detail_ready_from_task_detailer',
+            expected_task_revision=expected_revision,
         ),
     )
     record = _log_import(
@@ -1189,6 +1258,7 @@ def _consume_task_detailer_clarification(
     reply: str,
     job_id: str,
     task_id: str,
+    expected_revision: int,
 ) -> dict[str, object]:
     import_root = _role_import_dir(context, job_id)
     detail_design_path = import_root / 'task-detail-design.md'
@@ -1210,8 +1280,10 @@ def _consume_task_detailer_clarification(
             actor_source='loop_runner_role_output_import',
             actor='loop_runner',
             job_id=job_id,
+            expected_task_revision=expected_revision,
         ),
     )
+    expected_revision = _task_payload_revision(detail_design_import)
     detail_summary_import = deps.plan_task(
         context,
         SimpleNamespace(
@@ -1222,8 +1294,10 @@ def _consume_task_detailer_clarification(
             actor_source='loop_runner_role_output_import',
             actor='loop_runner',
             job_id=job_id,
+            expected_task_revision=expected_revision,
         ),
     )
+    expected_revision = _task_payload_revision(detail_summary_import)
     detail_packet_import = deps.plan_task(
         context,
         SimpleNamespace(
@@ -1234,8 +1308,10 @@ def _consume_task_detailer_clarification(
             actor_source='loop_runner_role_output_import',
             actor='loop_runner',
             job_id=job_id,
+            expected_task_revision=expected_revision,
         ),
     )
+    expected_revision = _task_payload_revision(detail_packet_import)
     clarified = deps.plan_task(
         context,
         SimpleNamespace(
@@ -1244,6 +1320,7 @@ def _consume_task_detailer_clarification(
             status='needs_clarification',
             next_owner='task_detailer',
             activation_reason='needs_clarification_from_task_detailer',
+            expected_task_revision=expected_revision,
         ),
     )
     record = _log_import(
@@ -1295,6 +1372,7 @@ def _consume_task_detailer_blocker(
     reply: str,
     job_id: str,
     task_id: str,
+    expected_revision: int,
 ) -> dict[str, object]:
     import_root = _role_import_dir(context, job_id)
     detail_design_path = import_root / 'task-detail-design.md'
@@ -1337,8 +1415,10 @@ def _consume_task_detailer_blocker(
             actor_source='loop_runner_role_output_import',
             actor='loop_runner',
             job_id=job_id,
+            expected_task_revision=expected_revision,
         ),
     )
+    expected_revision = _task_payload_revision(detail_design_import)
     detail_summary_import = deps.plan_task(
         context,
         SimpleNamespace(
@@ -1349,8 +1429,10 @@ def _consume_task_detailer_blocker(
             actor_source='loop_runner_role_output_import',
             actor='loop_runner',
             job_id=job_id,
+            expected_task_revision=expected_revision,
         ),
     )
+    expected_revision = _task_payload_revision(detail_summary_import)
     detail_packet_import = deps.plan_task(
         context,
         SimpleNamespace(
@@ -1361,8 +1443,10 @@ def _consume_task_detailer_blocker(
             actor_source='loop_runner_role_output_import',
             actor='loop_runner',
             job_id=job_id,
+            expected_task_revision=expected_revision,
         ),
     )
+    expected_revision = _task_payload_revision(detail_packet_import)
     blocker_import = deps.plan_task(
         context,
         SimpleNamespace(
@@ -1373,8 +1457,10 @@ def _consume_task_detailer_blocker(
             actor_source='loop_runner_role_output_import',
             actor='loop_runner',
             job_id=job_id,
+            expected_task_revision=expected_revision,
         ),
     )
+    expected_revision = _task_payload_revision(blocker_import)
     blocked = deps.plan_task(
         context,
         SimpleNamespace(
@@ -1383,6 +1469,7 @@ def _consume_task_detailer_blocker(
             status='blocked',
             next_owner='terminal',
             activation_reason='blocked_from_task_detailer',
+            expected_task_revision=expected_revision,
         ),
     )
     record = _log_import(
@@ -3113,6 +3200,67 @@ def _base_agent_name(agent_name: str) -> str:
     return text
 
 
+def _activation_task_revision(activation: dict[str, object] | None) -> int | None:
+    if not isinstance(activation, dict) or 'task_revision' not in activation:
+        return None
+    value = activation.get('task_revision')
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError('managed activation task_revision must be a positive integer')
+    return value
+
+
+def _task_payload_revision(payload: dict[str, object]) -> int:
+    record = payload.get('task') if isinstance(payload.get('task'), dict) else {}
+    return task_revision(record)
+
+
+def _expected_revision_for_task(
+    context,
+    deps,
+    *,
+    activation: dict[str, object] | None,
+    task_id: str,
+) -> int:
+    activation_task_id = str(activation.get('task_id') or '').strip() if isinstance(activation, dict) else ''
+    activation_revision = _activation_task_revision(activation)
+    if activation_revision is not None and activation_task_id == task_id:
+        return activation_revision
+    shown = deps.plan_task(context, SimpleNamespace(action='task-show', task_id=task_id))
+    return _task_payload_revision(shown)
+
+
+def _stale_activation_revision(
+    context,
+    deps,
+    *,
+    activation: dict[str, object] | None,
+) -> dict[str, object] | None:
+    expected = _activation_task_revision(activation)
+    if expected is None:
+        return None
+    task_id = str(activation.get('task_id') or '').strip() if isinstance(activation, dict) else ''
+    if not task_id:
+        return {'expected_task_revision': expected, 'reason': 'activation_task_id_missing'}
+    try:
+        shown = deps.plan_task(context, SimpleNamespace(action='task-show', task_id=task_id))
+    except ValueError as exc:
+        return {
+            'task_id': task_id,
+            'expected_task_revision': expected,
+            'reason': 'activation_task_unavailable',
+            'error': str(exc),
+        }
+    record = shown.get('task') if isinstance(shown.get('task'), dict) else {}
+    current = task_revision(record)
+    if current == expected:
+        return None
+    return {
+        'task_id': task_id,
+        'expected_task_revision': expected,
+        'current_task_revision': current,
+    }
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
 
@@ -3121,6 +3269,13 @@ def _deps(services):
     services = services or SimpleNamespace()
     return SimpleNamespace(
         plan_task=getattr(services, 'plan_task', plan_task),
+        effective_capacity_snapshot=getattr(
+            services,
+            'effective_capacity_snapshot',
+            lambda context: compile_project_effective_capacity_snapshot(
+                Path(context.project.project_root)
+            ),
+        ),
         submit_ask=getattr(services, 'submit_ask', submit_ask),
     )
 

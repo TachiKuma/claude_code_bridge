@@ -3,12 +3,15 @@ from __future__ import annotations
 from io import StringIO
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from cli.context import CliContextBuilder
 from cli.models import ParsedPlanTaskCommand
 from cli.parser import CliParser
 from cli.phase2 import maybe_handle_phase2
+from cli.services.plan_tasks import plan_task
 
 
 def _write(path: Path, text: str) -> None:
@@ -19,6 +22,31 @@ def _write(path: Path, text: str) -> None:
 def _project_with_plan(tmp_path: Path) -> Path:
     project_root = tmp_path / 'repo-plan-tasks'
     (project_root / '.ccb').mkdir(parents=True)
+    _write(
+        project_root / '.ccb' / 'ccb.config',
+        '''version = 2
+entry_window = "ccb-user"
+
+[windows]
+ccb-user = "bootstrap:codex"
+
+[loop.capacity]
+enabled = true
+max_nodes = 4
+
+[loop.role_profiles.coder]
+role = "agentroles.coder"
+provider = "codex"
+workspace_mode = "git-worktree"
+max_instances = 2
+
+[loop.role_profiles.code_reviewer]
+role = "agentroles.code_reviewer"
+provider = "codex"
+workspace_mode = "git-worktree"
+max_instances = 2
+''',
+    )
     _write(project_root / 'docs' / 'plantree' / 'plans' / 'demo-plan' / 'README.md', '# Demo Plan\n')
     return project_root
 
@@ -186,7 +214,20 @@ def test_plan_parser_supports_v1_task_commands() -> None:
     )
 
 
-def test_plan_task_imports_validated_single_node_orchestration_bundle(tmp_path: Path) -> None:
+def test_plan_task_imports_validated_single_node_orchestration_bundle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    role_store = tmp_path / 'roles'
+    for role_id, default_name in (
+        ('agentroles.coder', 'coder'),
+        ('agentroles.code_reviewer', 'code_reviewer'),
+    ):
+        _write(
+            role_store / 'installed' / role_id / 'current' / 'role.toml',
+            f'id = "{role_id}"\nversion = "0.1.0"\n\n[identity]\ndefault_agent_name = "{default_name}"\n',
+        )
+    monkeypatch.setenv('AGENT_ROLES_STORE', str(role_store))
     project_root = _project_with_plan(tmp_path)
     _make_ready_task(project_root, task_id='bundle-task')
     drafts = project_root / 'drafts'
@@ -215,6 +256,13 @@ def test_plan_task_imports_validated_single_node_orchestration_bundle(tmp_path: 
         'schema': 'ccb.loop.orchestration_bundle_candidate.v1',
         'task_id': 'bundle-task',
         'bundle_revision': 1,
+        'selection': {
+            'workgroup_count': 1,
+            'complexity': 'atomic',
+            'cutability': 'none',
+            'execution_shape': 'single_unit',
+            'rationale': 'The task is one tightly coupled implementation unit.',
+        },
         'nodes': [
             {
                 'node_id': 'node-001',
@@ -267,7 +315,10 @@ def test_plan_task_imports_validated_single_node_orchestration_bundle(tmp_path: 
     bundle_path = project_root / artifact['path']
     bundle = json.loads(bundle_path.read_text(encoding='utf-8'))
     assert bundle['task_id'] == 'bundle-task'
-    assert bundle['source'] == 'script_owned_import'
+    assert bundle['task_revision'] == 1
+    assert bundle['capacity_digest']
+    assert 'source' not in bundle
+    assert artifact['bundle_source'] == 'script_owned_import'
     assert bundle['nodes'][0]['work_packet_ref'] == f'{task_root}/orchestration/work-packets/node-001.md'
     assert (project_root / bundle['nodes'][0]['work_packet_ref']).read_text(encoding='utf-8') == (
         'Implement the bounded task and report verification.\n'
@@ -312,6 +363,200 @@ def test_plan_task_imports_validated_single_node_orchestration_bundle(tmp_path: 
     assert code == 1
     assert 'conflicts with existing bundle' in err
     assert packet_path.read_text(encoding='utf-8') == original_packet
+
+    candidate['bundle_revision'] = 3
+    skipped_path = drafts / 'orchestration_bundle.skipped.json'
+    _write(skipped_path, json.dumps(candidate, indent=2) + '\n')
+    code, _payload, _out, err = _run_phase2(
+        [
+            'plan',
+            'task-artifact',
+            '--task',
+            'bundle-task',
+            '--kind',
+            'orchestration_bundle',
+            '--file',
+            str(skipped_path),
+            '--json',
+        ],
+        cwd=project_root,
+    )
+    assert code == 1
+    assert 'revision must increase exactly once: expected 2, got 3' in err
+
+    candidate['bundle_revision'] = 2
+    next_path = drafts / 'orchestration_bundle.next.json'
+    _write(next_path, json.dumps(candidate, indent=2) + '\n')
+    code, advanced, _out, err = _run_phase2(
+        [
+            'plan',
+            'task-artifact',
+            '--task',
+            'bundle-task',
+            '--kind',
+            'orchestration_bundle',
+            '--file',
+            str(next_path),
+            '--json',
+        ],
+        cwd=project_root,
+    )
+    assert code == 0, err
+    assert advanced['idempotent'] is False
+    assert advanced['artifact']['bundle_revision'] == 2
+
+
+def test_plan_task_semantic_revision_is_monotonic_idempotent_and_running_fenced(
+    tmp_path: Path,
+) -> None:
+    project_root = _project_with_plan(tmp_path)
+    drafts = project_root / 'drafts'
+    _write(drafts / 'task-packet-v1.md', 'task packet v1\n')
+    _write(drafts / 'task-packet-v1-copy.md', 'task packet v1\n')
+    _write(drafts / 'task-packet-v2.md', 'task packet v2\n')
+    _write(drafts / 'task-packet-v3.md', 'task packet v3\n')
+    _write(drafts / 'execution-contract.md', 'execution contract\n')
+    code, created, _out, err = _run_phase2(
+        [
+            'plan',
+            'task-create',
+            '--plan',
+            'demo-plan',
+            '--title',
+            'Revision fencing',
+            '--task-id',
+            'task-revision',
+            '--json',
+        ],
+        cwd=project_root,
+    )
+    assert code == 0, err
+    assert created['task']['task_revision'] == 1
+
+    def import_packet(path: Path) -> tuple[int, dict[str, object], str]:
+        rc, payload, _stdout, stderr = _run_phase2(
+            [
+                'plan',
+                'task-artifact',
+                '--task',
+                'task-revision',
+                '--kind',
+                'task_packet',
+                '--file',
+                str(path),
+                '--json',
+            ],
+            cwd=project_root,
+        )
+        return rc, payload, stderr
+
+    code, first, err = import_packet(drafts / 'task-packet-v1.md')
+    assert code == 0, err
+    assert first['task']['task_revision'] == 1
+    assert first['idempotent'] is False
+
+    code, repeated, err = import_packet(drafts / 'task-packet-v1-copy.md')
+    assert code == 0, err
+    assert repeated['task']['task_revision'] == 1
+    assert repeated['idempotent'] is True
+
+    code, replaced, err = import_packet(drafts / 'task-packet-v2.md')
+    assert code == 0, err
+    assert replaced['task']['task_revision'] == 2
+    assert replaced['idempotent'] is False
+
+    code, repeated_v2, err = import_packet(drafts / 'task-packet-v2.md')
+    assert code == 0, err
+    assert repeated_v2['task']['task_revision'] == 2
+    assert repeated_v2['idempotent'] is True
+
+    code, _contract, _out, err = _run_phase2(
+        [
+            'plan',
+            'task-artifact',
+            '--task',
+            'task-revision',
+            '--kind',
+            'execution_contract',
+            '--file',
+            str(drafts / 'execution-contract.md'),
+            '--json',
+        ],
+        cwd=project_root,
+    )
+    assert code == 0, err
+    context_command = ParsedPlanTaskCommand(
+        project=None,
+        action='task-show',
+        task_id='task-revision',
+        json_output=True,
+    )
+    context = CliContextBuilder().build(context_command, cwd=project_root, bootstrap_if_missing=False)
+    with pytest.raises(ValueError, match='stale managed activation task_revision: expected 1, current 2'):
+        plan_task(
+            context,
+            SimpleNamespace(
+                action='task-status',
+                task_id='task-revision',
+                status='ready_for_orchestration',
+                expected_task_revision=1,
+            ),
+        )
+    shown = plan_task(context, SimpleNamespace(action='task-show', task_id='task-revision'))
+    assert shown['task']['status'] == 'draft'
+    assert shown['task']['task_revision'] == 2
+    code, _ready, _out, err = _run_phase2(
+        ['plan', 'task-status', '--task', 'task-revision', '--status', 'ready_for_orchestration', '--json'],
+        cwd=project_root,
+    )
+    assert code == 0, err
+    code, bound, _out, err = _run_phase2(
+        ['plan', 'task-bind-loop', '--task', 'task-revision', '--loop', 'loop-revision', '--json'],
+        cwd=project_root,
+    )
+    assert code == 0, err
+    assert bound['task']['status'] == 'running'
+
+    code, _blocked, err = import_packet(drafts / 'task-packet-v3.md')
+    assert code == 1
+    assert 'cannot replace semantic artifact while task is bound to running loop' in err
+
+
+def test_plan_task_legacy_revision_reads_as_one_and_materializes_on_mutation(tmp_path: Path) -> None:
+    project_root = _project_with_plan(tmp_path)
+    _make_ready_task(project_root, task_id='legacy-revision')
+    index_path = project_root / 'docs' / 'plantree' / 'plans' / 'demo-plan' / 'tasks' / 'index.json'
+    index = json.loads(index_path.read_text(encoding='utf-8'))
+    index['tasks'][0].pop('task_revision', None)
+    _write(index_path, json.dumps(index, indent=2) + '\n')
+
+    code, shown, _out, err = _run_phase2(
+        ['plan', 'task-show', '--task', 'legacy-revision', '--json'],
+        cwd=project_root,
+    )
+    assert code == 0, err
+    assert shown['task']['task_revision'] == 1
+
+    risk = project_root / 'drafts' / 'risk.md'
+    _write(risk, 'risk evidence\n')
+    code, mutated, _out, err = _run_phase2(
+        [
+            'plan',
+            'task-artifact',
+            '--task',
+            'legacy-revision',
+            '--kind',
+            'risk',
+            '--file',
+            str(risk),
+            '--json',
+        ],
+        cwd=project_root,
+    )
+    assert code == 0, err
+    assert mutated['task']['task_revision'] == 1
+    persisted = json.loads(index_path.read_text(encoding='utf-8'))
+    assert persisted['tasks'][0]['task_revision'] == 1
 
 
 def test_plan_task_ready_for_orchestration_can_pause_for_clarification(tmp_path: Path) -> None:

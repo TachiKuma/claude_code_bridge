@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 from io import StringIO
 import json
@@ -9,6 +10,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -37,6 +39,10 @@ from cli.services.ask_runtime import AskSummary
 from cli.services.loop_run_once import loop_run_once
 from cli.services.loop_runner import loop_runner_auto, loop_runner_once
 from cli.services.loop_orchestration_bundle import build_single_node_candidate
+from cli.services.loop_effective_capacity import (
+    compile_project_effective_capacity_snapshot,
+    effective_capacity_digest,
+)
 from cli.services.plan_tasks import plan_task
 from cli.services.frontdesk_intake import frontdesk_intake
 import cli.services.frontdesk_intake_command as frontdesk_intake_command_module
@@ -275,6 +281,17 @@ def _project_with_loop_capacity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     _write_installed_role(role_store, 'agentroles.coder', default_agent_name='coder')
     _write_installed_role(role_store, 'agentroles.code_reviewer', default_agent_name='code_reviewer')
     monkeypatch.setenv('AGENT_ROLES_STORE', str(role_store))
+
+    def clear_immaculate_test_agent(_context, clear_command):
+        return {
+            'status': 'ok',
+            'results': [
+                {'agent': name, 'status': 'cleared', 'pane_id': f'%{index}', 'command': '/clear'}
+                for index, name in enumerate(clear_command.agent_names, start=1)
+            ],
+        }
+
+    monkeypatch.setattr(loop_runner_module, 'clear_agent_context', clear_immaculate_test_agent)
     _write(
         project_root / '.ccb' / 'ccb.config',
         """cmd; orchestrator:codex; task_detailer:codex
@@ -321,6 +338,18 @@ def _project_with_workflow_topology(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     ):
         _write_installed_role(role_store, role_id, default_agent_name=default_agent_name)
     monkeypatch.setenv('AGENT_ROLES_STORE', str(role_store))
+
+    def clear_immaculate_test_agent(_context, clear_command):
+        return {
+            'status': 'ok',
+            'results': [
+                {'agent': name, 'status': 'cleared', 'pane_id': f'%{index}', 'command': '/clear'}
+                for index, name in enumerate(clear_command.agent_names, start=1)
+            ],
+        }
+
+    monkeypatch.setattr(loop_ask_first_module, 'clear_agent_context', clear_immaculate_test_agent)
+    monkeypatch.setattr(loop_runner_module, 'clear_agent_context', clear_immaculate_test_agent)
     _write(
         project_root / '.ccb' / 'ccb.config',
         """version = 2
@@ -382,6 +411,69 @@ max_instances = 2
     return project_root
 
 
+def test_v2_effective_capacity_snapshot_preserves_physical_nodes_and_limits_workgroups(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = _project_with_workflow_topology(tmp_path, monkeypatch)
+
+    first = compile_project_effective_capacity_snapshot(project_root)
+    second = compile_project_effective_capacity_snapshot(project_root)
+
+    assert first['schema'] == 'ccb.loop.effective_capacity_snapshot.v1'
+    assert first['config_version'] == 2
+    assert first['workflow_mode'] == 'route_only'
+    assert first['limits'] == {
+        'max_workgroups': 1,
+        'max_parallel_workgroups': 1,
+        'max_active_dynamic_agents': 4,
+    }
+    assert set(first['dynamic_profiles']) >= {'coder', 'code_reviewer'}
+    assert effective_capacity_digest(first) == effective_capacity_digest(second)
+
+
+def _multi_workgroup_capacity_snapshot(*, max_workgroups: int = 4) -> dict[str, object]:
+    return {
+        'schema': 'ccb.loop.effective_capacity_snapshot.v1',
+        'config_version': 3,
+        'workflow_profile': 'single_lane_multi_workgroup',
+        'workflow_mode': 'adaptive_workgroups',
+        'limits': {
+            'max_workgroups': max_workgroups,
+            'max_parallel_workgroups': max_workgroups,
+            'max_active_dynamic_agents': max_workgroups * 2,
+        },
+        'policies': {
+            'node_rework': {'max_rounds': 1},
+            'workspace': {'mode': 'git_worktree'},
+            'integration': {'mode': 'controller_owned'},
+            'release': {'default_lifetime': 'current_loop', 'policy': 'auto', 'idle_only': True},
+            'naming': {'template': 'loop-{loop_id}-{profile}-{index}'},
+            'execution_windows': {'policy': 'six_pane_overflow'},
+        },
+        'resident_profiles': {},
+        'dynamic_profiles': {
+            'coder': {
+                'role_id': 'agentroles.coder',
+                'provider': 'codex',
+                'model': None,
+                'workspace_mode': 'git-worktree',
+                'release_policy': 'current_loop',
+                'max_instances': max_workgroups,
+            },
+            'code_reviewer': {
+                'role_id': 'agentroles.code_reviewer',
+                'provider': 'codex',
+                'model': None,
+                'workspace_mode': 'git-worktree',
+                'release_policy': 'current_loop',
+                'max_instances': max_workgroups,
+            },
+        },
+        'profile_aliases': {},
+    }
+
+
 def _project_with_default_orchestrator_agent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     project_root = tmp_path / 'repo-default-orchestrator-agent'
     role_store = tmp_path / 'roles-default-orchestrator-agent'
@@ -395,6 +487,18 @@ def _project_with_default_orchestrator_agent(tmp_path: Path, monkeypatch: pytest
     ):
         _write_installed_role(role_store, role_id, default_agent_name=default_agent_name)
     monkeypatch.setenv('AGENT_ROLES_STORE', str(role_store))
+
+    def clear_immaculate_test_agent(_context, clear_command):
+        return {
+            'status': 'ok',
+            'results': [
+                {'agent': name, 'status': 'cleared', 'pane_id': f'%{index}', 'command': '/clear'}
+                for index, name in enumerate(clear_command.agent_names, start=1)
+            ],
+        }
+
+    monkeypatch.setattr(loop_ask_first_module, 'clear_agent_context', clear_immaculate_test_agent)
+    monkeypatch.setattr(loop_runner_module, 'clear_agent_context', clear_immaculate_test_agent)
     _write(
         project_root / '.ccb' / 'ccb.config',
         """frontdesk:codex; planner:codex; orchestrator:codex; ccb_round_reviewer:codex
@@ -1404,7 +1508,12 @@ def test_loop_runner_once_ready_for_orchestration_activates_orchestrator_only(
         'orchestration_bundle.' in message
     )
     assert 'ccb.loop.orchestration_bundle_candidate.v1' in message
-    assert 'omit orchestration_bundle only for a deterministic one-workgroup task' in message
+    assert 'Config V2 may omit it only for one deterministic workgroup' in message
+    assert 'candidate root fields are exactly schema, task_id, bundle_revision, selection, nodes, integration, and policy' in message
+    assert 'choose the smallest justified count from 1 to 4 without trying to fill capacity' in message
+    assert '"workgroup_count":1' not in message
+    assert 'Effective capacity snapshot:' in message
+    assert 'Expected bundle revision: 1' in message
     assert 'do not rely on provider reply text' in message
     assert 'do not start task_detailer, worker, reviewer, loop_run_once, or topology dispatch' in message
     assert 'ccb plan task-artifact' not in message
@@ -1420,9 +1529,11 @@ def test_loop_runner_once_ready_for_orchestration_activates_orchestrator_only(
         activation['required_next_output']
         == (
             'reply-only route decision, compact orchestration notes, and an orchestration bundle candidate '
-            'for multi-workgroup execution routes'
+            'for Config V3 execution routes or any decomposed Config V2 execution route'
         )
     )
+    assert activation['expected_bundle_revision'] == 1
+    assert activation['effective_capacity_snapshot']['limits']['max_workgroups'] == 1
     assert activation['artifact_refs'] == {
         'execution_contract': 'docs/plantree/plans/demo-plan/tasks/task-runner/execution_contract.md',
         'task_packet': 'docs/plantree/plans/demo-plan/tasks/task-runner/task_packet.md',
@@ -1442,7 +1553,7 @@ def test_loop_runner_once_ready_for_orchestration_activates_orchestrator_only(
         'Supervisor/script-owned import validates and records orchestration_notes, work packets, and '
         'orchestration_bundle; provider text is not authority.' in script_write_rules
     )
-    assert 'include a fenced JSON orchestration_bundle candidate' in script_write_rules
+    assert 'always include one fenced JSON orchestration_bundle candidate' in script_write_rules
     assert 'ccb plan task-artifact' not in script_write_rules
     assert 'plan task-artifact' not in script_write_rules
     assert 'Import the stable route' not in script_write_rules
@@ -1452,6 +1563,54 @@ def test_loop_runner_once_ready_for_orchestration_activates_orchestrator_only(
     assert shown['task']['current_loop'] is None
     assert shown['task']['next_owner'] == 'orchestrator'
     assert set(shown['task']['artifacts']) == {'task_packet', 'execution_contract'}
+
+
+def test_loop_runner_orchestrator_clear_failure_blocks_before_provider_ask(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = _project_with_loop_capacity(tmp_path, monkeypatch)
+    _add_ready_plan_task(project_root, task_id='task-clear-blocked')
+    command = ParsedLoopRunnerCommand(project=None, once=True, timeout_s=11.0, json_output=True)
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+    submissions: list[object] = []
+
+    def failed_clear(_context, _clear_command):
+        return {
+            'status': 'partial',
+            'results': [
+                {
+                    'agent': 'orchestrator',
+                    'status': 'failed',
+                    'reason': 'provider clear was not acknowledged',
+                }
+            ],
+        }
+
+    def forbidden_submit(_context, ask_command):
+        submissions.append(ask_command)
+        raise AssertionError('orchestrator ask must not run without proven freshness')
+
+    payload = loop_runner_once(
+        context,
+        command,
+        services=SimpleNamespace(
+            clear_agent_context=failed_clear,
+            submit_ask=forbidden_submit,
+            plan_task=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                AssertionError('freshness failure must not mutate task authority')
+            ),
+        ),
+    )
+
+    assert payload['loop_runner_status'] == 'blocked'
+    assert payload['action'] == 'activation_freshness_not_ready'
+    assert payload['freshness']['status'] == 'failed'
+    assert payload['next_activation'] == 'repair_activation_freshness'
+    assert submissions == []
+    activation = json.loads(Path(payload['activation_path']).read_text(encoding='utf-8'))
+    assert activation['freshness']['status'] == 'failed'
+    assert 'ask' not in activation
 
 
 def test_loop_runner_dynamic_orchestrator_mounts_imports_and_unloads(
@@ -1591,11 +1750,18 @@ def test_loop_runner_multi_workgroup_bundle_pauses_before_binding_or_asking(
     candidate_path = project_root / 'drafts' / f'{task_id}-orchestration-bundle.json'
     _write_json(
         candidate_path,
-        {
-            'schema': 'ccb.loop.orchestration_bundle_candidate.v1',
-            'task_id': task_id,
-            'bundle_revision': 1,
-            'nodes': [
+            {
+                'schema': 'ccb.loop.orchestration_bundle_candidate.v1',
+                'task_id': task_id,
+                'bundle_revision': 1,
+                'selection': {
+                    'workgroup_count': 2,
+                    'complexity': 'bounded',
+                    'cutability': 'high',
+                    'execution_shape': 'parallel',
+                    'rationale': 'Core and CLI scopes are independently reviewable.',
+                },
+                'nodes': [
                 {
                     'node_id': 'node-001',
                     'workgroup_id': 'wg-core',
@@ -1643,6 +1809,7 @@ def test_loop_runner_multi_workgroup_bundle_pauses_before_binding_or_asking(
             file_path=str(candidate_path),
             actor_source='test_multi_workgroup_bundle',
             actor='loop_runner',
+            effective_capacity_snapshot=_multi_workgroup_capacity_snapshot(),
         ),
     )
     assert bundle_import['artifact']['node_count'] == 2
@@ -1657,6 +1824,7 @@ def test_loop_runner_multi_workgroup_bundle_pauses_before_binding_or_asking(
             ask_first_execution=forbidden,
             plan_task=forbidden,
             submit_ask=forbidden,
+            effective_capacity_snapshot=lambda _context: _multi_workgroup_capacity_snapshot(),
         ),
     )
 
@@ -2727,7 +2895,9 @@ def test_loop_runner_direct_execution_bound_loop_without_ask_resumes_on_existing
     assert ask_record['purpose'] == 'worker'
     assert ask_record['job_id'] == 'job_1'
     state = json.loads((loop_dir / 'ask_first_stage_state.json').read_text(encoding='utf-8'))
-    assert state['status'] == 'pending'
+    assert state['schema'] == 'ccb.loop.workgroup_round_state.v1'
+    assert state['status'] == 'executing'
+    assert state['legacy_status'] == 'pending'
     assert state['task_id'] == 'task-direct'
     assert state['loop_id'] == 'wf-resume'
     assert state['stage'] == 'worker_ask'
@@ -2776,6 +2946,11 @@ def test_loop_runner_direct_execution_crash_during_submit_pauses_submission_unkn
     loop_id = first_submissions[0].target.split('-')[1]
     loop_dir = project_root / '.ccb' / 'runtime' / 'loops' / loop_id
     assert not (loop_dir / 'asks.jsonl').exists()
+    intent_path = loop_dir / 'ask_first_submission_intents.jsonl'
+    prepared = [json.loads(line) for line in intent_path.read_text(encoding='utf-8').splitlines()]
+    assert [(item['bundle_revision'], item['node_id'], item['purpose'], item['attempt'], item['status']) for item in prepared] == [
+        (1, 'node-001', 'worker', 1, 'prepared')
+    ]
     resume_submissions: list[object] = []
 
     def forbidden_duplicate_submit(_context, ask_command):
@@ -2810,11 +2985,160 @@ def test_loop_runner_direct_execution_crash_during_submit_pauses_submission_unkn
     state = json.loads((loop_dir / 'ask_first_stage_state.json').read_text(encoding='utf-8'))
     assert state['pending']['source'] == 'ask_submission_unknown'
     assert state['pending']['watch_observation'] == 'submission_unknown'
+    intents = [json.loads(line) for line in intent_path.read_text(encoding='utf-8').splitlines()]
+    assert [item['status'] for item in intents] == ['prepared', 'unknown']
+    assert all(
+        (item['bundle_revision'], item['node_id'], item['purpose'], item['attempt'])
+        == (1, 'node-001', 'worker', 1)
+        for item in intents
+    )
     assert not (loop_dir / 'round.json').exists()
     shown = plan_task(context, SimpleNamespace(action='task-show', task_id='task-direct'))
     assert shown['task']['status'] == 'running'
     assert shown['task']['current_loop'] == loop_id
     assert 'round_summary' not in shown['task']['artifacts']
+
+
+def test_ask_first_submission_identity_is_serialized_across_concurrent_once_callers(
+    tmp_path: Path,
+) -> None:
+    loop_dir = tmp_path / 'runtime' / 'loops' / 'lp-concurrent'
+    submit_started = threading.Event()
+    release_submit = threading.Event()
+    submissions: list[object] = []
+
+    def fake_clear(_context, clear_command):
+        return {
+            'status': 'ok',
+            'results': [{'agent': clear_command.agent_names[0], 'status': 'cleared'}],
+        }
+
+    def fake_submit(_context, ask_command):
+        submissions.append(ask_command)
+        submit_started.set()
+        assert release_submit.wait(timeout=2.0)
+        return AskSummary(
+            project_id='project-concurrent',
+            submission_id='sub-concurrent',
+            jobs=({'job_id': 'job-concurrent', 'agent_name': ask_command.target, 'status': 'accepted'},),
+        )
+
+    def fake_watch(_context, job_id, _out, *, timeout, emit_output):
+        return WatchEventBatch(
+            target=job_id,
+            job_id=job_id,
+            agent_name='loop-lp-concurrent-coder-1',
+            target_kind='job',
+            target_name=job_id,
+            provider='codex',
+            provider_instance=None,
+            cursor=0,
+            generation=1,
+            terminal=False,
+            status='running',
+            reply='',
+            events=(),
+        )
+
+    deps = SimpleNamespace(
+        clear_agent_context=fake_clear,
+        submit_ask=fake_submit,
+        watch_ask_job=fake_watch,
+        load_persisted_terminal_watch_payload=lambda *_args, **_kwargs: None,
+    )
+    call_args = {
+        'loop_dir': loop_dir,
+        'loop_id': 'lp-concurrent',
+        'target': 'loop-lp-concurrent-coder-1',
+        'sender': 'ccb_orchestrator',
+        'purpose': 'worker',
+        'bundle_revision': 1,
+        'node_id': 'node-001',
+        'attempt': 1,
+        'task_id': 'lp-concurrent-worker',
+        'message': 'execute node-001',
+        'timeout': None,
+    }
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(loop_ask_first_module._submit_and_watch, None, deps, **call_args)
+        assert submit_started.wait(timeout=2.0)
+        second = executor.submit(loop_ask_first_module._submit_and_watch, None, deps, **call_args)
+        release_submit.set()
+        first_result = first.result(timeout=3.0)
+        second_result = second.result(timeout=3.0)
+
+    assert len(submissions) == 1
+    assert first_result['job_id'] == 'job-concurrent'
+    assert second_result['job_id'] == 'job-concurrent'
+    assert second_result['watch_source'] == 'persisted_terminal'
+    intents = [
+        json.loads(line)
+        for line in (loop_dir / 'ask_first_submission_intents.jsonl').read_text(encoding='utf-8').splitlines()
+    ]
+    assert [item['status'] for item in intents] == ['prepared', 'accepted']
+    asks = [json.loads(line) for line in (loop_dir / 'asks.jsonl').read_text(encoding='utf-8').splitlines()]
+    assert len(asks) == 1
+    assert asks[0]['job_id'] == 'job-concurrent'
+
+
+def test_ask_first_immaculate_clear_failure_blocks_before_intent_or_provider_submit(
+    tmp_path: Path,
+) -> None:
+    loop_dir = tmp_path / 'runtime' / 'loops' / 'lp-clear-failed'
+    submissions: list[object] = []
+
+    def failed_clear(_context, _clear_command):
+        return {
+            'status': 'partial',
+            'results': [
+                {
+                    'agent': 'loop-lp-clear-failed-coder-1',
+                    'status': 'failed',
+                    'reason': 'provider clear command was not acknowledged',
+                }
+            ],
+        }
+
+    def forbidden_submit(_context, ask_command):
+        submissions.append(ask_command)
+        raise AssertionError('provider ask must not run without proven immaculate freshness')
+
+    deps = SimpleNamespace(
+        clear_agent_context=failed_clear,
+        submit_ask=forbidden_submit,
+        watch_ask_job=lambda *_args, **_kwargs: None,
+        load_persisted_terminal_watch_payload=lambda *_args, **_kwargs: None,
+    )
+
+    with pytest.raises(
+        loop_ask_first_module._ImmaculateActivationError,
+        match='immaculate activation freshness is not proven',
+    ):
+        loop_ask_first_module._submit_and_watch(
+            None,
+            deps,
+            loop_dir=loop_dir,
+            loop_id='lp-clear-failed',
+            target='loop-lp-clear-failed-coder-1',
+            sender='ccb_orchestrator',
+            purpose='worker',
+            bundle_revision=1,
+            node_id='node-001',
+            attempt=1,
+            task_id='lp-clear-failed-worker',
+            message='execute node-001',
+            timeout=None,
+        )
+
+    assert submissions == []
+    assert not (loop_dir / 'ask_first_submission_intents.jsonl').exists()
+    freshness_events = [
+        json.loads(line)
+        for line in (loop_dir / 'events.jsonl').read_text(encoding='utf-8').splitlines()
+    ]
+    assert freshness_events[-1]['kind'] == 'immaculate_activation_freshness'
+    assert freshness_events[-1]['status'] == 'failed'
 
 
 def test_loop_runner_direct_execution_crash_after_submit_before_ask_append_resumes_job_without_duplicate(
@@ -2864,6 +3188,15 @@ def test_loop_runner_direct_execution_crash_after_submit_before_ask_append_resum
     loop_id = worker_target.split('-')[1]
     loop_dir = project_root / '.ccb' / 'runtime' / 'loops' / loop_id
     assert not (loop_dir / 'asks.jsonl').exists()
+    intent_path = loop_dir / 'ask_first_submission_intents.jsonl'
+    accepted = [json.loads(line) for line in intent_path.read_text(encoding='utf-8').splitlines()]
+    assert [item['status'] for item in accepted] == ['prepared', 'accepted']
+    assert all(
+        (item['bundle_revision'], item['node_id'], item['purpose'], item['attempt'])
+        == (1, 'node-001', 'worker', 1)
+        for item in accepted
+    )
+    assert accepted[-1]['job_id'] == 'job_1'
     monkeypatch.setattr(loop_ask_first_module, '_append_ask', original_append_ask)
     worker_workspace = _seed_copy_workspace_binding(context, project_root, worker_target)
     _write(worker_workspace / 'lab_docs' / 'append_crash_note.md', 'status: worker-recovered\n')
@@ -2913,6 +3246,15 @@ def test_loop_runner_direct_execution_crash_after_submit_before_ask_append_resum
     assert state['current_artifacts']['worker']['watch_source'] == 'persisted_terminal'
     assert state['pending']['purpose'] == 'reviewer'
     assert state['pending']['job_id'] == 'job_2'
+    intents = [json.loads(line) for line in intent_path.read_text(encoding='utf-8').splitlines()]
+    worker_intents = [item for item in intents if item['purpose'] == 'worker']
+    reviewer_intents = [item for item in intents if item['purpose'] == 'reviewer']
+    assert [item['status'] for item in worker_intents] == ['prepared', 'accepted', 'terminal', 'consumed']
+    assert all(
+        (item['bundle_revision'], item['node_id'], item['attempt']) == (1, 'node-001', 1)
+        for item in worker_intents
+    )
+    assert [item['status'] for item in reviewer_intents] == ['prepared', 'accepted']
     assert not (loop_dir / 'round.json').exists()
     shown = plan_task(context, SimpleNamespace(action='task-show', task_id='task-direct'))
     assert shown['task']['status'] == 'running'
@@ -3026,16 +3368,15 @@ def test_loop_runner_direct_execution_route_runs_ask_first_round_without_dispatc
     assert payload['next_activation'] == 'stop'
     assert payload['orchestration_bundle']['node_count'] == 1
     assert payload['orchestration_bundle']['node_ids'] == ['node-001']
-    assert payload['release']['released_count'] == 4
+    assert payload['release']['released_count'] == 3
     assert payload['release']['retained_count'] == 0
     assert payload['topology']['status'] == 'ready'
     assert (project_root / 'lab_docs' / 'direct_execution_note.md').read_text(encoding='utf-8') == 'status: reviewed\n'
     targets = [command.target for command in submitted]
-    assert len(targets) == 4
+    assert len(targets) == 3
     assert targets[0].startswith(f'loop-{payload["loop_id"]}-coder-')
     assert targets[1].startswith(f'loop-{payload["loop_id"]}-code_reviewer-')
-    assert targets[2] == 'ccb_orchestrator'
-    assert targets[3] == 'ccb_round_reviewer'
+    assert targets[2] == 'ccb_round_reviewer'
     assert cleared_targets == targets
     assert all(command.sender == 'system' for command in submitted)
     assert all(command.callback is False for command in submitted)
@@ -3045,6 +3386,9 @@ def test_loop_runner_direct_execution_route_runs_ask_first_round_without_dispatc
     reviewer_message = submitted[1].message
     assert 'task_packet:' in worker_message
     assert 'execution_contract:' in worker_message
+    assert 'Node: node-001' in worker_message
+    assert 'node_work_packet:' in worker_message
+    assert 'Canonical node work packet:' in worker_message
     assert 'Task Packet:\ntask packet text' in worker_message
     assert 'Execution Contract:\nexecution contract text' in worker_message
     assert 'After completing the required verification, stop tool use and send one final answer.' in worker_message
@@ -3055,8 +3399,10 @@ def test_loop_runner_direct_execution_route_runs_ask_first_round_without_dispatc
     assert 'Final answer must include: verification: <commands run and result>' in worker_message
     assert 'Do not leave the job at a progress update such as checking final diff or preparing summary.' in worker_message
     assert 'explicitly check execution_contract' in reviewer_message
+    assert 'Node: node-001' in reviewer_message
+    assert 'Canonical node work packet:' in reviewer_message
     assert 'reject hidden fallback, scope shrink, and fake success' in reviewer_message
-    round_reviewer_message = submitted[3].message
+    round_reviewer_message = submitted[2].message
     assert round_reviewer_message.startswith('FINAL ANSWER FORMAT - parser enforced:\n')
     assert 'Do not describe what you are about to do.' in round_reviewer_message
     assert 'Do not run tests, tools, shell commands, or verification steps' in round_reviewer_message
@@ -3072,29 +3418,29 @@ def test_loop_runner_direct_execution_route_runs_ask_first_round_without_dispatc
     assert 'Supplied round evidence artifacts:' in round_reviewer_message
     assert 'Worker reply content:' in round_reviewer_message
     assert 'Reviewer reply content:' in round_reviewer_message
-    assert 'Orchestrator reply content:' in round_reviewer_message
     round_json = json.loads(Path(str(payload['round']['round_json_path'])).read_text(encoding='utf-8'))
+    assert round_json['schema'] == 'ccb.loop.workgroup_round_state.v1'
     assert round_json['workgroup_state_schema'] == 'ccb.loop.workgroup_round_state.v1'
     assert round_json['orchestration_bundle']['node_count'] == 1
     assert set(round_json['workgroups']) == {'node-001'}
+    assert set(round_json['nodes']) == {'node-001'}
+    assert round_json['nodes']['node-001']['status'] == 'integrated'
     assert round_json['workgroups']['node-001']['worker_agent'].startswith(f'loop-{payload["loop_id"]}-coder-')
     assert round_json['workgroups']['node-001']['reviewer_agent'].startswith(
         f'loop-{payload["loop_id"]}-code_reviewer-'
     )
     assert round_json['worker']['freshness']['status'] == 'cleared'
     assert round_json['reviewer']['freshness']['status'] == 'cleared'
-    assert round_json['orchestrator']['freshness']['status'] == 'cleared'
+    assert round_json['orchestrator'] == {}
     assert round_json['ccb_round_reviewer']['freshness']['status'] == 'cleared'
     assert f'reply from loop-{payload["loop_id"]}-coder-1' in round_reviewer_message
     assert f'reply from loop-{payload["loop_id"]}-code_reviewer-1' in round_reviewer_message
-    assert 'reply from ccb_orchestrator' in round_reviewer_message
     normalized_proposal = json.loads(Path(str(payload['topology']['proposal_path'])).read_text(encoding='utf-8'))
     desired = json.loads(Path(str(payload['topology']['desired_path'])).read_text(encoding='utf-8'))
     observed = json.loads(Path(str(payload['topology']['observed_path'])).read_text(encoding='utf-8'))
     assert [agent['profile'] for agent in normalized_proposal['agents']] == [
         'coder',
         'code_reviewer',
-        'ccb_orchestrator',
         'ccb_round_reviewer',
     ]
     assert {
@@ -3103,7 +3449,6 @@ def test_loop_runner_direct_execution_route_runs_ask_first_round_without_dispatc
     } == {
         f'loop-{payload["loop_id"]}-coder-1': 'ccb-exec',
         f'loop-{payload["loop_id"]}-code_reviewer-1': 'ccb-exec',
-        'ccb_orchestrator': 'ccb-plan',
         'ccb_round_reviewer': 'ccb-plan',
     }
     assert [window['name'] for window in normalized_proposal['windows']] == ['ccb-exec', 'ccb-plan']
@@ -3158,7 +3503,7 @@ def test_loop_runner_ask_first_round_reviewer_malformed_reply_gets_bounded_corre
         elif target == 'ccb_round_reviewer':
             reply = (
                 'round result: pass\n'
-                'correction_of_job: job_4\n'
+                'correction_of_job: job_3\n'
                 'verification performed: corrected first-line machine result for same evidence\n'
             )
         else:
@@ -3201,24 +3546,25 @@ def test_loop_runner_ask_first_round_reviewer_malformed_reply_gets_bounded_corre
     assert payload['round_result'] == 'pass'
     assert payload['round_result_source'] == 'round_reviewer_correction_reply'
     assert payload['task_status'] == 'done'
-    assert payload['release']['released_count'] == 4
+    assert payload['release']['released_count'] == 3
     targets = [command.target for command in submitted]
-    assert len(targets) == 5
-    assert targets[3:] == ['ccb_round_reviewer', 'ccb_round_reviewer']
-    assert submitted[4].task_id.endswith('-round-reviewer-correction')
-    assert 'Previous reviewer job: job_4' in submitted[4].message
-    assert 'Previous first non-empty line: 根据提供的证据，执行合约审计通过。' in submitted[4].message
-    assert 'FINAL ANSWER FORMAT - parser enforced:' in submitted[4].message
-    assert 'If that evidence is insufficient, the first line must be exactly: round result: blocked' in submitted[4].message
+    assert len(targets) == 4
+    assert targets[2:] == ['ccb_round_reviewer', 'ccb_round_reviewer']
+    assert submitted[3].task_id.endswith('-round-reviewer-correction')
+    assert 'Previous reviewer job: job_3' in submitted[3].message
+    assert 'Previous first non-empty line: 根据提供的证据，执行合约审计通过。' in submitted[3].message
+    assert 'FINAL ANSWER FORMAT - parser enforced:' in submitted[3].message
+    assert 'If that evidence is insufficient, the first line must be exactly: round result: blocked' in submitted[3].message
     round_json = json.loads(Path(str(payload['round']['round_json_path'])).read_text(encoding='utf-8'))
     assert round_json['ccb_round_reviewer']['purpose'] == 'ccb_round_reviewer_correction'
-    assert round_json['ccb_round_reviewer']['correction_source_job_id'] == 'job_4'
+    assert round_json['ccb_round_reviewer']['correction_source_job_id'] == 'job_3'
     loop_dir = Path(str(payload['round']['round_json_path'])).parent
     asks = [json.loads(line) for line in (loop_dir / 'asks.jsonl').read_text(encoding='utf-8').splitlines()]
     assert [ask['purpose'] for ask in asks][-2:] == [
-        'ccb_round_reviewer',
-        'ccb_round_reviewer_correction',
+        'round_reviewer',
+        'round_reviewer',
     ]
+    assert [ask['attempt'] for ask in asks][-2:] == [1, 2]
     events = [json.loads(line) for line in (loop_dir / 'events.jsonl').read_text(encoding='utf-8').splitlines()]
     assert any(event['kind'] == 'round_reviewer_result_correction_requested' for event in events)
 
@@ -3272,12 +3618,12 @@ def test_loop_runner_ask_first_uses_completed_auto_retry_successor(
 
     def fake_watch_ask_job(_context, job_id, _out, *, timeout, emit_output):
         watched.append(str(job_id))
-        target = targets_by_job.get(str(job_id), 'ccb_orchestrator')
+        target = targets_by_job.get(str(job_id), 'ccb_round_reviewer')
         if target.startswith('loop-') and '-coder-' in target:
             workspace = _seed_copy_workspace_binding(context, project_root, target)
             _write(workspace / 'lab_docs' / 'direct_execution_note.md', 'status: reviewed\n')
-        if target == 'ccb_orchestrator' and str(job_id) == 'job_3':
-            retry_jobs = project_root / '.ccb' / 'agents' / 'ccb_orchestrator' / 'jobs.jsonl'
+        if target == 'ccb_round_reviewer' and str(job_id) == 'job_3':
+            retry_jobs = project_root / '.ccb' / 'agents' / 'ccb_round_reviewer' / 'jobs.jsonl'
             retry_jobs.parent.mkdir(parents=True, exist_ok=True)
             retry_jobs.write_text(
                 json.dumps(
@@ -3291,7 +3637,7 @@ def test_loop_runner_ask_first_uses_completed_auto_retry_successor(
                 + '\n',
                 encoding='utf-8',
             )
-            targets_by_job['job_3_retry'] = 'ccb_orchestrator'
+            targets_by_job['job_3_retry'] = 'ccb_round_reviewer'
             return _watch_batch(
                 str(job_id),
                 target=target,
@@ -3301,9 +3647,9 @@ def test_loop_runner_ask_first_uses_completed_auto_retry_successor(
         if str(job_id) == 'job_3_retry':
             return _watch_batch(
                 str(job_id),
-                target='ccb_orchestrator',
+                target='ccb_round_reviewer',
                 status='completed',
-                reply='release readiness: ready after retry',
+                reply='round result: pass\nverification performed: retry successor evidence\n',
             )
         if target == 'ccb_round_reviewer':
             return _watch_batch(
@@ -3331,13 +3677,13 @@ def test_loop_runner_ask_first_uses_completed_auto_retry_successor(
 
     assert payload['loop_runner_status'] == 'ok'
     assert payload['round_result'] == 'pass'
-    assert watched == ['job_1', 'job_2', 'job_3', 'job_3_retry', 'job_4']
+    assert watched == ['job_1', 'job_2', 'job_3', 'job_3_retry']
     round_json = json.loads(Path(str(payload['round']['round_json_path'])).read_text(encoding='utf-8'))
-    assert round_json['orchestrator']['job_id'] == 'job_3_retry'
-    assert round_json['orchestrator']['status'] == 'completed'
-    assert round_json['orchestrator']['retry_source_job_id'] == 'job_3'
-    assert round_json['orchestrator']['retry_successor_job_id'] == 'job_3_retry'
-    assert round_json['orchestrator']['retry_lineage'] == ['job_3']
+    assert round_json['ccb_round_reviewer']['job_id'] == 'job_3_retry'
+    assert round_json['ccb_round_reviewer']['status'] == 'completed'
+    assert round_json['ccb_round_reviewer']['retry_source_job_id'] == 'job_3'
+    assert round_json['ccb_round_reviewer']['retry_successor_job_id'] == 'job_3_retry'
+    assert round_json['ccb_round_reviewer']['retry_lineage'] == ['job_3']
 
 
 def test_loop_runner_ask_first_without_explicit_timeout_waits_for_natural_ask_terminal(
@@ -3413,12 +3759,12 @@ def test_loop_runner_ask_first_without_explicit_timeout_waits_for_natural_ask_te
 
     assert payload['loop_runner_status'] == 'ok'
     assert payload['round_result'] == 'pass'
-    assert observed_timeouts == [0.0, 0.0, 0.0, 0.0]
+    assert observed_timeouts == [0.0, 0.0, 0.0]
     round_json = json.loads(Path(str(payload['round']['round_json_path'])).read_text(encoding='utf-8'))
     assert 'round_checker' not in round_json['agents']
     assert 'round_checker' not in round_json
     assert round_json['legacy_aliases']['round_checker']['field'] == 'ccb_round_reviewer'
-    assert round_json['topology']['release']['released_count'] == 4
+    assert round_json['topology']['release']['released_count'] == 3
     assert round_json['authority_update']['source'] == 'isolated_workspace_changes_promoted'
     assert round_json['authority_update']['changed_files'] == ['lab_docs/direct_execution_note.md']
     assert round_json['authority_update']['allowed_change_paths'] == ['lab_docs/direct_execution_note.md']
@@ -3606,7 +3952,12 @@ def test_loop_runner_direct_execution_uses_configured_orchestrator_agent_name(
     )
 
     targets = [command.target for command in submitted]
-    assert targets[2] == 'orchestrator'
+    assert targets == [
+        f'loop-{payload["loop_id"]}-coder-1',
+        f'loop-{payload["loop_id"]}-code_reviewer-1',
+        'ccb_round_reviewer',
+    ]
+    assert 'orchestrator' not in targets
     assert payload['round_result'] == 'pass'
     assert payload['task_status'] == 'done'
     assert payload['release']['released_count'] == 2
@@ -3615,7 +3966,7 @@ def test_loop_runner_direct_execution_uses_configured_orchestrator_agent_name(
     assert [window['name'] for window in proposal['windows']] == ['ccb-exec']
     round_json = json.loads(Path(str(payload['round']['round_json_path'])).read_text(encoding='utf-8'))
     assert round_json['agents']['orchestrator'] == 'orchestrator'
-    assert round_json['orchestrator']['target'] == 'orchestrator'
+    assert round_json['orchestrator'] == {}
 
 
 def test_loop_runner_direct_execution_pending_worker_ask_pauses_without_import_or_release(
@@ -3686,7 +4037,9 @@ def test_loop_runner_direct_execution_pending_worker_ask_pauses_without_import_o
     assert submitted[0].target.startswith(f'loop-{payload["loop_id"]}-coder-')
     loop_dir = project_root / '.ccb' / 'runtime' / 'loops' / payload['loop_id']
     state = json.loads((loop_dir / 'ask_first_stage_state.json').read_text(encoding='utf-8'))
-    assert state['status'] == 'pending'
+    assert state['schema'] == 'ccb.loop.workgroup_round_state.v1'
+    assert state['status'] == 'executing'
+    assert state['legacy_status'] == 'pending'
     assert state['task_id'] == 'task-direct'
     assert state['loop_id'] == payload['loop_id']
     assert state['stage'] == 'worker_ask'
@@ -3806,7 +4159,9 @@ def test_loop_runner_direct_execution_resumes_persisted_worker_reply_and_submits
     worker_artifact = loop_dir / 'artifacts' / 'worker-reply.md'
     assert worker_artifact.read_text(encoding='utf-8') == 'status: done\nworker evidence: persisted reply\n'
     state = json.loads((loop_dir / 'ask_first_stage_state.json').read_text(encoding='utf-8'))
-    assert state['status'] == 'pending'
+    assert state['schema'] == 'ccb.loop.workgroup_round_state.v1'
+    assert state['status'] == 'executing'
+    assert state['legacy_status'] == 'pending'
     assert state['purpose'] == 'reviewer'
     assert state['current_artifacts']['worker']['job_id'] == 'job_1'
     assert state['current_artifacts']['worker']['artifact'] == str(worker_artifact)
@@ -4319,7 +4674,7 @@ def test_loop_runner_direct_execution_resume_terminal_worker_failure_blocks(
     assert second['round_result'] == 'blocked'
     assert second['round_result_source'] == 'ask_job_incomplete'
     assert second['task_status'] == 'blocked'
-    assert second['release']['released_count'] == 4
+    assert second['release']['released_count'] == 3
     assert len(submitted) == 1
     round_json = json.loads(Path(str(second['round']['round_json_path'])).read_text(encoding='utf-8'))
     assert round_json['worker']['status'] == 'failed'
@@ -4413,7 +4768,7 @@ def test_loop_runner_direct_execution_promotes_isolated_workspace_changes_before
     assert payload['round_result'] == 'pass'
     assert payload['round_result_source'] == 'round_reviewer_reply'
     assert payload['task_status'] == 'done'
-    assert payload['release']['released_count'] == 4
+    assert payload['release']['released_count'] == 3
     assert (project_root / 'lab_docs' / 'l1_release_note.md').read_text(encoding='utf-8') == 'status: reviewed\n'
     round_json = json.loads(Path(str(payload['round']['round_json_path'])).read_text(encoding='utf-8'))
     assert round_json['round_result'] == 'pass'
@@ -4706,7 +5061,7 @@ def test_loop_runner_direct_execution_blocks_when_workspace_promotion_fails(
     assert payload['round_result'] == 'blocked'
     assert payload['round_result_source'] == 'isolated_workspace_promotion_failed'
     assert payload['task_status'] == 'blocked'
-    assert payload['release']['released_count'] == 4
+    assert payload['release']['released_count'] == 3
     assert (project_root / 'lab_docs' / 'l1_release_note.md').read_text(encoding='utf-8') == 'status: draft\n'
     round_json = json.loads(Path(str(payload['round']['round_json_path'])).read_text(encoding='utf-8'))
     assert round_json['round_result'] == 'blocked'
@@ -5575,7 +5930,7 @@ def test_loop_runner_partial_completion_route_imports_partial_without_done(
     assert payload['round_result'] == 'partial'
     assert payload['task_status'] == 'partial'
     assert payload['next_activation'] == 'planner'
-    assert len(submitted) == 4
+    assert len(submitted) == 3
     assert all(command.sender == 'system' for command in submitted)
     assert all(command.callback is False for command in submitted)
     assert all(command.silence is False for command in submitted)
@@ -5670,13 +6025,12 @@ def test_loop_runner_direct_execution_uses_one_bounded_rework_cycle(
     assert payload['loop_runner_status'] == 'ok'
     assert payload['round_result'] == expected_result
     assert payload['task_status'] == expected_status
-    assert payload['release']['released_count'] == 4
+    assert payload['release']['released_count'] == 3
     assert [command.task_id for command in submitted] == [
         f'{payload["loop_id"]}-worker',
         f'{payload["loop_id"]}-reviewer',
         f'{payload["loop_id"]}-worker-rework',
         f'{payload["loop_id"]}-reviewer-recheck',
-        f'{payload["loop_id"]}-orchestrator',
         f'{payload["loop_id"]}-round-reviewer',
     ]
     assert all(command.sender == 'system' for command in submitted)
@@ -5702,7 +6056,7 @@ def test_loop_runner_direct_execution_uses_one_bounded_rework_cycle(
         json.loads(line)['purpose']
         for line in (project_root / '.ccb' / 'runtime' / 'loops' / payload['loop_id'] / 'asks.jsonl').read_text(encoding='utf-8').splitlines()
     ]
-    assert asks == ['worker', 'reviewer', 'worker_rework', 'reviewer_recheck', 'orchestrator', 'ccb_round_reviewer']
+    assert asks == ['worker', 'reviewer', 'worker_rework', 'reviewer_recheck', 'round_reviewer']
     shown = plan_task(context, SimpleNamespace(action='task-show', task_id='task-rework'))
     assert shown['task']['status'] == expected_status
     assert shown['task']['current_loop'] is None
@@ -5885,7 +6239,7 @@ def test_loop_runner_direct_execution_submit_failure_blocks_and_releases(
     assert payload['round_result'] == 'blocked'
     assert payload['round_result_source'] == 'ask_submission_failed'
     assert payload['task_status'] == 'blocked'
-    assert payload['release']['released_count'] == 4
+    assert payload['release']['released_count'] == 3
     assert payload['release']['retained_count'] == 0
     assert len(submitted) == 1
     assert submitted[0].target.startswith(f'loop-{payload["loop_id"]}-coder-')
@@ -5898,7 +6252,7 @@ def test_loop_runner_direct_execution_submit_failure_blocks_and_releases(
     assert round_json['failure']['source'] == 'ask_submission_failed'
     assert round_json['failure']['stage'] == 'worker_ask'
     assert round_json['failure']['reason'] == 'submit transport failed'
-    assert round_json['topology']['release']['released_count'] == 4
+    assert round_json['topology']['release']['released_count'] == 3
     assert round_json['authority_import']['status'] == 'blocked'
     shown = plan_task(context, SimpleNamespace(action='task-show', task_id='task-direct'))
     assert shown['task']['status'] == 'blocked'
@@ -6211,7 +6565,7 @@ def test_loop_runner_direct_execution_persisted_failed_terminal_blocks_with_evid
     assert blocked['round_result'] == 'blocked'
     assert blocked['round_result_source'] == 'ask_job_incomplete'
     assert blocked['task_status'] == 'blocked'
-    assert blocked['release']['released_count'] == 4
+    assert blocked['release']['released_count'] == 3
     round_json = json.loads(Path(str(blocked['round']['round_json_path'])).read_text(encoding='utf-8'))
     assert round_json['worker']['status'] == 'failed'
     assert round_json['worker']['watch_source'] == 'persisted_terminal'
@@ -6364,7 +6718,6 @@ def test_round_reviewer_message_highlights_contract_expected_round_result() -> N
         worker={'job_id': 'job_worker', 'status': 'completed'},
         reviewer={'job_id': 'job_reviewer', 'status': 'completed'},
         rework={},
-        orchestrator={'job_id': 'job_orchestrator', 'status': 'completed'},
         authority_update=None,
     )
 
@@ -6390,7 +6743,6 @@ def test_round_reviewer_message_highlights_converged_expected_round_result() -> 
         worker={'job_id': 'job_worker', 'status': 'completed'},
         reviewer={'job_id': 'job_reviewer', 'status': 'completed'},
         rework={},
-        orchestrator={'job_id': 'job_orchestrator', 'status': 'completed'},
         authority_update=None,
     )
 
@@ -6398,13 +6750,11 @@ def test_round_reviewer_message_highlights_converged_expected_round_result() -> 
     assert 'your first line must be exactly: round result: pass' in message
 
 
-def test_round_reviewer_message_includes_reply_artifacts_and_surfaces_missing_artifact(tmp_path: Path) -> None:
+def test_round_reviewer_message_includes_worker_and_reviewer_reply_artifacts(tmp_path: Path) -> None:
     worker_artifact = tmp_path / 'worker-reply.md'
     reviewer_artifact = tmp_path / 'reviewer-reply.md'
     worker_artifact.write_text('worker says verification passed\n', encoding='utf-8')
     reviewer_artifact.write_text('reviewer says status: pass\n', encoding='utf-8')
-    missing_orchestrator_artifact = tmp_path / 'missing-orchestrator-reply.md'
-
     message = loop_ask_first_module._round_reviewer_message(
         loop_id='lp-test',
         task_id='task-pass',
@@ -6413,11 +6763,6 @@ def test_round_reviewer_message_includes_reply_artifacts_and_surfaces_missing_ar
         worker={'job_id': 'job_worker', 'status': 'completed', 'artifact': str(worker_artifact)},
         reviewer={'job_id': 'job_reviewer', 'status': 'completed', 'artifact': str(reviewer_artifact)},
         rework={},
-        orchestrator={
-            'job_id': 'job_orchestrator',
-            'status': 'completed',
-            'artifact': str(missing_orchestrator_artifact),
-        },
         authority_update=None,
     )
 
@@ -6426,21 +6771,10 @@ def test_round_reviewer_message_includes_reply_artifacts_and_surfaces_missing_ar
     assert 'worker says verification passed' in message
     assert f'Reviewer reply artifact: {reviewer_artifact}' in message
     assert 'reviewer says status: pass' in message
-    assert f'Orchestrator reply artifact: {missing_orchestrator_artifact}' in message
-    assert '<artifact read failed: FileNotFoundError:' in message
+    assert 'Orchestrator reply artifact:' not in message
 
 
-def test_orchestrator_and_task_detailer_prompts_are_reply_only_authority() -> None:
-    post_review_message = loop_ask_first_module._orchestrator_message(
-        loop_id='lp-test',
-        task_id='task-direct',
-        task_text='expected_route: direct_execution\n',
-        artifact_refs={'task_packet': 'tasks/task/task_packet.md', 'execution_contract': 'tasks/task/execution_contract.md'},
-        worker={'job_id': 'job_worker', 'status': 'completed'},
-        reviewer={'job_id': 'job_reviewer', 'status': 'completed'},
-        rework={},
-        authority_update=None,
-    )
+def test_planning_role_prompts_are_reply_only_authority() -> None:
     task_detailer_message = loop_runner_module._task_detailer_message(
         {
             'activation_id': 'act-1',
@@ -6477,7 +6811,7 @@ def test_orchestrator_and_task_detailer_prompts_are_reply_only_authority() -> No
         }
     )
 
-    for message in (post_review_message, task_detailer_message, planner_message, plan_reviewer_message):
+    for message in (task_detailer_message, planner_message, plan_reviewer_message):
         assert 'reply only' in message.lower()
         assert 'do not run ccb' in message.lower()
         assert 'ccb_test' in message
@@ -6557,23 +6891,23 @@ def test_loop_runner_direct_execution_unknown_round_result_blocks_and_releases(
     assert payload['round_result'] == 'blocked'
     assert payload['round_result_source'] == 'unknown_round_result'
     assert payload['task_status'] == 'blocked'
-    assert payload['release']['released_count'] == 4
+    assert payload['release']['released_count'] == 3
     assert payload['release']['retained_count'] == 0
-    assert len(submitted) == 5
-    assert submitted[4].target == 'ccb_round_reviewer'
-    assert submitted[4].task_id.endswith('-round-reviewer-correction')
-    assert 'Unknown first-line value observed: mystery' in submitted[4].message
+    assert len(submitted) == 4
+    assert submitted[3].target == 'ccb_round_reviewer'
+    assert submitted[3].task_id.endswith('-round-reviewer-correction')
+    assert 'Unknown first-line value observed: mystery' in submitted[3].message
     assert (project_root / 'lab_docs' / 'unknown_round_note.md').read_text(encoding='utf-8') == 'status: draft\n'
     round_json = json.loads(Path(str(payload['round']['round_json_path'])).read_text(encoding='utf-8'))
     assert round_json['ccb_round_reviewer']['purpose'] == 'ccb_round_reviewer_correction'
-    assert round_json['ccb_round_reviewer']['correction_source_job_id'] == 'job_4'
+    assert round_json['ccb_round_reviewer']['correction_source_job_id'] == 'job_3'
     assert round_json['ccb_round_reviewer']['correction_source_round_result_source'] == 'unknown_round_result'
     assert round_json['failure']['source'] == 'unknown_round_result'
     assert round_json['failure']['reason'] == "unknown round result 'mystery'"
     assert round_json['failure']['unknown_round_result'] == 'mystery'
     assert round_json['failure']['authority_rollback'] == 'restored_project_root'
     assert round_json['authority_update']['authority_rollback'] == 'restored_project_root'
-    assert round_json['topology']['release']['released_count'] == 4
+    assert round_json['topology']['release']['released_count'] == 3
     assert round_json['authority_import']['status'] == 'blocked'
     shown = plan_task(context, SimpleNamespace(action='task-show', task_id='task-direct'))
     assert shown['task']['status'] == 'blocked'
@@ -11410,6 +11744,114 @@ def test_loop_runner_role_output_import_blocks_unknown_orchestrator_route_withou
     assert set(shown['task']['artifacts']) == {'task_packet', 'execution_contract'}
 
 
+def test_loop_runner_v3_orchestrator_missing_bundle_blocks_without_semantic_import(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = _project_with_loop_capacity(tmp_path, monkeypatch)
+    task_id = 'task-v3-bundle-required'
+    _add_ready_plan_task(project_root, task_id=task_id)
+    _write_completion_snapshot(
+        project_root,
+        job_id='job_v3_missing_bundle',
+        agent_name='orchestrator',
+        reply='route: direct_execution\n\norchestration_notes: implement the bounded task.\n',
+    )
+    command = ParsedLoopRunnerCommand(
+        project=None,
+        once=True,
+        task_id=task_id,
+        role_job_id='job_v3_missing_bundle',
+        consume_role_output=True,
+        json_output=True,
+    )
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+
+    payload = loop_runner_once(
+        context,
+        command,
+        services=SimpleNamespace(
+            plan_task=plan_task,
+            effective_capacity_snapshot=lambda _context: _multi_workgroup_capacity_snapshot(),
+        ),
+    )
+
+    assert payload['loop_runner_status'] == 'blocked'
+    assert payload['action'] == 'role_output_import_blocked'
+    assert payload['reason'] == 'orchestrator_bundle_candidate_required'
+    assert payload['evidence']['config_version'] == 3
+    shown = plan_task(context, SimpleNamespace(action='task-show', task_id=task_id))
+    assert shown['task']['task_revision'] == 1
+    assert set(shown['task']['artifacts']) == {'task_packet', 'execution_contract'}
+
+
+def test_loop_runner_rejects_stale_managed_orchestrator_activation_before_import(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = _project_with_loop_capacity(tmp_path, monkeypatch)
+    task_id = 'task-stale-orchestrator'
+    _add_ready_plan_task(project_root, task_id=task_id)
+    command = ParsedLoopRunnerCommand(
+        project=None,
+        once=True,
+        task_id=task_id,
+        role_job_id='job_stale_orchestrator',
+        consume_role_output=True,
+        json_output=True,
+    )
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+    _write_json(
+        project_root / '.ccb' / 'runtime' / 'loops' / 'activations' / 'act-stale-orchestrator.json',
+        {
+            'schema_version': 1,
+            'record_type': 'ccb_loop_orchestrator_activation',
+            'activation_id': 'act-stale-orchestrator',
+            'action': 'activate_orchestrator',
+            'task_id': task_id,
+            'task_revision': 1,
+            'ask': {
+                'target': 'orchestrator',
+                'job_id': 'job_stale_orchestrator',
+                'status': 'accepted',
+            },
+        },
+    )
+    replacement = project_root / 'drafts' / 'stale-task-packet.md'
+    _write(replacement, 'replacement task packet after activation\n')
+    changed = plan_task(
+        context,
+        SimpleNamespace(
+            action='task-artifact',
+            task_id=task_id,
+            artifact_kind='task_packet',
+            file_path=str(replacement),
+        ),
+    )
+    assert changed['task']['task_revision'] == 2
+    _write_completion_snapshot(
+        project_root,
+        job_id='job_stale_orchestrator',
+        agent_name='orchestrator',
+        reply='route: direct_execution\n\norchestration_notes: stale output must not import.\n',
+    )
+
+    payload = loop_runner_once(context, command, services=SimpleNamespace(plan_task=plan_task))
+
+    assert payload['loop_runner_status'] == 'blocked'
+    assert payload['action'] == 'role_output_import_blocked'
+    assert payload['reason'] == 'stale_managed_activation_task_revision'
+    assert payload['evidence'] == {
+        'task_id': task_id,
+        'expected_task_revision': 1,
+        'current_task_revision': 2,
+    }
+    shown = plan_task(context, SimpleNamespace(action='task-show', task_id=task_id))
+    assert shown['task']['task_revision'] == 2
+    assert 'orchestration_notes' not in shown['task']['artifacts']
+    assert 'orchestration_bundle' not in shown['task']['artifacts']
+
+
 def test_loop_runner_role_output_imports_explicit_multi_workgroup_bundle(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -11432,6 +11874,13 @@ def test_loop_runner_role_output_imports_explicit_multi_workgroup_bundle(
         'schema': 'ccb.loop.orchestration_bundle_candidate.v1',
         'task_id': task_id,
         'bundle_revision': 1,
+        'selection': {
+            'workgroup_count': 2,
+            'complexity': 'bounded',
+            'cutability': 'high',
+            'execution_shape': 'parallel',
+            'rationale': 'Core and CLI scopes are independently reviewable.',
+        },
         'nodes': [
             {
                 'node_id': 'node-001',
@@ -11493,7 +11942,14 @@ def test_loop_runner_role_output_imports_explicit_multi_workgroup_bundle(
     )
     context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
 
-    payload = loop_runner_once(context, command, services=SimpleNamespace(plan_task=plan_task))
+    payload = loop_runner_once(
+        context,
+        command,
+        services=SimpleNamespace(
+            plan_task=plan_task,
+            effective_capacity_snapshot=lambda _context: _multi_workgroup_capacity_snapshot(),
+        ),
+    )
 
     assert payload['loop_runner_status'] == 'ok'
     assert payload['action'] == 'imported_orchestration_notes'
