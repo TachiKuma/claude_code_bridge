@@ -1470,30 +1470,29 @@ Evidence:
 
 ## Active TODO
 
-1. Freeze the current one-workgroup execution and Config V2 regression corpus,
-   then land the structured orchestration-bundle and node-state contracts.
-2. Generalize the direct engine to a node map and one-node synthetic bundle,
-   preserving current behavior before enabling fanout.
-3. Add node worktree/reviewed-commit/integration/promotion/rollback support,
-   then enable exact-once ready-frontier scheduling for 2-4 workgroups.
-4. Implement Config V3 with two resident roles, five immaculate dynamic
+1. Freeze the remaining F1 authority interfaces: task revision, capacity
+   snapshot/digest, final bundle/node schemas, and node-keyed exact-once key.
+2. Complete G1 so the one-group path uses node state exclusively and no normal
+   post-worker orchestrator activation remains.
+3. Run the goal's parallel R1/C1/P1 packages, integrate them one at a time,
+   then start R2/T1/E1 only after the first wave gate passes.
+4. Complete Git integration and exact-once 2-4 workgroup scheduling, including
+   topology, busy-retain, rollback, restart, and residue evidence.
+5. Implement Config V3 with two resident roles, five immaculate dynamic
    profiles, provider/model/RolePack validation, explicit semantic/physical
-   capacity, effective JSON, migration dry-run, and V2 compatibility.
-5. Run direct `talk2` source/fake/visible-real/package acceptance and publish
-   only after the clean candidate, exact npm version/tag, install/update/
-   rollback evidence, and registry intent agree.
+   capacity, then run direct `talk2` source/fake/visible-real/package gates.
 
 ## Next Gate
 
-Complete G0 and G1 in
+Complete F1 and the remaining G1 closure in
 [goals/single-lane-multi-workgroup-release-goal.md](goals/single-lane-multi-workgroup-release-goal.md):
-freeze baseline evidence, implement/validate the bundle contract, and prove the
-current one-workgroup route uses the generalized node engine before adding
-parallel workgroups.
+bind the final authority envelope, move the current one-workgroup route wholly
+onto the generalized node engine, and remove the normal post-worker
+orchestrator before starting Git integration or parallel workgroups.
 
 ## Blocked By
 
-No external dependency blocks G0. Source implementation is blocked only on
+No external dependency blocks F1/G1. Source implementation is blocked only on
 keeping the new bundle/controller boundary and Config V3 lifecycle contract
 coherent. Multi-lane work, default enablement, and publication remain blocked
 until the single-lane multi-workgroup goal passes. Exact release version and

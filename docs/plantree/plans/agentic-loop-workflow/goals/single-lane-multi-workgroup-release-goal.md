@@ -1,7 +1,7 @@
 # Single-Lane Multi-Workgroup Release Goal
 
 Date: 2026-07-10
-Status: Ready for implementation
+Status: In progress; G1 foundation landed
 
 ## Goal
 
@@ -38,17 +38,25 @@ Already available and preserved:
 - dynamic role profiles, Git worktree substrate, mount-only topology,
   deterministic window placement, six-pane execution windows, overflow,
   busy-retain, release retry, and visible sidebar evidence;
-- source/fake and real-provider single-workgroup evidence.
+- source/fake and real-provider single-workgroup evidence;
+- commit `34027943` adds the first G1 foundation: strict one-to-four-node
+  bundle import/validation, canonical work packets, deterministic ordering,
+  explicit orchestrator candidate import, one-node compatibility evidence,
+  and a multi-node pre-bind pause. Evidence is recorded in
+  [../history/single-lane-multi-workgroup-g1-foundation-20260710.md](../history/single-lane-multi-workgroup-g1-foundation-20260710.md).
 
 Blocking gaps:
 
 - the direct engine still creates one hard-coded coder/reviewer pair;
-- stage state, submission intent, result synthesis, and promotion are scalar;
+- the canonical bundle still needs task-revision and effective-capacity digest
+  binding before its V1 authority envelope is frozen;
+- stage state now exposes a node map, but submission intent, result synthesis,
+  promotion, and parts of recovery still use the scalar compatibility mirror;
 - existing multi-node tests stop at mount/layout/release and do not execute one
   task through several reviewed workgroups;
 - parallel workers cannot safely promote their deltas independently to the
   shared project root;
-- no structured orchestration-bundle authority is imported and validated;
+- the normal pass path still makes a post-worker orchestrator call;
 - `max_nodes` currently counts physical profile instances, not semantic
   workgroups;
 - Config V3 is design-only and its older draft incorrectly treats immaculate
@@ -101,9 +109,146 @@ Blocking gaps:
 10. V2 static config behavior remains byte/behavior compatible where the
     existing contract is defined.
 
+## Production-Ready Definition
+
+For this goal, "single-lane production-ready" means all of the following at
+the same frozen commit:
+
+- one project has one active Workflow Lane and one macro task at a time;
+- that task can use one to four reviewed workgroups in parallel, serial, or
+  mixed DAG form without enabling concurrent Roadmap Lanes;
+- the one-workgroup case uses the same bundle, node state, recovery, review,
+  integration, result, and release kernel as the multi-workgroup case;
+- Config V2 remains the static compatibility surface and Config V3 is an
+  opt-in validated dynamic surface;
+- source, fake-provider, visible Codex/Claude, UI/lifecycle, restart/failure,
+  package install, update, and rollback gates all pass;
+- the packed candidate can be installed and run outside the source checkout
+  with evidence tied to one commit and artifact digest.
+
+Production-ready does not automatically authorize registry publication.
+Publishing, tagging, and changing the installed global CCB remain a separate
+explicit user decision after the candidate gate passes.
+
+## Remaining Dependency Graph
+
+The critical path is deliberately ordered:
+
+```text
+F1 authority-interface freeze
+  -> G1 one-node generalized kernel
+  -> G2 Git worktree/integration kernel
+  -> G3 ready-frontier scheduler and lifecycle
+  -> G5 source/fake acceptance
+  -> G6 visible real-provider acceptance
+  -> G7 packed-candidate/install/update/rollback gate
+```
+
+Config V3 and RolePack work may proceed beside the runtime critical path only
+after F1 freezes task revision, capacity snapshot/digest, bundle/node schemas,
+role names, and capacity terminology. They must rejoin before G3 capacity and
+G5 acceptance. Test/evidence scaffolding may proceed early, but it cannot
+claim runtime behavior before the implementation exists.
+
+## Whole-Block Parallel Delegation Plan
+
+Workers may be used for coherent implementation packages, not for validation
+authority and not for several agents editing the same kernel concurrently.
+Each package has one owner, one dedicated Git worktree/branch, an explicit
+file boundary, focused tests, and a clean commit.
+
+### Wave 0: Talk2 Contract Freeze
+
+`talk2` owns F1 and does not delegate it. Freeze the remaining V1 authority
+fields, capacity snapshot interface, node-state enum, exact-once intent key,
+result mapping, and ownership boundaries. Update the goal/topic/decision first
+if implementation discovers a contradiction.
+
+### Wave 1: Three Parallel Whole Blocks
+
+| Package | Scope | Primary ownership | Depends on |
+| :--- | :--- | :--- | :--- |
+| R1 G1 runtime closure | Task revision/capacity binding, sole node-map one-group execution, node-keyed intent/recovery, node work-packet consumption, remove normal post-worker orchestrator | Bundle, plan-task, runner, ask-first, role-output import services and focused tests | F1 |
+| C1 Config V3 core | Version dispatch, V3 models/compiler/validator/effective JSON/migration dry-run, required roles/provider/model/RolePack/capacity checks, frozen V2 corpus | Config loader/models/CLI validation and new config tests; no loop runtime edits | F1 |
+| P1 RolePack contract | Orchestrator candidate output, node worker/reviewer, integration and round-review compact contracts, role projection tests | RolePack/spec/projection surfaces only; no controller authority code | F1 |
+
+`talk2` reviews and integrates R1 first, then C1 and P1 one at a time. The
+wave closes only after focused suites and the non-Gemini repository gate pass
+on the combined branch.
+
+### Wave 2: Three Parallel Whole Blocks
+
+| Package | Scope | Primary ownership | Depends on |
+| :--- | :--- | :--- | :--- |
+| R2 Git integration kernel | Clean-Git/scope preflight, node and integration worktrees, tree digest, reviewed commit, deterministic merge/test, promotion, rollback, cleanup | New integration service plus isolated Git tests | R1 |
+| T1 topology/capacity generalization | Compile one to four pairs, semantic versus physical limits, names/windows/overflow, owner-scoped release and busy-retain | Topology, capacity, placement/lifecycle services and focused tests | R1 + C1 |
+| E1 evidence and fake harness | Bundle/node/Git/integration/release/B7 schemas, deterministic fixtures, negative classifications | New or existing evidence scripts and dedicated tests; no source authority mutation | R1 contract |
+
+`talk2` integrates R2 before T1 and E1, then runs the combined Git/topology/
+evidence matrix. A package that requires another package's private helper must
+stop and request an interface decision instead of copying the helper.
+
+### Wave 3: Central Scheduler Closure
+
+One worker may own the complete G3 scheduler block after Wave 2 is integrated:
+ready-frontier computation, submit-all-ready behavior, per-node reviewer and
+bounded rework, dependency unblocking, callback/persisted-terminal recovery,
+structured final results, and full dynamic release. This central block is not
+split across workers because its state transitions and crash windows form one
+atomic design surface.
+
+A separate test-only worker may prepare failure/permutation fixtures in new
+test files after scheduler interfaces freeze. It must not change scheduler
+source or weaken an expected failure to make the suite pass.
+
+### Waves 4-5: Direct Acceptance And Candidate Packaging
+
+Workers are not acceptance authorities in these waves. `talk2` directly runs
+G5-G7, audits raw evidence, and decides pass/blocker. A worker is dispatched
+only when a concrete defect requires a bounded source repair; after that
+repair, direct acceptance restarts from the affected gate.
+
+## Worker Delivery Contract
+
+Every delegated package must return:
+
+- base commit, worktree path, branch, final commit SHA, and clean `git status`;
+- changed-file list and confirmation that no out-of-scope file was edited;
+- implemented contract and any interface assumption;
+- exact focused test commands and results, plus `py_compile` and
+  `git diff --check` where applicable;
+- failing-before evidence for each repaired bug when practical;
+- residual risks, deferred cases, and any discovered plan contradiction.
+
+Workers must not merge, publish, install globally, run destructive cleanup,
+reuse consumed real-test roots, or claim production readiness. They must not
+introduce silent serialization, fake success, timeout-as-business-failure,
+provider-reply authority, shared-worktree writes, hidden fallback, reduced
+maximum capacity, or test-only bypasses.
+
+## Talk2 Review And Integration Protocol
+
+For each returned package, `talk2` must:
+
+1. compare the diff with this goal and the package file boundary;
+2. inspect authority, crash-window, rollback, lifecycle, and compatibility
+   behavior before considering the worker's test report;
+3. run the package's focused tests directly in its worktree;
+4. integrate one commit/package at a time into
+   `workflow/agentic-loop-topology`, resolving no semantic conflict by guess;
+5. rerun affected adjacent suites after each integration and the non-Gemini
+   repository gate after each wave;
+6. record blockers honestly and return concrete repairs to a worker only when
+   source modification is required;
+7. keep the workflow worktree clean and update Plan Tree evidence at each
+   closed gate.
+
+Worker self-tests are supporting evidence only. Final source, fake-provider,
+visible-project, package, and release acceptance belongs to `talk2`.
+
 ## Implementation Phases
 
-### G0 Contract And Baseline Freeze
+### G0 Contract And Baseline Freeze - Design Landed, Source Binding Open
 
 - Land Decision 025, bundle schema, node/round state schema, result mapping,
   workspace/integration policy, V3 role lifecycle correction, and evidence
@@ -115,7 +260,7 @@ Blocking gaps:
 Gate: planning links resolve, schemas have rejection cases, and no core
 behavior is left to implementation-time interpretation.
 
-### G1 Bundle Authority And One-Node Generalization
+### G1 Bundle Authority And One-Node Generalization - In Progress
 
 - Add `ccb.loop.orchestration_bundle.v1` validation and script-owned import.
 - Add a deterministic one-node bundle for the validated simple fast path.
@@ -127,7 +272,7 @@ behavior is left to implementation-time interpretation.
 Gate: all current one-workgroup tests pass through the generalized engine and
 provider replies still cannot write authority.
 
-### G2 Worktree And Integration Kernel
+### G2 Worktree And Integration Kernel - Pending
 
 - Add clean-Git/scope preflight, node worktree/branch creation, tree-digest
   capture, reviewer-pass commit, deterministic integration worktree, merge,
@@ -138,7 +283,7 @@ provider replies still cannot write authority.
 Gate: deterministic two-node synthetic tests prove disjoint merge, dependency
 wave, conflict failure, rollback, and preservation of unrelated files.
 
-### G3 Multi-Workgroup Scheduler And Lifecycle
+### G3 Multi-Workgroup Scheduler And Lifecycle - Pending
 
 - Submit all ready-frontier workers in one runner activation.
 - Resume from callbacks or persisted terminal jobs without polling or business
@@ -151,7 +296,7 @@ wave, conflict failure, rollback, and preservation of unrelated files.
 Gate: exact-once crash-window tests and fake-provider 2/3/4-workgroup flows
 pass, including callback permutations and full cleanup.
 
-### G4 Config V3
+### G4 Config V3 - Pending
 
 - Implement V3 version dispatch, models, validator, effective compiler,
   `config validate --json`, effective-config reporting, and migration dry-run.
@@ -164,7 +309,7 @@ pass, including callback permutations and full cleanup.
 Gate: V2 corpus is unchanged; valid V3 opens a generated dynamic project;
 invalid V3 fails before provider or tmux startup.
 
-### G5 Direct Source And Fake-Provider Acceptance
+### G5 Direct Source And Fake-Provider Acceptance - Pending
 
 - Run focused unit/integration suites, full source suite, py_compile, static
   schema guards, source-wrapper smoke, and fake-provider matrix.
@@ -175,7 +320,7 @@ invalid V3 fails before provider or tmux startup.
 Gate: no skipped required case, no normalized false pass, no unbounded residue,
 and no topology dispatch authority.
 
-### G6 Visible Real-Provider Acceptance
+### G6 Visible Real-Provider Acceptance - Pending
 
 - From `/home/bfly/yunwei/test_ccb2`, use the current source `ccb_test`, inherit
   system provider environment, use a lab-local Role store, and open a visible
@@ -192,7 +337,7 @@ and no topology dispatch authority.
 Gate: raw project/task/job/topology/Git/UI evidence agrees with B7. Scripts may
 prepare and collect evidence but cannot substitute for the opened project.
 
-### G7 Release Candidate And Publication
+### G7 Release Candidate And Deployment Gate - Pending
 
 - Merge the accepted workflow branch into a clean release commit through the
   project branch policy; do not publish from a dirty worktree.
@@ -204,12 +349,26 @@ prepare and collect evidence but cannot substitute for the opened project.
   and a visible installed-candidate workflow task.
 - Test update from the current public stable version and a rollback to that
   version.
-- Publish only to the explicitly confirmed registry/package/version, then
-  verify registry metadata, fresh install, CLI entrypoints, payload download,
-  tag, and release notes.
+- Produce a deployment-readiness report tied to the commit, packed artifact
+  hash, V2/V3 configs, external install root, real-project root, and rollback
+  evidence.
 
-Gate: package name, version, registry, artifact hash, commit, tag, install
-evidence, and explicit publication intent all agree.
+Gate: package name, candidate version, artifact hash, commit, external install,
+visible workflow, update, rollback, and deployment-readiness report all agree.
+Passing this gate marks the single-lane candidate production-ready.
+
+### G8 Explicit Publication - User Authorization Required
+
+- Resolve the exact registry/package/version and verify that the version is
+  unused immediately before publishing.
+- Create the exact tag only from the frozen accepted commit.
+- Publish only after explicit user approval, then verify registry metadata,
+  fresh download/install, CLI entrypoints, payload hash, tag, and release
+  notes.
+
+Gate: publication intent, registry state, commit, tag, package digest, and
+post-publish installation agree. G8 changes the state from production-ready to
+released; it is never entered automatically by G7.
 
 ## Required Real Tasks
 
@@ -226,9 +385,45 @@ Prompts must be ordinary product requests. They must not tell frontdesk how to
 route, tell orchestrator how many groups to create, or tell providers which
 test result to report.
 
+## Visible Real-Validation Campaign
+
+All runs use fresh roots under `/home/bfly/yunwei/test_ccb2`, the explicit
+source `ccb_test`, inherited system provider environment, and a root-local
+`AGENT_ROLES_STORE`. The project must be opened in a separate visible terminal
+or WezTerm window. Script output alone is insufficient.
+
+| Run | Natural task shape | Required proof |
+| :--- | :--- | :--- |
+| V0 one group | Small bounded code/test task | Compatibility path uses the generalized node kernel; no post-worker orchestrator; pass and zero dynamic residue. |
+| V1 two groups | Core library plus independent CLI/tests | Both workers overlap in real time, each reviewer follows only its worker, deterministic integration and root tests pass. |
+| V2 three groups | Persistence/domain, API/command, docs/integration | Mixed DAG dependency unblocks from accepted predecessor commits; independent work still overlaps. |
+| V3 four groups | Parser/model, storage, CLI, tests/docs | Advertised maximum is real, fourth pair uses expected execution-window overflow, integration order is deterministic. |
+| V4 restart/failure | Separate active two-or-more-group task | Restart after durable intent causes no duplicate ask; worker failure, reviewer rework, merge/test failure, rollback, busy-retain, and final cleanup are visible and correctly classified. |
+| V5 installed candidate | One normal task from the packed external install | Same frontdesk-started behavior works outside source checkout; V2 and V3 open correctly; update and rollback remain usable. |
+
+Core acceptance uses Codex for frontdesk/planner/orchestrator/detailer/workers
+and supports a Claude `ccb_round_reviewer` cross-provider gate. Provider/model
+selection must come from Config V3, not test-script substitution. OpenCode or
+Grok evidence is recorded only when authenticated and actually run; Gemini is
+not a release gate.
+
+For every V0-V5 run, capture raw task index/artifacts, bundle and node state,
+ask jobs and terminal snapshots, Git branches/worktrees/commits, integration
+and project-root digests, test commands/results, topology desired/observed
+state, window/pane/sidebar state, release counts, retained blockers, final
+process residue, config digest, and B7 classification. `talk2` compares raw
+evidence with B7 before accepting the run.
+
+Stop the campaign immediately on provider-reply authority, duplicate ask,
+hidden serialization of independent nodes, unreviewed integration, dirty or
+wrong-base worktree, scope escape, false pass, rollback drift, cross-loop
+release, missing UI evidence, or unexplained residue. Repair the source and
+restart from the affected run with a new root; do not normalize the failure
+away.
+
 ## Acceptance Summary
 
-The goal is complete only when:
+The production-ready goal is complete at G7 only when:
 
 - one-node behavior is regression clean;
 - real 2/3/4-workgroup evidence exists for the advertised maximum;
@@ -238,7 +433,10 @@ The goal is complete only when:
 - UI placement and dynamic release are visibly correct;
 - V3 is implemented and validated while V2 remains compatible;
 - a clean packed candidate installs and executes the same workflow externally;
-- final release metadata is explicit and the publication is verified.
+- final deployment metadata and rollback evidence are explicit and agree.
+
+Actual release is complete only after separately authorized G8 publication
+and post-publish verification.
 
 ## Evidence
 

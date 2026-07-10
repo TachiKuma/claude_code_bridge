@@ -135,8 +135,9 @@ recoverable workflow loops.
 - [goals/single-lane-multi-workgroup-release-goal.md](goals/single-lane-multi-workgroup-release-goal.md):
   current release goal for one task lane, one orchestration bundle, one to four
   independently reviewed worker/reviewer workgroups, deterministic Git
-  integration, Config V3, visible real-provider acceptance, and package/
-  install/publication gates while preserving Config V2.
+  integration, Config V3, whole-block parallel implementation waves,
+  `talk2`-owned visible real-provider acceptance, and separate package/install
+  versus explicitly authorized publication gates while preserving Config V2.
 - [goals/planner-plan-script-goal.md](goals/planner-plan-script-goal.md):
   implementation and source-test goal for the first planner role boundary and
   `ccb plan` task-packet command surface.
