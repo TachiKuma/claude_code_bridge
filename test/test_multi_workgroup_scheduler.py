@@ -68,7 +68,9 @@ class FakeIntegration:
 
     def record_review(self, node_id: str, **kwargs):
         self.calls.append(('record_review', node_id, kwargs['reviewer_job_id']))
-        self.payload['nodes'][node_id]['status'] = 'review_passed'
+        self.payload['nodes'][node_id]['status'] = (
+            'review_passed' if kwargs['result'] == 'pass' else 'review_rejected'
+        )
         return kwargs
 
     def finalize_node(self, node_id: str):
@@ -158,6 +160,8 @@ class Harness:
             'release_incomplete_count': 0,
         }
         self.observed_agents: list[dict[str, object]] = []
+        self.include_release_observed = True
+        self.status_observed_path: Path | None = None
         self.current_capacity_digest = str(bundle['capacity_digest'])
         self.apply_status = 'ready'
         self.submit_failures: set[tuple[str, str]] = set()
@@ -167,14 +171,39 @@ class Harness:
             workgroup_integration_factory=lambda _scheduler: self.integration,
             compile_workgroup_mount_demand=self.compile_demand,
             apply_workgroup_topology=lambda *_args: {'loop_topology_status': self.apply_status},
-            release_workgroup_topology=lambda *_args: dict(self.release),
-            workgroup_topology_status=lambda *_args: {'observed': {'agents': list(self.observed_agents)}},
+            release_workgroup_topology=self.release_topology,
+            workgroup_topology_status=self.topology_status,
             bind_workgroup_workspace=self.bind_workspace,
             submit_or_recover_ask_once=self.submit,
             plan_task=self.plan_task,
             task_text=lambda *_args: 'task execution evidence',
             workgroup_capacity_digest=lambda _context: self.current_capacity_digest,
         )
+
+    def release_topology(self, *_args):
+        payload = dict(self.release)
+        if self.include_release_observed:
+            payload['observed'] = {
+                'agents': list(self.observed_agents),
+                'retained_count': self.release.get('retained_count', 0),
+                'release_incomplete_count': self.release.get('release_incomplete_count', 0),
+            }
+        if self.status_observed_path is not None:
+            payload['observed_path'] = str(self.status_observed_path)
+        return payload
+
+    def topology_status(self, *_args):
+        payload = {
+            'loop_topology_status': self.release.get('loop_topology_status'),
+            'observed': {
+                'revision': 1,
+                'status': self.release.get('loop_topology_status'),
+                'agent_count': len(self.observed_agents),
+            },
+        }
+        if self.status_observed_path is not None:
+            payload['observed_path'] = str(self.status_observed_path)
+        return payload
 
     def compile_demand(self, _root, bundle, *, active_node_ids, control_profiles=(), **_kwargs):
         active = list(active_node_ids)
@@ -346,6 +375,42 @@ def _scheduler(tmp_path: Path, count: int, *, mixed: bool = False, max_rework: i
     return scheduler, harness, integration
 
 
+def _real_r2_scheduler(tmp_path: Path, *, max_rework: int):
+    root = tmp_path / 'real-r2-repo'
+    root.mkdir()
+    record = _record(root)
+    (root / '.gitignore').write_text('.ccb/\n', encoding='utf-8')
+    _git(root, 'init')
+    _git(root, 'config', 'user.name', 'Test User')
+    _git(root, 'config', 'user.email', 'test@example.com')
+    _git(root, 'add', '.')
+    _git(root, 'commit', '-m', 'base')
+    bundle = _bundle(record, 1, max_rework=max_rework)
+    harness = Harness(root, bundle, FakeIntegration(bundle, root))
+    services = harness.services()
+    delattr(services, 'workgroup_integration_factory')
+    context = SimpleNamespace(
+        project=SimpleNamespace(project_root=root, project_id='project-real-r2-rework'),
+    )
+    scheduler = MultiWorkgroupScheduler(
+        context,
+        loop_id='loop-real-r2-rework',
+        task_record=record,
+        bundle=bundle,
+        bundle_artifact={'bundle_digest': bundle_digest(bundle)},
+        services=services,
+    )
+    return scheduler, harness, root
+
+
+def _write_node_result(scheduler: MultiWorkgroupScheduler, text: str) -> Path:
+    state = json.loads(scheduler.state_path.read_text(encoding='utf-8'))
+    path = Path(state['nodes']['node-001']['worktree_path']) / 'parts/1/result.txt'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding='utf-8')
+    return path
+
+
 @pytest.mark.parametrize('count', (1, 2, 3, 4))
 def test_scheduler_submits_entire_ready_frontier_before_any_reviewer(tmp_path: Path, count: int) -> None:
     scheduler, harness, _integration = _scheduler(tmp_path, count)
@@ -389,6 +454,8 @@ def test_scheduler_orders_review_integration_round_release_and_cleanup(tmp_path:
     assert integration.calls.index('promote') < integration.calls.index('verify_root') < integration.calls.index('accept')
     assert any(call[0] == 'cleanup_readiness' and call[2] == () for call in integration.calls if isinstance(call, tuple))
     assert ('cleanup', ()) in integration.calls
+    assert final['topology']['observed_evidence']['source'] == 'release_payload'
+    assert 'agents' not in final['topology']['status_after_release']['observed']
 
 
 def test_mixed_dag_unblocks_dependent_while_independent_sibling_is_pending(tmp_path: Path) -> None:
@@ -594,6 +661,135 @@ def test_scheduler_uses_real_r2_worktrees_commits_merge_promotion_and_cleanup(tm
         for path in final['cleanup']['removed_workspace_bindings']
     )
     assert _git(root, 'status', '--porcelain') == ''
+
+
+@pytest.mark.parametrize('cycles', (1, 2))
+def test_real_r2_scheduler_records_rework_cycles_then_integrates(
+    tmp_path: Path,
+    cycles: int,
+) -> None:
+    scheduler, harness, root = _real_r2_scheduler(tmp_path, max_rework=cycles)
+    scheduler.run_once()
+    worktree = _write_node_result(scheduler, 'initial\n').parents[2]
+    harness.complete('node-001', 'worker')
+    scheduler.run_once()
+
+    for cycle in range(1, cycles + 1):
+        purpose = 'reviewer' if cycle == 1 else 'reviewer_recheck'
+        harness.complete(
+            'node-001',
+            purpose,
+            attempt=cycle - 1 if purpose == 'reviewer_recheck' else None,
+            reply='status: rework_required',
+        )
+        scheduler.run_once()
+        assert json.loads(
+            (scheduler.loop_dir / 'git-transaction.json').read_text(encoding='utf-8')
+        )['nodes']['node-001']['status'] == 'review_rejected'
+        _write_node_result(scheduler, f'rework-{cycle}\n')
+        harness.complete('node-001', 'worker_rework', attempt=cycle)
+        scheduler.run_once()
+
+    harness.complete('node-001', 'reviewer_recheck', attempt=cycles, reply='status: pass')
+    scheduler.run_once()
+    harness.complete('round', 'ccb_round_reviewer', reply='round_result: pass')
+    final = scheduler.run_once()
+    integration = json.loads(
+        (scheduler.loop_dir / 'git-transaction.json').read_text(encoding='utf-8')
+    )
+
+    assert final['controller_status'] == 'pass'
+    assert [item['result'] for item in integration['nodes']['node-001']['reviews']] == [
+        *(['rework'] * cycles),
+        'pass',
+    ]
+    assert integration['nodes']['node-001']['status'] == 'integrated'
+    assert integration['nodes']['node-001']['reviewed_commit']
+    assert harness.submission_attempts.count(('node-001', 'worker_rework', cycles)) == 1
+    assert final['nodes']['node-001']['worktree_path'] == str(worktree)
+    assert (root / 'parts/1/result.txt').read_text(encoding='utf-8') == f'rework-{cycles}\n'
+
+
+def test_real_r2_exhausted_rework_records_failed_review_without_false_replan(tmp_path: Path) -> None:
+    scheduler, harness, _root = _real_r2_scheduler(tmp_path, max_rework=2)
+    scheduler.run_once()
+    _write_node_result(scheduler, 'initial\n')
+    harness.complete('node-001', 'worker')
+    scheduler.run_once()
+    harness.complete('node-001', 'reviewer', reply='status: rework_required')
+    scheduler.run_once()
+    _write_node_result(scheduler, 'rework-1\n')
+    harness.complete('node-001', 'worker_rework', attempt=1)
+    scheduler.run_once()
+    harness.complete('node-001', 'reviewer_recheck', attempt=1, reply='status: rework_required')
+    scheduler.run_once()
+    _write_node_result(scheduler, 'rework-2\n')
+    harness.complete('node-001', 'worker_rework', attempt=2)
+    scheduler.run_once()
+    harness.complete('node-001', 'reviewer_recheck', attempt=2, reply='status: rework_required')
+
+    final = scheduler.run_once()
+    integration = json.loads(
+        (scheduler.loop_dir / 'git-transaction.json').read_text(encoding='utf-8')
+    )
+
+    assert final['round_result'] == 'blocked'
+    assert final['round_result_source'] == 'required_node_failure'
+    assert [item['result'] for item in integration['nodes']['node-001']['reviews']] == [
+        'rework',
+        'rework',
+        'failed',
+    ]
+    assert integration['root']['promotion'] is None
+    assert not any(attempt == 3 for _node_id, _purpose, attempt in harness.submission_attempts)
+
+
+def test_real_r2_rework_record_crash_replays_before_single_rework_submit(tmp_path: Path) -> None:
+    scheduler, harness, _root = _real_r2_scheduler(tmp_path, max_rework=1)
+    scheduler.run_once()
+    _write_node_result(scheduler, 'initial\n')
+    harness.complete('node-001', 'worker')
+    scheduler.run_once()
+    harness.complete('node-001', 'reviewer', reply='status: rework_required')
+    fired = False
+
+    def crash(name: str, _state: dict[str, object]) -> None:
+        nonlocal fired
+        if name == 'after_r2_nonpass_review_before_rework_submit' and not fired:
+            fired = True
+            raise RuntimeError('crash:after-r2-rework-record')
+
+    scheduler._checkpoint_hook = crash
+    with pytest.raises(RuntimeError, match='crash:after-r2-rework-record'):
+        scheduler.run_once()
+    integration = json.loads(
+        (scheduler.loop_dir / 'git-transaction.json').read_text(encoding='utf-8')
+    )
+    assert integration['nodes']['node-001']['status'] == 'review_rejected'
+    assert [item['result'] for item in integration['nodes']['node-001']['reviews']] == ['rework']
+    scheduler._checkpoint_hook = None
+
+    scheduler.run_once()
+
+    assert harness.submission_attempts.count(('node-001', 'worker_rework', 1)) == 1
+
+
+def test_real_r2_blocked_reviewer_records_failed_authority(tmp_path: Path) -> None:
+    scheduler, harness, _root = _real_r2_scheduler(tmp_path, max_rework=1)
+    scheduler.run_once()
+    _write_node_result(scheduler, 'initial\n')
+    harness.complete('node-001', 'worker')
+    scheduler.run_once()
+    harness.complete('node-001', 'reviewer', reply='status: blocked')
+
+    final = scheduler.run_once()
+    integration = json.loads(
+        (scheduler.loop_dir / 'git-transaction.json').read_text(encoding='utf-8')
+    )
+
+    assert final['round_result'] == 'blocked'
+    assert integration['nodes']['node-001']['reviews'][0]['result'] == 'failed'
+    assert integration['nodes']['node-001']['status'] == 'review_rejected'
 
 
 def test_malformed_round_review_rolls_back_and_imports_replan(tmp_path: Path) -> None:
@@ -872,6 +1068,55 @@ def test_auto_runner_stops_without_spin_when_scheduler_has_no_waitable_job(
     assert payload['steps'][0]['scheduler_action'] == 'topology_pending'
 
 
+def test_auto_runner_reports_blocked_when_terminal_wait_does_not_advance_signature(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / 'auto-no-progress'
+    root.mkdir()
+    context = SimpleNamespace(project=SimpleNamespace(project_root=root, project_id='project-auto'))
+    calls = 0
+    traces = []
+
+    def fake_once(_context, _command, _services):
+        nonlocal calls
+        calls += 1
+        return {
+            'loop_runner_status': 'pending',
+            'action': 'multi_workgroup_execution_pending',
+            'scheduler_action': 'provider_jobs_pending',
+            'controller_status': 'executing',
+            'pending_job_ids': ['job-stuck'],
+            'submission_unknown': False,
+        }
+
+    def fake_trace(_context, command):
+        traces.append(command.target)
+        return {'job': {'job_id': command.target, 'status': 'completed'}}
+
+    monkeypatch.setattr(loop_runner_module, 'loop_runner_once', fake_once)
+    command = ParsedLoopRunnerCommand(
+        project=None,
+        auto=True,
+        once=False,
+        max_steps=8,
+        poll_interval_s=0.0,
+        json_output=True,
+    )
+    payload = loop_runner_auto(
+        context,
+        command,
+        services=SimpleNamespace(trace_target=fake_trace, sleep=lambda _seconds: None),
+    )
+
+    assert calls == 2
+    assert traces == ['job-stuck']
+    assert payload['loop_runner_status'] == 'blocked'
+    assert payload['action'] == 'auto_runner_scheduler_no_progress'
+    assert payload['pending_job_ids'] == ['job-stuck']
+    assert payload['next_activation'] == 'inspect_scheduler_job_authority_then_rerun'
+
+
 @pytest.mark.parametrize(
     ('release', 'observed_agent'),
     (
@@ -937,6 +1182,67 @@ def test_release_authority_residue_never_normalizes_to_pass_and_clean_retry_succ
     harness.observed_agents = []
     final = scheduler.run_once()
     assert final['controller_status'] == 'pass'
+    assert ('cleanup', ()) in integration.calls
+
+
+@pytest.mark.parametrize('evidence_shape', ('missing', 'corrupt'))
+def test_missing_or_corrupt_raw_observed_release_evidence_blocks_cleanup(
+    tmp_path: Path,
+    evidence_shape: str,
+) -> None:
+    scheduler, harness, integration = _scheduler(tmp_path, 1)
+    scheduler.run_once()
+    harness.complete('node-001', 'worker')
+    scheduler.run_once()
+    harness.complete('node-001', 'reviewer', reply='status: pass')
+    scheduler.run_once()
+    harness.complete('round', 'ccb_round_reviewer', reply='round_result: pass')
+    observed_path = scheduler.project_root / '.ccb' / 'runtime' / 'loops' / 'raw-observed.json'
+    if evidence_shape == 'corrupt':
+        observed_path.parent.mkdir(parents=True, exist_ok=True)
+        observed_path.write_text('{not-json\n', encoding='utf-8')
+    harness.include_release_observed = False
+    harness.status_observed_path = observed_path
+
+    blocked = scheduler.run_once()
+
+    assert blocked['controller_status'] == 'release_blocked'
+    expected_reason = (
+        'raw_observed_path_missing' if evidence_shape == 'missing' else 'raw_observed_corrupt'
+    )
+    assert blocked['topology']['observed_evidence']['reason'] == expected_reason
+    assert 'result' not in blocked['cleanup']
+    assert not any(call[0] == 'cleanup' for call in integration.calls if isinstance(call, tuple))
+    harness.include_release_observed = True
+    final = scheduler.run_once()
+    assert final['controller_status'] == 'pass'
+
+
+def test_compact_status_observed_path_loads_valid_raw_release_authority(tmp_path: Path) -> None:
+    scheduler, harness, integration = _scheduler(tmp_path, 1)
+    scheduler.run_once()
+    harness.complete('node-001', 'worker')
+    scheduler.run_once()
+    harness.complete('node-001', 'reviewer', reply='status: pass')
+    scheduler.run_once()
+    harness.complete('round', 'ccb_round_reviewer', reply='round_result: pass')
+    observed_path = scheduler.project_root / '.ccb' / 'runtime' / 'loops' / 'raw-observed.json'
+    observed_path.parent.mkdir(parents=True, exist_ok=True)
+    observed_path.write_text(
+        json.dumps({'agents': [], 'retained_count': 0, 'release_incomplete_count': 0}),
+        encoding='utf-8',
+    )
+    harness.include_release_observed = False
+    harness.status_observed_path = observed_path
+
+    final = scheduler.run_once()
+
+    assert final['controller_status'] == 'pass'
+    assert final['topology']['observed_evidence'] == {
+        'source': 'observed_path',
+        'reason': None,
+        'path': str(observed_path),
+    }
     assert ('cleanup', ()) in integration.calls
 
 

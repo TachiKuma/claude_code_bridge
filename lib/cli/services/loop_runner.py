@@ -105,7 +105,21 @@ def loop_runner_auto(context, command, services=None) -> dict[str, object]:
                     tuple(wait_job_ids),
                     bool(payload.get('submission_unknown')),
                 )
-                if not wait_job_ids or signature == previous_scheduler_signature:
+                if signature == previous_scheduler_signature:
+                    return _auto_payload(
+                        context,
+                        status='blocked',
+                        action='auto_runner_scheduler_no_progress',
+                        steps=steps,
+                        extra={
+                            'reason': 'scheduler pending-job signature did not advance after terminal trace',
+                            'pending_job_ids': wait_job_ids,
+                            'scheduler_action': payload.get('scheduler_action'),
+                            'controller_status': payload.get('controller_status'),
+                            'next_activation': 'inspect_scheduler_job_authority_then_rerun',
+                        },
+                    )
+                if not wait_job_ids:
                     break
                 previous_scheduler_signature = signature
                 for job_id in wait_job_ids:

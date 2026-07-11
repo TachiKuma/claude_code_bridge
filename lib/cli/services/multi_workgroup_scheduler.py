@@ -477,6 +477,23 @@ class MultiWorkgroupScheduler:
     ) -> None:
         decision = _review_decision(str(result.get('reply') or ''))
         node_id = str(node['node_id'])
+        maximum = int(self.bundle['policy']['max_node_rework_rounds'])
+        rework_count = int(node.get('rework_count') or 0)
+        accepted_rework = decision == 'rework_required' and rework_count < maximum
+        review = _mapping(node['review_input'])
+        if decision == 'pass':
+            review_result = 'pass'
+        elif accepted_rework:
+            review_result = 'rework'
+        else:
+            review_result = 'failed'
+        integration.record_review(
+            node_id,
+            reviewer_job_id=str(result.get('job_id') or ''),
+            result=review_result,
+            input_digest=str(review['input_digest']),
+            tree_digest=str(review['tree_digest']),
+        )
         if purpose == 'reviewer_recheck':
             self._append_rework_evidence(
                 node,
@@ -484,22 +501,13 @@ class MultiWorkgroupScheduler:
                 evidence={**result, 'decision': decision},
             )
         if decision == 'pass':
-            review = _mapping(node['review_input'])
-            integration.record_review(
-                node_id,
-                reviewer_job_id=str(result.get('job_id') or ''),
-                result='pass',
-                input_digest=str(review['input_digest']),
-                tree_digest=str(review['tree_digest']),
-            )
             self._checkpoint('after_reviewer_pass_before_node_commit', state)
             finalized = integration.finalize_node(node_id)
             node['reviewed_commit'] = finalized['reviewed_commit']
             node['status'] = 'integration_ready'
             return
-        maximum = int(self.bundle['policy']['max_node_rework_rounds'])
-        rework_count = int(node.get('rework_count') or 0)
-        if decision == 'rework_required' and rework_count < maximum:
+        if accepted_rework:
+            self._checkpoint('after_r2_nonpass_review_before_rework_submit', state)
             node['rework_count'] = rework_count + 1
             self._append_rework_evidence(
                 node,
@@ -733,10 +741,17 @@ class MultiWorkgroupScheduler:
     def _release_and_cleanup(self, state: dict[str, object]) -> None:
         release = self.deps.release_topology(self.context, self.loop_id)
         _mapping(state['topology'])['release'] = release
-        observed = self.deps.topology_status(self.context, self.loop_id)
-        _mapping(state['topology'])['observed_after_release'] = observed
-        active_workspaces = _active_workspaces(state, observed)
-        release_gate = _release_gate(release, observed)
+        status_summary = self.deps.topology_status(self.context, self.loop_id)
+        raw_observed, observed_evidence = _raw_observed_evidence(
+            self.project_root,
+            release,
+            status_summary,
+        )
+        _mapping(state['topology'])['status_after_release'] = status_summary
+        _mapping(state['topology'])['raw_observed_after_release'] = raw_observed
+        _mapping(state['topology'])['observed_evidence'] = observed_evidence
+        active_workspaces = _active_workspaces(state, raw_observed)
+        release_gate = _release_gate(release, raw_observed, observed_evidence)
         integration = self._integration()
         integration_materialized = (
             self.deps.integration_factory is not None
@@ -1303,9 +1318,15 @@ def _round_decision(reply: str) -> tuple[str | None, str]:
     return None, 'missing_round_result'
 
 
-def _active_workspaces(state: dict[str, object], status: dict[str, object]) -> tuple[Path, ...]:
-    observed = status.get('observed') if isinstance(status.get('observed'), dict) else {}
-    agents = observed.get('agents') if isinstance(observed.get('agents'), list) else []
+def _active_workspaces(
+    state: dict[str, object],
+    observed: dict[str, object] | None,
+) -> tuple[Path, ...]:
+    agents = (
+        observed.get('agents')
+        if isinstance(observed, dict) and isinstance(observed.get('agents'), list)
+        else []
+    )
     active_ids = {
         str(agent.get('id') or '')
         for agent in agents
@@ -1323,10 +1344,14 @@ def _active_workspaces(state: dict[str, object], status: dict[str, object]) -> t
 
 def _release_gate(
     release: dict[str, object],
-    status: dict[str, object],
+    observed: dict[str, object] | None,
+    observed_evidence: dict[str, object],
 ) -> dict[str, object]:
-    observed = status.get('observed') if isinstance(status.get('observed'), dict) else None
-    agents = observed.get('agents') if isinstance(observed, dict) and isinstance(observed.get('agents'), list) else None
+    agents = (
+        observed.get('agents')
+        if isinstance(observed, dict) and isinstance(observed.get('agents'), list)
+        else None
+    )
     live_agents = [
         deepcopy(agent)
         for agent in (agents or [])
@@ -1343,7 +1368,7 @@ def _release_gate(
         elif int(release.get(field) or 0) != 0:
             reasons.append(f'{field}:{int(release.get(field) or 0)}')
     if observed is None or agents is None:
-        reasons.append('observed_agents:missing')
+        reasons.append(str(observed_evidence.get('reason') or 'raw_observed_missing'))
     elif live_agents:
         reasons.append(f'observed_dynamic_residue:{len(live_agents)}')
     if isinstance(observed, dict):
@@ -1356,8 +1381,55 @@ def _release_gate(
         'retained_count': release.get('retained_count'),
         'release_incomplete_count': release.get('release_incomplete_count'),
         'live_agents': live_agents,
+        'observed_evidence': observed_evidence,
         'reasons': reasons,
     }
+
+
+def _raw_observed_evidence(
+    project_root: Path,
+    release: dict[str, object],
+    status_summary: dict[str, object],
+) -> tuple[dict[str, object] | None, dict[str, object]]:
+    inline = release.get('observed')
+    if isinstance(inline, dict) and isinstance(inline.get('agents'), list):
+        return inline, {
+            'source': 'release_payload',
+            'reason': None,
+            'path': release.get('observed_path'),
+        }
+    candidate = str(release.get('observed_path') or status_summary.get('observed_path') or '').strip()
+    if not candidate:
+        return None, {'source': 'missing', 'reason': 'raw_observed_path_missing', 'path': None}
+    path = Path(candidate).expanduser().resolve()
+    if project_root != path and project_root not in path.parents:
+        return None, {
+            'source': 'observed_path',
+            'reason': 'raw_observed_path_outside_project',
+            'path': str(path),
+        }
+    if not path.is_file():
+        return None, {
+            'source': 'observed_path',
+            'reason': 'raw_observed_path_missing',
+            'path': str(path),
+        }
+    try:
+        payload = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError) as exc:
+        return None, {
+            'source': 'observed_path',
+            'reason': 'raw_observed_corrupt',
+            'path': str(path),
+            'error': str(exc),
+        }
+    if not isinstance(payload, dict) or not isinstance(payload.get('agents'), list):
+        return None, {
+            'source': 'observed_path',
+            'reason': 'raw_observed_invalid',
+            'path': str(path),
+        }
+    return payload, {'source': 'observed_path', 'reason': None, 'path': str(path)}
 
 
 def _pending_purpose(node: dict[str, object]) -> str:
