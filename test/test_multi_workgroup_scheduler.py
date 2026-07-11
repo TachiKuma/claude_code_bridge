@@ -152,6 +152,7 @@ class Harness:
         self.submissions: list[tuple[str, str]] = []
         self.submission_attempts: list[tuple[str, str, int]] = []
         self.bindings: list[dict[str, object]] = []
+        self.demand_calls: list[dict[str, object]] = []
         self.imports: list[object] = []
         self.release = {
             'loop_topology_status': 'released',
@@ -207,6 +208,9 @@ class Harness:
 
     def compile_demand(self, _root, bundle, *, active_node_ids, control_profiles=(), **_kwargs):
         active = list(active_node_ids)
+        self.demand_calls.append(
+            {'active_node_ids': list(active), 'control_profiles': list(control_profiles)}
+        )
         bindings = [
             {
                 'node_id': node_id,
@@ -456,6 +460,37 @@ def test_scheduler_orders_review_integration_round_release_and_cleanup(tmp_path:
     assert ('cleanup', ()) in integration.calls
     assert final['topology']['observed_evidence']['source'] == 'release_payload'
     assert 'agents' not in final['topology']['status_after_release']['observed']
+
+
+def test_scheduler_final_round_topology_is_control_only_after_four_nodes_integrate(
+    tmp_path: Path,
+) -> None:
+    scheduler, harness, _integration = _scheduler(tmp_path, 4, mixed=True)
+    scheduler.run_once()
+    for node_id in ('node-001', 'node-002', 'node-004'):
+        harness.complete(node_id, 'worker')
+    scheduler.run_once()
+    for node_id in ('node-001', 'node-002', 'node-004'):
+        harness.complete(node_id, 'reviewer', reply='status: pass')
+    scheduler.run_once()
+    harness.complete('node-003', 'worker')
+    scheduler.run_once()
+    harness.complete('node-003', 'reviewer', reply='status: pass')
+    scheduler.run_once()
+
+    pending_round = scheduler.run_once()
+
+    assert pending_round['controller_status'] == 'round_review_pending'
+    assert harness.demand_calls[-1] == {
+        'active_node_ids': [],
+        'control_profiles': ['ccb_round_reviewer'],
+    }
+    assert pending_round['topology']['demand']['bindings'] == []
+    assert pending_round['topology']['demand']['mount_topology']['nodes'] == []
+    assert pending_round['topology']['demand']['mount_topology']['controls'] == [
+        'ccb_round_reviewer'
+    ]
+    assert all(node['status'] == 'integrated' for node in pending_round['nodes'].values())
 
 
 def test_mixed_dag_unblocks_dependent_while_independent_sibling_is_pending(tmp_path: Path) -> None:

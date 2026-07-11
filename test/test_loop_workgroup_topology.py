@@ -232,6 +232,45 @@ def test_compile_workgroup_mount_demand_places_activation_controls_without_resid
     assert not {'frontdesk', 'planner'} & set(by_profile)
 
 
+def test_compile_workgroup_mount_demand_supports_control_only_topology() -> None:
+    snapshot = _snapshot()
+    demand = compile_workgroup_mount_demand(
+        _bundle(snapshot, 4),
+        loop_id='control-only',
+        capacity_snapshot=snapshot,
+        active_node_ids=(),
+        control_profiles=('ccb_round_reviewer',),
+    )
+
+    assert demand['active_workgroup_count'] == 0
+    assert demand['bindings'] == []
+    assert demand['control_agent_count'] == 1
+    assert demand['physical_agent_count'] == 1
+    assert demand['profile_counts'] == {'ccb_round_reviewer': 1}
+    assert demand['mount_topology']['windows'] == [
+        {
+            'name': 'ccb-plan',
+            'class': 'planning',
+            'max_panes': 6,
+            'layout_policy': 'append-or-create-window',
+        }
+    ]
+    assert [node['id'] for node in demand['mount_topology']['nodes']] == ['control']
+
+
+def test_compile_workgroup_mount_demand_rejects_empty_nodes_and_controls() -> None:
+    snapshot = _snapshot()
+
+    with pytest.raises(ValueError, match='requires at least one active node or control profile'):
+        compile_workgroup_mount_demand(
+            _bundle(snapshot, 1),
+            loop_id='empty-all',
+            capacity_snapshot=snapshot,
+            active_node_ids=(),
+            control_profiles=(),
+        )
+
+
 def test_compile_workgroup_mount_demand_enforces_parallel_and_physical_peak_without_serializing() -> None:
     serial_snapshot = _snapshot(
         max_workgroups=2,

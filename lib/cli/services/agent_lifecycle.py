@@ -62,11 +62,20 @@ def add_lifecycle_agents(context, commands: Iterable[object], *, action: str = '
             _update_apply_evidence(context, payload)
             _write_state(context, name, payload)
             results.append(dict(payload, action='add'))
-        return results
     except Exception:
         for name, previous in previous_by_name.items():
             _restore_state(context, name, previous)
         raise
+    for name, payload in staged:
+        _append_event(
+            context,
+            {
+                'event': 'add',
+                'agent': name,
+                'lifecycle_state': payload['lifecycle_state'],
+            },
+        )
+    return results
 
 
 def _status(context, command) -> dict[str, object]:
@@ -172,6 +181,10 @@ def _add(context, command) -> dict[str, object]:
         _restore_state(context, name, previous)
         raise
     _write_state(context, name, payload)
+    _append_event(
+        context,
+        {'event': 'add', 'agent': name, 'lifecycle_state': payload['lifecycle_state']},
+    )
     return dict(payload, action='add')
 
 
@@ -226,7 +239,6 @@ def _stage_add(context, command) -> tuple[str, dict[str, object] | None, dict[st
     _write_state(context, name, payload)
     _update_resolved_placement(context, payload)
     _write_state(context, name, payload)
-    _append_event(context, {'event': 'add', 'agent': name, 'lifecycle_state': visibility})
     return name, previous, payload
 
 

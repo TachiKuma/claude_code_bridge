@@ -2090,6 +2090,57 @@ def test_loop_topology_partial_reconcile_failure_writes_observed_and_recovers(
     assert any(action['action'] == 'add' and action['agent'] == 'loop-round1-code_reviewer-1' for action in recovered['actions'])
 
 
+def test_loop_topology_add_batch_reload_failure_restores_state_without_add_events(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = _project_with_topology(tmp_path, monkeypatch)
+    proposal_path = project_root / 'graph.json'
+    _write_json(proposal_path, _proposal())
+    result, _proposed, stderr = _run_phase2(
+        [
+            'loop',
+            'topology',
+            'propose',
+            '--loop-id',
+            'round1',
+            '--from',
+            str(proposal_path),
+            '--proposal-id',
+            'proposal1',
+            '--json',
+        ],
+        cwd=project_root,
+    )
+    assert result == 0, stderr
+
+    def fail_reload(_context, *, action: str):
+        assert action == 'topology-agent-add-batch'
+        raise RuntimeError('namespace_patch_plan_not_planned')
+
+    monkeypatch.setattr(agent_lifecycle_module, '_apply_reload_if_mounted', fail_reload)
+    result, payload, stderr = _run_phase2(
+        ['loop', 'topology', 'commit', '--loop-id', 'round1', '--proposal', 'proposal1', '--apply', '--json'],
+        cwd=project_root,
+    )
+
+    assert result == 1
+    assert payload == {}
+    assert 'namespace_patch_plan_not_planned' in stderr
+    agents = ('loop-round1-coder-1', 'loop-round1-code_reviewer-1')
+    assert all(
+        not (project_root / '.ccb' / 'runtime' / 'agents' / agent / 'lifecycle.json').exists()
+        for agent in agents
+    )
+    events_path = project_root / '.ccb' / 'runtime' / 'agents' / 'events.jsonl'
+    events = (
+        [json.loads(line) for line in events_path.read_text(encoding='utf-8').splitlines()]
+        if events_path.is_file()
+        else []
+    )
+    assert not any(event.get('event') == 'add' and event.get('agent') in agents for event in events)
+
+
 def test_loop_topology_propose_rejects_edge_dependency_cycles(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

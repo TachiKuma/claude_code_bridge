@@ -358,6 +358,8 @@ def _build_report(
                 'base_commit': integration_node.get('base_commit'),
                 'reviewed_commit': integration_node.get('reviewed_commit'),
                 'tree_digest': integration_node.get('tree_digest'),
+                'layer': integration_node.get('layer'),
+                'integration_order': integration_node.get('integration_order'),
             }
         )
     round_reviewer = _mapping(scheduler.get('round_reviewer'))
@@ -368,6 +370,7 @@ def _build_report(
     raw_observed = _read_json(observed_path)
     integration_section = _mapping(integration.get('integration'))
     root_section = _mapping(integration.get('root'))
+    expected_merge_order = _expected_merge_order(integration)
     expected_paths = [f'g5_outputs/node-{index:03d}.txt' for index in range(1, count + 1)]
     actual_paths = [path for path in expected_paths if (project_root / path).is_file()]
     dynamic_lines = [
@@ -413,7 +416,7 @@ def _build_report(
         ) and round_reviewer.get('status') == 'completed',
         'all_nodes_reviewed_commits': all(bool(item['reviewed_commit']) for item in node_records),
         'root_files_promoted': actual_paths == expected_paths,
-        'merge_order_complete': integration_section.get('merge_order') == [item['node_id'] for item in node_records],
+        'merge_order_complete': integration_section.get('merge_order') == expected_merge_order,
         'root_verification_passed': _mapping(root_section.get('verification')).get('status') == 'passed',
         'task_done': task.get('status') == 'done',
         'round_pass': round_record.get('round_result') == 'pass',
@@ -463,6 +466,7 @@ def _build_report(
             'state_path': str(integration_path),
             'status': integration.get('status'),
             'merge_order': integration_section.get('merge_order'),
+            'expected_merge_order': expected_merge_order,
             'checks': integration_section.get('checks'),
             'root': root_section,
         },
@@ -676,6 +680,18 @@ def _find_loop_id(project_root: Path, task_id: str) -> str:
         if payload.get('task_id') == task_id:
             return str(payload.get('loop_id') or path.parent.name)
     return ''
+
+
+def _expected_merge_order(integration: dict[str, Any]) -> list[str]:
+    nodes = _mapping(integration.get('nodes'))
+    return sorted(
+        nodes,
+        key=lambda node_id: (
+            int(_mapping(nodes[node_id]).get('layer') or 0),
+            int(_mapping(nodes[node_id]).get('integration_order') or 0),
+            node_id,
+        ),
+    )
 
 
 def _live_observed_agents(observed: dict[str, Any]) -> list[dict[str, Any]]:

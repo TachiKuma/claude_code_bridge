@@ -52,6 +52,9 @@ def compile_workgroup_mount_demand(
     capacity_digest = effective_capacity_digest(capacity)
     nodes = _bundle_nodes(bundle, capacity=capacity, capacity_digest=capacity_digest)
     active_nodes = _active_nodes(nodes, active_node_ids=active_node_ids)
+    controls = _control_profiles(control_profiles, capacity=capacity)
+    if not active_nodes and not controls:
+        raise ValueError('workgroup mount demand requires at least one active node or control profile')
     limits = capacity['limits']
     max_parallel = int(limits['max_parallel_workgroups'])
     if len(active_nodes) > max_parallel:
@@ -61,7 +64,6 @@ def compile_workgroup_mount_demand(
         )
 
     attempts = _attempts(node_attempts, allowed={str(node['node_id']) for node in nodes}, field='node_attempts')
-    controls = _control_profiles(control_profiles, capacity=capacity)
     control_attempt_map = _attempts(
         control_attempts,
         allowed=set(_CONTROL_ORDER),
@@ -324,8 +326,6 @@ def _active_nodes(
 ) -> list[dict[str, object]]:
     ordered_ids = [str(node['node_id']) for node in nodes]
     requested = ordered_ids if active_node_ids is None else [str(item or '').strip() for item in active_node_ids]
-    if not requested:
-        raise ValueError('workgroup mount demand requires at least one active node')
     if len(requested) != len(set(requested)):
         raise ValueError('workgroup mount demand active_node_ids must be unique')
     unknown = sorted(set(requested) - set(ordered_ids))

@@ -284,6 +284,25 @@ def test_v3_config_is_fake_git_worktree_required() -> None:
     assert '[loop.capacity]' not in text
 
 
+def test_report_merge_order_uses_dependency_layer_then_integration_order() -> None:
+    module = _load_script()
+    integration = {
+        'nodes': {
+            'node-003': {'layer': 1, 'integration_order': 30},
+            'node-004': {'layer': 0, 'integration_order': 40},
+            'node-002': {'layer': 0, 'integration_order': 20},
+            'node-001': {'layer': 0, 'integration_order': 10},
+        }
+    }
+
+    assert module._expected_merge_order(integration) == [
+        'node-001',
+        'node-002',
+        'node-004',
+        'node-003',
+    ]
+
+
 def test_v3_role_activation_mount_has_loop_owner_and_capacity_digest(tmp_path: Path) -> None:
     capacity = _capacity()
     proposals: list[dict[str, object]] = []
@@ -360,21 +379,31 @@ def test_clean_topology_release_records_explicit_zero_residue(tmp_path: Path) ->
 
 
 @pytest.mark.ccb_lifecycle_smoke
-def test_real_cli_fake_multi_workgroup_mixed_dag_full_flow(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ('count', 'shape'),
+    ((1, 'parallel'), (2, 'parallel'), (3, 'mixed_dag'), (4, 'mixed_dag')),
+)
+def test_real_cli_fake_multi_workgroup_full_flow(
+    tmp_path: Path,
+    count: int,
+    shape: str,
+) -> None:
     module = _load_script()
-    project_root = tmp_path / 'g5-real-cli-fullflow'
+    project_root = tmp_path / f'g5-real-cli-fullflow-{count}'
 
     report = module.run_smoke(
         project_root=project_root,
-        count=3,
-        shape='mixed_dag',
+        count=count,
+        shape=shape,
         ccb_test=Path(__file__).resolve().parents[1] / 'ccb_test',
         command_timeout_s=240,
     )
 
     assert report['status'] == 'pass'
-    assert report['bundle']['node_count'] == 3
-    assert report['bundle']['dependencies']['node-003'] == ['node-001']
+    assert report['bundle']['node_count'] == count
+    expected_dependencies = ['node-001'] if shape == 'mixed_dag' else []
+    if count >= 3:
+        assert report['bundle']['dependencies']['node-003'] == expected_dependencies
     assert report['round']['result'] == 'pass'
     assert report['release']['live_agents'] == []
     assert report['release']['dynamic_residue'] == []

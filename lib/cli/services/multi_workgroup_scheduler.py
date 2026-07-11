@@ -329,8 +329,8 @@ class MultiWorkgroupScheduler:
             if _node(state, node_id)['status'] not in {'created', 'integrated', 'worker_failed', 'review_failed', 'blocked'}
         ]
         active.extend(node_id for node_id in frontier if node_id not in active)
-        if not active:
-            active = [str(self.bundle['nodes'][-1]['node_id'])]
+        if not active and not round_reviewer:
+            raise ValueError('workgroup topology requires an active node or round reviewer control')
         demand = self.deps.compile_mount_demand(
             self.project_root,
             self.bundle,
