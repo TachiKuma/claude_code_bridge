@@ -795,17 +795,23 @@ class TaskCompletionNotificationController {
     _nextReconnectDelay = _initialReconnectDelay;
     _reconnectAttempt = 0;
     _emitConnectionState(GatewayInvalidationConnectionState.connected, null);
-    await _onInvalidationEvent?.call(event);
+    final retainedBaseline =
+        _isBaselineEvent(event) && !event.isResyncRequired;
+    if (!retainedBaseline) {
+      await _onInvalidationEvent?.call(event);
+    }
     if (!_isCurrentHost(hostAtStart)) {
       return;
     }
     _lastConfirmedEventId = event.id;
     await _cursorStore.write(hostAtStart, event.id);
-    if (!event.isTaskCompleted) {
+    if (retainedBaseline) {
+      if (event.isTaskCompleted) {
+        await _seenStore.markSeenIfNew(event.dedupeKey);
+      }
       return;
     }
-    if (_isBaselineEvent(event)) {
-      await _seenStore.markSeenIfNew(event.dedupeKey);
+    if (!event.isTaskCompleted) {
       return;
     }
     final fresh = await _seenStore.markSeenIfNew(event.dedupeKey);

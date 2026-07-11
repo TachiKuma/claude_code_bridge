@@ -228,6 +228,60 @@ void main() {
     );
 
     test(
+      'retained invalidation baseline advances cursor without replay refreshes',
+      () async {
+        final secureStore = MemorySecureStore();
+        final cursorStore = GatewayInvalidationCursorStore(
+          secureStore: secureStore,
+        );
+        final streamClient = _FakeTaskCompletionStreamClient();
+        final invalidations = <TaskCompletionNotificationEvent>[];
+        final controller = _controller(
+          streamClient: streamClient,
+          localNotifications: _FakeTaskCompletionLocalNotifications(),
+          cursorStore: cursorStore,
+          onInvalidationEvent: invalidations.add,
+          clock: () => DateTime.utc(2026, 6, 30, 12),
+        );
+        final host = _host(scopes: const {'notify'});
+
+        await controller.start(host);
+        streamClient
+          ..add(
+            _invalidation(
+              id: 'mnotif_000000000010',
+              kind: TaskCompletionNotificationEvent.conversationChangedKind,
+              completedAt: DateTime.utc(2026, 6, 30, 11, 59, 58),
+            ),
+          )
+          ..add(
+            _invalidation(
+              id: 'mnotif_000000000011',
+              kind: TaskCompletionNotificationEvent.agentActivityChangedKind,
+              completedAt: DateTime.utc(2026, 6, 30, 11, 59, 59),
+            ),
+          );
+        await _drain();
+        await _drain();
+
+        expect(invalidations, isEmpty);
+        expect(await cursorStore.read(host), 'mnotif_000000000011');
+
+        final live = _invalidation(
+          id: 'mnotif_000000000012',
+          kind: TaskCompletionNotificationEvent.conversationChangedKind,
+          completedAt: DateTime.utc(2026, 6, 30, 12, 0, 1),
+        );
+        streamClient.add(live);
+        await _drain();
+
+        expect(invalidations, [live]);
+
+        await controller.dispose();
+      },
+    );
+
+    test(
       'stream completion reconnects and keeps future notifications alive',
       () async {
         final streamClient = _ReconnectTaskCompletionStreamClient();
@@ -403,6 +457,7 @@ void main() {
         _invalidation(
           id: 'mnotif_000000000123',
           kind: TaskCompletionNotificationEvent.resyncRequiredKind,
+          completedAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
         ),
       );
       await _drain();
@@ -622,6 +677,7 @@ TaskCompletionNotificationEvent _event({
 TaskCompletionNotificationEvent _invalidation({
   required String id,
   required String kind,
+  DateTime? completedAt,
 }) {
   return TaskCompletionNotificationEvent(
     id: id,
@@ -629,7 +685,7 @@ TaskCompletionNotificationEvent _invalidation({
     projectId: 'proj-demo',
     projectShortName: 'demo',
     agent: 'mobile',
-    completedAt: DateTime.utc(2026, 6, 30, 12),
+    completedAt: completedAt ?? DateTime.utc(2026, 6, 30, 12),
     dedupeKey: 'invalidation:$id',
     namespaceEpoch: 4,
     scope: 'conversation',
