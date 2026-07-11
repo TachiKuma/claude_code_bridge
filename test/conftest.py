@@ -167,13 +167,29 @@ def _process_lines_containing(path: Path) -> list[str]:
     )
     if result.returncode != 0:
         raise AssertionError(f'failed to inspect test-owned processes: {result.stderr}')
-    marker = str(path.resolve())
+    root = path.resolve()
+    marker = str(root)
     current_pid = os.getpid()
-    return [
-        line.strip()
-        for line in result.stdout.splitlines()
-        if marker in line and not line.lstrip().startswith(f'{current_pid} ')
-    ]
+    residue: list[str] = []
+    for line in result.stdout.splitlines():
+        parts = line.strip().split(None, 2)
+        if not parts or parts[0] == str(current_pid):
+            continue
+        try:
+            pid = int(parts[0])
+        except ValueError:
+            continue
+        cwd = _process_cwd(pid)
+        if marker in line or (cwd is not None and (cwd == root or root in cwd.parents)):
+            residue.append(f'{line.strip()} cwd={cwd or "unavailable"}')
+    return residue
+
+
+def _process_cwd(pid: int) -> Path | None:
+    try:
+        return Path(os.readlink(f'/proc/{pid}/cwd')).resolve()
+    except Exception:
+        return None
 
 
 def _clear_unmounted_in_process_authority(project_root: Path) -> None:

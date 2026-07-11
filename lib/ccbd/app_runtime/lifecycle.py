@@ -220,10 +220,14 @@ def _runtime_accelerator_startup_actions(app) -> list[str]:
     handle = getattr(app, 'runtime_accelerator', None)
     if handle is None or not getattr(handle, 'enabled', False):
         return []
+    actions = []
+    reclaimed_pids = tuple(getattr(handle, 'reclaimed_pids', ()) or ())
+    if reclaimed_pids:
+        actions.append(f'reclaim_runtime_accelerator:{",".join(str(pid) for pid in reclaimed_pids)}')
     if getattr(handle, 'process', None) is not None:
-        return ['start_runtime_accelerator']
+        return [*actions, 'start_runtime_accelerator']
     error = str(getattr(handle, 'error', '') or 'unavailable')
-    return [f'runtime_accelerator_fallback:{error}']
+    return [*actions, f'runtime_accelerator_fallback:{error}']
 
 
 def execute_project_stop(

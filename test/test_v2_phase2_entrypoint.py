@@ -22,6 +22,7 @@ from cli.services.cleanup import CleanupAction, CleanupSummary
 from cli.services.start_runtime import StartSummary
 import cli.phase2 as phase2_module
 from cli.phase2 import maybe_handle_phase2
+from runtime_accelerator.ownership import load_runtime_accelerator_owner, owner_manifest_path
 from storage.paths import PathLayout
 
 
@@ -1615,6 +1616,21 @@ def _wait_for_pid_exit(pid: int, timeout: float = 2.0) -> None:
     raise AssertionError(f'timed out waiting for pid {pid} to exit')
 
 
+def _wait_for_accelerator_owner(project_root: Path, timeout: float = 3.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        owner = load_runtime_accelerator_owner(project_root)
+        if owner is not None:
+            return owner
+        time.sleep(0.05)
+    raise AssertionError(f'runtime accelerator owner was not recorded: {owner_manifest_path(project_root)}')
+
+
+def _assert_accelerator_stopped(project_root: Path, pid: int) -> None:
+    _wait_for_pid_exit(pid)
+    assert not owner_manifest_path(project_root).exists()
+
+
 @pytest.mark.ccb_lifecycle_smoke
 def test_ccb_v2_project_lifecycle(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv('STUB_DELAY', '2.0')
@@ -1800,6 +1816,7 @@ def test_ccb_ping_ccbd_recovers_from_stale_mount_and_bumps_generation(tmp_path: 
 
     start = _run_ccb([], cwd=project_root)
     assert start.returncode == 0, start.stderr
+    accelerator_before = _wait_for_accelerator_owner(project_root)
 
     lease_path = project_root / '.ccb' / 'ccbd' / 'lease.json'
     lease = json.loads(lease_path.read_text(encoding='utf-8'))
@@ -1826,6 +1843,9 @@ def test_ccb_ping_ccbd_recovers_from_stale_mount_and_bumps_generation(tmp_path: 
     assert 'heartbeat_fresh: True' in ping.stdout
     assert 'takeover_allowed: False' in ping.stdout
     assert 'reason: healthy' in ping.stdout
+    accelerator_after = _wait_for_accelerator_owner(project_root)
+    assert accelerator_after.pid != accelerator_before.pid
+    _wait_for_pid_exit(accelerator_before.pid)
 
     doctor = _run_ccb(['doctor'], cwd=project_root)
     assert doctor.returncode == 0, doctor.stderr
@@ -1836,6 +1856,7 @@ def test_ccb_ping_ccbd_recovers_from_stale_mount_and_bumps_generation(tmp_path: 
 
     kill = _run_ccb(['kill'], cwd=project_root)
     assert kill.returncode == 0, kill.stderr
+    _assert_accelerator_stopped(project_root, accelerator_after.pid)
 
 
 @pytest.mark.ccb_lifecycle_smoke
@@ -1906,6 +1927,7 @@ def test_ccb_fake_provider_recovers_running_execution_after_ccbd_restart(tmp_pat
 
     start = _run_ccb([], cwd=project_root)
     assert start.returncode == 0, start.stderr
+    accelerator_before = _wait_for_accelerator_owner(project_root)
 
     ask = _run_ccb(
         ['ask', '--task-id', 'fake;latency_ms=1500', 'demo', 'from', 'user', 'resume after restart'],
@@ -1935,6 +1957,9 @@ def test_ccb_fake_provider_recovers_running_execution_after_ccbd_restart(tmp_pat
     assert 'last_restore_replay_pending_count: 0' in ping.stdout
     assert 'last_restore_abandoned_execution_count: 0' in ping.stdout
     assert 'last_restore_results_text: demo/fake:restored(provider_resumed)' in ping.stdout
+    accelerator_after = _wait_for_accelerator_owner(project_root)
+    assert accelerator_after.pid != accelerator_before.pid
+    _wait_for_pid_exit(accelerator_before.pid)
 
     doctor = _run_ccb(['doctor'], cwd=project_root)
     assert doctor.returncode == 0, doctor.stderr
@@ -1953,6 +1978,7 @@ def test_ccb_fake_provider_recovers_running_execution_after_ccbd_restart(tmp_pat
 
     kill = _run_ccb(['kill'], cwd=project_root)
     assert kill.returncode == 0, kill.stderr
+    _assert_accelerator_stopped(project_root, accelerator_after.pid)
 
 
 def test_ccb_doctor_and_ping_expose_opencode_restore_degradation(tmp_path: Path) -> None:

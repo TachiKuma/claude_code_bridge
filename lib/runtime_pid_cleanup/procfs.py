@@ -55,7 +55,7 @@ def list_process_cmdlines(
 
 def remove_pid_files(paths: tuple[Path, ...]) -> None:
     for path in paths:
-        if path.suffix != '.pid':
+        if path.suffix != '.pid' and path.name != 'runtime-accelerator.json':
             continue
         try:
             path.unlink()

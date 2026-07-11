@@ -11,6 +11,13 @@ from .config import (
     accelerator_startup_timeout_s,
     codex_accelerator_enabled,
 )
+from .ownership import (
+    RuntimeAcceleratorOwnershipError,
+    load_runtime_accelerator_owner,
+    reclaim_runtime_accelerator,
+    record_runtime_accelerator_owner,
+    remove_runtime_accelerator_owner,
+)
 
 
 @dataclass
@@ -19,6 +26,8 @@ class RuntimeAcceleratorHandle:
     socket_path: Path | None
     process: subprocess.Popen | None = None
     error: str = ""
+    project_root: Path | None = None
+    reclaimed_pids: tuple[int, ...] = ()
 
     @property
     def started(self) -> bool:
@@ -26,32 +35,67 @@ class RuntimeAcceleratorHandle:
 
 
 def maybe_start_runtime_accelerator(project_root: str | Path) -> RuntimeAcceleratorHandle:
+    project_root = Path(project_root).expanduser().resolve()
     socket_path = accelerator_socket_path(project_root)
     if not codex_accelerator_enabled():
-        return RuntimeAcceleratorHandle(enabled=False, socket_path=socket_path)
+        return RuntimeAcceleratorHandle(enabled=False, socket_path=socket_path, project_root=project_root)
     if socket_path is None:
-        return RuntimeAcceleratorHandle(enabled=True, socket_path=None, error="missing_socket_path")
+        return RuntimeAcceleratorHandle(
+            enabled=True,
+            socket_path=None,
+            error="missing_socket_path",
+            project_root=project_root,
+        )
     binary = accelerator_binary()
     if not binary:
-        return RuntimeAcceleratorHandle(enabled=True, socket_path=socket_path, error="missing_binary")
+        return RuntimeAcceleratorHandle(
+            enabled=True,
+            socket_path=socket_path,
+            error="missing_binary",
+            project_root=project_root,
+        )
+    reclaimed_pids = reclaim_runtime_accelerator(project_root, socket_path=socket_path)
     try:
         socket_path.parent.mkdir(parents=True, exist_ok=True)
-        if socket_path.exists():
-            socket_path.unlink()
         process = subprocess.Popen(
             [binary, "serve", "--socket", str(socket_path)],
+            cwd=str(project_root),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
     except Exception as exc:
-        return RuntimeAcceleratorHandle(enabled=True, socket_path=socket_path, error=str(exc))
+        return RuntimeAcceleratorHandle(
+            enabled=True,
+            socket_path=socket_path,
+            error=str(exc),
+            project_root=project_root,
+            reclaimed_pids=reclaimed_pids,
+        )
+    handle = RuntimeAcceleratorHandle(
+        enabled=True,
+        socket_path=socket_path,
+        process=process,
+        project_root=project_root,
+        reclaimed_pids=reclaimed_pids,
+    )
+    try:
+        record_runtime_accelerator_owner(project_root, socket_path=socket_path, pid=process.pid)
+    except Exception:
+        stop_runtime_accelerator(handle)
+        raise
     if wait_for_socket(socket_path, process=process, timeout_s=accelerator_startup_timeout_s()):
-        return RuntimeAcceleratorHandle(enabled=True, socket_path=socket_path, process=process)
+        return handle
     error = "startup_timeout" if process.poll() is None else f"exited:{process.returncode}"
-    stop_runtime_accelerator(RuntimeAcceleratorHandle(enabled=True, socket_path=socket_path, process=process))
-    return RuntimeAcceleratorHandle(enabled=True, socket_path=socket_path, error=error)
+    stop_runtime_accelerator(handle)
+    return RuntimeAcceleratorHandle(
+        enabled=True,
+        socket_path=socket_path,
+        error=error,
+        project_root=project_root,
+        reclaimed_pids=reclaimed_pids,
+    )
 
 
 def wait_for_socket(socket_path: Path, *, process: subprocess.Popen, timeout_s: float) -> bool:
@@ -70,13 +114,17 @@ def stop_runtime_accelerator(handle: RuntimeAcceleratorHandle | None) -> None:
         return
     process = handle.process
     owns_socket = process is not None
-    if process is not None and process.poll() is None:
-        process.terminate()
-        try:
-            process.wait(timeout=1.0)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=1.0)
+    if process is not None:
+        project_root = handle.project_root
+        if project_root is not None:
+            owner = load_runtime_accelerator_owner(project_root)
+            if owner is not None and owner.pid != process.pid:
+                raise RuntimeAcceleratorOwnershipError(
+                    f"runtime_accelerator_handle_owner_mismatch:handle={process.pid}:owner={owner.pid}"
+                )
+        _stop_process(process)
+        if project_root is not None:
+            remove_runtime_accelerator_owner(project_root, pid=process.pid)
     socket_path = handle.socket_path
     if owns_socket and socket_path is not None:
         try:
@@ -85,6 +133,17 @@ def stop_runtime_accelerator(handle: RuntimeAcceleratorHandle | None) -> None:
             pass
         except Exception:
             pass
+
+
+def _stop_process(process: subprocess.Popen) -> None:
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=1.0)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=1.0)
 
 
 __all__ = [
