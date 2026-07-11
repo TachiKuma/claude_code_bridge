@@ -51,6 +51,11 @@ orchestration_bundle:
 Candidate root fields are exactly the seven fields shown. Capacity is a
 ceiling, not a target. Structural ambiguity is `replan_required`; never hide it
 with serialization, node-count reduction, scope shrinkage, or fallback.
+Disjoint independently testable units that rely only on already declared
+interfaces belong in separate ready nodes. A shared API, package, final root
+test, or product outcome is not enough reason to merge them. For a one-node
+selection, the rationale must name the concrete path overlap or predecessor
+evidence dependency that prevents independent review.
 Verification refs must point to artifacts with `Verification:` or
 `Verification Commands:` bullet entries that are direct argv commands executed
 without a shell. Do not use `Verification Contract:` prose as executable

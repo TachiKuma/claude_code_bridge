@@ -496,6 +496,12 @@ def test_p1_orchestrator_rolepack_declares_adaptive_bundle_contract() -> None:
     assert 'partial_completion' in combined
     assert 'smallest justified workgroup count from 1 to 4' in combined
     assert 'capacity is a ceiling, not a target' in ' '.join(combined.split()).lower()
+    assert 'the smallest justified graph includes those units as separate' in combined_single_line
+    assert 'A stable public interface, shared final root verification' in combined_single_line
+    assert 'emit separate nodes in the same ready parallel group' in combined_single_line
+    assert 'Do not invent a dependency merely because one module calls a stable interface' in combined_single_line
+    assert 'Do not merge the fourth unit merely to avoid execution window overflow' in combined_single_line
+    assert 'concrete path overlap or predecessor' in template
     assert 'Structural ambiguity requires `replan_required`' in combined
     assert 'silent serialization' in combined
     assert 'parallel_group is evidence only' in combined

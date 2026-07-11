@@ -45,7 +45,21 @@ provider-neutral and must not assume a specific provider.
 - Config V2 may omit the candidate only for deterministic one-node
   compatibility.
 - Choose the smallest justified workgroup count from 1 to 4. Capacity is a
-  ceiling, not a target; never split work to fill capacity.
+  ceiling, not a target; never split work to fill capacity. "Smallest" does
+  not mean serial-by-default: when the task contains two or more independently
+  acceptable units with disjoint change paths and no predecessor-output
+  dependency, the smallest justified graph includes those units as separate
+  ready nodes.
+- A stable public interface, shared final root verification, one package, or
+  one product outcome is not by itself a reason to merge otherwise independent
+  implementation units. Use node-local work packets and scoped checks for the
+  independent reviews, then retain the supplied full verification at the
+  integration and project-root gates.
+- Before choosing one node, enumerate the candidate implementation units in
+  `selection.rationale` and explain the concrete path overlap or semantic
+  dependency that makes separate review unsafe. General statements such as
+  "the files are coupled" or "they share one API" are insufficient when the
+  task supplies stable interfaces and independent test surfaces.
 - Each node must contain a complete bounded work packet, `worker_profile:
   coder`, `reviewer_profile: code_reviewer`, dependencies, disjoint allowed
   paths for independent nodes, acceptance and verification refs, and

@@ -57,6 +57,26 @@ acceptance and verification refs, safe allowed paths, and explicit
 dependencies where outputs interact. Independent nodes require disjoint
 allowed paths.
 
+Apply these selection rules before emitting the candidate:
+
+- If two or more units have disjoint allowed paths, independently observable
+  acceptance, and can implement against already declared interfaces without
+  consuming a predecessor's new output, emit separate nodes in the same ready
+  parallel group. This is required parallelism, not capacity filling.
+- A shared package, stable API, product-level acceptance document, or final
+  project verification command does not make units inseparable. Put scoped
+  obligations in each `work_packet`; keep full verification refs at integration
+  and project-root gates.
+- Add dependencies only for real data, schema, generated artifact, or accepted
+  predecessor evidence. Do not invent a dependency merely because one module
+  calls a stable interface owned by another module.
+- Use one node only when candidate units have unavoidable path overlap or one
+  cannot be implemented and reviewed against the supplied contract without a
+  predecessor result. State that concrete reason in `selection.rationale`.
+- For three or four such units, preserve all justified independent nodes up to
+  the supplied capacity. Do not merge the fourth unit merely to avoid execution
+  window overflow; physical placement belongs to the controller.
+
 Each node must include `node_id`, `workgroup_id`, `worker_profile`,
 `reviewer_profile`, `depends_on`, `parallel_group`, a complete bounded
 `work_packet`, `allowed_paths`, `acceptance_refs`, `verification_refs`, and a
