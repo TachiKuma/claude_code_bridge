@@ -10396,6 +10396,63 @@ def test_frontdesk_single_task_import_rejects_semantic_section_loss() -> None:
     ]
 
 
+def test_frontdesk_single_task_import_accepts_unambiguous_single_edit_heading_typo() -> None:
+    activation = {
+        'record_type': 'ccb_loop_frontdesk_planner_activation',
+        'action': 'activate_planner_from_frontdesk',
+    }
+    parsed = {
+        'task_packet': (
+            '# Task: Preserve complete semantics\n'
+            'Route: direct_execution\n'
+            '## Goal\n'
+            'Ship the requested behavior.\n'
+            '## Acceptance Criteria\n'
+            '- The behavior is observable.\n'
+            '## Interface Contracts\n'
+            '- Keep the stable API.\n'
+            '## Constraints And Non-GGoals\n'
+            '- Do not lower acceptance.\n'
+            '## Execution Decomposition Inputs\n'
+            '- Independently reviewable surfaces: implementation and tests.\n'
+        )
+    }
+
+    result = role_output_import_module._validate_frontdesk_single_task_semantics(parsed, activation=activation)
+
+    assert result['status'] == 'ok'
+    assert result['semantic_sections'] == [
+        'goal',
+        'acceptance criteria',
+        'interface contracts',
+        'constraints and non-goals',
+        'execution decomposition inputs',
+    ]
+
+
+def test_frontdesk_single_task_import_rejects_semantically_different_heading() -> None:
+    activation = {
+        'record_type': 'ccb_loop_frontdesk_planner_activation',
+        'action': 'activate_planner_from_frontdesk',
+    }
+    parsed = {
+        'task_packet': (
+            '# Task: Missing non-goals\n'
+            'Route: direct_execution\n'
+            '## Goal\nvalue\n'
+            '## Acceptance Criteria\nvalue\n'
+            '## Interface Contracts\nvalue\n'
+            '## Constraints And Goals\nvalue\n'
+            '## Execution Decomposition Inputs\nvalue\n'
+        )
+    }
+
+    result = role_output_import_module._validate_frontdesk_single_task_semantics(parsed, activation=activation)
+
+    assert result['status'] == 'blocked'
+    assert result['missing_fields'] == ['task_packet.constraints and non-goals']
+
+
 def test_loop_runner_single_task_set_exposes_task_id_for_supervisor_resume(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

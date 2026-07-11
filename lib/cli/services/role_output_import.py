@@ -35,6 +35,13 @@ _SLUG_RE = re.compile(r'[^A-Za-z0-9_-]+')
 _PLANNER_CONTRACT_SINGLE_TASK = 'single_task'
 _PLANNER_CONTRACT_TASK_SET = 'task_set'
 _PLANNER_CONTRACTS = frozenset({_PLANNER_CONTRACT_SINGLE_TASK, _PLANNER_CONTRACT_TASK_SET})
+_FRONTDESK_SINGLE_TASK_SEMANTIC_SECTIONS = (
+    'goal',
+    'acceptance criteria',
+    'interface contracts',
+    'constraints and non-goals',
+    'execution decomposition inputs',
+)
 _TASK_SET_INTENT_MARKERS = (
     'route-mix',
     'route mix',
@@ -1645,13 +1652,7 @@ def _validate_frontdesk_single_task_semantics(
     if not _is_frontdesk_planner_activation(activation):
         return {'status': 'ok'}
     sections = _markdown_h2_sections(str(parsed.get('task_packet') or ''))
-    required = (
-        'goal',
-        'acceptance criteria',
-        'interface contracts',
-        'constraints and non-goals',
-        'execution decomposition inputs',
-    )
+    required = _FRONTDESK_SINGLE_TASK_SEMANTIC_SECTIONS
     missing = [name for name in required if not sections.get(name)]
     if missing:
         return {
@@ -1678,12 +1679,47 @@ def _markdown_h2_sections(markdown: str) -> dict[str, str]:
     for line in str(markdown or '').splitlines():
         heading = re.match(r'^\s*##\s+(.+?)\s*$', line)
         if heading:
-            current = re.sub(r'\s+', ' ', heading.group(1).strip().lower())
+            normalized = re.sub(r'\s+', ' ', heading.group(1).strip().lower())
+            current = _canonical_frontdesk_semantic_heading(normalized)
             sections.setdefault(current, [])
             continue
         if current is not None:
             sections[current].append(line)
     return {name: '\n'.join(lines).strip() for name, lines in sections.items()}
+
+
+def _canonical_frontdesk_semantic_heading(heading: str) -> str:
+    if heading in _FRONTDESK_SINGLE_TASK_SEMANTIC_SECTIONS:
+        return heading
+    candidates = [
+        expected
+        for expected in _FRONTDESK_SINGLE_TASK_SEMANTIC_SECTIONS
+        if _within_one_edit(heading, expected)
+    ]
+    return candidates[0] if len(candidates) == 1 else heading
+
+
+def _within_one_edit(left: str, right: str) -> bool:
+    if left == right:
+        return True
+    if abs(len(left) - len(right)) > 1:
+        return False
+    if len(left) == len(right):
+        return sum(a != b for a, b in zip(left, right)) == 1
+    shorter, longer = (left, right) if len(left) < len(right) else (right, left)
+    short_index = 0
+    long_index = 0
+    skipped = False
+    while short_index < len(shorter) and long_index < len(longer):
+        if shorter[short_index] == longer[long_index]:
+            short_index += 1
+            long_index += 1
+            continue
+        if skipped:
+            return False
+        skipped = True
+        long_index += 1
+    return True
 
 
 def _parse_planner_task_set_reply(reply: str) -> dict[str, object]:
