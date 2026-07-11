@@ -22,6 +22,7 @@ void main() {
             width: 390,
             child: TerminalControlToolbar(
               enabled: true,
+              onLatestOutput: () => calls.add('latest'),
               onEscape: () => calls.add('esc'),
               onTab: () => calls.add('tab'),
               onCtrlC: () => calls.add('ctrl-c'),
@@ -42,6 +43,10 @@ void main() {
     expect(find.byKey(const ValueKey('terminal-key-escape')), findsOneWidget);
     expect(find.byKey(const ValueKey('terminal-key-tab')), findsOneWidget);
     expect(find.byKey(const ValueKey('terminal-key-ctrl-c')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('terminal-key-latest-output')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('terminal-key-arrow-up')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('terminal-key-arrow-down')),
@@ -63,9 +68,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('terminal-key-escape')));
     await tester.tap(find.byKey(const ValueKey('terminal-key-tab')));
     await tester.tap(find.byKey(const ValueKey('terminal-key-ctrl-c')));
+    await tester.tap(find.byKey(const ValueKey('terminal-key-latest-output')));
     await tester.pump();
 
-    expect(calls, ['esc', 'tab', 'ctrl-c']);
+    expect(calls, ['esc', 'tab', 'ctrl-c', 'latest']);
 
     await tester.tap(find.byKey(const ValueKey('terminal-shortcuts-toggle')));
     await tester.pumpAndSettle();
@@ -82,6 +88,7 @@ void main() {
         home: Scaffold(
           body: TerminalControlToolbar(
             enabled: false,
+            onLatestOutput: () => called = true,
             onEscape: () => called = true,
             onTab: () => called = true,
             onCtrlC: () => called = true,
@@ -108,6 +115,13 @@ void main() {
 
     expect(escape.onPressed, isNull);
     expect(up.onPressed, isNull);
+    final latest = tester.widget<IconButton>(
+      find.descendant(
+        of: find.byKey(const ValueKey('terminal-key-latest-output')),
+        matching: find.byType(IconButton),
+      ),
+    );
+    expect(latest.onPressed, isNotNull);
     expect(called, isFalse);
   });
 
@@ -200,6 +214,65 @@ void main() {
     await binding.idle();
 
     expect(session.written.map(utf8.decode), contains('Alpha中文123'));
+  });
+
+  testWidgets('terminal input does not leave history-reading position', (
+    tester,
+  ) async {
+    final transport = RecordingTerminalTransport();
+    final view = _view(namespaceEpoch: 4);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AgentTerminalPane(
+            view: view,
+            target: view.terminalTargetForAgent('mobile'),
+            terminalTransport: transport,
+            gatewayTerminal: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final terminal = find.byKey(const ValueKey('ccb-live-terminal-view'));
+    transport.sessions.single.addOutput(
+      List.generate(240, (index) => 'history line $index\r\n').join(),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.descendant(
+      of: terminal,
+      matching: find.byType(Scrollable),
+    );
+    final position = tester.state<ScrollableState>(scrollable).position;
+    expect(position.pixels, closeTo(position.maxScrollExtent, 0.1));
+
+    await tester.drag(terminal, const Offset(0, 260));
+    await tester.pumpAndSettle();
+    final historyOffset = position.pixels;
+    expect(historyOffset, lessThan(position.maxScrollExtent - 40));
+
+    await tester.tap(terminal);
+    tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pump();
+    await tester.pump();
+
+    expect(position.pixels, closeTo(historyOffset, 0.1));
+
+    binding.testTextInput.enterText('stay-here');
+    await binding.idle();
+    await tester.pump();
+
+    expect(position.pixels, closeTo(historyOffset, 0.1));
+
+    await _expandTerminalShortcuts(tester);
+    await tester.tap(find.byKey(const ValueKey('terminal-key-latest-output')));
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(position.pixels, closeTo(position.maxScrollExtent, 0.1));
   });
 
   testWidgets('live terminal pane reopens when target epoch changes', (

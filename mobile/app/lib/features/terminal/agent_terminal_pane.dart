@@ -9,6 +9,7 @@ import '../../models/ccb_terminal_target.dart';
 import '../../tmux/tmux_command_builder.dart';
 import '../../transport/gateway_terminal_transport.dart';
 import '../../transport/terminal_transport.dart';
+import 'terminal_history_scroll_controller.dart';
 
 class AgentTerminalPane extends StatefulWidget {
   const AgentTerminalPane({
@@ -167,6 +168,7 @@ class _LiveTerminalPaneState extends State<_LiveTerminalPane>
   ];
 
   late final Terminal _terminal;
+  late final TerminalHistoryScrollController _terminalScrollController;
   Future<TerminalSession>? _sessionFuture;
   TerminalSession? _session;
   StreamSubscription<String>? _outputSubscription;
@@ -186,6 +188,9 @@ class _LiveTerminalPaneState extends State<_LiveTerminalPane>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _terminalScrollController = TerminalHistoryScrollController(
+      debugLabel: 'agent-terminal-history',
+    );
     _terminal = Terminal(
       maxLines: 4000,
       onOutput: (data) {
@@ -314,6 +319,7 @@ class _LiveTerminalPaneState extends State<_LiveTerminalPane>
     _openGeneration += 1;
     _cancelAutoReconnectTimer();
     unawaited(_closeCurrentSession());
+    _terminalScrollController.dispose();
     super.dispose();
   }
 
@@ -543,6 +549,7 @@ class _LiveTerminalPaneState extends State<_LiveTerminalPane>
                         _terminal,
                         key: const ValueKey('ccb-live-terminal-view'),
                         autofocus: true,
+                        scrollController: _terminalScrollController,
                       ),
                       if (!widget.showHeader && disconnected)
                         Positioned(
@@ -563,6 +570,8 @@ class _LiveTerminalPaneState extends State<_LiveTerminalPane>
                           ),
                           child: TerminalControlToolbar(
                             enabled: connected,
+                            onLatestOutput:
+                                _terminalScrollController.jumpToLatestOutput,
                             onEscape: () => _sendKey(const [27], 'Esc'),
                             onTab: () => _sendKey(const [9], 'Tab'),
                             onCtrlC: () => _sendKey(const [3], 'Ctrl-C'),
@@ -674,6 +683,7 @@ class AgentTerminalHeader extends StatelessWidget {
 class TerminalControlToolbar extends StatefulWidget {
   const TerminalControlToolbar({
     required this.enabled,
+    required this.onLatestOutput,
     required this.onEscape,
     required this.onTab,
     required this.onCtrlC,
@@ -683,6 +693,7 @@ class TerminalControlToolbar extends StatefulWidget {
   });
 
   final bool enabled;
+  final VoidCallback onLatestOutput;
   final VoidCallback onEscape;
   final VoidCallback onTab;
   final VoidCallback onCtrlC;
@@ -752,6 +763,13 @@ class _TerminalControlToolbarState extends State<TerminalControlToolbar> {
                       ),
                       if (_expanded) ...[
                         const SizedBox(width: 2),
+                        _TerminalShortcutIconButton(
+                          key: const ValueKey('terminal-key-latest-output'),
+                          tooltip: 'Latest output',
+                          enabled: true,
+                          onPressed: widget.onLatestOutput,
+                          icon: Icons.vertical_align_bottom,
+                        ),
                         _ToolbarTextButton(
                           key: const ValueKey('terminal-key-escape'),
                           label: 'Esc',
