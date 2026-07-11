@@ -755,6 +755,28 @@ def _handle_native_cli_run(provider: str, argv: list[str], delay_s: float) -> in
         if reply:
             print(reply, flush=True)
         return 0
+    if provider == "grok":
+        if mode == "cancelled":
+            reply = ""
+        if reply:
+            midpoint = max(1, len(reply) // 2)
+            print(json.dumps({"type": "text", "data": reply[:midpoint]}, ensure_ascii=True), flush=True)
+            print(json.dumps({"type": "text", "data": reply[midpoint:]}, ensure_ascii=True), flush=True)
+        if mode == "no_terminal":
+            return 0
+        print(
+            json.dumps(
+                {
+                    "type": "end",
+                    "stopReason": "Cancelled" if mode == "cancelled" else "EndTurn",
+                    "sessionId": f"ses-grok-{req_id}",
+                    "requestId": f"req-grok-{req_id}",
+                },
+                ensure_ascii=True,
+            ),
+            flush=True,
+        )
+        return 0
     if mode in {"tool", "tool_then_final"}:
         print(
             json.dumps(

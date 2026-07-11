@@ -163,6 +163,51 @@ def test_grok_provider_adapter_projects_system_login_and_uses_uuid_session(
     terminal, _emitted = _run_to_terminal(adapter, submission)
     assert terminal.decision is not None
     assert terminal.decision.status is CompletionStatus.COMPLETED
+    assert terminal.decision.reason == "grok_run_stop"
+    assert terminal.decision.diagnostics["finish_reason"] == "end_turn"
+
+
+def test_grok_provider_adapter_requires_native_terminal_event(monkeypatch, tmp_path: Path) -> None:
+    work_dir = tmp_path / "repo-grok-missing-native-terminal"
+    work_dir.mkdir()
+    _write_session("grok", work_dir)
+    _install_stub(monkeypatch, "grok", mode="no_terminal")
+
+    adapter = _adapter("grok")
+    submission = adapter.start(
+        _job("grok", work_dir),
+        context=_runtime_context("grok", work_dir),
+        now="2026-06-13T00:00:00Z",
+    )
+    terminal, emitted = _run_to_terminal(adapter, submission)
+
+    assert terminal.decision is not None
+    assert terminal.decision.status is CompletionStatus.INCOMPLETE
+    assert terminal.decision.reason == "grok_native_terminal_missing"
+    assert terminal.decision.reply == "stub reply for job_grok_run123"
+    assert terminal.decision.diagnostics["returncode"] == 0
+    assert CompletionItemKind.TURN_BOUNDARY not in emitted
+
+
+def test_grok_provider_adapter_reports_native_cancelled_end(monkeypatch, tmp_path: Path) -> None:
+    work_dir = tmp_path / "repo-grok-native-cancelled"
+    work_dir.mkdir()
+    _write_session("grok", work_dir)
+    _install_stub(monkeypatch, "grok", mode="cancelled")
+
+    adapter = _adapter("grok")
+    submission = adapter.start(
+        _job("grok", work_dir),
+        context=_runtime_context("grok", work_dir),
+        now="2026-06-13T00:00:00Z",
+    )
+    terminal, emitted = _run_to_terminal(adapter, submission)
+
+    assert terminal.decision is not None
+    assert terminal.decision.status is CompletionStatus.INCOMPLETE
+    assert terminal.decision.reason == "grok_run_finished:cancelled"
+    assert terminal.decision.reply == ""
+    assert CompletionItemKind.TURN_BOUNDARY in emitted
 
 
 @pytest.mark.parametrize("provider", PROVIDERS)
@@ -345,4 +390,9 @@ def test_native_cli_structured_tool_event_does_not_terminalize_before_final(tmp_
     assert terminal is not None
     assert terminal.decision is not None
     assert terminal.decision.status is CompletionStatus.INCOMPLETE
-    assert terminal.decision.reason == f"{provider}_run_finished:tool_calls"
+    expected_reason = (
+        "grok_native_terminal_missing"
+        if provider == "grok"
+        else f"{provider}_run_finished:tool_calls"
+    )
+    assert terminal.decision.reason == expected_reason

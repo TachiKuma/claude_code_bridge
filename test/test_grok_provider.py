@@ -7,6 +7,7 @@ import uuid
 
 from provider_backends.grok.execution import _build_command, observe_grok_output
 from provider_backends.native_cli_support import NativeCliExecutionRequest
+from provider_backends.native_cli_support.prompt import wrap_native_prompt
 
 
 def _req(prompt: str = 'review this', work_dir: str = '/tmp/wd', session_data: dict | None = None) -> NativeCliExecutionRequest:
@@ -53,6 +54,13 @@ def test_grok_command_session_data_overrides_env(monkeypatch) -> None:
 
     assert cmd[cmd.index('-m') + 1] == 'grok-4.5'
     assert cmd[cmd.index('--reasoning-effort') + 1] == 'xhigh'
+
+
+def test_grok_prompt_uses_request_anchor_without_semantic_done_marker() -> None:
+    prompt = wrap_native_prompt('review this', 'job_grok_native_end')
+
+    assert 'CCB_REQ_ID: job_grok_native_end' in prompt
+    assert 'CCB_DONE' not in prompt
 
 
 def test_grok_observer_extracts_text_from_aggregated_json(tmp_path: Path) -> None:
@@ -141,6 +149,45 @@ def test_grok_observer_extracts_native_streaming_json(tmp_path: Path) -> None:
     assert obs.finished is True
     assert obs.finish_reason == 'end_turn'
     assert obs.turn_ref == 'req-stream'
+
+
+def test_grok_observer_treats_native_cancelled_end_as_terminal(tmp_path: Path) -> None:
+    out = tmp_path / 'grok-cancelled.jsonl'
+    out.write_text(
+        json.dumps(
+            {
+                'type': 'end',
+                'stopReason': 'Cancelled',
+                'sessionId': 'ses-cancelled',
+                'requestId': 'req-cancelled',
+            },
+            ensure_ascii=True,
+        )
+        + '\n',
+        encoding='utf-8',
+    )
+
+    obs = observe_grok_output(out)
+
+    assert obs.error == ''
+    assert obs.text == ''
+    assert obs.finished is True
+    assert obs.finish_reason == 'cancelled'
+    assert obs.turn_ref == 'req-cancelled'
+
+
+def test_grok_observer_aggregated_cancelled_end_is_not_parser_error(tmp_path: Path) -> None:
+    out = tmp_path / 'grok-cancelled.json'
+    out.write_text(
+        json.dumps({'text': '', 'stopReason': 'Cancelled', 'requestId': 'req-cancelled'}),
+        encoding='utf-8',
+    )
+
+    obs = observe_grok_output(out)
+
+    assert obs.error == ''
+    assert obs.finished is True
+    assert obs.finish_reason == 'cancelled'
 
 
 def test_grok_observer_missing_file_is_empty(tmp_path: Path) -> None:

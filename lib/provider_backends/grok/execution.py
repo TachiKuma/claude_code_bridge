@@ -34,8 +34,9 @@ def build_execution_adapter() -> NativeCliSubprocessAdapter:
             empty_reason="grok_empty_reply",
             run_error_reason="grok_run_error",
             complete_reason="grok_run_stop",
-            process_exit_complete_reason="grok_run_exit",
+            missing_terminal_reason="grok_native_terminal_missing",
             timeout_reason="grok_run_timeout",
+            terminal_on_process_exit=False,
         )
     )
 
@@ -193,8 +194,6 @@ def _observe_grok_aggregate(raw: str) -> NativeCliObservation | None:
     error_field = payload.get("error")
     if error_field:
         error = _text_from(error_field) or "grok_error"
-    elif not text and finish_reason and finish_reason not in {"end_turn", "stop", "done", "completed", "success", "ok"}:
-        error = f"grok_stop_{finish_reason}"
 
     return NativeCliObservation(
         text=text,
@@ -372,6 +371,8 @@ def _is_final_update(update: Any, update_kind: str) -> bool:
 
 
 def _is_final_event(event: dict[str, Any], method: str) -> bool:
+    if _event_type(event) == "end":
+        return True
     haystack = " ".join(
         item
         for item in (
