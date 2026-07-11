@@ -77,6 +77,23 @@ def test_list_process_cmdlines_falls_back_to_ps_when_proc_is_unavailable(tmp_pat
     assert mapping == {101: '/usr/bin/python /opt/ccb/lib/ccbd/main.py --project /tmp/repo'}
 
 
+def test_list_process_cmdlines_uses_one_ps_snapshot_for_system_proc(monkeypatch) -> None:
+    expected = {101: '/usr/bin/python bridge.py --runtime-dir /tmp/repo/.ccb'}
+    monkeypatch.setattr(
+        'runtime_pid_cleanup.procfs._list_process_cmdlines_via_ps',
+        lambda *, current_pid: expected if current_pid == 202 else {},
+    )
+
+    mapping = list_process_cmdlines(
+        current_pid=202,
+        read_proc_cmdline_fn=lambda _pid: (_ for _ in ()).throw(
+            AssertionError('system /proc must not be read one pid at a time when ps succeeds')
+        ),
+    )
+
+    assert mapping == expected
+
+
 def test_collect_project_process_candidates_falls_back_to_ps_without_proc(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-ps-scan'
     project_root.mkdir()

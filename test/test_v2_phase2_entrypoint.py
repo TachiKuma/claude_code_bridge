@@ -32,7 +32,7 @@ def _repo_root() -> Path:
 def _run_ccb(args: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
     for name in tuple(env):
-        if name in {'CCB_SESSION_FILE', 'CCB_SESSION_ID'}:
+        if name in {'CCB_KEEPER_PID', 'CCB_SESSION_FILE', 'CCB_SESSION_ID'}:
             env.pop(name, None)
             continue
         if name.startswith(('CCB_CALLER_', 'CODEX_', 'CLAUDE_', 'GEMINI_', 'OPENCODE_', 'DROID_')):
@@ -68,7 +68,7 @@ def _dual_named_agent_config_text(agent1: str, provider1: str, agent2: str, prov
     return f'{agent1}:{provider1},{agent2}:{provider2}\n'
 
 
-_PHASE2_LOCAL_ENV_NAMES = frozenset({'CCB_SESSION_FILE', 'CCB_SESSION_ID'})
+_PHASE2_LOCAL_ENV_NAMES = frozenset({'CCB_KEEPER_PID', 'CCB_SESSION_FILE', 'CCB_SESSION_ID'})
 _PHASE2_LOCAL_ENV_PREFIXES = ('CCB_CALLER_', 'CODEX_', 'CLAUDE_', 'GEMINI_', 'OPENCODE_', 'DROID_')
 
 
@@ -696,8 +696,13 @@ def test_phase2_start_blocks_nested_directory_under_parent_anchor(tmp_path: Path
     assert 'create' in stderr and '.ccb manually' in stderr
 
 
-def test_phase2_reports_subprocess_failure_without_traceback(monkeypatch, tmp_path: Path) -> None:
+def test_phase2_reports_subprocess_failure_without_traceback(
+    monkeypatch,
+    tmp_path: Path,
+    phase2_runtime_owner,
+) -> None:
     project_root = tmp_path / 'repo-subprocess'
+    phase2_runtime_owner.track(project_root)
     _write(project_root / '.ccb' / 'ccb.config', 'agent1:codex\n')
 
     def _raise_subprocess_error(context):
@@ -719,8 +724,13 @@ def test_phase2_reports_subprocess_failure_without_traceback(monkeypatch, tmp_pa
     assert 'Traceback' not in stderr
 
 
-def test_phase2_reports_exception_cause_without_traceback(monkeypatch, tmp_path: Path) -> None:
+def test_phase2_reports_exception_cause_without_traceback(
+    monkeypatch,
+    tmp_path: Path,
+    phase2_runtime_owner,
+) -> None:
     project_root = tmp_path / 'repo-cause'
+    phase2_runtime_owner.track(project_root)
     _write(project_root / '.ccb' / 'ccb.config', 'agent1:codex\n')
 
     def _raise_wrapped_error(context):
@@ -2538,7 +2548,7 @@ def test_ccb_start_restore_preserves_existing_restore_state(tmp_path: Path) -> N
     assert proc.returncode == 0, proc.stderr
     assert 'start_status: ok' in proc.stdout
 
-    doctor = _wait_for_doctor_any_line(
+    _wait_for_doctor_any_line(
         project_root,
         (
             'agent: name=codex health=restored provider=codex completion=protocol_turn',
@@ -3057,12 +3067,17 @@ def test_ccb_codex_real_adapter_recovers_after_ccbd_restart(monkeypatch, tmp_pat
             assert not thread1.is_alive()
 
 
-def test_ccb_two_named_codex_agents_concurrent_ask_isolated(monkeypatch, tmp_path: Path) -> None:
+def test_ccb_two_named_codex_agents_concurrent_ask_isolated(
+    monkeypatch,
+    tmp_path: Path,
+    phase2_runtime_owner,
+) -> None:
     from jobs.store import JobEventStore, JobStore
     from provider_execution import codex as codex_adapter_module
     from storage.paths import PathLayout
 
     project_root = tmp_path / 'repo-dual-codex'
+    phase2_runtime_owner.track(project_root, in_process=True)
     _write(project_root / '.ccb' / 'ccb.config', _dual_named_agent_config_text('agent1', 'codex', 'agent2', 'codex'))
     _write(
         project_root / '.ccb' / '.codex-agent1-session',
@@ -3278,10 +3293,15 @@ def test_ccb_two_named_codex_agents_concurrent_ask_isolated(monkeypatch, tmp_pat
         _assert_phase2_app_shutdown_clean(project_root, app, thread)
 
 
-def test_ccb_two_named_codex_agents_recover_after_ccbd_restart(monkeypatch, tmp_path: Path) -> None:
+def test_ccb_two_named_codex_agents_recover_after_ccbd_restart(
+    monkeypatch,
+    tmp_path: Path,
+    phase2_runtime_owner,
+) -> None:
     from provider_execution import codex as codex_adapter_module
 
     project_root = tmp_path / 'repo-dual-codex-resume'
+    phase2_runtime_owner.track(project_root, in_process=True)
     _write(project_root / '.ccb' / 'ccb.config', _dual_named_agent_config_text('agent1', 'codex', 'agent2', 'codex'))
     _write(
         project_root / '.ccb' / '.codex-agent1-session',
@@ -3506,12 +3526,17 @@ def test_ccb_two_named_codex_agents_recover_after_ccbd_restart(monkeypatch, tmp_
             _assert_phase2_app_shutdown_clean(project_root, app1, thread1)
 
 
-def test_ccb_two_named_claude_agents_concurrent_ask_isolated(monkeypatch, tmp_path: Path) -> None:
+def test_ccb_two_named_claude_agents_concurrent_ask_isolated(
+    monkeypatch,
+    tmp_path: Path,
+    phase2_runtime_owner,
+) -> None:
     from jobs.store import JobEventStore, JobStore
     from provider_execution import claude as claude_adapter_module
     from storage.paths import PathLayout
 
     project_root = tmp_path / 'repo-dual-claude'
+    phase2_runtime_owner.track(project_root, in_process=True)
     _write(project_root / '.ccb' / 'ccb.config', _dual_named_agent_config_text('agent1', 'claude', 'agent2', 'claude'))
     _write(
         project_root / '.ccb' / '.claude-agent1-session',
@@ -3702,12 +3727,17 @@ def test_ccb_two_named_claude_agents_concurrent_ask_isolated(monkeypatch, tmp_pa
         _assert_phase2_app_shutdown_clean(project_root, app, thread)
 
 
-def test_ccb_two_named_gemini_agents_concurrent_ask_isolated(monkeypatch, tmp_path: Path) -> None:
+def test_ccb_two_named_gemini_agents_concurrent_ask_isolated(
+    monkeypatch,
+    tmp_path: Path,
+    phase2_runtime_owner,
+) -> None:
     from jobs.store import JobEventStore, JobStore
     from provider_execution import gemini as gemini_adapter_module
     from storage.paths import PathLayout
 
     project_root = tmp_path / 'repo-dual-gemini'
+    phase2_runtime_owner.track(project_root, in_process=True)
     _write(project_root / '.ccb' / 'ccb.config', _dual_named_agent_config_text('agent1', 'gemini', 'agent2', 'gemini'))
     _write(
         project_root / '.ccb' / '.gemini-agent1-session',
@@ -3885,13 +3915,18 @@ def test_ccb_two_named_gemini_agents_concurrent_ask_isolated(monkeypatch, tmp_pa
         _assert_phase2_app_shutdown_clean(project_root, app, thread)
 
 
-def test_ccb_two_named_opencode_agents_concurrent_ask_isolated(monkeypatch, tmp_path: Path) -> None:
+def test_ccb_two_named_opencode_agents_concurrent_ask_isolated(
+    monkeypatch,
+    tmp_path: Path,
+    phase2_runtime_owner,
+) -> None:
     from jobs.store import JobEventStore, JobStore
     from provider_backends.opencode.session_runtime.model import OpenCodeProjectSession
     from provider_execution import opencode as opencode_adapter_module
     from storage.paths import PathLayout
 
     project_root = tmp_path / 'repo-dual-opencode'
+    phase2_runtime_owner.track(project_root, in_process=True)
     shared_work_dir = project_root / '.ccb' / 'workspaces' / 'shared-opencode'
     shared_work_dir.mkdir(parents=True, exist_ok=True)
     _write(project_root / '.ccb' / 'ccb.config', _dual_named_agent_config_text('agent1', 'opencode', 'agent2', 'opencode'))
