@@ -43,6 +43,13 @@ class RuntimeAcceleratorOwner:
     start_token: str
 
 
+@dataclass(frozen=True)
+class CorruptOwnerRecovery:
+    status: str
+    reclaimed_pids: tuple[int, ...] = ()
+    warning: str = ""
+
+
 def owner_manifest_path(project_root: str | Path) -> Path:
     return PathLayout(Path(project_root)).ccbd_dir / _OWNER_FILE_NAME
 
@@ -76,7 +83,7 @@ def load_runtime_accelerator_owner(project_root: str | Path) -> RuntimeAccelerat
     try:
         pid = int(payload["pid"])
         socket_path = _resolved_path(payload["socket_path"])
-        executable = _resolved_path(payload["executable"])
+        executable = _normalized_executable_path(payload["executable"])
         start_token = str(payload["process_start_token"]).strip()
     except Exception as exc:
         raise RuntimeAcceleratorOwnershipError(f"runtime_accelerator_owner_invalid:{path}:{exc}") from exc
@@ -101,15 +108,17 @@ def record_runtime_accelerator_owner(
     root = _resolved_path(project_root)
     socket = _resolved_path(socket_path)
     identity = _wait_for_process_identity(pid)
-    if identity is None or not _matches_accelerator_process(identity, project_root=root, socket_path=socket):
+    if identity is None:
         raise RuntimeAcceleratorOwnershipError(f"runtime_accelerator_identity_unavailable:pid={pid}")
+    if not _matches_accelerator_process(identity, project_root=root, socket_path=socket):
+        raise RuntimeAcceleratorOwnershipError(f"runtime_accelerator_identity_mismatch:pid={pid}")
     assert identity.executable is not None
     owner = RuntimeAcceleratorOwner(
         project_id=compute_project_id(root),
         project_root=root,
         pid=pid,
         socket_path=socket,
-        executable=identity.executable,
+        executable=_normalized_executable_path(identity.executable),
         start_token=identity.start_token,
     )
     atomic_write_json(
@@ -174,6 +183,74 @@ def runtime_accelerator_pid_matches_owner(
     return identity is not None and _owner_matches_identity(owner, identity)
 
 
+def recover_corrupt_runtime_accelerator_owner(
+    project_root: str | Path,
+    *,
+    socket_path: str | Path,
+    force: bool,
+) -> CorruptOwnerRecovery:
+    root = _resolved_path(project_root)
+    socket = _resolved_path(socket_path)
+    manifest_path = owner_manifest_path(root)
+    if not manifest_path.exists():
+        return CorruptOwnerRecovery(status="absent")
+    try:
+        owner = load_runtime_accelerator_owner(root)
+    except RuntimeAcceleratorOwnershipError as exc:
+        invalid_reason = str(exc)
+    else:
+        return CorruptOwnerRecovery(status="valid" if owner is not None else "absent")
+    if not force:
+        return CorruptOwnerRecovery(
+            status="blocked",
+            warning=f"runtime_accelerator_corrupt_owner_preserved:force_required:{invalid_reason}",
+        )
+
+    verified_pids = legacy_runtime_accelerator_pids(root, socket_path=socket)
+    if not verified_pids:
+        return CorruptOwnerRecovery(
+            status="blocked",
+            warning="runtime_accelerator_corrupt_owner_preserved:exact_legacy_identity_not_found",
+        )
+    reclaimed: list[int] = []
+    for pid in verified_pids:
+        if not terminate_pid_tree(pid, timeout_s=1.0, is_pid_alive_fn=is_pid_alive):
+            return CorruptOwnerRecovery(
+                status="blocked",
+                reclaimed_pids=tuple(reclaimed),
+                warning=f"runtime_accelerator_corrupt_owner_preserved:terminate_failed:pid={pid}",
+            )
+        reclaimed.append(pid)
+    remaining = legacy_runtime_accelerator_pids(root, socket_path=socket)
+    if remaining:
+        return CorruptOwnerRecovery(
+            status="blocked",
+            reclaimed_pids=tuple(reclaimed),
+            warning=(
+                "runtime_accelerator_corrupt_owner_preserved:verified_processes_remain:"
+                + ",".join(str(pid) for pid in remaining)
+            ),
+        )
+    if socket.exists() and _socket_is_connectable(socket):
+        return CorruptOwnerRecovery(
+            status="blocked",
+            reclaimed_pids=tuple(reclaimed),
+            warning="runtime_accelerator_corrupt_owner_preserved:socket_still_connectable",
+        )
+    try:
+        socket.unlink(missing_ok=True)
+        if socket.exists():
+            raise OSError("socket still exists")
+        manifest_path.unlink()
+    except OSError as exc:
+        return CorruptOwnerRecovery(
+            status="blocked",
+            reclaimed_pids=tuple(reclaimed),
+            warning=f"runtime_accelerator_corrupt_owner_preserved:cleanup_failed:{exc}",
+        )
+    return CorruptOwnerRecovery(status="recovered", reclaimed_pids=tuple(reclaimed))
+
+
 def runtime_accelerator_pid_matches_legacy(pid: int, *, project_root: str | Path) -> bool:
     root = _resolved_path(project_root)
     identity = inspect_process_identity(pid)
@@ -227,6 +304,10 @@ def remove_runtime_accelerator_owner(project_root: str | Path, *, pid: int) -> N
         owner_manifest_path(root).unlink(missing_ok=True)
 
 
+def runtime_accelerator_socket_is_connectable(socket_path: str | Path) -> bool:
+    return _socket_is_connectable(_resolved_path(socket_path))
+
+
 def inspect_process_identity(pid: int) -> ProcessIdentity | None:
     if int(pid) <= 0 or not is_pid_alive(int(pid)):
         return None
@@ -267,10 +348,13 @@ def _reclaim_recorded_owner(owner: RuntimeAcceleratorOwner) -> str:
 
 
 def _owner_matches_identity(owner: RuntimeAcceleratorOwner, identity: ProcessIdentity) -> bool:
+    observed_executable = (
+        _normalized_executable_path(identity.executable) if identity.executable is not None else None
+    )
     return (
         identity.pid == owner.pid
         and identity.start_token == owner.start_token
-        and identity.executable == owner.executable
+        and observed_executable == owner.executable
         and _matches_accelerator_process(
             identity,
             project_root=owner.project_root,
@@ -285,10 +369,11 @@ def _matches_accelerator_process(
     project_root: Path,
     socket_path: Path,
 ) -> bool:
+    executable = _normalized_executable_path(identity.executable) if identity.executable is not None else None
     return (
         identity.cwd == project_root
-        and identity.executable is not None
-        and _is_accelerator_executable(identity.executable)
+        and executable is not None
+        and _is_accelerator_executable(executable)
         and _argv_matches_accelerator(identity.argv, socket_path=socket_path)
     )
 
@@ -301,6 +386,13 @@ def _argv_matches_accelerator(argv: tuple[str, ...], *, socket_path: Path) -> bo
 
 def _is_accelerator_executable(path: Path) -> bool:
     return path.name in {"ccb-runtime-accelerator", "ccb-runtime-accelerator.exe"}
+
+
+def _normalized_executable_path(value: str | Path) -> Path:
+    text = str(value)
+    if text.endswith(" (deleted)"):
+        text = text[: -len(" (deleted)")]
+    return _resolved_path(text)
 
 
 def _wait_for_process_identity(pid: int, *, timeout_s: float = 0.25) -> ProcessIdentity | None:
@@ -399,6 +491,7 @@ def _resolved_path(value: str | Path) -> Path:
 
 
 __all__ = [
+    "CorruptOwnerRecovery",
     "ProcessIdentity",
     "RuntimeAcceleratorOwner",
     "RuntimeAcceleratorOwnershipError",
@@ -407,9 +500,11 @@ __all__ = [
     "legacy_runtime_accelerator_pids",
     "load_runtime_accelerator_owner",
     "owner_manifest_path",
+    "recover_corrupt_runtime_accelerator_owner",
     "reclaim_runtime_accelerator",
     "record_runtime_accelerator_owner",
     "remove_runtime_accelerator_owner",
     "runtime_accelerator_pid_matches_legacy",
     "runtime_accelerator_pid_matches_owner",
+    "runtime_accelerator_socket_is_connectable",
 ]

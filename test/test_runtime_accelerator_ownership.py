@@ -14,6 +14,7 @@ from runtime_accelerator.ownership import (
     owner_manifest_path,
     reclaim_runtime_accelerator,
     record_runtime_accelerator_owner,
+    recover_corrupt_runtime_accelerator_owner,
     runtime_accelerator_pid_matches_owner,
 )
 
@@ -195,6 +196,74 @@ def test_recorded_owner_rejects_lookalike_process(monkeypatch, tmp_path: Path, i
     assert owner_path.exists()
 
 
+def test_stale_owner_identity_unavailable_remains_fail_closed(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    socket_path = tmp_path / "accelerator.sock"
+    owner_path = _write_owner(project_root, socket_path)
+    monkeypatch.setattr("runtime_accelerator.ownership.is_pid_alive", lambda pid: True)
+    monkeypatch.setattr("runtime_accelerator.ownership.inspect_process_identity", lambda pid: None)
+    monkeypatch.setattr(
+        "runtime_accelerator.ownership.terminate_pid_tree",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unknown owner must not be killed")),
+    )
+
+    with pytest.raises(RuntimeAcceleratorOwnershipError, match="owner_identity_unavailable"):
+        reclaim_runtime_accelerator(project_root, socket_path=socket_path)
+
+    assert owner_path.exists()
+
+
+def test_deleted_executable_suffix_is_normalized_for_exact_owner_reclaim(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    socket_path = tmp_path / "accelerator.sock"
+    _write_owner(project_root, socket_path)
+    terminated: list[int] = []
+    monkeypatch.setattr("runtime_accelerator.ownership.is_pid_alive", lambda pid: True)
+    monkeypatch.setattr(
+        "runtime_accelerator.ownership.inspect_process_identity",
+        lambda pid: _identity(
+            project_root.resolve(),
+            socket_path.resolve(),
+            pid=pid,
+            executable=Path("/opt/ccb/bin/ccb-runtime-accelerator (deleted)"),
+        ),
+    )
+    monkeypatch.setattr(
+        "runtime_accelerator.ownership.terminate_pid_tree",
+        lambda pid, **kwargs: terminated.append(pid) or True,
+    )
+    monkeypatch.setattr("runtime_accelerator.ownership.legacy_runtime_accelerator_pids", lambda *args, **kwargs: ())
+
+    assert reclaim_runtime_accelerator(project_root, socket_path=socket_path) == (321,)
+    assert terminated == [321]
+
+
+@pytest.mark.parametrize(
+    "executable",
+    (
+        Path("/bin/sh (deleted)"),
+        Path("/other/ccb-runtime-accelerator (deleted)"),
+    ),
+)
+def test_deleted_suffix_does_not_relax_executable_identity(monkeypatch, tmp_path: Path, executable: Path) -> None:
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    socket_path = tmp_path / "accelerator.sock"
+    owner_path = _write_owner(project_root, socket_path)
+    monkeypatch.setattr("runtime_accelerator.ownership.is_pid_alive", lambda pid: True)
+    monkeypatch.setattr(
+        "runtime_accelerator.ownership.inspect_process_identity",
+        lambda pid: _identity(project_root.resolve(), socket_path.resolve(), pid=pid, executable=executable),
+    )
+
+    with pytest.raises(RuntimeAcceleratorOwnershipError, match="owner_identity_mismatch"):
+        reclaim_runtime_accelerator(project_root, socket_path=socket_path)
+
+    assert owner_path.exists()
+
+
 def test_owner_pid_match_revalidates_exact_manifest_identity(monkeypatch, tmp_path: Path) -> None:
     project_root = tmp_path / "project"
     project_root.mkdir()
@@ -288,3 +357,108 @@ def test_takeover_reaps_all_legacy_accelerators_for_project_socket(monkeypatch, 
 
     assert reclaim_runtime_accelerator(project_root, socket_path=socket_path) == (808, 909)
     assert terminated == [808, 909]
+
+
+def test_normal_recovery_preserves_corrupt_owner_with_warning(tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    socket_path = tmp_path / "accelerator.sock"
+    manifest_path = owner_manifest_path(project_root)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text("{invalid\n", encoding="utf-8")
+
+    result = recover_corrupt_runtime_accelerator_owner(
+        project_root,
+        socket_path=socket_path,
+        force=False,
+    )
+
+    assert result.status == "blocked"
+    assert "force_required" in result.warning
+    assert manifest_path.exists()
+
+
+def test_force_recovery_removes_corrupt_owner_only_after_exact_legacy_reap(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    socket_path = tmp_path / "accelerator.sock"
+    socket_path.write_text("stale", encoding="utf-8")
+    manifest_path = owner_manifest_path(project_root)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text("{invalid\n", encoding="utf-8")
+    scans = iter(((321,), ()))
+    events: list[str] = []
+    monkeypatch.setattr(
+        "runtime_accelerator.ownership.legacy_runtime_accelerator_pids",
+        lambda *args, **kwargs: next(scans),
+    )
+    monkeypatch.setattr(
+        "runtime_accelerator.ownership.terminate_pid_tree",
+        lambda pid, **kwargs: events.append(f"terminate:{pid}") or True,
+    )
+    monkeypatch.setattr(
+        "runtime_accelerator.ownership._socket_is_connectable",
+        lambda path: events.append("socket-check") or False,
+    )
+
+    result = recover_corrupt_runtime_accelerator_owner(
+        project_root,
+        socket_path=socket_path,
+        force=True,
+    )
+
+    assert result.status == "recovered"
+    assert result.reclaimed_pids == (321,)
+    assert events == ["terminate:321", "socket-check"]
+    assert not manifest_path.exists()
+    assert not socket_path.exists()
+
+
+def test_force_recovery_without_exact_legacy_identity_preserves_corrupt_owner(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    socket_path = tmp_path / "accelerator.sock"
+    manifest_path = owner_manifest_path(project_root)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text("{invalid\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "runtime_accelerator.ownership.legacy_runtime_accelerator_pids",
+        lambda *args, **kwargs: (),
+    )
+
+    result = recover_corrupt_runtime_accelerator_owner(
+        project_root,
+        socket_path=socket_path,
+        force=True,
+    )
+
+    assert result.status == "blocked"
+    assert "exact_legacy_identity_not_found" in result.warning
+    assert manifest_path.exists()
+
+
+def test_force_recovery_preserves_corrupt_owner_when_socket_remains_active(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    socket_path = tmp_path / "accelerator.sock"
+    socket_path.write_text("active", encoding="utf-8")
+    manifest_path = owner_manifest_path(project_root)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text("{invalid\n", encoding="utf-8")
+    scans = iter(((321,), ()))
+    monkeypatch.setattr(
+        "runtime_accelerator.ownership.legacy_runtime_accelerator_pids",
+        lambda *args, **kwargs: next(scans),
+    )
+    monkeypatch.setattr("runtime_accelerator.ownership.terminate_pid_tree", lambda *args, **kwargs: True)
+    monkeypatch.setattr("runtime_accelerator.ownership._socket_is_connectable", lambda path: True)
+
+    result = recover_corrupt_runtime_accelerator_owner(
+        project_root,
+        socket_path=socket_path,
+        force=True,
+    )
+
+    assert result.status == "blocked"
+    assert "socket_still_connectable" in result.warning
+    assert manifest_path.exists()

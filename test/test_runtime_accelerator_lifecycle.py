@@ -11,6 +11,7 @@ from runtime_accelerator.lifecycle import (
     maybe_start_runtime_accelerator,
     stop_runtime_accelerator,
 )
+from runtime_accelerator.ownership import RuntimeAcceleratorOwnershipError, owner_manifest_path
 
 
 class FakeProcess:
@@ -149,6 +150,65 @@ def test_runtime_accelerator_takeover_failure_blocks_new_process(monkeypatch, tm
         maybe_start_runtime_accelerator(tmp_path)
 
     assert socket_path.exists()
+
+
+def test_runtime_accelerator_first_start_identity_unavailable_falls_back(monkeypatch, tmp_path: Path) -> None:
+    fake_process = FakeProcess()
+    socket_path = tmp_path / "accelerator.sock"
+    monkeypatch.setenv("CCB_RUNTIME_ACCELERATOR_CODEX", "1")
+    monkeypatch.setenv("CCB_RUNTIME_ACCELERATOR_SOCKET", str(socket_path))
+    monkeypatch.setattr("runtime_accelerator.lifecycle.accelerator_binary", lambda: "/bin/fake")
+    monkeypatch.setattr("runtime_accelerator.lifecycle.reclaim_runtime_accelerator", lambda *args, **kwargs: ())
+
+    def fake_popen(*args, **kwargs):
+        socket_path.write_text("new-sidecar", encoding="utf-8")
+        return fake_process
+
+    monkeypatch.setattr("runtime_accelerator.lifecycle.subprocess.Popen", fake_popen)
+    monkeypatch.setattr(
+        "runtime_accelerator.lifecycle.record_runtime_accelerator_owner",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            RuntimeAcceleratorOwnershipError("runtime_accelerator_identity_unavailable:pid=321")
+        ),
+    )
+    monkeypatch.setattr("runtime_accelerator.lifecycle.load_runtime_accelerator_owner", lambda project_root: None)
+    monkeypatch.setattr(
+        "runtime_accelerator.lifecycle.runtime_accelerator_socket_is_connectable",
+        lambda path: False,
+    )
+
+    handle = maybe_start_runtime_accelerator(tmp_path)
+
+    assert handle.process is None
+    assert handle.error == "runtime_accelerator_identity_unavailable:pid=321"
+    assert fake_process.terminated is True
+    assert not socket_path.exists()
+    assert not owner_manifest_path(tmp_path).exists()
+    assert _runtime_accelerator_startup_actions(SimpleNamespace(runtime_accelerator=handle)) == [
+        "runtime_accelerator_fallback:runtime_accelerator_identity_unavailable:pid=321"
+    ]
+
+
+def test_runtime_accelerator_new_sidecar_identity_mismatch_fails_closed(monkeypatch, tmp_path: Path) -> None:
+    fake_process = FakeProcess()
+    socket_path = tmp_path / "accelerator.sock"
+    monkeypatch.setenv("CCB_RUNTIME_ACCELERATOR_CODEX", "1")
+    monkeypatch.setenv("CCB_RUNTIME_ACCELERATOR_SOCKET", str(socket_path))
+    monkeypatch.setattr("runtime_accelerator.lifecycle.accelerator_binary", lambda: "/bin/fake")
+    monkeypatch.setattr("runtime_accelerator.lifecycle.reclaim_runtime_accelerator", lambda *args, **kwargs: ())
+    monkeypatch.setattr("runtime_accelerator.lifecycle.subprocess.Popen", lambda *args, **kwargs: fake_process)
+    monkeypatch.setattr(
+        "runtime_accelerator.lifecycle.record_runtime_accelerator_owner",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            RuntimeAcceleratorOwnershipError("runtime_accelerator_identity_mismatch:pid=321")
+        ),
+    )
+    monkeypatch.setattr("runtime_accelerator.lifecycle.load_runtime_accelerator_owner", lambda project_root: None)
+
+    with pytest.raises(RuntimeAcceleratorOwnershipError, match="identity_mismatch"):
+        maybe_start_runtime_accelerator(tmp_path)
+
+    assert fake_process.terminated is True
 
 
 def test_ccbd_startup_actions_record_started_or_fallback() -> None:

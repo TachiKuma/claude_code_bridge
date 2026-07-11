@@ -17,6 +17,7 @@ from .ownership import (
     reclaim_runtime_accelerator,
     record_runtime_accelerator_owner,
     remove_runtime_accelerator_owner,
+    runtime_accelerator_socket_is_connectable,
 )
 
 
@@ -82,6 +83,27 @@ def maybe_start_runtime_accelerator(project_root: str | Path) -> RuntimeAccelera
     )
     try:
         record_runtime_accelerator_owner(project_root, socket_path=socket_path, pid=process.pid)
+    except RuntimeAcceleratorOwnershipError as exc:
+        stop_runtime_accelerator(handle)
+        if not str(exc).startswith("runtime_accelerator_identity_unavailable:"):
+            raise
+        try:
+            socket_path.unlink(missing_ok=True)
+        except OSError as cleanup_exc:
+            raise RuntimeAcceleratorOwnershipError(
+                f"runtime_accelerator_identity_fallback_cleanup_failed:{socket_path}:{cleanup_exc}"
+            ) from cleanup_exc
+        if socket_path.exists() or runtime_accelerator_socket_is_connectable(socket_path):
+            raise RuntimeAcceleratorOwnershipError(
+                f"runtime_accelerator_identity_fallback_socket_active:{socket_path}"
+            )
+        return RuntimeAcceleratorHandle(
+            enabled=True,
+            socket_path=socket_path,
+            error=str(exc),
+            project_root=project_root,
+            reclaimed_pids=reclaimed_pids,
+        )
     except Exception:
         stop_runtime_accelerator(handle)
         raise

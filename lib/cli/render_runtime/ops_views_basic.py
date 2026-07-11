@@ -981,6 +981,8 @@ def render_kill(summary) -> tuple[str, ...]:
         f'socket_path: {summary.socket_path}',
         f'forced: {str(summary.forced).lower()}',
     ]
+    lines.extend(f'kill_action: {action}' for action in getattr(summary, 'runtime_actions', ()) or ())
+    lines.extend(f'kill_warning: {warning}' for warning in getattr(summary, 'runtime_warnings', ()) or ())
     lines.extend(render_tmux_cleanup_summaries(getattr(summary, 'cleanup_summaries', ()) or ()))
     return tuple(lines)
 
