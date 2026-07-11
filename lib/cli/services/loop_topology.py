@@ -1258,6 +1258,14 @@ def _mark_release_residue(context, loop_id: str, *, payload: Mapping[str, object
     observed = json.loads(json.dumps(updated.get('observed') or {}))
     blockers = _release_residue_blockers(observed)
     if not blockers:
+        observed['release_incomplete_agents'] = []
+        observed['release_incomplete_count'] = 0
+        observed['release_incomplete_profile_counts'] = {}
+        atomic_write_json(_observed_path(context, loop_id), observed)
+        updated['observed'] = observed
+        updated['release_incomplete_agents'] = []
+        updated['release_incomplete_count'] = 0
+        updated['release_incomplete_profile_counts'] = {}
         return updated
     names = sorted(blockers)
     profile_counts = Counter(

@@ -19,7 +19,10 @@ from .ask import submit_ask
 from .clear import clear_agent_context
 from .loop_ask_first import release_ask_first_execution_round, run_ask_first_execution_round
 from .loop_orchestration_bundle import bundle_summary, load_task_orchestration_bundle, task_revision
-from .loop_effective_capacity import compile_project_effective_capacity_snapshot
+from .loop_effective_capacity import (
+    compile_project_effective_capacity_snapshot,
+    effective_capacity_digest,
+)
 from .multi_workgroup_scheduler import (
     resume_pending_multi_workgroup_scheduler,
     run_multi_workgroup_scheduler,
@@ -693,6 +696,11 @@ def _activate_orchestrator(context, command, deps, task: dict[str, object]) -> d
             activation,
             activation_path=activation_path,
         )
+    capacity_snapshot = activation.get('effective_capacity_snapshot')
+    inline_request = not (
+        isinstance(capacity_snapshot, dict)
+        and int(capacity_snapshot.get('config_version') or 0) == 3
+    )
     summary = deps.submit_ask(
         context,
         ParsedAskCommand(
@@ -702,7 +710,7 @@ def _activate_orchestrator(context, command, deps, task: dict[str, object]) -> d
             message=_orchestrator_message(activation),
             task_id=activation_id,
             compact=True,
-            inline_request=True,
+            inline_request=inline_request,
         ),
     )
     job = _single_job(summary.jobs, target=target)
@@ -1060,9 +1068,16 @@ def _mount_activation_topology(
             'window_name': window_name,
             'loop_topology_status': 'configured',
         }
+    capacity_snapshot = deps.effective_capacity_snapshot(context)
+    if int(capacity_snapshot.get('config_version') or 0) == 3:
+        dynamic_profiles = capacity_snapshot.get('dynamic_profiles')
+        v3_profile = profile.removeprefix('ccb_')
+        if isinstance(dynamic_profiles, dict) and v3_profile in dynamic_profiles:
+            profile = v3_profile
     proposal_path = _activation_path(context, activation_id).with_suffix('.topology.proposal.json')
     proposal = {
         'schema': 'ccb.loop.agent_mount_topology.v1',
+        'owner': {'kind': 'loop', 'loop_id': activation_id},
         'release_policy': {'policy': 'auto', 'idle_only': True},
         'windows': [
             {
@@ -1084,6 +1099,8 @@ def _mount_activation_topology(
             }
         ],
     }
+    if int(capacity_snapshot.get('config_version') or 0) == 3:
+        proposal['capacity_digest'] = effective_capacity_digest(capacity_snapshot)
     atomic_write_json(proposal_path, proposal)
     try:
         proposed = deps.loop_topology(

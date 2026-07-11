@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import os
 from pathlib import Path
 import re
 from typing import Any
@@ -18,9 +19,6 @@ from agents.models import (
     QueuePolicy,
     RestoreMode,
     RuntimeMode,
-    SidebarSpec,
-    SidebarViewSpec,
-    ToolWindowSpec,
     WindowSpec,
     WorkflowConfig,
     WorkflowRoleSpec,
@@ -416,7 +414,7 @@ def _parse_role(
             f'{path}.role',
             f'role {role_id} does not declare supported providers',
         )
-    if provider not in role_manifest.providers:
+    if provider not in role_manifest.providers and not _allows_source_test_fake_provider(provider):
         _fail(
             'v3_role_provider_unsupported',
             f'{path}.provider',
@@ -820,9 +818,13 @@ def _provider(value: object, *, path: str) -> str:
     if not isinstance(value, str):
         _fail('v3_type_invalid', path, 'provider must be a string')
     provider = value.strip().lower()
-    if provider not in _KNOWN_PROVIDERS:
+    if provider not in _KNOWN_PROVIDERS and not _allows_source_test_fake_provider(provider):
         _fail('v3_provider_unknown', path, f'unknown provider: {provider or "<empty>"}')
     return provider
+
+
+def _allows_source_test_fake_provider(provider: str) -> bool:
+    return provider == 'fake' and os.environ.get('CCB_TEST_ENTRYPOINT') == '1'
 
 
 def _normalize_model(provider: str, value: str | None, *, path: str) -> str | None:

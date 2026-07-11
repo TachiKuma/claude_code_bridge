@@ -8,7 +8,6 @@ import shutil
 import pytest
 
 from agents.config_loader import (
-    ConfigValidationError,
     StructuredConfigValidationError,
     load_project_config,
     render_project_config_text,
@@ -400,6 +399,41 @@ def test_v3_kind_default_without_provider_applies_to_explicit_provider(
     assert workflow.resident['frontdesk'].model == 'gpt-5.5'
     assert workflow.resident['planner'].provider == 'claude'
     assert workflow.resident['planner'].raw_model == 'Claude Sonnet 4.6 (Thinking)'
+
+
+def test_v3_accepts_fake_provider_for_source_owned_workflow_smokes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv('CCB_TEST_ENTRYPOINT', '1')
+    text = _valid_v3_text().replace('provider = "codex"', 'provider = "fake"').replace(
+        'model = "gpt5.5"\nthinking = "medium"\n',
+        '',
+    ).replace(
+        'provider = "claude"\nmodel = "Claude Sonnet 4.6 (Thinking)"',
+        'provider = "fake"',
+    )
+    project_root = _project(tmp_path, monkeypatch, text=text)
+
+    workflow = load_project_config(project_root, include_loop_overlays=False).config.workflow
+
+    assert {role.provider for role in workflow.resident.values()} == {'fake'}
+    assert {role.provider for role in workflow.dynamic.values()} == {'fake'}
+
+
+def test_v3_rejects_fake_provider_outside_source_test_entrypoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv('CCB_TEST_ENTRYPOINT', raising=False)
+    text = _valid_v3_text().replace('provider = "codex"', 'provider = "fake"')
+    project_root = _project(tmp_path, monkeypatch, text=text)
+
+    with pytest.raises(StructuredConfigValidationError) as exc_info:
+        load_project_config(project_root, include_loop_overlays=False)
+
+    assert exc_info.value.code == 'v3_provider_unknown'
+    assert exc_info.value.path == 'workflow.defaults.provider'
 
 
 @pytest.mark.parametrize(

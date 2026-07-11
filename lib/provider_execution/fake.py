@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import timedelta
+import ast
 import json
 from pathlib import Path
 
 from ccbd.api_models import JobRecord
 from ccbd.system import parse_utc_timestamp
 from completion.models import (
+    CompletionDecision,
     CompletionCursor,
     CompletionItem,
     CompletionItemKind,
@@ -179,6 +181,11 @@ def _reply_for_body(job: JobRecord, *, context=None) -> tuple[str, list[dict[str
     marker = body.strip()
     effective_body = _effective_request_body(job)
     workflow_reply = _workflow_role_bundle_reply(agent_name=agent_name, body=effective_body)
+    if workflow_reply is None:
+        workflow_reply = _workflow_multi_workgroup_orchestrator_reply(
+            agent_name=agent_name,
+            body=effective_body,
+        )
     if workflow_reply is None:
         workflow_reply = _workflow_execution_reply(job=job, context=context, agent_name=agent_name, body=effective_body)
     if workflow_reply is None:
@@ -369,7 +376,9 @@ def _workflow_role_bundle_reply(*, agent_name: str, body: str) -> str | None:
 
 
 def _workflow_execution_reply(*, job: JobRecord, context, agent_name: str, body: str) -> str | None:
-    if 'Role: worker' in body:
+    g5_smoke = _g5_smoke_contract(body)
+    scheduler_purpose = _scheduler_purpose(body) if g5_smoke is not None else ''
+    if 'Role: worker' in body or scheduler_purpose in {'worker', 'worker_rework'}:
         status = 'done'
         changed_files = _materialize_fake_worker_changes(job, context, body)
         changed_files_text = ', '.join(changed_files) if changed_files else 'none'
@@ -390,7 +399,7 @@ def _workflow_execution_reply(*, job: JobRecord, context, agent_name: str, body:
             'evidence refs: task_packet execution_contract\n'
             'hidden degradation audit: no hidden fallback or scope shrink\n'
         )
-    if 'Role: code_reviewer' not in body:
+    if 'Role: code_reviewer' not in body and scheduler_purpose not in {'reviewer', 'reviewer_recheck'}:
         return None
     recheck = 'Purpose: bounded_rework_recheck' in body
     scenario = _phase6_scenario(body)
@@ -418,10 +427,26 @@ def _workflow_execution_reply(*, job: JobRecord, context, agent_name: str, body:
 
 def _workflow_round_checker_reply(*, agent_name: str, body: str) -> str | None:
     normalized_agent = agent_name.replace('-', '_')
-    is_round_reviewer = agent_name == 'round_checker' or 'round_reviewer' in normalized_agent
+    multi_workgroup_review = (
+        'Role: ccb_round_reviewer' in body
+        and 'Review script-owned multi-workgroup evidence.' in body
+    )
+    is_round_reviewer = (
+        agent_name == 'round_checker'
+        or 'round_reviewer' in normalized_agent
+        or multi_workgroup_review
+    )
     has_round_role = 'Role: round_checker' in body or 'Role: ccb_round_reviewer' in body
     if not is_round_reviewer or not has_round_role:
         return None
+    if multi_workgroup_review:
+        return (
+            'round_result: pass\n'
+            'verification performed: fake provider deterministic multi-workgroup smoke\n'
+            'hidden degradation audit: no degradation requested\n'
+            'evidence refs: scheduler state, reviewed commits, integration state, release evidence\n'
+            'recommended next owner: multi_workgroup_scheduler\n'
+        )
     scenario = _phase6_scenario(body)
     result = 'pass'
     if scenario == 'partial_completion':
@@ -452,7 +477,8 @@ def _materialize_fake_worker_changes(job: JobRecord, context, body: str) -> list
         return []
     changed: list[str] = []
     workspace = Path(workspace_path)
-    for relative in _fake_allowed_change_paths(body):
+    allowed_paths = _scheduler_allowed_change_paths(body) or _fake_allowed_change_paths(body)
+    for relative in allowed_paths:
         path = workspace / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
@@ -487,6 +513,180 @@ def _fake_allowed_change_paths(body: str) -> list[Path]:
             paths.append(relative)
             seen.add(key)
     return paths
+
+
+def _scheduler_allowed_change_paths(body: str) -> list[Path]:
+    for raw_line in str(body or '').splitlines():
+        line = raw_line.strip()
+        if not line.startswith('Allowed paths:'):
+            continue
+        try:
+            values = json.loads(line.split(':', 1)[1].strip())
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(values, list):
+            return []
+        paths = []
+        for value in values:
+            relative = _safe_fake_relative_path(str(value or '').strip())
+            if relative is not None:
+                paths.append(relative)
+        return paths
+    return []
+
+
+def _workflow_multi_workgroup_orchestrator_reply(*, agent_name: str, body: str) -> str | None:
+    if agent_name != 'orchestrator' and 'Role: ccb_orchestrator' not in body:
+        return None
+    contract = _g5_smoke_contract(body)
+    if contract is None:
+        return None
+    candidate = _g5_orchestration_candidate(body, contract=contract)
+    return (
+        'route: direct_execution\n\n'
+        'orchestration_notes: deterministic G5 source/fake multi-workgroup contract; '
+        'task_packet and execution_contract remain script-owned authority.\n\n'
+        'orchestration_bundle:\n'
+        '```json\n'
+        f'{json.dumps(candidate, ensure_ascii=False, indent=2, sort_keys=True)}\n'
+        '```\n'
+    )
+
+
+def _g5_orchestration_candidate(body: str, *, contract: dict[str, object]) -> dict[str, object]:
+    task_id = _loop_activation_task_id(body)
+    count = int(contract['count'])
+    requested_shape = str(contract['shape'])
+    if count == 1:
+        execution_shape = 'single_unit'
+    elif requested_shape == 'parallel':
+        execution_shape = 'parallel'
+    else:
+        execution_shape = 'mixed_dag'
+    artifact_refs = _literal_mapping_line(body, 'Artifact refs:')
+    task_packet_ref = str(artifact_refs.get('task_packet') or '').strip()
+    execution_contract_ref = str(artifact_refs.get('execution_contract') or '').strip()
+    if not task_id or not task_packet_ref or not execution_contract_ref:
+        raise ValueError('G5 smoke orchestrator activation is missing task/artifact refs')
+    allowed_paths = contract['allowed_paths']
+    nodes = []
+    for index in range(1, count + 1):
+        node_id = f'node-{index:03d}'
+        depends_on = ['node-001'] if execution_shape == 'mixed_dag' and index == 3 else []
+        nodes.append(
+            {
+                'node_id': node_id,
+                'workgroup_id': f'wg-{index:03d}',
+                'worker_profile': 'coder',
+                'reviewer_profile': 'code_reviewer',
+                'depends_on': depends_on,
+                'parallel_group': 'wave-2' if depends_on else 'wave-1',
+                'work_packet': (
+                    f'G5 deterministic node {node_id}: write only {allowed_paths[index - 1]} '
+                    'and return verification evidence.'
+                ),
+                'allowed_paths': [allowed_paths[index - 1]],
+                'acceptance_refs': [task_packet_ref, execution_contract_ref],
+                'verification_refs': [execution_contract_ref],
+                'integration_order': index * 10,
+            }
+        )
+    return {
+        'schema': 'ccb.loop.orchestration_bundle_candidate.v1',
+        'task_id': task_id,
+        'bundle_revision': _expected_bundle_revision(body),
+        'selection': {
+            'workgroup_count': count,
+            'complexity': 'atomic' if count == 1 else ('bounded' if count == 2 else 'complex'),
+            'cutability': 'none' if count == 1 else 'high',
+            'execution_shape': execution_shape,
+            'rationale': 'Deterministic G5 smoke contract requests independently reviewable node scopes.',
+        },
+        'nodes': nodes,
+        'integration': {
+            'verification_refs': [execution_contract_ref],
+            'project_root_verification_refs': [execution_contract_ref],
+        },
+        'policy': {
+            'max_node_rework_rounds': 1,
+            'on_required_node_failure': 'partial_or_blocked',
+            'on_structural_failure': 'replan_required',
+        },
+    }
+
+
+def _g5_smoke_contract(body: str) -> dict[str, object] | None:
+    compact = _literal_mapping_line(body, 'Compact artifacts:')
+    texts = [str(body or '')]
+    for value in compact.values():
+        if isinstance(value, dict):
+            texts.append(str(value.get('content') or ''))
+    marker = 'g5_multi_workgroup_smoke:'
+    for text in texts:
+        for raw_line in text.splitlines():
+            line = raw_line.strip().lstrip('-*').strip()
+            if not line.startswith(marker):
+                continue
+            try:
+                payload = json.loads(line[len(marker) :].strip())
+            except json.JSONDecodeError:
+                return None
+            if not isinstance(payload, dict):
+                return None
+            count = payload.get('count')
+            shape = str(payload.get('shape') or '')
+            allowed_paths = payload.get('allowed_paths')
+            if isinstance(count, bool) or not isinstance(count, int) or count not in {1, 2, 3, 4}:
+                return None
+            if shape not in {'parallel', 'mixed_dag'}:
+                return None
+            if shape == 'mixed_dag' and count < 3:
+                return None
+            if not isinstance(allowed_paths, list) or len(allowed_paths) != count:
+                return None
+            normalized = [_safe_fake_relative_path(str(path or '')) for path in allowed_paths]
+            if any(path is None for path in normalized):
+                return None
+            return {
+                'count': count,
+                'shape': shape,
+                'allowed_paths': [path.as_posix() for path in normalized if path is not None],
+            }
+    return None
+
+
+def _literal_mapping_line(body: str, label: str) -> dict[str, object]:
+    for raw_line in str(body or '').splitlines():
+        line = raw_line.strip()
+        if not line.startswith(label):
+            continue
+        try:
+            payload = ast.literal_eval(line[len(label) :].strip())
+        except (SyntaxError, ValueError):
+            return {}
+        return payload if isinstance(payload, dict) else {}
+    return {}
+
+
+def _expected_bundle_revision(body: str) -> int:
+    for raw_line in str(body or '').splitlines():
+        line = raw_line.strip()
+        if line.startswith('Expected bundle revision:'):
+            try:
+                value = int(line.split(':', 1)[1].strip())
+            except ValueError:
+                break
+            if value > 0:
+                return value
+    raise ValueError('G5 smoke orchestrator activation is missing bundle revision')
+
+
+def _scheduler_purpose(body: str) -> str:
+    for raw_line in str(body or '').splitlines():
+        line = raw_line.strip()
+        if line.startswith('Purpose:'):
+            return line.split(':', 1)[1].strip().lower()
+    return ''
 
 
 def _safe_fake_relative_path(value: str) -> Path | None:
