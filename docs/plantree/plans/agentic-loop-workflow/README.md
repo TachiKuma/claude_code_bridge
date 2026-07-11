@@ -57,6 +57,10 @@ recoverable workflow loops.
   round, same-turn ccbd restart recovery, dynamic Claude UI/session-security
   probing, performance attribution, and explicit credential-rehydration
   residuals.
+- [history/single-lane-wave3-g3-scheduler-closure-20260711.md](history/single-lane-wave3-g3-scheduler-closure-20260711.md):
+  direct source/runtime closure evidence for the one-to-four-workgroup
+  ready-frontier scheduler, R2/T1 integration, crash recovery, strict release,
+  and durable runtime accelerator ownership; no fake/live-provider claim.
 - [history/phase1-6-deployment-readiness-p2-frontdesk-pressure-20260708.md](history/phase1-6-deployment-readiness-p2-frontdesk-pressure-20260708.md):
   P2 post-acceptance deployment-readiness evidence for real-project
   frontdesk macro-intake pressure across direct, detail, macro-adjustment, and

@@ -1,7 +1,7 @@
 # Single-Lane Multi-Workgroup Release Goal
 
 Date: 2026-07-11
-Status: In progress; Wave 2 R2/T1/E1 landed, Wave 3 G3 active
+Status: In progress; Wave 3 G3 source closure landed, G5 acceptance active
 
 ## Goal
 
@@ -60,17 +60,21 @@ Already available and preserved:
   one-to-four-workgroup topology/capacity, and strict deterministic evidence.
   Evidence is recorded in
   [../history/single-lane-wave2-git-topology-evidence-closure-20260711.md](../history/single-lane-wave2-git-topology-evidence-closure-20260711.md).
+- commits `8d3fc102`, `92da3faf`, and `bca51abd` close the G3 scheduler source
+  kernel; `fb4b26c7`, `96172d92`, and `94ea6d73` close test-runtime and
+  accelerator ownership exposed by the direct full-suite gate. Evidence is
+  recorded in
+  [../history/single-lane-wave3-g3-scheduler-closure-20260711.md](../history/single-lane-wave3-g3-scheduler-closure-20260711.md).
 
-Blocking gaps:
+Remaining acceptance gaps:
 
-- the direct engine deliberately pauses multi-node bundles before bind; the
-  ready-frontier scheduler is not landed;
-- multi-node result synthesis and scheduler wiring are absent even though Git
-  integration, promotion/rollback, topology/capacity, and evidence APIs exist;
-- existing multi-node tests prove component contracts and deterministic
-  fixtures, but do not execute one task through several reviewed workgroups;
-- Config V3 is implemented but remains runtime-gated until multi-node bind,
-  scheduling, and acceptance are complete.
+- G5 has not yet executed one task through one, two, three, and four reviewed
+  workgroups with the scheduler and strict E1 normalization;
+- restart, rework, partial, blocked, replan, integration-failure, rollback,
+  busy-retain, and release cases still need direct full-flow evidence;
+- Config V3 source validation is implemented, but opened-project enablement
+  remains gated until G5 and visible G6 acceptance complete;
+- no packed-candidate install/update/rollback evidence exists for this branch.
 
 ## Scope
 
@@ -203,14 +207,14 @@ stop and request an interface decision instead of copying the helper.
 The required order is complete through `c64ab341`; the combined gate passed
 `249` tests. This closes component readiness only, not live scheduler behavior.
 
-### Wave 3: Central Scheduler Closure
+### Wave 3: Central Scheduler Closure - Landed
 
-One worker may own the complete G3 scheduler block after Wave 2 is integrated:
+The complete G3 scheduler block is integrated through `bca51abd`:
 ready-frontier computation, submit-all-ready behavior, per-node reviewer and
 bounded rework, dependency unblocking, callback/persisted-terminal recovery,
-structured final results, and full dynamic release. This central block is not
-split across workers because its state transitions and crash windows form one
-atomic design surface.
+structured final results, real R2 integration, raw T1 release authority, and
+full dynamic release. Runtime ownership hardening through `94ea6d73` closes
+the process-residue defect exposed by the direct full-suite gate.
 
 A separate test-only worker may prepare failure/permutation fixtures in new
 test files after scheduler interfaces freeze. It must not change scheduler
@@ -263,7 +267,7 @@ visible-project, package, and release acceptance belongs to `talk2`.
 
 ## Implementation Phases
 
-### G0 Contract And Baseline Freeze - Design Landed, Source Binding Open
+### G0 Contract And Baseline Freeze - Complete
 
 - Land Decision 025, bundle schema, node/round state schema, result mapping,
   workspace/integration policy, V3 role lifecycle correction, and evidence
@@ -306,7 +310,7 @@ Direct evidence: commits `f3b6b7a6` and `bd7bcbd7`; `42` focused real-Git
 tests, `61` adjacent tests, exact intent/lookalike rejection, failed-root-test
 quarantine and rollback, recovery, and cleanup passed.
 
-### G3 Multi-Workgroup Scheduler And Lifecycle - Pending
+### G3 Multi-Workgroup Scheduler And Lifecycle - Complete
 
 - Submit all ready-frontier workers in one runner activation.
 - Resume from callbacks or persisted terminal jobs without polling or business
@@ -316,8 +320,13 @@ quarantine and rollback, recovery, and cleanup passed.
 - Generalize topology, naming, placement, capacity, release, busy-retain, and
   residue evidence for one to four pairs plus dynamic control roles.
 
-Gate: exact-once crash-window tests and fake-provider 2/3/4-workgroup flows
-pass, including callback permutations and full cleanup.
+Source gate: exact-once crash-window, frontier, dependency, review/rework,
+R2 integration, raw topology/release, runtime ownership, and residue tests
+pass. Scheduler-driven fake-provider 2/3/4-workgroup flows remain the G5 gate.
+
+Direct evidence: commits `8d3fc102`, `92da3faf`, `bca51abd`, `fb4b26c7`,
+`96172d92`, and `94ea6d73`; the integrated full source gate passed `4210`
+tests with zero current-run command-line and cwd-owned runtime residue.
 
 ### G4 Config V3 - Complete, Runtime Enablement Gated
 
@@ -334,9 +343,10 @@ invalid V3 fails before provider or tmux startup.
 
 Source/config evidence: commits `6c2a15ad` and `fcf07b3a`; parser, effective
 config, diagnostics, migration preview, provider/model/RolePack/capacity, and
-V2 compatibility gates passed. Opened-project enablement remains gated by G3.
+V2 compatibility gates passed. Opened-project enablement remains gated by G5
+and G6 acceptance.
 
-### G5 Direct Source And Fake-Provider Acceptance - Pending
+### G5 Direct Source And Fake-Provider Acceptance - Active
 
 - Run focused unit/integration suites, full source suite, py_compile, static
   schema guards, source-wrapper smoke, and fake-provider matrix.

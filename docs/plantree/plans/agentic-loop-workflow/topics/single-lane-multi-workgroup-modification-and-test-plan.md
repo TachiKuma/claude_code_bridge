@@ -1,7 +1,7 @@
 # Single-Lane Multi-Workgroup Modification And Test Plan
 
 Date: 2026-07-11
-Status: Wave 2 complete; Wave 3 G3 scheduler active
+Status: Wave 3 G3 source closure complete; G5 direct acceptance active
 
 F1 authority interfaces and adaptive group selection are frozen by
 [Decision 026](../decisions/026-authority-envelope-and-adaptive-workgroup-selection.md).
@@ -19,8 +19,11 @@ Config V3 and adaptive RolePack contracts landed in `615460ec`, `95d9a409`,
 Wave 2 Git integration, topology/capacity, and evidence work landed through
 `c64ab341`; direct evidence is recorded in
 [single-lane-wave2-git-topology-evidence-closure-20260711.md](../history/single-lane-wave2-git-topology-evidence-closure-20260711.md).
-The controller still rejects multi-node execution before bind, so the next
-runtime implementation gate is G3 scheduling, not real-provider fanout yet.
+Wave 3 scheduler and runtime-ownership work landed through `94ea6d73`; direct
+evidence is recorded in
+[single-lane-wave3-g3-scheduler-closure-20260711.md](../history/single-lane-wave3-g3-scheduler-closure-20260711.md).
+The next gate is G5 scheduler-driven source/fake acceptance, not real-provider
+fanout yet.
 
 ## Objective
 
@@ -36,7 +39,7 @@ independent provider calls overlap.
 
 ## Baseline Findings
 
-Current source behavior that must be changed deliberately:
+The pre-G3 source behavior that required deliberate change was:
 
 - `loop_ask_first.py` constructs exactly one
   `loop-<loop>-coder-1` and one `loop-<loop>-code_reviewer-1`.

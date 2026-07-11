@@ -12,10 +12,13 @@ Date: 2026-06-24
   [history/single-lane-wave1-config-rolepack-closure-20260711.md](history/single-lane-wave1-config-rolepack-closure-20260711.md).
 - Wave 2 R2/T1/E1 is integrated through `c64ab341`; direct evidence is in
   [history/single-lane-wave2-git-topology-evidence-closure-20260711.md](history/single-lane-wave2-git-topology-evidence-closure-20260711.md).
-- Current work is Wave 3: the central G3 ready-frontier scheduler and lifecycle
-  wiring across the landed Git, topology/capacity, Config V3, and evidence APIs.
+- Wave 3 G3 is integrated through `94ea6d73`; direct evidence is in
+  [history/single-lane-wave3-g3-scheduler-closure-20260711.md](history/single-lane-wave3-g3-scheduler-closure-20260711.md).
+- Current work is G5 direct source/fake acceptance across one to four
+  workgroups, restart/failure paths, integration, release, and E1 evidence.
 - Real one-to-four workgroup provider runs are intentionally unopened until
-  multi-node bind, integration, recovery, lifecycle, and result gates exist.
+  G5 directly proves the landed bind, integration, recovery, lifecycle, and
+  result paths through scheduler-driven source/fake flows.
 
 ## Done
 
@@ -1257,9 +1260,16 @@ post-worker orchestrator call. C1/P1 are integrated. See
 2026-07-11 Wave 2 checkpoint: item 3 and the physical topology/evidence parts
 of items 5-6 are landed through `c64ab341`. R2 exact Git transactions, T1
 one-to-four-workgroup placement/capacity, and E1 strict evidence classification
-passed `249` combined tests. Real multi-workgroup execution remains gated only
-on item 4/G3 and direct source/fake acceptance. See
+passed `249` combined tests. At that checkpoint, real multi-workgroup
+execution remained gated on item 4/G3 and direct source/fake acceptance. See
 [history/single-lane-wave2-git-topology-evidence-closure-20260711.md](history/single-lane-wave2-git-topology-evidence-closure-20260711.md).
+
+2026-07-11 Wave 3 checkpoint: item 4 and the scheduler-facing portions of item
+5 are landed through `bca51abd`; test-runtime and accelerator ownership are
+hardened through `94ea6d73`. The integrated non-provider-blackbox gate passed
+`4210` tests with zero current-run command-line or cwd-owned runtime residue.
+Item 7/G5 is now active. See
+[history/single-lane-wave3-g3-scheduler-closure-20260711.md](history/single-lane-wave3-g3-scheduler-closure-20260711.md).
 
 1. Freeze the current one-workgroup and Config V2 source/test baselines and
    land the orchestration-bundle/node-state/evidence contracts from
