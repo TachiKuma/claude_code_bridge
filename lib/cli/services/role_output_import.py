@@ -389,6 +389,16 @@ def _consume_planner(
             reason=str(parsed.get('reason') or 'planner_reply_invalid'),
             evidence=dict(parsed),
         )
+    if parsed.get('planner_contract') == _PLANNER_CONTRACT_SINGLE_TASK:
+        semantic_check = _validate_frontdesk_single_task_semantics(parsed, activation=activation)
+        if semantic_check.get('status') != 'ok':
+            return _blocked_payload(
+                context,
+                job_id=job_id,
+                agent_name=str(snapshot.get('agent_name') or ''),
+                reason=str(semantic_check.get('reason') or 'planner_task_packet_semantics_invalid'),
+                evidence=dict(semantic_check),
+            )
     if parsed.get('planner_contract') == _PLANNER_CONTRACT_TASK_SET:
         task_id_check = _validate_task_set_expected_task_ids(parsed, activation=activation)
         if task_id_check.get('status') != 'ok':
@@ -1627,6 +1637,55 @@ def _parse_planner_reply_for_contract(reply: str, *, planner_contract: str) -> d
     return parsed
 
 
+def _validate_frontdesk_single_task_semantics(
+    parsed: dict[str, object],
+    *,
+    activation: dict[str, object] | None,
+) -> dict[str, object]:
+    if not _is_frontdesk_planner_activation(activation):
+        return {'status': 'ok'}
+    sections = _markdown_h2_sections(str(parsed.get('task_packet') or ''))
+    required = (
+        'goal',
+        'acceptance criteria',
+        'interface contracts',
+        'constraints and non-goals',
+        'execution decomposition inputs',
+    )
+    missing = [name for name in required if not sections.get(name)]
+    if missing:
+        return {
+            'status': 'blocked',
+            'reason': 'planner_task_packet_missing_semantic_sections',
+            'missing_fields': [f'task_packet.{name}' for name in missing],
+            'required_sections': list(required),
+        }
+    return {'status': 'ok', 'semantic_sections': list(required)}
+
+
+def _is_frontdesk_planner_activation(activation: dict[str, object] | None) -> bool:
+    if not isinstance(activation, dict):
+        return False
+    return (
+        str(activation.get('record_type') or '').strip() == 'ccb_loop_frontdesk_planner_activation'
+        or str(activation.get('action') or '').strip() == 'activate_planner_from_frontdesk'
+    )
+
+
+def _markdown_h2_sections(markdown: str) -> dict[str, str]:
+    sections: dict[str, list[str]] = {}
+    current: str | None = None
+    for line in str(markdown or '').splitlines():
+        heading = re.match(r'^\s*##\s+(.+?)\s*$', line)
+        if heading:
+            current = re.sub(r'\s+', ' ', heading.group(1).strip().lower())
+            sections.setdefault(current, [])
+            continue
+        if current is not None:
+            sections[current].append(line)
+    return {name: '\n'.join(lines).strip() for name, lines in sections.items()}
+
+
 def _parse_planner_task_set_reply(reply: str) -> dict[str, object]:
     task_set_text = _fenced_section(reply, ('task-set.json', 'task_set.json'))
     if not task_set_text:
@@ -1892,15 +1951,6 @@ def _parse_task_detailer_reply(
     *,
     detail_ready_stop_contract: object | None = None,
 ) -> dict[str, object]:
-    detail_labels = (
-        'task-detail-design.md',
-        'task-detail-design',
-        'brief-update-summary.md',
-        'brief-update-summary',
-        'detail-packet.manifest.json',
-        'detail-packet.md',
-        'detail-packet',
-    )
     detail_terminator_labels = (
         'task-detail-design.md',
         'brief-update-summary.md',
@@ -2598,6 +2648,17 @@ def _planner_single_task_from_frontdesk_message(activation: dict[str, object], f
         '```markdown\n'
         '# Task: <title>\n'
         'Route: <direct_execution|needs_detail|macro_adjustment_request|blocked|partial_completion>\n'
+        '## Goal\n'
+        '<preserve the complete product outcome from intake>\n'
+        '## Acceptance Criteria\n'
+        '- <observable behavior; preserve every intake requirement>\n'
+        '## Interface Contracts\n'
+        '- <stable interface, data shape, or "None declared">\n'
+        '## Constraints And Non-Goals\n'
+        '- <constraint or explicit non-goal>\n'
+        '## Execution Decomposition Inputs\n'
+        '- Independently reviewable surfaces: <surfaces or none>\n'
+        '- Real predecessor dependencies: <dependencies or none>\n'
         'Allowed paths:\n'
         '- <relative path>\n'
         'Verification:\n'

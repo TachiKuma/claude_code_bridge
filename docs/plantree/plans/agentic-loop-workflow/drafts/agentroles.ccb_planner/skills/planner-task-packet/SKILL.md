@@ -37,6 +37,17 @@ For single-slice work, use fenced blocks with these exact labels:
 ```markdown
 # Task: <title>
 Route: <direct_execution|needs_detail|macro_adjustment_request|blocked|partial_completion>
+## Goal
+<complete product outcome>
+## Acceptance Criteria
+- <observable behavior; preserve every intake requirement>
+## Interface Contracts
+- <stable interface, data shape, or None declared>
+## Constraints And Non-Goals
+- <constraint or explicit non-goal>
+## Execution Decomposition Inputs
+- Independently reviewable surfaces: <surfaces or none>
+- Real predecessor dependencies: <dependencies or none>
 Allowed paths:
 - <relative path, or leave empty when route is needs_detail/blocked>
 Verification:
@@ -51,6 +62,11 @@ Verification:
 
 For task-set work, use exactly one fenced `**task-set.json**` section. Do not
 also return single-task sections for the same reply.
+
+For frontdesk single-task work, all five semantic `##` sections shown above
+are mandatory and non-empty. Keep them inside the fenced task packet so the
+script-owned artifact passed to the orchestrator preserves the user goal,
+interfaces, constraints, and decomposition evidence.
 
 ````markdown
 **task-set.json**

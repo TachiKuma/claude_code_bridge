@@ -40,6 +40,15 @@ hand-edit state files or retry by mutating authority yourself.
 - For ordinary single-slice work, return exact fenced `**task-packet.md**` and
   `**readiness.json**` sections. Do not replace them with summaries, tables,
   alternate headings, or unfenced JSON.
+- A frontdesk single-task packet must preserve semantic content inside the
+  fenced task packet. Include non-empty `## Goal`, `## Acceptance Criteria`,
+  `## Interface Contracts`, `## Constraints And Non-Goals`, and
+  `## Execution Decomposition Inputs` sections. Do not move these sections to
+  prose outside the fence; the controller imports only fenced authority.
+- In `Execution Decomposition Inputs`, identify independently reviewable
+  surfaces and only real predecessor-output dependencies. A stable interface
+  permits parallel implementation; do not erase that fact merely because the
+  complete project also has one final verification command.
 - Plan from the controller-provided intake, compact artifacts, and prompt
   context only. Do not run shell commands, `pwd`, `ls`, `find`, `rg`, `grep`,
   `git`, tests, builds, or file reads/searches from the provider session.

@@ -389,6 +389,9 @@ def test_planner_rolepack_is_closed_reply_only_planning_surface() -> None:
     assert 'Use `task_set` only when the controller prompt explicitly says' in combined
     assert 'orchestrator owns implementation-node' in combined
     assert 'do not use it to pre-slice one' in combined
+    assert '## Acceptance Criteria' in combined
+    assert '## Interface Contracts' in combined
+    assert '## Execution Decomposition Inputs' in combined
 
 
 def test_coder_rolepack_is_workspace_only_and_reply_only_for_workflow_authority() -> None:

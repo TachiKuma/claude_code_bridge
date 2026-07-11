@@ -35,6 +35,7 @@ from cli.services import ask as ask_service
 import cli.services.frontdesk_intake as frontdesk_intake_module
 from cli.services import loop_ask_first as loop_ask_first_module
 from cli.services import loop_runner as loop_runner_module
+from cli.services import role_output_import as role_output_import_module
 from cli.services.ask_runtime import AskSummary
 from cli.services.loop_run_once import loop_run_once
 from cli.services.loop_runner import loop_runner_auto, loop_runner_once
@@ -2257,6 +2258,17 @@ def test_loop_runner_auto_pending_later_frontdesk_handoff_does_not_starve_ready_
 ```markdown
 # Task: First Frontdesk Task
 Route: direct_execution
+## Goal
+Complete the first frontdesk task.
+## Acceptance Criteria
+- README change is verified.
+## Interface Contracts
+- None declared.
+## Constraints And Non-Goals
+- Change only README.md.
+## Execution Decomposition Inputs
+- Independently reviewable surfaces: README.md.
+- Real predecessor dependencies: none.
 Allowed paths:
 - README.md
 Verification:
@@ -2347,6 +2359,17 @@ def test_loop_runner_auto_waits_for_pending_frontdesk_activation_job_then_consum
 ```markdown
 # Task: Second Frontdesk Task
 Route: direct_execution
+## Goal
+Complete the second frontdesk task.
+## Acceptance Criteria
+- README change is verified.
+## Interface Contracts
+- None declared.
+## Constraints And Non-Goals
+- Change only README.md.
+## Execution Decomposition Inputs
+- Independently reviewable surfaces: README.md.
+- Real predecessor dependencies: none.
 Allowed paths:
 - README.md
 Verification:
@@ -2422,6 +2445,17 @@ def test_loop_runner_auto_imports_completed_retry_successor_for_failed_activatio
 ```markdown
 # Task: Retry Successor Task
 Route: direct_execution
+## Goal
+Complete the retried frontdesk task.
+## Acceptance Criteria
+- README change is verified.
+## Interface Contracts
+- None declared.
+## Constraints And Non-Goals
+- Change only README.md.
+## Execution Decomposition Inputs
+- Independently reviewable surfaces: README.md.
+- Real predecessor dependencies: none.
 Allowed paths:
 - README.md
 Verification:
@@ -2607,6 +2641,17 @@ def test_loop_runner_auto_skips_settled_blocked_frontdesk_activation_for_wait_jo
 ```markdown
 # Task: Successful Frontdesk Task
 Route: direct_execution
+## Goal
+Complete the successful frontdesk task.
+## Acceptance Criteria
+- README change is verified.
+## Interface Contracts
+- None declared.
+## Constraints And Non-Goals
+- Change only README.md.
+## Execution Decomposition Inputs
+- Independently reviewable surfaces: README.md.
+- Real predecessor dependencies: none.
 Allowed paths:
 - README.md
 Verification:
@@ -8826,6 +8871,9 @@ def test_frontdesk_forward_planner_submits_silent_planner_activation(
     assert 'Do not run ccb, ccb_test, ccb plan, ccb loop, ccb ask' in ask_command.message
     assert '**task-packet.md**' in ask_command.message
     assert '**task-set.json**' not in ask_command.message
+    assert '## Acceptance Criteria' in ask_command.message
+    assert '## Interface Contracts' in ask_command.message
+    assert '## Execution Decomposition Inputs' in ask_command.message
     activation_path = Path(str(payload['activation_path']))
     activation = json.loads(activation_path.read_text(encoding='utf-8'))
     assert activation['record_type'] == 'ccb_loop_frontdesk_planner_activation'
@@ -9827,10 +9875,21 @@ Build a Python module and pytest coverage.
 
 **task-packet.md**
 ```markdown
-# Task: Implement Task List
+    # Task: Implement Task List
 
-Route: direct_execution
-Allowed paths:
+    Route: direct_execution
+    ## Goal
+    Implement the compact task-list feature.
+    ## Acceptance Criteria
+    - The task-list module and focused tests pass.
+    ## Interface Contracts
+    - The module API is defined by its focused tests.
+    ## Constraints And Non-Goals
+    - Change only the declared module and test.
+    ## Execution Decomposition Inputs
+    - Independently reviewable surfaces: module and focused test as one unit.
+    - Real predecessor dependencies: none.
+    Allowed paths:
 - lab_tasks/task_list.py
 - tests/test_task_list.py
 
@@ -10261,6 +10320,17 @@ def test_loop_runner_imports_single_planner_task_settles_frontdesk_source_task(
             '```markdown\n'
             '# Task: Clarify external sync integration requirements\n'
             'Route: needs_detail\n'
+            '## Goal\n'
+            'Clarify the external sync integration before implementation.\n'
+            '## Acceptance Criteria\n'
+            '- The external API contract is explicit.\n'
+            '## Interface Contracts\n'
+            '- External API contract is currently unknown.\n'
+            '## Constraints And Non-Goals\n'
+            '- Do not implement before clarification.\n'
+            '## Execution Decomposition Inputs\n'
+            '- Independently reviewable surfaces: none before clarification.\n'
+            '- Real predecessor dependencies: clarified API contract.\n'
             'Allowed paths:\n\n'
             'Verification:\n'
             '- Clarify external API contract.\n'
@@ -10293,6 +10363,35 @@ def test_loop_runner_imports_single_planner_task_settles_frontdesk_source_task(
     assert '# Single Task Handoff Complete' in completion_text
     assert 'child_task_count: 1' in completion_text
     assert f'- {child_task_id}' in completion_text
+
+
+def test_frontdesk_single_task_import_rejects_semantic_section_loss() -> None:
+    activation = {
+        'record_type': 'ccb_loop_frontdesk_planner_activation',
+        'action': 'activate_planner_from_frontdesk',
+    }
+    parsed = {
+        'task_packet': (
+            '# Task: Flattened packet\n'
+            'Route: direct_execution\n'
+            'Allowed paths:\n'
+            '- app.py\n'
+            'Verification:\n'
+            '- python -m unittest\n'
+        )
+    }
+
+    result = role_output_import_module._validate_frontdesk_single_task_semantics(parsed, activation=activation)
+
+    assert result['status'] == 'blocked'
+    assert result['reason'] == 'planner_task_packet_missing_semantic_sections'
+    assert result['missing_fields'] == [
+        'task_packet.goal',
+        'task_packet.acceptance criteria',
+        'task_packet.interface contracts',
+        'task_packet.constraints and non-goals',
+        'task_packet.execution decomposition inputs',
+    ]
 
 
 def test_loop_runner_single_task_set_exposes_task_id_for_supervisor_resume(
