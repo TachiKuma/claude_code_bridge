@@ -14,9 +14,11 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
     import tomli as tomllib
 
 from agents.models import AgentSpec, PermissionMode, ProviderProfileSpec, QueuePolicy, RestoreMode, RuntimeMode, WorkspaceMode
+from agents.config_loader import load_project_config
 from cli.services.provider_hooks import prepare_provider_workspace
 from provider_core.caller_env import caller_context_env
 import provider_core.source_home as source_home_module
+from provider_profiles.codex_home_config import materialize_codex_home_config
 from provider_hooks.settings import build_hook_command, install_workspace_activity_hooks, install_workspace_completion_hooks
 from storage.paths import PathLayout
 
@@ -484,6 +486,95 @@ def test_prepare_provider_workspace_materializes_frontdesk_codex_with_hard_comma
     assert role_server['tools']['ccb_frontdesk_ask_planner']['approval_mode'] == 'approve'
     assert role_server['env']['CCB_CALLER_ACTOR'] == 'frontdesk'
     assert role_server['env']['CCB_CALLER_PROJECT_ROOT'] == str(project_root.resolve())
+    assert role_server['env']['AGENT_ROLES_STORE'] == str(tmp_path / '.roles')
+
+
+def test_codex_role_command_mcp_keeps_each_project_role_store_isolated(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    stores = []
+    for name in ('one', 'two'):
+        role_store = tmp_path / f'{name}-roles'
+        monkeypatch.setenv('AGENT_ROLES_STORE', str(role_store))
+        installed = role_store / 'installed' / 'agentroles.ccb_frontdesk' / 'current'
+        installed.parent.mkdir(parents=True)
+        shutil.copytree(FRONTDESK_ROLE_ROOT, installed)
+        reviewer = role_store / 'installed' / 'agentroles.code_reviewer' / 'current'
+        reviewer.mkdir(parents=True)
+        (reviewer / 'role.toml').write_text(
+            'id = "agentroles.code_reviewer"\nversion = "1.0.0"\n',
+            encoding='utf-8',
+        )
+        project_root = tmp_path / name
+        (project_root / '.ccb').mkdir(parents=True)
+        (project_root / '.ccb' / 'ccb.config').write_text(
+            '\n'.join(
+                (
+                    'version = 2',
+                    'entry_window = "main"',
+                    '',
+                    '[windows]',
+                    'main = "frontdesk:codex"',
+                    '',
+                    '[agents.frontdesk]',
+                    'role = "agentroles.ccb_frontdesk"',
+                    '',
+                    '[loop.capacity]',
+                    'enabled = true',
+                    'max_nodes = 1',
+                    '',
+                    '[loop.role_profiles.code_reviewer]',
+                    'role = "agentroles.code_reviewer"',
+                    'provider = "codex"',
+                    'max_instances = 1',
+                )
+            ) + '\n',
+            encoding='utf-8',
+        )
+
+        loaded = load_project_config(project_root)
+        assert loaded.config.loop_capacity.role_profiles['code_reviewer'].role == 'agentroles.code_reviewer'
+
+        prepare_provider_workspace(
+            layout=PathLayout(project_root),
+            spec=_spec('frontdesk', provider='codex', role='agentroles.ccb_frontdesk'),
+            workspace_path=project_root / 'workspace',
+            completion_dir=project_root / '.ccb' / 'completion',
+            agent_name='frontdesk',
+            refresh_profile=True,
+        )
+
+        home = project_root / '.ccb' / 'agents' / 'frontdesk' / 'provider-state' / 'codex' / 'home'
+        config = tomllib.loads((home / 'config.toml').read_text(encoding='utf-8'))
+        stores.append(config['mcp_servers']['ccb_role_command']['env']['AGENT_ROLES_STORE'])
+
+    assert stores == [str(tmp_path / 'one-roles'), str(tmp_path / 'two-roles')]
+
+
+def test_codex_role_command_mcp_preserves_default_store_when_env_is_unset(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv('AGENT_ROLES_STORE', raising=False)
+    project_root = tmp_path / 'repo'
+    (project_root / '.ccb').mkdir(parents=True)
+    (project_root / '.ccb' / 'ccb.config').write_text('frontdesk:codex\n', encoding='utf-8')
+    home = tmp_path / 'codex-home'
+
+    materialize_codex_home_config(
+        home,
+        source_home=tmp_path / 'source-home',
+        project_root=project_root,
+        agent_name='frontdesk',
+        runtime_dir=project_root / '.ccb' / 'runtime',
+        command_policy=SimpleNamespace(
+            provider_tools=(('codex', 'ccb_frontdesk_ask_planner'),),
+        ),
+    )
+
+    config = tomllib.loads((home / 'config.toml').read_text(encoding='utf-8'))
+    assert 'AGENT_ROLES_STORE' not in config['mcp_servers']['ccb_role_command']['env']
 
 
 def test_prepare_provider_workspace_rejects_codex_frontdesk_without_managed_capability(

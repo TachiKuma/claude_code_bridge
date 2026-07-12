@@ -602,6 +602,15 @@ def _install_role_command_mcp_server(
     ):
         features[feature] = False
     payload['features'] = features
+    server_env = {
+        'CCB_CALLER_ACTOR': actor,
+        'CCB_CALLER_PROJECT_ROOT': str(resolved_project),
+        'CCB_CALLER_PROJECT_ID': compute_project_id(resolved_project),
+        'CCB_CALLER_RUNTIME_DIR': str(Path(runtime_dir).expanduser().resolve()),
+    }
+    agent_roles_store = str(os.environ.get('AGENT_ROLES_STORE') or '').strip()
+    if agent_roles_store:
+        server_env['AGENT_ROLES_STORE'] = agent_roles_store
     payload['mcp_servers'] = {'ccb_role_command': {
         'command': sys.executable,
         'args': [str(server)],
@@ -613,12 +622,7 @@ def _install_role_command_mcp_server(
                 'approval_mode': 'approve',
             },
         },
-        'env': {
-            'CCB_CALLER_ACTOR': actor,
-            'CCB_CALLER_PROJECT_ROOT': str(resolved_project),
-            'CCB_CALLER_PROJECT_ID': compute_project_id(resolved_project),
-            'CCB_CALLER_RUNTIME_DIR': str(Path(runtime_dir).expanduser().resolve()),
-        },
+        'env': server_env,
     }}
     target_config.write_text(_render_toml_document(payload), encoding='utf-8')
 
