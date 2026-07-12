@@ -53,3 +53,50 @@ def test_match_detail_ready_stop_contract_accepts_explicit_normative_text(text: 
 )
 def test_match_detail_ready_stop_contract_rejects_unsafe_context(text: str) -> None:
     assert match_detail_ready_stop_contract(text) is None
+
+
+@pytest.mark.parametrize(
+    'text',
+    (
+        'Expected stop: detail_ready. Do not stop at detail_ready.',
+        'Expected stop: detail_ready. Expected stop: blocked.',
+        'Expected stop: detail_ready when validation succeeds.',
+        '- > Expected stop: detail_ready',
+        '{"description":"Expected stop: detail_ready"}',
+        'For task unrelated-task, expected stop: detail_ready.',
+    ),
+)
+def test_match_detail_ready_stop_contract_rejects_any_unsafe_statement_in_corpus(text: str) -> None:
+    assert match_detail_ready_stop_contract(text) is None
+
+
+@pytest.mark.parametrize(
+    'text',
+    (
+        'Expected controller-visible task outcome is detail_ready.',
+        'The task stops at detail_ready.',
+    ),
+)
+def test_match_detail_ready_stop_contract_preserves_legacy_grammar(text: str) -> None:
+    assert match_detail_ready_stop_contract(text) is not None
+
+
+@pytest.mark.parametrize(
+    'corpus',
+    (
+        {'task_packet': 'Expected stop: detail_ready.', 'execution_contract': 'Do not stop at detail_ready.'},
+        {'task_packet': 'Expected stop: detail_ready.', 'orchestration_notes': 'Expected stop: blocked.'},
+        {'task_packet': 'Expected stop: detail_ready.', 'execution_contract': '- > Expected stop: detail_ready'},
+        {'task_packet': 'Expected stop: detail_ready.', 'execution_contract': '{"status":"detail_ready"}'},
+        {'task_packet': 'Expected stop: detail_ready.', 'execution_contract': 'For task other-task, expected stop: detail_ready.'},
+    ),
+)
+def test_match_detail_ready_stop_contract_rejects_unsafe_cross_artifact_corpus(corpus: dict[str, str]) -> None:
+    assert match_detail_ready_stop_contract(corpus, task_id='current-task') is None
+
+
+def test_match_detail_ready_stop_contract_allows_explicit_current_task_scope() -> None:
+    assert match_detail_ready_stop_contract(
+        {'task_packet': 'For task current-task, expected stop: detail_ready.'},
+        task_id='current-task',
+    ) is not None

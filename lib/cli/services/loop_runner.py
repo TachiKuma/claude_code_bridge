@@ -31,11 +31,16 @@ from .multi_workgroup_scheduler import (
 )
 from .loop_run_once import loop_run_once
 from .loop_topology import loop_topology
-from .plan_tasks import detail_ready_reconcile_authority, find_first_actionable_task, plan_task
+from .plan_tasks import (
+    detail_ready_reconcile_authority,
+    detail_ready_stop_contract_match,
+    find_first_actionable_task,
+    plan_task,
+    task_state_version,
+)
 from .questions import question_refs
 from .role_output_import import consume_activation_role_output, consume_explicit_role_output
 from .task_set_feedback_runtime import advance_task_set_feedback_runtime
-from .task_stop_contract import match_detail_ready_stop_contract
 from .trace import trace_target
 from .watch_fallback import (
     load_persisted_terminal_watch_payload,
@@ -244,10 +249,12 @@ def _reconcile_detail_ready(context, deps, task: dict[str, object]) -> dict[str,
             action='task-reconcile-detail-ready',
             task_id=record.get('task_id'),
             expected_status=record.get('status'),
+            expected_owner=record.get('owner'),
             expected_next_owner=record.get('next_owner'),
             expected_current_loop=record.get('current_loop'),
             expected_task_revision=task_revision(record),
-            expected_updated_at=record.get('updated_at'),
+            expected_state_version=task_state_version(record),
+            expected_activation_reason=record.get('activation_reason'),
             expected_authority_digest=authority['authority_digest'],
         ),
     )
@@ -1521,6 +1528,8 @@ def _payload_wait_job_ids(payload: dict[str, object]) -> list[str]:
 def _auto_should_stop(payload: dict[str, object]) -> bool:
     action = str(payload.get('action') or '').strip()
     status = str(payload.get('loop_runner_status') or '').strip()
+    if action == 'reconciled_detail_ready':
+        return True
     if action in {'activated_orchestrator', 'activated_planner', 'activated_task_detailer', 'activated_plan_reviewer'}:
         return False
     if action == 'ran_one_round':
@@ -1875,7 +1884,10 @@ def _task_detailer_activation_packet(
         ('task_packet', 'execution_contract', 'orchestration_notes'),
         content_limit=_INLINE_COMPACT_ARTIFACT_CONTENT_LIMIT,
     )
-    detail_ready_stop_contract = _detail_ready_stop_contract(compact_artifacts)
+    detail_ready_stop_contract = detail_ready_stop_contract_match(
+        record,
+        project_root=Path(context.project.project_root),
+    )
     return {
         'schema_version': 1,
         'record_type': 'ccb_loop_task_detailer_activation',
@@ -2125,20 +2137,6 @@ def _compact_text_excerpt(text: str, limit: int) -> str:
     head_len = max(1, (limit - len(marker)) // 2)
     tail_len = max(1, limit - len(marker) - head_len)
     return f'{text[:head_len]}{marker}{text[-tail_len:]}'
-
-
-def _detail_ready_stop_contract(compact_artifacts: dict[str, dict[str, object]]) -> dict[str, object] | None:
-    evidence: list[dict[str, object]] = []
-    for kind, item in sorted(compact_artifacts.items()):
-        text = str(item.get('content') or '')
-        if not text:
-            continue
-        match = match_detail_ready_stop_contract(text)
-        if match is not None:
-            evidence.append({'kind': kind, 'path': item.get('path'), 'match': match['match']})
-    if not evidence:
-        return None
-    return {'status': 'detail_ready', 'evidence': evidence}
 
 
 def _orchestrator_message(activation: dict[str, object]) -> str:
