@@ -31,10 +31,11 @@ from .multi_workgroup_scheduler import (
 )
 from .loop_run_once import loop_run_once
 from .loop_topology import loop_topology
-from .plan_tasks import find_first_actionable_task, plan_task
+from .plan_tasks import detail_ready_reconcile_authority, find_first_actionable_task, plan_task
 from .questions import question_refs
 from .role_output_import import consume_activation_role_output, consume_explicit_role_output
 from .task_set_feedback_runtime import advance_task_set_feedback_runtime
+from .task_stop_contract import match_detail_ready_stop_contract
 from .trace import trace_target
 from .watch_fallback import (
     load_persisted_terminal_watch_payload,
@@ -45,25 +46,6 @@ _ORCHESTRATOR_ROUTES = ('direct_execution', 'needs_detail', 'macro_adjustment_re
 _ROUND_REVIEWER_FIELD = 'ccb_round_reviewer'
 _LEGACY_ROUND_CHECKER_FIELD = 'round_checker'
 _INLINE_COMPACT_ARTIFACT_CONTENT_LIMIT = 500
-_DETAIL_READY_STOP_PATTERNS = (
-    ('expected_stop_detail_ready', r'\bexpected\s+stop\s*:\s*`?detail_ready`?\b'),
-    ('stop_at_detail_ready', r'\bstop(?:s|ped|ping)?\s+(?:at|as|on)\s+`?detail_ready`?\b'),
-    (
-        'controller_visible_detail_ready',
-        r'\bcontroller-visible\s+task\s+outcome\s+remains\s+`?detail_ready`?\b',
-    ),
-    (
-        'expected_controller_visible_detail_ready',
-        r'\bexpected\s+controller-visible\s+(?:task\s+)?(?:outcome|status|stop)\s+is\s+`?detail_ready`?\b',
-    ),
-    (
-        'preserve_terminal_expectation_detail_ready',
-        r'\bpreserve\s+terminal\s+expectation\s+`?detail_ready`?\b',
-    ),
-    ('terminal_status_detail_ready', r'\bwith\s+terminal\s+status\s+`?detail_ready`?\b'),
-)
-
-
 def loop_runner_auto(context, command, services=None) -> dict[str, object]:
     deps = _deps(services)
     lock = AutoRunnerLock(context.project.project_root)
@@ -207,6 +189,8 @@ def loop_runner_once(context, command, services=None) -> dict[str, object]:
         return payload
 
     runner_action = str(task.get('runner_action') or '')
+    if runner_action == 'reconcile_detail_ready':
+        return _reconcile_detail_ready(context, deps, task)
     if runner_action == 'activate_orchestrator':
         task_identity = str(task['record'].get('task_id') or 'unknown')
         lock_name = hashlib.sha256(task_identity.encode('utf-8')).hexdigest()
@@ -244,6 +228,43 @@ def loop_runner_once(context, command, services=None) -> dict[str, object]:
     if runner_action in {'planner_next_action_required', 'blocker_evidence_required'}:
         return _finalize_script_owned_terminal_route(context, deps, task)
     return _stop_without_activation(context, task)
+
+
+def _reconcile_detail_ready(context, deps, task: dict[str, object]) -> dict[str, object]:
+    record = task['record']
+    authority = detail_ready_reconcile_authority(
+        record,
+        project_root=Path(context.project.project_root),
+    )
+    if authority is None:
+        raise ValueError('stale detail_ready reconciliation candidate')
+    reconciled = deps.plan_task(
+        context,
+        SimpleNamespace(
+            action='task-reconcile-detail-ready',
+            task_id=record.get('task_id'),
+            expected_status=record.get('status'),
+            expected_next_owner=record.get('next_owner'),
+            expected_current_loop=record.get('current_loop'),
+            expected_task_revision=task_revision(record),
+            expected_updated_at=record.get('updated_at'),
+            expected_authority_digest=authority['authority_digest'],
+        ),
+    )
+    return {
+        'schema_version': 1,
+        'record_type': 'ccb_loop_runner_once',
+        'loop_runner_status': 'ok',
+        'project_id': context.project.project_id,
+        'project_root': str(context.project.project_root),
+        'action': 'reconciled_detail_ready',
+        'reason': 'explicit_detail_ready_stop_contract',
+        'task_id': record.get('task_id'),
+        'task_status': reconciled.get('status'),
+        'next_owner': reconciled.get('next_owner'),
+        'activation_reason': reconciled.get('activation_reason'),
+        'idempotent': reconciled.get('idempotent'),
+    }
 
 
 def _run_ask_first_execution_round(context, command, deps, task: dict[str, object]) -> dict[str, object]:
@@ -2112,10 +2133,9 @@ def _detail_ready_stop_contract(compact_artifacts: dict[str, dict[str, object]])
         text = str(item.get('content') or '')
         if not text:
             continue
-        for name, pattern in _DETAIL_READY_STOP_PATTERNS:
-            if re.search(pattern, text, flags=re.IGNORECASE):
-                evidence.append({'kind': kind, 'path': item.get('path'), 'match': name})
-                break
+        match = match_detail_ready_stop_contract(text)
+        if match is not None:
+            evidence.append({'kind': kind, 'path': item.get('path'), 'match': match['match']})
     if not evidence:
         return None
     return {'status': 'detail_ready', 'evidence': evidence}

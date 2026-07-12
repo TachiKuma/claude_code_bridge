@@ -18,6 +18,7 @@ from .loop_orchestration_bundle import (
     normalize_bundle_candidate,
     task_revision,
 )
+from .task_stop_contract import match_detail_ready_stop_contract
 from .loop_effective_capacity import compile_project_effective_capacity_snapshot
 from .planner_task_set_import_transaction import runner_transaction_committed
 
@@ -144,6 +145,8 @@ def plan_task(context, command) -> dict[str, object]:
         return _task_artifact(context, command)
     if action == 'task-status':
         return _task_status(context, command)
+    if action == 'task-reconcile-detail-ready':
+        return _task_reconcile_detail_ready(context, command)
     if action == 'task-accept-detailer-replan':
         return _task_accept_detailer_replan(context, command)
     if action == 'task-bind-loop':
@@ -461,6 +464,60 @@ def _task_status(context, command) -> dict[str, object]:
         _replace_record(task['tasks_root'], task['index'], record)
         _write_task_readme(context, record)
         return _payload(context, action='task-status', record=record)
+
+
+def _task_reconcile_detail_ready(context, command) -> dict[str, object]:
+    task = _require_task(context, command.task_id)
+    with file_lock(_task_lock_path(context, task['record'])):
+        task = _require_task(context, command.task_id)
+        record = _materialize_task_revision(task['record'])
+        expected_authority = str(getattr(command, 'expected_authority_digest', None) or '').strip()
+        if not re.fullmatch(r'[0-9a-f]{64}', expected_authority):
+            raise ValueError('expected_authority_digest must be 64 lowercase hex characters')
+        current_authority = _detail_ready_reconcile_authority(
+            record,
+            project_root=Path(context.project.project_root),
+            allowed_statuses={'ready_for_orchestration', 'detail_ready'},
+        )
+        if current_authority is None or current_authority['authority_digest'] != expected_authority:
+            raise ValueError('stale detail_ready reconciliation authority')
+        if (
+            record.get('status') == 'detail_ready'
+            and record.get('next_owner') == 'planner'
+            and record.get('activation_reason') == 'reconciled_detail_ready_stop_contract'
+        ):
+            payload = _payload(context, action='task-reconcile-detail-ready', record=record)
+            payload['idempotent'] = True
+            return payload
+        expected = {
+            'status': getattr(command, 'expected_status', None),
+            'next_owner': getattr(command, 'expected_next_owner', None),
+            'current_loop': getattr(command, 'expected_current_loop', None),
+            'task_revision': getattr(command, 'expected_task_revision', None),
+            'updated_at': getattr(command, 'expected_updated_at', None),
+        }
+        observed = {
+            'status': record.get('status'),
+            'next_owner': record.get('next_owner'),
+            'current_loop': record.get('current_loop'),
+            'task_revision': task_revision(record),
+            'updated_at': record.get('updated_at'),
+        }
+        if observed != expected:
+            raise ValueError('stale detail_ready reconciliation task state')
+        if record.get('status') != 'ready_for_orchestration':
+            raise ValueError('detail_ready reconciliation requires ready_for_orchestration')
+        now = _utc_now()
+        record['status'] = 'detail_ready'
+        record['owner'] = _owner_for_status('detail_ready')
+        record['next_owner'] = 'planner'
+        record['activation_reason'] = 'reconciled_detail_ready_stop_contract'
+        record['updated_at'] = now
+        _replace_record(task['tasks_root'], task['index'], record)
+        _write_task_readme(context, record)
+        payload = _payload(context, action='task-reconcile-detail-ready', record=record)
+        payload['idempotent'] = False
+        return payload
 
 
 def _task_accept_detailer_replan(context, command) -> dict[str, object]:
@@ -936,13 +993,6 @@ def _payload(context, *, action: str, record: dict[str, object]) -> dict[str, ob
 
 
 _STATUS_STOP_PATTERNS = {
-    'detail_ready': (
-        r'\bstop(?:s|ped|ping)?\s+(?:at|as|on)\s+`?detail_ready`?\b',
-        r'\bcontroller-visible\s+task\s+outcome\s+remains\s+`?detail_ready`?\b',
-        r'\bexpected\s+controller-visible\s+(?:task\s+)?(?:outcome|status|stop)\s+is\s+`?detail_ready`?\b',
-        r'\bpreserve\s+terminal\s+expectation\s+`?detail_ready`?\b',
-        r'\bwith\s+terminal\s+status\s+`?detail_ready`?\b',
-    ),
     'replan_required': (
         r'\bstop(?:s|ped|ping)?\s+(?:at|as|on)\s+`?replan_required`?\b',
         r'\bcontroller-visible\s+task\s+outcome\s+remains\s+`?replan_required`?\b',
@@ -1009,6 +1059,7 @@ def find_first_actionable_task(context, *, task_id: str | None = None) -> dict[s
         return None
     priority = {
         'activate_orchestrator': 0,
+        'reconcile_detail_ready': 0,
         'ask_first_execute': 0,
         'ask_first_execution_not_ready': 0,
         'execute': 0,
@@ -1072,6 +1123,15 @@ def _activation_runner_action_for_record(
                 'next_owner': 'orchestrator',
             }
         if route == 'needs_detail':
+            if project_root is not None and detail_ready_reconcile_authority(
+                record,
+                project_root=Path(project_root),
+            ) is not None:
+                return {
+                    'action': 'reconcile_detail_ready',
+                    'reason': 'explicit_detail_ready_stop_contract',
+                    'next_owner': 'orchestrator',
+                }
             if _detail_packet_ready(record):
                 return {
                     'action': 'activate_orchestrator',
@@ -1196,16 +1256,113 @@ def _detail_packet_ready(record: dict[str, object]) -> bool:
     return _DETAIL_READY_REQUIRED <= artifacts
 
 
+def detail_ready_reconcile_authority(
+    record: dict[str, object],
+    *,
+    project_root: Path,
+) -> dict[str, object] | None:
+    return _detail_ready_reconcile_authority(
+        record,
+        project_root=project_root,
+        allowed_statuses={'ready_for_orchestration'},
+    )
+
+
+def _detail_ready_reconcile_authority(
+    record: dict[str, object],
+    *,
+    project_root: Path,
+    allowed_statuses: set[str],
+) -> dict[str, object] | None:
+    if str(record.get('status') or '') not in allowed_statuses:
+        return None
+    status = str(record.get('status') or '')
+    expected_owner = 'orchestrator' if status == 'ready_for_orchestration' else 'planner'
+    if str(record.get('next_owner') or '') != expected_owner:
+        return None
+    if str(record.get('current_loop') or '').strip() or _orchestrator_route_for_record(record) != 'needs_detail':
+        return None
+    artifacts = record.get('artifacts') if isinstance(record.get('artifacts'), dict) else {}
+    verified: dict[str, dict[str, str]] = {}
+    for kind in sorted(_DETAIL_READY_REQUIRED):
+        item = artifacts.get(kind) if isinstance(artifacts, dict) else None
+        checked = _verified_reconcile_artifact(project_root, item, require_actor=True)
+        if checked is None:
+            return None
+        verified[kind] = checked
+    contract_sections = [str(record.get('title') or '')]
+    for kind in ('task_packet', 'execution_contract', 'orchestration_notes'):
+        item = artifacts.get(kind) if isinstance(artifacts, dict) else None
+        if item is None:
+            continue
+        checked = _verified_reconcile_artifact(project_root, item, require_actor=False)
+        if checked is None:
+            return None
+        verified[kind] = checked
+        contract_sections.append(checked['text'])
+    contract_text = '\n'.join(contract_sections)
+    stop_match = match_detail_ready_stop_contract(contract_text)
+    if stop_match is None:
+        return None
+    authority = {
+        'task_revision': task_revision(record),
+        'route': 'needs_detail',
+        'artifacts': {
+            kind: {'path': item['path'], 'sha256': item['sha256']}
+            for kind, item in sorted(verified.items())
+        },
+        'stop_contract_sha256': hashlib.sha256(contract_text.encode('utf-8')).hexdigest(),
+    }
+    encoded = json.dumps(authority, sort_keys=True, separators=(',', ':')).encode('utf-8')
+    authority['authority_digest'] = hashlib.sha256(encoded).hexdigest()
+    authority['stop_match'] = stop_match
+    return authority
+
+
+def _verified_reconcile_artifact(
+    project_root: Path,
+    artifact: object,
+    *,
+    require_actor: bool,
+) -> dict[str, str] | None:
+    if not isinstance(artifact, dict):
+        return None
+    relative = str(artifact.get('path') or '').strip()
+    recorded_sha = str(artifact.get('sha256') or '').strip().lower()
+    actor = artifact.get('actor')
+    if not relative or not re.fullmatch(r'[0-9a-f]{64}', recorded_sha):
+        return None
+    if require_actor and (not isinstance(actor, dict) or not actor):
+        return None
+    try:
+        root = project_root.resolve()
+        path = (project_root / relative).resolve(strict=True)
+    except FileNotFoundError:
+        return None
+    if path == root or root not in path.parents or not path.is_file():
+        return None
+    try:
+        text = path.read_text(encoding='utf-8')
+    except (OSError, UnicodeError):
+        return None
+    actual_sha = hashlib.sha256(text.encode('utf-8')).hexdigest()
+    if actual_sha != recorded_sha:
+        return None
+    return {'path': relative, 'sha256': recorded_sha, 'text': text}
+
+
 def _task_declares_status_stop(
     record: dict[str, object],
     *,
     status: str,
     project_root: Path | None,
 ) -> bool:
+    text = _task_stop_contract_text(record, project_root=project_root)
+    if status == 'detail_ready':
+        return match_detail_ready_stop_contract(text) is not None
     patterns = _STATUS_STOP_PATTERNS.get(status)
     if not patterns:
         return False
-    text = _task_stop_contract_text(record, project_root=project_root).lower()
     return any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in patterns)
 
 

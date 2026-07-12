@@ -44,7 +44,7 @@ from cli.services.loop_effective_capacity import (
     compile_project_effective_capacity_snapshot,
     effective_capacity_digest,
 )
-from cli.services.plan_tasks import find_first_actionable_task, plan_task
+from cli.services.plan_tasks import detail_ready_reconcile_authority, find_first_actionable_task, plan_task
 from cli.services.frontdesk_intake import frontdesk_intake
 import cli.services.frontdesk_intake_command as frontdesk_intake_command_module
 from cli.services.frontdesk_intake_command import frontdesk_intake_command
@@ -7834,11 +7834,244 @@ detail_readiness_recommendation: detail_ready
     assert shown['task']['status'] == 'detail_ready'
 
 
+def _prepare_root8_reset_detail_ready_task(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    project_root = _project_with_loop_capacity(tmp_path, monkeypatch)
+    _add_ready_plan_task(
+        project_root,
+        task_id='phase6b-l3-needs-detail',
+        task_packet_text=(
+            '# Task: L3 needs-detail\n'
+            'Route: needs_detail\n'
+            'Preserve terminal expectation detail_ready.\n'
+        ),
+    )
+    command = ParsedLoopRunnerCommand(project=None, once=True, timeout_s=11.0, json_output=True)
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+    for kind, filename, text in (
+        (
+            'task_packet',
+            'root8-task-packet.md',
+            '# Task: L3 needs-detail\nRoute: needs_detail\nPreserve terminal expectation detail_ready.\n',
+        ),
+        ('execution_contract', 'root8-execution-contract.md', '# Execution Contract\nRoute: needs_detail\n'),
+    ):
+        source = project_root / 'drafts' / filename
+        _write(source, text)
+        plan_task(
+            context,
+            SimpleNamespace(
+                action='task-artifact',
+                task_id='phase6b-l3-needs-detail',
+                artifact_kind=kind,
+                file_path=str(source),
+            ),
+        )
+    _import_orchestration_notes(context, project_root, task_id='phase6b-l3-needs-detail', route='needs_detail')
+    for kind, filename in (
+        ('detail_design', 'detail-design.md'),
+        ('detail_summary', 'detail-summary.md'),
+        ('detail_packet', 'detail-packet.md'),
+    ):
+        source = project_root / 'drafts' / filename
+        _write(source, f'{kind}\n')
+        plan_task(
+            context,
+            SimpleNamespace(
+                action='task-artifact',
+                task_id='phase6b-l3-needs-detail',
+                artifact_kind=kind,
+                file_path=str(source),
+                actor_source='task_detailer',
+                actor='task_detailer',
+                job_id='job_2b89867387e4',
+            ),
+        )
+    plan_task(
+        context,
+        SimpleNamespace(
+            action='task-status',
+            task_id='phase6b-l3-needs-detail',
+            status='detail_ready',
+            activation_reason='detail_ready_from_task_detailer',
+        ),
+    )
+    plan_task(
+        context,
+        SimpleNamespace(
+            action='task-status',
+            task_id='phase6b-l3-needs-detail',
+            status='ready_for_orchestration',
+            activation_reason='planner_task_packet_imported',
+        ),
+    )
+    return project_root, context, command
+
+
+def test_loop_runner_reconciles_root8_shaped_reset_detail_ready_without_activation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _project_root, context, command = _prepare_root8_reset_detail_ready_task(tmp_path, monkeypatch)
+
+    def forbidden_submit(*_args, **_kwargs):
+        raise AssertionError('root8-shaped reset must reconcile without Planner or Orchestrator activation')
+
+    reconciled = loop_runner_once(
+        context,
+        command,
+        services=SimpleNamespace(submit_ask=forbidden_submit, plan_task=plan_task),
+    )
+    assert reconciled['action'] == 'reconciled_detail_ready'
+    assert reconciled['task_status'] == 'detail_ready'
+    assert reconciled['activation_reason'] == 'reconciled_detail_ready_stop_contract'
+
+    settled = loop_runner_once(
+        context,
+        command,
+        services=SimpleNamespace(submit_ask=forbidden_submit, plan_task=plan_task),
+    )
+    assert settled['loop_runner_status'] == 'idle'
+    assert settled['reason'] == 'no_actionable_task'
+
+
+def test_plan_task_detail_ready_reconcile_is_idempotent_for_same_authority(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root, context, _command = _prepare_root8_reset_detail_ready_task(tmp_path, monkeypatch)
+    candidate = find_first_actionable_task(context, task_id='phase6b-l3-needs-detail')
+    assert candidate is not None
+    record = candidate['record']
+    authority = detail_ready_reconcile_authority(record, project_root=project_root)
+    assert authority is not None
+    reconcile_command = SimpleNamespace(
+        action='task-reconcile-detail-ready',
+        task_id='phase6b-l3-needs-detail',
+        expected_status=record['status'],
+        expected_next_owner=record['next_owner'],
+        expected_current_loop=record['current_loop'],
+        expected_task_revision=record['task_revision'],
+        expected_updated_at=record['updated_at'],
+        expected_authority_digest=authority['authority_digest'],
+    )
+
+    first = plan_task(context, reconcile_command)
+    first_updated_at = first['task']['updated_at']
+    second = plan_task(context, reconcile_command)
+
+    assert first['idempotent'] is False
+    assert second['idempotent'] is True
+    assert second['task']['updated_at'] == first_updated_at
+
+
+def test_loop_runner_auto_reconciles_detail_ready_then_finishes_without_agent_activation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root, _context, _command = _prepare_root8_reset_detail_ready_task(tmp_path, monkeypatch)
+    command = ParsedLoopRunnerCommand(
+        project=None,
+        once=False,
+        auto=True,
+        max_steps=3,
+        poll_interval_s=0.0,
+        json_output=True,
+    )
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+
+    def forbidden_submit(*_args, **_kwargs):
+        raise AssertionError('reconcile auto sequence must not submit Planner or Orchestrator')
+
+    payload = loop_runner_auto(
+        context,
+        command,
+        services=SimpleNamespace(submit_ask=forbidden_submit, plan_task=plan_task),
+    )
+
+    assert payload['action'] == 'auto_runner_finished'
+    assert payload['final_action'] == 'none'
+    assert [step['action'] for step in payload['steps']] == ['reconciled_detail_ready', 'none']
+
+
+@pytest.mark.parametrize('mutation', ('missing_artifact', 'non_needs_detail', 'bound_loop', 'no_contract'))
+def test_loop_runner_does_not_reconcile_incomplete_or_nonmatching_detail_task(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    project_root, context, _command = _prepare_root8_reset_detail_ready_task(tmp_path, monkeypatch)
+    index_path = project_root / 'docs' / 'plantree' / 'plans' / 'demo-plan' / 'tasks' / 'index.json'
+    index = json.loads(index_path.read_text(encoding='utf-8'))
+    record = index['tasks'][0]
+    if mutation == 'missing_artifact':
+        record['artifacts'].pop('detail_packet')
+    elif mutation == 'non_needs_detail':
+        record['artifacts']['orchestration_notes']['orchestrator_route'] = 'direct_execution'
+    elif mutation == 'bound_loop':
+        record['current_loop'] = 'lp-stale'
+    else:
+        packet = project_root / record['artifacts']['task_packet']['path']
+        packet.write_text('# Task: ordinary detail work\nRoute: needs_detail\n', encoding='utf-8')
+        record['artifacts']['task_packet']['sha256'] = hashlib.sha256(packet.read_bytes()).hexdigest()
+    _write_json(index_path, index)
+
+    candidate = find_first_actionable_task(context, task_id='phase6b-l3-needs-detail')
+    assert candidate is None or candidate['runner_action'] != 'reconcile_detail_ready'
+
+
+@pytest.mark.parametrize(
+    'mutation',
+    ('status', 'loop', 'route', 'revision', 'updated_at', 'artifact', 'contract'),
+)
+def test_loop_runner_reconcile_fails_closed_when_selected_authority_becomes_stale(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    project_root, context, command = _prepare_root8_reset_detail_ready_task(tmp_path, monkeypatch)
+    index_path = project_root / 'docs' / 'plantree' / 'plans' / 'demo-plan' / 'tasks' / 'index.json'
+
+    def stale_plan_task(call_context, task_command):
+        if task_command.action != 'task-reconcile-detail-ready':
+            return plan_task(call_context, task_command)
+        index = json.loads(index_path.read_text(encoding='utf-8'))
+        record = index['tasks'][0]
+        if mutation == 'status':
+            record['status'] = 'draft'
+            record['owner'] = 'planner'
+            record['next_owner'] = 'planner'
+        elif mutation == 'loop':
+            record['current_loop'] = 'lp-stale'
+        elif mutation == 'route':
+            record['artifacts']['orchestration_notes']['orchestrator_route'] = 'direct_execution'
+        elif mutation == 'revision':
+            record['task_revision'] += 1
+        elif mutation == 'updated_at':
+            record['updated_at'] = '2099-01-01T00:00:00Z'
+        elif mutation == 'artifact':
+            path = project_root / record['artifacts']['detail_packet']['path']
+            path.write_text('replaced detail packet\n', encoding='utf-8')
+        else:
+            path = project_root / record['artifacts']['task_packet']['path']
+            path.write_text('# Task: contract removed\nRoute: needs_detail\n', encoding='utf-8')
+            record['artifacts']['task_packet']['sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
+        _write_json(index_path, index)
+        return plan_task(call_context, task_command)
+
+    with pytest.raises(ValueError, match='stale detail_ready reconciliation'):
+        loop_runner_once(
+            context,
+            command,
+            services=SimpleNamespace(plan_task=stale_plan_task),
+        )
+
+
 @pytest.mark.parametrize(
     'non_contract',
     (
         'detail_ready is not the terminal expectation.',
         'Do not change terminal expectations.',
+        'Do not preserve terminal expectation detail_ready.',
     ),
 )
 def test_loop_runner_does_not_treat_negated_or_generic_terminal_text_as_detail_ready_stop(
