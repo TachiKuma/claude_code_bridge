@@ -585,7 +585,7 @@ def _consume_planner_task_set(
     parsed: dict[str, object],
 ) -> dict[str, object]:
     job_id = str(snapshot.get('job_id') or '')
-    task_set_authority_enabled = _task_set_authority_enabled(context)
+    task_set_authority_enabled = _task_set_authority_enabled(context, activation)
     source_task_id = _source_task_id_for_task_set(context, activation=activation)
     if task_set_authority_enabled:
         identity_error = _task_set_source_identity_error(
@@ -814,7 +814,12 @@ def _settle_frontdesk_task_set_source_task(
     )
 
 
-def _task_set_authority_enabled(context) -> bool:
+def _task_set_authority_enabled(context, activation: dict[str, object] | None = None) -> bool:
+    if (
+        isinstance(activation, dict)
+        and activation.get('source') == 'frontdesk_direct_silence_ask'
+    ):
+        return True
     snapshot = compile_project_effective_capacity_snapshot(Path(context.project.project_root))
     return int(snapshot.get('config_version') or 0) == 3
 

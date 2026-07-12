@@ -10603,11 +10603,20 @@ Constraints: Frontdesk must not mutate CCB authority; planner will create task a
     assert imports[-1]['action'] == 'frontdesk_handoff_already_started'
 
 
-@pytest.mark.parametrize('config_version', (2, 3))
+@pytest.mark.parametrize(
+    ('config_version', 'activation_source', 'expects_task_set_authority'),
+    (
+        (2, None, False),
+        (3, None, True),
+        (2, 'frontdesk_direct_silence_ask', True),
+    ),
+)
 def test_loop_runner_imports_planner_task_set_as_script_owned_tasks(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     config_version: int,
+    activation_source: str | None,
+    expects_task_set_authority: bool,
 ) -> None:
     project_root = _project_with_loop_capacity(tmp_path, monkeypatch)
     monkeypatch.setattr(
@@ -10647,9 +10656,7 @@ def test_loop_runner_imports_planner_task_set_as_script_owned_tasks(
         )
         + '\n',
     )
-    _write_json(
-        project_root / '.ccb' / 'runtime' / 'loops' / 'activations' / 'act-route-mix.json',
-        {
+    activation = {
             'schema_version': 1,
             'record_type': 'ccb_loop_frontdesk_planner_activation',
             'activation_id': 'act-route-mix',
@@ -10671,7 +10678,12 @@ def test_loop_runner_imports_planner_task_set_as_script_owned_tasks(
                 'job_id': 'job_route_mix_planner',
                 'status': 'accepted',
             },
-        },
+        }
+    if activation_source is not None:
+        activation['source'] = activation_source
+    _write_json(
+        project_root / '.ccb' / 'runtime' / 'loops' / 'activations' / 'act-route-mix.json',
+        activation,
     )
     tasks = [
         {
@@ -10720,6 +10732,7 @@ def test_loop_runner_imports_planner_task_set_as_script_owned_tasks(
             'title': 'L4 blocked external dependency',
             'route': 'blocked',
             'readiness': 'blocked',
+            'required': False,
             'task_packet': '# Task: L4 blocked external dependency\nRoute: blocked\n',
             'allowed_paths': [],
             'verification': ['Blocker evidence identifies the missing external credential.'],
@@ -10744,24 +10757,24 @@ def test_loop_runner_imports_planner_task_set_as_script_owned_tasks(
     assert payload['task_count'] == 5
     assert payload['task_ids'] == expected_task_ids
     assert payload['source_task_settlement']['status'] == (
-        'decomposed' if config_version == 3 else 'done'
+        'decomposed' if expects_task_set_authority else 'done'
     )
     assert payload['source_task_settlement']['task_id'] == 'route-mix-intake'
     task_set = (
         payload['task_set_authority']['task_set']
-        if config_version == 3
+        if expects_task_set_authority
         else None
     )
     if task_set is not None:
         assert task_set['schema'] == 'ccb.plan.task_set.v1'
         assert task_set['state'] == 'running'
         assert task_set['task_set_revision'] == 1
-        assert task_set['ordered_required_children'] == expected_task_ids
+        assert task_set['ordered_required_children'] == expected_task_ids[:-1]
         assert task_set['planner_job']['job_id'] == 'job_route_mix_planner'
         assert task_set['source_request']['source_job_id'] == 'job_frontdesk_route_mix'
     else:
         assert 'task_set_authority' not in payload
-    for task_id in expected_task_ids:
+    for task_order, task_id in enumerate(expected_task_ids):
         shown = plan_task(context, SimpleNamespace(action='task-show', task_id=task_id))
         assert shown['task']['status'] == 'ready_for_orchestration'
         assert shown['task']['next_owner'] == 'orchestrator'
@@ -10774,7 +10787,8 @@ def test_loop_runner_imports_planner_task_set_as_script_owned_tasks(
         if task_set is not None:
             assert shown['task']['task_set']['task_set_id'] == task_set['task_set_id']
             assert shown['task']['task_set']['task_set_revision'] == 1
-            assert shown['task']['task_set']['required'] is True
+            assert shown['task']['task_set']['required'] is (task_id != 'phase6b-l4-blocked')
+            assert shown['task']['task_set']['order'] == task_order
         else:
             assert 'task_set' not in shown['task']
     l1_contract_path = project_root / plan_task(
@@ -10800,6 +10814,22 @@ def test_loop_runner_imports_planner_task_set_as_script_owned_tasks(
         assert source['task']['activation_reason'] == 'planner_task_set_decomposed_source_task'
         completion = source['task']['artifacts']['completion']
         assert completion['actor']['source'] == 'loop_runner_role_output_import'
+    replay = loop_runner_once(context, command, services=SimpleNamespace(plan_task=plan_task))
+    assert replay['action'] == 'role_output_already_consumed'
+    assert replay['task_ids'] == expected_task_ids
+    if expects_task_set_authority:
+        task_set_paths = list(
+            (project_root / 'docs' / 'plantree' / 'plans' / 'demo-plan' / 'task-sets').glob(
+                '*/task-set.json'
+            )
+        )
+        assert len(task_set_paths) == 1
+        index = json.loads(
+            (project_root / 'docs' / 'plantree' / 'plans' / 'demo-plan' / 'tasks' / 'index.json').read_text(
+                encoding='utf-8'
+            )
+        )
+        assert len(index['tasks']) == len(expected_task_ids) + 1
 
 
 def test_loop_runner_imports_single_planner_task_settles_frontdesk_source_task(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -687,7 +688,7 @@ def test_dispatcher_frontdesk_direct_silence_ask_records_activation_without_rewr
             (Path(context.project.project_root), activation_id, wait_job_id)
         ) or {'status': 'started', 'pid': 4242},
     )
-    body = _frontdesk_intake_reply()
+    body = _frontdesk_intake_reply() + '\nScope includes a bounded route-mix task set.\n'
     receipt = dispatcher.submit(
         MessageEnvelope(
             project_id=ctx.project_id,
@@ -711,11 +712,23 @@ def test_dispatcher_frontdesk_direct_silence_ask_records_activation_without_rewr
     activation_path = project_root / '.ccb' / 'runtime' / 'loops' / 'activations' / 'act-frontdesk-frontdesk-auto-1.json'
     activation = json.loads(activation_path.read_text(encoding='utf-8'))
     assert activation['source'] == 'frontdesk_direct_silence_ask'
+    assert activation['source_job']['job_id'] == 'frontdesk-auto-1'
+    assert activation['source_task_id'] == 'frontdesk-auto-1'
+    assert activation['source_request']['source_job_id'] == 'frontdesk-auto-1'
+    assert activation['source_request']['bytes'] == len(body.encode('utf-8'))
+    assert activation['source_request']['sha256'] == hashlib.sha256(body.encode('utf-8')).hexdigest()
     assert activation['direct_ask']['controller_rewrote_body'] is False
     assert activation['ask']['job_id'] == job_id
     assert activation['ask']['target'] == 'planner'
     assert activation['ask']['silence'] is True
     assert runner_calls == [(project_root, 'act-frontdesk-frontdesk-auto-1', job_id)]
+    source = json.loads(
+        (project_root / 'docs' / 'plantree' / 'plans' / 'demo-plan' / 'tasks' / 'index.json').read_text(
+            encoding='utf-8'
+        )
+    )
+    source_task = next(task for task in source['tasks'] if task['task_id'] == 'frontdesk-auto-1')
+    assert source_task['status'] == 'draft'
     assert not (project_root / '.ccb' / 'runtime' / 'frontdesk-handoff').exists()
 
 

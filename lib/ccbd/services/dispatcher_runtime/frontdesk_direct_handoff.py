@@ -103,6 +103,7 @@ def _prepare(dispatcher, request: MessageEnvelope) -> _DirectHandoff:
     activation_id = str(request.task_id)
     request_id = activation_id.removeprefix('act-frontdesk-')
     intake_sha256 = hashlib.sha256(request.body.encode('utf-8')).hexdigest()
+    intake_bytes = len(request.body.encode('utf-8'))
     activation_path = _activation_path(context, activation_id)
     activation = _load_existing_activation(activation_path)
     if activation is not None:
@@ -120,15 +121,23 @@ def _prepare(dispatcher, request: MessageEnvelope) -> _DirectHandoff:
             intake_sha256=intake_sha256,
             source_request={
                 'status': 'ok',
-                'source_job_id': activation_id,
+                'source_job_id': request_id,
                 'agent_name': 'frontdesk',
                 'project_id': request.project_id,
                 'to_agent': 'planner',
                 'from_actor': 'frontdesk',
                 'message_type': 'ask',
-                'text': '',
+                'text': request.body,
+                'bytes': intake_bytes,
+                'sha256': intake_sha256,
             },
         )
+        if activation.get('planner_contract') == 'task_set':
+            activation['source_task_id'] = _ensure_source_task(
+                context,
+                plan_slug=plan_slug,
+                request_id=request_id,
+            )
         activation['source'] = 'frontdesk_direct_silence_ask'
         activation['status'] = 'direct_ask_pending'
         activation['direct_ask'] = {
@@ -147,6 +156,28 @@ def _prepare(dispatcher, request: MessageEnvelope) -> _DirectHandoff:
         activation=activation,
         intake_sha256=intake_sha256,
     )
+
+
+def _ensure_source_task(context, *, plan_slug: str, request_id: str) -> str:
+    from cli.services.plan_tasks import plan_task
+
+    try:
+        shown = plan_task(context, SimpleNamespace(action='task-show', task_id=request_id))
+    except ValueError:
+        plan_task(
+            context,
+            SimpleNamespace(
+                action='task-create',
+                plan_slug=plan_slug,
+                title=f'Frontdesk intake {request_id}',
+                task_id=request_id,
+            ),
+        )
+        return request_id
+    task = shown.get('task') if isinstance(shown.get('task'), dict) else {}
+    if str(task.get('plan_slug') or '') != plan_slug:
+        raise ValueError('frontdesk source task plan authority conflict')
+    return request_id
 
 
 def _validate_shape(dispatcher, request: MessageEnvelope) -> None:
@@ -223,13 +254,6 @@ def _finalize(dispatcher, handoff: _DirectHandoff, job) -> None:
         'status': job.status.value,
         'sender': 'frontdesk',
         'silence': True,
-    }
-    activation['source_job'] = {
-        'job_id': job.job_id,
-        'agent_name': 'frontdesk',
-        'terminal_status': 'forwarded',
-        'finished_at': None,
-        'reply_sha256': handoff.intake_sha256,
     }
     activation['status'] = 'planner_submitted'
     atomic_write_json(handoff.activation_path, activation)
