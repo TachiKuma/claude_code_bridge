@@ -6,7 +6,7 @@ generic_shell = false
 generic_ccb = false
 supported_providers = ["codex", "claude"]
 allowed_effects = [
-  "observer_intake_handoff",
+  "planner_silence_handoff",
 ]
 forbidden_effects = [
   "task_create",
@@ -20,3 +20,14 @@ forbidden_effects = [
   "test_exec",
   "implementation",
 ]
+
+[provider_tools]
+codex = "ccb_frontdesk_ask_planner"
+
+[[allowed]]
+id = "planner_silence_handoff"
+argv_prefix = ["ask", "--silence", "--compact", "--inline-request", "--task-id"]
+required_args = ["act-frontdesk-<request-id>", "planner"]
+stdin_schema = "ccb.frontdesk.intake.v1"
+output_schema = "ccb.ask.submission_receipt.v1"
+idempotency_key = "frontdesk_request_id_and_intake_sha256"

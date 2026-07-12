@@ -10,6 +10,7 @@ from datetime import date, datetime, time
 from pathlib import Path
 import re
 import shutil
+import sys
 
 from provider_core.memory_projection import (
     materialize_provider_memory_file,
@@ -25,6 +26,7 @@ from provider_core.projected_assets import (
 )
 from provider_core.source_home import current_provider_source_home
 from rolepacks.projection import project_role_skills_to_home
+from project.ids import compute_project_id
 from storage.atomic import atomic_write_text
 from storage.paths import PathLayout
 
@@ -156,6 +158,14 @@ def materialize_codex_home_config(
             project_root=project_root,
             workspace_path=workspace_path,
         )
+
+    _install_role_command_mcp_server(
+        target_config,
+        command_policy=command_policy,
+        project_root=project_root,
+        agent_name=agent_name,
+        runtime_dir=runtime_dir,
+    )
 
     _materialize_auth_file(
         source_home / 'auth.json',
@@ -547,6 +557,65 @@ def _merge_codex_mcp_server_overrides(payload: dict[str, object], *, profile) ->
     for name, server in overrides.items():
         existing[name] = _clone_mapping(server)
     payload['mcp_servers'] = existing
+
+
+def _install_role_command_mcp_server(
+    target_config: Path,
+    *,
+    command_policy,
+    project_root: Path | None,
+    agent_name: str | None,
+    runtime_dir: Path | None,
+) -> None:
+    provider_tools = dict(getattr(command_policy, 'provider_tools', ()) or ())
+    tool_name = str(provider_tools.get('codex') or '').strip()
+    actor = str(agent_name or '').strip().lower()
+    if tool_name != 'ccb_frontdesk_ask_planner' or actor != 'frontdesk':
+        return
+    if project_root is None or runtime_dir is None:
+        raise RuntimeError('Codex role command capability requires project and runtime identity')
+    resolved_project = Path(project_root).expanduser().resolve()
+    server = Path(__file__).resolve().parents[2] / 'mcp' / 'ccb-role-command' / 'server.py'
+    if not server.is_file():
+        raise RuntimeError(f'Codex role command MCP server is missing: {server}')
+    payload = _read_source_config_payload(target_config)
+    payload['approval_policy'] = 'never'
+    payload['sandbox_mode'] = 'read-only'
+    features = _clone_mapping(payload.get('features')) if isinstance(payload.get('features'), dict) else {}
+    for feature in (
+        'apps',
+        'browser_use',
+        'browser_use_external',
+        'computer_use',
+        'image_generation',
+        'multi_agent',
+        'multi_agent_v2',
+        'plugins',
+        'remote_plugin',
+        'shell_tool',
+        'unified_exec',
+    ):
+        features[feature] = False
+    payload['features'] = features
+    payload['mcp_servers'] = {'ccb_role_command': {
+        'command': sys.executable,
+        'args': [str(server)],
+        'required': True,
+        'enabled_tools': [tool_name],
+        'default_tools_approval_mode': 'prompt',
+        'tools': {
+            tool_name: {
+                'approval_mode': 'approve',
+            },
+        },
+        'env': {
+            'CCB_CALLER_ACTOR': actor,
+            'CCB_CALLER_PROJECT_ROOT': str(resolved_project),
+            'CCB_CALLER_PROJECT_ID': compute_project_id(resolved_project),
+            'CCB_CALLER_RUNTIME_DIR': str(Path(runtime_dir).expanduser().resolve()),
+        },
+    }}
+    target_config.write_text(_render_toml_document(payload), encoding='utf-8')
 
 
 def _merge_codex_plugin_overrides(payload: dict[str, object], *, profile) -> None:

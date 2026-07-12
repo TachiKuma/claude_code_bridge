@@ -17,8 +17,10 @@ ready-frontier scheduler, real R2 Git transactions, T1 topology authority,
 crash recovery, strict release, and runtime accelerator ownership. G5 then
 proved the integrated scheduler through one-to-four-workgroup source/fake
 runtime flows. Decision 027 and a visible two-workgroup Codex baseline now pass
-in G6. The remaining phase is the broader visible real-provider matrix:
-three/four workgroups, restart, real rework, busy-retain, and provider-profile
+in G6. Decision 028 is also real-provider verified, including an exact
+Frontdesk-owned silent Planner handoff and genuine bounded rework in both
+workgroups. The remaining phase is the broader visible real-provider matrix:
+three/four workgroups, in-flight restart, busy-retain, and provider-profile
 qualification. This is not yet a packaged-candidate or default-enablement
 claim.
 
@@ -34,6 +36,8 @@ claim.
   [decisions/026-authority-envelope-and-adaptive-workgroup-selection.md](decisions/026-authority-envelope-and-adaptive-workgroup-selection.md)
 - Worker-owned review and minimal controller:
   [decisions/027-worker-owned-review-chain-and-minimal-controller.md](decisions/027-worker-owned-review-chain-and-minimal-controller.md)
+- Frontdesk-owned Planner silence handoff:
+  [decisions/028-frontdesk-owned-planner-silence-handoff.md](decisions/028-frontdesk-owned-planner-silence-handoff.md)
 
 Provider replies remain evidence only. Scripts own bundle, task, node,
 integration, topology, round, and release authority. Mount topology remains
@@ -42,6 +46,9 @@ Decision 027 now supersedes the controller-owned Reviewer/rework relay:
 Workers must collaborate directly with their assigned Reviewer through a
 bounded restricted chain, while the controller validates lineage and retains
 only mechanical authority.
+Decision 028 likewise supersedes the Controller-observed Frontdesk semantic
+relay: Frontdesk authors one silent Planner ask; Controller code only validates,
+deduplicates, records activation, and wakes or recovers the runner.
 
 ## Last Landed
 
@@ -64,17 +71,19 @@ G5 evidence:
 Decision 027 real-provider checkpoint:
 [history/g6-worker-owned-review-chain-real-provider-20260712.md](history/g6-worker-owned-review-chain-real-provider-20260712.md).
 
+Decision 028 direct-handoff and real-rework checkpoint:
+[history/decision028-frontdesk-direct-handoff-real-provider-20260712.md](history/decision028-frontdesk-direct-handoff-real-provider-20260712.md).
+
 Earlier accepted checkpoints remain in the G1, R1, Wave 1, and Wave 2 history
 records linked from the goal, including
 [history/single-lane-r1-authority-runtime-closure-20260711.md](history/single-lane-r1-authority-runtime-closure-20260711.md).
 
 ## Next Target
 
-Complete the remaining G6 rows from fresh visible opened projects: three/four
-workgroups, real overlap, in-flight restart, real rework, busy-retain, and
-strict provider-profile qualification. Preserve the accepted Codex
-Worker-owned chain baseline and aggregate raw evidence into B7 without
-normalizing protocol failures.
+Complete the remaining G6 rows: three/four workgroups, real overlap, in-flight
+restart, busy-retain, and strict provider-profile qualification. Preserve the
+accepted Decision 027/028 Codex baselines and aggregate raw evidence into B7
+without normalizing protocol failures.
 
 ## Execution Queue
 
@@ -91,7 +100,8 @@ normalizing protocol failures.
    overlap, Worker-owned Reviewer order, deterministic integration, root
    output, sidebar/window evidence, and zero residue.
 2. Run a separate restart/failure G6 scenario covering durable intent replay,
-   node failure or reviewer rework, rollback/busy-retain behavior, and cleanup.
+   node failure, rollback/busy-retain behavior, and cleanup. Real bounded
+   Reviewer rework is already proven in both nodes of the Decision 028 run.
 3. Qualify each claimed provider/profile against the strict first-line role
    protocol; retain non-compliant rows as non-success.
 4. Normalize and audit raw task/job/topology/Git/UI evidence against B7 before
@@ -143,11 +153,22 @@ terminal/UI. Script output cannot substitute for opened-project evidence.
   residue. The accepted G6 project and one discovered stale 2026-07-10 test
   project were both closed with project-level `ccb_test kill -f`; no runtime
   owned by this workflow worktree remained.
+- Decision 028 visible Codex checkpoint: Frontdesk job `job_6c88e4472b20`
+  submitted exactly one silent Planner job `job_2584ecf35c46`; two parallel
+  workgroups each received one real `rework_required` and one passing recheck;
+  root verification passed `7` tests; Round Reviewer `job_8a99582b80cd`
+  passed; task authority ended `done/pass`; all dynamic panes, agents,
+  worktrees, and temporary branches were removed; project-level shutdown left
+  no process or socket residue.
+- Decision 028 affected source gate: `393 passed`; accelerator/CLI regression
+  gate `30 passed`; former heartbeat race `10/10 passed`; final full
+  non-provider-blackbox repository gate `4321 passed, 2 skipped, 21 deselected
+  in 642.29s`. Post-suite workflow/pytest process and socket scans were empty.
 
 ## Non-Claims
 
-The branch is not production-ready. The accepted two-workgroup Codex row does
-not prove the complete three/four-group, restart, rework, busy-retain, or
+The branch is not production-ready. The accepted two-workgroup Codex rows do
+not prove the complete three/four-group, restart, busy-retain, or
 cross-provider G6 matrix, packaged candidate behavior, production/default
 enablement, or publication. Those claims remain behind G6-G8.
 

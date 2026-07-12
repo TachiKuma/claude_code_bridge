@@ -1,7 +1,7 @@
 # Single-Lane Multi-Workgroup Release Goal
 
 Date: 2026-07-12
-Status: In progress; G6 two-workgroup Codex baseline passed, remaining matrix active
+Status: In progress; Decision 028 and two-workgroup real rework passed, remaining G6 matrix active
 
 ## Goal
 
@@ -75,7 +75,7 @@ Remaining acceptance gaps:
 
 - Config V3 visible two-workgroup Codex execution is proven, but broader
   opened-project enablement remains gated until all G6 rows complete;
-- visible three/four-workgroup, restart, rework, busy-retain, and qualified
+- visible three/four-workgroup, restart, busy-retain, and qualified
   non-Codex provider evidence is still missing;
 - no packed-candidate install/update/rollback evidence exists for this branch.
 
@@ -127,6 +127,9 @@ Remaining acceptance gaps:
     existing contract is defined.
 11. Worker/Reviewer semantic communication is node-local `ask --chain`;
     controller code does not relay reviewer or rework prompts.
+12. Frontdesk/Planner semantic communication is one Frontdesk-authored
+    `ask --silence`; controller code validates, deduplicates, records, wakes,
+    and recovers but never observes a completed reply to rewrite Planner prose.
 
 ## Production-Ready Definition
 
@@ -366,7 +369,7 @@ Gate result: passed for source/fake scope. Direct evidence: commits
 `pyflakes`, `git diff --check`, and narrow residue scans passed. See
 [../history/single-lane-g5-source-fake-acceptance-20260711.md](../history/single-lane-g5-source-fake-acceptance-20260711.md).
 
-### G6 Visible Real-Provider Acceptance - Active, Two-Group Baseline Passed
+### G6 Visible Real-Provider Acceptance - Active, Two-Group Rework Passed
 
 - From `/home/bfly/yunwei/test_ccb2`, use the current source `ccb_test`, inherit
   system provider environment, use a lab-local Role store, and open a visible
@@ -391,6 +394,13 @@ mixed DAG with Worker-owned Reviewer chains, deterministic Git integration,
 `79` root tests, Round Reviewer pass, complete worktree cleanup, and zero
 dynamic residue. See
 [../history/g6-worker-owned-review-chain-real-provider-20260712.md](../history/g6-worker-owned-review-chain-real-provider-20260712.md).
+
+Decision 028 then passed a second fresh visible two-workgroup run with an exact
+Frontdesk-owned silent Planner handoff and genuine Reviewer findings in both
+nodes. Each Worker completed one bounded rework/recheck cycle, root verification
+passed `7` tests, the Round Reviewer passed, temporary Git state was removed,
+and only resident Frontdesk/Planner panes remained. See
+[../history/decision028-frontdesk-direct-handoff-real-provider-20260712.md](../history/decision028-frontdesk-direct-handoff-real-provider-20260712.md).
 The remaining bullets above still gate G6 closure.
 
 ### G7 Release Candidate And Deployment Gate - Pending

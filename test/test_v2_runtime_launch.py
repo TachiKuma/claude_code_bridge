@@ -990,7 +990,7 @@ def test_ensure_agent_runtime_launches_named_claude_session(monkeypatch, tmp_pat
     assert tmux_state['user_option'] == ('%44', '@ccb_project_id', ctx.project.project_id)
 
 
-def test_ensure_agent_runtime_forces_safe_permission_for_frontdesk_command_surface(
+def test_ensure_agent_runtime_forces_single_ask_permission_for_frontdesk_command_surface(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -1034,7 +1034,7 @@ def test_ensure_agent_runtime_forces_safe_permission_for_frontdesk_command_surfa
     home = ctx.paths.agent_provider_state_dir('frontdesk', 'claude') / 'home'
     settings_payload = json.loads((home / '.claude' / 'settings.json').read_text(encoding='utf-8'))
     assert settings_payload['permissions'] == {
-        'allow': [],
+        'allow': ['Bash(ask --silence --compact --inline-request --task-id *)'],
         'deny': [],
     }
 

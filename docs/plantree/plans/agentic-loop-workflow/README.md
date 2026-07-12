@@ -66,6 +66,11 @@ recoverable workflow loops.
   workgroups, restart, rework, partial, blocked, integration/root verification
   failure, round blocked, release, cleanup, and B7 campaign normalization; no
   live-provider claim.
+- [history/decision028-frontdesk-direct-handoff-real-provider-20260712.md](history/decision028-frontdesk-direct-handoff-real-provider-20260712.md):
+  direct `talk2` evidence from a visible real-provider project proving the
+  Frontdesk-owned silent Planner handoff, two parallel Worker-owned Reviewer
+  chains, genuine bounded rework in both nodes, deterministic integration,
+  root and round pass, complete dynamic release, and project shutdown.
 - [history/phase1-6-deployment-readiness-p2-frontdesk-pressure-20260708.md](history/phase1-6-deployment-readiness-p2-frontdesk-pressure-20260708.md):
   P2 post-acceptance deployment-readiness evidence for real-project
   frontdesk macro-intake pressure across direct, detail, macro-adjustment, and
@@ -451,6 +456,10 @@ recoverable workflow loops.
   decision that each Worker owns its bounded `ask --chain` review loop with
   the assigned Reviewer while controller code retains only deterministic
   authority, integration, recovery, and lifecycle duties.
+- [decisions/028-frontdesk-owned-planner-silence-handoff.md](decisions/028-frontdesk-owned-planner-silence-handoff.md):
+  decision that Frontdesk directly authors and submits one silent Planner ask,
+  while Controller code only validates, deduplicates, records activation, and
+  wakes or recovers the runner without semantic relay.
 - [history/g6-worker-owned-review-chain-real-provider-20260712.md](history/g6-worker-owned-review-chain-real-provider-20260712.md):
   strict live-provider checkpoint for the Decision 027 two-workgroup Codex
   baseline, preserved provider-protocol failures, integration, round review,

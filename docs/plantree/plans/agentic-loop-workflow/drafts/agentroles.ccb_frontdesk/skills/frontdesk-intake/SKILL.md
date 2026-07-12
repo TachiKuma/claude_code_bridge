@@ -23,8 +23,10 @@ Use this skill for user-facing workflow intake and reporting.
 Every turn, classify the user message before acting:
 
 - Direct answer or clarification: answer concisely and do not forward.
-- Macro task or workflow request: produce importable intake and stop.
-- Blocked prerequisite: produce structured blocked evidence and stop.
+- Macro task or workflow request: produce importable intake, submit it directly
+  to Planner with the one allowed silent ask, and stop.
+- Blocked prerequisite: produce structured blocked evidence, submit it directly
+  to Planner with the same allowed silent ask, and stop.
 - Final report or escalation: summarize evidence and do not forward.
 
 Classification is strict. If the request asks you to create, modify, inspect,
@@ -52,10 +54,9 @@ Next step: controller_observed_planner_handoff
 Next role: planner
 ```
 
-Include `CCB_REQ_ID: <id>` immediately after the heading only when the current
-user turn itself contains that request id. Never copy one from earlier
-conversation. For ordinary interactive input, omit it; the controller binds the
-completed turn to a fresh request id.
+Always include `CCB_REQ_ID: <request-id>` immediately after the heading. Reuse
+an id only for an exact retry of the same turn; otherwise generate a fresh
+bounded id.
 
 For a request that appears blocked by unavailable credentials, private endpoint
 access, missing external approval, or another prerequisite, still return an
@@ -78,12 +79,24 @@ Next step: controller_observed_planner_handoff
 Next role: planner
 ```
 
-After producing valid `**Intake Evidence**` or valid `**Blocked Evidence**`,
-stop. Do not run commands. The CCB controller observes the final reply,
-validates the artifact, submits one silent planner ask, and records the
-activation for the runner. It resolves the active plan from project context and
-does not write plan/task authority through provider prose. Do not claim planner
-activation.
+Submit the completed evidence exactly once:
+
+- Codex: call `ccb_frontdesk_ask_planner` with `request_id` and the complete
+  evidence string. Do not invoke shell `ask` from the read-only sandbox.
+- Claude: use the sole allowed shell command:
+
+  ```bash
+  ask --silence --compact --inline-request \
+    --task-id act-frontdesk-<request-id> planner \
+    '<complete multiline Intake Evidence or Blocked Evidence with the same CCB_REQ_ID>'
+  ```
+
+Then stop. This is the only allowed side effect. The Codex tool and Claude
+command both fix target, silence, compact, inline body, and task-id semantics.
+Do not use a heredoc or pipe. Do not use `--chain`, target any other agent, poll, wait, or run a
+second ask. The Controller validates and
+deduplicates this Frontdesk-authored message, records the activation, and wakes
+the runner without rewriting the Planner body.
 
 ## Rules
 
@@ -102,9 +115,9 @@ activation.
 - Do not manage runtime capacity.
 - Do not show raw noisy execution logs unless escalation requires evidence.
 - Preserve user decisions as macro constraints for planner.
-- Do not run ordinary `ccb ask`, `ccb plan`, `ccb loop`, `ccb question`,
-  `ccb_test`, wrapper scripts, unrestricted shell commands, heredocs, stdin
-  pipes, `--file` handoff, sockets, or artifact/status import commands. There
-  is no active command exception for frontdesk.
+- Do not run `ccb plan`, `ccb loop`, `ccb question`, `ccb_test`, wrapper
+  scripts, unrestricted shell commands, `--file` handoff, sockets, or
+  artifact/status import commands. The only command exception is the exact
+  silent Planner ask above, whose evidence is supplied by stdin.
 - Do not answer blocked requests with vague prose. Use the exact labels above so
   the supervisor/runner can import or reject the artifact safely.

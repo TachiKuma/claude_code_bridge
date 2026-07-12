@@ -1486,16 +1486,28 @@ def test_frontdesk_rolepack_forbids_direct_project_artifact_implementation() -> 
     assert policy.enforcement == 'required'
     assert policy.generic_shell is False
     assert policy.generic_ccb is False
-    assert policy.allowed_effects == ('observer_intake_handoff',)
-    assert policy.allowed == ()
+    assert policy.allowed_effects == ('planner_silence_handoff',)
+    assert policy.provider_tools == (('codex', 'ccb_frontdesk_ask_planner'),)
+    assert len(policy.allowed) == 1
+    assert policy.allowed[0].argv_prefix == (
+        'ask',
+        '--silence',
+        '--compact',
+        '--inline-request',
+        '--task-id',
+    )
+    assert policy.allowed[0].required_args == ('act-frontdesk-<request-id>', 'planner')
     assert {'project_artifact_write', 'file_write', 'shell_exec', 'implementation'} <= set(policy.forbidden_effects)
     assert 'create `docs/runtime-retest-a.md`' in frontdesk_text
     assert 'do not create or verify that' in frontdesk_text
     assert '**intake evidence**' in frontdesk_text
-    assert 'controller observes' in frontdesk_text
+    assert 'controller validates and deduplicates' in frontdesk_text
     assert 'every user turn must pass this gate' in frontdesk_text
     assert 'choose `planner_handoff`' in frontdesk_text
-    assert 'ordinary `ccb ask`' in frontdesk_text
+    assert 'ask --silence --compact --inline-request' in frontdesk_text
+    assert 'ccb_frontdesk_ask_planner' in frontdesk_text
+    assert '--task-id act-frontdesk-<request-id> planner' in frontdesk_text
+    assert "<<'EOF'" not in frontdesk_text
 
 
 def test_legacy_ccb_store_migrates_to_spec_owned_store(tmp_path: Path, monkeypatch) -> None:

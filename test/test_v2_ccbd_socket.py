@@ -428,6 +428,7 @@ def test_ccbd_heartbeat_records_step_metrics_without_background_worker(tmp_path:
     assert app.control_plane_metrics.last_heartbeat_duration_s is not None
     assert app.control_plane_metrics.heartbeat_step_duration_s['health_monitor'] >= 0.0
     assert app.control_plane_metrics.heartbeat_step_duration_s['runtime_supervision'] >= 0.0
+    assert 'frontdesk_session_observer' not in app.control_plane_metrics.heartbeat_step_duration_s
     assert app.control_plane_metrics.last_heartbeat_agents_inspected == 1
     assert app.control_plane_metrics.last_heartbeat_runtime_store_writes == 0
 

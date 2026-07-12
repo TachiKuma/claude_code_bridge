@@ -6,7 +6,7 @@ from time import monotonic
 from agents.models import AgentState, RuntimeBindingSource, normalize_runtime_binding_source
 from ccbd.models import CcbdShutdownReport, CcbdStartupReport, cleanup_summaries_from_objects
 from ccbd.reload_drain_auto_retry import tick_reload_drain_auto_retry
-from ccbd.frontdesk_session_observer import observe_frontdesk_session
+from ccbd.services.dispatcher_runtime.frontdesk_direct_handoff import recover_frontdesk_direct_handoffs
 from ccbd.services.lifecycle import build_lifecycle, current_socket_inode
 from ccbd.stop_flow import build_shutdown_runtime_snapshots
 from runtime_accelerator.lifecycle import maybe_start_runtime_accelerator, stop_runtime_accelerator
@@ -51,6 +51,7 @@ def start(app):
     try:
         _update_startup_progress(app, 'restoring_state')
         app.dispatcher.restore_running_jobs()
+        recovered_frontdesk_jobs = recover_frontdesk_direct_handoffs(app.dispatcher)
         adopted_agents = _adopt_existing_runtime_authority(app)
         restore_report = app.dispatcher.last_restore_report(project_id=app.project_id)
         if restore_report is not None:
@@ -59,6 +60,8 @@ def start(app):
         _mark_lifecycle_mounted(app)
         app.runtime_accelerator = maybe_start_runtime_accelerator(app.project_root)
         startup_actions = ['mount_backend', 'listen_socket', 'restore_running_jobs']
+        if recovered_frontdesk_jobs:
+            startup_actions.append(f'recover_frontdesk_direct_handoff:{",".join(recovered_frontdesk_jobs)}')
         startup_actions.extend(_runtime_accelerator_startup_actions(app))
         if adopted_agents:
             startup_actions.append(f'adopt_runtime_authority:{",".join(adopted_agents)}')
@@ -587,7 +590,6 @@ def _heartbeat_failures(app) -> tuple[str, ...]:
         ('health_monitor', app.health_monitor.check_all),
         ('runtime_supervision', app.runtime_supervision.reconcile_once),
         ('dispatcher_runtime_views', app.dispatcher.reconcile_runtime_views),
-        ('frontdesk_session_observer', lambda: observe_frontdesk_session(app)),
         ('dispatcher_tick', app.dispatcher.tick),
         ('dispatcher_poll_completions', app.dispatcher.poll_completions),
         ('reload_drain_auto_retry', lambda: tick_reload_drain_auto_retry(app)),

@@ -1394,13 +1394,14 @@ def test_run_cli_entrypoint_prints_ask_help() -> None:
     assert result == 0
     assert "Usage:" in stdout.getvalue()
     assert (
-        "ccb ask [--compact] [--silence] [--chain] [--artifact-request] [--artifact-reply] <target> [--] <message...>"
+        "ccb ask [--compact] [--silence] [--chain] [--artifact-request] [--inline-request] [--artifact-reply] <target> [--] <message...>"
         in stdout.getvalue()
     )
     assert "--compact request a distilled reply that preserves key information" in stdout.getvalue()
     assert "--silence request silent-on-success delivery; failures/blockers still surface" in stdout.getvalue()
     assert "--chain mark this ask as part of the current active task chain" in stdout.getvalue()
     assert "--artifact-request force the request body into a CCB text artifact" in stdout.getvalue()
+    assert "--inline-request keep the request body inline and disable automatic artifact spill" in stdout.getvalue()
     assert "--artifact-reply force the final reply into a CCB text artifact" in stdout.getvalue()
     assert "--artifact-io enable both --artifact-request and --artifact-reply" in stdout.getvalue()
     assert "ccb ask --compact agent1 review latest diff" in stdout.getvalue()

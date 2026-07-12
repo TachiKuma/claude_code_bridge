@@ -81,6 +81,52 @@ def test_recorded_owner_binds_project_socket_process_and_start_token(monkeypatch
     assert owner.start_token == "proc:100"
 
 
+def test_recorded_owner_waits_through_pre_exec_identity(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    socket_path = tmp_path / "runtime" / "accelerator.sock"
+    pre_exec = ProcessIdentity(
+        pid=321,
+        argv=("/usr/bin/python", "-m", "pytest"),
+        cwd=project_root.resolve(),
+        executable=Path("/usr/bin/python"),
+        start_token="proc:100",
+    )
+    accelerated = _identity(project_root.resolve(), socket_path.resolve())
+    observed = iter((pre_exec, accelerated))
+    monkeypatch.setattr("runtime_accelerator.ownership._wait_for_process_identity", lambda pid: pre_exec)
+    monkeypatch.setattr(
+        "runtime_accelerator.ownership.inspect_process_identity",
+        lambda pid: next(observed),
+    )
+
+    owner = record_runtime_accelerator_owner(project_root, socket_path=socket_path, pid=321)
+
+    assert owner == load_runtime_accelerator_owner(project_root)
+    assert owner.executable == Path("/opt/ccb/bin/ccb-runtime-accelerator")
+
+
+def test_recorded_owner_persistent_lookalike_still_fails_closed(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    socket_path = tmp_path / "runtime" / "accelerator.sock"
+    lookalike = ProcessIdentity(
+        pid=321,
+        argv=("/usr/bin/python", "-m", "pytest"),
+        cwd=project_root.resolve(),
+        executable=Path("/usr/bin/python"),
+        start_token="proc:100",
+    )
+    monkeypatch.setattr("runtime_accelerator.ownership._wait_for_process_identity", lambda pid: lookalike)
+    monkeypatch.setattr("runtime_accelerator.ownership.inspect_process_identity", lambda pid: lookalike)
+    monkeypatch.setattr("runtime_accelerator.ownership.time.sleep", lambda seconds: None)
+
+    with pytest.raises(RuntimeAcceleratorOwnershipError, match="identity_mismatch"):
+        record_runtime_accelerator_owner(project_root, socket_path=socket_path, pid=321)
+
+    assert not owner_manifest_path(project_root).exists()
+
+
 def test_takeover_reaps_exact_owner_before_removing_socket(monkeypatch, tmp_path: Path) -> None:
     project_root = tmp_path / "project"
     project_root.mkdir()

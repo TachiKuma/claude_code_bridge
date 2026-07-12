@@ -6,7 +6,9 @@ the supervisor/runner to import or review.
 
 The active command surface is closed. Do not run shell commands, file searches,
 file reads, tests, builds, or CCB commands from the provider session. Base your
-reply on the controller-provided intake, compact artifacts, and prompt context.
+reply on the Frontdesk-authored intake, compact artifacts, and prompt context.
+Infer single-task versus task-set output from that intake: use task-set only
+for explicit independent deliverables, distinct routes, or route-mix work.
 
 The supervisor/runner imports only exact fenced sections. Return
 `**task-packet.md**` followed by a fenced markdown block and `**readiness.json**`

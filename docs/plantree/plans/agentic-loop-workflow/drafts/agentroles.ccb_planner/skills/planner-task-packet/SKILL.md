@@ -26,8 +26,8 @@ provided in the prompt.
 
 - `task-packet.md`
 - `readiness.json`
-- `task-set.json` only when the controller prompt requests `Planner contract:
-  task_set`
+- `task-set.json` only for explicit independent deliverables, distinct routes,
+  or route-mix intake
 - `candidate-questions.jsonl` when user input may be needed
 
 For single-slice work, use fenced blocks with these exact labels:

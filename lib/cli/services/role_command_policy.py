@@ -32,6 +32,7 @@ class RoleCommandPolicy:
     generic_shell: bool
     generic_ccb: bool
     supported_providers: tuple[str, ...]
+    provider_tools: tuple[tuple[str, str], ...]
     allowed_effects: tuple[str, ...]
     forbidden_effects: tuple[str, ...]
     allowed: tuple[AllowedRoleCommand, ...]
@@ -68,6 +69,7 @@ def load_role_command_policy(role: RoleManifest) -> RoleCommandPolicy | None:
         generic_shell=_required_bool(surface, 'generic_shell', path=path),
         generic_ccb=_required_bool(surface, 'generic_ccb', path=path),
         supported_providers=_string_tuple(surface.get('supported_providers')),
+        provider_tools=_provider_tools(payload.get('provider_tools')),
         allowed_effects=_string_tuple(surface.get('allowed_effects')),
         forbidden_effects=_string_tuple(surface.get('forbidden_effects')),
         allowed=allowed,
@@ -101,6 +103,17 @@ def ensure_role_command_policy_supported(*, spec) -> RoleCommandPolicy | None:
             'role command surface requires hard provider enforcement: '
             f'role={policy.role_id} provider={provider or "unknown"} supported_providers={",".join(supported)}'
         )
+    if (
+        role_command_policy_requires_enforcement(policy)
+        and bool(policy.allowed)
+        and provider not in _SUPPORTED_HARD_ENFORCEMENT_PROVIDERS
+        and not role_command_policy_provider_tool(policy, provider)
+        and not _allows_source_test_fake_provider(provider)
+    ):
+        raise RuntimeError(
+            'role command surface requires a managed provider capability: '
+            f'role={policy.role_id} provider={provider or "unknown"}'
+        )
     return policy
 
 
@@ -116,6 +129,16 @@ def _allows_source_test_fake_provider(provider: str) -> bool:
 
 def role_command_policy_disables_inherited_assets(policy: RoleCommandPolicy | None) -> bool:
     return role_command_policy_requires_enforcement(policy)
+
+
+def role_command_policy_provider_tool(policy: RoleCommandPolicy | None, provider: str) -> str | None:
+    if policy is None:
+        return None
+    normalized = str(provider or '').strip().lower()
+    for name, tool in policy.provider_tools:
+        if name == normalized:
+            return tool
+    return None
 
 
 def claude_permission_allowlist(policy: RoleCommandPolicy | None) -> tuple[str, ...]:
@@ -179,6 +202,18 @@ def _table_list(value: object) -> tuple[dict[str, Any], ...]:
     return tuple(item for item in value if isinstance(item, dict))
 
 
+def _provider_tools(value: object) -> tuple[tuple[str, str], ...]:
+    if not isinstance(value, dict):
+        return ()
+    return tuple(
+        sorted(
+            (str(provider).strip().lower(), str(tool).strip())
+            for provider, tool in value.items()
+            if str(provider).strip() and str(tool).strip()
+        )
+    )
+
+
 __all__ = [
     'AllowedRoleCommand',
     'RoleCommandPolicy',
@@ -188,5 +223,6 @@ __all__ = [
     'load_role_command_policy',
     'role_command_policy_disables_inherited_assets',
     'role_command_policy_for_spec',
+    'role_command_policy_provider_tool',
     'role_command_policy_requires_enforcement',
 ]

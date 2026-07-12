@@ -23,8 +23,14 @@ Date: 2026-06-24
 - Decision 027 and its visible two-workgroup Codex baseline now pass. Evidence
   is in
   [history/g6-worker-owned-review-chain-real-provider-20260712.md](history/g6-worker-owned-review-chain-real-provider-20260712.md).
+- Decision 028 replaces Controller-observed Frontdesk replies with one
+  Frontdesk-authored `ask --silence` to Planner. Controller retains only
+  schema/idempotency/activation/runner mechanics. The source boundary and a
+  fresh visible two-workgroup real-provider run now pass, including genuine
+  bounded Reviewer rework in both groups. Evidence is in
+  [history/decision028-frontdesk-direct-handoff-real-provider-20260712.md](history/decision028-frontdesk-direct-handoff-real-provider-20260712.md).
 - Current work is completing the remaining G6 three/four-group, restart,
-  rework, busy-retain, and provider-profile matrix from fresh opened projects
+  busy-retain, and provider-profile matrix from fresh opened projects
   under `/home/bfly/yunwei/test_ccb2`.
 
 ## Done
@@ -1350,8 +1356,8 @@ provider qualification. See
 - Full multi-round loop-runner-mediated dynamic agent load/unload beyond the
   bounded `run-once` smoke.
 - Long-running loop runner daemon.
-- Automatic planner activation and clarification routing before the one-shot
-  runner bridge is proven.
+- Rich clarification brokerage beyond the accepted Frontdesk direct Planner
+  silence handoff and dynamic task-detailer route.
 - User-defined arbitrary window classes and interactive drag/drop layout.
 - Exact tmux geometry restoration across restarts.
 - Multi-orchestrator arbitration.

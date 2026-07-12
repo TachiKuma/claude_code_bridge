@@ -258,8 +258,8 @@ def test_workflow_rolepacks_include_common_authority_rule_and_templates() -> Non
             assert (root / template).is_file(), f'{role_id} missing {template}'
 
 
-def test_frontdesk_planner_and_task_detailer_are_reply_only_for_authority_and_routing() -> None:
-    for role_id in ('agentroles.ccb_frontdesk', 'agentroles.ccb_planner', 'agentroles.ccb_task_detailer'):
+def test_planner_and_task_detailer_are_reply_only_for_authority_and_routing() -> None:
+    for role_id in ('agentroles.ccb_planner', 'agentroles.ccb_task_detailer'):
         root = role_root(role_id)
         combined = '\n'.join(
             [
@@ -313,14 +313,17 @@ def test_frontdesk_rolepack_is_read_only_intake_not_implementation() -> None:
     assert 'Every turn, classify the user message first' in combined
     assert 'Every user turn must pass this gate' in combined
     assert 'choose `planner_handoff`' in combined
-    assert 'active command surface is closed' in combined
-    assert 'controller observes your final reply' in combined
+    assert 'exactly one exception' in combined
+    assert 'Controller may validate, dedupe' in combined
+    assert 'must not observe your final' in combined
     assert 'ccb frontdesk forward-planner --request-id <stable-request-id> --intake-base64' not in combined
-    assert 'ordinary `ccb ask`' in combined
-    assert 'heredocs' in combined
+    assert 'ask --silence --compact --inline-request' in combined
+    assert '--task-id act-frontdesk-<request-id> planner' in combined
+    assert "<<'EOF'" not in combined
+    assert 'Do not add `--chain`' in combined
     assert '`--file` handoff' in combined
     assert '--intake-base64 <base64-utf8-artifact>' not in combined
-    assert "<<'EOF'" not in combined
+    assert "'<complete multiline Intake Evidence" in combined
     assert 'frontdesk_intake_status: ok' not in combined
     assert 'Do not implement the request' in combined or 'Do not perform implementation' in combined
     assert 'Do not create, edit, delete, or format' in combined
@@ -332,13 +335,12 @@ def test_frontdesk_rolepack_is_read_only_intake_not_implementation() -> None:
         'Changed:',
         'Verification:',
         'ccb ask planner',
-        'command ask planner',
         'Bash(',
     ):
         assert forbidden not in combined
 
 
-def test_frontdesk_rolepack_declares_closed_observer_handoff_surface() -> None:
+def test_frontdesk_rolepack_declares_one_planner_silence_handoff_surface() -> None:
     manifest = load_role_manifest(role_root('agentroles.ccb_frontdesk'))
     policy = load_role_command_policy(manifest)
 
@@ -349,11 +351,19 @@ def test_frontdesk_rolepack_declares_closed_observer_handoff_surface() -> None:
     assert policy.generic_shell is False
     assert policy.generic_ccb is False
     assert policy.supported_providers == ('codex', 'claude')
-    assert policy.allowed_effects == ('observer_intake_handoff',)
+    assert policy.allowed_effects == ('planner_silence_handoff',)
     assert {'task_create', 'artifact_import', 'status_write', 'runner_start', 'worker_dispatch'} <= set(
         policy.forbidden_effects
     )
-    assert policy.allowed == ()
+    assert len(policy.allowed) == 1
+    command = policy.allowed[0]
+    assert command.id == 'planner_silence_handoff'
+    assert command.argv_prefix == ('ask', '--silence', '--compact', '--inline-request', '--task-id')
+    assert policy.provider_tools == (('codex', 'ccb_frontdesk_ask_planner'),)
+    assert command.required_args == ('act-frontdesk-<request-id>', 'planner')
+    assert command.stdin_schema == 'ccb.frontdesk.intake.v1'
+    assert command.output_schema == 'ccb.ask.submission_receipt.v1'
+    assert command.idempotency_key == 'frontdesk_request_id_and_intake_sha256'
 
 
 def test_planner_rolepack_is_closed_reply_only_planning_surface() -> None:
@@ -388,7 +398,8 @@ def test_planner_rolepack_is_closed_reply_only_planning_surface() -> None:
     assert 'Do not run shell commands' in combined
     assert 'file searches' in combined
     assert 'Allowed Change Paths' in combined
-    assert 'Use `task_set` only when the controller prompt explicitly says' in combined
+    assert 'Infer the contract from Frontdesk intake' in combined
+    assert 'explicit independent deliverables, distinct routes' in combined
     assert 'orchestrator owns implementation-node' in combined
     assert 'do not use it to pre-slice one' in combined
     assert '## Acceptance Criteria' in combined

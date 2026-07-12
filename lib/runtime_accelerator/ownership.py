@@ -110,6 +110,12 @@ def record_runtime_accelerator_owner(
     identity = _wait_for_process_identity(pid)
     if identity is None:
         raise RuntimeAcceleratorOwnershipError(f"runtime_accelerator_identity_unavailable:pid={pid}")
+    identity = _wait_for_accelerator_identity(
+        pid,
+        initial=identity,
+        project_root=root,
+        socket_path=socket,
+    )
     if not _matches_accelerator_process(identity, project_root=root, socket_path=socket):
         raise RuntimeAcceleratorOwnershipError(f"runtime_accelerator_identity_mismatch:pid={pid}")
     assert identity.executable is not None
@@ -404,6 +410,32 @@ def _wait_for_process_identity(pid: int, *, timeout_s: float = 0.25) -> ProcessI
         if time.monotonic() >= deadline:
             return None
         time.sleep(0.01)
+
+
+def _wait_for_accelerator_identity(
+    pid: int,
+    *,
+    initial: ProcessIdentity,
+    project_root: Path,
+    socket_path: Path,
+    timeout_s: float = 0.25,
+) -> ProcessIdentity:
+    """Wait through the fork-to-exec window without accepting a lookalike."""
+
+    identity = initial
+    deadline = time.monotonic() + max(0.0, timeout_s)
+    while not _matches_accelerator_process(
+        identity,
+        project_root=project_root,
+        socket_path=socket_path,
+    ):
+        if time.monotonic() >= deadline:
+            return identity
+        time.sleep(0.01)
+        observed = inspect_process_identity(pid)
+        if observed is not None:
+            identity = observed
+    return identity
 
 
 def _read_proc_argv(pid: int) -> tuple[str, ...]:

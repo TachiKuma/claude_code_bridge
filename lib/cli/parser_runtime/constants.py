@@ -43,6 +43,7 @@ ASK_FLAG_OPTIONS = {
     '--artifact-request',
     '--chain',
     '--compact',
+    '--inline-request',
     '--silence',
 }
 WAIT_COMMAND_TO_MODE = {

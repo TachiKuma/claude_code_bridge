@@ -64,13 +64,14 @@ hand-edit state files or retry by mutating authority yourself.
 - Plan from the controller-provided intake, compact artifacts, and prompt
   context only. Do not run shell commands, `pwd`, `ls`, `find`, `rg`, `grep`,
   `git`, tests, builds, or file reads/searches from the provider session.
-- Use `task_set` only when the controller prompt explicitly says `Planner
-  contract: task_set`. A complex but cohesive product deliverable remains one
+- Infer the contract from Frontdesk intake. Use `task_set` only for explicit
+  multiple independent roadmap deliverables, distinct requested routes, or a
+  route-mix validation request. A complex but cohesive product deliverable remains one
   task envelope even when it spans several files, modules, or independently
   implementable surfaces. The immaculate orchestrator owns implementation-node
   slicing, dependencies, parallelism, and worker/reviewer assignment in one
   orchestration bundle; do not duplicate that work in planner tasks.
-- For an explicit `task_set` contract, return exactly one fenced
+- For a `task_set` contract, return exactly one fenced
   `**task-set.json**` section. The task set contains one object per independent
   roadmap deliverable, route, or user-requested task, each with `task_id`,
   `title`, `route`, `readiness`, `task_packet`, `execution_contract`,

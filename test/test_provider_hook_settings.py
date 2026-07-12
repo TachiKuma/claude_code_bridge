@@ -274,7 +274,7 @@ def test_prepare_provider_workspace_accepts_claude_bypass_permission_prompt(
     assert payload['projects'][workspace_key]['allowedTools'] == []
 
 
-def test_prepare_provider_workspace_removes_frontdesk_provider_command_permissions(
+def test_prepare_provider_workspace_limits_frontdesk_to_planner_silence_ask(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -334,7 +334,7 @@ def test_prepare_provider_workspace_removes_frontdesk_provider_command_permissio
     settings_path = home / '.claude' / 'settings.json'
     payload = json.loads(settings_path.read_text(encoding='utf-8'))
     assert payload['permissions'] == {
-        'allow': [],
+        'allow': ['Bash(ask --silence --compact --inline-request --task-id *)'],
         'deny': [],
     }
     assert payload['theme'] == 'light'
@@ -456,7 +456,150 @@ def test_prepare_provider_workspace_materializes_frontdesk_codex_with_hard_comma
     assert not (home / 'skills' / 'bug-fix-prove-it' / 'SKILL.md').exists()
     assert not (home / 'skills' / 'bug-fix-prove-it.ccb-projection.json').exists()
     assert not (home / 'commands' / 'unsafe.md').exists()
-    assert 'inherited-hook' not in (home / 'config.toml').read_text(encoding='utf-8')
+    config_text = (home / 'config.toml').read_text(encoding='utf-8')
+    assert 'inherited-hook' not in config_text
+    config = tomllib.loads(config_text)
+    assert config['approval_policy'] == 'never'
+    assert config['sandbox_mode'] == 'read-only'
+    assert config['features']['apps'] is False
+    assert config['features']['multi_agent'] is False
+    assert config['features']['shell_tool'] is False
+    assert config['features']['unified_exec'] is False
+    assert set(config['mcp_servers']) == {'ccb_role_command'}
+    role_server = config['mcp_servers']['ccb_role_command']
+    assert role_server['command']
+    assert role_server['args'][0].endswith('/mcp/ccb-role-command/server.py')
+    assert role_server['required'] is True
+    assert role_server['enabled_tools'] == ['ccb_frontdesk_ask_planner']
+    assert role_server['default_tools_approval_mode'] == 'prompt'
+    assert role_server['tools']['ccb_frontdesk_ask_planner']['approval_mode'] == 'approve'
+    assert role_server['env']['CCB_CALLER_ACTOR'] == 'frontdesk'
+    assert role_server['env']['CCB_CALLER_PROJECT_ROOT'] == str(project_root.resolve())
+
+
+def test_prepare_provider_workspace_rejects_codex_frontdesk_without_managed_capability(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _install_frontdesk_role(tmp_path, monkeypatch)
+    role_store = tmp_path / '.roles'
+    surface = (
+        role_store
+        / 'installed'
+        / 'agentroles.ccb_frontdesk'
+        / 'current'
+        / 'adapters'
+        / 'ccb'
+        / 'command-surface.toml'
+    )
+    text = surface.read_text(encoding='utf-8')
+    text = text.replace(
+        '[provider_tools]\ncodex = "ccb_frontdesk_ask_planner"\n\n',
+        '',
+    )
+    surface.write_text(text, encoding='utf-8')
+    project_root = tmp_path / 'repo'
+    workspace = project_root / 'workspace'
+    (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
+
+    with pytest.raises(RuntimeError, match='requires a managed provider capability'):
+        prepare_provider_workspace(
+            layout=PathLayout(project_root),
+            spec=_spec('frontdesk', provider='codex', role='agentroles.ccb_frontdesk'),
+            workspace_path=workspace,
+            completion_dir=(
+                project_root
+                / '.ccb'
+                / 'agents'
+                / 'frontdesk'
+                / 'provider-runtime'
+                / 'codex'
+                / 'completion'
+            ),
+            agent_name='frontdesk',
+            refresh_profile=True,
+        )
+
+
+def test_prepare_provider_workspace_allows_codex_role_with_empty_command_allowlist(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    role_store = tmp_path / '.roles'
+    monkeypatch.setenv('AGENT_ROLES_STORE', str(role_store))
+    installed = role_store / 'installed' / 'agentroles.empty_surface' / 'current'
+    (installed / 'adapters' / 'ccb').mkdir(parents=True)
+    (installed / 'role.toml').write_text(
+        '\n'.join(
+            (
+                'id = "agentroles.empty_surface"',
+                'name = "Empty Surface"',
+                'description = "No command capability."',
+                'version = "1.0.0"',
+                'role_version = "1.0.0"',
+                'schema_version = 1',
+                'memory = "memory.md"',
+                '',
+                '[adapters.ccb]',
+                'command_surface = "adapters/ccb/command-surface.toml"',
+            )
+        )
+        + '\n',
+        encoding='utf-8',
+    )
+    (installed / 'memory.md').write_text('No commands.\n', encoding='utf-8')
+    (installed / 'adapters' / 'ccb' / 'command-surface.toml').write_text(
+        '\n'.join(
+            (
+                'schema = "ccb-command-surface/v1"',
+                'mode = "deny_all_except"',
+                'enforcement = "required"',
+                'if_unsupported = "fail_mount"',
+                'generic_shell = false',
+                'generic_ccb = false',
+                'supported_providers = ["codex"]',
+                'allowed_effects = ["reply_only"]',
+                'forbidden_effects = ["shell_exec"]',
+            )
+        )
+        + '\n',
+        encoding='utf-8',
+    )
+    project_root = tmp_path / 'repo'
+    workspace = project_root / 'workspace'
+    (project_root / '.ccb').mkdir(parents=True)
+
+    profile = prepare_provider_workspace(
+        layout=PathLayout(project_root),
+        spec=_spec('empty', provider='codex', role='agentroles.empty_surface'),
+        workspace_path=workspace,
+        completion_dir=(
+            project_root
+            / '.ccb'
+            / 'agents'
+            / 'empty'
+            / 'provider-runtime'
+            / 'codex'
+            / 'completion'
+        ),
+        agent_name='empty',
+        refresh_profile=True,
+    )
+
+    assert profile.provider == 'codex'
+    config = tomllib.loads(
+        (
+            project_root
+            / '.ccb'
+            / 'agents'
+            / 'empty'
+            / 'provider-state'
+            / 'codex'
+            / 'home'
+            / 'config.toml'
+        ).read_text(encoding='utf-8')
+    )
+    assert 'ccb_role_command' not in config.get('mcp_servers', {})
 
 
 def test_prepare_provider_workspace_rejects_fake_frontdesk_hard_command_surface_without_source_test(
