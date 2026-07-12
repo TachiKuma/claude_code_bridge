@@ -17,9 +17,12 @@ sequenceDiagram
     User->>FD: 项目请求
     FD->>P: ask --silence：完整 Intake / Blocked Evidence
     P->>C: 导入 task 或 task-set；写入 revision-fenced authority
+    C->>O: 激活 Orchestrator triage，提供 Planner macro packet
 
-    alt 需要局部细化
-        C->>D: 激活 Detailer，提供任务与证据
+    alt direct_execution
+        O->>C: direct_execution route；进入确定性 physical dispatch
+    else needs_detail（仅此时激活 Detailer）
+        O->>D: needs_detail；提供 refinement request 与 Planner refs
         alt local_detail_ready
             D->>O: 返回局部 detail packet
         else macro impact / planner_replan_required
@@ -35,11 +38,18 @@ sequenceDiagram
             D->>C: 可验证的阻塞证据
             C->>FD: 保留权威状态；仅不可恢复时升级
         end
-    else 无需细化
-        C->>O: 激活编排，或验证直接执行模板
+    else macro_adjustment_request
+        O->>P: macro artifact；请求 Planner-owned 更新
+        P->>C: 接受修订；旧 bundle 作废
+        C->>O: 新鲜 activation，重新 triage
+    else blocked
+        O->>C: blocker evidence
+        C->>FD: 保留权威状态；仅不可恢复时升级
     end
 
-    O->>C: 语义 bundle：nodes、依赖、logical roles、验收、rework policy
+    opt 已取得可派发的 direct_execution 或 local detail
+        O->>C: 语义 bundle：nodes、依赖、logical roles、验收、rework policy
+    end
     C->>T: 校验 schema / capacity / revision / digest，提交 mount intent
     T-->>C: 具体绑定、已观察的就绪状态
 

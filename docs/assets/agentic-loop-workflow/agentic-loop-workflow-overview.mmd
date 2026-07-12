@@ -1,6 +1,6 @@
 %% CCB Agentic Loop Workflow — overview
 %% Source of truth: docs/agentic-loop-workflow-architecture.zh.md
-%% Keep this graph semantic: the program spine is a control plane, never an agent role.
+%% Mainline: Frontdesk -> Planner -> Orchestrator triage. The program spine is a control plane, never an agent role.
 flowchart TB
     U([用户])
 
@@ -35,15 +35,16 @@ flowchart TB
 
     U --> FD
     FD -->|"受限 silent handoff"| P
-    P -->|"task-set / child task"| O
-    P -->|"直接执行资格"| C
-    O -->|"needs_detail"| D
-    D -->|"local_detail_ready"| O
-    D -->|"needs_clarification"| UI
-    UI -->|"答复证据"| FD
-    FD -->|"澄清转达"| D
-    D -->|"macro impact：受限 silent ask"| P
-    O -->|"direct_execution + bundle"| C
+    P -->|"macro task / task-set child task"| O
+    O -->|"direct_execution（triage route）"| C
+    O -. "needs_detail（仅此时激活）" .-> D
+    D -. "local_detail_ready" .-> O
+    D -. "macro impact：受限 silent ask" .-> P
+    O -. "macro_adjustment_request" .-> P
+    O -. "blocked evidence" .-> C
+    D -. "needs_clarification" .-> UI
+    UI -. "答复证据" .-> FD
+    FD -. "clarification boundary" .-> D
     C --> T
     T -->|"已绑定、就绪"| WG
     WG --> G --> RR
