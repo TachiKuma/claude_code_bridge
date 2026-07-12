@@ -1,0 +1,66 @@
+%% CCB Agentic Loop Workflow — overview
+%% Source of truth: docs/agentic-loop-workflow-architecture.zh.md
+%% Keep this graph semantic: the program spine is a control plane, never an agent role.
+flowchart TB
+    U([用户])
+
+    subgraph L1[一、交互与细化层]
+      direction LR
+      FD["Frontdesk<br/>用户入口、澄清转达、最终报告、不可恢复升级"]
+      D["Task Detailer<br/>局部细化与事实核对"]
+      UI["用户交互边界<br/>澄清问题与答复证据"]
+    end
+
+    subgraph L2[二、规划与编排层]
+      direction LR
+      P["Planner<br/>Brief / Roadmap / TODO<br/>task-set 与 revision-fenced backfill"]
+      O["Orchestrator<br/>一次产出语义 bundle、依赖、workgroup 方案"]
+    end
+
+    subgraph SPINE[程序控制脊柱（程序／权威；不是 Agent role）]
+      direction LR
+      H["受限协作<br/>ask --silence / restricted chain"]
+      C["Loop Runner / Deterministic Controller<br/>校验、exact-once intent、恢复、状态推进"]
+      A["PlanTask + Task-Set Authority<br/>revision fence、digest、closure aggregate"]
+      T["Mount Topology / Lifecycle<br/>locks、binding、pane visibility、busy-retain、release"]
+      H --> C --> A --> T
+    end
+
+    subgraph L3[三、工作与验证层]
+      direction LR
+      WG["1–4 个 Worker + Reviewer workgroup<br/>Worker 以受限 chain 协同指定 Reviewer；bounded rework"]
+      G["Git Integration + Root Verification<br/>隔离 worktree、确定性集成、根验证"]
+      RR["Round Reviewer<br/>轮次 gate"]
+    end
+
+    U --> FD
+    FD -->|"受限 silent handoff"| P
+    P -->|"task-set / child task"| O
+    P -->|"直接执行资格"| C
+    O -->|"needs_detail"| D
+    D -->|"local_detail_ready"| O
+    D -->|"needs_clarification"| UI
+    UI -->|"答复证据"| FD
+    FD -->|"澄清转达"| D
+    D -->|"macro impact：受限 silent ask"| P
+    O -->|"direct_execution + bundle"| C
+    C --> T
+    T -->|"已绑定、就绪"| WG
+    WG --> G --> RR
+    RR -->|"child outcome"| A
+    A -->|"child aggregate / closure"| P
+    P -->|"backfill 后的 status"| FD
+    FD --> U
+
+    C -. "验证协议、持久化 intent、恢复" .-> H
+    A -. "revision / digest fence" .-> P
+    T -. "物理 mount 与释放证据" .-> WG
+
+    classDef role fill:#E8F1FF,stroke:#6B9BDE,color:#10233D,stroke-width:2px;
+    classDef control fill:#FFF2D8,stroke:#D99A2B,color:#442400,stroke-width:2px;
+    classDef work fill:#E7F7F0,stroke:#3B9C74,color:#103326,stroke-width:2px;
+    classDef boundary fill:#F0EAFE,stroke:#9074C8,color:#2D2151,stroke-width:2px;
+    class FD,D,P,O role;
+    class H,C,A,T control;
+    class WG,G,RR work;
+    class U,UI boundary;
