@@ -23,10 +23,10 @@ workgroups. A follow-up long-root real-provider run additionally proves that
 successful silence produces no caller delivery, managed MCP callers honor the
 mounted lease socket, isolated Workers read project-root PlanTree authority,
 and compact inline Round Reviewer evidence closes the round. The remaining
-phase is the broader visible real-provider matrix:
-three/four workgroups, in-flight restart, busy-retain, and provider-profile
-qualification. This is not yet a packaged-candidate or default-enablement
-claim.
+phase first closes Decision 029 Planner feedback/task-set aggregation, then the
+broader visible real-provider matrix: three/four workgroups, in-flight restart,
+busy-retain, and provider-profile qualification. This is not yet a
+packaged-candidate or default-enablement claim.
 
 ## Authority
 
@@ -42,6 +42,10 @@ claim.
   [decisions/027-worker-owned-review-chain-and-minimal-controller.md](decisions/027-worker-owned-review-chain-and-minimal-controller.md)
 - Frontdesk-owned Planner silence handoff:
   [decisions/028-frontdesk-owned-planner-silence-handoff.md](decisions/028-frontdesk-owned-planner-silence-handoff.md)
+- Planner feedback and task-set closure:
+  [decisions/029-planner-feedback-and-task-set-closure.md](decisions/029-planner-feedback-and-task-set-closure.md)
+- Detailed Decision 029 implementation/test plan:
+  [topics/planner-feedback-and-task-set-closure-plan.md](topics/planner-feedback-and-task-set-closure-plan.md)
 
 Provider replies remain evidence only. Scripts own bundle, task, node,
 integration, topology, round, and release authority. Mount topology remains
@@ -88,32 +92,32 @@ records linked from the goal, including
 
 ## Next Target
 
-Complete the remaining G6 rows: three/four workgroups, real overlap, in-flight
-restart, busy-retain, and strict provider-profile qualification. Preserve the
-accepted Decision 027/028 Codex baselines and aggregate raw evidence into B7
-without normalizing protocol failures.
+Implement and directly validate Decision 029 P0-P5: task-set parent authority,
+Detailer macro-impact feedback, deterministic mixed-outcome aggregation,
+exact-once Planner Roadmap backfill, and Frontdesk completion reporting. Then
+complete the remaining G6 rows without normalizing protocol failures.
 
 ## Execution Queue
 
 - Waves 0-3, complete: F1, R1, C1/P1, R2/T1/E1, and G3 are integrated.
 - G5, complete: direct source/fake full-flow acceptance owned by `talk2`.
-- G6, active: two-workgroup Codex baseline passed; remaining visible matrix
-  and provider-profile qualification pending.
+- G6C, next: Decision 029 Planner feedback and task-set closure package.
+- G6, active after G6C: two-workgroup Codex baseline passed; remaining visible
+  matrix and provider-profile qualification pending.
 - G7, gated: package/install/update/rollback readiness.
 - G8, separate: publication requires explicit user authorization.
 
 ## Active TODO
 
-1. Run frontdesk-started three- and four-workgroup natural tasks proving real
-   overlap, Worker-owned Reviewer order, deterministic integration, root
-   output, sidebar/window evidence, and zero residue.
-2. Run a separate restart/failure G6 scenario covering durable intent replay,
-   node failure, rollback/busy-retain behavior, and cleanup. Real bounded
-   Reviewer rework is already proven in both nodes of the Decision 028 run.
-3. Qualify each claimed provider/profile against the strict first-line role
-   protocol; retain non-compliant rows as non-success.
-4. Normalize and audit raw task/job/topology/Git/UI evidence against B7 before
-   accepting any real-provider row.
+1. Freeze Decision 029 schemas, aggregate precedence, role capabilities,
+   revision fences, and failing-before tests.
+2. Add task-set parent authority and stop marking decomposition as macro
+   completion.
+3. Add restricted exact-once Detailer-to-Planner macro-impact feedback.
+4. Add final-child aggregation, Planner Roadmap backfill, and Frontdesk status
+   notification with crash recovery.
+5. Run the planned source/fake and visible real-provider closure matrix, then
+   resume three/four-group, restart, busy-retain, and provider qualification.
 
 ## Blocked By
 
@@ -185,10 +189,11 @@ terminal/UI. Script output cannot substitute for opened-project evidence.
 
 ## Non-Claims
 
-The branch is not production-ready. The accepted two-workgroup Codex rows do
-not prove the complete three/four-group, restart, busy-retain, or
+The branch is not production-ready. Decision 029 is planned but not
+implemented. The accepted two-workgroup Codex rows do not prove task-set
+Roadmap closure, the complete three/four-group, restart, busy-retain, or
 cross-provider G6 matrix, packaged candidate behavior, production/default
-enablement, or publication. Those claims remain behind G6-G8.
+enablement, or publication. Those claims remain behind G6C-G8.
 
 The bounded earlier Phase 1-6 claim remains archived in
 [history/phase1-6-acceptance-report-20260705.md](history/phase1-6-acceptance-report-20260705.md).

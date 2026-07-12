@@ -32,9 +32,16 @@ Date: 2026-06-24
   project-root authority refs for isolated Workers, compact inline round
   evidence, and zero final dynamic residue. Evidence is in
   [history/decision028-frontdesk-direct-handoff-real-provider-20260712.md](history/decision028-frontdesk-direct-handoff-real-provider-20260712.md).
-- Current work is completing the remaining G6 three/four-group, restart,
-  busy-retain, and provider-profile matrix from fresh opened projects
-  under `/home/bfly/yunwei/test_ccb2`.
+- Decision 029 defines the next closure package: Detailer returns macro drift
+  directly to Planner through one restricted silent ask; script-owned task-set
+  authority aggregates final child outcomes; Planner updates Roadmap/Brief/TODO
+  under revision fencing and sends one completion status to Frontdesk. See
+  [decisions/029-planner-feedback-and-task-set-closure.md](decisions/029-planner-feedback-and-task-set-closure.md)
+  and
+  [topics/planner-feedback-and-task-set-closure-plan.md](topics/planner-feedback-and-task-set-closure-plan.md).
+- Current work first closes Decision 029 P0-P5, then completes the remaining
+  G6 three/four-group, restart, busy-retain, and provider-profile matrix from
+  fresh opened projects under `/home/bfly/yunwei/test_ccb2`.
 
 ## Done
 
@@ -139,6 +146,12 @@ Date: 2026-06-24
   [topics/parallel-roadmap-lanes-and-planner-authority.md](topics/parallel-roadmap-lanes-and-planner-authority.md)
   and
   [decisions/023-roadmap-graph-and-workflow-lanes.md](decisions/023-roadmap-graph-and-workflow-lanes.md).
+- Accepted the single-lane Planner feedback and task-set closure boundary:
+  local Detailer results return to Orchestrator, macro-impact findings return
+  directly to Planner, decomposition is not macro completion, mixed child
+  outcomes aggregate deterministically, and one revision-fenced Planner
+  backfill precedes Frontdesk/user completion reporting. See
+  [decisions/029-planner-feedback-and-task-set-closure.md](decisions/029-planner-feedback-and-task-set-closure.md).
 - Accepted the topology ownership and sequencing refinement: each future Lane
   owns independent immaculate orchestrator activation and desired/observed
   topology state, while one deterministic project Topology Controller owns

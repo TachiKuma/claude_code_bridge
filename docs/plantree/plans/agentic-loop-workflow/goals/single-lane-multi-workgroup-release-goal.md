@@ -1,7 +1,7 @@
 # Single-Lane Multi-Workgroup Release Goal
 
 Date: 2026-07-12
-Status: In progress; Decision 028 and two-workgroup real rework passed, remaining G6 matrix active
+Status: In progress; Decision 029 closure package planned before remaining G6 matrix
 
 ## Goal
 
@@ -411,6 +411,30 @@ passed `4324` tests; this strengthens V0/Decision 028 evidence but does not
 replace the remaining three/four-group, restart, busy-retain, or provider rows.
 The remaining bullets above still gate G6 closure.
 
+### G6C Planner Feedback And Task-Set Closure - Planned
+
+- Add a restricted direct Detailer-to-Planner silent replan request when source
+  inspection or user clarification changes macro scope, dependencies,
+  acceptance, risk, or Roadmap semantics.
+- Keep local Detailer completion on the direct return to a fresh Orchestrator.
+- Persist task-set parent identity and stop treating decomposition as macro
+  completion.
+- Aggregate all-pass, pass+blocked, pass+partial, multiple-replan, all-blocked,
+  and system-failure outcomes deterministically after child release/cleanup.
+- Submit exactly one revision-fenced Planner closure backfill and one required
+  Frontdesk status notification, with crash recovery and stale-revision
+  rejection.
+- Run source/fake and fresh visible real-provider tests for local detail,
+  user-driven replan, mixed closure, final-child replay, restart, and revision
+  races.
+
+Gate: the source request, task-set record, child authority, Planner
+Brief/Roadmap/TODO update, Frontdesk status, and final user summary agree. No
+Controller-authored semantic relay, premature completion, duplicate ask,
+stale update, hidden downgrade, or runtime residue is accepted. Detailed
+authority and test design:
+[../topics/planner-feedback-and-task-set-closure-plan.md](../topics/planner-feedback-and-task-set-closure-plan.md).
+
 ### G7 Release Candidate And Deployment Gate - Pending
 
 - Merge the accepted workflow branch into a clean release commit through the
@@ -505,6 +529,8 @@ The production-ready goal is complete at G7 only when:
 - exact-once restart recovery and failure semantics are proven;
 - project-root authority and rollback are correct;
 - UI placement and dynamic release are visibly correct;
+- Detailer macro correction and task-set Roadmap closure are exact-once,
+  revision-fenced, and visibly reported;
 - V3 is implemented and validated while V2 remains compatible;
 - a clean packed candidate installs and executes the same workflow externally;
 - final deployment metadata and rollback evidence are explicit and agree.

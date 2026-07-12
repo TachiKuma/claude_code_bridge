@@ -220,8 +220,11 @@ Planner activates only for:
 - failed integration gate;
 - next-milestone decision.
 
-Normal worker/reviewer success and dynamic release update script-owned
-projections without another planner call.
+Normal child worker/reviewer success and dynamic release update script-owned
+projections without another Planner call. The final required child transition
+is different: Decision 029 adds one task-set join and one revision-fenced
+Planner closure backfill so a completed macro request can update Roadmap,
+Brief, TODO, and next-milestone authority exactly once.
 
 ### Optional: scoped lane planners
 

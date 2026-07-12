@@ -59,6 +59,11 @@ If detail work discovers macro drift, the detailer emits a
 decisions, open questions, task status, runtime topology, or global plan-tree
 surfaces directly.
 
+Decision 029 fixes the delivery boundary for that request: Task Detailer owns
+one restricted direct silent Planner handoff carrying a versioned macro-impact
+envelope. Controller code validates exact-once identity/revision authority but
+does not reconstruct the semantic request.
+
 ## Consequences
 
 - `agentroles.collections.planning_group` requires only
@@ -86,6 +91,7 @@ surfaces directly.
 - [017-flat-roles-and-role-collections.md](017-flat-roles-and-role-collections.md)
 - [018-planner-uses-plan-brief.md](018-planner-uses-plan-brief.md)
 - [022-semantic-orchestration-bundle-and-controller-execution.md](022-semantic-orchestration-bundle-and-controller-execution.md)
+- [029-planner-feedback-and-task-set-closure.md](029-planner-feedback-and-task-set-closure.md)
 - [../topics/architecture.md](../topics/architecture.md)
 - [../topics/task-detailer-role-design.md](../topics/task-detailer-role-design.md)
 

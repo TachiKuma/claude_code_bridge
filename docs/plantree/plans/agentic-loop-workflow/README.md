@@ -223,6 +223,10 @@ recoverable workflow loops.
   target Plan Tree Roadmap Graph, Workflow Lane, ready-frontier, planner
   single-writer, code-worktree, conflict, and integration-gate design for
   serial and parallel project work.
+- [topics/planner-feedback-and-task-set-closure-plan.md](topics/planner-feedback-and-task-set-closure-plan.md):
+  implementation and real-test plan for Detailer-to-Planner macro correction,
+  task-set terminal aggregation, revision-fenced Planner Roadmap backfill, and
+  Frontdesk/user completion reporting.
 - [topics/planner-plan-tree-brief-and-detail-boundary.md](topics/planner-plan-tree-brief-and-detail-boundary.md):
   planner-owned plan brief shape and boundary with task-detailer-owned detail
   docs and per-task execution refinement.
@@ -230,6 +234,10 @@ recoverable workflow loops.
   short-lived task refinement role that reads macro task refs, plan-tree/source
   evidence, performs detailed self-research, owns task-local clarification, and
   emits detailed execution packets without becoming the long-lived planner.
+- [decisions/029-planner-feedback-and-task-set-closure.md](decisions/029-planner-feedback-and-task-set-closure.md):
+  accepted planning boundary for direct restricted Detailer feedback, durable
+  task-set closure authority, exact-once Planner rehydration, and Frontdesk
+  status notification.
 - [topics/state-and-script-contract.md](topics/state-and-script-contract.md):
   proposed short-term progress store, script entrypoints, state transitions,
   artifact requirements, and plan-tree synchronization rules.

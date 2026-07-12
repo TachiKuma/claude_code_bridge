@@ -245,6 +245,12 @@ Rules:
   defers the request through script-owned state;
 - never treat a request as an accepted roadmap or decision change.
 
+Decision 029 makes delivery explicit: the Detailer uses one restricted direct
+`ask Planner --silence` capability with a versioned replan envelope. It cannot
+target other roles, wait, chain, or write Planner-owned PlanTree files. The
+script layer validates task revision and digest, persists exact-once intent,
+and prevents execution from continuing on the superseded bundle.
+
 ## Task-Local Clarification
 
 Clarification stays inside `task_detailer` in V1.
