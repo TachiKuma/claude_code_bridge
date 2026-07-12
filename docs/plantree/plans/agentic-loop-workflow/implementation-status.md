@@ -4,7 +4,7 @@ Date: 2026-07-12
 Status: In progress — G6C implementation integrated, P5 acceptance active
 Branch: `workflow/g6c-integration`
 Worktree: `/home/bfly/yunwei/ccb_worktrees/g6c-integration`
-Head before this plan update: `d941fa2e`
+Current HEAD before this status update: `c3b4bba0`
 
 ## Current Phase
 
@@ -15,10 +15,11 @@ P0-P4 source implementation is integrated; P5 direct acceptance is active.
 
 The first fresh G6C run, root8, proved L1/L2 and both L4 branches but was
 rejected because an affirmative Detailer stop contract was not recognized and
-L3 repeated until the 24-step runner limit. The shared matcher and stale-fenced
-reconciliation repair is now at `d941fa2e` with `280 passed`. Root8 remains
-preserved; acceptance resumes from a fresh root9 after independent review and
-the current-HEAD source gate.
+L3 repeated until the 24-step runner limit. The fail-closed matcher,
+provenance, revision, stale-replay, and reconciliation repairs are integrated
+through `c37c4ac4`. Fourth-round independent review passed with `344` focused
+tests and no High/Medium finding. Root8 remains preserved; the current-HEAD
+full source gate is active before a fresh root9 run.
 
 ## Authority
 
@@ -39,19 +40,22 @@ closure, integration, topology, round, release, and delivery authority.
   durable journals, and admission hardening.
 - `4f80bc94` through `8faa6fa4`: activation-sidecar and parent-authority harness
   repairs discovered by fresh real runs.
-- `d941fa2e`: shared detail-ready stop matcher and task-lock reconciliation.
+- `d941fa2e` through `c37c4ac4`: shared stop-contract corpus, canonical
+  Detailer provenance, monotonic state fencing, SHA-verified normal stops,
+  fail-closed task scope, convergent semantic revisions, idempotent post-state,
+  and auto-runner reconciliation semantics.
+- `f09cb211` through `ec8fee16`: public three-layer architecture document,
+  Mermaid flows, and reviewed SVG/PNG promotional graphic.
 
 ## Active TODO
 
-1. Independently review `d941fa2e` for fail-closed matcher and artifact
-   authority behavior; repair only verified findings.
-2. Run the complete current-HEAD non-provider-blackbox suite and static/diff
+1. Run the complete current-HEAD non-provider-blackbox suite and static/diff
    gates from the dedicated external test project.
-3. Run fresh visible root9 L1-L4 through task-set closure, Planner backfill,
+2. Run fresh visible root9 L1-L4 through task-set closure, Planner backfill,
    Frontdesk reporting, B7, release, shutdown, and zero-residue audit.
-4. Complete remaining G6 three/four-workgroup, restart, busy-retain, and
+3. Complete remaining G6 three/four-workgroup, restart, busy-retain, and
    provider-profile rows from fresh opened projects.
-5. Run G7 package/install/update/rollback gates and one visible installed-
+4. Run G7 package/install/update/rollback gates and one visible installed-
    candidate workflow; keep G8 publication separately authorized.
 
 ## Blocked By
@@ -67,16 +71,23 @@ runs, observes, and audits real opened-project acceptance under
 `/home/bfly/yunwei/test_ccb2` using this worktree's explicit `ccb_test`,
 inherited provider environment, and a root-local `AGENT_ROLES_STORE`. RolePack
 changes go through `mother`; source/runtime diagnostics may use `ccb_self`.
+When a worker needs a reviewer result to finish its current task, it must use
+`ask --chain` or leave reviewer submission to `talk2`; `--silence` is only for
+independent work whose successful result is not needed upstream.
 
 ## Last Verified
 
-- Current detail-ready/loop/task gate: `280 passed` at `d941fa2e`.
+- Fourth-round independent detail-ready authority review: PASS at
+  `c37c4ac4`; `344 passed`, `compileall` and `git diff --check` passed, with no
+  High/Medium finding. Completion snapshot:
+  `/home/bfly/yunwei/ccb_source/.ccb/ccbd/snapshots/job_2ccb4102700d.json`,
+  SHA-256 `1d920d45af105b2ec1e9f1e8b455e2fc8ba133dcde5603e3b78f589dbd9b20b0`.
 - Parent-authority harness checkpoint: `78 passed`.
 - Latest full repository gate before the final fixes: `4583 passed, 2 skipped,
   21 deselected in 675.06s`; current HEAD still requires a full rerun.
 - Root8: L1/L2 `done/pass`, L4 macro `replan_required`, L4 blocked `blocked`;
   L3 rejected after repeated Orchestrator activation and runner step limit.
-- Integration worktree was clean at `d941fa2e` before this plan update.
+- Integration worktree was clean at `c3b4bba0` before this status update.
 
 ## Non-Claims
 

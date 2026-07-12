@@ -16,7 +16,7 @@ reconciliation fix. It is not an acceptance report.
 
 - Branch: `workflow/g6c-integration`
 - Worktree: `/home/bfly/yunwei/ccb_worktrees/g6c-integration`
-- Current accepted implementation head: `d941fa2e`
+- Current accepted source implementation head: `c37c4ac4`
 - Decision 029 core starts at `4f166209` and includes task-set parent authority,
   Detailer-to-Planner feedback, deterministic task-set aggregation, Planner
   backfill, Frontdesk notification, revision fencing, exact-once recovery, and
@@ -28,11 +28,20 @@ reconciliation fix. It is not an acceptance report.
   matcher and adds task-lock-owned, stale-fenced reconciliation from
   `ready_for_orchestration/orchestrator` to `detail_ready/planner` when all
   recorded detail artifacts and the explicit stop contract remain valid.
+- `a62ebb34`, `52c8701d`, and `c37c4ac4` close independent-review findings:
+  corpus-wide deny-first matching, canonical importer/job/path/SHA provenance,
+  monotonic state fencing, verified normal stop corpora, post-state idempotence,
+  Markdown task-scope normalization, and one semantic revision shared by all
+  outputs from a real Detailer import.
 
 ## Source Evidence
 
-- Current detail-ready matcher, reconciliation, loop-capacity, and PlanTask
-  focused gate: `280 passed`.
+- Fourth-round independent detail-ready authority review: PASS at
+  `c37c4ac4`; focused matcher, reconciliation, loop-capacity, PlanTask, and
+  real Detailer import gate: `344 passed`.
+- Worker1 completion snapshot:
+  `/home/bfly/yunwei/ccb_source/.ccb/ccbd/snapshots/job_2ccb4102700d.json`,
+  SHA-256 `1d920d45af105b2ec1e9f1e8b455e2fc8ba133dcde5603e3b78f589dbd9b20b0`.
 - Parent-authority harness checkpoint: `78 passed`.
 - The most recent full repository gate predates the final harness and
   detail-ready fixes: `4583 passed, 2 skipped, 21 deselected in 675.06s`.
@@ -74,15 +83,13 @@ The accepted repair has two layers:
 
 ## Remaining Acceptance Gates
 
-1. Independent security review of `d941fa2e`, especially cross-statement
-   terminal conflicts and artifact-actor authority.
-2. Current-HEAD full non-provider-blackbox suite plus static/diff checks.
-3. Fresh root9 opened-project L1-L4 run proving L3 reconciliation, task-set
+1. Current-HEAD full non-provider-blackbox suite plus static/diff checks.
+2. Fresh root9 opened-project L1-L4 run proving L3 reconciliation, task-set
    aggregate closure, Planner backfill, Frontdesk notification, B7, visible
    panes, release, shutdown, and zero residue.
-4. Remaining G6 real rows: three/four workgroups, in-flight restart,
+3. Remaining G6 real rows: three/four workgroups, in-flight restart,
    busy-retain, and provider-profile qualification.
-5. G7 clean candidate package/install/update/rollback and one visible
+4. G7 clean candidate package/install/update/rollback and one visible
    installed-candidate workflow. Publication remains a separate explicit
    authorization gate.
 
@@ -94,3 +101,7 @@ real-provider projects and owns the final pass/reject decision. RolePack or
 role-contract changes are reviewed with `mother`; source/runtime diagnostics
 outside that boundary may be assigned to `ccb_self`.
 
+For nested review dependencies, workers use `ask --chain` so the reviewer
+result returns through the active parent continuation. `--silence` is reserved
+for independent work and must not be used when the parent or `talk2` needs the
+successful result to decide the gate.
