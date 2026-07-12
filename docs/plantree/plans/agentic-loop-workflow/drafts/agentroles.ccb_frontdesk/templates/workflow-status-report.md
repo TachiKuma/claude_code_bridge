@@ -1,3 +1,6 @@
+Input: validated `ccb.planner.frontdesk_status.v1` only
+Preservation: retain every field below byte-for-byte; never mutate authority or forward this status
+Rendering: render only `user_report_body` exactly as Planner supplied it
 Schema: ccb.planner.frontdesk_status.v1
 Notification identity: <stable-id>
 Aggregate result: pass|partial|replan_required|blocked

@@ -19,6 +19,11 @@ forbidden_effects = [
   "shell_exec",
   "test_exec",
   "implementation",
+  "generic_ccb",
+  "wait",
+  "watch",
+  "arbitrary_target",
+  "frontdesk_status_forward",
 ]
 
 [provider_tools]

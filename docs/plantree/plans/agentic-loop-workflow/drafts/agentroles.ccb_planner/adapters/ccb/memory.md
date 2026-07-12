@@ -16,6 +16,10 @@ Return the single parser-stable fenced proposal only. It contains the complete
 structured Frontdesk status envelope. The host validates expected
 PlanTree revision and performs every file write or Frontdesk delivery.
 
+For `task_set_closure`, the expected PlanTree revision is a digest-valued fence
+and the mode is exactly `task_set_closure`. Do not run wait/watch commands,
+notify Frontdesk, or target any agent. The provider reply is evidence only.
+
 The supervisor/runner imports only exact fenced sections. Return
 `**task-packet.md**` followed by a fenced markdown block and `**readiness.json**`
 followed by a fenced JSON object. Do not use alternate section names, unfenced

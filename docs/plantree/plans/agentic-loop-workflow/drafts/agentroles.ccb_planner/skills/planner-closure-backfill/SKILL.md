@@ -5,8 +5,10 @@ description: Produce revision-fenced Planner replan or task-set closure proposal
 
 # Planner Closure Backfill
 
-Use this skill only when the activation mode is `detailer_replan` or
+Use this output contract only when the activation mode is exactly
 `task_set_closure`. Initial intake remains owned by `planner-task-packet`.
+Detailer replan input remains a distinct activation contract and must not be
+mixed into this task-set closure proposal.
 
 ## Inputs
 
@@ -43,8 +45,8 @@ Return exactly this one fenced section and no alternative authority shape:
 ```json
 {
   "schema": "ccb.planner.backfill_proposal.v1",
-  "mode": "detailer_replan|task_set_closure",
-  "expected_plan_revision": 1,
+  "mode": "task_set_closure",
+  "expected_plan_revision": "sha256:<64 lowercase hex>",
   "task_or_task_set_id": "stable-id",
   "task_or_task_set_revision": 1,
   "closure_evidence_digest": "sha256:<64 lowercase hex>",
@@ -87,9 +89,20 @@ Return exactly this one fenced section and no alternative authority shape:
 
 ## Rules
 
-- Preserve the script-owned `aggregate_result` exactly. Map it mechanically to
-  `closure_complete`, `closure_partial`, `task_set_replanned`, or
-  `closure_blocked`; never output a complete semantic result for non-pass.
+- `expected_plan_revision is a digest`: copy the supplied
+  `sha256:<64 lowercase hex>` value exactly. Never convert it to a counter,
+  infer a newer revision, or repair a stale value in provider prose.
+- Preserve the script-owned `aggregate_result` exactly. The complete mapping is
+  `pass -> closure_complete`, `partial -> closure_partial`,
+  `replan_required -> task_set_replanned`, and
+  `blocked -> closure_blocked`. Never output a complete semantic result for
+  non-pass; never output a complete semantic result for non-pass aggregate
+  evidence.
+- Preserve `accepted_scope`, `unresolved_scope`, `blockers`, `replan_inputs`,
+  and `evidence_refs` from the validated closure envelope. `pass` requires empty
+  unresolved/blocker/replan fields. Every non-pass requires non-empty
+  `unresolved_scope`; `blocked` requires blockers and `replan_required`
+  requires replan inputs.
 - Never omit unresolved required scope from mixed outcomes.
 - Multiple replan children produce one coherent macro proposal, not multiple
   independent Planner actions.
@@ -97,8 +110,11 @@ Return exactly this one fenced section and no alternative authority shape:
   supplied current revision as a blocker.
 - Preserve aggregate result, accepted scope, unresolved scope, blockers, next
   milestone, and evidence refs byte-for-byte in `frontdesk_status`.
+- Embed exactly one complete `ccb.planner.frontdesk_status.v1` object under the
+  sole `frontdesk_status` field, including when notification is not required.
 - Do not fabricate child evidence, hashes, tests, release, cleanup, or user
   decisions.
-- Do not modify PlanTree or send Frontdesk messages from this reply-only
-  surface. The host imports the proposal and exposes any restricted delivery
-  capability separately.
+- No PlanTree write, Frontdesk notification, CCB command, file operation, test,
+  wait, watch, or downstream ask is allowed from this reply-only surface. The
+  host validates and imports the proposal and owns every side effect.
+- Do not modify PlanTree or send Frontdesk messages from the provider reply.

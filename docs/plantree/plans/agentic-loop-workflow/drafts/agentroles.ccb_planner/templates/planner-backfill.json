@@ -1,7 +1,7 @@
 {
   "schema": "ccb.planner.backfill_proposal.v1",
-  "mode": "detailer_replan|task_set_closure",
-  "expected_plan_revision": 1,
+  "mode": "task_set_closure",
+  "expected_plan_revision": "sha256:<64 lowercase hex>",
   "task_or_task_set_id": "stable-id",
   "task_or_task_set_revision": 1,
   "closure_evidence_digest": "sha256:<64 lowercase hex>",

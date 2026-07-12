@@ -6,6 +6,7 @@ import ast
 import hashlib
 import json
 from pathlib import Path
+import re
 
 from ccbd.api_models import JobRecord
 from ccbd.system import parse_utc_timestamp
@@ -196,7 +197,9 @@ def _reply_for_body(
     body = job.request.body
     marker = body.strip()
     effective_body = _effective_request_body(job)
-    workflow_reply = _workflow_role_bundle_reply(agent_name=agent_name, body=effective_body)
+    workflow_reply = _decision029_reply(agent_name=agent_name, body=effective_body)
+    if workflow_reply is None:
+        workflow_reply = _workflow_role_bundle_reply(agent_name=agent_name, body=effective_body)
     if workflow_reply is None:
         workflow_reply = _workflow_multi_workgroup_orchestrator_reply(
             agent_name=agent_name,
@@ -337,6 +340,378 @@ def _effective_request_body(job: JobRecord) -> str:
     if preview:
         return preview
     return job.request.body
+
+
+_DECISION029_DIGEST_RE = re.compile(r'^sha256:[0-9a-f]{64}$')
+_DECISION029_RESULT_BY_AGGREGATE = {
+    'pass': 'closure_complete',
+    'partial': 'closure_partial',
+    'replan_required': 'task_set_replanned',
+    'blocked': 'closure_blocked',
+}
+_DECISION029_CLOSURE_REQUIRED = {
+    'schema',
+    'task_set_id',
+    'task_set_revision',
+    'expected_plan_revision',
+    'ordered_children',
+    'ordered_terminal_evidence_digest',
+    'status',
+    'aggregate_result',
+    'reason',
+    'accepted_scope',
+    'unresolved_scope',
+    'blockers',
+    'replan_inputs',
+    'evidence_refs',
+    'frontdesk_notification_required',
+    'closure_digest',
+}
+_DECISION029_CLOSURE_OPTIONAL = {
+    'schema_version',
+    'source_request',
+    'planner_job',
+    'created_at',
+}
+_DECISION029_FRONTDESK_FIELDS = {
+    'schema',
+    'notification_identity',
+    'aggregate_result',
+    'accepted_scope',
+    'unresolved_scope',
+    'blockers',
+    'next_milestone',
+    'evidence_refs',
+    'user_report_body',
+}
+
+
+def _decision029_reply(*, agent_name: str, body: str) -> str | None:
+    if agent_name == 'planner' and '**task-set-closure.json**' in body:
+        return _decision029_planner_reply(body)
+    if agent_name == 'frontdesk' and '**frontdesk-status.json**' in body:
+        return _decision029_frontdesk_reply(body)
+    return None
+
+
+def _decision029_planner_reply(body: str) -> str:
+    transport = _decision029_json_section(body, 'task-set-closure.json')
+    if set(transport) != {'schema', 'closure', 'closure_intent'}:
+        raise ValueError('Decision 029 closure transport fields are invalid')
+    if transport.get('schema') != 'ccb.plan.task_set_closure_transport.v1':
+        raise ValueError('Decision 029 closure transport schema is invalid')
+    closure = transport.get('closure')
+    intent = transport.get('closure_intent')
+    if not isinstance(closure, dict) or not isinstance(intent, dict):
+        raise ValueError('Decision 029 closure transport authority is invalid')
+    _decision029_validate_closure_intent(intent, closure)
+    normalized = _decision029_closure(closure)
+    aggregate_result = str(normalized['aggregate_result'])
+    result = _DECISION029_RESULT_BY_AGGREGATE[aggregate_result]
+    evidence_refs = normalized['evidence_refs']
+    accepted_scope = normalized['accepted_scope']
+    unresolved_scope = normalized['unresolved_scope']
+    blockers = normalized['blockers']
+    replan_inputs = normalized['replan_inputs']
+    next_milestone = _decision029_next_milestone(
+        str(normalized['task_set_id']),
+        aggregate_result,
+        str(normalized['reason']),
+    )
+    status = {
+        'schema': 'ccb.planner.frontdesk_status.v1',
+        'notification_identity': _decision029_notification_identity(str(normalized['closure_digest'])),
+        'aggregate_result': aggregate_result,
+        'accepted_scope': accepted_scope,
+        'unresolved_scope': unresolved_scope,
+        'blockers': blockers,
+        'next_milestone': next_milestone,
+        'evidence_refs': evidence_refs,
+        'user_report_body': _decision029_user_report(normalized),
+    }
+    proposal = {
+        'schema': 'ccb.planner.backfill_proposal.v1',
+        'mode': 'task_set_closure',
+        'expected_plan_revision': normalized['expected_plan_revision'],
+        'task_or_task_set_id': normalized['task_set_id'],
+        'task_or_task_set_revision': normalized['task_set_revision'],
+        'closure_evidence_digest': normalized['ordered_terminal_evidence_digest'],
+        'aggregate_result': aggregate_result,
+        'result': result,
+        'brief_summary': _decision029_brief_summary(normalized),
+        'roadmap_transitions': [
+            {
+                'id': normalized['task_set_id'],
+                'status': _decision029_transition_status(aggregate_result),
+                'summary': str(normalized['reason']),
+                'evidence_refs': evidence_refs,
+            }
+        ],
+        'todo_transitions': [
+            {
+                'id': f"{normalized['task_set_id']}-closure",
+                'status': _decision029_transition_status(aggregate_result),
+                'summary': str(normalized['reason']),
+                'evidence_refs': evidence_refs,
+            }
+        ],
+        'decision_refs': [],
+        'open_question_refs': [],
+        'evidence_refs': evidence_refs,
+        'accepted_scope': accepted_scope,
+        'unresolved_scope': unresolved_scope,
+        'blockers': blockers,
+        'replan_inputs': replan_inputs,
+        'next_milestone': next_milestone,
+        'frontdesk_notification_required': normalized['frontdesk_notification_required'],
+        'frontdesk_status': status,
+    }
+    return (
+        '**planner-backfill.json**\n```json\n'
+        + json.dumps(proposal, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+        + '\n```'
+    )
+
+
+def _decision029_frontdesk_reply(body: str) -> str:
+    status = _decision029_json_section(body, 'frontdesk-status.json')
+    allowed = _DECISION029_FRONTDESK_FIELDS | {'planner_feedback_digest'}
+    status_fields = set(status)
+    if status_fields != _DECISION029_FRONTDESK_FIELDS and status_fields != allowed:
+        raise ValueError('Decision 029 Frontdesk status fields are invalid')
+    if status.get('schema') != 'ccb.planner.frontdesk_status.v1':
+        raise ValueError('Decision 029 Frontdesk status schema is invalid')
+    aggregate_result = str(status.get('aggregate_result') or '')
+    if aggregate_result not in _DECISION029_RESULT_BY_AGGREGATE:
+        raise ValueError('Decision 029 Frontdesk aggregate result is invalid')
+    accepted_scope = _decision029_text_list(status.get('accepted_scope'), 'frontdesk accepted_scope')
+    unresolved_scope = _decision029_text_list(status.get('unresolved_scope'), 'frontdesk unresolved_scope')
+    blockers = _decision029_text_list(status.get('blockers'), 'frontdesk blockers')
+    _decision029_text_list(status.get('evidence_refs'), 'frontdesk evidence_refs', allow_empty=False)
+    _decision029_validate_non_success_fields(
+        aggregate_result=aggregate_result,
+        accepted_scope=accepted_scope,
+        unresolved_scope=unresolved_scope,
+        blockers=blockers,
+        replan_inputs=(),
+        frontdesk_only=True,
+    )
+    milestone = status.get('next_milestone')
+    if not isinstance(milestone, dict) or set(milestone) != {'kind', 'ref', 'rationale'}:
+        raise ValueError('Decision 029 Frontdesk next_milestone is invalid')
+    if 'planner_feedback_digest' in status:
+        _decision029_digest(status['planner_feedback_digest'], 'planner_feedback_digest')
+    report = str(status.get('user_report_body') or '')
+    if not report.strip():
+        raise ValueError('Decision 029 Frontdesk user_report_body is missing')
+    return report
+
+
+def _decision029_closure(value: dict[str, object]) -> dict[str, object]:
+    missing = sorted(_DECISION029_CLOSURE_REQUIRED - set(value))
+    extra = sorted(set(value) - _DECISION029_CLOSURE_REQUIRED - _DECISION029_CLOSURE_OPTIONAL)
+    if missing or extra:
+        raise ValueError(f'Decision 029 closure fields are invalid: missing={missing}, extra={extra}')
+    if value.get('schema') != 'ccb.plan.task_set_closure.v1' or value.get('status') != 'closure_pending':
+        raise ValueError('Decision 029 closure schema or status is invalid')
+    task_set_id = _decision029_text(value.get('task_set_id'), 'task_set_id')
+    revision = value.get('task_set_revision')
+    if isinstance(revision, bool) or not isinstance(revision, int) or revision <= 0:
+        raise ValueError('Decision 029 task_set_revision is invalid')
+    plan_revision = value.get('expected_plan_revision')
+    if isinstance(plan_revision, dict):
+        plan_revision = plan_revision.get('digest')
+    plan_revision = _decision029_digest(plan_revision, 'expected_plan_revision')
+    terminal_digest = _decision029_digest(
+        value.get('ordered_terminal_evidence_digest'),
+        'ordered_terminal_evidence_digest',
+    )
+    closure_digest = _decision029_digest(value.get('closure_digest'), 'closure_digest')
+    children = value.get('ordered_children')
+    if not isinstance(children, list) or not children:
+        raise ValueError('Decision 029 ordered_children are invalid')
+    child_results: list[str] = []
+    for child in children:
+        if not isinstance(child, dict):
+            raise ValueError('Decision 029 child evidence is invalid')
+        _decision029_text(child.get('task_id'), 'child.task_id')
+        result = str(child.get('result') or '')
+        if result not in _DECISION029_RESULT_BY_AGGREGATE:
+            raise ValueError('Decision 029 child result is invalid')
+        child_results.append(result)
+    aggregate_result = str(value.get('aggregate_result') or '')
+    if aggregate_result != _decision029_aggregate(child_results):
+        raise ValueError('Decision 029 aggregate result mismatch')
+    accepted_scope = _decision029_text_list(value.get('accepted_scope'), 'accepted_scope')
+    unresolved_scope = _decision029_text_list(value.get('unresolved_scope'), 'unresolved_scope')
+    blockers = _decision029_text_list(value.get('blockers'), 'blockers')
+    replan_inputs = _decision029_text_list(value.get('replan_inputs'), 'replan_inputs')
+    evidence_refs = _decision029_text_list(value.get('evidence_refs'), 'evidence_refs', allow_empty=False)
+    _decision029_validate_non_success_fields(
+        aggregate_result=aggregate_result,
+        accepted_scope=accepted_scope,
+        unresolved_scope=unresolved_scope,
+        blockers=blockers,
+        replan_inputs=replan_inputs,
+        frontdesk_only=False,
+    )
+    notify = value.get('frontdesk_notification_required')
+    if not isinstance(notify, bool):
+        raise ValueError('Decision 029 frontdesk_notification_required is invalid')
+    return {
+        'task_set_id': task_set_id,
+        'task_set_revision': revision,
+        'expected_plan_revision': plan_revision,
+        'ordered_terminal_evidence_digest': terminal_digest,
+        'closure_digest': closure_digest,
+        'aggregate_result': aggregate_result,
+        'reason': _decision029_text(value.get('reason'), 'reason'),
+        'accepted_scope': accepted_scope,
+        'unresolved_scope': unresolved_scope,
+        'blockers': blockers,
+        'replan_inputs': replan_inputs,
+        'evidence_refs': evidence_refs,
+        'frontdesk_notification_required': notify,
+    }
+
+
+def _decision029_validate_closure_intent(intent: dict[str, object], closure: dict[str, object]) -> None:
+    required = {
+        'intent_id',
+        'task_set_id',
+        'task_set_revision',
+        'ordered_terminal_evidence_digest',
+        'closure_digest',
+    }
+    if set(intent) != required:
+        raise ValueError('Decision 029 closure intent fields are invalid')
+    expected = {
+        'task_set_id': closure.get('task_set_id'),
+        'task_set_revision': closure.get('task_set_revision'),
+        'ordered_terminal_evidence_digest': closure.get('ordered_terminal_evidence_digest'),
+        'closure_digest': closure.get('closure_digest'),
+    }
+    if {key: intent.get(key) for key in expected} != expected:
+        raise ValueError('Decision 029 closure intent authority mismatch')
+    _decision029_text(intent.get('intent_id'), 'closure_intent.intent_id')
+
+
+def _decision029_validate_non_success_fields(
+    *,
+    aggregate_result: str,
+    accepted_scope: tuple[str, ...],
+    unresolved_scope: tuple[str, ...],
+    blockers: tuple[str, ...],
+    replan_inputs: tuple[str, ...],
+    frontdesk_only: bool,
+) -> None:
+    del accepted_scope
+    if aggregate_result == 'pass' and (unresolved_scope or blockers or replan_inputs):
+        raise ValueError('Decision 029 pass contains unresolved non-success evidence')
+    if aggregate_result != 'pass' and not unresolved_scope:
+        raise ValueError('Decision 029 non-success unresolved_scope is missing')
+    if aggregate_result == 'blocked' and not blockers:
+        raise ValueError('Decision 029 blocked result has no blockers')
+    if aggregate_result == 'replan_required' and not frontdesk_only and not replan_inputs:
+        raise ValueError('Decision 029 replan result has no replan_inputs')
+
+
+def _decision029_aggregate(results: list[str]) -> str:
+    if 'replan_required' in results:
+        return 'replan_required'
+    if 'partial' in results:
+        return 'partial'
+    if 'pass' in results and 'blocked' in results:
+        return 'partial'
+    if results and all(result == 'blocked' for result in results):
+        return 'blocked'
+    if results and all(result == 'pass' for result in results):
+        return 'pass'
+    raise ValueError('Decision 029 child result combination is unsupported')
+
+
+def _decision029_next_milestone(task_set_id: str, aggregate_result: str, reason: str) -> dict[str, str]:
+    if aggregate_result == 'pass':
+        kind, ref = 'workflow_terminal', f'{task_set_id}-closed'
+    elif aggregate_result == 'blocked':
+        kind, ref = 'blocked_none', f'{task_set_id}-blocked'
+    elif aggregate_result == 'replan_required':
+        kind, ref = 'selected', f'{task_set_id}-replan'
+    else:
+        kind, ref = 'selected', f'{task_set_id}-remaining'
+    return {'kind': kind, 'ref': ref, 'rationale': reason}
+
+
+def _decision029_user_report(closure: dict[str, object]) -> str:
+    aggregate = str(closure['aggregate_result'])
+    task_set_id = str(closure['task_set_id'])
+    accepted = ', '.join(closure['accepted_scope']) or 'none'
+    unresolved = ', '.join(closure['unresolved_scope']) or 'none'
+    blockers = ', '.join(closure['blockers']) or 'none'
+    evidence = ', '.join(closure['evidence_refs'])
+    return (
+        f'Task set {task_set_id} has aggregate result {aggregate}. '
+        f'Accepted scope: {accepted}. Unresolved scope: {unresolved}. '
+        f'Blockers: {blockers}. Evidence: {evidence}.'
+    )
+
+
+def _decision029_brief_summary(closure: dict[str, object]) -> str:
+    return f"Task set {closure['task_set_id']}: {closure['reason']}."
+
+
+def _decision029_transition_status(aggregate_result: str) -> str:
+    return {
+        'pass': 'done',
+        'partial': 'partial',
+        'replan_required': 'replan_required',
+        'blocked': 'blocked',
+    }[aggregate_result]
+
+
+def _decision029_notification_identity(closure_digest: str) -> str:
+    return f"status-{closure_digest.split(':', 1)[1][:20]}"
+
+
+def _decision029_json_section(body: str, label: str) -> dict[str, object]:
+    pattern = re.compile(
+        rf'\A\s*\*\*{re.escape(label)}\*\*\s*\n```json\s*\n'
+        rf'((?:(?!\n```).)*)\n```\s*\Z',
+        flags=re.DOTALL,
+    )
+    matches = pattern.findall(str(body or ''))
+    if len(matches) != 1:
+        raise ValueError(f'Decision 029 expected exactly one fenced {label}')
+    try:
+        payload = json.loads(matches[0])
+    except json.JSONDecodeError as exc:
+        raise ValueError(f'Decision 029 {label} JSON is invalid') from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f'Decision 029 {label} must be an object')
+    return payload
+
+
+def _decision029_digest(value: object, label: str) -> str:
+    text = str(value or '')
+    if not _DECISION029_DIGEST_RE.fullmatch(text):
+        raise ValueError(f'Decision 029 {label} is not a digest')
+    return text
+
+
+def _decision029_text(value: object, label: str) -> str:
+    text = str(value or '').strip()
+    if not text:
+        raise ValueError(f'Decision 029 {label} is missing')
+    return text
+
+
+def _decision029_text_list(value: object, label: str, *, allow_empty: bool = True) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        raise ValueError(f'Decision 029 {label} must be a list')
+    result = tuple(_decision029_text(item, label) for item in value)
+    if not allow_empty and not result:
+        raise ValueError(f'Decision 029 {label} must not be empty')
+    return result
 
 
 def _workflow_role_bundle_reply(*, agent_name: str, body: str) -> str | None:

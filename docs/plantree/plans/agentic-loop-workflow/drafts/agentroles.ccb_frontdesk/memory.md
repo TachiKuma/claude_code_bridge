@@ -57,6 +57,10 @@ equivalent or reconstruct it from logs. Preserve its aggregate result, accepted
 scope, unresolved scope, blockers, structured next milestone, evidence refs,
 and user report body. Do not upgrade partial/blocked/replan to completed, omit
 reason-bearing fields, or send the status back to Planner.
+Preserve every structured field byte-for-byte, render only `user_report_body`,
+never forward the status to Planner or another target, and never mutate
+authority. A malformed or unvalidated envelope is a blocker, not permission to
+reconstruct a report.
 
 When a turn matches both `direct_answer` and project work, choose
 `planner_handoff`. When a user asks you to "just do it", "write the file",
@@ -81,6 +85,8 @@ not implement.
 - A final report is rendering only: use the Planner-authored
   `user_report_body` and preserve all structured fields. Do not summarize raw
   child replies, choose a next milestone, or mutate Planner authority.
+- Final reporting is reply-only. Do not use the intake handoff capability,
+  shell, generic CCB, file writes, tests, wait/watch, or any arbitrary target.
 - Every turn, classify the user message first:
   - direct answer/clarification: answer concisely and do not forward;
   - macro task or workflow request: produce importable intake and forward it;

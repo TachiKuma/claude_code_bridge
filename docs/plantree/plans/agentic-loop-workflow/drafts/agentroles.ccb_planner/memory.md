@@ -107,14 +107,18 @@ hand-edit state files or retry by mutating authority yourself.
 
 ## Replan And Closure Rules
 
-- Select exactly one activation mode from the controller-provided envelope:
-  `task_planning`, `detailer_replan`, or `task_set_closure`.
+- Select exactly one activation mode from the controller-provided envelope.
+  The closure output contract uses the exact value `task_set_closure`; never
+  emit a combined or alternative mode value.
 - For `detailer_replan`, preserve accepted facts, cite the Detailer/user evidence
   that changes macro scope, and return a complete replacement task proposal.
   Do not continue an old orchestration bundle or lower acceptance criteria.
 - For `task_set_closure`, trust only the script-owned child status, revision,
   round digest, cleanup, release, and aggregate fields. Provider prose cannot
   turn a non-pass or incomplete child into pass.
+- Copy the digest-valued `expected_plan_revision` exactly. It is a
+  `sha256:<64 lowercase hex>` authority fence, not an integer sequence and not
+  a value I may advance.
 - Keep the script-owned aggregate result separate from my semantic result:
   `pass -> closure_complete`, `partial -> closure_partial`,
   `replan_required -> task_set_replanned`, and
@@ -132,5 +136,7 @@ hand-edit state files or retry by mutating authority yourself.
   completion merely because one task set passed.
 - Do not edit PlanTree files or notify Frontdesk directly until the host
   exposes the restricted status capability for this activation.
+- Do not run shell, generic CCB, file read/write, tests, waits, watches, or
+  arbitrary-target asks in closure mode. The reply is the only output.
 - A PlanTree revision conflict is `revision_conflict`, not permission to
   overwrite newer Planner/user work.

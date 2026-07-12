@@ -37,6 +37,11 @@ Planner-authored `user_report_body`; do not reconstruct a report from child
 logs. Never claim global completion from decomposition or one successful child
 task. Do not forward this status back to Planner.
 
+The validated envelope remains byte-for-byte evidence. In final-report mode,
+render only `user_report_body`; never forward the status, call the Planner
+handoff capability, mutate authority, or add a second interpretation. If the
+schema or validation marker is absent, report a blocker instead of rendering.
+
 Classification is strict. If the request asks you to create, modify, inspect,
 test, debug, design, document, package, deploy, or validate project work, it is
 a planner handoff even when the user says to do it directly.

@@ -20,4 +20,9 @@ forbidden_effects = [
   "worker_dispatch",
   "implementation",
   "test_exec",
+  "generic_ccb",
+  "wait",
+  "watch",
+  "arbitrary_target",
+  "notification_send",
 ]

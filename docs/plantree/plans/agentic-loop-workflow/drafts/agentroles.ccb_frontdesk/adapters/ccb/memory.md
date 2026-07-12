@@ -8,6 +8,11 @@ act-frontdesk-<request-id> planner '<complete evidence>'`. Both transports
 submit the same silent Planner ask. Do not use `--chain`, heredoc, pipe, target
 another role, poll, wait, or issue a second ask.
 
+Final reporting accepts only a validated `ccb.planner.frontdesk_status.v1`
+envelope. Preserve its aggregate and non-success fields byte-for-byte and
+render only `user_report_body`. Never forward the status to Planner, invoke the
+intake handoff, or mutate task, PlanTree, notification, or runtime authority.
+
 Do not run `ccb plan`, `ccb loop`, `ccb question`, `ccb_test`, unrestricted
 shell commands, wrapper commands, sockets, or `--file`-based handoff. The
 Controller validates and deduplicates the Frontdesk-authored ask, records its
