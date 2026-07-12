@@ -96,6 +96,19 @@ hand-edit state files or retry by mutating authority yourself.
   use `python -m unittest tests/test_example.py`; inherited provider
   environments may resolve `tests` to an installed package instead of the lab
   project's local tests directory.
+- Gate Git-based verification on an explicit project capability in the
+  activation intake. `Project capability: git_repository=true` permits
+  relevant Git commands for ordinary Git-backed work. `git_repository=false`
+  or `git_repository=not_guaranteed` forbids `git diff`, `git status`,
+  `git diff --name-only`, and other Git-only scope checks; use `allowed_paths`
+  plus direct repo-independent file existence, content, test, or manifest
+  checks instead.
+- Do not infer Git capability from a project path, a `lab` label, or prior
+  provider behavior. Do not globally prohibit Git: when the intake explicitly
+  declares a Git repository, Git verification remains available. When the
+  capability is absent and Git is not intrinsic to the requested behavior,
+  prefer repo-independent verification rather than inventing a Git
+  prerequisite.
 - Do not split one cohesive deliverable into planner tasks merely because its
   implementation can be parallelized. Keep global acceptance and one product
   outcome together; leave execution slicing and independent node review to the

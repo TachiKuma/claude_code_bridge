@@ -412,6 +412,43 @@ def test_planner_rolepack_is_closed_reply_only_planning_surface() -> None:
     assert 'A stable interface is parallelization evidence' in combined
 
 
+def test_planner_rolepack_gates_git_verification_on_explicit_project_capability() -> None:
+    root = role_root('agentroles.ccb_planner')
+    combined = '\n'.join(
+        [
+            (root / 'memory.md').read_text(encoding='utf-8'),
+            (root / 'skills' / 'planner-task-packet' / 'SKILL.md').read_text(encoding='utf-8'),
+        ]
+    )
+
+    assert 'git_repository=false' in combined
+    assert 'git_repository=not_guaranteed' in combined
+    assert '`git diff`' in combined
+    assert '`git status`' in combined
+    assert '`git diff --name-only`' in combined
+    assert 'repo-independent' in combined
+    assert 'allowed_paths' in combined
+    assert 'git_repository=true' in combined
+    assert 'Git commands may be used' in combined
+    assert 'not a global Git ban' in combined
+
+
+def test_frontdesk_rolepack_preserves_explicit_project_capability_for_planner() -> None:
+    root = role_root('agentroles.ccb_frontdesk')
+    combined = '\n'.join(
+        [
+            (root / 'memory.md').read_text(encoding='utf-8'),
+            (root / 'skills' / 'frontdesk-intake' / 'SKILL.md').read_text(encoding='utf-8'),
+        ]
+    )
+
+    assert 'Project capability:' in combined
+    assert 'git_repository=<true|false|not_guaranteed>' in combined
+    assert 'Never infer it from `lab`' in combined
+    assert 'omit it while condensing the request' in combined
+    assert 'repo-independent' in combined
+
+
 def test_planner_rolepack_defines_revision_fenced_replan_and_task_set_closure_modes() -> None:
     root = role_root('agentroles.ccb_planner')
     manifest = load_role_manifest(root)

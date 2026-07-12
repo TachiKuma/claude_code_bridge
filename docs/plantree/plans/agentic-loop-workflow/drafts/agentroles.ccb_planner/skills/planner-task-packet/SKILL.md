@@ -133,6 +133,22 @@ file-path unittest commands such as `python -m unittest tests/test_example.py`;
 those can resolve to an installed third-party `tests` package in inherited
 provider environments.
 
+Choose scope verification from the explicit project capability carried by the
+intake:
+
+- `Project capability: git_repository=true`: Git commands may be used when
+  they are relevant to the requested work.
+- `Project capability: git_repository=false` or
+  `git_repository=not_guaranteed`: do not emit `git diff`, `git status`,
+  `git diff --name-only`, or another Git-only scope check. Use `allowed_paths`
+  with direct repo-independent file existence, content, test, or manifest
+  checks.
+
+Do not infer this capability from `lab`, a filesystem path, or an earlier
+provider response. This is a per-activation constraint, not a global Git ban.
+If no capability is declared and Git behavior is not itself part of the user
+request, prefer repo-independent verification.
+
 ## Rules
 
 - Do not mark task state directly.

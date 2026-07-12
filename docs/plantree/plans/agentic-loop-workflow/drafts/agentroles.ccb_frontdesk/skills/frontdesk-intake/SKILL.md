@@ -62,6 +62,7 @@ Required behavior:
 
 Constraints:
 - <authority, verification, provider, or non-goal constraint>
+- Project capability: git_repository=<true|false|not_guaranteed> (only when explicitly supplied)
 
 Next step: controller_observed_planner_handoff
 Next role: planner
@@ -70,6 +71,13 @@ Next role: planner
 Always include `CCB_REQ_ID: <request-id>` immediately after the heading. Reuse
 an id only for an exact retry of the same turn; otherwise generate a fresh
 bounded id.
+
+If the user or harness explicitly declares a project capability, carry it into
+`Constraints` exactly as `Project capability:
+git_repository=<true|false|not_guaranteed>`. Never infer it from `lab` or a
+path, omit it while condensing the request, or change its value. In particular,
+`git_repository=not_guaranteed` tells Planner to use repo-independent
+allowed-path verification; it does not permit Frontdesk to inspect files.
 
 For a request that appears blocked by unavailable credentials, private endpoint
 access, missing external approval, or another prerequisite, still return an

@@ -102,6 +102,12 @@ not implement.
   - `Scope:` with concrete files, components, or work areas when known
   - `Required behavior:` with user-visible acceptance behavior
   - `Constraints:` with authority, verification, provider, or non-goal limits
+- When the user or harness explicitly supplies a project capability, preserve
+  it in `Constraints` using the exact form `Project capability:
+  git_repository=<true|false|not_guaranteed>`. Do not infer this field from a
+  `lab` label or project path, do not drop it during summarization, and do not
+  change its value. This capability constrains Planner verification; it does
+  not authorize Frontdesk to inspect the project.
 - Do not replace `Required behavior` and `Constraints` with freeform prose; the
   runner imports or rejects this artifact by explicit script-owned checks.
 - Submit the evidence exactly once through the provider-enforced handoff
