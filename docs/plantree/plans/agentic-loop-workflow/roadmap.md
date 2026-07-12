@@ -27,7 +27,10 @@ Date: 2026-06-24
   Frontdesk-authored `ask --silence` to Planner. Controller retains only
   schema/idempotency/activation/runner mechanics. The source boundary and a
   fresh visible two-workgroup real-provider run now pass, including genuine
-  bounded Reviewer rework in both groups. Evidence is in
+  bounded Reviewer rework in both groups. A follow-up long-root run also
+  proves no successful-silence caller delivery, mounted-lease socket authority,
+  project-root authority refs for isolated Workers, compact inline round
+  evidence, and zero final dynamic residue. Evidence is in
   [history/decision028-frontdesk-direct-handoff-real-provider-20260712.md](history/decision028-frontdesk-direct-handoff-real-provider-20260712.md).
 - Current work is completing the remaining G6 three/four-group, restart,
   busy-retain, and provider-profile matrix from fresh opened projects

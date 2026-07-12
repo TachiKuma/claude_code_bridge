@@ -114,13 +114,65 @@ The project was then detached and closed with exact project-level
 `ccb_test kill -f`. Final state was `unmounted`; project process and socket
 scans were empty.
 
+## Closure Follow-Up
+
+Commit `6646f6a3` closed three runtime gaps exposed by fresh real-provider
+reruns rather than weakening the accepted protocol:
+
+- Successful `ask --silence` jobs are still persisted as terminal evidence,
+  but no hidden `result=hidden` completion is delivered back to Frontdesk.
+  Failed silent jobs remain visible to the caller.
+- Managed in-project callers now use the validated mounted lease socket as
+  socket authority. This fixes long project roots whose daemon socket is
+  relocated under `/run/user/...` when a provider MCP child intentionally does
+  not inherit `XDG_RUNTIME_DIR`; normal callers still use the configured local
+  socket path.
+- Worker prompts now expose Planner-authored task packets and acceptance/test
+  references as absolute, read-only project-root authority paths. Workers no
+  longer attempt to resolve untracked PlanTree authority inside isolated Git
+  worktrees.
+- Round Reviewer input is now the versioned compact
+  `ccb.loop.round_review_envelope.v1`. It preserves task/bundle/capacity
+  identity, reviewed commit/tree lineage, integration/root verification
+  digests, authority checks, and cleanup state while remaining inline below
+  the request-artifact spill threshold.
+
+The final accepted follow-up project was
+`/home/bfly/yunwei/test_ccb2/decision028-silence-round-inline-final4-20260712085421`.
+It used inherited system provider credentials, a project-local Role store, and
+a long root that forced relocated daemon sockets.
+
+| Boundary | Evidence |
+| :--- | :--- |
+| User -> Frontdesk | `job_4eb671304e32`; completed with no successful-silence reply delivery. |
+| Frontdesk -> Planner | `job_4597d7295169`; `from_actor=frontdesk`, `silence=true`, exactly one submission. |
+| Orchestrator | `job_fb6181c00bb0`; selected one workgroup because the shared API/test/doc change was not safely path-disjoint. |
+| Worker -> Reviewer | Worker `job_3eb5614cb5bd` created Reviewer chain child `job_48cebdaa09ca`; continuation returned as `job_6fed21dde81b`. |
+| Round Reviewer | `job_10c751eca40e`; 3161-byte inline request, no `body_artifact`, `round result: pass`. |
+
+The reviewed node commit was
+`fa65c5678f87f07208eb4173eb416518ce2be2da`; promoted root head was
+`cef0b44a0c9db422a7dddf4b6d589eae9ef6673b` with tree
+`git-tree:sha1:9ae832e59420668997cc5638a3ae682beb1dd8cc`. Root verification passed
+`13` tests. Task authority ended `done/pass`, `next_owner=terminal`, and
+`current_loop=null`. Observed topology ended empty with retained and
+release-incomplete counts both zero. Project-level `ccb_test kill -f` then
+left lifecycle state `unmounted` and no related process residue.
+
+Three preceding fresh roots were consumed as strict failure evidence: one
+exposed caller-environment contamination, one reproduced the relocated-socket
+MCP failure, and one exposed project-authority refs incorrectly resolved from
+the Worker worktree. None was reused after repair.
+
 ## Source Verification
 
 - Affected MCP/RolePack/provider/dispatcher/daemon/CLI suite: `393 passed`.
 - Runtime accelerator ownership/lifecycle and CLI help regression: `30 passed`.
 - Former heartbeat race selector repeated ten times: `10/10 passed`.
-- Final full non-provider-blackbox repository gate:
-  `4321 passed, 2 skipped, 21 deselected in 642.29s`.
+- Final full non-provider-blackbox repository gate after the closure follow-up:
+  `4324 passed, 2 skipped, 21 deselected in 671.99s`.
+- Full G5 multi-workgroup real-CLI/fake-runtime matrix after adapting the fake
+  provider to the versioned compact round envelope: `39 passed`.
 - Changed-source `py_compile`, `pyflakes`, Markdown link checks, whitespace
   checks, and `git diff --check`: passed.
 - Post-suite process and socket scans for the workflow worktree and both pytest

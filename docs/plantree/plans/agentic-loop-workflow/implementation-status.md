@@ -19,7 +19,11 @@ proved the integrated scheduler through one-to-four-workgroup source/fake
 runtime flows. Decision 027 and a visible two-workgroup Codex baseline now pass
 in G6. Decision 028 is also real-provider verified, including an exact
 Frontdesk-owned silent Planner handoff and genuine bounded rework in both
-workgroups. The remaining phase is the broader visible real-provider matrix:
+workgroups. A follow-up long-root real-provider run additionally proves that
+successful silence produces no caller delivery, managed MCP callers honor the
+mounted lease socket, isolated Workers read project-root PlanTree authority,
+and compact inline Round Reviewer evidence closes the round. The remaining
+phase is the broader visible real-provider matrix:
 three/four workgroups, in-flight restart, busy-retain, and provider-profile
 qualification. This is not yet a packaged-candidate or default-enablement
 claim.
@@ -61,6 +65,10 @@ deduplicates, records activation, and wakes or recovers the runner.
 - `5163ad6f`: G5 source/fake runtime campaign harness and ten-scenario matrix.
 - `9fceb5de`: terminal failed workgroup quarantine, restore, and R2 exclusion.
 - `b42ec3b2`: project-bound recovery of spilled G5 fake-provider contracts.
+- `8f9b62f2`: Frontdesk-owned Planner silent handoff and minimal Controller
+  boundary.
+- `6646f6a3`: successful-silence delivery suppression, mounted-lease socket
+  authority, absolute Worker authority refs, and compact round evidence.
 
 Wave 3 evidence:
 [history/single-lane-wave3-g3-scheduler-closure-20260711.md](history/single-lane-wave3-g3-scheduler-closure-20260711.md).
@@ -164,6 +172,16 @@ terminal/UI. Script output cannot substitute for opened-project evidence.
   gate `30 passed`; former heartbeat race `10/10 passed`; final full
   non-provider-blackbox repository gate `4321 passed, 2 skipped, 21 deselected
   in 642.29s`. Post-suite workflow/pytest process and socket scans were empty.
+- Decision 028 closure follow-up: long-root project
+  `decision028-silence-round-inline-final4-20260712085421` completed
+  Frontdesk -> silent Planner -> Orchestrator -> Worker-owned Reviewer chain ->
+  Git integration -> compact inline Round Reviewer -> task result -> release.
+  Root verification passed `13` tests; final dynamic/retained/incomplete counts
+  were `0/0/0`; project shutdown left no related process residue.
+- Closure source gates: complete G5 real-CLI/fake-runtime matrix `39 passed`;
+  final non-provider-blackbox repository gate `4324 passed, 2 skipped,
+  21 deselected in 671.99s`; changed-source `py_compile`, `pyflakes`, and
+  `git diff --check` passed.
 
 ## Non-Claims
 

@@ -401,6 +401,14 @@ nodes. Each Worker completed one bounded rework/recheck cycle, root verification
 passed `7` tests, the Round Reviewer passed, temporary Git state was removed,
 and only resident Frontdesk/Planner panes remained. See
 [../history/decision028-frontdesk-direct-handoff-real-provider-20260712.md](../history/decision028-frontdesk-direct-handoff-real-provider-20260712.md).
+
+A follow-up fresh long-root run closed successful-silence delivery, relocated
+managed-caller socket, isolated Worker authority-ref, and Round Reviewer
+request-spill gaps. The one-group task completed with a Worker-owned Reviewer
+chain, `13` root tests, an inline compact round envelope, empty final topology,
+and clean project shutdown. The final non-provider-blackbox repository gate
+passed `4324` tests; this strengthens V0/Decision 028 evidence but does not
+replace the remaining three/four-group, restart, busy-retain, or provider rows.
 The remaining bullets above still gate G6 closure.
 
 ### G7 Release Candidate And Deployment Gate - Pending
