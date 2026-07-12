@@ -915,7 +915,7 @@ def test_planner_task_set_handoff_keeps_waiting_for_nonterminal_frontdesk(
 @pytest.mark.parametrize(
     'state',
     [
-        {'fenced_task_set_present': True},
+        {'fenced_task_set_present': True, 'authoritative_parent_present': True},
         {'planner_job_id': 'job_planner', 'planner_job_status': 'failed'},
     ],
 )
@@ -928,6 +928,11 @@ def test_planner_task_set_handoff_preserves_existing_terminal_conditions(
     _root, manifest = _materialize(tmp_path)
     monkeypatch.setattr(runner, 'planner_task_set_handoff_state', lambda _manifest: state)
     monkeypatch.setattr(
+        runner,
+        'controlled_task_set_source_parent_ids',
+        lambda _manifest: {'job_frontdesk'} if state.get('authoritative_parent_present') else set(),
+    )
+    monkeypatch.setattr(
         runner.time,
         'sleep',
         lambda _seconds: (_ for _ in ()).throw(AssertionError('unexpected sleep')),
@@ -936,7 +941,7 @@ def test_planner_task_set_handoff_preserves_existing_terminal_conditions(
     assert runner.wait_for_planner_task_set_handoff(manifest, before='start_task') == state
 
 
-def test_planner_task_set_handoff_ignores_activation_sidecars(
+def test_planner_task_set_evidence_ignores_activation_sidecars(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -970,18 +975,46 @@ def test_planner_task_set_handoff_ignores_activation_sidecars(
     )
     planner_reply.parent.mkdir(parents=True, exist_ok=True)
     planner_reply.write_text('**task-set.json**\n', encoding='utf-8')
-    monkeypatch.setattr(
-        runner.time,
-        'sleep',
-        lambda _seconds: (_ for _ in ()).throw(AssertionError('unexpected wait')),
-    )
-
-    state = runner.wait_for_planner_task_set_handoff(manifest, before='start_task')
+    state = runner.planner_task_set_evidence(manifest)
 
     assert state['activation_path'] == str(canonical_activation)
     assert state['planner_job_id'] == planner_job_id
     assert state['planner_reply_path'] == str(planner_reply)
     assert state['fenced_task_set_present'] is True
+
+
+def test_start_task_waits_for_root10_authority_import_before_validating_source_parent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    source_task_id = _write_frontdesk_task_set_parent_authority(runner, manifest)
+    project = Path(str(manifest['project']))
+    index_path = (
+        project / 'docs' / 'plantree' / 'plans' / runner.PLAN_SLUG / 'tasks' / 'index.json'
+    )
+    index = json.loads(index_path.read_text(encoding='utf-8'))
+    parent = next(task for task in index['tasks'] if task['task_id'] == source_task_id)
+    parent['status'] = 'draft'
+    parent.pop('task_set_parent')
+    runner._write_json(index_path, index)
+    sleeps = []
+
+    assert runner.controlled_task_set_source_parent_ids(manifest) == set()
+    assert runner.unexpected_plan_task_ids(manifest) == [source_task_id]
+    monkeypatch.setattr(runner, 'PLANNER_TASK_SET_WAIT_ATTEMPTS', 1)
+    monkeypatch.setattr(runner.time, 'sleep', lambda seconds: sleeps.append(seconds))
+
+    with pytest.raises(
+        runner.HarnessBlocker,
+        match='runner_resume_and_evidence_integrity.*frontdesk_planner_handoff_pending',
+    ):
+        runner.start_task(manifest, 'phase6b-l1-doc-direct-execution')
+
+    assert not Path(str(manifest['rows'])).exists()
+    assert not Path(str(manifest['b7'])).exists()
+    assert sleeps == [runner.PLANNER_TASK_SET_WAIT_RETRY_DELAY_SECONDS]
 
 
 def test_init_writes_config_before_startup_and_validates_mount_after_startup() -> None:
@@ -1585,12 +1618,12 @@ def _write_frontdesk_task_set_parent_authority(
     non_ascii: bool = False,
 ) -> str:
     project = Path(str(manifest['project']))
-    source_task_id = 'job_da3510bbfe19'
+    source_task_id = 'job_a7545d776a18'
     activation_id = f'act-frontdesk-{source_task_id}'
-    planner_job_id = 'job_31e0de7cb0fd'
-    task_set_id = 'ts-017b23211d6230850c98'
-    project_id = 'project-root7'
-    body = f'CCB_REQ_ID: {source_task_id}\nRoute mix intake'
+    planner_job_id = 'job_836626329bb8'
+    task_set_id = 'ts-709156b264e3b0bcfe49'
+    project_id = 'project-root10-sanitized'
+    body = f'CCB_REQ_ID: {source_task_id}\nSanitized root10 route mix intake'
     if non_ascii:
         body += '\n中文请求：保持任务身份。'
     body += '\n'
@@ -1604,11 +1637,11 @@ def _write_frontdesk_task_set_parent_authority(
         'task_set_id': task_set_id,
         'task_set_revision': 1,
         'binding_role': 'parent',
-        'bound_task_revision': 2,
+        'bound_task_revision': 1,
     }
     parent = {
         'task_id': source_task_id,
-        'task_revision': 2,
+        'task_revision': 1,
         'status': 'decomposed',
         'task_set_parent': parent_binding,
     }
@@ -1622,22 +1655,23 @@ def _write_frontdesk_task_set_parent_authority(
             'task_set_id': task_set_id,
             'task_set_revision': 1,
             'binding_role': 'child',
-            'bound_task_revision': 3,
+            'bound_task_revision': 1,
             'required': True,
             'order': order,
         }
         child_records.append(
             {
                 'task_id': task_id,
-                'task_revision': 3,
+                'task_revision': 1,
+                'status': 'ready_for_orchestration',
                 'task_set': binding,
             }
         )
         task_set_children.append(
-            {'task_id': task_id, 'task_revision': 3, 'required': True, 'order': order}
+            {'task_id': task_id, 'task_revision': 1, 'required': True, 'order': order}
         )
         import_children.append(
-            {'task_id': task_id, 'task_revision': 3, 'task_set': dict(binding)}
+            {'task_id': task_id, 'task_revision': 1, 'task_set': dict(binding)}
         )
         identity_children.append(
             {
@@ -1666,6 +1700,7 @@ def _write_frontdesk_task_set_parent_authority(
         'project_root': str(project),
         'action': 'activate_planner_from_frontdesk',
         'source': 'frontdesk_direct_silence_ask',
+        'status': 'planner_submitted',
         'plan_slug': runner.PLAN_SLUG,
         'request_id': source_task_id,
         'intake_sha256': body_sha256,
@@ -1675,7 +1710,7 @@ def _write_frontdesk_task_set_parent_authority(
             'preview': body.strip()[:400],
         },
         'planner_contract': 'task_set',
-        'required_next_output': 'task-set.json',
+        'required_next_output': 'reply-only task-set.json with exact bounded task IDs',
         'script_write_rules': ['Reply only.', 'Use exact task IDs.'],
         'expected_task_ids': required_children,
         'source_task_id': source_task_id,
@@ -1695,7 +1730,13 @@ def _write_frontdesk_task_set_parent_authority(
             'body_sha256': body_sha256,
             'controller_rewrote_body': False,
         },
-        'ask': {'target': 'planner', 'job_id': planner_job_id, 'sender': 'frontdesk'},
+        'ask': {
+            'target': 'planner',
+            'job_id': planner_job_id,
+            'sender': 'frontdesk',
+            'silence': True,
+            'status': 'accepted',
+        },
     }
     task_set = {
         'schema': 'ccb.plan.task_set.v1',
@@ -1711,14 +1752,18 @@ def _write_frontdesk_task_set_parent_authority(
             'bytes': body_bytes,
         },
         'planner_job': {'job_id': planner_job_id, 'reply_sha256': planner_reply_sha256},
-        'plan_revision': {'revision': 1},
+        'plan_revision': {
+            'schema': 'ccb.plan.revision.v1',
+            'digest': 'sha256:' + '1' * 64,
+            'files': [],
+        },
         'children': task_set_children,
         'ordered_required_children': required_children,
         'state': 'running',
         'aggregate_result': None,
         'closure': None,
-        'created_at': '2026-07-08T00:00:00+00:00',
-        'updated_at': '2026-07-08T00:00:01+00:00',
+        'created_at': '2026-07-12T23:10:49.527255+00:00',
+        'updated_at': '2026-07-12T23:10:49.543729+00:00',
     }
     request = {
         'project_id': project_id,
@@ -1768,6 +1813,14 @@ def _write_frontdesk_task_set_parent_authority(
         'task_set': task_set,
         'source_task_id': source_task_id,
         'children': import_children,
+        'task_set_path': str(
+            project / 'docs' / 'plantree' / 'plans' / runner.PLAN_SLUG
+            / 'task-sets' / task_set_id / 'task-set.json'
+        ),
+        'tasks': [
+            {'task_id': task_id, 'required': True}
+            for task_id in required_children
+        ],
     }
     planner_import = {
         'schema': 'ccb.plan.planner_task_set_import_transaction.v1',
@@ -1831,7 +1884,7 @@ def _write_frontdesk_task_set_parent_authority(
     elif mutation == 'task_set_plan':
         task_set['plan_slug'] = 'other-plan'
     elif mutation == 'child_revision':
-        task_set_children[0]['task_revision'] = 4
+        task_set_children[0]['task_revision'] = 2
     elif mutation == 'child_order':
         task_set_children[0]['order'] = 1
     elif mutation == 'child_binding_revision':
@@ -1899,7 +1952,7 @@ def _write_frontdesk_task_set_parent_authority(
         / 'artifacts'
         / 'text'
         / 'completion-reply'
-        / f'{planner_job_id}-art_root7.txt'
+        / f'{planner_job_id}-art_root10.txt'
     )
     reply_path.parent.mkdir(parents=True, exist_ok=True)
     reply_path.write_text(planner_reply, encoding='utf-8')
@@ -1931,7 +1984,7 @@ def _write_frontdesk_task_set_parent_authority(
 
 def _write_unrelated_history_authority(runner, manifest: dict[str, object]) -> None:
     project = Path(str(manifest['project']))
-    current_source = 'job_da3510bbfe19'
+    current_source = 'job_a7545d776a18'
     current_activation_id = f'act-frontdesk-{current_source}'
     history_source = 'job_history_frontdesk'
     history_activation_id = f'act-frontdesk-{history_source}'
@@ -1984,7 +2037,7 @@ def _write_unrelated_history_authority(runner, manifest: dict[str, object]) -> N
     current_task_set = json.loads(
         (
             project / 'docs' / 'plantree' / 'plans' / runner.PLAN_SLUG
-            / 'task-sets' / 'ts-017b23211d6230850c98' / 'task-set.json'
+            / 'task-sets' / 'ts-709156b264e3b0bcfe49' / 'task-set.json'
         ).read_text(encoding='utf-8')
     )
     task_set = copy.deepcopy(current_task_set)
@@ -1999,7 +2052,7 @@ def _write_unrelated_history_authority(runner, manifest: dict[str, object]) -> N
 
     current_import = json.loads(
         (
-            project / '.ccb' / 'runtime' / 'role-output-imports' / 'job_31e0de7cb0fd'
+            project / '.ccb' / 'runtime' / 'role-output-imports' / 'job_836626329bb8'
             / 'planner-task-set-import.transaction.json'
         ).read_text(encoding='utf-8')
     )
@@ -2032,7 +2085,7 @@ def _write_unrelated_history_authority(runner, manifest: dict[str, object]) -> N
     )
     current_reply = (
         project / '.ccb' / 'ccbd' / 'artifacts' / 'text' / 'completion-reply'
-        / 'job_31e0de7cb0fd-art_root7.txt'
+        / 'job_836626329bb8-art_root10.txt'
     )
     history_reply = current_reply.with_name(f'{history_planner}-art_history.txt')
     history_reply.write_bytes(current_reply.read_bytes())
@@ -2048,7 +2101,7 @@ def test_authoritative_frontdesk_task_set_source_parent_is_not_unexpected(tmp_pa
     assert source_task_id not in runner.unexpected_plan_task_ids(manifest)
 
 
-def test_root7_schema_frontdesk_task_set_source_parent_is_controlled(tmp_path: Path) -> None:
+def test_root10_schema_frontdesk_task_set_source_parent_is_controlled(tmp_path: Path) -> None:
     runner = _load_runner()
     _root, manifest = _materialize(tmp_path)
     source_task_id = _write_frontdesk_task_set_parent_authority(runner, manifest)

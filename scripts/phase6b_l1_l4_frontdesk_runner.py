@@ -1669,10 +1669,17 @@ def wait_for_planner_task_set_handoff(manifest: dict[str, Any], *, before: str) 
     for _attempt in range(PLANNER_TASK_SET_WAIT_ATTEMPTS):
         state = planner_task_set_handoff_state(manifest)
         last_state = state
-        if state.get("fenced_task_set_present"):
+        if (
+            state.get("fenced_task_set_present")
+            and controlled_task_set_source_parent_ids(manifest)
+        ):
             return state
         planner_status = str(state.get("planner_job_status") or "").strip().lower()
-        if state.get("planner_job_id") and planner_status in TERMINAL_JOB_STATUSES:
+        if (
+            not state.get("fenced_task_set_present")
+            and state.get("planner_job_id")
+            and planner_status in TERMINAL_JOB_STATUSES
+        ):
             return state
         frontdesk_status = str(state.get("frontdesk_job_status") or "").strip().lower()
         no_handoff_evidence = not any(
