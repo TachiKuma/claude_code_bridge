@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1350" viewBox="0 0 2400 1350" role="img" aria-labelledby="title desc">
   <title id="title">CCB Agentic Loop Workflow</title>
-  <desc id="desc">深色 16:9 CCB 工作流架构图。图面前台只保留 Frontdesk 和按需 Task Detailer；后台依次展示 Planner、Orchestrator，以及可并行打开的一到四个 Worker 加 Reviewer 工作组、Git 根验证和 Round Reviewer。Orchestrator 的 needs detail 以短虚线激活 Detailer，Detailer 的 local ready 回 Orchestrator、macro 回 Planner。最右侧是一条贯穿各层的程序控制脊柱。</desc>
+  <desc id="desc">深色 16:9 CCB 工作流架构图。图面前台只保留 Frontdesk 和按需 Task Detailer；后台依次展示 Planner、Orchestrator，以及可并行打开的一到四个 Worker 加 Reviewer 工作组、Git 根验证和 Round Reviewer。Orchestrator 的 direct execution semantic bundle 先进入程序控制脊柱，再经校验、绑定和就绪检查物理派发到工作组。needs detail 以短虚线激活 Detailer，Detailer 的 local ready 回 Orchestrator、macro 回 Planner。</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0A1116"/>
@@ -16,6 +16,14 @@
       <stop offset="0" stop-color="#5F8ED7" stop-opacity="0"/>
       <stop offset="0.45" stop-color="#6BA4FF"/>
       <stop offset="1" stop-color="#84D7C4" stop-opacity="0.25"/>
+    </linearGradient>
+    <linearGradient id="semanticToProgram" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#79ACFF"/>
+      <stop offset="1" stop-color="#D99A2B"/>
+    </linearGradient>
+    <linearGradient id="programToWork" x1="1" y1="0" x2="0" y2="0">
+      <stop offset="0" stop-color="#D99A2B"/>
+      <stop offset="1" stop-color="#79D7BF"/>
     </linearGradient>
     <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
       <feGaussianBlur stdDeviation="12" result="blur"/>
@@ -48,6 +56,8 @@
       .card-en { font-size: 19px; font-weight: 700; letter-spacing: 1.5px; fill: #86B6FF; }
       .card-body { font-size: 21px; font-weight: 450; fill: #B5C4D0; }
       .flow-label { font-size: 18px; font-weight: 800; fill: #B9D4FF; }
+      .semantic-label { font-size: 18px; font-weight: 800; fill: #C5D5FA; }
+      .dispatch-label { font-size: 18px; font-weight: 800; fill: #A9E5D5; }
       .workgroup-mini { font-size: 17px; font-weight: 800; fill: #D8F6EC; }
       .spine-title { font-size: 17px; font-weight: 800; letter-spacing: 1.2px; fill: #FFF3D7; }
       .spine-body { font-size: 16px; font-weight: 650; fill: #FFF1D3; }
@@ -114,8 +124,9 @@
   <!-- Mainline and conditional triage loops: Frontdesk -> Planner -> Orchestrator -->
   <path d="M1170 544 C1170 578 1180 606 1180 634" fill="none" stroke="#79ACFF" stroke-width="3" marker-end="url(#arrowBlue)"/>
   <path d="M1310 690 H1340" stroke="#79ACFF" stroke-width="3" marker-end="url(#arrowBlue)"/>
-  <path d="M1500 746 C1450 788 1342 832 1246 882" fill="none" stroke="#79ACFF" stroke-width="3" marker-end="url(#arrowBlue)"/>
-  <text x="1370" y="810" class="flow-label">direct_execution</text>
+  <path d="M1760 690 C1840 690 1910 652 1992 652" fill="none" stroke="url(#semanticToProgram)" stroke-width="3" marker-end="url(#arrowAmber)"/>
+  <text x="1778" y="660" class="semantic-label">direct_execution</text>
+  <text x="1778" y="682" class="semantic-label">semantic bundle</text>
   <!-- Conditional Detailer loop: needs_detail to Detailer, then local ready to Orchestrator -->
   <path d="M1700 648 C1785 615 1782 550 1720 506" fill="none" stroke="#79ACFF" stroke-width="2" stroke-dasharray="6 6" marker-end="url(#arrowBlue)"/>
   <text x="1762" y="586" class="flow-label">needs_detail</text>
@@ -193,6 +204,8 @@
   <path d="M1954 652 H1992" stroke="#D99A2B" stroke-width="2" stroke-dasharray="5 7"/>
   <path d="M1954 790 H1992" stroke="#D99A2B" stroke-width="2" stroke-dasharray="5 7"/>
   <path d="M1954 928 H1992" stroke="#D99A2B" stroke-width="2" stroke-dasharray="5 7"/>
+  <path d="M1992 928 C1910 850 1570 850 1246 882" fill="none" stroke="url(#programToWork)" stroke-width="3" marker-end="url(#arrowMint)"/>
+  <text x="1570" y="840" class="dispatch-label">validated · bound · ready</text>
 
   <!-- Closure loop -->
   <g transform="translate(790 1116)">
