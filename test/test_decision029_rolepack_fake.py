@@ -4,6 +4,7 @@ from copy import deepcopy
 import hashlib
 import json
 from pathlib import Path
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -92,7 +93,9 @@ def _generated_closure(tmp_path: Path, results: list[str]) -> dict[str, object]:
         task_set_id=created['task_set']['task_set_id'],
     )
     assert evaluated['status'] == 'closure_pending'
-    return _worker2_closure_shape(evaluated['closure'])
+    closure = evaluated['closure']
+    assert re.fullmatch(r'sha256:[0-9a-f]{64}', closure['expected_plan_revision'])
+    return closure
 
 
 def _generated_non_execution_closure(tmp_path: Path, *, result: str) -> dict[str, object]:
@@ -114,17 +117,9 @@ def _generated_non_execution_closure(tmp_path: Path, *, result: str) -> dict[str
         context, task_set_id=created['task_set']['task_set_id'],
     )
     assert evaluated['status'] == 'closure_pending'
-    return _worker2_closure_shape(evaluated['closure'])
-
-
-def _worker2_closure_shape(closure: dict[str, object]) -> dict[str, object]:
-    result = deepcopy(closure)
-    revision = result['expected_plan_revision']
-    assert isinstance(revision, dict)
-    result['expected_plan_revision'] = revision['digest']
-    result.pop('closure_digest')
-    result['closure_digest'] = _canonical_digest(result)
-    return result
+    closure = evaluated['closure']
+    assert re.fullmatch(r'sha256:[0-9a-f]{64}', closure['expected_plan_revision'])
+    return closure
 
 
 def _canonical_digest(value: object) -> str:
