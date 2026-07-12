@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from agents.models import AgentValidationError, normalize_agent_name
 from storage.paths import PathLayout
 
 from .model_enums import AttemptState
@@ -46,9 +47,19 @@ def authoritative_retry_successor(layout: PathLayout, source_job_id: str) -> Ret
     source = attempts.get_latest_by_job_id(source_job_id)
     if source is None:
         raise RetryLineageError('retry source attempt authority missing')
-    message = MessageStore(layout).get_latest(source.message_id)
+    try:
+        message = MessageStore(layout).get_latest(source.message_id)
+    except (AgentValidationError, ValueError) as exc:
+        raise RetryLineageError('retry source message target authority malformed') from exc
     if message is None:
         raise RetryLineageError('retry source message authority missing')
+    try:
+        source_agent = normalize_agent_name(source.agent_name)
+        target_agents = tuple(normalize_agent_name(agent) for agent in message.target_agents)
+    except AgentValidationError as exc:
+        raise RetryLineageError('retry source message target authority malformed') from exc
+    if target_agents.count(source_agent) != 1:
+        raise RetryLineageError('retry source agent is not uniquely authorized by message targets')
     if source.attempt_state not in _TERMINAL_NON_SUCCESS:
         raise RetryLineageError('retry source attempt is not terminal non-success')
 
@@ -57,7 +68,7 @@ def authoritative_retry_successor(layout: PathLayout, source_job_id: str) -> Ret
         latest[attempt.attempt_id] = attempt
     candidates = [
         attempt for attempt in latest.values()
-        if attempt.agent_name == source.agent_name
+        if attempt.agent_name == source_agent
         and attempt.retry_index == source.retry_index + 1
     ]
     if len(candidates) > 1:
