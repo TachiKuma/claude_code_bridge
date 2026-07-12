@@ -379,6 +379,87 @@ def find_pending_task_set_closures(context) -> dict[str, object]:
     }
 
 
+def evaluate_current_task_set_closures(
+    context,
+    *,
+    plan_task_fn: Callable = None,
+) -> dict[str, object]:
+    """Evaluate current task sets in stable path order, then expose closure intents."""
+    plans_root = Path(context.project.project_root) / 'docs' / 'plantree' / 'plans'
+    evaluated: list[dict[str, object]] = []
+    for path in sorted(plans_root.glob('*/task-sets/*/task-set.json')):
+        record = _read_json(path)
+        _validate_task_set(record)
+        state = str(record.get('state') or '')
+        if state not in {'running', 'closure_pending', 'system_failure'}:
+            continue
+        result = evaluate_task_set_closure(
+            context,
+            task_set_id=str(record['task_set_id']),
+            expected_revision=int(record['task_set_revision']),
+            plan_task_fn=plan_task_fn,
+        )
+        evaluated.append(
+            {
+                'task_set_id': record['task_set_id'],
+                'task_set_revision': record['task_set_revision'],
+                'status': result.get('status'),
+                'reason': result.get('reason'),
+            }
+        )
+    discovered = find_pending_task_set_closures(context)
+    return {**discovered, 'evaluated': evaluated}
+
+
+def settle_task_set_closure_feedback(
+    context,
+    *,
+    task_set_id: str,
+    task_set_revision: int,
+    intent_id: str,
+    ordered_terminal_evidence_digest: str,
+    transport_ref: dict[str, object],
+) -> dict[str, object]:
+    task_set_id = _segment(task_set_id, field='task_set_id')
+    task_set_revision = _positive_int(task_set_revision, field='task_set_revision')
+    intent_id = _segment(intent_id, field='intent_id')
+    path = _runtime_task_set_root(context, task_set_id) / 'closure-intents.json'
+    with file_lock(path.with_suffix('.lock')):
+        store = _read_json(path)
+        if store.get('schema') != INTENT_STORE_SCHEMA or store.get('task_set_id') != task_set_id:
+            raise ValueError('task-set closure intent store authority mismatch')
+        matches = [
+            item for item in store.get('intents') or ()
+            if isinstance(item, dict) and item.get('intent_id') == intent_id
+        ]
+        if len(matches) != 1:
+            raise ValueError('task-set closure intent not found or ambiguous')
+        intent = matches[0]
+        _validate_intent(intent)
+        expected = {
+            'task_set_revision': task_set_revision,
+            'ordered_terminal_evidence_digest': ordered_terminal_evidence_digest,
+        }
+        if any(intent.get(key) != value for key, value in expected.items()):
+            raise ValueError('task-set closure feedback settlement authority mismatch')
+        normalized_ref = {
+            key: transport_ref.get(key)
+            for key in ('runtime_state_path', 'planner_job_id', 'frontdesk_job_id')
+            if transport_ref.get(key) is not None
+        }
+        if intent.get('status') == 'feedback_closed':
+            if intent.get('transport_ref') != normalized_ref:
+                raise ValueError('task-set closure feedback settlement conflicts with persisted transport')
+            return {'status': 'feedback_closed', 'intent': intent, 'idempotent': True}
+        if intent.get('status') != 'pending_planner_backfill':
+            raise ValueError('task-set closure intent is not pending feedback')
+        intent['status'] = 'feedback_closed'
+        intent['transport_ref'] = normalized_ref
+        intent['feedback_closed_at'] = _now()
+        atomic_write_json(path, store)
+        return {'status': 'feedback_closed', 'intent': intent, 'idempotent': False}
+
+
 def _resolve_children(
     context,
     children: list[dict[str, object]],
@@ -778,15 +859,22 @@ def _validate_closure(record: dict[str, object]) -> None:
 
 
 def _validate_intent(record: dict[str, object]) -> None:
-    allowed = _INTENT_REQUIRED_KEYS | {'stale_reason', 'stale_at'}
+    allowed = _INTENT_REQUIRED_KEYS | {
+        'stale_reason', 'stale_at', 'transport_ref', 'feedback_closed_at',
+    }
     if (
         record.get('schema') != INTENT_SCHEMA
         or not _INTENT_REQUIRED_KEYS <= set(record)
         or set(record) - allowed
     ):
         raise ValueError('invalid task-set closure intent schema or fields')
-    if record.get('status') not in {'pending_planner_backfill', 'stale'}:
+    if record.get('status') not in {'pending_planner_backfill', 'stale', 'feedback_closed'}:
         raise ValueError('invalid task-set closure intent status')
+    if record.get('status') == 'feedback_closed' and (
+        not isinstance(record.get('transport_ref'), dict)
+        or not str(record.get('feedback_closed_at') or '')
+    ):
+        raise ValueError('closed task-set closure intent lacks transport authority')
 
 
 def _show_task(context, task_id: str, *, plan_task_fn: Callable) -> dict[str, object]:

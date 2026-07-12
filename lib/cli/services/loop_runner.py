@@ -32,6 +32,7 @@ from .loop_topology import loop_topology
 from .plan_tasks import find_first_actionable_task, plan_task
 from .questions import question_refs
 from .role_output_import import consume_activation_role_output, consume_explicit_role_output
+from .task_set_feedback_runtime import advance_task_set_feedback_runtime
 from .trace import trace_target
 from .watch_fallback import (
     load_persisted_terminal_watch_payload,
@@ -181,6 +182,10 @@ def loop_runner_once(context, command, services=None) -> dict[str, object]:
     if task is None:
         if pending_role_output is not None:
             return pending_role_output
+        if requested_task_id is None:
+            task_set_feedback = deps.task_set_feedback(context, deps.services)
+            if task_set_feedback is not None:
+                return task_set_feedback
         payload = {
             'schema_version': 1,
             'record_type': 'ccb_loop_runner_once',
@@ -1021,6 +1026,11 @@ def _deps(services):
             services,
             'delegated_callback_pending',
             persisted_delegated_callback_pending,
+        ),
+        task_set_feedback=getattr(
+            services,
+            'task_set_feedback',
+            advance_task_set_feedback_runtime,
         ),
         effective_capacity_snapshot=getattr(
             services,

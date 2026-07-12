@@ -13,6 +13,7 @@ from cli.services.task_set_closure import (
     evaluate_task_set_closure,
     find_pending_task_set_closures,
     revise_task_set_authority,
+    settle_task_set_closure_feedback,
 )
 
 
@@ -283,6 +284,33 @@ def test_last_child_creates_one_exact_once_closure_intent_and_replay_reuses_it(t
     assert replay['closure_intent']['intent_id'] == first['closure_intent']['intent_id']
     assert discovered['pending_count'] == 1
     assert discovered['pending'][0]['intent_id'] == first['closure_intent']['intent_id']
+
+
+def test_feedback_settlement_removes_intent_from_pending_discovery(tmp_path: Path) -> None:
+    context = _context(tmp_path)
+    created = _create_set(context, [('child-a', True)])
+    task_set_id = created['task_set']['task_set_id']
+    _complete(context, 'child-a', 'pass')
+    closed = evaluate_task_set_closure(context, task_set_id=task_set_id, plan_task_fn=plan_task)
+    intent = closed['closure_intent']
+    authority = dict(
+        task_set_id=task_set_id,
+        task_set_revision=1,
+        intent_id=intent['intent_id'],
+        ordered_terminal_evidence_digest=intent['ordered_terminal_evidence_digest'],
+        transport_ref={
+            'runtime_state_path': '.ccb/runtime/task-sets/state.json',
+            'planner_job_id': 'job_planner',
+        },
+    )
+
+    first = settle_task_set_closure_feedback(context, **authority)
+    replay = settle_task_set_closure_feedback(context, **authority)
+    discovered = find_pending_task_set_closures(context)
+
+    assert first['idempotent'] is False
+    assert replay['idempotent'] is True
+    assert discovered['pending_count'] == 0
 
 
 def test_same_revision_conflicting_terminal_digest_fails_closed(tmp_path: Path) -> None:
