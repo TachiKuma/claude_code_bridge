@@ -132,7 +132,7 @@ class _FakeTerminalPaneState extends State<_FakeTerminalPane> {
           child: TerminalView(
             _terminal,
             key: const ValueKey('ccb-terminal-view'),
-            autofocus: true,
+            autofocus: false,
             readOnly: true,
           ),
         ),
@@ -169,6 +169,7 @@ class _LiveTerminalPaneState extends State<_LiveTerminalPane>
 
   late final Terminal _terminal;
   late final TerminalHistoryScrollController _terminalScrollController;
+  final _terminalViewKey = GlobalKey<TerminalViewState>();
   Future<TerminalSession>? _sessionFuture;
   TerminalSession? _session;
   StreamSubscription<String>? _outputSubscription;
@@ -183,6 +184,8 @@ class _LiveTerminalPaneState extends State<_LiveTerminalPane>
     pixelHeight: 640,
   );
   String _controlStatus = 'Connecting';
+  bool _terminalInputActive = false;
+  bool _terminalKeyboardWasVisible = false;
 
   @override
   void initState() {
@@ -306,10 +309,29 @@ class _LiveTerminalPaneState extends State<_LiveTerminalPane>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed && _terminalInputActive) {
+      _deactivateTerminalInput();
+    }
     if (state == AppLifecycleState.resumed &&
         _isReconnectableStatus(_controlStatus) &&
         !_autoReconnectBlocked) {
       unawaited(_reconnect());
+    }
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    if (!mounted || !_terminalInputActive) {
+      return;
+    }
+    final keyboardVisible = View.of(context).viewInsets.bottom > 0;
+    if (keyboardVisible) {
+      _terminalKeyboardWasVisible = true;
+      return;
+    }
+    if (_terminalKeyboardWasVisible) {
+      _deactivateTerminalInput(closeKeyboard: false);
     }
   }
 
@@ -342,6 +364,36 @@ class _LiveTerminalPaneState extends State<_LiveTerminalPane>
     session.writeBytes(bytes).catchError((Object error) {
       // TerminalView can emit control responses while a WebSocket reconnects.
       // Keep those best-effort writes from replacing explicit toolbar status.
+    });
+  }
+
+  void _toggleTerminalKeyboard() {
+    if (_terminalInputActive) {
+      _deactivateTerminalInput();
+      return;
+    }
+    setState(() {
+      _terminalInputActive = true;
+      _terminalKeyboardWasVisible = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_terminalInputActive) {
+        return;
+      }
+      _terminalViewKey.currentState?.requestKeyboard();
+    });
+  }
+
+  void _deactivateTerminalInput({bool closeKeyboard = true}) {
+    if (closeKeyboard) {
+      _terminalViewKey.currentState?.closeKeyboard();
+    }
+    _terminalKeyboardWasVisible = false;
+    if (!mounted || !_terminalInputActive) {
+      return;
+    }
+    setState(() {
+      _terminalInputActive = false;
     });
   }
 
@@ -507,8 +559,16 @@ class _LiveTerminalPaneState extends State<_LiveTerminalPane>
     if (!mounted) {
       return;
     }
+    final disableInput = _isTerminalControlsDisabled(status);
+    if (disableInput) {
+      _terminalViewKey.currentState?.closeKeyboard();
+      _terminalKeyboardWasVisible = false;
+    }
     setState(() {
       _controlStatus = status;
+      if (disableInput) {
+        _terminalInputActive = false;
+      }
     });
   }
 
@@ -545,11 +605,15 @@ class _LiveTerminalPaneState extends State<_LiveTerminalPane>
                   return Stack(
                     fit: StackFit.expand,
                     children: [
-                      TerminalView(
-                        _terminal,
+                      KeyedSubtree(
                         key: const ValueKey('ccb-live-terminal-view'),
-                        autofocus: true,
-                        scrollController: _terminalScrollController,
+                        child: TerminalView(
+                          _terminal,
+                          key: _terminalViewKey,
+                          autofocus: false,
+                          readOnly: !connected || !_terminalInputActive,
+                          scrollController: _terminalScrollController,
+                        ),
                       ),
                       if (!widget.showHeader && disconnected)
                         Positioned(
@@ -570,6 +634,8 @@ class _LiveTerminalPaneState extends State<_LiveTerminalPane>
                           ),
                           child: TerminalControlToolbar(
                             enabled: connected,
+                            keyboardActive: _terminalInputActive,
+                            onKeyboard: _toggleTerminalKeyboard,
                             onLatestOutput:
                                 _terminalScrollController.jumpToLatestOutput,
                             onEscape: () => _sendKey(const [27], 'Esc'),
@@ -683,6 +749,8 @@ class AgentTerminalHeader extends StatelessWidget {
 class TerminalControlToolbar extends StatefulWidget {
   const TerminalControlToolbar({
     required this.enabled,
+    required this.keyboardActive,
+    required this.onKeyboard,
     required this.onLatestOutput,
     required this.onEscape,
     required this.onTab,
@@ -693,6 +761,8 @@ class TerminalControlToolbar extends StatefulWidget {
   });
 
   final bool enabled;
+  final bool keyboardActive;
+  final VoidCallback onKeyboard;
   final VoidCallback onLatestOutput;
   final VoidCallback onEscape;
   final VoidCallback onTab;
@@ -769,6 +839,19 @@ class _TerminalControlToolbarState extends State<TerminalControlToolbar> {
                           enabled: true,
                           onPressed: widget.onLatestOutput,
                           icon: Icons.vertical_align_bottom,
+                        ),
+                        _TerminalShortcutIconButton(
+                          key: const ValueKey('terminal-key-keyboard'),
+                          tooltip:
+                              widget.keyboardActive
+                                  ? 'Hide keyboard'
+                                  : 'Show keyboard',
+                          enabled: widget.enabled,
+                          onPressed: widget.onKeyboard,
+                          icon:
+                              widget.keyboardActive
+                                  ? Icons.keyboard_hide
+                                  : Icons.keyboard,
                         ),
                         _ToolbarTextButton(
                           key: const ValueKey('terminal-key-escape'),

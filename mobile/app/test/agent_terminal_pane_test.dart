@@ -22,6 +22,8 @@ void main() {
             width: 390,
             child: TerminalControlToolbar(
               enabled: true,
+              keyboardActive: false,
+              onKeyboard: () => calls.add('keyboard'),
               onLatestOutput: () => calls.add('latest'),
               onEscape: () => calls.add('esc'),
               onTab: () => calls.add('tab'),
@@ -41,6 +43,7 @@ void main() {
     await _expandTerminalShortcuts(tester);
 
     expect(find.byKey(const ValueKey('terminal-key-escape')), findsOneWidget);
+    expect(find.byKey(const ValueKey('terminal-key-keyboard')), findsOneWidget);
     expect(find.byKey(const ValueKey('terminal-key-tab')), findsOneWidget);
     expect(find.byKey(const ValueKey('terminal-key-ctrl-c')), findsOneWidget);
     expect(
@@ -88,6 +91,8 @@ void main() {
         home: Scaffold(
           body: TerminalControlToolbar(
             enabled: false,
+            keyboardActive: false,
+            onKeyboard: () => called = true,
             onLatestOutput: () => called = true,
             onEscape: () => called = true,
             onTab: () => called = true,
@@ -123,6 +128,47 @@ void main() {
     );
     expect(latest.onPressed, isNotNull);
     expect(called, isFalse);
+  });
+
+  testWidgets('terminal keyboard opens only from the explicit shortcut', (
+    tester,
+  ) async {
+    final transport = RecordingTerminalTransport();
+    final view = _view(namespaceEpoch: 4);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AgentTerminalPane(
+            view: view,
+            target: view.terminalTargetForAgent('mobile'),
+            terminalTransport: transport,
+            gatewayTerminal: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final terminal = find.byKey(const ValueKey('ccb-live-terminal-view'));
+    expect(binding.testTextInput.isVisible, isFalse);
+
+    await tester.tap(terminal);
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(binding.testTextInput.isVisible, isFalse);
+
+    await _expandTerminalShortcuts(tester);
+    await tester.tap(find.byKey(const ValueKey('terminal-key-keyboard')));
+    await tester.pump();
+    expect(binding.testTextInput.isVisible, isTrue);
+
+    await tester.tap(find.byKey(const ValueKey('terminal-key-keyboard')));
+    await tester.pump();
+    expect(binding.testTextInput.isVisible, isFalse);
+
+    await tester.tap(terminal);
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(binding.testTextInput.isVisible, isFalse);
   });
 
   testWidgets('live terminal pane does not echo terminal report replies', (
@@ -208,8 +254,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final session = transport.sessions.single;
-    await tester.tap(find.byKey(const ValueKey('ccb-live-terminal-view')));
-    await tester.pump(const Duration(seconds: 1));
+    await _expandTerminalShortcuts(tester);
+    await tester.tap(find.byKey(const ValueKey('terminal-key-keyboard')));
+    await tester.pump();
     binding.testTextInput.enterText('Alpha中文123');
     await binding.idle();
 
@@ -254,7 +301,8 @@ void main() {
     final historyOffset = position.pixels;
     expect(historyOffset, lessThan(position.maxScrollExtent - 40));
 
-    await tester.tap(terminal);
+    await _expandTerminalShortcuts(tester);
+    await tester.tap(find.byKey(const ValueKey('terminal-key-keyboard')));
     tester.view.viewInsets = const FakeViewPadding(bottom: 280);
     addTearDown(tester.view.resetViewInsets);
     await tester.pump();
