@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -45,7 +46,9 @@ def _job(*, agent_name: str, body: str) -> JobRecord:
     )
 
 
-def _planner_body(closure: dict[str, object]) -> str:
+def _planner_body(
+    closure: dict[str, object], *, notification_required: bool = True,
+) -> str:
     envelope = {
         'schema': 'ccb.plan.task_set_closure_transport.v1',
         'closure': closure,
@@ -57,6 +60,11 @@ def _planner_body(closure: dict[str, object]) -> str:
             'closure_digest': closure['closure_digest'],
         },
     }
+    if not notification_required:
+        envelope['fake_provider_semantics'] = {
+            'schema': 'ccb.fake.decision029_planner_semantics.v1',
+            'frontdesk_notification_required': False,
+        }
     return '**task-set-closure.json**\n```json\n' + json.dumps(envelope, sort_keys=True) + '\n```'
 
 
@@ -77,7 +85,7 @@ def _generated_closure(tmp_path: Path, results: list[str]) -> dict[str, object]:
         task_set_id=created['task_set']['task_set_id'],
     )
     assert evaluated['status'] == 'closure_pending'
-    return evaluated['closure']
+    return _worker2_closure_shape(evaluated['closure'])
 
 
 def _generated_non_execution_closure(tmp_path: Path, *, result: str) -> dict[str, object]:
@@ -99,12 +107,33 @@ def _generated_non_execution_closure(tmp_path: Path, *, result: str) -> dict[str
         context, task_set_id=created['task_set']['task_set_id'],
     )
     assert evaluated['status'] == 'closure_pending'
-    return evaluated['closure']
+    return _worker2_closure_shape(evaluated['closure'])
 
 
-def _planner_reply(closure: dict[str, object]) -> dict[str, object]:
+def _worker2_closure_shape(closure: dict[str, object]) -> dict[str, object]:
+    result = deepcopy(closure)
+    revision = result['expected_plan_revision']
+    assert isinstance(revision, dict)
+    result['expected_plan_revision'] = revision['digest']
+    result.pop('closure_digest')
+    result['closure_digest'] = _canonical_digest(result)
+    return result
+
+
+def _canonical_digest(value: object) -> str:
+    encoded = json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(',', ':'),
+    ).encode('utf-8')
+    return 'sha256:' + hashlib.sha256(encoded).hexdigest()
+
+
+def _planner_reply(
+    closure: dict[str, object], *, notification_required: bool = True,
+) -> dict[str, object]:
     reply = FakeProviderAdapter(latency_seconds=0).start(
-        _job(agent_name='planner', body=_planner_body(closure)),
+        _job(agent_name='planner', body=_planner_body(
+            closure, notification_required=notification_required,
+        )),
         context=None,
         now='2026-07-12T00:00:00Z',
     ).reply
@@ -115,6 +144,7 @@ def test_corpus_is_generator_backed_and_non_acceptance() -> None:
     corpus = _corpus()
     assert corpus['schema'] == 'ccb.decision029.fake_closure_scenarios.v2'
     assert corpus['generator'].endswith('evaluate_task_set_closure')
+    assert corpus['closure_representation'] == 'worker2-frozen-digest-string'
     assert corpus['evidence_scope'] == 'source_fake_protocol_only_not_acceptance'
 
 
@@ -127,14 +157,103 @@ def test_fake_planner_accepts_exact_production_closure(tmp_path: Path, scenario:
         'ordered_terminal_evidence_digest', 'status', 'aggregate_result', 'reason',
         'created_at', 'closure_digest',
     }
-    proposal = _planner_reply(closure)
-    assert proposal['expected_plan_revision'] == closure['expected_plan_revision']['digest']
+    notification_required = scenario.get('fake_provider_semantics') != 'notification_not_required'
+    proposal = _planner_reply(closure, notification_required=notification_required)
+    assert proposal['expected_plan_revision'] == closure['expected_plan_revision']
     assert proposal['aggregate_result'] == scenario['aggregate_result']
     assert proposal['result'] == RESULT_BY_AGGREGATE[scenario['aggregate_result']]
     assert proposal['closure_evidence_digest'] == closure['ordered_terminal_evidence_digest']
     assert proposal['frontdesk_status']['aggregate_result'] == scenario['aggregate_result']
+    assert proposal['frontdesk_notification_required'] is notification_required
     assert 'accepted_scope' not in closure
     assert 'frontdesk_notification_required' not in closure
+
+
+def test_fake_planner_schema_locks_digest_plan_revision_and_rejects_object(tmp_path: Path) -> None:
+    closure = _generated_closure(tmp_path, ['pass'])
+    assert isinstance(closure['expected_plan_revision'], str)
+    assert _planner_reply(closure)['expected_plan_revision'] == closure['expected_plan_revision']
+    old_shape = deepcopy(closure)
+    old_shape['expected_plan_revision'] = {
+        'schema': 'ccb.plan.revision.v1', 'files': [],
+        'digest': closure['expected_plan_revision'],
+    }
+    old_shape['closure_digest'] = _canonical_digest({
+        key: value for key, value in old_shape.items() if key != 'closure_digest'
+    })
+    with pytest.raises(ValueError, match='expected_plan_revision is not a digest'):
+        _planner_reply(old_shape)
+
+
+def test_notification_not_required_does_not_launder_non_success(tmp_path: Path) -> None:
+    closure = _generated_closure(tmp_path, ['pass', 'blocked'])
+    proposal = _planner_reply(closure, notification_required=False)
+    assert proposal['frontdesk_notification_required'] is False
+    assert proposal['aggregate_result'] == 'partial'
+    assert proposal['result'] == 'closure_partial'
+    assert proposal['unresolved_scope']
+
+
+def test_fake_notification_semantics_rejects_authority_fields(tmp_path: Path) -> None:
+    closure = _generated_closure(tmp_path, ['pass'])
+    envelope = json.loads(_planner_body(
+        closure, notification_required=False,
+    ).split('```json\n', 1)[1].rsplit('\n```', 1)[0])
+    envelope['fake_provider_semantics']['aggregate_result'] = 'pass'
+    body = '**task-set-closure.json**\n```json\n' + json.dumps(envelope) + '\n```'
+    with pytest.raises(ValueError, match='fake provider semantics'):
+        FakeProviderAdapter(latency_seconds=0).start(
+            _job(agent_name='planner', body=body), context=None,
+            now='2026-07-12T00:00:00Z',
+        )
+
+
+@pytest.mark.parametrize(
+    ('field', 'value'),
+    (
+        ('missing', None),
+        ('extra', True),
+        ('path', '/tmp/request.txt'),
+        ('path', '../request.txt'),
+        ('path', r'..\request.txt'),
+        ('bytes', -1),
+        ('bytes', True),
+        ('sha256', 'not-a-digest'),
+        ('kind', ''),
+    ),
+)
+def test_fake_planner_rejects_malformed_source_body_artifact(
+    tmp_path: Path, field: str, value: object,
+) -> None:
+    closure = _generated_closure(tmp_path, ['pass'])
+    artifact = {
+        'kind': 'ccb.text', 'path': '.ccb/artifacts/request.txt',
+        'bytes': 12, 'sha256': 'a' * 64,
+    }
+    if field == 'missing':
+        artifact.pop('path')
+    elif field == 'extra':
+        artifact['unexpected'] = value
+    else:
+        artifact[field] = value
+    closure['source_request']['body_artifact'] = artifact
+    closure['closure_digest'] = _canonical_digest({
+        key: item for key, item in closure.items() if key != 'closure_digest'
+    })
+    with pytest.raises(ValueError, match='body_artifact'):
+        _planner_reply(closure)
+
+
+def test_fake_planner_accepts_exact_source_body_artifact(tmp_path: Path) -> None:
+    closure = _generated_closure(tmp_path, ['pass'])
+    closure['source_request']['body_artifact'] = {
+        'kind': 'ccb.text', 'path': '.ccb/artifacts/request.txt',
+        'bytes': 12, 'sha256': 'a' * 64,
+    }
+    closure['closure_digest'] = _canonical_digest({
+        key: item for key, item in closure.items() if key != 'closure_digest'
+    })
+    assert _planner_reply(closure)['aggregate_result'] == 'pass'
 
 
 @pytest.mark.parametrize(

@@ -388,7 +388,8 @@ def _decision029_reply(*, agent_name: str, body: str) -> str | None:
 
 def _decision029_planner_reply(body: str) -> str:
     transport = _decision029_json_section(body, 'task-set-closure.json')
-    if set(transport) != {'schema', 'closure', 'closure_intent'}:
+    allowed_transport = {'schema', 'closure', 'closure_intent'}
+    if set(transport) not in {frozenset(allowed_transport), frozenset(allowed_transport | {'fake_provider_semantics'})}:
         raise ValueError('Decision 029 closure transport fields are invalid')
     if transport.get('schema') != 'ccb.plan.task_set_closure_transport.v1':
         raise ValueError('Decision 029 closure transport schema is invalid')
@@ -396,6 +397,7 @@ def _decision029_planner_reply(body: str) -> str:
     intent = transport.get('closure_intent')
     if not isinstance(closure, dict) or not isinstance(intent, dict):
         raise ValueError('Decision 029 closure transport authority is invalid')
+    notification_required = _decision029_fake_semantics(transport.get('fake_provider_semantics'))
     _decision029_validate_closure_intent(intent, closure)
     normalized = _decision029_closure(closure)
     aggregate_result = str(normalized['aggregate_result'])
@@ -455,7 +457,7 @@ def _decision029_planner_reply(body: str) -> str:
         'blockers': blockers,
         'replan_inputs': replan_inputs,
         'next_milestone': next_milestone,
-        'frontdesk_notification_required': normalized['frontdesk_notification_required'],
+        'frontdesk_notification_required': notification_required,
         'frontdesk_status': status,
     }
     return (
@@ -517,7 +519,7 @@ def _decision029_closure(value: dict[str, object]) -> dict[str, object]:
     revision = value.get('task_set_revision')
     if isinstance(revision, bool) or not isinstance(revision, int) or revision <= 0:
         raise ValueError('Decision 029 task_set_revision is invalid')
-    plan_revision = _decision029_plan_revision(value.get('expected_plan_revision'))
+    plan_revision = _decision029_digest(value.get('expected_plan_revision'), 'expected_plan_revision')
     _decision029_source_request(value.get('source_request'))
     _decision029_planner_job(value.get('planner_job'))
     _decision029_text(value.get('created_at'), 'created_at')
@@ -583,25 +585,19 @@ def _decision029_closure(value: dict[str, object]) -> dict[str, object]:
         'blockers': tuple(blockers),
         'replan_inputs': tuple(replan_inputs),
         'evidence_refs': tuple(evidence_refs),
-        'frontdesk_notification_required': True,
     }
 
 
-def _decision029_plan_revision(value: object) -> str:
-    if not isinstance(value, dict) or set(value) != {'schema', 'files', 'digest'}:
-        raise ValueError('Decision 029 expected_plan_revision is invalid')
-    if value.get('schema') != 'ccb.plan.revision.v1' or not isinstance(value.get('files'), list):
-        raise ValueError('Decision 029 expected_plan_revision is invalid')
-    for item in value['files']:
-        if not isinstance(item, dict) or set(item) != {'path', 'sha256'}:
-            raise ValueError('Decision 029 plan revision file is invalid')
-        _decision029_text(item.get('path'), 'plan_revision.path')
-        _decision029_hex_digest(item.get('sha256'), 'plan_revision.sha256')
-    expected = dict(value)
-    digest = _decision029_digest(expected.pop('digest'), 'expected_plan_revision.digest')
-    if digest != _decision029_canonical_digest(expected):
-        raise ValueError('Decision 029 expected_plan_revision digest mismatch')
-    return digest
+def _decision029_fake_semantics(value: object) -> bool:
+    if value is None:
+        return True
+    expected = {
+        'schema': 'ccb.fake.decision029_planner_semantics.v1',
+        'frontdesk_notification_required': False,
+    }
+    if value != expected:
+        raise ValueError('Decision 029 fake provider semantics are invalid')
+    return False
 
 
 def _decision029_source_request(value: object) -> None:
@@ -615,9 +611,28 @@ def _decision029_source_request(value: object) -> None:
         raise ValueError('Decision 029 source_request.bytes is invalid')
     artifact = value.get('body_artifact')
     if artifact is not None:
-        allowed = {'kind', 'path', 'bytes', 'sha256'}
-        if not isinstance(artifact, dict) or not artifact or set(artifact) - allowed:
+        required_artifact = {'kind', 'path', 'bytes', 'sha256'}
+        if not isinstance(artifact, dict) or set(artifact) != required_artifact:
             raise ValueError('Decision 029 source_request.body_artifact is invalid')
+        kind = _decision029_text(artifact.get('kind'), 'source_request.body_artifact.kind')
+        if len(kind) > 80:
+            raise ValueError('Decision 029 source_request.body_artifact.kind is invalid')
+        path_text = _decision029_text(artifact.get('path'), 'source_request.body_artifact.path')
+        path = Path(path_text)
+        if (
+            len(path_text) > 1024
+            or path.is_absolute()
+            or path_text != path.as_posix()
+            or '\\' in path_text
+            or not path.parts
+            or path_text == '.'
+            or '..' in path.parts
+        ):
+            raise ValueError('Decision 029 source_request.body_artifact.path is invalid')
+        artifact_bytes = artifact.get('bytes')
+        if isinstance(artifact_bytes, bool) or not isinstance(artifact_bytes, int) or artifact_bytes < 0:
+            raise ValueError('Decision 029 source_request.body_artifact.bytes is invalid')
+        _decision029_hex_digest(artifact.get('sha256'), 'source_request.body_artifact.sha256')
 
 
 def _decision029_planner_job(value: object) -> None:
