@@ -5,7 +5,6 @@ from dataclasses import replace
 import hashlib
 import json
 from pathlib import Path
-import re
 import time
 from types import SimpleNamespace
 from uuid import uuid4
