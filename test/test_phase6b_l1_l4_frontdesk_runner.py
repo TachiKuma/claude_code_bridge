@@ -187,6 +187,29 @@ def test_provider_loop_runner_commands_are_unbounded(tmp_path: Path) -> None:
         assert 'timeout' not in argv
 
 
+def test_frontdesk_request_is_natural_language_with_current_intake_contract(tmp_path: Path) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+
+    request_path = runner.write_frontdesk_request(manifest)
+    request = request_path.read_text(encoding='utf-8')
+
+    assert request.startswith('Please start ')
+    assert not request.startswith('**Intake Evidence**')
+    assert 'User Request' in request
+    assert 'Macro request' in request
+    assert 'Execution Contract' in request
+    assert 'Acceptance Criteria' in request
+    assert 'Scope' in request
+    assert 'Constraints' in request
+    assert '**Intake Evidence**' in request
+    assert 'silent handoff to planner' in request.lower()
+    assert 'must not directly implement' in request.lower()
+    for task in runner.TASKS:
+        assert task['task_id'] in request
+        assert task['expected_route'] in request
+
+
 def test_generated_config_mounts_required_resident_ask_targets_not_only_role_profiles(
     tmp_path: Path,
 ) -> None:
@@ -731,6 +754,137 @@ def test_planner_task_set_handoff_wait_checkpoints_before_false_missing_task_set
     assert payload['handoff_state']['frontdesk_job_status'] == 'running'
     assert not Path(str(manifest['rows'])).exists()
     assert sleeps == [runner.PLANNER_TASK_SET_WAIT_RETRY_DELAY_SECONDS] * 2
+
+
+def test_planner_task_set_handoff_blocks_immediately_when_frontdesk_failed_without_handoff(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    snapshot = Path(str(manifest['project'])) / '.ccb/ccbd/snapshots/job_frontdesk.json'
+    state = {
+        'frontdesk_job_id': 'job_frontdesk',
+        'frontdesk_job_status': 'failed',
+        'frontdesk_job_reason': 'frontdesk_direct_implementation_boundary_violation',
+        'frontdesk_snapshot_path': str(snapshot),
+        'planner_job_id': None,
+        'activation_path': None,
+        'fenced_task_set_present': False,
+    }
+    sleeps = []
+
+    monkeypatch.setattr(runner, 'planner_task_set_handoff_state', lambda _manifest: state)
+    monkeypatch.setattr(runner.time, 'sleep', lambda seconds: sleeps.append(seconds))
+
+    with pytest.raises(
+        runner.HarnessBlocker,
+        match='runner_resume_and_evidence_integrity.*frontdesk_terminal_without_planner_handoff',
+    ):
+        runner.wait_for_planner_task_set_handoff(manifest, before='start_task_phase6b-l1-doc-direct-execution')
+
+    checkpoint = (
+        Path(str(manifest['root']))
+        / 'pending-checkpoints'
+        / (
+            f"{manifest['label']}__frontdesk_terminal_without_planner_handoff_before_"
+            'start_task_phase6b-l1-doc-direct-execution.json'
+        )
+    )
+    payload = json.loads(checkpoint.read_text(encoding='utf-8'))
+    assert payload['reason'] == 'frontdesk_terminal_without_planner_handoff'
+    assert payload['handoff_state']['frontdesk_job_status'] == 'failed'
+    assert payload['handoff_state']['frontdesk_job_reason'] == 'frontdesk_direct_implementation_boundary_violation'
+    assert payload['handoff_state']['frontdesk_snapshot_path'] == str(snapshot)
+    assert sleeps == []
+
+
+def test_planner_task_set_handoff_state_preserves_frontdesk_terminal_snapshot(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    root, manifest = _materialize(tmp_path)
+    project = Path(str(manifest['project']))
+    job_id = 'job_frontdesk'
+    logs = root / 'logs'
+    logs.mkdir(parents=True, exist_ok=True)
+    (logs / 'entry__frontdesk_entry_ask.stdout').write_text(
+        f'accepted job={job_id}\n',
+        encoding='utf-8',
+    )
+    snapshot = project / f'.ccb/ccbd/snapshots/{job_id}.json'
+    snapshot.parent.mkdir(parents=True, exist_ok=True)
+    snapshot.write_text(
+        json.dumps(
+            {
+                'latest_decision': {
+                    'status': 'failed',
+                    'reason': 'frontdesk_direct_implementation_boundary_violation',
+                }
+            }
+        ),
+        encoding='utf-8',
+    )
+
+    state = runner.planner_task_set_handoff_state(manifest)
+
+    assert state['frontdesk_job_id'] == job_id
+    assert state['frontdesk_job_status'] == 'failed'
+    assert state['frontdesk_job_reason'] == 'frontdesk_direct_implementation_boundary_violation'
+    assert state['frontdesk_snapshot_path'] == str(snapshot)
+    assert state['planner_job_id'] is None
+    assert state['activation_path'] is None
+
+
+@pytest.mark.parametrize(
+    'state',
+    [
+        {'frontdesk_job_status': 'pending'},
+        {'frontdesk_job_status': 'running'},
+    ],
+)
+def test_planner_task_set_handoff_keeps_waiting_for_nonterminal_frontdesk(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    state: dict[str, object],
+) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    observed = {'frontdesk_job_id': 'job_frontdesk', **state}
+    sleeps = []
+
+    monkeypatch.setattr(runner, 'PLANNER_TASK_SET_WAIT_ATTEMPTS', 1)
+    monkeypatch.setattr(runner, 'planner_task_set_handoff_state', lambda _manifest: observed)
+    monkeypatch.setattr(runner.time, 'sleep', lambda seconds: sleeps.append(seconds))
+
+    with pytest.raises(runner.HarnessBlocker, match='frontdesk_planner_handoff_pending'):
+        runner.wait_for_planner_task_set_handoff(manifest, before='start_task')
+
+    assert sleeps == [runner.PLANNER_TASK_SET_WAIT_RETRY_DELAY_SECONDS]
+
+
+@pytest.mark.parametrize(
+    'state',
+    [
+        {'fenced_task_set_present': True},
+        {'planner_job_id': 'job_planner', 'planner_job_status': 'failed'},
+    ],
+)
+def test_planner_task_set_handoff_preserves_existing_terminal_conditions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    state: dict[str, object],
+) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    monkeypatch.setattr(runner, 'planner_task_set_handoff_state', lambda _manifest: state)
+    monkeypatch.setattr(
+        runner.time,
+        'sleep',
+        lambda _seconds: (_ for _ in ()).throw(AssertionError('unexpected sleep')),
+    )
+
+    assert runner.wait_for_planner_task_set_handoff(manifest, before='start_task') == state
 
 
 def test_init_writes_config_before_startup_and_validates_mount_after_startup() -> None:

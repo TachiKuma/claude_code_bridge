@@ -831,6 +831,24 @@ def write_frontdesk_request(manifest: dict[str, Any]) -> Path:
     path.write_text(
         "Please start a fresh real-provider L1-L4 deployment-readiness route-mix "
         "validation for this lab project.\n\n"
+        "User Request: validate the bounded route mix below through the managed "
+        "Frontdesk-to-Planner workflow.\n\n"
+        "Macro request: prepare and route these exact task ids without changing "
+        "their expected routes: phase6b-l1-doc-direct-execution "
+        "(direct_execution), phase6b-l2-code-test-direct-execution "
+        "(direct_execution), phase6b-l3-needs-detail (needs_detail), "
+        "phase6b-l4-macro-adjustment-request (macro_adjustment_request), and "
+        "phase6b-l4-blocked-prerequisite (blocked).\n\n"
+        "Execution Contract and Acceptance Criteria: Frontdesk must return only "
+        "structured **Intake Evidence** containing detailed Macro request or User "
+        "request, Required behavior, Scope, and Constraints. Frontdesk must not "
+        "directly implement project artifacts; after producing intake evidence it "
+        "must use the controlled silent handoff to Planner. Planner and orchestrator "
+        "own task preparation and routing.\n\n"
+        "Scope: preserve the existing L1-L4 task semantics, expected routes, task "
+        "ids, and terminal expectations. Constraints: Frontdesk produces intake "
+        "evidence only and performs no worker implementation or controller-owned "
+        "evidence work.\n\n"
         "Use frontdesk as the user-facing intake and hand off to planner automatically. "
         "Treat this as controller-owned route-mix validation, not as a worker "
         "implementation task. Planner and orchestrator should prepare and route the "
@@ -1129,6 +1147,18 @@ def planner_task_set_handoff_state(manifest: dict[str, Any]) -> dict[str, Any]:
         status = latest_job_status(project, "frontdesk", frontdesk_job_id)
         if status:
             evidence["frontdesk_job_status"] = status
+        snapshot_path = project / ".ccb" / "ccbd" / "snapshots" / f"{frontdesk_job_id}.json"
+        snapshot = _read_json(snapshot_path)
+        if isinstance(snapshot, dict):
+            evidence["frontdesk_snapshot_path"] = str(snapshot_path)
+            decision = snapshot.get("latest_decision")
+            if isinstance(decision, dict):
+                decision_status = _first_text(decision.get("status"))
+                if decision_status and not evidence.get("frontdesk_job_status"):
+                    evidence["frontdesk_job_status"] = decision_status.lower()
+                reason = _first_text(decision.get("reason"))
+                if reason:
+                    evidence["frontdesk_job_reason"] = reason
     planner_job_id = _first_text(evidence.get("planner_job_id"))
     if planner_job_id:
         status = latest_job_status(project, "planner", planner_job_id)
@@ -1147,6 +1177,41 @@ def wait_for_planner_task_set_handoff(manifest: dict[str, Any], *, before: str) 
         planner_status = str(state.get("planner_job_status") or "").strip().lower()
         if state.get("planner_job_id") and planner_status in TERMINAL_JOB_STATUSES:
             return state
+        frontdesk_status = str(state.get("frontdesk_job_status") or "").strip().lower()
+        no_handoff_evidence = not any(
+            (
+                state.get("planner_job_id"),
+                state.get("activation_path"),
+                state.get("fenced_task_set_present"),
+            )
+        )
+        if frontdesk_status in TERMINAL_JOB_STATUSES and no_handoff_evidence:
+            checkpoint = Path(str(manifest["root"])) / "pending-checkpoints" / (
+                f"{manifest['label']}__frontdesk_terminal_without_planner_handoff_before_{before}.json"
+            )
+            payload = {
+                "schema_version": 1,
+                "record_type": "ccb_phase6b_l1_l4_planner_task_set_checkpoint",
+                "classification": "runner_resume_and_evidence_integrity",
+                "status": "blocker",
+                "reason": "frontdesk_terminal_without_planner_handoff",
+                "claimable": False,
+                "root": manifest["root"],
+                "project": manifest["project"],
+                "label": manifest["label"],
+                "before": before,
+                "handoff_state": state,
+                "blocked_actions": ["manual start-task"],
+            }
+            _write_json(checkpoint, payload)
+            raise HarnessBlocker(
+                classification="runner_resume_and_evidence_integrity",
+                reason="frontdesk_terminal_without_planner_handoff",
+                message=(
+                    "frontdesk reached a terminal state without planner activation, "
+                    f"job, or fenced task set before {before}; checkpoint={checkpoint}"
+                ),
+            )
         time.sleep(PLANNER_TASK_SET_WAIT_RETRY_DELAY_SECONDS)
     checkpoint = Path(str(manifest["root"])) / "pending-checkpoints" / (
         f"{manifest['label']}__planner_task_set_handoff_pending_before_{before}.json"
