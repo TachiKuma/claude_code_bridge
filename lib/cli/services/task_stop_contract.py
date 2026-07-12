@@ -30,12 +30,16 @@ _CONFLICTING_STATUS_PATTERN = re.compile(r'\b(?:replan_required|blocked|done|can
 _SCHEMA_PATTERN = re.compile(r'\b(?:schema|token(?:s)?|enum|allowed\s+statuses)\b', re.IGNORECASE)
 _JSON_PATTERN = re.compile(r'(^|\n)\s*[\[{]|"[^"\n]+"\s*:', re.IGNORECASE)
 _FENCE_PATTERN = re.compile(r'(^|\n)\s*(?:```|~~~)', re.IGNORECASE)
-_QUOTE_PATTERN = re.compile(r'(^|\n)\s*(?:[-*+]\s+)?(?:>\s*)+', re.IGNORECASE)
+_QUOTE_PATTERN = re.compile(r'(^|\n)\s*(?:(?:[-*+]|\d+[.)])\s+)*>\s*', re.IGNORECASE)
 _TASK_REFERENCE_PATTERN = re.compile(
     r'\b(?:for\s+task|task\s+id)\s*[:=]?\s*`?([A-Za-z0-9][A-Za-z0-9_-]*)`?',
     re.IGNORECASE,
 )
 _TASK_LABEL_PATTERN = re.compile(r'\btask\s+`?([A-Za-z0-9][A-Za-z0-9_-]*)`?\s*:', re.IGNORECASE)
+_TASK_SCOPE_LABEL_PATTERN = re.compile(
+    r'\b(?:task|task_id)\b\s*(?:\*{1,3}|_{1,3})?\s*:\s*(?:\*{1,3}|_{1,3})?\s*`?([A-Za-z0-9][A-Za-z0-9_-]*)`?',
+    re.IGNORECASE,
+)
 _OTHER_TASK_PATTERN = re.compile(r'\b(?:other|another)\s+task\b', re.IGNORECASE)
 
 
@@ -87,7 +91,11 @@ def _unsafe_corpus(text: str, *, task_id: str) -> bool:
         or '?' in text
     ):
         return True
-    for reference in (*_TASK_REFERENCE_PATTERN.findall(text), *_TASK_LABEL_PATTERN.findall(text)):
+    for reference in (
+        *_TASK_REFERENCE_PATTERN.findall(text),
+        *_TASK_LABEL_PATTERN.findall(text),
+        *_TASK_SCOPE_LABEL_PATTERN.findall(text),
+    ):
         if not task_id or reference != task_id:
             return True
     return False

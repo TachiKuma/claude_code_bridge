@@ -100,3 +100,24 @@ def test_match_detail_ready_stop_contract_allows_explicit_current_task_scope() -
         {'task_packet': 'For task current-task, expected stop: detail_ready.'},
         task_id='current-task',
     ) is not None
+
+
+@pytest.mark.parametrize(
+    'text',
+    (
+        '1. > Expected stop: detail_ready.',
+        '  1. - > Expected stop: detail_ready.',
+        'Task: other-task\nExpected stop: detail_ready.',
+        '**task_id:** `other-task`\nExpected stop: detail_ready.',
+    ),
+)
+def test_match_detail_ready_stop_contract_rejects_ordered_quote_and_mismatched_scope_label(text: str) -> None:
+    assert match_detail_ready_stop_contract(text, task_id='current-task') is None
+
+
+@pytest.mark.parametrize('label', ('Task: `current-task`', '**task_id:** current-task'))
+def test_match_detail_ready_stop_contract_allows_exact_current_scope_label(label: str) -> None:
+    assert match_detail_ready_stop_contract(
+        f'{label}\nExpected stop: detail_ready.',
+        task_id='current-task',
+    ) is not None

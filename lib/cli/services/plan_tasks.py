@@ -63,6 +63,7 @@ _SEMANTIC_TASK_ARTIFACTS = frozenset(
     }
 )
 _DETAIL_READY_REQUIRED = frozenset({'detail_design', 'detail_summary', 'detail_packet'})
+_STOP_CONTRACT_ARTIFACTS = frozenset({'task_packet', 'execution_contract', 'orchestration_notes'})
 _ORCHESTRATION_READY_REQUIRED = frozenset({'task_packet', 'execution_contract'})
 _READY_REQUIRED = frozenset({'requirements', 'acceptance', 'verification', 'handoff', 'review'})
 _PLAN_REVIEW_REQUIRED = frozenset({'requirements', 'acceptance', 'verification', 'handoff'})
@@ -322,6 +323,9 @@ def _task_artifact(context, command) -> dict[str, object]:
             extra=extra,
             actor=_artifact_actor_metadata(context, command),
         )
+        if artifact_kind in _STOP_CONTRACT_ARTIFACTS:
+            record = _synchronize_stop_contract_revisions(record)
+            artifact = dict(record['artifacts'][artifact_kind])
         now = str(artifact['imported_at'])
         record['updated_at'] = now
         _replace_record(locked_task['tasks_root'], locked_task['index'], record)
@@ -485,11 +489,15 @@ def _task_reconcile_detail_ready(context, command) -> dict[str, object]:
             raise ValueError('stale detail_ready reconciliation authority')
         if (
             record.get('status') == 'detail_ready'
+            and record.get('owner') == _owner_for_status('detail_ready')
             and record.get('next_owner') == 'planner'
+            and not str(record.get('current_loop') or '').strip()
             and record.get('activation_reason') == 'reconciled_detail_ready_stop_contract'
             and isinstance(record.get('detail_ready_reconciliation'), dict)
             and record['detail_ready_reconciliation'].get('authority_digest') == expected_authority
             and record['detail_ready_reconciliation'].get('basis_digest') == current_authority['basis_digest']
+            and record['detail_ready_reconciliation'].get('post_state_digest')
+            == _post_reconcile_state_digest(record, basis_digest=current_authority['basis_digest'])
         ):
             payload = _payload(context, action='task-reconcile-detail-ready', record=record)
             payload['idempotent'] = True
@@ -526,6 +534,11 @@ def _task_reconcile_detail_ready(context, command) -> dict[str, object]:
         record['detail_ready_reconciliation'] = {
             'authority_digest': expected_authority,
             'basis_digest': current_authority['basis_digest'],
+            'post_state_digest': _post_reconcile_state_digest(
+                record,
+                basis_digest=current_authority['basis_digest'],
+                state_version=task_state_version(record) + 1,
+            ),
         }
         record['updated_at'] = now
         _replace_record(task['tasks_root'], task['index'], record)
@@ -1304,8 +1317,10 @@ def _detail_ready_reconcile_authority(
     if str(record.get('status') or '') not in allowed_statuses:
         return None
     status = str(record.get('status') or '')
-    expected_owner = 'orchestrator' if status == 'ready_for_orchestration' else 'planner'
-    if str(record.get('next_owner') or '') != expected_owner:
+    expected_next_owner = 'orchestrator' if status == 'ready_for_orchestration' else 'planner'
+    if status == 'detail_ready' and record.get('owner') != _owner_for_status('detail_ready'):
+        return None
+    if str(record.get('next_owner') or '') != expected_next_owner:
         return None
     if str(record.get('current_loop') or '').strip() or _orchestrator_route_for_record(record) != 'needs_detail':
         return None
@@ -1393,6 +1408,8 @@ def _detail_reconcile_provenance(
         job_id = item_job_id
         source_revision = item_revision
         verified[kind] = checked
+    if source_revision != task_revision(record):
+        return None
     activation = _task_detailer_activation_authority(
         project_root,
         task_id=task_id,
@@ -1542,20 +1559,13 @@ def _task_stop_contract_corpus(record: dict[str, object], *, project_root: Path)
         artifact = artifacts.get(kind) if isinstance(artifacts, dict) else None
         if not isinstance(artifact, dict):
             continue
-        relative = str(artifact.get('path') or '').strip()
-        if not relative:
+        checked = _verified_reconcile_artifact(project_root, record, kind, artifact)
+        if checked is None:
             return None
-        try:
-            root = project_root.resolve()
-            path = (project_root / relative).resolve(strict=True)
-        except FileNotFoundError:
+        revision = artifact.get('task_revision')
+        if revision != task_revision(record):
             return None
-        if path == root or root not in path.parents or not path.is_file():
-            return None
-        try:
-            corpus[kind] = path.read_text(encoding='utf-8')
-        except (OSError, UnicodeError):
-            return None
+        corpus[kind] = checked['text']
     return corpus or None
 
 
@@ -1566,6 +1576,40 @@ def _digest_json(value: object) -> str:
 
 def _corpus_digest(corpus: dict[str, str]) -> str:
     return _digest_json(corpus)
+
+
+def _synchronize_stop_contract_revisions(record: dict[str, object]) -> dict[str, object]:
+    artifacts = dict(record.get('artifacts') or {})
+    revision = task_revision(record)
+    for kind in _STOP_CONTRACT_ARTIFACTS:
+        artifact = artifacts.get(kind)
+        if isinstance(artifact, dict):
+            updated = dict(artifact)
+            updated['task_revision'] = revision
+            artifacts[kind] = updated
+    updated_record = dict(record)
+    updated_record['artifacts'] = artifacts
+    return updated_record
+
+
+def _post_reconcile_state_digest(
+    record: dict[str, object],
+    *,
+    basis_digest: str,
+    state_version: int | None = None,
+) -> str:
+    return _digest_json(
+        {
+            'status': record.get('status'),
+            'owner': record.get('owner'),
+            'next_owner': record.get('next_owner'),
+            'current_loop': record.get('current_loop'),
+            'activation_reason': record.get('activation_reason'),
+            'task_revision': task_revision(record),
+            'state_version': task_state_version(record) if state_version is None else state_version,
+            'basis_digest': basis_digest,
+        }
+    )
 
 
 def _task_stop_contract_text(record: dict[str, object], *, project_root: Path | None) -> str:
