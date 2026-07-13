@@ -59,7 +59,7 @@ void main() {
           ),
           'body': jsonDecode(await utf8.decodeStream(request)),
         });
-        request.response.statusCode = HttpStatus.created;
+        request.response.statusCode = HttpStatus.ok;
         await request.response.close();
       });
       final messaging = _FakePushMessagingClient(token: 'first-token');
@@ -92,9 +92,9 @@ void main() {
       await _drain();
 
       expect(requests, hasLength(2));
-    expect(requests.first['path'], '/v1/devices/me/push-token');
+      expect(requests.first['path'], '/v1/devices/me/push-token');
       expect(requests.first['authorization'], 'Bearer paired-device-token');
-    expect(requests.first['body'], {'token': 'first-token'});
+      expect(requests.first['body'], {'token': 'first-token'});
       expect(routes.map((route) => route.agent), ['mobile']);
 
       await runtime.dispose();

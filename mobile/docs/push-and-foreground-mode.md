@@ -31,12 +31,15 @@ The registration protocol is deliberately small:
 {"token":"fcm-token"}
 ```
 
-The gateway stores the FCM token in owner-only private state. Sender payloads
-are exactly `id`, `kind`, `project_id`, `project_short_name`, `agent`,
-`completed_at`, and `dedupe_key`; they must not include prompts, terminal
-output, paths, errors, credentials, or a device token. FCM is not an
-authorization channel: opening a route always uses the stored paired profile
-and normal gateway authorization.
+The gateway stores the FCM token in owner-only private state. Sender data
+payloads are exactly `id`, `kind`, `project_id`, `project_short_name`,
+`agent`, `completed_at`, and `dedupe_key`; they must not include prompts,
+terminal output, paths, errors, credentials, or a device token. For Android
+background and terminated delivery, the deployment-owned FCM sender must wrap
+those route fields in a real FCM notification+data message; data-only messages
+are not accepted as production evidence for background user-visible delivery.
+FCM is not an authorization channel: opening a route always uses the stored
+paired profile and normal gateway authorization.
 
 On a foreground/background notification click, the app first restores its
 stored paired profile and resumes the existing cursor-based notification
@@ -62,6 +65,13 @@ deployment-specific configuration file, while the FCM guide specifies
 `getToken`, `onTokenRefresh`, and Android auto-init controls. Those facts are
 why configuration and sender credentials stay outside source control and why
 the app enables token generation only after paired opt-in.
+
+Dependency audit note: pub.dev listed `firebase_messaging 16.4.2` and
+`firebase_core 4.12.0` as current on 2026-07-14, but that pair failed this
+project's compile gate because `firebase_messaging` could not resolve
+`FirebasePlugin` / `pluginConstants`. The integration therefore keeps the
+latest build-passing official FlutterFire pins above until the upstream package
+pair is buildable with this Flutter SDK.
 
 The remaining external requirements are: a private Firebase Android app
 configuration matching `io.ccb.mobile.ccb_mobile`, a server-side FCM v1 sender
