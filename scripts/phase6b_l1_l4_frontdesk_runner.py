@@ -40,6 +40,7 @@ RESIDENT_ASK_TARGETS = RESIDENT_AGENT_TARGETS
 READY_RESIDENT_AGENT_STATES = frozenset({"idle"})
 RESIDENT_PS_ATTEMPTS = 3
 RESIDENT_PS_RETRY_DELAY_SECONDS = 0.5
+READ_ONLY_TASK_OBSERVATION_MAX_RETRIES = 8
 AUTO_RUNNER_QUIET_ATTEMPTS = 1200
 AUTO_RUNNER_QUIET_RETRY_DELAY_SECONDS = 1.0
 PLANNER_TASK_SET_WAIT_ATTEMPTS = 1200
@@ -2245,7 +2246,26 @@ def task_record_exists(manifest: dict[str, Any], task_id: str) -> bool:
     return completed.returncode == 0
 
 
+def read_only_task_observation_label_suffix(manifest: dict[str, Any], label_suffix: str) -> str:
+    log_path = Path(str(manifest["command_log"]))
+    for attempt in range(READ_ONLY_TASK_OBSERVATION_MAX_RETRIES + 1):
+        candidate_suffix = label_suffix if attempt == 0 else f"{label_suffix}__attempt_{attempt}"
+        label, stdout_path, stderr_path = command_output_paths(manifest, candidate_suffix)
+        if (
+            not _command_log_has_label(log_path, label)
+            and not stdout_path.exists()
+            and not stderr_path.exists()
+        ):
+            return candidate_suffix
+    raise HarnessError(
+        "evidence_integrity_read_only_observation_attempts_exhausted: "
+        + f"{manifest['label']}__{label_suffix}; "
+        + f"max retries={READ_ONLY_TASK_OBSERVATION_MAX_RETRIES}; existing evidence is preserved"
+    )
+
+
 def observe_task_record(manifest: dict[str, Any], task_id: str, label_suffix: str) -> dict[str, Any]:
+    label_suffix = read_only_task_observation_label_suffix(manifest, label_suffix)
     run_logged(
         manifest,
         label_suffix,

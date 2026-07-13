@@ -739,7 +739,7 @@ def test_start_task_waits_for_frontdesk_auto_runner_before_manual_activation(
     def fake_run_logged(observed_manifest, label_suffix, argv):
         assert handoff_seen['value'] is True
         calls.append(('run_logged', label_suffix))
-        if label_suffix == f'{task_id}__task_observe_existing':
+        if label_suffix.startswith(f'{task_id}__task_observe_existing'):
             _label, stdout_path, _stderr_path = runner.command_output_paths(
                 observed_manifest,
                 label_suffix,
@@ -773,7 +773,7 @@ def test_start_task_waits_for_frontdesk_auto_runner_before_manual_activation(
         ('assert_planner_task_set_present', None),
         ('run_logged', f'{task_id}__task_observe_existing'),
         ('wait', f'start_task_{task_id}'),
-        ('run_logged', f'{task_id}__task_observe_existing'),
+        ('run_logged', f'{task_id}__task_observe_existing__attempt_1'),
         ('run_logged', f'{task_id}__activate_orchestrator'),
     ]
 
@@ -1114,6 +1114,91 @@ def test_command_evidence_duplicate_label_is_rejected_before_overwrite(tmp_path:
     assert stderr_path.read_text(encoding='utf-8') == 'original stderr evidence\n'
 
 
+def test_continue_route_recovers_after_route_observation_evidence_is_already_recorded(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    task_id = 'phase6b-l2-code-test-direct-execution'
+    route_available = {'value': False}
+    commands = []
+
+    def fake_subprocess_run(argv, **kwargs):
+        commands.append(argv)
+        assert argv[-5:] == ['plan', 'task-show', '--task', task_id, '--json']
+        artifacts = (
+            {'orchestration_notes': {'orchestrator_route': 'direct_execution'}}
+            if route_available['value']
+            else {}
+        )
+        kwargs['stdout'].write(
+            json.dumps({'task': {'task_id': task_id, 'status': 'done', 'artifacts': artifacts}})
+        )
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(runner.subprocess, 'run', fake_subprocess_run)
+
+    with pytest.raises(runner.HarnessError, match='supervisor checkpoint required'):
+        runner.import_supervisor_route(manifest, task_id, 'direct_execution')
+
+    route_available['value'] = True
+    runner.import_supervisor_route(manifest, task_id, 'direct_execution')
+
+    labels = [record['label'] for record in _command_log_records(Path(str(manifest['command_log'])))]
+    assert labels == [
+        f"{manifest['label']}__{task_id}__route_observe_existing",
+        f"{manifest['label']}__{task_id}__route_observe_existing__attempt_1",
+    ]
+    assert len(commands) == 2
+    assert all(argv[-5:] == ['plan', 'task-show', '--task', task_id, '--json'] for argv in commands)
+
+
+def test_start_task_reuses_completed_resolved_task_without_provider_resubmission(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    _root, manifest = _materialize(tmp_path)
+    predecessor_id = 'phase6b-l1-doc-direct-execution'
+    task_id = 'phase6b-l2-code-test-direct-execution'
+    commands = []
+
+    monkeypatch.setattr(runner, 'wait_for_planner_task_set_handoff', lambda _manifest, *, before: {})
+    monkeypatch.setattr(runner, 'assert_planner_task_set_present', lambda _manifest: {})
+    monkeypatch.setattr(runner, 'validate_sequence_task_set_only', lambda _manifest: None)
+    monkeypatch.setattr(
+        runner,
+        'resolve_sequence_task_id',
+        lambda _manifest, requested_task_id: task_id if requested_task_id == predecessor_id else requested_task_id,
+    )
+    monkeypatch.setattr(runner, 'task_record_exists', lambda _manifest, _task_id: True)
+    monkeypatch.setattr(
+        runner,
+        'wait_for_auto_runner_quiet',
+        lambda _manifest, *, before: pytest.fail(f'unexpected auto-runner wait: {before}'),
+    )
+
+    def fake_subprocess_run(argv, **kwargs):
+        commands.append(argv)
+        assert argv[-5:] == ['plan', 'task-show', '--task', task_id, '--json']
+        kwargs['stdout'].write(json.dumps({'task': {'task_id': task_id, 'status': 'done'}}))
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(runner.subprocess, 'run', fake_subprocess_run)
+
+    runner.start_task(manifest, predecessor_id)
+    runner.start_task(manifest, task_id)
+
+    labels = [record['label'] for record in _command_log_records(Path(str(manifest['command_log'])))]
+    assert labels == [
+        f"{manifest['label']}__{task_id}__task_observe_existing",
+        f"{manifest['label']}__{task_id}__task_observe_existing__attempt_1",
+    ]
+    assert len(commands) == 2
+    assert all(argv[-5:] == ['plan', 'task-show', '--task', task_id, '--json'] for argv in commands)
+
+
 def test_sequence25_pending_reviewer_checkpoint_blocks_b7_and_cleanup(tmp_path: Path) -> None:
     runner = _load_runner()
     _root, manifest = _materialize(tmp_path)
@@ -1405,7 +1490,7 @@ def test_start_task_activates_existing_ready_task_without_reimporting_anchors(
 
     def fake_run_logged(observed_manifest, label_suffix, argv):
         calls.append((label_suffix, argv))
-        if label_suffix == f'{task_id}__task_observe_existing':
+        if label_suffix.startswith(f'{task_id}__task_observe_existing'):
             _label, stdout_path, _stderr_path = runner.command_output_paths(
                 observed_manifest,
                 label_suffix,
@@ -1437,7 +1522,7 @@ def test_start_task_activates_existing_ready_task_without_reimporting_anchors(
 
     assert [call[0] for call in calls] == [
         f'{task_id}__task_observe_existing',
-        f'{task_id}__task_observe_existing',
+        f'{task_id}__task_observe_existing__attempt_1',
         f'{task_id}__activate_orchestrator',
     ]
     assert not any('__artifact_' in call[0] for call in calls)
