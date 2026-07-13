@@ -22,9 +22,10 @@
 - **Ask And Clear Skills Projected Per Agent**: managed Grok homes now receive
   independently owned native `ask` and `ccb-clear` skills when skill
   inheritance is enabled, without replacing conflicting user-owned skills.
-- **Permissions Stay Narrow**: normal Grok starts grant only
-  `Bash(command ask *)` and `Bash(command ccb clear*)`; safe starts, disabled
-  inheritance, and incomplete projections grant neither rule.
+- **Normal Starts Use Native Maximum Permission**: managed Grok now starts with
+  `--permission-mode bypassPermissions`, aligned with other auto-permission
+  providers. Safe `ccb -s` starts omit both bypass mode and the CCB skill allow
+  rules; skill inheritance still controls only the two projected command rules.
 - **System Login Is Refreshed Into Managed Homes**: Grok startup refreshes
   inherited auth/config state from the user-owned Grok home before the managed
   visible session launches.

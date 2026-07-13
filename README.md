@@ -271,7 +271,7 @@ Thanks to [tmux-agent-sidebar](https://github.com/hiroppy/tmux-agent-sidebar) fo
 - Prevented Codex native subagent rollouts from capturing CCB request binding or replacing the authoritative parent session and turn.
 - Kept built-in subagent activity, messages, and completion events inside the parent agent's collaboration flow instead of returning them to the CCB caller.
 - Matched the isolation behavior in the Python runtime and Rust accelerator, with an authenticated `spawn_agent` regression proving that callers receive only the parent final reply.
-- Added independently projected native `ask` and `ccb-clear` skills to each managed Grok home, with only the two required command permissions.
+- Added independently projected native `ask` and `ccb-clear` skills to each managed Grok home; normal starts use Grok's native `bypassPermissions` mode while safe starts keep approval enabled.
 - Refreshed inherited system Grok login state before startup and routed CCB requests through each agent's visible native Grok session; authenticated two-agent testing passed visible ask, result recovery, named clear, and post-clear isolation.
 
 </details>

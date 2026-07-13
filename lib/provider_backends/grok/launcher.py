@@ -21,6 +21,8 @@ from .skills import grok_ccb_skills_ready, grok_skill_permission_args
 
 def _grok_visible_args(prepared_state: dict[str, object]) -> tuple[str, ...]:
     args = ['--cwd', str(_path_from_prepared(prepared_state, 'workspace_path'))]
+    if bool(prepared_state.get('grok_auto_permission_enabled')):
+        args.extend(['--permission-mode', 'bypassPermissions'])
     if bool(prepared_state.get('grok_skill_permissions_enabled')):
         args.extend(grok_skill_permission_args())
     return tuple(args)
@@ -66,7 +68,8 @@ def build_start_cmd(
     *,
     prepared_state: dict[str, object] | None = None,
 ) -> str:
-    launch_context = prepared_state or {}
+    launch_context = prepared_state if prepared_state is not None else {}
+    launch_context['grok_auto_permission_enabled'] = bool(command.auto_permission)
     home_dir = _path_or_none(launch_context.get('grok_home'))
     if home_dir is not None:
         profile = load_resolved_provider_profile(Path(runtime_dir))
@@ -80,7 +83,7 @@ def build_start_cmd(
         spec,
         runtime_dir,
         launch_session_id,
-        prepared_state=prepared_state,
+        prepared_state=launch_context,
     )
 
 
@@ -111,6 +114,9 @@ def build_session_payload(
     )
     payload['grok_skill_permissions_enabled'] = bool(
         prepared_state.get('grok_skill_permissions_enabled')
+    )
+    payload['grok_auto_permission_enabled'] = bool(
+        prepared_state.get('grok_auto_permission_enabled')
     )
     return payload
 

@@ -271,8 +271,11 @@ Date: 2026-06-13
 - Added Grok-native CCB skills and execution context:
   - `ask` and `ccb-clear` project independently into each managed
     `.grok/skills` directory with inspectable ownership markers.
-  - Normal starts grant only the two exact skill command prefixes; safe starts,
-    disabled inheritance, missing sources, and unmarked conflicts grant none.
+  - Normal starts use Grok's native `bypassPermissions` mode, aligned with
+    other auto-permission providers, and add the two exact skill command
+    prefixes when projection is ready. Safe starts add neither bypass mode nor
+    skill rules; disabled inheritance, missing sources, and unmarked conflicts
+    suppress only the skill rules.
   - Headless jobs restore exact agent/project/session caller identity before a
     skill invokes CCB, while Grok native completion authority remains unchanged.
   - Focused tests passed with `204 passed`; real two-instance native skill

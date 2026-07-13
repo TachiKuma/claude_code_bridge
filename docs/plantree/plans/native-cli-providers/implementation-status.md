@@ -161,9 +161,17 @@ diagnostic ideas stay deferred/open until real usage needs them.
 
 Grok native CCB skill projection verification, 2026-07-13:
 
+- Grok normal-start permission alignment passed launcher regression coverage
+  (`11 passed`) and the wider Grok/native execution set (`202 passed`). In the
+  opened real project, both session records contained
+  `--permission-mode bypassPermissions`, both TUI footers reported
+  `always-approve`, and `grok1` executed `pwd` without an approval prompt.
+  Safe-start coverage verifies that `ccb -s` emits neither bypass mode nor CCB
+  skill allow rules.
 - Added instance-local native `ask` and `ccb-clear` packages, ownership-marked
-  projection, narrow command permissions, persisted policy, exact visible-pane
-  caller environment, disable/conflict behavior, and storage classification.
+  projection, normal-start native bypass permission, safe-start isolation,
+  persisted policy, exact visible-pane caller environment, disable/conflict
+  behavior, and storage classification.
 - Focused Grok, native execution, launcher, skill-template, hygiene, storage,
   and release-package tests: `204 passed`.
 - Both skill packages passed the skill creator `quick_validate.py` gate.

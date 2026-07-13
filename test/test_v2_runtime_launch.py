@@ -1782,6 +1782,7 @@ def test_native_cli_launcher_builds_provider_state_payload(
             '--demo',
         ]
         assert payload['grok_skill_permissions_enabled'] is False
+        assert payload['grok_auto_permission_enabled'] is False
         assert (state_dir / 'home' / '.grok' / 'skills' / 'ask' / 'SKILL.md').is_file()
         assert (state_dir / 'home' / '.grok' / 'skills' / 'ccb-clear' / 'SKILL.md').is_file()
     elif provider == 'pi':
@@ -1838,7 +1839,7 @@ def test_grok_launcher_projects_system_login_into_managed_home(
     assert f'HOME={shlex.quote(str(managed_home))}' in start_cmd
 
 
-def test_grok_launcher_allows_only_ccb_skill_commands_on_normal_start(
+def test_grok_launcher_uses_bypass_permissions_and_allows_ccb_skills_on_normal_start(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -1874,11 +1875,13 @@ def test_grok_launcher_allows_only_ccb_skill_commands_on_normal_start(
     assert 'Bash(command ask *)' in visible_parts
     assert 'Bash(command ccb clear*)' in visible_parts
     assert '--minimal' in visible_parts
+    assert visible_parts[visible_parts.index('--permission-mode') + 1] == 'bypassPermissions'
     assert '--always-approve' not in visible_parts
     assert payload['grok_skill_permissions_enabled'] is True
+    assert payload['grok_auto_permission_enabled'] is True
 
 
-def test_grok_launcher_disables_projection_and_permissions_when_inheritance_is_off(
+def test_grok_launcher_disables_skill_projection_and_rules_when_inheritance_is_off(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -1902,8 +1905,12 @@ def test_grok_launcher_disables_projection_and_permissions_when_inheritance_is_o
     start_cmd = launcher.build_start_cmd(command, spec, runtime_dir, 'sess-grok', prepared_state=prepared)
     managed_home = ctx.paths.agent_provider_state_dir('grok1', 'grok') / 'home'
 
-    assert '--allow' not in shlex.split(start_cmd.rsplit('; ', 1)[-1])
+    visible_parts = shlex.split(start_cmd.rsplit('; ', 1)[-1])
+
+    assert '--allow' not in visible_parts
+    assert visible_parts[visible_parts.index('--permission-mode') + 1] == 'bypassPermissions'
     assert prepared['grok_skill_permissions_enabled'] is False
+    assert prepared['grok_auto_permission_enabled'] is True
     assert not (managed_home / '.grok' / 'skills' / 'ask').exists()
     assert not (managed_home / '.grok' / 'skills' / 'ccb-clear').exists()
 
