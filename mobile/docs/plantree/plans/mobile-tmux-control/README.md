@@ -276,6 +276,9 @@ Relevant implementation anchors in `/home/bfly/yunwei/ccb_source`:
   records that P0 task-completion phone notifications are app-lifetime local
   notifications fed by a server-wide low-sensitive gateway event stream, with
   push/foreground-service reliability deferred.
+- [decisions/022-device-bound-push-delivery.md](decisions/022-device-bound-push-delivery.md)
+  records the gateway's device-bound push-token, payload, authorization,
+  migration, and external-provider boundary.
 
 ## Current Direction
 

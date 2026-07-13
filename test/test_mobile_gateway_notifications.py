@@ -22,6 +22,7 @@ from mobile_gateway.notifications import (
     MobileNotificationStore,
     encode_sse_event,
 )
+from mobile_gateway.push import PushSendResult
 import mobile_gateway.service as mobile_gateway_service
 
 
@@ -85,6 +86,8 @@ def _service(
     *,
     mobile_dir: Path,
     project_registry: MobileGatewayProjectRegistry | None = None,
+    push_sender=None,
+    push_sender_timeout_seconds: float = 2.0,
 ) -> MobileGatewayService:
     return MobileGatewayService(
         project_id=client.project_id,
@@ -93,6 +96,8 @@ def _service(
         mobile_dir=mobile_dir,
         project_registry=project_registry,
         clock=lambda: '2026-06-30T01:02:03Z',
+        push_sender=push_sender,
+        push_sender_timeout_seconds=push_sender_timeout_seconds,
     )
 
 
@@ -333,6 +338,104 @@ def test_notification_service_requires_notify_scope_and_default_pairing_grants_i
             {'Authorization': f'Bearer {view_claim["device_token"]}'},
         )
     assert denied.value.status_code == 403
+
+
+def test_push_delivery_is_device_bound_deduped_and_visible_target_scoped(tmp_path: Path) -> None:
+    client = _ActivityCcbdClient(project_id='proj-demo', project_root='/srv/demo', display_name='demo')
+    sent: list[tuple[str, dict[str, object], float]] = []
+
+    def sender(token: str, payload: dict[str, object], timeout: float) -> PushSendResult:
+        sent.append((token, payload, timeout))
+        return PushSendResult()
+
+    service = _service(client, mobile_dir=tmp_path / 'mobile', push_sender=sender)
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787', reusable_claims=True,
+    )
+    _, first = service.dispatch_post('/v1/pairing/claim', {'pairing_code': pairing['pairing_code']})
+    _, second = service.dispatch_post('/v1/pairing/claim', {'pairing_code': pairing['pairing_code']})
+    first_headers = {'Authorization': f'Bearer {first["device_token"]}'}
+    second_headers = {'Authorization': f'Bearer {second["device_token"]}'}
+    assert service.dispatch_put('/v1/devices/me/push-token', {'token': 'token-first'}, first_headers)[0] == 200
+    assert service.dispatch_put('/v1/devices/me/push-token', {'token': 'token-second'}, second_headers)[0] == 200
+    service.dispatch_post(
+        '/v1/devices/me/presence',
+        {'visible': True, 'focused_project_id': 'proj-demo', 'focused_agent': 'mobile'},
+        first_headers,
+    )
+
+    service.project_view_payload('proj-demo')
+    client.activity_state = 'idle'
+    service.project_view_payload('proj-demo')
+    events = service.notification_events_since('/v1/mobile/notifications?once=1', second_headers)
+    completion = next(event for event in events if event['kind'] == 'task_completed')
+
+    assert [(token, payload) for token, payload, _timeout in sent] == [('token-second', completion)]
+    assert set(sent[0][1]) == {'id', 'kind', 'project_id', 'project_short_name', 'agent', 'completed_at', 'dedupe_key'}
+    assert sent[0][1]['dedupe_key'] == completion['dedupe_key']
+    assert service.dispatch_delete('/v1/devices/me/push-token', second_headers)[0] == 200
+    assert service._require_pairing_store().push_tokens_for_delivery() == [(str(first['device']['device_id']), 'token-first')]
+
+
+def test_push_invalid_token_cleanup_revoke_and_scope_compatibility(tmp_path: Path) -> None:
+    client = _ActivityCcbdClient(project_id='proj-demo', project_root='/srv/demo', display_name='demo')
+    service = _service(
+        client,
+        mobile_dir=tmp_path / 'mobile',
+        push_sender=lambda token, _payload, _timeout: PushSendResult(invalid_token=token == 'invalid'),
+    )
+    old = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787', scopes=('view',))
+    _, old_claim = service.dispatch_post('/v1/pairing/claim', {'pairing_code': old['pairing_code']})
+    old_headers = {'Authorization': f'Bearer {old_claim["device_token"]}'}
+    with pytest.raises(MobileGatewayError) as denied:
+        service.dispatch_put('/v1/devices/me/push-token', {'token': 'no-scope'}, old_headers)
+    assert denied.value.status_code == 403
+    assert service.dispatch_get('/v1/devices/me', old_headers)[0] == 200
+
+    pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787', reusable_claims=True)
+    _, first = service.dispatch_post('/v1/pairing/claim', {'pairing_code': pairing['pairing_code']})
+    _, second = service.dispatch_post('/v1/pairing/claim', {'pairing_code': pairing['pairing_code']})
+    first_headers = {'Authorization': f'Bearer {first["device_token"]}'}
+    second_headers = {'Authorization': f'Bearer {second["device_token"]}'}
+    service.dispatch_put('/v1/devices/me/push-token', {'token': 'invalid'}, first_headers)
+    service.dispatch_put('/v1/devices/me/push-token', {'token': 'survivor'}, second_headers)
+    service.project_view_payload('proj-demo')
+    client.activity_state = 'idle'
+    service.project_view_payload('proj-demo')
+
+    store = service._require_pairing_store()
+    assert store.push_tokens_for_delivery() == [(str(second['device']['device_id']), 'survivor')]
+    service.dispatch_post(f'/v1/devices/{second["device"]["device_id"]}/revoke', {}, second_headers)
+    assert store.push_tokens_for_delivery() == []
+    with pytest.raises(MobileGatewayError) as revoked:
+        service.dispatch_get('/v1/devices/me', second_headers)
+    assert revoked.value.status_code == 401
+
+
+def test_push_sender_timeout_does_not_block_completion_observation(tmp_path: Path) -> None:
+    client = _ActivityCcbdClient(project_id='proj-demo', project_root='/srv/demo', display_name='demo')
+
+    def slow_sender(_token: str, _payload: dict[str, object], _timeout: float) -> PushSendResult:
+        time.sleep(0.25)
+        return PushSendResult()
+
+    service = _service(
+        client,
+        mobile_dir=tmp_path / 'mobile',
+        push_sender=slow_sender,
+        push_sender_timeout_seconds=0.1,
+    )
+    pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
+    _, claim = service.dispatch_post('/v1/pairing/claim', {'pairing_code': pairing['pairing_code']})
+    headers = {'Authorization': f'Bearer {claim["device_token"]}'}
+    service.dispatch_put('/v1/devices/me/push-token', {'token': 'slow'}, headers)
+    service.project_view_payload('proj-demo')
+    client.activity_state = 'idle'
+    started = time.monotonic()
+    service.project_view_payload('proj-demo')
+
+    assert time.monotonic() - started < 0.2
+    assert any(event['kind'] == 'task_completed' for event in service.notification_events_since('/v1/mobile/notifications?once=1', headers))
 
 
 def test_notification_service_observes_only_explicit_project_views(tmp_path: Path) -> None:

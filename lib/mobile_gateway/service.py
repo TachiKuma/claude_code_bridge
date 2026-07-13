@@ -31,6 +31,7 @@ from .notifications import (
     encode_sse_event,
 )
 from .pairing import MobileGatewayPairingError, MobileGatewayPairingStore
+from .push import MobilePushDispatcher, PushSender
 from .project_activity import MobileGatewayProjectActivityStore
 from .project_registry import MobileGatewayProject, MobileGatewayProjectRegistry
 from .terminal import (
@@ -62,6 +63,7 @@ _PAIRING_CAPABILITIES = (
     'invalidation_stream',
     'event_cursor_resume',
     'device_presence',
+    'push_notifications',
 )
 _REDACTED_NAMESPACE_KEYS = ('socket_path', 'session_name')
 _DEFAULT_ROUTE_PROVIDER = 'lan'
@@ -445,6 +447,8 @@ class MobileGatewayService:
         terminal_session_factory: Callable[[TerminalAttachTarget], object] | None = None,
         terminal_history_factory: Callable[[TerminalHistoryTarget], dict[str, object]] | None = None,
         terminal_message_sender: Callable[[PaneMessageTarget, str], dict[str, object]] | None = None,
+        push_sender: PushSender | None = None,
+        push_sender_timeout_seconds: float = 2.0,
     ) -> None:
         self._project_id = str(project_id)
         self._project_root = Path(project_root)
@@ -468,6 +472,14 @@ class MobileGatewayService:
         self._pairing_store = pairing_store
         if self._pairing_store is None and mobile_dir is not None:
             self._pairing_store = MobileGatewayPairingStore(self._mobile_dir)
+        self._push_dispatcher = (
+            MobilePushDispatcher(
+                pairing_store=self._pairing_store,
+                sender=push_sender,
+                timeout_seconds=push_sender_timeout_seconds,
+            )
+            if self._pairing_store is not None else None
+        )
         self._notification_store = MobileNotificationStore(self._mobile_dir) if mobile_dir is not None else None
         self._project_activity_store = (
             MobileGatewayProjectActivityStore(self._mobile_dir) if mobile_dir is not None else None
@@ -1195,6 +1207,37 @@ class MobileGatewayService:
             return 200, result
         raise MobileGatewayError('not found', status_code=404)
 
+    def dispatch_put(
+        self,
+        path: str,
+        body: Mapping[str, object] | None,
+        headers: Mapping[str, object] | None = None,
+    ) -> tuple[int, dict[str, object]]:
+        route = urlparse(path).path.rstrip('/') or '/'
+        if route != '/v1/devices/me/push-token':
+            raise MobileGatewayError('not found', status_code=404)
+        device = self._authenticate(headers, required_scopes=('notify',))
+        try:
+            self._require_pairing_store().register_push_token(
+                device_id=device.device_id,
+                token=str((body or {}).get('token') or ''),
+            )
+        except MobileGatewayPairingError as exc:
+            raise MobileGatewayError(str(exc), status_code=exc.status_code) from exc
+        return 200, {'schema_version': _SCHEMA_VERSION, 'status': 'ok'}
+
+    def dispatch_delete(
+        self,
+        path: str,
+        headers: Mapping[str, object] | None = None,
+    ) -> tuple[int, dict[str, object]]:
+        route = urlparse(path).path.rstrip('/') or '/'
+        if route != '/v1/devices/me/push-token':
+            raise MobileGatewayError('not found', status_code=404)
+        device = self._authenticate(headers, required_scopes=('notify',))
+        self._require_pairing_store().delete_push_token(device_id=device.device_id)
+        return 200, {'schema_version': _SCHEMA_VERSION, 'status': 'ok'}
+
     def _submit_agent_message(
         self,
         *,
@@ -1707,6 +1750,8 @@ class MobileGatewayService:
         )
         for event in emitted:
             self._record_project_activity(event.project_id, activity_at=event.completed_at)
+            if self._push_dispatcher is not None:
+                self._push_dispatcher.deliver(event)
 
     def _register_invalidation_watch(self, query: Mapping[str, object]) -> None:
         project_id = _query_text(query, 'watch_project_id')
@@ -2147,6 +2192,25 @@ def build_mobile_gateway_server(listen: ListenAddress, service: MobileGatewaySer
                     'status': 'error',
                     'error': _error_text(exc),
                 }
+            self._send_json(status, payload)
+
+        def do_PUT(self) -> None:  # noqa: N802 - stdlib hook
+            try:
+                status, payload = service.dispatch_put(self.path, self._read_json_body(), self.headers)
+            except MobileGatewayError as exc:
+                status = exc.status_code
+                payload = {'schema_version': _SCHEMA_VERSION, 'status': 'error', 'error': _error_text(exc)}
+            except ValueError as exc:
+                status = 400
+                payload = {'schema_version': _SCHEMA_VERSION, 'status': 'error', 'error': _error_text(exc)}
+            self._send_json(status, payload)
+
+        def do_DELETE(self) -> None:  # noqa: N802 - stdlib hook
+            try:
+                status, payload = service.dispatch_delete(self.path, self.headers)
+            except MobileGatewayError as exc:
+                status = exc.status_code
+                payload = {'schema_version': _SCHEMA_VERSION, 'status': 'error', 'error': _error_text(exc)}
             self._send_json(status, payload)
 
         def log_message(self, format: str, *args) -> None:  # noqa: A002 - stdlib signature

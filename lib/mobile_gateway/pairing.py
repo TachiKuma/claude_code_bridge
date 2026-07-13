@@ -20,6 +20,7 @@ _DEFAULT_TERMINAL_EXPIRES_SECONDS = 5 * 60
 _TERMINAL_LOG_COMPACT_BYTES = 8 * 1024 * 1024
 _HANDOFF_RECORD_TYPE = 'ccb_mobile_pairing_handoff'
 _PRESENCE_RECORD_TYPE = 'ccb_mobile_device_presence'
+_PUSH_TOKEN_RECORD_TYPE = 'ccb_mobile_device_push_tokens'
 _DEFAULT_PRESENCE_TTL_SECONDS = 90
 
 
@@ -87,6 +88,10 @@ class MobileGatewayPairingStore:
     @property
     def presence_path(self) -> Path:
         return self._mobile_dir / 'device-presence.json'
+
+    @property
+    def push_tokens_path(self) -> Path:
+        return self._mobile_dir / 'push-tokens.json'
 
     @property
     def terminal_tokens_path(self) -> Path:
@@ -307,6 +312,37 @@ class MobileGatewayPairingStore:
                 now=self._clock(),
                 freshness_ttl_seconds=self._presence_ttl_seconds,
             ) if record else None
+
+    def register_push_token(self, *, device_id: str, token: str) -> None:
+        clean_token = str(token or '').strip()
+        if not clean_token or len(clean_token) > 4096:
+            raise MobileGatewayPairingError('push token is invalid', status_code=400, reason='invalid_push_token')
+        with self._lock:
+            if not any(record.get('device_id') == device_id and not record.get('revoked_at') for record in self._read_devices()):
+                raise MobileGatewayPairingError('device token revoked', status_code=401, reason='revoked')
+            tokens = self._read_push_tokens()
+            tokens[device_id] = {'device_id': device_id, 'token': clean_token, 'updated_at': _iso(self._clock())}
+            self._write_push_tokens(tokens)
+            self._append_audit(event='device_push_token_registered', result='ok', device_id=device_id)
+
+    def delete_push_token(self, *, device_id: str, reason: str = 'device_deleted') -> bool:
+        with self._lock:
+            tokens = self._read_push_tokens()
+            removed = tokens.pop(device_id, None) is not None
+            if removed:
+                self._write_push_tokens(tokens)
+                self._append_audit(event='device_push_token_deleted', result='ok', device_id=device_id, reason=reason)
+            return removed
+
+    def push_tokens_for_delivery(self) -> list[tuple[str, str]]:
+        """Internal-only provider tokens for active devices."""
+        with self._lock:
+            active_ids = {str(record.get('device_id') or '') for record in self._read_devices() if not record.get('revoked_at')}
+            return [
+                (device_id, str(record.get('token') or ''))
+                for device_id, record in self._read_push_tokens().items()
+                if device_id in active_ids and str(record.get('token') or '')
+            ]
 
     def revoke_pairing(self, pairing_id: str, *, reason: str = 'revoked') -> dict[str, object] | None:
         requested = str(pairing_id or '').strip()
@@ -1030,6 +1066,30 @@ class MobileGatewayPairingStore:
             'devices': [presence[key] for key in sorted(presence)],
         })
 
+    def _read_push_tokens(self) -> dict[str, dict[str, object]]:
+        try:
+            payload = json.loads(self.push_tokens_path.read_text(encoding='utf-8'))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        if not isinstance(payload, dict) or payload.get('record_type') != _PUSH_TOKEN_RECORD_TYPE:
+            return {}
+        records = payload.get('devices')
+        if not isinstance(records, list):
+            return {}
+        return {
+            str(record.get('device_id') or ''): dict(record)
+            for record in records
+            if isinstance(record, dict) and str(record.get('device_id') or '')
+        }
+
+    def _write_push_tokens(self, tokens: dict[str, dict[str, object]]) -> None:
+        self._ensure_dir()
+        _write_json(self.push_tokens_path, {
+            'schema_version': _SCHEMA_VERSION,
+            'record_type': _PUSH_TOKEN_RECORD_TYPE,
+            'devices': [tokens[key] for key in sorted(tokens)],
+        })
+
     def _revoke_device_record(
         self,
         *,
@@ -1056,6 +1116,7 @@ class MobileGatewayPairingStore:
                 now=now,
                 reason=reason,
             )
+            push_token_removed = self.delete_push_token(device_id=device_id, reason='device_revoked')
             self._append_audit(
                 event='device_revoked',
                 result='ok',
@@ -1065,6 +1126,7 @@ class MobileGatewayPairingStore:
                 reason=reason,
                 revoked_terminal_count=revoked_terminal_count,
                 presence_removed=presence_removed,
+                push_token_removed=push_token_removed,
             )
             return {
                 'schema_version': _SCHEMA_VERSION,
@@ -1072,6 +1134,7 @@ class MobileGatewayPairingStore:
                 'device': _public_device(updated),
                 'revoked_terminal_count': revoked_terminal_count,
                 'presence_removed': presence_removed,
+                'push_token_removed': push_token_removed,
             }
         raise MobileGatewayPairingError('device not found', status_code=404, reason='not_found')
 
