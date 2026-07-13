@@ -4,6 +4,7 @@ import 'dart:math';
 import '../../pairing/gateway_pairing.dart';
 import '../../repository/gateway_mobile_ccb_repository.dart';
 import '../../transport/http_gateway_transport.dart';
+import '../../transport/gateway_connection_outcome.dart';
 
 /// App-lifetime authority for route/auth state. Pages keep their cached data;
 /// they report request outcomes here instead of independently clearing profiles
@@ -202,5 +203,57 @@ class MobileConnectionSupervisor {
   void _emit(MobileConnectionSnapshot value) {
     _snapshot = value;
     if (!_disposed) _onChanged(value);
+  }
+}
+
+/// Converts raw gateway outcomes into the sole app-lifetime connection state.
+/// The adapter intentionally has no retry mechanism: a failed mutation is
+/// reported but never repeated, while the supervisor probes only safe health
+/// endpoints before consumers refresh their reads.
+class MobileConnectionOutcomeAdapter
+    implements GatewayConnectionOutcomeReporter {
+  MobileConnectionOutcomeAdapter({
+    required MobileConnectionSupervisor supervisor,
+    required bool Function() isCurrent,
+  }) : _supervisor = supervisor,
+       _isCurrent = isCurrent;
+
+  final MobileConnectionSupervisor _supervisor;
+  final bool Function() _isCurrent;
+
+  @override
+  void succeeded(GatewayConnectionOperation operation) {
+    if (_isCurrent()) _supervisor.reportSuccess();
+  }
+
+  @override
+  void failed(GatewayConnectionOperation operation, Object error) {
+    if (!_isCurrent()) return;
+    _supervisor.reportFailure(
+      error,
+      kind: switch (operation) {
+        GatewayConnectionOperation.read => MobileTransportKind.httpRead,
+        GatewayConnectionOperation.stream => MobileTransportKind.sse,
+        GatewayConnectionOperation.terminal => MobileTransportKind.terminalRead,
+        GatewayConnectionOperation.mutation => MobileTransportKind.mutation,
+      },
+      auth: _authDisposition(error),
+    );
+  }
+
+  MobileAuthDisposition _authDisposition(Object error) {
+    if (error is GatewayHttpException) {
+      if (error.statusCode == 401) {
+        return MobileAuthDisposition.credentialInvalid;
+      }
+      if (error.statusCode == 403) return MobileAuthDisposition.scopeDenied;
+    }
+    final text = error.toString().toLowerCase();
+    if (text.contains('invalid token') ||
+        text.contains('device revoked') ||
+        text.contains('token revoked')) {
+      return MobileAuthDisposition.credentialInvalid;
+    }
+    return MobileAuthDisposition.none;
   }
 }

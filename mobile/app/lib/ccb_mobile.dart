@@ -29,6 +29,7 @@ export 'repository/gateway_mobile_ccb_repository.dart';
 export 'repository/mobile_ccb_repository.dart';
 export 'tmux/tmux_command_builder.dart';
 export 'transport/gateway_transport.dart';
+export 'transport/gateway_connection_outcome.dart';
 export 'transport/gateway_route_diagnostics.dart';
 export 'transport/gateway_terminal_transport.dart';
 export 'transport/http_gateway_transport.dart';

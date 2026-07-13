@@ -3,27 +3,42 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'gateway_transport.dart';
+import 'gateway_connection_outcome.dart';
 import 'terminal_transport.dart';
 
-class GatewayTerminalTransport implements TerminalTransport {
+class GatewayTerminalTransport
+    implements TerminalTransport, GatewayConnectionOutcomeReportable {
   GatewayTerminalTransport({required GatewayTransport transport})
     : _transport = transport;
 
   final GatewayTransport _transport;
+  GatewayConnectionOutcomeReporter? _outcomeReporter;
+
+  @override
+  set outcomeReporter(GatewayConnectionOutcomeReporter? reporter) {
+    _outcomeReporter = reporter;
+  }
 
   @override
   Future<TerminalSession> open(TerminalOpenRequest request) async {
-    final handle = await _transport.openTerminal(
-      GatewayTerminalOpenRequest.fromCcbTarget(
-        request.target,
-        geometry: request.geometry,
-      ),
-    );
-    return _GatewayTerminalSession(
-      transport: _transport,
-      request: request,
-      handle: handle,
-    );
+    try {
+      final handle = await _transport.openTerminal(
+        GatewayTerminalOpenRequest.fromCcbTarget(
+          request.target,
+          geometry: request.geometry,
+        ),
+      );
+      _outcomeReporter?.succeeded(GatewayConnectionOperation.terminal);
+      return _GatewayTerminalSession(
+        transport: _transport,
+        request: request,
+        handle: handle,
+        outcomeReporter: _outcomeReporter,
+      );
+    } catch (error) {
+      _outcomeReporter?.failed(GatewayConnectionOperation.terminal, error);
+      rethrow;
+    }
   }
 }
 
@@ -32,9 +47,11 @@ class _GatewayTerminalSession implements TerminalSession {
     required GatewayTransport transport,
     required TerminalOpenRequest request,
     required GatewayTerminalHandle handle,
+    GatewayConnectionOutcomeReporter? outcomeReporter,
   }) : _transport = transport,
        _request = request,
        _handle = handle,
+       _outcomeReporter = outcomeReporter,
        _geometry = request.geometry {
     unawaited(
       _connect().catchError((Object error, StackTrace stackTrace) {
@@ -56,6 +73,7 @@ class _GatewayTerminalSession implements TerminalSession {
   int _nextInputSequence = 1;
   int _resumeCursor = 0;
   bool _closed = false;
+  final GatewayConnectionOutcomeReporter? _outcomeReporter;
 
   @override
   String get launchedCommand => _request.attachCommand;
@@ -83,10 +101,7 @@ class _GatewayTerminalSession implements TerminalSession {
   @override
   Future<void> resize(TerminalGeometry geometry) {
     _geometry = geometry;
-    return _transport.sendTerminalFrame(
-      _handle,
-      GatewayTerminalFrame.resize(geometry),
-    );
+    return _sendMutation(GatewayTerminalFrame.resize(geometry));
   }
 
   @override
@@ -109,10 +124,7 @@ class _GatewayTerminalSession implements TerminalSession {
       return;
     }
     _closed = true;
-    await _transport.sendTerminalFrame(
-      _handle,
-      GatewayTerminalFrame.closed('client_closed'),
-    );
+    await _sendMutation(GatewayTerminalFrame.closed('client_closed'));
     await _cancelSubscription();
     await _closeOutput();
   }
@@ -122,7 +134,16 @@ class _GatewayTerminalSession implements TerminalSession {
     if (renewal != null) {
       await renewal;
     }
-    return _transport.sendTerminalFrame(_handle, frame);
+    return _sendMutation(frame);
+  }
+
+  Future<void> _sendMutation(GatewayTerminalFrame frame) async {
+    try {
+      await _transport.sendTerminalFrame(_handle, frame);
+    } catch (error) {
+      _outcomeReporter?.failed(GatewayConnectionOperation.mutation, error);
+      rethrow;
+    }
   }
 
   Future<void> _connect({int? resumeCursor}) {
@@ -209,6 +230,7 @@ class _GatewayTerminalSession implements TerminalSession {
           }
         })
         .catchError((Object error, StackTrace stackTrace) {
+          _outcomeReporter?.failed(GatewayConnectionOperation.terminal, error);
           if (connection != null && !connection.isCompleted) {
             connection.completeError(error, stackTrace);
           }
@@ -252,6 +274,7 @@ class _GatewayTerminalSession implements TerminalSession {
   }
 
   void _completeConnectionReady() {
+    _outcomeReporter?.succeeded(GatewayConnectionOperation.terminal);
     final connection = _connectionReady;
     if (connection != null && !connection.isCompleted) {
       connection.complete();
@@ -259,6 +282,7 @@ class _GatewayTerminalSession implements TerminalSession {
   }
 
   void _completeConnectionError(Object error, [StackTrace? stackTrace]) {
+    _outcomeReporter?.failed(GatewayConnectionOperation.terminal, error);
     final connection = _connectionReady;
     if (connection != null && !connection.isCompleted) {
       if (stackTrace == null) {

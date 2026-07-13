@@ -21,6 +21,7 @@ import '../../pairing/gateway_pairing.dart';
 import '../../repository/mobile_ccb_repository.dart';
 import '../../repository/gateway_mobile_ccb_repository.dart';
 import '../../transport/gateway_route_diagnostics.dart';
+import '../../transport/gateway_connection_outcome.dart';
 import '../../transport/http_gateway_transport.dart';
 import '../../transport/route_provider.dart';
 import '../../transport/terminal_transport.dart';
@@ -219,6 +220,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
   late final TaskCompletionUnreadStore _taskCompletionUnreadStore;
   late final TaskCompletionNotificationController _taskNotifications;
   late final MobileConnectionSupervisor _connectionSupervisor;
+  MobileConnectionOutcomeAdapter? _connectionOutcomeAdapter;
   late final MobilePresenceCoordinator _presenceCoordinator;
   bool _taskNotificationsSuspendedForBackground = false;
 
@@ -496,16 +498,24 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     GatewayPairedHost? profile,
     Object error,
   ) async {
-    _connectionSupervisor.reportFailure(
-      error,
-      auth:
-          (error is GatewayHttpException && error.statusCode == 401) ||
-                  (error is ProjectHomeGatewayActivationException &&
-                      error.kind ==
-                          ProjectHomeGatewayActivationFailureKind.tokenInvalid)
-              ? MobileAuthDisposition.credentialInvalid
-              : MobileAuthDisposition.none,
-    );
+    final adapter = _connectionOutcomeAdapter;
+    if (adapter != null) {
+      adapter.failed(GatewayConnectionOperation.read, error);
+    } else {
+      _connectionSupervisor.reportFailure(
+        error,
+        auth:
+            (error is GatewayHttpException && error.statusCode == 401) ||
+                    (error is ProjectHomeGatewayActivationException &&
+                        error.kind ==
+                            ProjectHomeGatewayActivationFailureKind
+                                .tokenInvalid)
+                ? MobileAuthDisposition.credentialInvalid
+                : error is GatewayHttpException && error.statusCode == 403
+                ? MobileAuthDisposition.scopeDenied
+                : MobileAuthDisposition.none,
+      );
+    }
     if (_mode != AppRuntimeMode.pairedGateway ||
         error is ProjectHomeGatewayActivationException) {
       return error;
@@ -1307,6 +1317,20 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
               : null,
       probeImmediately: false,
     );
+    final outcomeAdapter = MobileConnectionOutcomeAdapter(
+      supervisor: _connectionSupervisor,
+      isCurrent: () => _isActiveGatewayProfile(profile),
+    );
+    _connectionOutcomeAdapter = outcomeAdapter;
+    final repository = session.repository;
+    if (repository case final GatewayConnectionOutcomeReportable reportable) {
+      reportable.outcomeReporter = outcomeAdapter;
+    }
+    final terminalTransport = session.terminalTransport;
+    if (terminalTransport
+        case final GatewayConnectionOutcomeReportable reportable) {
+      reportable.outcomeReporter = outcomeAdapter;
+    }
     _presenceCoordinator.start(
       reporter:
           session.repository is MobileGatewayPresenceReporter
@@ -1384,6 +1408,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     _stopTaskCompletionNotifications();
     _presenceCoordinator.stop();
     _connectionSupervisor.stop();
+    _connectionOutcomeAdapter = null;
     setState(() {
       _mode = AppRuntimeMode.fake;
       _showPairingSetup = true;
@@ -1668,6 +1693,9 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     // The notification SSE is an optional live-update channel. Its transport
     // can reconnect independently while ordinary gateway HTTP requests remain
     // healthy, so it must not disable chat or insert/remove gateway UI.
+    if (state == GatewayInvalidationConnectionState.connected) {
+      _connectionOutcomeAdapter?.succeeded(GatewayConnectionOperation.stream);
+    }
     if (state == GatewayInvalidationConnectionState.connected &&
         _gatewayConnectionState ==
             GatewayInvalidationConnectionState.reconnecting) {
@@ -1720,16 +1748,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     if (error is! GatewayTaskCompletionNotificationStreamException) {
       return;
     }
-    _connectionSupervisor.reportFailure(
-      error,
-      auth:
-          error.statusCode == 401
-              ? MobileAuthDisposition.credentialInvalid
-              : error.statusCode == 403
-              ? MobileAuthDisposition.scopeDenied
-              : MobileAuthDisposition.none,
-      kind: MobileTransportKind.sse,
-    );
+    _connectionOutcomeAdapter?.failed(GatewayConnectionOperation.stream, error);
   }
 
   Future<void> _refreshAfterGatewayReconnect({

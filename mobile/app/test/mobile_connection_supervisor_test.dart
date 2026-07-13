@@ -5,6 +5,7 @@ import 'package:ccb_mobile/pairing/gateway_pairing.dart';
 import 'package:ccb_mobile/repository/gateway_mobile_ccb_repository.dart';
 import 'package:ccb_mobile/transport/http_gateway_transport.dart';
 import 'package:ccb_mobile/transport/gateway_transport.dart';
+import 'package:ccb_mobile/transport/gateway_connection_outcome.dart';
 import 'package:ccb_mobile/transport/route_provider.dart';
 import 'package:test/test.dart';
 
@@ -41,24 +42,28 @@ void main() {
     supervisor.dispose();
   });
 
-  test('probe classifies an invalid credential as authentication required', () async {
-    final repository = _ProbeRepository()
-      ..healthError = GatewayHttpException(Uri(), 401, 'revoked');
-    final supervisor = MobileConnectionSupervisor(
-      onChanged: (_) {},
-      initialDelay: Duration.zero,
-      maxDelay: Duration.zero,
-    );
+  test(
+    'probe classifies an invalid credential as authentication required',
+    () async {
+      final repository =
+          _ProbeRepository()
+            ..healthError = GatewayHttpException(Uri(), 401, 'revoked');
+      final supervisor = MobileConnectionSupervisor(
+        onChanged: (_) {},
+        initialDelay: Duration.zero,
+        maxDelay: Duration.zero,
+      );
 
-    supervisor.start(profile: _profile(), probe: repository);
-    await Future<void>.delayed(Duration.zero);
+      supervisor.start(profile: _profile(), probe: repository);
+      await Future<void>.delayed(Duration.zero);
 
-    expect(
-      supervisor.snapshot.state,
-      MobileConnectionState.authenticationRequired,
-    );
-    supervisor.dispose();
-  });
+      expect(
+        supervisor.snapshot.state,
+        MobileConnectionState.authenticationRequired,
+      );
+      supervisor.dispose();
+    },
+  );
 
   test('403 scope denial and mutation failure keep the stored session', () {
     final supervisor = MobileConnectionSupervisor(onChanged: (_) {});
@@ -75,17 +80,64 @@ void main() {
     supervisor.dispose();
   });
 
-  test('probe scope denial degrades without invalidating credentials', () async {
-    final repository = _ProbeRepository()
-      ..healthError = GatewayHttpException(Uri(), 403, 'scope denied');
+  test('outcome adapter classifies timeout, 401, 403, and recovery', () {
     final supervisor = MobileConnectionSupervisor(onChanged: (_) {});
+    supervisor.start(profile: _profile(), probe: _ProbeRepository());
+    final adapter = MobileConnectionOutcomeAdapter(
+      supervisor: supervisor,
+      isCurrent: () => true,
+    );
 
-    supervisor.start(profile: _profile(), probe: repository);
-    await Future<void>.delayed(Duration.zero);
-
-    expect(supervisor.snapshot.state, MobileConnectionState.degraded);
+    adapter.failed(GatewayConnectionOperation.read, TimeoutException('route'));
+    expect(supervisor.snapshot.state, MobileConnectionState.reconnecting);
+    adapter.succeeded(GatewayConnectionOperation.read);
+    expect(supervisor.snapshot.state, MobileConnectionState.online);
+    adapter.failed(
+      GatewayConnectionOperation.mutation,
+      GatewayHttpException(Uri(), 403, 'scope denied'),
+    );
+    expect(
+      supervisor.snapshot.state,
+      isNot(MobileConnectionState.authenticationRequired),
+    );
+    adapter.failed(
+      GatewayConnectionOperation.read,
+      GatewayHttpException(Uri(), 401, 'invalid token'),
+    );
+    expect(
+      supervisor.snapshot.state,
+      MobileConnectionState.authenticationRequired,
+    );
     supervisor.dispose();
   });
+
+  test('outcome adapter ignores a stale profile generation', () {
+    final supervisor = MobileConnectionSupervisor(onChanged: (_) {});
+    supervisor.start(profile: _profile(), probe: _ProbeRepository());
+    final adapter = MobileConnectionOutcomeAdapter(
+      supervisor: supervisor,
+      isCurrent: () => false,
+    );
+    adapter.failed(GatewayConnectionOperation.read, TimeoutException('stale'));
+    expect(supervisor.snapshot.state, MobileConnectionState.connecting);
+    supervisor.dispose();
+  });
+
+  test(
+    'probe scope denial degrades without invalidating credentials',
+    () async {
+      final repository =
+          _ProbeRepository()
+            ..healthError = GatewayHttpException(Uri(), 403, 'scope denied');
+      final supervisor = MobileConnectionSupervisor(onChanged: (_) {});
+
+      supervisor.start(profile: _profile(), probe: repository);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(supervisor.snapshot.state, MobileConnectionState.degraded);
+      supervisor.dispose();
+    },
+  );
 
   test(
     'deferred startup uses activation result instead of duplicate probe',
