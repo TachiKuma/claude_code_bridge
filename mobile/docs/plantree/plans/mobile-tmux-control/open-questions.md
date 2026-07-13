@@ -91,15 +91,13 @@ See
    scopes needed for Comms, restart, and clear context?
 2. Should raw terminal input be disabled by default for remote/tunnel access?
 3. What audit events are required without logging private terminal keystrokes?
-4. Should a phone be able to persist pairing indefinitely, or require periodic
-   host-side re-approval?
-5. What should the default trusted-device profile include for
+4. What should the default trusted-device profile include for
    LAN/tailnet/relay/Cloudflare use: terminal input only, or terminal input
    plus project lifecycle control?
-6. In SSH-direct mode, should the app store SSH credentials, use imported
+5. In SSH-direct mode, should the app store SSH credentials, use imported
    private keys, rely on system keychain identities, or prefer short-lived
    gateway tokens only?
-7. For the advanced Cloudflare route, should Cloudflare Access be documented
+6. For the advanced Cloudflare route, should Cloudflare Access be documented
    as optional defense-in-depth, or integrated into the app pairing flow?
 
 ## CCB APIs

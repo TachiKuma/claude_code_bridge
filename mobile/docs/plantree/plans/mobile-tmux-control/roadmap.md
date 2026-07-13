@@ -2,6 +2,27 @@
 
 Date: 2026-06-18
 
+## Phase 4H: Paseo-Inspired Runtime And Background Hardening — In Progress
+
+Status: In Progress (2026-07-13).
+
+- keep the existing Flutter app and CCB mobile gateway;
+- introduce one app-lifetime connection supervisor with cached foreground
+  recovery and fail-closed mutation behavior;
+- persist and resume a bounded gateway event journal using explicit cursors;
+- add presence-aware FCM completion delivery for background/process-killed
+  operation rather than relying on an ordinary background WebSocket;
+- provide optional user-controlled Android foreground connectivity for active
+  Terminal/large-transfer use;
+- preserve reusable unlimited pairing claims until explicit
+  `ccb update mobile` rotation, while existing device credentials remain valid;
+- require same-commit emulator and physical-phone background/Doze/reconnect/
+  multi-device evidence before release.
+
+Execution authority:
+[goal-paseo-inspired-runtime-hardening.md](goal-paseo-inspired-runtime-hardening.md)
+and [Decision 021](decisions/021-reusable-pairing-until-manual-rotation.md).
+
 ## Phase 4G: Realtime Authority, Recovery, and Bounded Cache — In Progress (review correction)
 
 Status: In Progress (review correction, 2026-07-10).

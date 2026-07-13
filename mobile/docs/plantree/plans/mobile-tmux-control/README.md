@@ -70,6 +70,11 @@ Relevant implementation anchors in `/home/bfly/yunwei/ccb_source`:
   reusable long-running goal prompt for optimizing selected-agent conversation
   latency, live output smoothness, transcript reconciliation, and strict local
   Android Emulator evidence after pane-backed chat lands.
+- [goal-paseo-inspired-runtime-hardening.md](goal-paseo-inspired-runtime-hardening.md)
+  is the implementation-driving goal for keeping the current Flutter/CCB
+  architecture while adopting Paseo-inspired host persistence, unified
+  reconnect, cursor catch-up, Push, presence, and optional foreground-service
+  behavior with strict emulator and physical-phone evidence.
 - [roadmap.md](roadmap.md) tracks likely implementation phases.
 - [implementation-status.md](implementation-status.md) is the current
   execution handoff for the active landing phase.
