@@ -3920,7 +3920,7 @@ def test_terminal_websocket_streams_frames_and_rejects_replayed_input(tmp_path: 
             '-t',
             '%2',
             '-S',
-            '-30',
+            '-1000',
         ]
         assert 'attach-session' not in sessions[0].target.command
         assert sessions[0].target.geometry.columns == 100
