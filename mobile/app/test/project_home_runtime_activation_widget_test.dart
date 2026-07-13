@@ -267,6 +267,84 @@ void main() {
     );
   });
 
+  testWidgets('403 scope denial keeps profile and offers Retry', (
+    tester,
+  ) async {
+    final profile = _pairedHost(hostId: 'proj-demo', deviceId: 'phone');
+    final profileStore = await _profileStoreWith([profile]);
+    final repository =
+        _HealthCheckedGatewayRepository()
+          ..deviceError = GatewayHttpException(
+            Uri.parse('http://proj-demo.local:8787/v1/devices/me'),
+            403,
+            'scope denied',
+          );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProjectHomeScreen(
+          repository: RecordingGatewayRepository(),
+          profileStore: profileStore,
+          gatewayRepositoryFactory: (_) => repository,
+          gatewayTerminalTransportFactory: (_) => RecordingTerminalTransport(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await openConnectionDetails(tester);
+    await expandTile(tester, const ValueKey('runtime-mode-panel'));
+    _runtimeSegments(
+      tester,
+    ).onSelectionChanged?.call({AppRuntimeMode.pairedGateway});
+    await tester.pumpAndSettle();
+    await dismissConnectionDetails(tester);
+
+    expect(find.byKey(const ValueKey('project-list-retry-button')), findsOne);
+    expect(
+      find.byKey(const ValueKey('project-list-repair-button')),
+      findsNothing,
+    );
+    expect(
+      await profileStore.read(hostId: 'proj-demo', deviceId: 'phone'),
+      isNotNull,
+    );
+  });
+
+  testWidgets('paired lifecycle publishes visible presence transitions', (
+    tester,
+  ) async {
+    final profile = _pairedHost(hostId: 'proj-demo', deviceId: 'phone');
+    final profileStore = await _profileStoreWith([profile]);
+    final repository = _HealthCheckedGatewayRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProjectHomeScreen(
+          repository: RecordingGatewayRepository(),
+          profileStore: profileStore,
+          gatewayRepositoryFactory: (_) => repository,
+          gatewayTerminalTransportFactory: (_) => RecordingTerminalTransport(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await openConnectionDetails(tester);
+    await expandTile(tester, const ValueKey('runtime-mode-panel'));
+    _runtimeSegments(
+      tester,
+    ).onSelectionChanged?.call({AppRuntimeMode.pairedGateway});
+    await tester.pumpAndSettle();
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+
+    expect(repository.presenceVisible, containsAllInOrder([true, false, true]));
+  });
+
   testWidgets('activation syncs gateway settings on project list', (
     tester,
   ) async {
@@ -463,9 +541,11 @@ class _FailingProfileStore extends GatewayHostProfileStore {
 }
 
 class _HealthCheckedGatewayRepository extends RecordingGatewayRepository
-    implements MobileGatewayProfileHealthProbe {
+    implements MobileGatewayProfileHealthProbe, MobileGatewayPresenceReporter {
   Object? healthError;
+  Object? deviceError;
   bool revoked = false;
+  final presenceVisible = <bool>[];
 
   @override
   Future<GatewayHealth> health() async {
@@ -478,6 +558,8 @@ class _HealthCheckedGatewayRepository extends RecordingGatewayRepository
 
   @override
   Future<GatewayDevice> device() async {
+    final error = deviceError;
+    if (error != null) throw error;
     return GatewayDevice(
       deviceId: 'phone',
       projectId: 'proj-demo',
@@ -485,6 +567,16 @@ class _HealthCheckedGatewayRepository extends RecordingGatewayRepository
       routeProvider: RouteProviderKind.lan,
       revoked: revoked,
     );
+  }
+
+  @override
+  Future<void> reportPresence({
+    required bool visible,
+    String? focusedProjectId,
+    String? focusedAgent,
+    bool userActivity = false,
+  }) async {
+    presenceVisible.add(visible);
   }
 }
 

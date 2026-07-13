@@ -64,13 +64,17 @@ class MobileConnectionSupervisor {
   void start({
     required GatewayPairedHost profile,
     MobileGatewayProfileHealthProbe? probe,
+    bool probeImmediately = true,
   }) {
     _generation += 1;
     _profile = profile;
     _probe = probe;
     _nextDelay = initialDelay;
     _retryTimer?.cancel();
-    _probeNow(_generation);
+    _emit(const MobileConnectionSnapshot(MobileConnectionState.connecting));
+    if (probeImmediately) {
+      _probeNow(_generation);
+    }
   }
 
   void reportSuccess() {
@@ -95,7 +99,14 @@ class MobileConnectionSupervisor {
       );
       return;
     }
-    if (kind != MobileTransportKind.mutation) _scheduleRetry();
+    if (kind == MobileTransportKind.mutation) {
+      return;
+    }
+    if (auth == MobileAuthDisposition.scopeDenied) {
+      _emit(const MobileConnectionSnapshot(MobileConnectionState.degraded));
+      return;
+    }
+    _scheduleRetry(degraded: kind == MobileTransportKind.sse);
   }
 
   void foregroundResume() {
@@ -154,7 +165,7 @@ class MobileConnectionSupervisor {
     }
   }
 
-  void _scheduleRetry() {
+  void _scheduleRetry({bool degraded = false}) {
     if (_retryTimer != null || _disposed) return;
     final base = _nextDelay ?? initialDelay;
     final jitter = 0.9 + (_random.nextDouble() * 0.2);
@@ -163,7 +174,9 @@ class MobileConnectionSupervisor {
     );
     _emit(
       MobileConnectionSnapshot(
-        MobileConnectionState.reconnecting,
+        degraded
+            ? MobileConnectionState.degraded
+            : MobileConnectionState.reconnecting,
         retryIn: delay,
       ),
     );

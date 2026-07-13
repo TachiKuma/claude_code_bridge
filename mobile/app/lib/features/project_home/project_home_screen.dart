@@ -30,6 +30,7 @@ import 'project_home_focus_coordinator.dart';
 import 'project_home_gateway_profiles.dart';
 import 'project_home_lifecycle_coordinator.dart';
 import 'mobile_connection_supervisor.dart';
+import 'mobile_presence_coordinator.dart';
 import 'project_home_notification_target.dart';
 import 'project_home_onboarding.dart';
 import 'project_home_pairing_flow.dart';
@@ -218,11 +219,22 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
   late final TaskCompletionUnreadStore _taskCompletionUnreadStore;
   late final TaskCompletionNotificationController _taskNotifications;
   late final MobileConnectionSupervisor _connectionSupervisor;
+  late final MobilePresenceCoordinator _presenceCoordinator;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _connectionSupervisor = MobileConnectionSupervisor(
+      onChanged: _handleSupervisorState,
+    );
+    _presenceCoordinator = MobilePresenceCoordinator(
+      onFailure:
+          (error) => _connectionSupervisor.reportFailure(
+            error,
+            kind: MobileTransportKind.mutation,
+          ),
+    );
     _taskCompletionUnreadStore =
         widget.taskCompletionUnreadStore ?? TaskCompletionUnreadStore();
     _invalidationCursorStore =
@@ -244,9 +256,6 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
       onStreamError: _handleGatewayStreamError,
       shouldShowNotification: _shouldShowTaskCompletionNotification,
     );
-    _connectionSupervisor = MobileConnectionSupervisor(
-      onChanged: _handleSupervisorState,
-    );
     _activeRepository = widget.repository;
     _viewFuture = _loadActiveProjectView();
     _bootstrapProfiles();
@@ -257,6 +266,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     WidgetsBinding.instance.removeObserver(this);
     _pairingForm.dispose();
     unawaited(_taskNotifications.dispose());
+    _presenceCoordinator.dispose();
     _connectionSupervisor.dispose();
     _lifecycleResultNotifier.dispose();
     _runningLifecycleActionNotifier.dispose();
@@ -267,8 +277,14 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _appLifecycleState = state;
     if (state == AppLifecycleState.resumed) {
+      _presenceCoordinator.setVisible(true);
       _connectionSupervisor.foregroundResume();
       _taskNotifications.retryNow();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      _presenceCoordinator.setVisible(false);
     }
   }
 
@@ -350,6 +366,11 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
             setState(() {
               _rememberProjectUsed(view.project.id);
             });
+            _presenceCoordinator.updateTarget(
+              projectId: view.project.id,
+              agent: selectedAgent?.name,
+              userActivity: true,
+            );
           },
           onWindowSelected: (windowName) {
             _selectWindow(view, windowName);
@@ -808,6 +829,11 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
         setState(() {
           _rememberProjectUsed(view.project.id);
         });
+        _presenceCoordinator.updateTarget(
+          projectId: view.project.id,
+          agent: agent?.name,
+          userActivity: true,
+        );
       },
       onToggleSidebar: _toggleWideSidebarLevel,
       onHorizontalDragStart: _startWideSidebarDrag,
@@ -934,6 +960,11 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
         agent: agentName,
       ),
     );
+    _presenceCoordinator.updateTarget(
+      projectId: _activeProjectId,
+      agent: agentName,
+      userActivity: true,
+    );
   }
 
   void _updateNotificationWatch(CcbProjectView view) {
@@ -1018,6 +1049,11 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
       _selectedAgentName = null;
       _viewFuture = _loadActiveProjectView();
     });
+    _presenceCoordinator.updateTarget(
+      projectId: project.id,
+      agent: null,
+      userActivity: true,
+    );
     unawaited(_restoreProjectViewSnapshot(project.id));
   }
 
@@ -1199,6 +1235,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
           _viewFuture = session.viewFuture;
         });
         unawaited(_taskNotifications.stop());
+        _presenceCoordinator.stop();
         _connectionSupervisor.stop();
         _lifecycleResultNotifier.value = null;
       case AppRuntimeMode.pairedGateway:
@@ -1257,6 +1294,14 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
           session.repository is MobileGatewayProfileHealthProbe
               ? session.repository as MobileGatewayProfileHealthProbe
               : null,
+      probeImmediately: false,
+    );
+    _presenceCoordinator.start(
+      reporter:
+          session.repository is MobileGatewayPresenceReporter
+              ? session.repository as MobileGatewayPresenceReporter
+              : null,
+      visible: _appLifecycleState == AppLifecycleState.resumed,
     );
     _startTaskCompletionNotifications(profile);
     _lifecycleResultNotifier.value = null;
@@ -1276,6 +1321,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     if (!_isActiveGatewayProfile(profile)) {
       return;
     }
+    _connectionSupervisor.reportSuccess();
     _gatewayProfileActivationSucceeded = true;
     await widget.profileStore.markSuccessful(profile);
   }
@@ -1325,6 +1371,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
 
   void _returnToPairingSetup() {
     unawaited(_taskNotifications.stop());
+    _presenceCoordinator.stop();
     _connectionSupervisor.stop();
     setState(() {
       _mode = AppRuntimeMode.fake;
@@ -1571,19 +1618,26 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     if (snapshot.state == MobileConnectionState.authenticationRequired) {
       final profile = _selectedProfile;
       if (profile != null) {
+        final wasActivated = _gatewayProfileActivationSucceeded;
         unawaited(() async {
           await _invalidateGatewayProfile(profile);
-          if (mounted) _returnToPairingSetup();
+          if (mounted && wasActivated) _returnToPairingSetup();
         }());
       }
       return;
     }
     if (snapshot.state == MobileConnectionState.online) {
+      final wasReconnecting =
+          _gatewayConnectionState ==
+          GatewayInvalidationConnectionState.reconnecting;
       _markGatewayRequestSucceeded();
+      if (wasReconnecting) {
+        _taskNotifications.retryNow();
+        _verifyGatewayRecovery();
+      }
       return;
     }
     if (snapshot.state == MobileConnectionState.reconnecting ||
-        snapshot.state == MobileConnectionState.degraded ||
         snapshot.state == MobileConnectionState.offline) {
       setState(() {
         _gatewayConnectionState =
@@ -1607,6 +1661,11 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
         _gatewayConnectionState ==
             GatewayInvalidationConnectionState.reconnecting) {
       _verifyGatewayRecovery();
+    } else if (state == GatewayInvalidationConnectionState.reconnecting) {
+      _connectionSupervisor.reportFailure(
+        TimeoutException('notification stream disconnected'),
+        kind: MobileTransportKind.sse,
+      );
     }
   }
 
@@ -1625,8 +1684,8 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
   }
 
   void _retryGatewayConnection() {
+    _connectionSupervisor.retryNow();
     _taskNotifications.retryNow();
-    _verifyGatewayRecovery();
   }
 
   void _verifyGatewayRecovery() {
@@ -1647,13 +1706,17 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
   }
 
   void _handleGatewayStreamError(Object error) {
-    if (error is! GatewayTaskCompletionNotificationStreamException ||
-        error.statusCode != 401) {
+    if (error is! GatewayTaskCompletionNotificationStreamException) {
       return;
     }
     _connectionSupervisor.reportFailure(
       error,
-      auth: MobileAuthDisposition.credentialInvalid,
+      auth:
+          error.statusCode == 401
+              ? MobileAuthDisposition.credentialInvalid
+              : error.statusCode == 403
+              ? MobileAuthDisposition.scopeDenied
+              : MobileAuthDisposition.none,
       kind: MobileTransportKind.sse,
     );
   }
@@ -2027,8 +2090,13 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     required String? projectId,
     required String? agentName,
   }) {
+    if (_visibleTaskCompletionProjectId == projectId &&
+        _visibleTaskCompletionAgentName == agentName) {
+      return;
+    }
     _visibleTaskCompletionProjectId = projectId;
     _visibleTaskCompletionAgentName = agentName;
+    _presenceCoordinator.updateTarget(projectId: projectId, agent: agentName);
   }
 
   Future<void> _clearTaskCompletionUnreadForAgent({

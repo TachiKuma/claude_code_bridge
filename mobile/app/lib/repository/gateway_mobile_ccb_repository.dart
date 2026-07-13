@@ -14,11 +14,21 @@ abstract interface class MobileGatewayProfileHealthProbe {
   Future<GatewayDevice> device();
 }
 
+abstract interface class MobileGatewayPresenceReporter {
+  Future<void> reportPresence({
+    required bool visible,
+    String? focusedProjectId,
+    String? focusedAgent,
+    bool userActivity = false,
+  });
+}
+
 class GatewayMobileCcbRepository
     implements
         MobileCcbRepository,
         MobileCcbRepositoryFileUploader,
-        MobileGatewayProfileHealthProbe {
+        MobileGatewayProfileHealthProbe,
+        MobileGatewayPresenceReporter {
   const GatewayMobileCcbRepository({required GatewayTransport transport})
     : _transport = transport;
 
@@ -37,6 +47,25 @@ class GatewayMobileCcbRepository
   @override
   Future<GatewayDevice> device() {
     return _transport.device();
+  }
+
+  @override
+  Future<void> reportPresence({
+    required bool visible,
+    String? focusedProjectId,
+    String? focusedAgent,
+    bool userActivity = false,
+  }) {
+    final transport = _transport;
+    if (transport is! GatewayPresenceTransport) {
+      return Future<void>.value();
+    }
+    return (transport as GatewayPresenceTransport).reportPresence(
+      visible: visible,
+      focusedProjectId: focusedProjectId,
+      focusedAgent: focusedAgent,
+      userActivity: userActivity,
+    );
   }
 
   @override

@@ -198,13 +198,12 @@ void main() {
     'gateway runtime fails invalid profile token before project list',
     () async {
       final profile = _pairedHost(hostId: 'host-id', deviceId: 'phone');
-      final repository =
-          _RecordingRepository()
-            ..deviceError = GatewayHttpException(
-              Uri.parse('http://host-id.local:8787/v1/devices/me'),
-              401,
-              'unauthorized',
-            );
+      final repository = _RecordingRepository()
+        ..deviceError = GatewayHttpException(
+          Uri.parse('http://host-id.local:8787/v1/devices/me'),
+          401,
+          'unauthorized',
+        );
 
       final session = const ProjectHomeRuntimeSessionCoordinator()
           .activateGateway(
@@ -239,9 +238,8 @@ void main() {
     'gateway runtime reports unreachable profile before project list',
     () async {
       final profile = _pairedHost(hostId: 'host-id', deviceId: 'phone');
-      final repository =
-          _RecordingRepository()
-            ..healthError = TimeoutException('route timed out');
+      final repository = _RecordingRepository()
+        ..healthError = TimeoutException('route timed out');
 
       final session = const ProjectHomeRuntimeSessionCoordinator()
           .activateGateway(
@@ -265,6 +263,19 @@ void main() {
       expect(repository.listProjectsCalls, 0);
     },
   );
+
+  test('403 scope denial preserves paired identity semantics', () {
+    final error = projectHomeGatewayActivationExceptionFor(
+      GatewayHttpException(
+        Uri.parse('http://host.local/v1/devices/me'),
+        403,
+        'device scope denied',
+      ),
+    );
+
+    expect(error.kind, ProjectHomeGatewayActivationFailureKind.scopeDenied);
+    expect(error.message, isNot(contains('Re-pair')));
+  });
 
   test('gateway runtime session times out project list load', () async {
     final profile = _pairedHost(

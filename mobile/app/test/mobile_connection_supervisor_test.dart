@@ -57,6 +57,51 @@ void main() {
   });
 
   test(
+    'deferred startup uses activation result instead of duplicate probe',
+    () {
+      final repository = _ProbeRepository();
+      final supervisor = MobileConnectionSupervisor(onChanged: (_) {});
+      supervisor.start(
+        profile: _profile(),
+        probe: repository,
+        probeImmediately: false,
+      );
+
+      expect(repository.healthCalls, 0);
+      expect(supervisor.snapshot.state, MobileConnectionState.connecting);
+
+      supervisor.reportSuccess();
+      expect(supervisor.snapshot.state, MobileConnectionState.online);
+      supervisor.dispose();
+    },
+  );
+
+  test('sse failure degrades while a bounded core probe is pending', () async {
+    final states = <MobileConnectionState>[];
+    final repository = _ProbeRepository();
+    final supervisor = MobileConnectionSupervisor(
+      onChanged: (value) => states.add(value.state),
+      initialDelay: Duration.zero,
+      maxDelay: Duration.zero,
+    );
+    supervisor.start(
+      profile: _profile(),
+      probe: repository,
+      probeImmediately: false,
+    );
+    supervisor.reportFailure(
+      TimeoutException('sse disconnected'),
+      kind: MobileTransportKind.sse,
+    );
+
+    expect(supervisor.snapshot.state, MobileConnectionState.degraded);
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    expect(repository.healthCalls, 1);
+    expect(supervisor.snapshot.state, MobileConnectionState.online);
+    supervisor.dispose();
+  });
+
+  test(
     'profile switch drains a queued latest probe after stale completion',
     () async {
       final first = _ProbeRepository()..gate = Completer<void>();
