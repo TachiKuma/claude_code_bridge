@@ -13280,10 +13280,50 @@ detail_readiness_recommendation: detail_ready
     assert replay['idempotent'] is True
     assert replay['consumed_action'] == 'settled_planner_terminal_status_constraint'
     assert plan_task(context, SimpleNamespace(action='task-show', task_id='root13-detail-bound'))['task'] == shown['task']
-    settled = loop_runner_once(context, command, services=SimpleNamespace(plan_task=plan_task))
+    stale_activation = json.loads(activation_path.read_text(encoding='utf-8'))
+    stale_activation['task_revision'] += 1
+    stale_activation['terminal_status_constraint']['task_revision'] += 1
+    _write_json(activation_path, stale_activation)
+
+    restarted_context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+
+    def forbidden_submit_after_restart(_context, ask_command):
+        raise AssertionError(
+            f'settled bounded detail_ready task must not reactivate {ask_command.target} after restart'
+        )
+
+    restarted_replay = loop_runner_once(
+        restarted_context,
+        ParsedLoopRunnerCommand(
+            project=None,
+            once=True,
+            plan_slug='demo-plan',
+            role_job_id='job_root13_post_detail_planner',
+            consume_role_output=True,
+            json_output=True,
+        ),
+        services=SimpleNamespace(submit_ask=forbidden_submit_after_restart, plan_task=plan_task),
+    )
+    assert restarted_replay['action'] == 'role_output_already_consumed'
+    assert restarted_replay['idempotent'] is True
+    assert restarted_replay['consumed_action'] == 'settled_planner_terminal_status_constraint'
+    assert (
+        plan_task(restarted_context, SimpleNamespace(action='task-show', task_id='root13-detail-bound'))['task']
+        == shown['task']
+    )
+    restarted_command = ParsedLoopRunnerCommand(project=None, once=True, timeout_s=11.0, json_output=True)
+    settled = loop_runner_once(
+        restarted_context,
+        restarted_command,
+        services=SimpleNamespace(submit_ask=forbidden_submit_after_restart, plan_task=plan_task),
+    )
     assert settled['loop_runner_status'] == 'idle'
     assert settled['reason'] == 'no_actionable_task'
-    assert find_first_actionable_task(context, task_id='root13-detail-bound') is None
+    assert (
+        plan_task(restarted_context, SimpleNamespace(action='task-show', task_id='root13-detail-bound'))['task']
+        == shown['task']
+    )
+    assert find_first_actionable_task(restarted_context, task_id='root13-detail-bound') is None
 
 
 def test_loop_runner_leaves_explicit_non_success_stop_contracts_settled(
