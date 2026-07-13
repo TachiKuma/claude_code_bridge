@@ -1,7 +1,7 @@
 # G6C Root13 Planner Terminal Constraint Diagnostic
 
 Date: 2026-07-13
-Status: rejected real-provider acceptance; bounded source repair active
+Status: rejected real-provider acceptance; bounded source repair verified; root14 pending
 Phase: G6C / Decision 029 P5
 Read when: implementing the post-detail terminal constraint or preparing root14
 
@@ -71,6 +71,25 @@ The repair must be generic and activation-scoped:
 Do not hard-code Phase 6B task ids, force status from the harness, globally
 reinterpret `readiness=ready`, weaken path/provenance checks, or let provider
 text write authority directly.
+
+## Repair Landing And Source Gate
+
+- `c6bd0235` adds the activation-scoped, revision/state/digest-backed terminal
+  constraint, fail-closed matching settlement, legacy compatibility, and
+  verified terminal closure semantics.
+- `6dbbfef8` aligns the Planner RolePack reply contract; `5485f722` separates
+  initial task-set binding revision from the terminal task revision in B7.
+- `b4a1f200`, `c3b653ee`, and `77c54a98` prove real authority, bounded replay
+  across restart, no reactivation, and mixed-terminal task-set closure through
+  Planner backfill, Frontdesk delivery, and parent settlement.
+- `82a3a622` repairs the unrelated Gemini ccbd-restart observation failures
+  discovered by the first full-suite attempt without relaxing other provider
+  restore behavior.
+- Direct current-HEAD verification passed the four prior Gemini failures, the
+  complete Phase 2 entrypoint (`77 passed`), and the full source suite
+  (`4792 passed, 2 skipped in 732.93s`). Root14 is therefore no longer blocked
+  by a source-test failure, but none of this substitutes for visible real-
+  project acceptance.
 
 ## Root14 Gates
 

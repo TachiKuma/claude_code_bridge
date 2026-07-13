@@ -1329,8 +1329,11 @@ repairs passed the real Frontdesk-to-Planner handoff, and L1/L2 plus both L4
 routes reached their expected terminals. Root13 was rejected when the
 post-detail Planner importer ignored `status_recommendation=detail_ready` and
 reopened L3 as `ready_for_orchestration`, preventing task-set closure. The
-next gate is a generic activation-scoped, digest-backed terminal constraint
-with ordinary post-detail compatibility, followed by a fresh root14 run. See
+generic activation-scoped, digest-backed terminal constraint, fail-closed
+settlement, Planner contract, closure chain, strict B7 evidence, and
+restart/idempotence coverage have now landed through `77c54a98`. At
+`82a3a622`, the current full source suite passed `4792` tests with `2` skipped;
+the next gate is a fresh root14 real opened-project run. See
 [history/g6c-root13-planner-terminal-constraint-diagnostic-20260713.md](history/g6c-root13-planner-terminal-constraint-diagnostic-20260713.md).
 
 1. Freeze the current one-workgroup and Config V2 source/test baselines and

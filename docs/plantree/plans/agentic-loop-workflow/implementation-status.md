@@ -1,10 +1,10 @@
 # Agentic Loop Workflow Implementation Status
 
 Date: 2026-07-13
-Status: In progress — G6C root13 rejected, bounded terminal repair active
+Status: In progress — G6C bounded terminal repair verified, root14 acceptance next
 Branch: `workflow/g6c-integration`
 Worktree: `/home/bfly/yunwei/ccb_worktrees/g6c-integration`
-Current HEAD before this status update: `3a5e1810`
+Current HEAD before this status update: `82a3a622`
 
 ## Current Phase
 
@@ -14,14 +14,14 @@ reviewed `Worker + Reviewer` workgroups. G0-G5, Decision 027, and Decision 028
 are accepted. Decision 029 P0-P4 source implementation is integrated; P5
 direct acceptance is active.
 
-Root13 proved the repaired Frontdesk capability handoff, repo-independent
-Planner task set, L1/L2 `done/pass`, L4 macro `replan_required`, and L4
-blocked `blocked`. L3 reached `detail_ready`, but the post-detail Planner
-import ignored its explicit `status_recommendation=detail_ready` and reopened
-the task as `ready_for_orchestration`. Root13 was therefore rejected and
-safely unmounted. The active source task is a digest-backed, activation-scoped
-terminal constraint plus fail-closed importer settlement; root14 is forbidden
-until that repair and its ordinary-detail regression gates pass.
+Root13 remains rejected evidence: it proved the repaired Frontdesk capability
+handoff, repo-independent Planner task set, L1/L2 `done/pass`, L4 macro
+`replan_required`, and L4 blocked `blocked`, but reopened L3 after
+`detail_ready`. The activation-scoped, digest-backed terminal constraint,
+fail-closed importer settlement, Planner RolePack contract, closure evidence,
+restart/idempotence coverage, and strict B7 validator have now landed. The
+current source full-suite gate is green, so root14 is unblocked and is the next
+direct opened-project acceptance target.
 
 ## Authority
 
@@ -51,16 +51,24 @@ closure, integration, topology, round, release, and delivery authority.
 - `c4dbeed1` and `3a5e1810`: Frontdesk/Planner Git-capability contract and
   harness request injection; root13 proved the capability survives the real
   direct handoff with `controller_rewrote_body=false`.
+- `c6bd0235` through `77c54a98`: bounded terminal constraint and settlement,
+  Planner RolePack alignment, strict B7 closure evidence, real authority and
+  restart/idempotence regressions, and mixed-terminal feedback closure.
+- `82a3a622`: Gemini session observation now resumes safely after ccbd restart
+  through an adapter-specific opt-in; the prior four full-suite failures are
+  covered by durable terminal, session-cursor, rotation, and mutation evidence.
 
 Earlier accepted R1 authority/runtime evidence remains indexed at
 [history/single-lane-r1-authority-runtime-closure-20260711.md](history/single-lane-r1-authority-runtime-closure-20260711.md).
 
 ## Active TODO
 
-1. Land activation-scoped, digest-backed `detail_ready` terminal constraints
-   and importer settlement without changing ordinary post-detail execution.
-2. Update the Planner RolePack contract through `mother`, then run fresh
-   visible root14 through closure, B7, release, shutdown, and zero residue.
+1. Run fresh visible root14 through the five route terminals, bounded L3
+   settlement, task-set closure, Planner backfill, Frontdesk reporting, strict
+   B7, release, auto-runner exit, shutdown, and zero residue.
+2. Audit the preserved root14 project/UI/pane evidence directly and reject the
+   run on any authority drift, L3 reactivation, false cleanup, or hidden-only
+   proof.
 3. Complete remaining G6 three/four-workgroup, restart, busy-retain, and
    provider-profile rows from fresh opened projects.
 4. Run G7 package/install/update/rollback gates and one visible installed-
@@ -68,9 +76,10 @@ Earlier accepted R1 authority/runtime evidence remains indexed at
 
 ## Blocked By
 
-Blocked by the root13 post-detail activation/importer contract defect. Live
-provider availability is not the current blocker. Downstream real acceptance
-and packaging claims remain paused until the bounded repair is verified.
+No source-test blocker remains for root14. Production readiness remains gated
+by a fresh real opened-project root14 pass, the remaining G6 matrix, and G7
+package/install/update/rollback acceptance. Live provider availability can
+still block an individual real run but is not a waived gate.
 
 ## Acceptance Ownership
 
@@ -104,12 +113,21 @@ independent work whose successful result is not needed upstream.
 - Harness and RolePack gates at `3a5e1810`: `79 passed` and `24 passed`;
   `pyflakes`, `compileall`, `git diff --check`, and clean-worktree checks
   passed before root13.
+- Bounded-terminal integration gates through `77c54a98`: harness `94 passed`,
+  workflow core `351 passed`, RolePack/plan documents `56 passed`, with real
+  no-monkeypatch closure and mixed-terminal feedback-chain coverage.
+- Gemini restart recovery at `82a3a622`: the four prior failures passed
+  independently, non-Gemini conservative restore boundaries passed `2`, and
+  the complete Phase 2 entrypoint passed `77`.
+- Current-HEAD full source suite: `4792 passed, 2 skipped in 732.93s`;
+  `compileall`, `git diff --check`, changed-file `pyflakes`, and clean-worktree
+  checks passed before this plan-only update.
 
 ## Non-Claims
 
 The branch is not production-ready. It is not yet a packaged candidate or
 production/default-enablement claim. Root8 and root13 are diagnostic evidence,
-not passes.
+not passes; a green source suite does not replace root14 or G6/G7 acceptance.
 Three/four-workgroup, restart, busy-retain, provider qualification, G7
 packaging, and G8 publication remain outside the current accepted claim.
 
