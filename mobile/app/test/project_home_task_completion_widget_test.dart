@@ -96,6 +96,59 @@ void main() {
   });
 
   testWidgets(
+    'notification stream stops in background and resumes once in foreground',
+    (tester) async {
+      final streamClient = _LifecycleTaskCompletionStreamClient();
+      final profileStore = await _profileStoreWith([
+        _pairedHost(scopes: const {'view', 'focus', 'notify'}),
+      ]);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ProjectHomeScreen(
+            repository: FakeMobileCcbRepository.demo(),
+            profileStore: profileStore,
+            autoActivateStoredProfile: true,
+            gatewayRepositoryFactory: (_) => RecordingGatewayRepository(),
+            gatewayTerminalTransportFactory:
+                (_) => RecordingTerminalTransport(),
+            taskNotificationStreamClient: streamClient,
+            taskCompletionLocalNotifications:
+                _FakeTaskCompletionLocalNotifications(),
+            taskCompletionSeenStore: TaskCompletionSeenDedupeStore(
+              secureStore: MemorySecureStore(),
+            ),
+            taskCompletionUnreadStore: TaskCompletionUnreadStore(
+              secureStore: MemorySecureStore(),
+            ),
+            invalidationCursorStore: _cursorStore(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(streamClient.subscribeCalls, 1);
+      expect(streamClient.hasListener, isTrue);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(streamClient.hasListener, isFalse);
+      await tester.pump(const Duration(seconds: 2));
+      expect(streamClient.subscribeCalls, 1);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await streamClient.waitForSubscribeCalls(2);
+      await tester.pump();
+
+      expect(streamClient.subscribeCalls, 2);
+      expect(streamClient.hasListener, isTrue);
+    },
+  );
+
+  testWidgets(
     'notification stream retry does not reflow or disable the active chat',
     (tester) async {
       final streamClient = _FakeTaskCompletionStreamClient();
@@ -577,6 +630,41 @@ class _FakeTaskCompletionStreamClient
       delivered.add(event);
       return event;
     });
+  }
+}
+
+class _LifecycleTaskCompletionStreamClient
+    implements GatewayTaskCompletionNotificationStreamClient {
+  final controllers = <StreamController<TaskCompletionNotificationEvent>>[];
+  final _subscribeWaiters = <int, Completer<void>>{};
+
+  int get subscribeCalls => controllers.length;
+  bool get hasListener =>
+      controllers.isNotEmpty && controllers.last.hasListener;
+
+  Future<void> waitForSubscribeCalls(int count) {
+    if (subscribeCalls >= count) {
+      return Future<void>.value();
+    }
+    return (_subscribeWaiters[count] ??= Completer<void>()).future;
+  }
+
+  @override
+  Stream<TaskCompletionNotificationEvent> subscribe(
+    GatewayPairedHost host, [
+    String? lastEventId,
+    GatewayInvalidationWatch? watch,
+    void Function()? onConnected,
+  ]) {
+    final controller = StreamController<TaskCompletionNotificationEvent>();
+    controllers.add(controller);
+    for (final entry in _subscribeWaiters.entries.toList(growable: false)) {
+      if (subscribeCalls >= entry.key && !entry.value.isCompleted) {
+        entry.value.complete();
+        _subscribeWaiters.remove(entry.key);
+      }
+    }
+    return controller.stream;
   }
 }
 

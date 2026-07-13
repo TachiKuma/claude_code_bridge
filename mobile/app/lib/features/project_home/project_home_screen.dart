@@ -220,6 +220,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
   late final TaskCompletionNotificationController _taskNotifications;
   late final MobileConnectionSupervisor _connectionSupervisor;
   late final MobilePresenceCoordinator _presenceCoordinator;
+  bool _taskNotificationsSuspendedForBackground = false;
 
   @override
   void initState() {
@@ -279,12 +280,22 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     if (state == AppLifecycleState.resumed) {
       _presenceCoordinator.setVisible(true);
       _connectionSupervisor.foregroundResume();
-      _taskNotifications.retryNow();
+      final profile = _selectedProfile;
+      if (_taskNotificationsSuspendedForBackground &&
+          _mode == AppRuntimeMode.pairedGateway &&
+          profile != null) {
+        _startTaskCompletionNotifications(profile);
+      } else {
+        _taskNotifications.retryNow();
+      }
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached ||
         state == AppLifecycleState.hidden) {
       _presenceCoordinator.setVisible(false);
+      if (state != AppLifecycleState.inactive) {
+        _stopTaskCompletionNotifications(forBackground: true);
+      }
     }
   }
 
@@ -1234,7 +1245,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
           _gatewayReconnectRetryIn = null;
           _viewFuture = session.viewFuture;
         });
-        unawaited(_taskNotifications.stop());
+        _stopTaskCompletionNotifications();
         _presenceCoordinator.stop();
         _connectionSupervisor.stop();
         _lifecycleResultNotifier.value = null;
@@ -1370,7 +1381,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
   }
 
   void _returnToPairingSetup() {
-    unawaited(_taskNotifications.stop());
+    _stopTaskCompletionNotifications();
     _presenceCoordinator.stop();
     _connectionSupervisor.stop();
     setState(() {
@@ -2012,7 +2023,17 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
   }
 
   void _startTaskCompletionNotifications(GatewayPairedHost profile) {
+    if (_appLifecycleState != AppLifecycleState.resumed) {
+      _taskNotificationsSuspendedForBackground = true;
+      return;
+    }
+    _taskNotificationsSuspendedForBackground = false;
     unawaited(_startTaskCompletionNotificationsAfterUnreadLoad(profile));
+  }
+
+  void _stopTaskCompletionNotifications({bool forBackground = false}) {
+    _taskNotificationsSuspendedForBackground = forBackground;
+    unawaited(_taskNotifications.stop());
   }
 
   Future<void> _startTaskCompletionNotificationsAfterUnreadLoad(

@@ -648,6 +648,7 @@ class TaskCompletionNotificationController {
   bool _started = false;
   bool _terminalStreamError = false;
   int _reconnectAttempt = 0;
+  int _lifecycleGeneration = 0;
   final LinkedHashSet<String> _seenEventIds = LinkedHashSet<String>();
   Future<void> _eventHandlingTail = Future<void>.value();
 
@@ -655,7 +656,11 @@ class TaskCompletionNotificationController {
     GatewayPairedHost host, [
     GatewayInvalidationWatch? watch,
   ]) async {
-    await stop();
+    final generation = ++_lifecycleGeneration;
+    await _stopCurrentSubscription();
+    if (generation != _lifecycleGeneration) {
+      return TaskCompletionNotificationSubscriptionStatus.subscribed;
+    }
     if (!host.profile.scopes.contains('notify')) {
       return TaskCompletionNotificationSubscriptionStatus.missingNotifyScope;
     }
@@ -668,10 +673,16 @@ class TaskCompletionNotificationController {
     _lastConfirmedEventId = await _cursorStore
         .read(host)
         .timeout(const Duration(milliseconds: 100), onTimeout: () => null);
+    if (generation != _lifecycleGeneration) {
+      return TaskCompletionNotificationSubscriptionStatus.subscribed;
+    }
     _liveBaselineCompletedAt = _clock().toUtc();
     _nextReconnectDelay = _initialReconnectDelay;
     _reconnectAttempt = 0;
     _permissionStatus = await _localNotifications.requestPermissionIfNeeded();
+    if (generation != _lifecycleGeneration) {
+      return TaskCompletionNotificationSubscriptionStatus.subscribed;
+    }
     _connect();
     return _permissionStatus ==
             TaskCompletionLocalNotificationPermissionStatus.granted
@@ -688,16 +699,22 @@ class TaskCompletionNotificationController {
   }
 
   Future<void> stop() async {
+    _lifecycleGeneration += 1;
+    await _stopCurrentSubscription();
+  }
+
+  Future<void> _stopCurrentSubscription() async {
     _started = false;
     _activeHost = null;
     _watch = null;
     _lastConfirmedEventId = null;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
-    await _eventSubscription?.cancel();
+    final eventSubscription = _eventSubscription;
     _eventSubscription = null;
     _seenEventIds.clear();
     _emitConnectionState(GatewayInvalidationConnectionState.stopped, null);
+    await eventSubscription?.cancel();
   }
 
   Future<void> dispose() async {
