@@ -956,6 +956,21 @@ class TaskCompletionNotificationController {
     unawaited(_requestSubscriptionReconcile());
   }
 
+  /// Reconnects the existing cursor-based stream without starting any
+  /// background transport. Callers may await the subscription handoff before
+  /// selecting a notification target.
+  Future<void> catchUpNow() {
+    if (!_started || _startInitializing) {
+      return Future<void>.value();
+    }
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _nextReconnectDelay = _initialReconnectDelay;
+    _reconnectAttempt = 0;
+    _subscriptionDesiredConnected = true;
+    return _requestSubscriptionReconcile();
+  }
+
   Future<void> _handleEvent(TaskCompletionNotificationEvent event) async {
     final hostAtStart = _activeHost;
     if (!_started || hostAtStart == null) {

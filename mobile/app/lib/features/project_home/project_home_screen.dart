@@ -17,6 +17,7 @@ import '../../models/ccb_project.dart';
 import '../../models/ccb_project_lifecycle.dart';
 import '../../models/ccb_project_view.dart';
 import '../../notifications/task_completion_notifications.dart';
+import '../../notifications/push_notifications.dart';
 import '../../pairing/gateway_pairing.dart';
 import '../../repository/mobile_ccb_repository.dart';
 import '../../repository/gateway_mobile_ccb_repository.dart';
@@ -67,6 +68,8 @@ class ProjectHomeScreen extends StatelessWidget {
     this.taskCompletionSeenStore,
     this.taskCompletionUnreadStore,
     this.invalidationCursorStore,
+    this.pushMessaging,
+    this.pushRegistrationClient,
     super.key,
   });
 
@@ -87,6 +90,8 @@ class ProjectHomeScreen extends StatelessWidget {
   final TaskCompletionSeenDedupeStore? taskCompletionSeenStore;
   final TaskCompletionUnreadStore? taskCompletionUnreadStore;
   final GatewayInvalidationCursorStore? invalidationCursorStore;
+  final PushMessagingClient? pushMessaging;
+  final GatewayPushRegistrationClient? pushRegistrationClient;
 
   @override
   Widget build(BuildContext context) {
@@ -107,6 +112,8 @@ class ProjectHomeScreen extends StatelessWidget {
       taskCompletionSeenStore: taskCompletionSeenStore,
       taskCompletionUnreadStore: taskCompletionUnreadStore,
       invalidationCursorStore: invalidationCursorStore,
+      pushMessaging: pushMessaging,
+      pushRegistrationClient: pushRegistrationClient,
     );
   }
 }
@@ -129,6 +136,8 @@ class _ProjectHomeView extends StatefulWidget {
     required this.taskCompletionSeenStore,
     required this.taskCompletionUnreadStore,
     required this.invalidationCursorStore,
+    required this.pushMessaging,
+    required this.pushRegistrationClient,
   });
 
   final MobileCcbRepository repository;
@@ -148,6 +157,8 @@ class _ProjectHomeView extends StatefulWidget {
   final TaskCompletionSeenDedupeStore? taskCompletionSeenStore;
   final TaskCompletionUnreadStore? taskCompletionUnreadStore;
   final GatewayInvalidationCursorStore? invalidationCursorStore;
+  final PushMessagingClient? pushMessaging;
+  final GatewayPushRegistrationClient? pushRegistrationClient;
 
   @override
   State<_ProjectHomeView> createState() => _ProjectHomeViewState();
@@ -219,6 +230,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
   final _taskCompletionUnreadClearInFlight = <String>{};
   late final TaskCompletionUnreadStore _taskCompletionUnreadStore;
   late final TaskCompletionNotificationController _taskNotifications;
+  late final PushNotificationRuntime _pushNotifications;
   late final MobileConnectionSupervisor _connectionSupervisor;
   MobileConnectionOutcomeAdapter? _connectionOutcomeAdapter;
   int _gatewayActivationGeneration = 0;
@@ -260,6 +272,12 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
       onStreamError: _handleGatewayStreamError,
       shouldShowNotification: _shouldShowTaskCompletionNotification,
     );
+    _pushNotifications = PushNotificationRuntime(
+      messaging: widget.pushMessaging ?? FirebasePushMessagingClient(),
+      registration:
+          widget.pushRegistrationClient ?? GatewayPushRegistrationClient(),
+      onRouteOpened: _handlePushNotificationRoute,
+    );
     _activeRepository = widget.repository;
     _viewFuture = _loadActiveProjectView();
     _bootstrapProfiles();
@@ -270,6 +288,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     WidgetsBinding.instance.removeObserver(this);
     _pairingForm.dispose();
     unawaited(_taskNotifications.dispose());
+    unawaited(_pushNotifications.dispose());
     _presenceCoordinator.dispose();
     _connectionSupervisor.dispose();
     _lifecycleResultNotifier.dispose();
@@ -1350,6 +1369,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
       visible: _appLifecycleState == AppLifecycleState.resumed,
     );
     _startTaskCompletionNotifications(profile);
+    unawaited(_pushNotifications.start(profile));
     _lifecycleResultNotifier.value = null;
     unawaited(_restoreGatewayProjectListSnapshot(profile));
   }
@@ -1434,6 +1454,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     _gatewayActivationGeneration += 1;
     _detachGatewayOutcomeReporters();
     _stopTaskCompletionNotifications();
+    unawaited(_pushNotifications.stop());
     _presenceCoordinator.stop();
     _connectionSupervisor.stop();
     _connectionOutcomeAdapter = null;
@@ -2257,6 +2278,21 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
           _serverProjectsFuture = _loadServerProjects();
         });
     }
+  }
+
+  Future<void> _handlePushNotificationRoute(PushNotificationRoute route) async {
+    if (_mode != AppRuntimeMode.pairedGateway) {
+      return;
+    }
+    // The cursor stream is foreground-only. Reconnect it before resolving the
+    // route so a tap cannot turn a notification into a terminal operation.
+    await _taskNotifications.catchUpNow();
+    await _openTaskCompletionNotificationTap(
+      TaskCompletionNotificationTap(
+        projectId: route.projectId,
+        agent: route.agent,
+      ),
+    );
   }
 
   void _showSnack(String message) {
