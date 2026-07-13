@@ -154,7 +154,18 @@ class MobileConnectionSupervisor {
       if (generation != _generation) return;
       reportSuccess();
     } catch (error) {
-      if (generation == _generation) reportFailure(error);
+      if (generation == _generation) {
+        reportFailure(
+          error,
+          auth: switch (error) {
+            GatewayHttpException(statusCode: 401) =>
+              MobileAuthDisposition.credentialInvalid,
+            GatewayHttpException(statusCode: 403) =>
+              MobileAuthDisposition.scopeDenied,
+            _ => MobileAuthDisposition.none,
+          },
+        );
+      }
     } finally {
       _inFlightGeneration = null;
       final queued = _queuedGeneration;

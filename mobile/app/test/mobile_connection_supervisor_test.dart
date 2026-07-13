@@ -41,6 +41,25 @@ void main() {
     supervisor.dispose();
   });
 
+  test('probe classifies an invalid credential as authentication required', () async {
+    final repository = _ProbeRepository()
+      ..healthError = GatewayHttpException(Uri(), 401, 'revoked');
+    final supervisor = MobileConnectionSupervisor(
+      onChanged: (_) {},
+      initialDelay: Duration.zero,
+      maxDelay: Duration.zero,
+    );
+
+    supervisor.start(profile: _profile(), probe: repository);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      supervisor.snapshot.state,
+      MobileConnectionState.authenticationRequired,
+    );
+    supervisor.dispose();
+  });
+
   test('403 scope denial and mutation failure keep the stored session', () {
     final supervisor = MobileConnectionSupervisor(onChanged: (_) {});
     supervisor.start(profile: _profile(), probe: _ProbeRepository());
@@ -53,6 +72,18 @@ void main() {
       supervisor.snapshot.state,
       isNot(MobileConnectionState.authenticationRequired),
     );
+    supervisor.dispose();
+  });
+
+  test('probe scope denial degrades without invalidating credentials', () async {
+    final repository = _ProbeRepository()
+      ..healthError = GatewayHttpException(Uri(), 403, 'scope denied');
+    final supervisor = MobileConnectionSupervisor(onChanged: (_) {});
+
+    supervisor.start(profile: _profile(), probe: repository);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(supervisor.snapshot.state, MobileConnectionState.degraded);
     supervisor.dispose();
   });
 
@@ -134,12 +165,14 @@ GatewayPairedHost _profile({String device = 'device'}) => GatewayPairedHost(
 
 class _ProbeRepository implements MobileGatewayProfileHealthProbe {
   bool fail = false;
+  Object? healthError;
   Completer<void>? gate;
   var healthCalls = 0;
   @override
   Future<GatewayHealth> health() async {
     healthCalls += 1;
     await gate?.future;
+    if (healthError case final error?) throw error;
     if (fail) throw TimeoutException('route');
     return GatewayHealth(
       status: 'ok',
