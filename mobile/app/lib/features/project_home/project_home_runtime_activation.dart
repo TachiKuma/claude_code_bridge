@@ -124,13 +124,18 @@ Future<void> verifyProjectHomeGatewayProfile(
   MobileCcbRepository repository, {
   Duration timeout = projectHomeRuntimeGatewayHealthTimeout,
 }) async {
-  final probe = repository is MobileGatewayProfileHealthProbe
-      ? repository as MobileGatewayProfileHealthProbe
-      : null;
+  final probe =
+      repository is MobileGatewayProfileHealthProbe
+          ? repository as MobileGatewayProfileHealthProbe
+          : null;
   if (probe == null) {
     return;
   }
   try {
+    if (probe case final MobileGatewayCoreRouteVerifier verifier) {
+      await verifier.verifyCoreRoutes().timeout(timeout);
+      return;
+    }
     final health = await probe.health().timeout(timeout);
     if (health.status.trim().toLowerCase() != 'ok') {
       throw ProjectHomeGatewayActivationException(

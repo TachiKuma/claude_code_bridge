@@ -14,7 +14,10 @@ abstract interface class MobileGatewayProfileHealthProbe {
   Future<GatewayHealth> health();
 
   Future<GatewayDevice> device();
+}
 
+/// Performs the complete core-route verification as one connection outcome.
+abstract interface class MobileGatewayCoreRouteVerifier {
   /// Verifies both core routes as one supervisor-authoritative operation.
   /// Implementations must not report a successful ordinary read until the
   /// entire verification has completed.
@@ -35,6 +38,7 @@ class GatewayMobileCcbRepository
         MobileCcbRepository,
         MobileCcbRepositoryFileUploader,
         MobileGatewayProfileHealthProbe,
+        MobileGatewayCoreRouteVerifier,
         MobileGatewayPresenceReporter,
         GatewayConnectionOutcomeReportable {
   GatewayMobileCcbRepository({required GatewayTransport transport})
@@ -64,13 +68,19 @@ class GatewayMobileCcbRepository
 
   @override
   Future<void> verifyCoreRoutes() async {
-    final health = await _transport.health();
-    if (health.status.toLowerCase() != 'ok') {
-      throw GatewayHttpException(Uri(), 503, 'gateway health is degraded');
-    }
-    final device = await _transport.device();
-    if (device.revoked) {
-      throw GatewayHttpException(Uri(), 401, 'device revoked');
+    try {
+      final health = await _transport.health();
+      if (health.status.toLowerCase() != 'ok') {
+        throw GatewayHttpException(Uri(), 503, 'gateway health is degraded');
+      }
+      final device = await _transport.device();
+      if (device.revoked) {
+        throw GatewayHttpException(Uri(), 401, 'device revoked');
+      }
+      _outcomeReporter?.succeeded(GatewayConnectionOperation.read);
+    } catch (error) {
+      _outcomeReporter?.failed(GatewayConnectionOperation.read, error);
+      rethrow;
     }
   }
 

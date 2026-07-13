@@ -155,7 +155,26 @@ class MobileConnectionSupervisor {
     try {
       final probe = _probe;
       if (probe != null) {
-        await probe.verifyCoreRoutes().timeout(const Duration(seconds: 4));
+        if (probe case final MobileGatewayCoreRouteVerifier verifier) {
+          await verifier.verifyCoreRoutes().timeout(const Duration(seconds: 4));
+        } else {
+          final health = await probe.health().timeout(
+            const Duration(seconds: 4),
+          );
+          if (health.status.toLowerCase() != 'ok') {
+            throw GatewayHttpException(
+              Uri(),
+              503,
+              'gateway health is degraded',
+            );
+          }
+          final device = await probe.device().timeout(
+            const Duration(seconds: 4),
+          );
+          if (device.revoked) {
+            throw GatewayHttpException(Uri(), 401, 'device revoked');
+          }
+        }
       }
       if (generation != _generation) return;
       reportSuccess();
