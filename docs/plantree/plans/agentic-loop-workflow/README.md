@@ -80,6 +80,10 @@ recoverable workflow loops.
   current G6C implementation checkpoint, rejected root8 real-provider
   diagnosis, detail-ready reconciliation repair, and the remaining P5/G6/G7
   acceptance gates.
+- [history/g6c-root13-planner-terminal-constraint-diagnostic-20260713.md](history/g6c-root13-planner-terminal-constraint-diagnostic-20260713.md):
+  rejected root13 real-provider evidence after the Git-capability repair;
+  records the post-detail Planner/importer terminal-constraint gap and the
+  root14 repair and acceptance gates.
 - [history/phase1-6-deployment-readiness-p2-frontdesk-pressure-20260708.md](history/phase1-6-deployment-readiness-p2-frontdesk-pressure-20260708.md):
   P2 post-acceptance deployment-readiness evidence for real-project
   frontdesk macro-intake pressure across direct, detail, macro-adjustment, and

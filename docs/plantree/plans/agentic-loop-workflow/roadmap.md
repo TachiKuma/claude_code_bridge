@@ -1324,6 +1324,15 @@ tests, and a fresh root9 opened-project run are required before P5 acceptance.
 See
 [history/g6c-decision029-integration-and-root8-diagnostic-20260712.md](history/g6c-decision029-integration-and-root8-diagnostic-20260712.md).
 
+2026-07-13 G6C root13 checkpoint: the Git-capability RolePack and harness
+repairs passed the real Frontdesk-to-Planner handoff, and L1/L2 plus both L4
+routes reached their expected terminals. Root13 was rejected when the
+post-detail Planner importer ignored `status_recommendation=detail_ready` and
+reopened L3 as `ready_for_orchestration`, preventing task-set closure. The
+next gate is a generic activation-scoped, digest-backed terminal constraint
+with ordinary post-detail compatibility, followed by a fresh root14 run. See
+[history/g6c-root13-planner-terminal-constraint-diagnostic-20260713.md](history/g6c-root13-planner-terminal-constraint-diagnostic-20260713.md).
+
 1. Freeze the current one-workgroup and Config V2 source/test baselines and
    land the orchestration-bundle/node-state/evidence contracts from
    [topics/single-lane-multi-workgroup-modification-and-test-plan.md](topics/single-lane-multi-workgroup-modification-and-test-plan.md).

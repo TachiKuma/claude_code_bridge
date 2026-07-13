@@ -1,10 +1,10 @@
 # Agentic Loop Workflow Implementation Status
 
-Date: 2026-07-12
-Status: In progress — G6C implementation integrated, P5 acceptance active
+Date: 2026-07-13
+Status: In progress — G6C root13 rejected, bounded terminal repair active
 Branch: `workflow/g6c-integration`
 Worktree: `/home/bfly/yunwei/ccb_worktrees/g6c-integration`
-Current HEAD before this status update: `2d897845`
+Current HEAD before this status update: `3a5e1810`
 
 ## Current Phase
 
@@ -14,13 +14,14 @@ reviewed `Worker + Reviewer` workgroups. G0-G5, Decision 027, and Decision 028
 are accepted. Decision 029 P0-P4 source implementation is integrated; P5
 direct acceptance is active.
 
-The first fresh G6C run, root8, proved L1/L2 and both L4 branches but was
-rejected because an affirmative Detailer stop contract was not recognized and
-L3 repeated until the 24-step runner limit. The fail-closed matcher,
-provenance, revision, stale-replay, and reconciliation repairs are integrated
-through `c37c4ac4`. Fourth-round independent review passed with `344` focused
-tests and no High/Medium finding. Root8 remains preserved; the current-HEAD
-full source gate is accepted; a fresh root9 run is now active.
+Root13 proved the repaired Frontdesk capability handoff, repo-independent
+Planner task set, L1/L2 `done/pass`, L4 macro `replan_required`, and L4
+blocked `blocked`. L3 reached `detail_ready`, but the post-detail Planner
+import ignored its explicit `status_recommendation=detail_ready` and reopened
+the task as `ready_for_orchestration`. Root13 was therefore rejected and
+safely unmounted. The active source task is a digest-backed, activation-scoped
+terminal constraint plus fail-closed importer settlement; root14 is forbidden
+until that repair and its ordinary-detail regression gates pass.
 
 ## Authority
 
@@ -47,24 +48,29 @@ closure, integration, topology, round, release, and delivery authority.
   and auto-runner reconciliation semantics.
 - `f09cb211` through `ec8fee16`: public three-layer architecture document,
   Mermaid flows, and reviewed SVG/PNG promotional graphic.
+- `c4dbeed1` and `3a5e1810`: Frontdesk/Planner Git-capability contract and
+  harness request injection; root13 proved the capability survives the real
+  direct handoff with `controller_rewrote_body=false`.
 
 Earlier accepted R1 authority/runtime evidence remains indexed at
 [history/single-lane-r1-authority-runtime-closure-20260711.md](history/single-lane-r1-authority-runtime-closure-20260711.md).
 
 ## Active TODO
 
-1. Run fresh visible root9 L1-L4 through task-set closure, Planner backfill,
-   Frontdesk reporting, B7, release, shutdown, and zero-residue audit.
-2. Complete remaining G6 three/four-workgroup, restart, busy-retain, and
+1. Land activation-scoped, digest-backed `detail_ready` terminal constraints
+   and importer settlement without changing ordinary post-detail execution.
+2. Update the Planner RolePack contract through `mother`, then run fresh
+   visible root14 through closure, B7, release, shutdown, and zero residue.
+3. Complete remaining G6 three/four-workgroup, restart, busy-retain, and
    provider-profile rows from fresh opened projects.
-3. Run G7 package/install/update/rollback gates and one visible installed-
+4. Run G7 package/install/update/rollback gates and one visible installed-
    candidate workflow; keep G8 publication separately authorized.
 
 ## Blocked By
 
-No external dependency beyond live provider availability. A source or runtime
-failure pauses downstream claims and creates a bounded repair task; it is not
-normalized into a pass.
+Blocked by the root13 post-detail activation/importer contract defect. Live
+provider availability is not the current blocker. Downstream real acceptance
+and packaging claims remain paused until the bounded repair is verified.
 
 ## Acceptance Ownership
 
@@ -90,14 +96,20 @@ independent work whose successful result is not needed upstream.
   passed after the one-line unused-import cleanup at `2d897845`.
 - Root8: L1/L2 `done/pass`, L4 macro `replan_required`, L4 blocked `blocked`;
   L3 rejected after repeated Orchestrator activation and runner step limit.
-- Historical roots 1-8 retain their files and evidence but are all unmounted
-  with `pid_alive=False` before root9 materialization.
-- Integration worktree was clean at `2d897845` before this status update.
+- Root13: capability handoff and initial five-task import passed; L1/L2 and
+  both L4 routes reached expected terminals. L3 reached `detail_ready`, then
+  `job_564275f23588` was imported as `ready_for_orchestration` despite
+  `status_recommendation=detail_ready`; the project was rejected, unmounted,
+  and auto-runner pid `4118860` terminated with evidence preserved.
+- Harness and RolePack gates at `3a5e1810`: `79 passed` and `24 passed`;
+  `pyflakes`, `compileall`, `git diff --check`, and clean-worktree checks
+  passed before root13.
 
 ## Non-Claims
 
 The branch is not production-ready. It is not yet a packaged candidate or
-production/default-enablement claim. Root8 is diagnostic evidence, not a pass.
+production/default-enablement claim. Root8 and root13 are diagnostic evidence,
+not passes.
 Three/four-workgroup, restart, busy-retain, provider qualification, G7
 packaging, and G8 publication remain outside the current accepted claim.
 
