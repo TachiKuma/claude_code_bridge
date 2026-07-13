@@ -35,8 +35,8 @@ class PushNotificationRoute {
     }
 
     return PushNotificationRoute(
-      projectId: requiredValue('route_project_id'),
-      agent: requiredValue('route_agent'),
+      projectId: requiredValue('project_id'),
+      agent: requiredValue('agent'),
       hostId: _optionalValue(data['host_id']),
       deviceId: _optionalValue(data['device_id']),
     );
@@ -164,9 +164,9 @@ class GatewayPushRegistrationClient {
     }
     try {
       final request = await _httpClient
-          .postUrl(
+          .putUrl(
             host.profile.routeProvider.gatewayUrl.resolve(
-              '/v1/devices/me/push',
+              '/v1/devices/me/push-token',
             ),
           )
           .timeout(timeout);
@@ -175,17 +175,12 @@ class GatewayPushRegistrationClient {
         ..contentType = ContentType.json;
       request.add(
         utf8.encode(
-          jsonEncode({
-            'platform': 'android',
-            'device_id': host.profile.deviceId,
-            'token': normalizedToken,
-          }),
+          jsonEncode({'token': normalizedToken}),
         ),
       );
       final response = await request.close().timeout(timeout);
       await response.drain<void>();
-      return response.statusCode == HttpStatus.created ||
-          response.statusCode == HttpStatus.ok;
+      return response.statusCode == HttpStatus.ok;
     } catch (_) {
       return false;
     }

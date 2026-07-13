@@ -20,24 +20,23 @@ The client requests notification permission only after it has a paired host
 with the existing `notify` scope. A denial is a normal result: it disables
 push registration and does not affect foreground notification reconciliation.
 Once allowed, the FCM token and every refresh are registered at
-`POST /v1/devices/me/push` with the bearer token from that exact paired host
-and its `device_id`. The gateway must derive the identity from the bearer
-token and reject a mismatched body identity; it must never accept a token as
-authority for another paired device. Re-pairing creates a new binding; the app
-does not revoke or mutate an old binding automatically.
+`PUT /v1/devices/me/push-token` with the bearer token from that exact paired
+host. The gateway derives device identity exclusively from that bearer; it
+never accepts a caller-supplied device identity. Re-pairing creates a new
+binding; the app does not revoke or mutate an old binding automatically.
 
 The registration protocol is deliberately small:
 
 ```json
-{"platform":"android","device_id":"paired-device-id","token":"fcm-token"}
+{"token":"fcm-token"}
 ```
 
-The gateway stores the FCM token encrypted and owner-readable only. Sender
-payloads contain only a versioned route (`route_project_id`, `route_agent`,
-optional `cursor` and dedupe key) and a short generic notification label. They
-must not include prompts, terminal output, paths, errors, credentials, or a
-device token. FCM is not an authorization channel: opening a route always
-uses the stored paired profile and normal gateway authorization.
+The gateway stores the FCM token in owner-only private state. Sender payloads
+are exactly `id`, `kind`, `project_id`, `project_short_name`, `agent`,
+`completed_at`, and `dedupe_key`; they must not include prompts, terminal
+output, paths, errors, credentials, or a device token. FCM is not an
+authorization channel: opening a route always uses the stored paired profile
+and normal gateway authorization.
 
 On a foreground/background notification click, the app first restores its
 stored paired profile and resumes the existing cursor-based notification

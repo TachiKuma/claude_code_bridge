@@ -8,13 +8,13 @@ import 'package:test/test.dart';
 void main() {
   test('push route requires a complete paired target', () {
     expect(
-      () => PushNotificationRoute.fromData(const {'route_project_id': 'demo'}),
+      () => PushNotificationRoute.fromData(const {'project_id': 'demo'}),
       throwsFormatException,
     );
 
     final route = PushNotificationRoute.fromData(const {
-      'route_project_id': 'proj-demo',
-      'route_agent': 'mobile',
+      'project_id': 'proj-demo',
+      'agent': 'mobile',
       'host_id': 'host-demo',
       'device_id': 'device-demo',
     });
@@ -92,13 +92,9 @@ void main() {
       await _drain();
 
       expect(requests, hasLength(2));
-      expect(requests.first['path'], '/v1/devices/me/push');
+    expect(requests.first['path'], '/v1/devices/me/push-token');
       expect(requests.first['authorization'], 'Bearer paired-device-token');
-      expect(requests.first['body'], {
-        'platform': 'android',
-        'device_id': 'device-demo',
-        'token': 'first-token',
-      });
+    expect(requests.first['body'], {'token': 'first-token'});
       expect(routes.map((route) => route.agent), ['mobile']);
 
       await runtime.dispose();
