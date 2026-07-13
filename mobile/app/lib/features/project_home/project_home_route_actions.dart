@@ -15,6 +15,8 @@ Future<void> pushProjectHomeTerminalRoute(
   required String projectId,
   String? agentName,
   String? windowName,
+  int? expectedNamespaceEpoch,
+  String? expectedPaneId,
   TerminalTransport? terminalTransport,
   bool gatewayTerminal = false,
 }) {
@@ -26,6 +28,8 @@ Future<void> pushProjectHomeTerminalRoute(
             projectId: projectId,
             agentName: agentName,
             windowName: windowName,
+            expectedNamespaceEpoch: expectedNamespaceEpoch,
+            expectedPaneId: expectedPaneId,
             terminalTransport: terminalTransport,
             gatewayTerminal: gatewayTerminal,
           ),

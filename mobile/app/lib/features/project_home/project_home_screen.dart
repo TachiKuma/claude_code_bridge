@@ -1884,52 +1884,6 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     }
   }
 
-  Future<CcbProjectView?> _focusAgent(
-    CcbProjectView view,
-    String agentName,
-  ) async {
-    final projectId = view.project.id;
-    final selectionRevision = _selectionRevision;
-    final outcome = await _focusCoordinator.focusAgent(
-      repository: _activeRepository,
-      view: view,
-      agentName: agentName,
-    );
-    if (!mounted || _activeProjectId != projectId) {
-      return null;
-    }
-    if (outcome.kind == ProjectHomeFocusOutcomeKind.stale) {
-      _showSnack(outcome.snackMessage!);
-      return null;
-    }
-    if (outcome.kind == ProjectHomeFocusOutcomeKind.success) {
-      final focusedView = outcome.focusedView!;
-      _rememberProjectActivity(focusedView);
-      setState(() {
-        _rememberProjectUsed(focusedView.project.id);
-        if (_selectionRevision == selectionRevision) {
-          _selectedAgentName = outcome.selectedAgentName;
-        }
-        _viewFuture = Future<CcbProjectView>.value(focusedView);
-      });
-      final selectedAgent = outcome.selectedAgentName;
-      if (selectedAgent != null) {
-        unawaited(
-          _clearTaskCompletionUnreadForAgent(
-            projectId: focusedView.project.id,
-            agent: selectedAgent,
-          ),
-        );
-      }
-      return focusedView;
-    }
-    setState(() {
-      _viewFuture = Future<CcbProjectView>.value(outcome.originalView!);
-    });
-    _showSnack(outcome.snackMessage!);
-    return null;
-  }
-
   Future<CcbProjectView?> _focusWindow(
     CcbProjectView view,
     String windowName, {
@@ -1988,13 +1942,9 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
 
   Future<void> _openAgentTerminal(CcbProjectView view, String agentName) async {
     if (_mode == AppRuntimeMode.pairedGateway) {
-      final focusedView = await _focusAgent(view, agentName);
-      if (focusedView == null || !mounted) {
-        return;
-      }
       final transport = _terminalTransport;
       final outcome = projectHomeGatewayTerminalNavigation(
-        focusedView: focusedView,
+        view: view,
         agentName: agentName,
         hasTerminalTransport: transport != null,
       );
@@ -2011,6 +1961,8 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
         repository: _activeRepository,
         projectId: spec.projectId,
         agentName: spec.agentName,
+        expectedNamespaceEpoch: spec.namespaceEpoch,
+        expectedPaneId: spec.paneId,
         terminalTransport: transport,
         gatewayTerminal: spec.gatewayTerminal,
       );

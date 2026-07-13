@@ -198,12 +198,13 @@ void main() {
     'gateway runtime fails invalid profile token before project list',
     () async {
       final profile = _pairedHost(hostId: 'host-id', deviceId: 'phone');
-      final repository = _RecordingRepository()
-        ..deviceError = GatewayHttpException(
-          Uri.parse('http://host-id.local:8787/v1/devices/me'),
-          401,
-          'unauthorized',
-        );
+      final repository =
+          _RecordingRepository()
+            ..deviceError = GatewayHttpException(
+              Uri.parse('http://host-id.local:8787/v1/devices/me'),
+              401,
+              'unauthorized',
+            );
 
       final session = const ProjectHomeRuntimeSessionCoordinator()
           .activateGateway(
@@ -238,8 +239,9 @@ void main() {
     'gateway runtime reports unreachable profile before project list',
     () async {
       final profile = _pairedHost(hostId: 'host-id', deviceId: 'phone');
-      final repository = _RecordingRepository()
-        ..healthError = TimeoutException('route timed out');
+      final repository =
+          _RecordingRepository()
+            ..healthError = TimeoutException('route timed out');
 
       final session = const ProjectHomeRuntimeSessionCoordinator()
           .activateGateway(
@@ -324,7 +326,10 @@ GatewayPairedHost _pairedHost({
 }
 
 class _RecordingRepository
-    implements MobileCcbRepository, MobileGatewayProfileHealthProbe {
+    implements
+        MobileCcbRepository,
+        MobileGatewayProfileHealthProbe,
+        MobileGatewayCoreRouteVerifier {
   final getProjectViewCalls = <String>[];
   var listProjectsCalls = 0;
   var healthCalls = 0;

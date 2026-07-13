@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:ccb_mobile/ccb_mobile.dart';
 import 'package:ccb_mobile/features/project_home/mobile_connection_supervisor.dart';
 import 'package:ccb_mobile/features/project_home/project_home_runtime_activation.dart';
-import 'package:ccb_mobile/transport/gateway_connection_outcome.dart';
 import 'package:test/test.dart';
 
 void main() {

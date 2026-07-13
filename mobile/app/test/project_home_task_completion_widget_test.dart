@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -140,8 +141,7 @@ void main() {
 
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pump();
-      await streamClient.waitForSubscribeCalls(2);
-      await tester.pump();
+      await _pumpUntilLifecycleSubscribed(tester, streamClient, 2);
 
       expect(streamClient.subscribeCalls, 2);
       expect(streamClient.hasListener, isTrue);
@@ -381,6 +381,7 @@ void main() {
     await _pumpUntilSubscribed(tester, streamClient);
     await tester.tap(find.byKey(const ValueKey('project-open-proj-demo')));
     await tester.pumpAndSettle();
+    await _pumpUntilSubscribeCalls(tester, streamClient, 2);
     final callsBefore = repository.getProjectViewCalls;
 
     streamClient.add(
@@ -424,7 +425,6 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await _pumpUntilSubscribed(tester, streamClient);
     await tester.tap(find.byKey(const ValueKey('project-open-proj-demo')));
     await tester.pumpAndSettle();
 
@@ -473,6 +473,7 @@ void main() {
     await _pumpUntilSubscribed(tester, streamClient);
     await tester.tap(find.byKey(const ValueKey('project-open-proj-demo')));
     await tester.pumpAndSettle();
+    await _pumpUntilSubscribed(tester, streamClient);
 
     streamClient.add(_completionEvent(dedupeKey: 'lead-unread', agent: 'lead'));
     await _pumpNotificationEvent(tester);
@@ -576,6 +577,40 @@ Future<void> _pumpUntilSubscribed(
   expect(streamClient.hasListener, isTrue);
 }
 
+Future<void> _pumpUntilSubscribeCalls(
+  WidgetTester tester,
+  _FakeTaskCompletionStreamClient streamClient,
+  int count,
+) async {
+  for (
+    var attempt = 0;
+    attempt < 50 && streamClient.subscribeCalls < count;
+    attempt += 1
+  ) {
+    await tester.idle();
+    await tester.pump(const Duration(milliseconds: 1));
+  }
+  expect(streamClient.subscribeCalls, greaterThanOrEqualTo(count));
+  expect(streamClient.hasListener, isTrue);
+}
+
+Future<void> _pumpUntilLifecycleSubscribed(
+  WidgetTester tester,
+  _LifecycleTaskCompletionStreamClient streamClient,
+  int count,
+) async {
+  for (
+    var attempt = 0;
+    attempt < 50 && streamClient.subscribeCalls < count;
+    attempt += 1
+  ) {
+    await tester.idle();
+    await tester.pump(const Duration(milliseconds: 1));
+  }
+  expect(streamClient.subscribeCalls, greaterThanOrEqualTo(count));
+  expect(streamClient.hasListener, isTrue);
+}
+
 Future<GatewayHostProfileStore> _profileStoreWith(
   List<GatewayPairedHost> profiles,
 ) async {
@@ -626,28 +661,21 @@ class _FakeTaskCompletionStreamClient
     void Function()? onConnected,
   ]) {
     subscribeCalls += 1;
-    return _controller.stream.map((event) {
-      delivered.add(event);
-      return event;
-    });
+    return _ImmediateCancelStream(
+      _controller.stream.map((event) {
+        delivered.add(event);
+        return event;
+      }),
+    );
   }
 }
 
 class _LifecycleTaskCompletionStreamClient
     implements GatewayTaskCompletionNotificationStreamClient {
-  final controllers = <StreamController<TaskCompletionNotificationEvent>>[];
-  final _subscribeWaiters = <int, Completer<void>>{};
-
-  int get subscribeCalls => controllers.length;
-  bool get hasListener =>
-      controllers.isNotEmpty && controllers.last.hasListener;
-
-  Future<void> waitForSubscribeCalls(int count) {
-    if (subscribeCalls >= count) {
-      return Future<void>.value();
-    }
-    return (_subscribeWaiters[count] ??= Completer<void>()).future;
-  }
+  final _controller =
+      StreamController<TaskCompletionNotificationEvent>.broadcast(sync: true);
+  var subscribeCalls = 0;
+  bool get hasListener => _controller.hasListener;
 
   @override
   Stream<TaskCompletionNotificationEvent> subscribe(
@@ -656,16 +684,66 @@ class _LifecycleTaskCompletionStreamClient
     GatewayInvalidationWatch? watch,
     void Function()? onConnected,
   ]) {
-    final controller = StreamController<TaskCompletionNotificationEvent>();
-    controllers.add(controller);
-    for (final entry in _subscribeWaiters.entries.toList(growable: false)) {
-      if (subscribeCalls >= entry.key && !entry.value.isCompleted) {
-        entry.value.complete();
-        _subscribeWaiters.remove(entry.key);
-      }
-    }
-    return controller.stream;
+    subscribeCalls += 1;
+    return _ImmediateCancelStream(_controller.stream);
   }
+}
+
+class _ImmediateCancelStream extends Stream<TaskCompletionNotificationEvent> {
+  _ImmediateCancelStream(this._delegate);
+
+  final Stream<TaskCompletionNotificationEvent> _delegate;
+
+  @override
+  StreamSubscription<TaskCompletionNotificationEvent> listen(
+    void Function(TaskCompletionNotificationEvent event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) => _ImmediateCancelSubscription(
+    _delegate.listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    ),
+  );
+}
+
+class _ImmediateCancelSubscription
+    implements StreamSubscription<TaskCompletionNotificationEvent> {
+  _ImmediateCancelSubscription(this._delegate);
+
+  final StreamSubscription<TaskCompletionNotificationEvent> _delegate;
+
+  @override
+  Future<void> cancel() {
+    unawaited(_delegate.cancel());
+    return SynchronousFuture<void>(null);
+  }
+
+  @override
+  void onData(void Function(TaskCompletionNotificationEvent data)? handleData) {
+    _delegate.onData(handleData);
+  }
+
+  @override
+  void onError(Function? handleError) => _delegate.onError(handleError);
+
+  @override
+  void onDone(void Function()? handleDone) => _delegate.onDone(handleDone);
+
+  @override
+  void pause([Future<void>? resumeSignal]) => _delegate.pause(resumeSignal);
+
+  @override
+  void resume() => _delegate.resume();
+
+  @override
+  bool get isPaused => _delegate.isPaused;
+
+  @override
+  Future<E> asFuture<E>([E? futureValue]) => _delegate.asFuture(futureValue);
 }
 
 class _FakeTaskCompletionLocalNotifications

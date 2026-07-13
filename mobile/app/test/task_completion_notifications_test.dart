@@ -721,6 +721,120 @@ void main() {
     );
 
     test(
+      'HTTP SSE replacement coalesces watch changes and awaits cancellation',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        var requestCount = 0;
+        final responses = <HttpResponse>[];
+        server.listen((request) async {
+          requestCount += 1;
+          final response =
+              request.response
+                ..statusCode = HttpStatus.ok
+                ..headers.contentType = ContentType(
+                  'text',
+                  'event-stream',
+                  charset: 'utf-8',
+                )
+                ..write(': connected\n\n');
+          responses.add(response);
+          await response.flush();
+        });
+        addTearDown(() async {
+          for (final response in responses) {
+            try {
+              await response.close();
+            } on Object {
+              // A canceled client may already have closed the response.
+            }
+          }
+          await server.close(force: true);
+        });
+        final httpClient = HttpGatewayTaskCompletionNotificationStreamClient(
+          timeout: const Duration(seconds: 2),
+        );
+        final streamClient = _CountingTaskCompletionStreamClient(httpClient);
+        final controller = TaskCompletionNotificationController(
+          streamClient: streamClient,
+          localNotifications: _FakeTaskCompletionLocalNotifications(),
+          seenStore: TaskCompletionSeenDedupeStore(
+            secureStore: MemorySecureStore(),
+          ),
+          onTap: (_) {},
+        );
+        final host = GatewayPairedHost(
+          profile: GatewayHostProfile(
+            hostId: 'host-http',
+            deviceId: 'device-http',
+            routeProvider: RouteProvider(
+              kind: RouteProviderKind.lan,
+              gatewayUrl: Uri.parse(
+                'http://${server.address.address}:${server.port}',
+              ),
+            ),
+            scopes: const {'notify'},
+          ),
+          deviceToken: 'device-token',
+          projectId: 'proj-demo',
+        );
+
+        await controller.start(host);
+        await _waitFor(() => requestCount == 1 && streamClient.active == 1);
+        controller
+          ..updateWatch(
+            const GatewayInvalidationWatch(
+              projectId: 'proj-demo',
+              agent: 'mobile',
+              namespaceEpoch: 4,
+            ),
+          )
+          ..updateWatch(
+            const GatewayInvalidationWatch(
+              projectId: 'proj-demo',
+              agent: 'lead',
+              namespaceEpoch: 4,
+            ),
+          )
+          ..retryNow();
+        await _waitFor(
+          () => requestCount == 2 && streamClient.active == 1,
+          description:
+              () =>
+                  'requestCount=$requestCount active=${streamClient.active} peak=${streamClient.peak}',
+        );
+        expect(streamClient.peak, lessThanOrEqualTo(1));
+
+        controller.updateWatch(
+          const GatewayInvalidationWatch(
+            projectId: 'proj-demo',
+            agent: 'lead',
+            namespaceEpoch: 4,
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        expect(streamClient.peak, lessThanOrEqualTo(1));
+
+        await controller.stop();
+        await _waitFor(
+          () => streamClient.active == 0,
+          timeout: const Duration(seconds: 5),
+        );
+        await controller.start(
+          host,
+          const GatewayInvalidationWatch(
+            projectId: 'proj-demo',
+            agent: 'lead',
+            namespaceEpoch: 4,
+          ),
+        );
+        await _waitFor(() => requestCount == 3 && streamClient.active == 1);
+        expect(streamClient.peak, lessThanOrEqualTo(1));
+        await controller.dispose();
+        httpClient.close(force: true);
+      },
+    );
+
+    test(
       'tap routing opens target agent when project view still contains it',
       () {
         final route = resolveProjectHomeTaskCompletionNotificationTap(
@@ -890,6 +1004,22 @@ Future<void> _drain() async {
   await Future<void>.delayed(Duration.zero);
 }
 
+Future<void> _waitFor(
+  bool Function() condition, {
+  Duration timeout = const Duration(seconds: 2),
+  String Function()? description,
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (!condition()) {
+    if (DateTime.now().isAfter(deadline)) {
+      throw TimeoutException(
+        'condition was not met within $timeout${description == null ? '' : ': ${description()}'}',
+      );
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+}
+
 class _FakeTaskCompletionStreamClient
     implements GatewayTaskCompletionNotificationStreamClient {
   final _controller =
@@ -911,6 +1041,49 @@ class _FakeTaskCompletionStreamClient
     subscribeCalls += 1;
     lastEventIds.add(lastEventId);
     return _controller.stream;
+  }
+}
+
+class _CountingTaskCompletionStreamClient
+    implements GatewayTaskCompletionNotificationStreamClient {
+  _CountingTaskCompletionStreamClient(this._delegate);
+
+  final GatewayTaskCompletionNotificationStreamClient _delegate;
+  var active = 0;
+  var peak = 0;
+
+  @override
+  Stream<TaskCompletionNotificationEvent> subscribe(
+    GatewayPairedHost host, [
+    String? lastEventId,
+    GatewayInvalidationWatch? watch,
+    void Function()? onConnected,
+  ]) {
+    return Stream<TaskCompletionNotificationEvent>.multi((controller) {
+      active += 1;
+      peak = peak > active ? peak : active;
+      var closed = false;
+      void markClosed() {
+        if (closed) return;
+        closed = true;
+        active -= 1;
+      }
+
+      final subscription = _delegate
+          .subscribe(host, lastEventId, watch, onConnected)
+          .listen(
+            controller.add,
+            onError: controller.addError,
+            onDone: () {
+              markClosed();
+              controller.close();
+            },
+          );
+      controller.onCancel = () async {
+        await subscription.cancel();
+        markClosed();
+      };
+    });
   }
 }
 

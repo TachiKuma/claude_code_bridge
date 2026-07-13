@@ -716,7 +716,10 @@ class TaskCompletionNotificationController {
   bool _started = false;
   int _reconnectAttempt = 0;
   int _lifecycleGeneration = 0;
-  int _connectionGeneration = 0;
+  int _desiredSubscriptionGeneration = 0;
+  Future<void>? _subscriptionReconcileFuture;
+  bool _subscriptionReconcileRequested = false;
+  bool _subscriptionDesiredConnected = false;
   GatewayInvalidationConnectionState? _connectionState;
   final LinkedHashSet<String> _seenEventIds = LinkedHashSet<String>();
   Future<void> _eventHandlingTail = Future<void>.value();
@@ -734,6 +737,7 @@ class TaskCompletionNotificationController {
       return TaskCompletionNotificationSubscriptionStatus.missingNotifyScope;
     }
     _started = true;
+    _subscriptionDesiredConnected = true;
     _activeHost = host;
     _watch = watch;
     // Secure storage is normally immediate. Keep subscription recovery
@@ -752,7 +756,7 @@ class TaskCompletionNotificationController {
     if (generation != _lifecycleGeneration) {
       return TaskCompletionNotificationSubscriptionStatus.subscribed;
     }
-    _connect();
+    await _requestSubscriptionReconcile();
     return _permissionStatus ==
             TaskCompletionLocalNotificationPermissionStatus.granted
         ? TaskCompletionNotificationSubscriptionStatus.subscribed
@@ -773,18 +777,20 @@ class TaskCompletionNotificationController {
   }
 
   Future<void> _stopCurrentSubscription() async {
-    _connectionGeneration += 1;
+    _setStoppedDesiredState();
+    await _requestSubscriptionReconcile();
+  }
+
+  void _setStoppedDesiredState() {
     _started = false;
+    _subscriptionDesiredConnected = false;
     _activeHost = null;
     _watch = null;
     _lastConfirmedEventId = null;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
-    final eventSubscription = _eventSubscription;
-    _eventSubscription = null;
     _seenEventIds.clear();
     _emitConnectionState(GatewayInvalidationConnectionState.stopped, null);
-    await eventSubscription?.cancel();
   }
 
   Future<void> dispose() async {
@@ -792,17 +798,60 @@ class TaskCompletionNotificationController {
     await _tapSubscription.cancel();
   }
 
-  void _connect() {
+  Future<void> _requestSubscriptionReconcile() {
+    _desiredSubscriptionGeneration += 1;
+    _subscriptionReconcileRequested = true;
+    final running = _subscriptionReconcileFuture;
+    if (running != null) {
+      return running;
+    }
+    final completer = Completer<void>();
+    _subscriptionReconcileFuture = completer.future;
+    unawaited(_drainSubscriptionReconcile(completer));
+    return completer.future;
+  }
+
+  Future<void> _drainSubscriptionReconcile(Completer<void> completer) async {
+    try {
+      while (_subscriptionReconcileRequested) {
+        _subscriptionReconcileRequested = false;
+        final desiredGeneration = _desiredSubscriptionGeneration;
+        final previousSubscription = _eventSubscription;
+        _eventSubscription = null;
+        if (previousSubscription != null) {
+          await previousSubscription.cancel();
+        }
+        if (_subscriptionReconcileRequested) {
+          continue;
+        }
+        if (_isCurrentDesiredSubscription(desiredGeneration)) {
+          _connect(desiredGeneration);
+        }
+      }
+      _subscriptionReconcileFuture = null;
+      completer.complete();
+    } catch (error, stackTrace) {
+      _subscriptionReconcileFuture = null;
+      completer.completeError(error, stackTrace);
+    }
+  }
+
+  bool _isCurrentDesiredSubscription(int desiredGeneration) {
+    return _started &&
+        _subscriptionDesiredConnected &&
+        desiredGeneration == _desiredSubscriptionGeneration;
+  }
+
+  void _connect(int desiredGeneration) {
     final host = _activeHost;
-    if (!_started || host == null) {
+    if (host == null || !_isCurrentDesiredSubscription(desiredGeneration)) {
       return;
     }
-    final connectionGeneration = ++_connectionGeneration;
     var terminalStreamError = false;
     try {
       _eventSubscription = _streamClient
           .subscribe(host, _lastConfirmedEventId, _watch, () {
-            if (!_isCurrentConnection(host, connectionGeneration)) {
+            if (!_isCurrentConnection(host, desiredGeneration)) {
               return;
             }
             _nextReconnectDelay = _initialReconnectDelay;
@@ -815,7 +864,7 @@ class TaskCompletionNotificationController {
           .listen(
             _enqueueEvent,
             onError: (Object error, StackTrace _) {
-              if (!_isCurrentConnection(host, connectionGeneration)) {
+              if (!_isCurrentConnection(host, desiredGeneration)) {
                 return;
               }
               _onStreamError?.call(error);
@@ -824,29 +873,29 @@ class TaskCompletionNotificationController {
                   error.statusCode >= 400 &&
                   error.statusCode < 500;
               if (!terminalStreamError) {
-                _scheduleReconnect(host, connectionGeneration);
+                _scheduleReconnect(host, desiredGeneration);
               }
             },
             onDone: () {
-              if (_isCurrentConnection(host, connectionGeneration) &&
+              if (_isCurrentConnection(host, desiredGeneration) &&
                   !terminalStreamError) {
-                _scheduleReconnect(host, connectionGeneration);
+                _scheduleReconnect(host, desiredGeneration);
               }
             },
           );
     } catch (_) {
-      _scheduleReconnect(host, connectionGeneration);
+      _scheduleReconnect(host, desiredGeneration);
     }
   }
 
-  void _scheduleReconnect(GatewayPairedHost host, int connectionGeneration) {
-    if (!_isCurrentConnection(host, connectionGeneration) ||
+  void _scheduleReconnect(GatewayPairedHost host, int desiredGeneration) {
+    if (!_isCurrentConnection(host, desiredGeneration) ||
         _reconnectTimer != null) {
       return;
     }
-    final reconnectGeneration = ++_connectionGeneration;
-    unawaited(_eventSubscription?.cancel());
-    _eventSubscription = null;
+    _subscriptionDesiredConnected = false;
+    unawaited(_requestSubscriptionReconcile());
+    final reconnectGeneration = _desiredSubscriptionGeneration;
     final delay = _nextReconnectDelay;
     _nextReconnectDelay = _nextDelayAfter(delay);
     _reconnectAttempt += 1;
@@ -855,11 +904,14 @@ class TaskCompletionNotificationController {
       delay,
     );
     _reconnectTimer = Timer(delay, () {
-      if (!_started || reconnectGeneration != _connectionGeneration) {
+      if (!_isCurrentHost(host) ||
+          _subscriptionDesiredConnected ||
+          reconnectGeneration != _desiredSubscriptionGeneration) {
         return;
       }
       _reconnectTimer = null;
-      _connect();
+      _subscriptionDesiredConnected = true;
+      unawaited(_requestSubscriptionReconcile());
     });
   }
 
@@ -884,14 +936,12 @@ class TaskCompletionNotificationController {
     if (!_started) {
       return;
     }
-    _connectionGeneration += 1;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
-    unawaited(_eventSubscription?.cancel());
-    _eventSubscription = null;
     _nextReconnectDelay = _initialReconnectDelay;
     _reconnectAttempt = 0;
-    _connect();
+    _subscriptionDesiredConnected = true;
+    unawaited(_requestSubscriptionReconcile());
   }
 
   Future<void> _handleEvent(TaskCompletionNotificationEvent event) async {
@@ -962,7 +1012,7 @@ class TaskCompletionNotificationController {
       _started && identical(_activeHost, host);
 
   bool _isCurrentConnection(GatewayPairedHost host, int generation) =>
-      _isCurrentHost(host) && generation == _connectionGeneration;
+      _isCurrentHost(host) && generation == _desiredSubscriptionGeneration;
 
   void _enqueueEvent(TaskCompletionNotificationEvent event) {
     _eventHandlingTail = _eventHandlingTail

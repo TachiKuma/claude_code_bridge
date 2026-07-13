@@ -330,7 +330,8 @@ GatewayPairedHost _profile({String device = 'device'}) => GatewayPairedHost(
   deviceToken: 'token',
 );
 
-class _ProbeRepository implements MobileGatewayProfileHealthProbe {
+class _ProbeRepository
+    implements MobileGatewayProfileHealthProbe, MobileGatewayCoreRouteVerifier {
   bool fail = false;
   Object? healthError;
   Completer<void>? gate;

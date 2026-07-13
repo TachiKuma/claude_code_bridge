@@ -592,7 +592,10 @@ class _FailingProfileStore extends GatewayHostProfileStore {
 }
 
 class _HealthCheckedGatewayRepository extends RecordingGatewayRepository
-    implements MobileGatewayProfileHealthProbe, MobileGatewayPresenceReporter {
+    implements
+        MobileGatewayProfileHealthProbe,
+        MobileGatewayCoreRouteVerifier,
+        MobileGatewayPresenceReporter {
   Object? healthError;
   Object? deviceError;
   Object? listProjectsError;
