@@ -769,6 +769,53 @@ void main() {
     );
 
     test(
+      'stale start completion cannot replace a newer subscription',
+      () async {
+        final streamClient = _FakeTaskCompletionStreamClient();
+        final localNotifications =
+            _SequencedPermissionTaskCompletionLocalNotifications();
+        final controller = _controller(
+          streamClient: streamClient,
+          localNotifications: localNotifications,
+        );
+        const firstWatch = GatewayInvalidationWatch(
+          projectId: 'proj-demo',
+          agent: 'mobile',
+          namespaceEpoch: 4,
+        );
+        const latestWatch = GatewayInvalidationWatch(
+          projectId: 'proj-demo',
+          agent: 'lead',
+          namespaceEpoch: 5,
+        );
+
+        final firstStart = controller.start(
+          _host(scopes: const {'notify'}),
+          firstWatch,
+        );
+        await _waitFor(() => localNotifications.requests.length == 1);
+        final latestStart = controller.start(
+          _host(scopes: const {'notify'}),
+          latestWatch,
+        );
+        await _waitFor(() => localNotifications.requests.length == 2);
+
+        localNotifications.requests[1].complete(
+          TaskCompletionLocalNotificationPermissionStatus.granted,
+        );
+        await latestStart;
+        localNotifications.requests[0].complete(
+          TaskCompletionLocalNotificationPermissionStatus.granted,
+        );
+        await firstStart;
+
+        expect(streamClient.subscribeCalls, 1);
+        expect(streamClient.watches, [latestWatch]);
+        await controller.dispose();
+      },
+    );
+
+    test(
       'HTTP SSE replacement coalesces watch changes and awaits cancellation',
       () async {
         final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
@@ -1281,5 +1328,20 @@ class _FakeTaskCompletionLocalNotifications
   Future<bool> showTaskCompletion(TaskCompletionNotificationEvent event) async {
     shown.add(event);
     return true;
+  }
+}
+
+class _SequencedPermissionTaskCompletionLocalNotifications
+    extends _FakeTaskCompletionLocalNotifications {
+  final requests =
+      <Completer<TaskCompletionLocalNotificationPermissionStatus>>[];
+
+  @override
+  Future<TaskCompletionLocalNotificationPermissionStatus>
+  requestPermissionIfNeeded() {
+    final request =
+        Completer<TaskCompletionLocalNotificationPermissionStatus>();
+    requests.add(request);
+    return request.future;
   }
 }
