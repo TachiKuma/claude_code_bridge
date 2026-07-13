@@ -1,10 +1,10 @@
 # Agentic Loop Workflow Implementation Status
 
 Date: 2026-07-13
-Status: In progress — G6C bounded terminal repair verified, root14 acceptance next
+Status: In progress — G6C root14 rejected, RolePack and harness recovery repairs active
 Branch: `workflow/g6c-integration`
 Worktree: `/home/bfly/yunwei/ccb_worktrees/g6c-integration`
-Current HEAD before this status update: `82a3a622`
+Current HEAD before this status update: `fcae9f3a`
 
 ## Current Phase
 
@@ -14,14 +14,15 @@ reviewed `Worker + Reviewer` workgroups. G0-G5, Decision 027, and Decision 028
 are accepted. Decision 029 P0-P4 source implementation is integrated; P5
 direct acceptance is active.
 
-Root13 remains rejected evidence: it proved the repaired Frontdesk capability
-handoff, repo-independent Planner task set, L1/L2 `done/pass`, L4 macro
-`replan_required`, and L4 blocked `blocked`, but reopened L3 after
-`detail_ready`. The activation-scoped, digest-backed terminal constraint,
-fail-closed importer settlement, Planner RolePack contract, closure evidence,
-restart/idempotence coverage, and strict B7 validator have now landed. The
-current source full-suite gate is green, so root14 is unblocked and is the next
-direct opened-project acceptance target.
+Root14 passed fresh project startup, the Frontdesk capability handoff, exact
+five-task Planner import, repo-independent verification, and an L1 real
+Worker/Reviewer/Round Reviewer `done/pass`. L2 then exposed Orchestrator
+RolePack fence-language drift: the provider used the bundle schema as the code
+fence language, and the importer correctly failed closed because literal
+fenced JSON was absent. Root14 was rejected and safely unmounted. A separate
+harness replay defect was also confirmed after a failed precondition consumed
+a fixed read-only observation label. Root15 is forbidden until both repairs
+and their source gates pass.
 
 ## Authority
 
@@ -63,23 +64,24 @@ Earlier accepted R1 authority/runtime evidence remains indexed at
 
 ## Active TODO
 
-1. Run fresh visible root14 through the five route terminals, bounded L3
-   settlement, task-set closure, Planner backfill, Frontdesk reporting, strict
-   B7, release, auto-runner exit, shutdown, and zero residue.
-2. Audit the preserved root14 project/UI/pane evidence directly and reject the
-   run on any authority drift, L3 reactivation, false cleanup, or hidden-only
-   proof.
-3. Complete remaining G6 three/four-workgroup, restart, busy-retain, and
+1. Land the Orchestrator literal-`json` fence RolePack repair and projection
+   regression without relaxing the importer.
+2. Land recovery-safe read-only harness observation while preserving duplicate
+   fail-closed behavior for authority mutation, provider submission, B7, and
+   cleanup.
+3. Pass focused and full source gates, then run fresh visible root15 through
+   all five routes, closure, B7, release, shutdown, and zero residue.
+4. Complete remaining G6 three/four-workgroup, restart, busy-retain, and
    provider-profile rows from fresh opened projects.
-4. Run G7 package/install/update/rollback gates and one visible installed-
+5. Run G7 package/install/update/rollback gates and one visible installed-
    candidate workflow; keep G8 publication separately authorized.
 
 ## Blocked By
 
-No source-test blocker remains for root14. Production readiness remains gated
-by a fresh real opened-project root14 pass, the remaining G6 matrix, and G7
-package/install/update/rollback acceptance. Live provider availability can
-still block an individual real run but is not a waived gate.
+Blocked from root15 by the root14 Orchestrator RolePack fence-language drift
+and harness recovery-label defect. Production readiness also remains gated by
+fresh real root15 acceptance, the remaining G6 matrix, and G7 package/install/
+update/rollback acceptance.
 
 ## Acceptance Ownership
 
@@ -122,12 +124,19 @@ independent work whose successful result is not needed upstream.
 - Current-HEAD full source suite: `4792 passed, 2 skipped in 732.93s`;
   `compileall`, `git diff --check`, changed-file `pyflakes`, and clean-worktree
   checks passed before this plan-only update.
+- Root14: Frontdesk exact completion, committed direct Planner handoff with
+  `controller_rewrote_body=false`, exact five-child task set, and L1
+  `done/pass` all passed. L2 import failed closed with
+  `orchestrator_reply_bundle_requires_fenced_json`; no L2 Worker was submitted.
+  Pending guard passed, cleanup returned `state: unmounted`, all resident
+  agents stopped, and no project process remained.
 
 ## Non-Claims
 
 The branch is not production-ready. It is not yet a packaged candidate or
 production/default-enablement claim. Root8 and root13 are diagnostic evidence,
-not passes; a green source suite does not replace root14 or G6/G7 acceptance.
+not passes; root14 is also rejected evidence, not a pass. A green source suite
+does not replace root15 or G6/G7 acceptance.
 Three/four-workgroup, restart, busy-retain, provider qualification, G7
 packaging, and G8 publication remain outside the current accepted claim.
 

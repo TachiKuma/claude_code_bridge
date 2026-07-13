@@ -84,6 +84,10 @@ recoverable workflow loops.
   rejected root13 real-provider evidence after the Git-capability repair;
   records the post-detail Planner/importer terminal-constraint gap and the
   root14 repair and acceptance gates.
+- [history/g6c-root14-orchestrator-fence-diagnostic-20260713.md](history/g6c-root14-orchestrator-fence-diagnostic-20260713.md):
+  rejected root14 real-provider evidence after L1 pass; records the
+  Orchestrator schema-as-fence RolePack drift, fail-closed importer result,
+  harness replay defect, and root15 repair gates.
 - [history/phase1-6-deployment-readiness-p2-frontdesk-pressure-20260708.md](history/phase1-6-deployment-readiness-p2-frontdesk-pressure-20260708.md):
   P2 post-acceptance deployment-readiness evidence for real-project
   frontdesk macro-intake pressure across direct, detail, macro-adjustment, and

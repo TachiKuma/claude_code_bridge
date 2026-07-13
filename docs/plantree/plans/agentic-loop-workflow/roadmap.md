@@ -1333,8 +1333,14 @@ generic activation-scoped, digest-backed terminal constraint, fail-closed
 settlement, Planner contract, closure chain, strict B7 evidence, and
 restart/idempotence coverage have now landed through `77c54a98`. At
 `82a3a622`, the current full source suite passed `4792` tests with `2` skipped;
-the next gate is a fresh root14 real opened-project run. See
+root14 then passed Frontdesk/Planner/L1 but was rejected when the L2
+Orchestrator used the bundle schema as its fence language and the importer
+correctly required literal fenced JSON. A harness read-only observation replay
+defect was found during recovery. The next gate is to land both bounded
+repairs and rerun the full source gate before a fresh root15. See
 [history/g6c-root13-planner-terminal-constraint-diagnostic-20260713.md](history/g6c-root13-planner-terminal-constraint-diagnostic-20260713.md).
+See also
+[history/g6c-root14-orchestrator-fence-diagnostic-20260713.md](history/g6c-root14-orchestrator-fence-diagnostic-20260713.md).
 
 1. Freeze the current one-workgroup and Config V2 source/test baselines and
    land the orchestration-bundle/node-state/evidence contracts from
