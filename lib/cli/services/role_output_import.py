@@ -24,7 +24,7 @@ from .loop_effective_capacity import (
     allows_v2_missing_candidate,
     compile_project_effective_capacity_snapshot,
 )
-from .plan_tasks import plan_task
+from .plan_tasks import detail_ready_stop_contract_authority, plan_task
 from .task_set_closure import create_task_set_authority
 from .planner_feedback_apply import plan_revision_authority
 from .planner_task_set_import_transaction import (
@@ -40,6 +40,11 @@ _VALID_ROUTES = frozenset({'direct_execution', 'needs_detail', 'macro_adjustment
 _EXECUTION_ROUTES = frozenset({'direct_execution', 'partial_completion'})
 _NEEDS_DETAIL_READINESS = frozenset({'ready', 'needs_clarification'})
 _VALID_READINESS = frozenset({'ready', 'needs_clarification', 'blocked', 'not_ready'})
+_VALID_STATUS_RECOMMENDATIONS = frozenset(
+    {'blocked', 'detail_ready', 'needs_clarification', 'ready_for_orchestration', 'replan_required'}
+)
+_TERMINAL_STATUS_CONSTRAINT_SCHEMA_VERSION = 1
+_TERMINAL_STATUS_CONSTRAINT_BASIS = 'verified_detail_ready_stop_contract'
 _SEGMENT_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$')
 _SLUG_RE = re.compile(r'[^A-Za-z0-9_-]+')
 _PLANNER_CONTRACT_SINGLE_TASK = 'single_task'
@@ -443,6 +448,48 @@ def _consume_planner(
                 reason=str(semantic_check.get('reason') or 'planner_task_packet_semantics_invalid'),
                 evidence=dict(semantic_check),
             )
+    terminal_constraint = _validated_planner_terminal_status_constraint(
+        context,
+        deps,
+        activation=activation,
+    )
+    if terminal_constraint.get('status') == 'blocked':
+        return _blocked_payload(
+            context,
+            job_id=job_id,
+            agent_name=str(snapshot.get('agent_name') or ''),
+            reason=str(terminal_constraint.get('reason') or 'planner_terminal_status_constraint_invalid'),
+            evidence=dict(terminal_constraint),
+        )
+    if terminal_constraint.get('status') == 'ok':
+        if parsed.get('planner_contract') != _PLANNER_CONTRACT_SINGLE_TASK:
+            return _blocked_payload(
+                context,
+                job_id=job_id,
+                agent_name=str(snapshot.get('agent_name') or ''),
+                reason='planner_terminal_status_reply_contract_mismatch',
+                evidence={'planner_contract': parsed.get('planner_contract')},
+            )
+        reply_check = _validate_planner_terminal_status_reply(
+            parsed,
+            constraint=terminal_constraint['constraint'],
+        )
+        if reply_check.get('status') != 'ok':
+            return _blocked_payload(
+                context,
+                job_id=job_id,
+                agent_name=str(snapshot.get('agent_name') or ''),
+                reason=str(reply_check.get('reason') or 'planner_terminal_status_reply_invalid'),
+                evidence=dict(reply_check),
+            )
+        return _settle_planner_terminal_status_constraint(
+            context,
+            snapshot=snapshot,
+            reply=reply,
+            task_payload=terminal_constraint['task_payload'],
+            constraint=terminal_constraint['constraint'],
+            reply_check=reply_check,
+        )
     if parsed.get('planner_contract') == _PLANNER_CONTRACT_TASK_SET:
         task_id_check = _validate_task_set_expected_task_ids(parsed, activation=activation)
         if task_id_check.get('status') != 'ok':
@@ -2102,6 +2149,193 @@ def _consume_task_detailer_blocker(
     )
 
 
+def _validated_planner_terminal_status_constraint(
+    context,
+    deps,
+    *,
+    activation: dict[str, object] | None,
+) -> dict[str, object]:
+    if not isinstance(activation, dict) or 'terminal_status_constraint' not in activation:
+        return {'status': 'not_applicable'}
+    constraint = activation.get('terminal_status_constraint')
+    if not isinstance(constraint, dict):
+        return {
+            'status': 'blocked',
+            'reason': 'planner_terminal_status_constraint_not_object',
+        }
+    raw_task_id = constraint.get('task_id')
+    raw_required_reason = constraint.get('required_reason')
+    task_id = raw_task_id.strip() if isinstance(raw_task_id, str) else ''
+    required_reason = raw_required_reason.strip() if isinstance(raw_required_reason, str) else ''
+    authority_digest = str(constraint.get('authority_digest') or '').strip().lower()
+    basis_digest = str(constraint.get('basis_digest') or '').strip().lower()
+    task_revision = constraint.get('task_revision')
+    state_version = constraint.get('state_version')
+    required = {
+        'schema_version': constraint.get('schema_version'),
+        'status': constraint.get('status'),
+        'basis': constraint.get('basis'),
+        'task_id': task_id,
+        'task_revision': task_revision,
+        'state_version': state_version,
+        'authority_digest': authority_digest,
+        'basis_digest': basis_digest,
+        'required_reason': required_reason,
+    }
+    if (
+        required['schema_version'] != _TERMINAL_STATUS_CONSTRAINT_SCHEMA_VERSION
+        or required['status'] != 'detail_ready'
+        or required['basis'] != _TERMINAL_STATUS_CONSTRAINT_BASIS
+        or not isinstance(raw_task_id, str)
+        or not _SEGMENT_RE.fullmatch(task_id)
+        or isinstance(task_revision, bool)
+        or not isinstance(task_revision, int)
+        or task_revision <= 0
+        or isinstance(state_version, bool)
+        or not isinstance(state_version, int)
+        or state_version <= 0
+        or not re.fullmatch(r'[0-9a-f]{64}', authority_digest)
+        or not re.fullmatch(r'[0-9a-f]{64}', basis_digest)
+        or not isinstance(raw_required_reason, str)
+        or not _SEGMENT_RE.fullmatch(required_reason)
+    ):
+        return {
+            'status': 'blocked',
+            'reason': 'planner_terminal_status_constraint_invalid_shape',
+            'constraint': required,
+        }
+    if (
+        str(activation.get('task_id') or '').strip() != task_id
+        or activation.get('task_revision') != task_revision
+        or activation.get('task_status') != 'detail_ready'
+    ):
+        return {
+            'status': 'blocked',
+            'reason': 'planner_terminal_status_constraint_activation_mismatch',
+            'constraint': required,
+        }
+    try:
+        task_payload = deps.plan_task(context, SimpleNamespace(action='task-show', task_id=task_id))
+    except ValueError as exc:
+        return {
+            'status': 'blocked',
+            'reason': 'planner_terminal_status_constraint_task_unavailable',
+            'constraint': required,
+            'error': str(exc),
+        }
+    record = task_payload.get('task') if isinstance(task_payload.get('task'), dict) else {}
+    authority = detail_ready_stop_contract_authority(
+        record,
+        project_root=Path(context.project.project_root),
+    )
+    if authority is None:
+        return {
+            'status': 'blocked',
+            'reason': 'planner_terminal_status_constraint_stale_authority',
+            'constraint': required,
+        }
+    observed = {
+        'task_id': record.get('task_id'),
+        'task_revision': authority.get('task_revision'),
+        'state_version': authority.get('state_version'),
+        'authority_digest': authority.get('authority_digest'),
+        'basis_digest': authority.get('basis_digest'),
+    }
+    expected = {
+        'task_id': task_id,
+        'task_revision': task_revision,
+        'state_version': state_version,
+        'authority_digest': authority_digest,
+        'basis_digest': basis_digest,
+    }
+    if observed != expected:
+        return {
+            'status': 'blocked',
+            'reason': 'planner_terminal_status_constraint_stale_authority',
+            'constraint': required,
+            'observed': observed,
+        }
+    return {
+        'status': 'ok',
+        'constraint': required,
+        'task_payload': task_payload,
+    }
+
+
+def _validate_planner_terminal_status_reply(
+    parsed: dict[str, object],
+    *,
+    constraint: dict[str, object],
+) -> dict[str, object]:
+    observed = {
+        'readiness': parsed.get('readiness_status'),
+        'route': parsed.get('route'),
+        'status_recommendation': parsed.get('status_recommendation'),
+        'reason': parsed.get('reason'),
+        'allowed_paths': parsed.get('allowed_paths'),
+        'blockers': parsed.get('blockers'),
+    }
+    if (
+        observed['readiness'] != 'ready'
+        or observed['route'] != 'needs_detail'
+        or observed['status_recommendation'] != 'detail_ready'
+        or observed['reason'] != constraint['required_reason']
+        or bool(observed['allowed_paths'])
+        or bool(observed['blockers'])
+    ):
+        return {
+            'status': 'blocked',
+            'reason': 'planner_terminal_status_reply_mismatch',
+            'constraint': {
+                'status': constraint['status'],
+                'required_reason': constraint['required_reason'],
+            },
+            'observed': observed,
+        }
+    return {'status': 'ok', 'observed': observed}
+
+
+def _settle_planner_terminal_status_constraint(
+    context,
+    *,
+    snapshot: dict[str, object],
+    reply: str,
+    task_payload: dict[str, object],
+    constraint: dict[str, object],
+    reply_check: dict[str, object],
+) -> dict[str, object]:
+    task = task_payload.get('task') if isinstance(task_payload.get('task'), dict) else {}
+    job_id = str(snapshot.get('job_id') or '')
+    record = _log_import(
+        context,
+        {
+            'action': 'settled_planner_terminal_status_constraint',
+            'status': 'ok',
+            'source_job': _job_trace(snapshot, reply),
+            'task_id': task.get('task_id'),
+            'task_status': task.get('status'),
+            'next_owner': task.get('next_owner'),
+            'terminal_status_constraint': constraint,
+            'reply_check': reply_check,
+        },
+    )
+    return _base_payload(
+        context,
+        loop_runner_status='ok',
+        action='settled_planner_terminal_status_constraint',
+        job_id=job_id,
+        agent_name=str(snapshot.get('agent_name') or ''),
+        extra={
+            'task_id': task.get('task_id'),
+            'task_status': task.get('status'),
+            'next_owner': task.get('next_owner'),
+            'terminal_status_constraint': constraint,
+            'role_output_import': record,
+            'next_activation': 'none',
+        },
+    )
+
+
 def _parse_planner_reply(reply: str) -> dict[str, object]:
     task_packet = _fenced_section(reply, ('task-packet.md', 'task_packet.md'))
     readiness_text = _fenced_section(reply, ('readiness.json',))
@@ -2155,6 +2389,21 @@ def _parse_planner_reply(reply: str) -> dict[str, object]:
             'error': str(exc),
         }
     blockers = _string_list(readiness.get('blockers'))
+    status_recommendation = _optional_planner_readiness_text(readiness, field='status_recommendation')
+    if status_recommendation is not None and status_recommendation not in _VALID_STATUS_RECOMMENDATIONS:
+        return {
+            'status': 'blocked',
+            'reason': 'planner_readiness_invalid_status_recommendation',
+            'status_recommendation': status_recommendation,
+            'expected_status_recommendations': sorted(_VALID_STATUS_RECOMMENDATIONS),
+        }
+    reason = _optional_planner_readiness_text(readiness, field='reason')
+    if reason is not None and not _SEGMENT_RE.fullmatch(reason):
+        return {
+            'status': 'blocked',
+            'reason': 'planner_readiness_invalid_reason',
+            'reply_reason': reason,
+        }
     missing_fields = []
     if route in _EXECUTION_ROUTES and not allowed_paths:
         missing_fields.append('readiness.allowed_paths')
@@ -2183,11 +2432,24 @@ def _parse_planner_reply(reply: str) -> dict[str, object]:
         'task_packet': task_packet.strip() + '\n',
         'execution_contract': execution_contract.strip() + '\n',
         'readiness': readiness,
+        'readiness_status': readiness_value,
         'route': route,
         'allowed_paths': allowed_paths,
         'verification': verification,
+        'blockers': blockers,
+        'status_recommendation': status_recommendation,
+        'reason': reason,
         'title': title,
     }
+
+
+def _optional_planner_readiness_text(readiness: dict[str, object], *, field: str) -> str | None:
+    if field not in readiness:
+        return None
+    value = readiness.get(field)
+    if not isinstance(value, str):
+        return ''
+    return value.strip().lower() if field == 'status_recommendation' else value.strip()
 
 
 def _parse_planner_reply_for_contract(reply: str, *, planner_contract: str) -> dict[str, object]:
@@ -3784,7 +4046,11 @@ def _next_activation_for_consumed_record(record: dict[str, object]) -> str:
         return 'ask_first_execution'
     if action == 'imported_task_detailer_clarification_authority':
         return 'task_detailer'
-    if action in {'imported_task_detailer_detail_authority', 'imported_task_detailer_blocker_authority'}:
+    if action in {
+        'imported_task_detailer_detail_authority',
+        'imported_task_detailer_blocker_authority',
+        'settled_planner_terminal_status_constraint',
+    }:
         return 'terminal'
     return 'inspect'
 

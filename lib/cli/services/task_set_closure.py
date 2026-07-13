@@ -18,6 +18,7 @@ from completion.snapshot_store import CompletionSnapshotStore
 
 from .planner_feedback_apply import plan_revision_authority, validate_planner_backfill_record
 from .planner_feedback import parse_planner_feedback_reply, planner_feedback_digest
+from .plan_tasks import detail_ready_stop_contract_authority
 
 
 TASK_SET_SCHEMA = 'ccb.plan.task_set.v1'
@@ -27,6 +28,7 @@ INTENT_STORE_SCHEMA = 'ccb.plan.task_set_closure_intent_store.v1'
 _SEGMENT_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$')
 _TERMINAL_RESULTS = {
     'done': 'pass',
+    'detail_ready': 'pass',
     'partial': 'partial',
     'replan_required': 'replan_required',
     'blocked': 'blocked',
@@ -948,7 +950,7 @@ def _child_evidence(context, child: dict[str, object], *, plan_slug: str, plan_t
     if result is None:
         return {**base, 'evidence_status': 'pending', 'reason': f'child_status_{status or "missing"}'}
     try:
-        authority = _terminal_authority(context, task, result=result)
+        authority = _terminal_authority(context, task, status=status, result=result)
     except ValueError as exc:
         return {
             **base,
@@ -965,7 +967,27 @@ def _child_evidence(context, child: dict[str, object], *, plan_slug: str, plan_t
     }
 
 
-def _terminal_authority(context, task: dict[str, object], *, result: str) -> dict[str, object]:
+def _terminal_authority(
+    context,
+    task: dict[str, object],
+    *,
+    status: str,
+    result: str,
+) -> dict[str, object]:
+    if status == 'detail_ready':
+        authority = detail_ready_stop_contract_authority(
+            task,
+            project_root=Path(context.project.project_root),
+        )
+        if authority is None:
+            raise ValueError('terminal_child_detail_ready_authority_missing')
+        return {
+            'artifact_kind': 'detail_ready_stop_contract',
+            'authority_digest': authority['authority_digest'],
+            'basis_digest': authority['basis_digest'],
+            'release': {'status': 'not_applicable_no_execution'},
+            'cleanup': {'status': 'not_applicable_no_execution'},
+        }
     artifacts = task.get('artifacts') if isinstance(task.get('artifacts'), dict) else {}
     last_round = task.get('last_round') if isinstance(task.get('last_round'), dict) else None
     if last_round is None:

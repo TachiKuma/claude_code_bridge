@@ -1328,6 +1328,19 @@ def detail_ready_reconcile_authority(
     )
 
 
+def detail_ready_stop_contract_authority(
+    record: dict[str, object],
+    *,
+    project_root: Path,
+) -> dict[str, object] | None:
+    """Return verified detail-ready terminal authority for a settled task."""
+    return _detail_ready_reconcile_authority(
+        record,
+        project_root=project_root,
+        allowed_statuses={'detail_ready'},
+    )
+
+
 def detail_ready_stop_contract_match(
     record: dict[str, object],
     *,
@@ -2086,4 +2099,10 @@ def _positive_record_int(value: object, *, field: str) -> int:
     return value
 
 
-__all__ = ['find_first_actionable_task', 'find_first_ready_task', 'plan_task', 'task_execution_text']
+__all__ = [
+    'detail_ready_stop_contract_authority',
+    'find_first_actionable_task',
+    'find_first_ready_task',
+    'plan_task',
+    'task_execution_text',
+]

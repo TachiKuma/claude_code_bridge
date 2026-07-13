@@ -32,6 +32,7 @@ from .loop_run_once import loop_run_once
 from .loop_topology import loop_topology
 from .plan_tasks import (
     detail_ready_reconcile_authority,
+    detail_ready_stop_contract_authority,
     detail_ready_stop_contract_match,
     find_first_actionable_task,
     plan_task,
@@ -1527,7 +1528,7 @@ def _payload_wait_job_ids(payload: dict[str, object]) -> list[str]:
 def _auto_should_stop(payload: dict[str, object]) -> bool:
     action = str(payload.get('action') or '').strip()
     status = str(payload.get('loop_runner_status') or '').strip()
-    if action == 'reconciled_detail_ready':
+    if action in {'reconciled_detail_ready', 'settled_planner_terminal_status_constraint'}:
         return True
     if action in {'activated_orchestrator', 'activated_planner', 'activated_task_detailer', 'activated_plan_reviewer'}:
         return False
@@ -1822,7 +1823,7 @@ def _planner_activation_packet(
         for kind, artifact in sorted(artifacts.items())
         if str(kind).startswith('round_') and isinstance(artifact, dict)
     ]
-    return {
+    activation = {
         'schema_version': 1,
         'record_type': 'ccb_loop_planner_activation',
         'activation_id': activation_id,
@@ -1865,6 +1866,23 @@ def _planner_activation_packet(
             'artifact links preferred over pasted runtime logs',
         ],
     }
+    terminal_authority = detail_ready_stop_contract_authority(
+        record,
+        project_root=Path(context.project.project_root),
+    )
+    if terminal_authority is not None:
+        activation['terminal_status_constraint'] = {
+            'schema_version': 1,
+            'status': 'detail_ready',
+            'basis': 'verified_detail_ready_stop_contract',
+            'task_id': record.get('task_id'),
+            'task_revision': terminal_authority['task_revision'],
+            'state_version': terminal_authority['state_version'],
+            'authority_digest': terminal_authority['authority_digest'],
+            'basis_digest': terminal_authority['basis_digest'],
+            'required_reason': reason,
+        }
+    return activation
 
 
 def _task_detailer_activation_packet(
@@ -2188,7 +2206,7 @@ def _expected_next_bundle_revision(record: dict[str, object]) -> int:
 
 
 def _planner_message(activation: dict[str, object]) -> str:
-    return (
+    message = (
         'Role: planner\n'
         f"Activation id: {activation.get('activation_id')}\n"
         f"Task: {activation.get('task_id')}\n"
@@ -2209,6 +2227,18 @@ def _planner_message(activation: dict[str, object]) -> str:
         '- supervisor/runner scripts own authoritative writes and route/status imports\n'
         '- do not edit task index, status, current_loop, runtime capacity, or tmux state directly\n'
         '- do not start worker/checker/orchestrator execution from this activation'
+    )
+    constraint = activation.get('terminal_status_constraint')
+    if not isinstance(constraint, dict):
+        return message
+    return (
+        f'{message}\n\n'
+        'Terminal status constraint:\n'
+        f'- Controller-verified constraint: {constraint}\n'
+        '- Return route `needs_detail`, status_recommendation `detail_ready`, '
+        f'and reason `{constraint.get("required_reason")}`.\n'
+        '- Return an empty allowed_paths list and no blockers; this preserves the '
+        'controller-visible terminal status rather than authorizing execution.\n'
     )
 
 

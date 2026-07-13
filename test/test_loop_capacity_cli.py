@@ -13051,6 +13051,241 @@ Verification:
     assert 'job_post_detail_planner' in trace
 
 
+@pytest.mark.parametrize(
+    ('reply_mutation', 'constraint_mutation', 'expected_reason'),
+    (
+        (None, None, None),
+        ('missing_recommendation', None, 'planner_terminal_status_reply_mismatch'),
+        ('conflicting_recommendation', None, 'planner_terminal_status_reply_mismatch'),
+        ('conflicting_reason', None, 'planner_terminal_status_reply_mismatch'),
+        ('invalid_reason', None, 'planner_readiness_invalid_reason'),
+        ('conflicting_route', None, 'planner_terminal_status_reply_mismatch'),
+        ('nonempty_allowed_paths', None, 'planner_terminal_status_reply_mismatch'),
+        (None, 'stale_revision', 'stale_managed_activation_task_revision'),
+        (None, 'tampered_digest', 'planner_terminal_status_constraint_stale_authority'),
+        (None, 'tampered_provenance', 'planner_terminal_status_constraint_stale_authority'),
+    ),
+)
+def test_loop_runner_keeps_root13_shaped_bounded_post_detail_planner_reply_at_detail_ready(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reply_mutation: str | None,
+    constraint_mutation: str | None,
+    expected_reason: str | None,
+) -> None:
+    project_root = _project_with_loop_capacity(tmp_path, monkeypatch)
+    _add_ready_plan_task(
+        project_root,
+        task_id='root13-detail-bound',
+        task_packet_text=(
+            '# Task: root13-detail-bound\n'
+            'Route: needs_detail\n'
+            'Expected stop: detail_ready.\n'
+        ),
+        execution_contract_text=(
+            '# Execution Contract\n'
+            'Route: needs_detail\n'
+            'The controller-visible task outcome remains detail_ready.\n'
+        ),
+    )
+    command = ParsedLoopRunnerCommand(project=None, once=True, timeout_s=11.0, json_output=True)
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+    _import_orchestration_notes(context, project_root, task_id='root13-detail-bound', route='needs_detail')
+
+    def fake_submit_detailer(_context, ask_command):
+        assert ask_command.target == 'task_detailer'
+        return AskSummary(
+            project_id=context.project.project_id,
+            submission_id=None,
+            jobs=({'job_id': 'job_root13_detailer', 'agent_name': 'task_detailer', 'status': 'submitted'},),
+        )
+
+    activated = loop_runner_once(
+        context,
+        command,
+        services=SimpleNamespace(submit_ask=fake_submit_detailer, plan_task=plan_task),
+    )
+    assert activated['action'] == 'activated_task_detailer'
+    _write_completion_snapshot(
+        project_root,
+        job_id='job_root13_detailer',
+        agent_name='task_detailer',
+        reply="""Detail result: `local_detail_ready`
+Detail readiness recommendation: `detail_ready`
+
+## Artifact: `task-detail-design.md`
+```markdown
+# Detail Design
+Resolved.
+```
+
+## Artifact: `brief-update-summary.md`
+```markdown
+# Detail Summary
+Resolved.
+```
+
+## Artifact: `detail-packet.md`
+```markdown
+# Detail Packet
+detail_readiness_recommendation: detail_ready
+```
+""",
+    )
+    imported = loop_runner_once(context, command, services=SimpleNamespace(plan_task=plan_task))
+    assert imported['action'] == 'imported_task_detailer_detail_authority'
+    before = plan_task(context, SimpleNamespace(action='task-show', task_id='root13-detail-bound'))['task']
+    authority = plan_tasks_module.detail_ready_stop_contract_authority(
+        before,
+        project_root=project_root,
+    )
+    assert authority is not None
+    generated = loop_runner_module._planner_activation_packet(
+        context,
+        before,
+        activation_id='act-generated-root13-post-detail',
+        action='activate_planner',
+        reason='detail_ready_task',
+    )
+    assert generated['terminal_status_constraint']['authority_digest'] == authority['authority_digest']
+    constrained_message = loop_runner_module._planner_message(generated)
+    assert 'Terminal status constraint:' in constrained_message
+    assert 'route `needs_detail`, status_recommendation `detail_ready`' in constrained_message
+    assert 'empty allowed_paths list and no blockers' in constrained_message
+    ordinary = dict(before)
+    ordinary['status'] = 'draft'
+    ordinary_activation = loop_runner_module._planner_activation_packet(
+        context,
+        ordinary,
+        activation_id='act-ordinary-planner',
+        action='activate_planner',
+        reason='draft_task',
+    )
+    assert 'terminal_status_constraint' not in ordinary_activation
+    assert 'Terminal status constraint:' not in loop_runner_module._planner_message(ordinary_activation)
+    _write_json(
+        project_root / '.ccb' / 'runtime' / 'loops' / 'activations' / 'act-root13-post-detail.json',
+        {
+            'schema_version': 1,
+            'record_type': 'ccb_loop_planner_activation',
+            'activation_id': 'act-root13-post-detail',
+            'project_id': context.project.project_id,
+            'project_root': str(project_root),
+            'plan_slug': 'demo-plan',
+            'task_id': 'root13-detail-bound',
+            'task_revision': before['task_revision'],
+            'task_status': 'detail_ready',
+            'action': 'activate_planner',
+            'reason_for_activation': 'detail_ready_task',
+            'terminal_status_constraint': {
+                'schema_version': 1,
+                'status': 'detail_ready',
+                'basis': 'verified_detail_ready_stop_contract',
+                'task_id': 'root13-detail-bound',
+                'task_revision': before['task_revision'],
+                'state_version': before['state_version'],
+                'authority_digest': authority['authority_digest'],
+                'basis_digest': authority['basis_digest'],
+                'required_reason': 'detail_ready_task',
+            },
+            'ask': {
+                'target': 'planner',
+                'job_id': 'job_root13_post_detail_planner',
+                'status': 'accepted',
+            },
+        },
+    )
+    activation_path = project_root / '.ccb' / 'runtime' / 'loops' / 'activations' / 'act-root13-post-detail.json'
+    activation = json.loads(activation_path.read_text(encoding='utf-8'))
+    if constraint_mutation == 'stale_revision':
+        activation['task_revision'] += 1
+        activation['terminal_status_constraint']['task_revision'] += 1
+    elif constraint_mutation == 'tampered_digest':
+        activation['terminal_status_constraint']['authority_digest'] = '0' * 64
+    elif constraint_mutation == 'tampered_provenance':
+        detail_packet = project_root / before['artifacts']['detail_packet']['path']
+        detail_packet.write_text('tampered detail packet\n', encoding='utf-8')
+    _write_json(activation_path, activation)
+    readiness = {
+        'readiness': 'ready',
+        'route': 'needs_detail',
+        'status_recommendation': 'detail_ready',
+        'reason': 'detail_ready_task',
+        'blockers': [],
+        'allowed_paths': [],
+        'verification': ['python -m pytest tests/test_bounded_detail.py'],
+    }
+    if reply_mutation == 'missing_recommendation':
+        readiness.pop('status_recommendation')
+    elif reply_mutation == 'conflicting_recommendation':
+        readiness['status_recommendation'] = 'ready_for_orchestration'
+    elif reply_mutation == 'conflicting_reason':
+        readiness['reason'] = 'other_reason'
+    elif reply_mutation == 'invalid_reason':
+        readiness['reason'] = 'not a valid reason'
+    elif reply_mutation == 'conflicting_route':
+        readiness['route'] = 'direct_execution'
+        readiness['allowed_paths'] = ['bounded_detail/work.py']
+    elif reply_mutation == 'nonempty_allowed_paths':
+        readiness['allowed_paths'] = ['bounded_detail/work.py']
+    _write_completion_snapshot(
+        project_root,
+        job_id='job_root13_post_detail_planner',
+        agent_name='planner',
+        reply=(
+            '**task-packet.md**\n'
+            '```markdown\n'
+            '# Task: root13-detail-bound\n'
+            'Route: needs_detail\n'
+            'Expected stop: detail_ready.\n\n'
+            'Allowed paths:\n\n'
+            'Verification:\n'
+            '- python -m pytest tests/test_bounded_detail.py\n'
+            '```\n\n'
+            '**readiness.json**\n'
+            '```json\n'
+            + json.dumps(readiness, indent=2)
+            + '\n```\n'
+        ),
+    )
+
+    payload = loop_runner_once(context, command, services=SimpleNamespace(plan_task=plan_task))
+    shown = plan_task(context, SimpleNamespace(action='task-show', task_id='root13-detail-bound'))
+    assert shown['task']['status'] == 'detail_ready'
+    assert shown['task']['task_revision'] == before['task_revision']
+    assert shown['task']['state_version'] == before['state_version']
+    if expected_reason is not None:
+        assert payload['loop_runner_status'] == 'blocked'
+        assert payload['action'] == 'role_output_import_blocked'
+        assert payload['reason'] == expected_reason
+        return
+
+    assert payload['loop_runner_status'] == 'ok'
+    assert payload['action'] == 'settled_planner_terminal_status_constraint'
+    assert payload['task_status'] == 'detail_ready'
+    assert payload['next_owner'] == 'planner'
+    replay = loop_runner_once(
+        context,
+        ParsedLoopRunnerCommand(
+            project=None,
+            once=True,
+            plan_slug='demo-plan',
+            role_job_id='job_root13_post_detail_planner',
+            consume_role_output=True,
+            json_output=True,
+        ),
+        services=SimpleNamespace(plan_task=plan_task),
+    )
+    assert replay['action'] == 'role_output_already_consumed'
+    assert replay['idempotent'] is True
+    assert replay['consumed_action'] == 'settled_planner_terminal_status_constraint'
+    assert plan_task(context, SimpleNamespace(action='task-show', task_id='root13-detail-bound'))['task'] == shown['task']
+    settled = loop_runner_once(context, command, services=SimpleNamespace(plan_task=plan_task))
+    assert settled['loop_runner_status'] == 'idle'
+    assert settled['reason'] == 'no_actionable_task'
+    assert find_first_actionable_task(context, task_id='root13-detail-bound') is None
+
+
 def test_loop_runner_leaves_explicit_non_success_stop_contracts_settled(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -25,6 +25,7 @@ from cli.services.task_set_feedback_runtime import (
     _runtime_digest,
 )
 from cli.services.ask_runtime.submission import _artifact_request_body
+import cli.services.task_set_closure as task_set_closure_module
 from cli.services.task_set_closure import (
     create_task_set_authority,
     evaluate_task_set_closure,
@@ -665,6 +666,91 @@ def test_task_set_aggregate_precedence_rows(
     assert closed['closure']['aggregate_result'] == expected
     assert closed['closure']['reason'] == reason
     assert closed['closure_intent']['status'] == 'pending_planner_backfill'
+
+
+def test_task_set_closure_accepts_verified_detail_ready_terminal_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _context(tmp_path)
+    _create_task(context, 'source-intake', ready=False)
+    child_ids = (
+        'child-pass-one',
+        'child-pass-two',
+        'child-detail-ready',
+        'child-replan',
+        'child-blocked',
+    )
+    for task_id in child_ids:
+        _create_task(context, task_id)
+    _complete(context, 'child-pass-one', 'pass')
+    _complete(context, 'child-pass-two', 'pass')
+    _complete(context, 'child-replan', 'replan_required')
+    _complete(context, 'child-blocked', 'blocked')
+    revision = plan_task(context, SimpleNamespace(action='task-show', task_id='child-detail-ready'))['task']['task_revision']
+    for kind in ('detail_design', 'detail_summary', 'detail_packet'):
+        path = Path(context.project.project_root) / 'drafts' / f'{kind}.md'
+        _write(path, f'{kind}\n')
+        imported = plan_task(
+            context,
+            SimpleNamespace(
+                action='task-artifact',
+                task_id='child-detail-ready',
+                artifact_kind=kind,
+                file_path=str(path),
+                expected_task_revision=revision,
+            ),
+        )
+        revision = imported['task']['task_revision']
+    plan_task(
+        context,
+        SimpleNamespace(
+            action='task-status',
+            task_id='child-detail-ready',
+            status='detail_ready',
+            next_owner='planner',
+            expected_task_revision=revision,
+        ),
+    )
+    created = create_task_set_authority(
+        context,
+        plan_slug='demo',
+        source_task_id='source-intake',
+        source_request={
+            'source_job_id': 'job-frontdesk',
+            'sha256': hashlib.sha256(b'user request').hexdigest(),
+            'bytes': len(b'user request'),
+        },
+        planner_job={
+            'job_id': 'job-planner',
+            'reply_sha256': hashlib.sha256(b'planner reply').hexdigest(),
+        },
+        children=[{'task_id': task_id, 'required': True} for task_id in child_ids],
+        plan_task_fn=plan_task,
+    )
+    monkeypatch.setattr(
+        task_set_closure_module,
+        'detail_ready_stop_contract_authority',
+        lambda task, *, project_root: (
+            {'authority_digest': 'a' * 64, 'basis_digest': 'b' * 64}
+            if task['task_id'] == 'child-detail-ready'
+            else None
+        ),
+    )
+
+    closed = evaluate_task_set_closure(
+        context,
+        task_set_id=created['task_set']['task_set_id'],
+        plan_task_fn=plan_task,
+    )
+
+    assert closed['status'] == 'closure_pending'
+    assert closed['closure']['aggregate_result'] == 'replan_required'
+    assert closed['closure']['reason'] == 'one_or_more_required_children_require_replan'
+    detail = next(item for item in closed['closure']['ordered_children'] if item['task_id'] == 'child-detail-ready')
+    assert detail['status'] == 'detail_ready'
+    assert detail['result'] == 'pass'
+    assert detail['authority']['artifact_kind'] == 'detail_ready_stop_contract'
 
 
 def test_optional_pending_child_does_not_block_required_closure(tmp_path: Path) -> None:
