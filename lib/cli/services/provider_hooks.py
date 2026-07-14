@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
+import shlex
 import sys
 
 from agents.models import RuntimeMode
@@ -28,6 +30,7 @@ from provider_profiles import (
     load_resolved_provider_profile,
     materialize_provider_profile,
 )
+from .role_command_policy import ensure_role_command_policy_supported
 
 
 def prepare_workspace_provider_hooks(
@@ -101,6 +104,8 @@ def prepare_provider_workspace(
     auto_permission: bool = False,
 ) -> ResolvedProviderProfile:
     runtime_dir = layout.agent_provider_runtime_dir(spec.name, spec.provider)
+    _materialize_source_test_ccb_shim(layout.project_root)
+    command_policy = ensure_role_command_policy_supported(spec=spec)
     resolved_profile = (
         materialize_provider_profile(
             layout=layout,
@@ -123,6 +128,7 @@ def prepare_provider_workspace(
         resolved_profile=resolved_profile,
         workspace_path=workspace_path,
         auto_permission=auto_permission,
+        command_policy=command_policy,
     )
     prepare_workspace_provider_hooks(
         provider=spec.provider,
@@ -141,6 +147,24 @@ def prepare_provider_workspace(
         resolved_profile=resolved_profile,
     )
     return resolved_profile
+
+
+def _materialize_source_test_ccb_shim(project_root: Path) -> None:
+    if os.environ.get('CCB_TEST_ENTRYPOINT') != '1':
+        return
+    source_root = Path(__file__).resolve().parents[3]
+    wrapper = source_root / 'ccb_test'
+    if not wrapper.is_file():
+        return
+    bin_dir = Path(project_root) / '.ccb' / 'bin'
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    shim = bin_dir / 'ccb'
+    shim.write_text(
+        '#!/usr/bin/env bash\n'
+        f'exec {shlex.quote(str(wrapper))} "$@"\n',
+        encoding='utf-8',
+    )
+    shim.chmod(0o755)
 
 
 def provider_workspace_path_for_prepare(
@@ -176,6 +200,7 @@ def _materialize_provider_home(
     resolved_profile: ResolvedProviderProfile | None,
     workspace_path: Path,
     auto_permission: bool,
+    command_policy=None,
 ) -> None:
     provider = str(spec.provider or '').strip().lower()
     if provider == 'claude':
@@ -188,6 +213,7 @@ def _materialize_provider_home(
             agent_name=spec.name,
             workspace_path=workspace_path,
             auto_permission=auto_permission,
+            command_policy=command_policy,
             memory_projection_event_path=layout.agent_events_path(spec.name),
             memory_projection_marker_path=Path(runtime_dir) / 'claude-memory-projection.json',
         )
@@ -210,6 +236,7 @@ def _materialize_provider_home(
             agent_name=spec.name,
             runtime_dir=runtime_dir,
             workspace_path=workspace_path,
+            command_policy=command_policy,
             memory_projection_event_path=layout.agent_events_path(spec.name),
             memory_projection_marker_path=Path(runtime_dir) / 'codex-memory-projection.json',
         )

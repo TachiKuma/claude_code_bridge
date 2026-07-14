@@ -46,6 +46,27 @@ def render_agent_lifecycle(summary) -> tuple[str, ...]:
 
 
 def render_config_validate(summary) -> tuple[str, ...]:
+    if int(getattr(summary, 'config_version', 2)) == 3:
+        workflow = summary.workflow or {}
+        capacity = summary.effective_workgroup_capacity or {}
+        return (
+            'config_status: valid',
+            f'project: {summary.project_root}',
+            f'project_id: {summary.project_id}',
+            f'config_source_kind: {summary.source_kind}',
+            f'config_source: {summary.source or "<builtin>"}',
+            'config_version: 3',
+            f'workflow_mode: {workflow.get("mode", "")}',
+            f'workflow_profile: {workflow.get("profile", "")}',
+            f'entry_role: {workflow.get("entry_role", "")}',
+            'resident_roles: ' + ', '.join(str(item.get('slot')) for item in summary.resident_roles),
+            'dynamic_profiles: ' + ', '.join(str(item.get('profile')) for item in summary.dynamic_profiles),
+            'effective_workgroup_capacity: '
+            f'max_workgroups={capacity.get("max_workgroups")} '
+            f'max_parallel_workgroups={capacity.get("max_parallel_workgroups")} '
+            f'max_active_dynamic_agents={capacity.get("max_active_dynamic_agents")}',
+            f'capacity_digest: {summary.capacity_digest}',
+        )
     lines = [
         'config_status: valid',
         f'project: {summary.project_root}',
@@ -486,6 +507,8 @@ def render_plan_task(summary) -> tuple[str, ...]:
         f'action: {payload.get("action", "")}',
         f'task_id: {payload.get("task_id", "")}',
         f'status: {payload.get("status", "")}',
+        f'next_owner: {task.get("next_owner", "")}',
+        f'activation_reason: {task.get("activation_reason", "")}',
         f'plan_slug: {payload.get("plan_slug", "")}',
         f'task_root: {payload.get("task_root", "")}',
         f'readme_path: {payload.get("readme_path", "")}',
@@ -968,6 +991,8 @@ def render_kill(summary) -> tuple[str, ...]:
         f'socket_path: {summary.socket_path}',
         f'forced: {str(summary.forced).lower()}',
     ]
+    lines.extend(f'kill_action: {action}' for action in getattr(summary, 'runtime_actions', ()) or ())
+    lines.extend(f'kill_warning: {warning}' for warning in getattr(summary, 'runtime_warnings', ()) or ())
     lines.extend(render_tmux_cleanup_summaries(getattr(summary, 'cleanup_summaries', ()) or ()))
     return tuple(lines)
 

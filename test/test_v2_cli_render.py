@@ -1139,6 +1139,26 @@ def test_render_start_and_kill_include_tmux_cleanup_summary() -> None:
     assert 'tmux_cleanup: socket=<default> owned=%1,%2 active=%1 orphaned=%2 killed=%2' in kill_lines
 
 
+def test_render_kill_surfaces_runtime_recovery_actions_and_warnings() -> None:
+    summary = SimpleNamespace(
+        project_id='proj-1',
+        state='unmounted',
+        socket_path='/tmp/repo/.ccb/ccbd/ccbd.sock',
+        forced=True,
+        cleanup_summaries=(),
+        runtime_actions=('recover_corrupt_runtime_accelerator_owner:321',),
+        runtime_warnings=('runtime_accelerator_corrupt_owner_preserved:exact_legacy_identity_not_found',),
+    )
+
+    lines = render_kill(summary)
+
+    assert 'kill_action: recover_corrupt_runtime_accelerator_owner:321' in lines
+    assert (
+        'kill_warning: runtime_accelerator_corrupt_owner_preserved:exact_legacy_identity_not_found'
+        in lines
+    )
+
+
 def test_render_start_includes_layout_identity_summary() -> None:
     start = SimpleNamespace(
         project_root='/tmp/repo',

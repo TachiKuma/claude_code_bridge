@@ -10,6 +10,7 @@ from datetime import date, datetime, time
 from pathlib import Path
 import re
 import shutil
+import sys
 
 from provider_core.memory_projection import (
     materialize_provider_memory_file,
@@ -25,6 +26,7 @@ from provider_core.projected_assets import (
 )
 from provider_core.source_home import current_provider_source_home
 from rolepacks.projection import project_role_skills_to_home
+from project.ids import compute_project_id
 from storage.atomic import atomic_write_text
 from storage.paths import PathLayout
 
@@ -104,6 +106,7 @@ def materialize_codex_home_config(
     runtime_dir: Path | None = None,
     workspace_path: Path | None = None,
     shared_cache_root: Path | None = None,
+    command_policy=None,
     memory_projection_event_path: Path | None = None,
     memory_projection_marker_path: Path | None = None,
 ) -> Path:
@@ -115,6 +118,7 @@ def materialize_codex_home_config(
     target_config = target_home / 'config.toml'
     source_config = source_home / 'config.toml'
     authority = codex_api_authority(profile)
+    inherited_assets_enabled = not _role_command_policy_disables_inherited_assets(command_policy)
 
     if authority is not None:
         _write_codex_api_authority_config(
@@ -155,6 +159,14 @@ def materialize_codex_home_config(
             workspace_path=workspace_path,
         )
 
+    _install_role_command_mcp_server(
+        target_config,
+        command_policy=command_policy,
+        project_root=project_root,
+        agent_name=agent_name,
+        runtime_dir=runtime_dir,
+    )
+
     _materialize_auth_file(
         source_home / 'auth.json',
         target_home / 'auth.json',
@@ -172,12 +184,14 @@ def materialize_codex_home_config(
         source_home / 'skills',
         target_home / 'skills',
         profile=profile,
+        enabled=inherited_assets_enabled,
     )
-    _materialize_skill_overlays(
-        target_home / 'skills',
-        profile=profile,
-        project_root=project_root,
-    )
+    if inherited_assets_enabled:
+        _materialize_skill_overlays(
+            target_home / 'skills',
+            profile=profile,
+            project_root=project_root,
+        )
     project_role_skills_to_home(
         project_root=project_root,
         agent_name=agent_name,
@@ -187,15 +201,16 @@ def materialize_codex_home_config(
     _route_inherited_tree(
         source_home / 'commands',
         target_home / 'commands',
-        enabled=_inherits_commands(profile),
+        enabled=_inherits_commands(profile) and inherited_assets_enabled,
         label=_CODEX_COMMANDS_PROJECTION_LABEL,
     )
-    _sync_codex_plugin_projection(
-        source_home,
-        target_home,
-        project_root=project_root,
-        shared_cache_root=shared_cache_root,
-    )
+    if inherited_assets_enabled:
+        _sync_codex_plugin_projection(
+            source_home,
+            target_home,
+            project_root=project_root,
+            shared_cache_root=shared_cache_root,
+        )
     memory_result = _materialize_codex_memory(
         source_home,
         target_home,
@@ -204,11 +219,12 @@ def materialize_codex_home_config(
         agent_name=agent_name,
         workspace_path=workspace_path,
     )
-    _install_codex_inherited_hooks(
-        target_home,
-        target_config,
-        source_home=source_home,
-    )
+    if inherited_assets_enabled:
+        _install_codex_inherited_hooks(
+            target_home,
+            target_config,
+            source_home=source_home,
+        )
     record_memory_projection_event(
         memory_result,
         provider='codex',
@@ -543,6 +559,74 @@ def _merge_codex_mcp_server_overrides(payload: dict[str, object], *, profile) ->
     payload['mcp_servers'] = existing
 
 
+def _install_role_command_mcp_server(
+    target_config: Path,
+    *,
+    command_policy,
+    project_root: Path | None,
+    agent_name: str | None,
+    runtime_dir: Path | None,
+) -> None:
+    provider_tools = dict(getattr(command_policy, 'provider_tools', ()) or ())
+    tool_name = str(provider_tools.get('codex') or '').strip()
+    actor = str(agent_name or '').strip().lower()
+    allowed_tools = {
+        'frontdesk': 'ccb_frontdesk_ask_planner',
+        'task_detailer': 'ccb_task_detailer_replan_planner',
+        'ccb_task_detailer': 'ccb_task_detailer_replan_planner',
+    }
+    if allowed_tools.get(actor) != tool_name:
+        return
+    if project_root is None or runtime_dir is None:
+        raise RuntimeError('Codex role command capability requires project and runtime identity')
+    resolved_project = Path(project_root).expanduser().resolve()
+    server = Path(__file__).resolve().parents[2] / 'mcp' / 'ccb-role-command' / 'server.py'
+    if not server.is_file():
+        raise RuntimeError(f'Codex role command MCP server is missing: {server}')
+    payload = _read_source_config_payload(target_config)
+    payload['approval_policy'] = 'never'
+    payload['sandbox_mode'] = 'read-only'
+    features = _clone_mapping(payload.get('features')) if isinstance(payload.get('features'), dict) else {}
+    for feature in (
+        'apps',
+        'browser_use',
+        'browser_use_external',
+        'computer_use',
+        'image_generation',
+        'multi_agent',
+        'multi_agent_v2',
+        'plugins',
+        'remote_plugin',
+        'shell_tool',
+        'unified_exec',
+    ):
+        features[feature] = False
+    payload['features'] = features
+    server_env = {
+        'CCB_CALLER_ACTOR': actor,
+        'CCB_CALLER_PROJECT_ROOT': str(resolved_project),
+        'CCB_CALLER_PROJECT_ID': compute_project_id(resolved_project),
+        'CCB_CALLER_RUNTIME_DIR': str(Path(runtime_dir).expanduser().resolve()),
+    }
+    agent_roles_store = str(os.environ.get('AGENT_ROLES_STORE') or '').strip()
+    if agent_roles_store:
+        server_env['AGENT_ROLES_STORE'] = agent_roles_store
+    payload['mcp_servers'] = {'ccb_role_command': {
+        'command': sys.executable,
+        'args': [str(server)],
+        'required': True,
+        'enabled_tools': [tool_name],
+        'default_tools_approval_mode': 'prompt',
+        'tools': {
+            tool_name: {
+                'approval_mode': 'approve',
+            },
+        },
+        'env': server_env,
+    }}
+    target_config.write_text(_render_toml_document(payload), encoding='utf-8')
+
+
 def _merge_codex_plugin_overrides(payload: dict[str, object], *, profile) -> None:
     overrides = _profile_plugins(profile)
     if not overrides:
@@ -749,7 +833,7 @@ def _materialize_auth_sidecars(
     target_home = Path(target_home).expanduser()
     previous = _read_auth_projection_manifest(target_home)
     previous_sidecars = _manifest_sidecars(previous)
-    requested_sidecars = _codex_auth_sidecar_names(source_config)
+    requested_sidecars = _codex_auth_sidecar_names(source_home, source_config)
 
     if authority is not None:
         _remove_projected_auth_sidecars(target_home, previous_sidecars | requested_sidecars)
@@ -788,7 +872,7 @@ def _materialize_auth_sidecars(
     )
 
 
-def _codex_auth_sidecar_names(source_config: Path) -> set[str]:
+def _codex_auth_sidecar_names(source_home: Path, source_config: Path) -> set[str]:
     names = set(_CODEX_AUTH_SIDECAR_FILENAMES)
     for match in _CODEX_AUTH_SIDECAR_REF_RE.finditer(_safe_read_text(source_config)):
         name = str(match.group('name') or '').strip()
@@ -888,11 +972,10 @@ def _auth_projection_file_record(source: Path, target: Path, *, name: str) -> di
 
 def _file_sha256(path: Path) -> str:
     try:
-        candidate = Path(path).expanduser()
-        if not candidate.is_file():
+        if not Path(path).expanduser().is_file():
             return ''
         digest = hashlib.sha256()
-        with candidate.open('rb') as handle:
+        with Path(path).expanduser().open('rb') as handle:
             for chunk in iter(lambda: handle.read(1024 * 1024), b''):
                 digest.update(chunk)
         return digest.hexdigest()
@@ -990,14 +1073,14 @@ def _is_managed_skill_projection_dir(target: Path) -> bool:
     return bool(entries)
 
 
-def _materialize_inherited_skills(source: Path, target: Path, *, profile) -> None:
+def _materialize_inherited_skills(source: Path, target: Path, *, profile, enabled: bool = True) -> None:
     include = _profile_skill_patterns(profile, 'inherited_skill_include')
     exclude = _profile_skill_patterns(profile, 'inherited_skill_exclude')
     if not include and not exclude:
         _copy_inherited_tree(
             source,
             target,
-            enabled=_inherits_skills(profile),
+            enabled=_inherits_skills(profile) and enabled,
             label=_CODEX_SKILLS_PROJECTION_LABEL,
         )
         _remove_stale_skill_projection_markers(
@@ -1009,11 +1092,19 @@ def _materialize_inherited_skills(source: Path, target: Path, *, profile) -> Non
     _route_filtered_skill_entries(
         source,
         target,
-        enabled=_inherits_skills(profile),
+        enabled=_inherits_skills(profile) and enabled,
         include=include,
         exclude=exclude,
         label_prefix=f'{_CODEX_SKILLS_PROJECTION_LABEL}:',
     )
+
+
+def _role_command_policy_disables_inherited_assets(command_policy) -> bool:
+    if command_policy is None:
+        return False
+    mode = str(getattr(command_policy, 'mode', '') or '').strip()
+    enforcement = str(getattr(command_policy, 'enforcement', '') or '').strip()
+    return mode == 'deny_all_except' and enforcement == 'required'
 
 
 def _route_filtered_skill_entries(

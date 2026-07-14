@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dataclasses import replace
 import os
 from pathlib import Path
 import shutil
@@ -19,6 +20,7 @@ from workspace.models import WorkspacePlan
 
 from .provider_hooks import prepare_provider_workspace, provider_workspace_path_for_prepare
 from .provider_binding import AgentBinding, resolve_agent_binding
+from .role_command_policy import role_command_policy_for_spec, role_command_policy_requires_enforcement
 from .runtime_launch_runtime import (
     best_effort_kill_tmux_pane as _best_effort_kill_tmux_pane_impl,
     binding_runtime_alive as _binding_runtime_alive_impl,
@@ -58,8 +60,9 @@ def ensure_agent_runtime(
 ) -> RuntimeLaunchResult:
     launcher = _runtime_launcher(spec.provider)
     runtime_dir = context.paths.agent_provider_runtime_dir(spec.name, spec.provider)
+    effective_command = _command_for_role_policy(command, spec)
     provider_workspace_path = provider_workspace_path_for_prepare(
-        command=command,
+        command=effective_command,
         spec=spec,
         plan=plan,
         runtime_dir=runtime_dir,
@@ -71,11 +74,11 @@ def ensure_agent_runtime(
         workspace_path=provider_workspace_path,
         completion_dir=runtime_dir / 'completion',
         agent_name=spec.name,
-        auto_permission=command.auto_permission,
+        auto_permission=effective_command.auto_permission,
     )
     return _ensure_agent_runtime_impl(
         context,
-        command,
+        effective_command,
         spec,
         plan,
         binding,
@@ -89,6 +92,13 @@ def ensure_agent_runtime(
         style_index=style_index,
         tmux_socket_path=tmux_socket_path,
     )
+
+
+def _command_for_role_policy(command: ParsedStartCommand, spec: AgentSpec) -> ParsedStartCommand:
+    policy = role_command_policy_for_spec(spec)
+    if role_command_policy_requires_enforcement(policy) and command.auto_permission:
+        return replace(command, auto_permission=False)
+    return command
 
 
 def _launch_tmux_runtime(

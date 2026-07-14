@@ -23,7 +23,7 @@ from cli.services.cancel import cancel_job
 from cli.services.clear import clear_agent_context
 from cli.services.cleanup import cleanup_project_storage
 from cli.services.config_ui import open_config_ui_url, prepare_config_ui
-from cli.services.config_validate import validate_config_context
+from cli.services.config_validate import effective_config_context, migrate_config_context, validate_config_context
 from cli.services.doctor import doctor_summary
 from cli.services.doctor_storage import doctor_storage_summary
 from cli.services.diagnostics import export_diagnostic_bundle
@@ -161,6 +161,7 @@ def _dispatch_services():
         clear_fault_rule=clear_fault_rule,
         doctor_summary=doctor_summary,
         doctor_storage_summary=doctor_storage_summary,
+        effective_config_context=effective_config_context,
         exit_code_for_ask_status=exit_code_for_ask_status,
         export_diagnostic_bundle=export_diagnostic_bundle,
         inbox_target=inbox_target,
@@ -171,6 +172,7 @@ def _dispatch_services():
         loop_runner_once=loop_runner_once,
         loop_topology=loop_topology,
         maintenance_status=maintenance_status,
+        migrate_config_context=migrate_config_context,
         mobile_devices_status=mobile_devices_status,
         prepare_mobile_gateway=prepare_mobile_gateway,
         pend_target=pend_target,

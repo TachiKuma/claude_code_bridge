@@ -17,6 +17,11 @@ from provider_core.projected_assets import route_projected_tree
 from provider_core.source_home import current_provider_source_home
 from provider_profiles import provider_api_env_keys
 from rolepacks.projection import project_role_skills_to_home
+from cli.services.role_command_policy import (
+    claude_permission_allowlist,
+    role_command_policy_disables_inherited_assets,
+    role_command_policy_requires_enforcement,
+)
 from project_memory import (
     ensure_project_memory,
     load_memory_sources,
@@ -80,6 +85,7 @@ def prepare_claude_home_overrides(
     workspace_path: Path | None = None,
     memory_projection_event_path: Path | None = None,
     memory_projection_marker_path: Path | None = None,
+    command_policy=None,
 ) -> dict[str, str]:
     layout = resolve_claude_home_layout(runtime_dir, profile)
     if refresh_home:
@@ -90,6 +96,7 @@ def prepare_claude_home_overrides(
             agent_name=agent_name,
             workspace_path=workspace_path,
             auto_permission=auto_permission,
+            command_policy=command_policy,
             memory_projection_event_path=memory_projection_event_path,
             memory_projection_marker_path=memory_projection_marker_path,
         )
@@ -127,6 +134,7 @@ def materialize_claude_home_config(
     agent_name: str | None = None,
     workspace_path: Path | None = None,
     auto_permission: bool = False,
+    command_policy=None,
     memory_projection_event_path: Path | None = None,
     memory_projection_marker_path: Path | None = None,
 ) -> ClaudeHomeLayout:
@@ -140,6 +148,7 @@ def materialize_claude_home_config(
         agent_name=agent_name,
         workspace_path=workspace_path,
         auto_permission=auto_permission,
+        command_policy=command_policy,
     )
     record_memory_projection_event(
         memory_result,
@@ -207,6 +216,7 @@ def _prepare_managed_home(
     agent_name: str | None,
     workspace_path: Path | None,
     auto_permission: bool,
+    command_policy,
 ) -> dict[str, object]:
     target_layout.home_root.mkdir(parents=True, exist_ok=True)
     target_layout.claude_dir.mkdir(parents=True, exist_ok=True)
@@ -221,7 +231,13 @@ def _prepare_managed_home(
             path=target_layout.claude_dir / 'CLAUDE.md',
         )
 
-    _materialize_settings(source_home, target_layout, profile=profile, auto_permission=auto_permission)
+    _materialize_settings(
+        source_home,
+        target_layout,
+        profile=profile,
+        auto_permission=auto_permission,
+        command_policy=command_policy,
+    )
     _materialize_macos_keychain_preferences(source_home, target_layout, profile=profile)
     _materialize_auth(source_home, target_layout, profile=profile)
     _materialize_trust(
@@ -230,6 +246,7 @@ def _prepare_managed_home(
         profile=profile,
         project_root=project_root,
         workspace_path=workspace_path,
+        auto_permission=auto_permission,
     )
     return _materialize_inherited_assets(
         source_home,
@@ -238,6 +255,7 @@ def _prepare_managed_home(
         project_root=project_root,
         agent_name=agent_name,
         workspace_path=workspace_path,
+        command_policy=command_policy,
     )
 
 
@@ -249,17 +267,19 @@ def _materialize_inherited_assets(
     project_root: Path | None,
     agent_name: str | None,
     workspace_path: Path | None,
+    command_policy,
 ) -> dict[str, object]:
+    inherited_assets_enabled = not role_command_policy_disables_inherited_assets(command_policy)
     _route_inherited_tree(
         source_home / '.claude' / 'commands',
         target_layout.claude_dir / 'commands',
-        enabled=_inherits_commands(profile),
+        enabled=inherited_assets_enabled and _inherits_commands(profile),
         label=_CLAUDE_COMMANDS_PROJECTION_LABEL,
     )
     _route_inherited_tree(
         source_home / '.claude' / 'skills',
         target_layout.claude_dir / 'skills',
-        enabled=_inherits_skills(profile),
+        enabled=inherited_assets_enabled and _inherits_skills(profile),
         label=_CLAUDE_SKILLS_PROJECTION_LABEL,
     )
     project_role_skills_to_home(
@@ -380,10 +400,17 @@ def _materialize_settings(
     *,
     profile,
     auto_permission: bool = False,
+    command_policy=None,
 ) -> None:
     payload = _projected_settings_payload(source_home / '.claude' / 'settings.json', profile=profile)
     existing = _read_json_object(target_layout.settings_path)
-    merged = _merge_settings_payload(payload, existing=existing, profile=profile, auto_permission=auto_permission)
+    merged = _merge_settings_payload(
+        payload,
+        existing=existing,
+        profile=profile,
+        auto_permission=auto_permission,
+        command_policy=command_policy,
+    )
     if merged is None:
         return
     target_layout.settings_path.parent.mkdir(parents=True, exist_ok=True)
@@ -400,10 +427,18 @@ def _materialize_trust(
     profile,
     project_root: Path | None,
     workspace_path: Path | None,
+    auto_permission: bool = False,
 ) -> None:
     source_trust = source_home / '.claude.json'
     profile_servers = _profile_mcp_servers(profile)
-    if source_trust.is_file() or target_layout.trust_path.exists() or profile_servers:
+    custom_api_key = _claude_custom_api_key_from_settings(target_layout.settings_path)
+    if (
+        source_trust.is_file()
+        or target_layout.trust_path.exists()
+        or profile_servers
+        or auto_permission
+        or _env_value_present(custom_api_key)
+    ):
         merged = _projected_claude_json_payload(
             _read_json_object(source_trust) if source_trust.is_file() else {},
             existing=_read_json_object(target_layout.trust_path),
@@ -411,6 +446,14 @@ def _materialize_trust(
             project_root=project_root,
             workspace_path=workspace_path,
         )
+        if auto_permission:
+            merged['bypassPermissionsModeAccepted'] = True
+            _ensure_project_permission_acceptance(
+                merged,
+                project_root=project_root,
+                workspace_path=workspace_path,
+            )
+        _approve_claude_custom_api_key(merged, custom_api_key)
         _write_json_object(target_layout.trust_path, merged)
     _ensure_trust_file(target_layout.trust_path)
 
@@ -638,6 +681,34 @@ def _refresh_project_mcp_record(
         merged.pop(target_key, None)
 
 
+def _ensure_project_permission_acceptance(
+    merged: dict[str, object],
+    *,
+    project_root: Path | None,
+    workspace_path: Path | None,
+) -> None:
+    target_key = _claude_project_target_key(project_root=project_root, workspace_path=workspace_path)
+    if not target_key:
+        return
+
+    projects = merged.get('projects')
+    if not isinstance(projects, dict):
+        projects = {}
+    else:
+        projects = dict(projects)
+
+    project_record = _project_record_copy(projects.get(target_key))
+    top_record = _project_record_copy(merged.get(target_key))
+    for record in (project_record, top_record):
+        record['hasTrustDialogAccepted'] = True
+        if not isinstance(record.get('allowedTools'), list):
+            record['allowedTools'] = []
+
+    projects[target_key] = project_record
+    merged['projects'] = projects
+    merged[target_key] = top_record
+
+
 def _project_record_copy(value: object) -> dict[str, object]:
     return dict(value) if isinstance(value, dict) else {}
 
@@ -781,6 +852,8 @@ def _projected_settings_payload(source_settings_path: Path, *, profile) -> dict[
     elif not _inherits_auth(profile):
         env_payload.pop('ANTHROPIC_AUTH_TOKEN', None)
         env_payload.pop('ANTHROPIC_API_KEY', None)
+    else:
+        _sync_claude_api_key_alias(env_payload)
 
     include_config = _inherits_config(profile)
     payload: dict[str, object] = {}
@@ -801,6 +874,7 @@ def _merge_settings_payload(
     existing: dict[str, object],
     profile=None,
     auto_permission: bool = False,
+    command_policy=None,
 ) -> dict[str, object] | None:
     existing_payload = dict(existing or {})
     projected_payload = dict(projected or {})
@@ -827,6 +901,18 @@ def _merge_settings_payload(
             if key == 'permissions' and auto_permission and _is_ccb_only_permission_payload(value):
                 continue
             merged[key] = value
+
+    if role_command_policy_requires_enforcement(command_policy):
+        allowlist = list(claude_permission_allowlist(command_policy))
+        merged['permissions'] = {'allow': allowlist, 'deny': []}
+
+    # Claude Code 1.0.43 still iterates the legacy top-level allowedTools
+    # array even when the newer permissions.* schema is present.
+    if not isinstance(merged.get('allowedTools'), list):
+        merged['allowedTools'] = []
+
+    if auto_permission:
+        merged['skipDangerousModePermissionPrompt'] = True
 
     if merged:
         return merged
@@ -939,6 +1025,7 @@ def _carry_forward_managed_auth_env(
                 value = existing_env.get(key)
                 if _env_value_present(value):
                     merged_env[key] = value
+        _sync_claude_api_key_alias(merged_env)
 
     if merged_env:
         merged_payload['env'] = merged_env
@@ -959,6 +1046,35 @@ def _env_value_present(value: object) -> bool:
     if isinstance(value, str):
         return bool(value.strip())
     return value is not None
+
+
+def _sync_claude_api_key_alias(env_payload: dict[str, object]) -> None:
+    auth_token = env_payload.get('ANTHROPIC_AUTH_TOKEN')
+    api_key = env_payload.get('ANTHROPIC_API_KEY')
+    if _env_value_present(auth_token) and not _env_value_present(api_key):
+        env_payload['ANTHROPIC_API_KEY'] = auth_token
+
+
+def _claude_custom_api_key_from_settings(settings_path: Path) -> object:
+    settings = _read_json_object(settings_path)
+    env_payload = _read_env_payload(settings)
+    return env_payload.get('ANTHROPIC_API_KEY')
+
+
+def _approve_claude_custom_api_key(payload: dict[str, object], api_key: object) -> None:
+    if not isinstance(api_key, str) or not api_key.strip():
+        return
+    key_suffix = api_key[-20:]
+    responses = payload.get('customApiKeyResponses')
+    if not isinstance(responses, dict):
+        responses = {}
+    approved = responses.get('approved')
+    if not isinstance(approved, list):
+        approved = []
+    if key_suffix not in approved:
+        approved = [*approved, key_suffix]
+    responses['approved'] = approved
+    payload['customApiKeyResponses'] = responses
 
 
 def _needs_settings_stub(profile) -> bool:

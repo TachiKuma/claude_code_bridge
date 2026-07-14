@@ -15,13 +15,14 @@ def write_ask_usage(
         print("", file=out)
     print("Usage:", file=out)
     print(
-        f"  {command_name} [--compact] [--silence] [--chain] [--artifact-request] [--artifact-reply] <target> [--] <message...>",
+        f"  {command_name} [--compact] [--silence] [--chain] [--artifact-request] [--inline-request] [--artifact-reply] <target> [--] <message...>",
         file=out,
     )
     print("      --compact request a distilled reply that preserves key information", file=out)
     print("      --silence request silent-on-success delivery; failures/blockers still surface", file=out)
     print("      --chain mark this ask as part of the current active task chain", file=out)
     print("      --artifact-request force the request body into a CCB text artifact", file=out)
+    print("      --inline-request keep the request body inline and disable automatic artifact spill", file=out)
     print("      --artifact-reply force the final reply into a CCB text artifact", file=out)
     print("      --artifact-io enable both --artifact-request and --artifact-reply", file=out)
     print("      nested asks from active tasks must use --chain or --silence", file=out)

@@ -41,6 +41,7 @@ def _parse_route_options(remaining: list[str], *, error_type):
     silence = False
     callback = False
     artifact_request = False
+    inline_request = False
     artifact_reply = False
     while remaining and remaining[0].startswith('-'):
         option = remaining.pop(0)
@@ -59,6 +60,9 @@ def _parse_route_options(remaining: list[str], *, error_type):
             if option == '--artifact-request':
                 artifact_request = True
                 continue
+            if option == '--inline-request':
+                inline_request = True
+                continue
             if option == '--artifact-reply':
                 artifact_reply = True
                 continue
@@ -71,7 +75,7 @@ def _parse_route_options(remaining: list[str], *, error_type):
         if not remaining:
             raise error_type(f'{option} requires a value')
         _set_option_value(options, option, remaining.pop(0), error_type=error_type)
-    return options, compact, silence, callback, artifact_request, artifact_reply
+    return options, compact, silence, callback, artifact_request, inline_request, artifact_reply
 
 
 def parse_ask(
@@ -86,7 +90,7 @@ def parse_ask(
         return action_command
 
     remaining = list(tokens)
-    options, compact, silence, callback, artifact_request, artifact_reply = _parse_route_options(
+    options, compact, silence, callback, artifact_request, inline_request, artifact_reply = _parse_route_options(
         remaining,
         error_type=error_type,
     )
@@ -111,6 +115,7 @@ def parse_ask(
         silence=silence,
         callback=callback,
         artifact_request=artifact_request,
+        inline_request=inline_request,
         artifact_reply=artifact_reply,
     )
 

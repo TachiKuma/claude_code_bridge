@@ -14,10 +14,10 @@ OPTIONAL_PROVIDER_NAMES = (
     "cursor",
     "copilot",
     "crush",
+    "grok",
     "kiro",
     "pi",
     "zai",
-    "grok",
 )
 
 
@@ -57,10 +57,10 @@ def build_builtin_backends(*, include_optional: bool = True) -> list[ProviderBac
             build_cursor_backend(),
             build_copilot_backend(),
             build_crush_backend(),
+            build_grok_backend(),
             build_kiro_backend(),
             build_pi_backend(),
             build_zai_backend(),
-            build_grok_backend(),
         ])
     return backends
 

@@ -10,6 +10,8 @@ _UNUSABLE_LINE_PATTERNS = (
     re.compile(r'^(?:error:\s*)?(?:pane is dead|pane dead)\b[.!:;\-\s]*$', re.IGNORECASE),
     re.compile(r'^(?:codex\s+)?shutting down(?:\.\.\.)?[.!:;\-\s]*$', re.IGNORECASE),
 )
+_IDLE_PROMPT_RE = re.compile(r'^\s*›\s+\S.*$', re.MULTILINE)
+_ACTIVE_STATUS_RE = re.compile(r'^\s*•\s+(?:Working|Thinking|Running)\b', re.MULTILINE | re.IGNORECASE)
 
 
 def looks_unusable(text: str) -> bool:
@@ -23,28 +25,29 @@ def looks_unusable(text: str) -> bool:
 
 
 def looks_ready(text: str) -> bool:
-    normalized = str(text or '')
+    normalized = _latest_codex_region(str(text or ''))
     lowered = normalized.lower()
     if looks_unusable(normalized):
         return False
     if 'openai codex' not in lowered:
-        return False
+        tail = '\n'.join(normalized.splitlines()[-24:])
+        return bool(_IDLE_PROMPT_RE.search(tail)) and not bool(_ACTIVE_STATUS_RE.search(tail))
     if 'model:' in lowered and 'loading' in lowered:
         return False
     return '›' in normalized or '>_' in normalized or '/model to change' in lowered
 
 
-def wait_for_runtime_ready(backend: object, pane_id: str, *, timeout_s: float = 1.0) -> None:
+def wait_for_runtime_ready(backend: object, pane_id: str, *, timeout_s: float = 8.0) -> bool:
     get_pane_content = getattr(backend, 'get_pane_content', None)
     if not callable(get_pane_content):
-        return
+        return True
     deadline = time.time() + resolved_timeout(timeout_s)
     state = ReadinessState()
     while time.time() < deadline:
         try:
             text = str(get_pane_content(pane_id, lines=120) or '')
         except Exception:
-            return
+            return True
         if text.strip():
             state.saw_content = True
         if looks_unusable(text):
@@ -52,10 +55,9 @@ def wait_for_runtime_ready(backend: object, pane_id: str, *, timeout_s: float = 
             continue
         if stable_ready_seen(state, text):
             time.sleep(0.2)
-            return
+            return True
         time.sleep(0.2)
-    if state.saw_content:
-        return
+    return not state.saw_content
 
 
 def resolved_timeout(timeout_s: float) -> float:
@@ -77,7 +79,7 @@ def stable_ready_seen(state: ReadinessState, text: str) -> bool:
         state.stable_text = ''
         state.stable_since = None
         return False
-    fingerprint = text.strip()
+    fingerprint = _latest_codex_region(text).strip()
     if fingerprint != state.stable_text:
         state.stable_text = fingerprint
         state.stable_since = time.time()
@@ -86,6 +88,15 @@ def stable_ready_seen(state: ReadinessState, text: str) -> bool:
         state.stable_since = time.time()
         return False
     return time.time() - state.stable_since >= 0.5
+
+
+def _latest_codex_region(text: str) -> str:
+    normalized = str(text or '')
+    lowered = normalized.lower()
+    index = lowered.rfind('openai codex')
+    if index < 0:
+        return normalized
+    return normalized[index:]
 
 
 __all__ = ['looks_ready', 'looks_unusable', 'wait_for_runtime_ready']
