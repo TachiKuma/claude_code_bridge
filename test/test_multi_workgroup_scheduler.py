@@ -580,7 +580,7 @@ def test_scheduler_orders_review_integration_round_release_and_cleanup(tmp_path:
     assert '"final_round_reviewer_release_required_after_reply":true' in round_message
     assert '"bundle_digest":"' in round_message
     assert '"results_digest":"sha256:' in round_message
-    harness.complete('round', 'ccb_round_reviewer', reply='round_result: pass')
+    harness.complete('round', 'ccb_round_reviewer', reply='round result: pass')
 
     final = scheduler.run_once()
 
@@ -931,7 +931,7 @@ def test_busy_release_passes_latest_active_workspaces_and_blocks_cleanup(tmp_pat
     scheduler.run_once()
     harness.complete('node-001', 'reviewer', reply='status: pass')
     scheduler.run_once()
-    harness.complete('round', 'ccb_round_reviewer', reply='round_result: pass')
+    harness.complete('round', 'ccb_round_reviewer', reply='round result: pass')
     harness.release = {
         'loop_topology_status': 'release_incomplete',
         'released_count': 2,
@@ -970,7 +970,7 @@ def test_result_import_crash_resumes_release_without_second_import(tmp_path: Pat
     scheduler.run_once()
     harness.complete('node-001', 'reviewer', reply='status: pass')
     scheduler.run_once()
-    harness.complete('round', 'ccb_round_reviewer', reply='round_result: pass')
+    harness.complete('round', 'ccb_round_reviewer', reply='round result: pass')
     fired = False
 
     def crash(name: str, _state: dict[str, object]) -> None:
@@ -1010,7 +1010,7 @@ def test_cleanup_intent_crash_resumes_without_rechecking_readiness(tmp_path: Pat
     scheduler.run_once()
     harness.complete('node-001', 'reviewer', reply='status: pass')
     scheduler.run_once()
-    harness.complete('round', 'ccb_round_reviewer', reply='round_result: pass')
+    harness.complete('round', 'ccb_round_reviewer', reply='round result: pass')
 
     def crash(name: str, _state: dict[str, object]) -> None:
         if name == 'after_result_import':
@@ -1080,7 +1080,7 @@ def test_scheduler_uses_real_r2_worktrees_commits_merge_promotion_and_cleanup(tm
     for node_id in ('node-001', 'node-002'):
         harness.complete(node_id, 'reviewer', reply='status: pass')
     scheduler.run_once()
-    harness.complete('round', 'ccb_round_reviewer', reply='round_result: pass')
+    harness.complete('round', 'ccb_round_reviewer', reply='round result: pass')
 
     final = scheduler.run_once()
 
@@ -1127,7 +1127,7 @@ def test_real_r2_scheduler_records_rework_cycles_then_integrates(
 
     harness.complete('node-001', 'reviewer_recheck', attempt=cycles, reply='status: pass')
     scheduler.run_once()
-    harness.complete('round', 'ccb_round_reviewer', reply='round_result: pass')
+    harness.complete('round', 'ccb_round_reviewer', reply='round result: pass')
     final = scheduler.run_once()
     integration = json.loads(
         (scheduler.loop_dir / 'git-transaction.json').read_text(encoding='utf-8')
@@ -1372,7 +1372,7 @@ def test_rework_cycle_rechecks_same_tree_then_completes(tmp_path: Path) -> None:
     assert harness.submissions[-1] == ('node-001', 'reviewer_recheck')
     harness.complete('node-001', 'reviewer_recheck', reply='status: pass')
     scheduler.run_once()
-    harness.complete('round', 'ccb_round_reviewer', reply='round_result: pass')
+    harness.complete('round', 'ccb_round_reviewer', reply='round result: pass')
 
     final = scheduler.run_once()
 
@@ -1451,7 +1451,7 @@ def test_reviewer_pass_and_promotion_crash_windows_replay_without_duplicate_impo
         scheduler.run_once()
     scheduler._checkpoint_hook = None
     scheduler.run_once()
-    harness.complete('round', 'ccb_round_reviewer', reply='round_result: pass')
+    harness.complete('round', 'ccb_round_reviewer', reply='round result: pass')
 
     final = scheduler.run_once()
 
@@ -1489,7 +1489,7 @@ def test_auto_runner_advances_full_multi_workgroup_round_without_manual_once(
                 harness.complete(node_id, 'worker')
                 harness.complete(node_id, 'reviewer', reply='status: pass')
             else:
-                result.update(status='completed', terminal=True, reply='round_result: pass')
+                result.update(status='completed', terminal=True, reply='round result: pass')
             return {'job': {'job_id': job_id, 'status': 'completed'}}
         raise AssertionError(f'unknown wait job: {job_id}')
 
@@ -1557,7 +1557,7 @@ def test_auto_runner_starts_node_reviewer_before_slower_sibling_worker_finishes(
                     event_log.append(('submitted', node_id, 'reviewer'))
                     harness.complete(node_id, 'reviewer', reply='status: pass')
                 else:
-                    result.update(status='completed', terminal=True, reply='round_result: pass')
+                    result.update(status='completed', terminal=True, reply='round result: pass')
                 terminal_events.append((node_id, purpose))
                 event_log.append(('terminal', node_id, purpose))
             return {'job': {'job_id': job_id, 'status': result['status']}}
@@ -1791,7 +1791,7 @@ def test_release_authority_residue_never_normalizes_to_pass_and_clean_retry_succ
     scheduler.run_once()
     harness.complete('node-001', 'reviewer', reply='status: pass')
     scheduler.run_once()
-    harness.complete('round', 'ccb_round_reviewer', reply='round_result: pass')
+    harness.complete('round', 'ccb_round_reviewer', reply='round result: pass')
     harness.release = release
     harness.observed_agents = [observed_agent] if observed_agent else []
 
@@ -1823,7 +1823,7 @@ def test_missing_or_corrupt_raw_observed_release_evidence_blocks_cleanup(
     scheduler.run_once()
     harness.complete('node-001', 'reviewer', reply='status: pass')
     scheduler.run_once()
-    harness.complete('round', 'ccb_round_reviewer', reply='round_result: pass')
+    harness.complete('round', 'ccb_round_reviewer', reply='round result: pass')
     observed_path = scheduler.project_root / '.ccb' / 'runtime' / 'loops' / 'raw-observed.json'
     if evidence_shape == 'corrupt':
         observed_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1852,7 +1852,7 @@ def test_compact_status_observed_path_loads_valid_raw_release_authority(tmp_path
     scheduler.run_once()
     harness.complete('node-001', 'reviewer', reply='status: pass')
     scheduler.run_once()
-    harness.complete('round', 'ccb_round_reviewer', reply='round_result: pass')
+    harness.complete('round', 'ccb_round_reviewer', reply='round result: pass')
     observed_path = scheduler.project_root / '.ccb' / 'runtime' / 'loops' / 'raw-observed.json'
     observed_path.parent.mkdir(parents=True, exist_ok=True)
     observed_path.write_text(
@@ -1929,7 +1929,7 @@ def test_two_rework_cycles_use_distinct_intents_same_binding_and_then_pass(tmp_p
     scheduler.run_once()
     harness.complete('node-001', 'reviewer_recheck', attempt=2, reply='status: pass')
     scheduler.run_once()
-    harness.complete('round', 'ccb_round_reviewer', reply='round_result: pass')
+    harness.complete('round', 'ccb_round_reviewer', reply='round result: pass')
     final = scheduler.run_once()
 
     assert final['controller_status'] == 'pass'
