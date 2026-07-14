@@ -721,12 +721,17 @@ def test_p1_node_rolepacks_bind_canonical_packet_and_exact_review_tree() -> None
     for required in ('Node:', 'Workgroup:', 'Visible workspace identity:', 'Canonical node work packet ref:', 'Allowed paths:', 'Acceptance refs:', 'Verification refs:', 'Verification results:', 'Changed paths:', 'Blockers:'):
         assert required in coder_skill
     assert 'once per bounded review hop' in coder_skill
+    assert 'per\nbounded review hop' in coder_contract
+    assert 'per bounded review hop' in coder_adapter
     assert 'pass`: return Coder terminal `done`' in coder_skill
     assert 'non_converged`: return Coder terminal `needs_rework`' in coder_skill
     assert 'command ask --chain --artifact-reply <assigned-reviewer>' in coder_adapter
     assert 'unauthorized downstream asks submitted: no' in coder_template
     assert '\n- downstream asks submitted: no' not in coder_template
     assert 'unauthorized downstream asks' in coder_readme
+    assert 'assigned Reviewer chain outcome: <pass|blocked|non_converged>' in coder_template
+    assert 'assigned Reviewer chain outcome: <pass|rework_required|blocked|non_converged>' not in coder_template
+    assert 'rework_required is bounded intermediate' in coder_template
     for required in (
         'canonical node work packet',
         'declared refs',

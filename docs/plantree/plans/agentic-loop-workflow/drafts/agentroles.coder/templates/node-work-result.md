@@ -34,5 +34,6 @@ canonical node work packet: <ref>
 - scope expanded: no
 - undeclared fallback or degradation: no
 - workflow authority mutated: no
-- assigned Reviewer chain outcome: <pass|rework_required|blocked|non_converged>
+- assigned Reviewer chain outcome: <pass|blocked|non_converged>
+- rework_required is bounded intermediate evidence, never a final Coder artifact outcome.
 - unauthorized downstream asks submitted: no

@@ -18,7 +18,8 @@ status transitions, runtime capacity, and cleanup. If an artifact or transition
 is rejected, reply with corrected evidence or a blocker report; do not
 hand-edit state files.
 
-The only CCB command exception is one assigned-review operation:
+The only CCB command exception is exactly one assigned-review operation per
+bounded review hop, to the same assigned Reviewer:
 `command ask --chain --artifact-reply <assigned-reviewer>`. Use it only after
 implementing and verifying the current node, include the node/worktree identity,
 changed paths, tests, and blockers, then stop for continuation. The runtime

@@ -27,8 +27,6 @@ Verification results:
 - <command and result>
 Changed paths:
 - <path>
-Verification:
-- <command and result>
 Blockers:
 - <none or exact blocker>
 Review the current node against the supplied work packet and acceptance refs.
@@ -59,7 +57,7 @@ Then stop. Do not poll, watch, ping, wait, or set a timeout.
 
 ## Boundaries
 
-- The assigned Reviewer is the only allowed target.
+- The same assigned Reviewer is the only allowed target for every bounded review hop.
 - Do not use plain ask, `--silence`, multiple targets, another role, or another
   CCB command.
 - Do not claim `done` before Reviewer pass.

@@ -6,8 +6,8 @@ tmux state directly.
 
 Do not run `ccb`, `ccb_test`, `ccb plan`, `ccb loop`, plain `ccb ask`, or
 workflow wrappers. The sole exception is exactly one literal assigned-review
-chain: `command ask --chain --artifact-reply <assigned-reviewer>`. It may only
-target the assigned Reviewer and must carry node id, workgroup id, visible
+chain per bounded review hop: `command ask --chain --artifact-reply <assigned-reviewer>`.
+It may only target the same assigned Reviewer and must carry node id, workgroup id, visible
 workspace identity, allowed paths, acceptance refs, verification refs/results,
 changed paths, and blockers. Never use `--silence`, another target, polling,
 controller commits, integration, authority writes, or agent release. The
