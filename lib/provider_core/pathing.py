@@ -22,6 +22,7 @@ PROVIDER_SESSION_FILENAMES = {
     'grok': '.grok-session',
     'kiro': '.kiro-session',
     'pi': '.pi-session',
+    'omp': '.omp-session',
     'zai': '.zai-session',
     'grok': '.grok-session',
 }

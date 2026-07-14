@@ -78,6 +78,7 @@ CRUSH_RUNTIME_SPEC = _provider_runtime_spec("crush")
 GROK_RUNTIME_SPEC = _provider_runtime_spec("grok")
 KIRO_RUNTIME_SPEC = _provider_runtime_spec("kiro")
 PI_RUNTIME_SPEC = _provider_runtime_spec("pi")
+OMP_RUNTIME_SPEC = _provider_runtime_spec("omp")
 ZAI_RUNTIME_SPEC = _provider_runtime_spec("zai")
 GROK_RUNTIME_SPEC = _provider_runtime_spec("grok")
 
@@ -149,6 +150,10 @@ PI_CLIENT_SPEC = _client_spec(
     provider_key="pi",
     session_filename=".pi-session",
 )
+OMP_CLIENT_SPEC = _client_spec(
+    provider_key="omp",
+    session_filename=".omp-session",
+)
 ZAI_CLIENT_SPEC = _client_spec(
     provider_key="zai",
     session_filename=".zai-session",
@@ -176,6 +181,7 @@ RUNTIME_SPECS_BY_PROVIDER = {
     "grok": GROK_RUNTIME_SPEC,
     "kiro": KIRO_RUNTIME_SPEC,
     "pi": PI_RUNTIME_SPEC,
+    "omp": OMP_RUNTIME_SPEC,
     "zai": ZAI_RUNTIME_SPEC,
     "grok": GROK_RUNTIME_SPEC,
 }
@@ -198,6 +204,7 @@ CLIENT_SPECS_BY_PROVIDER = {
     "grok": GROK_CLIENT_SPEC,
     "kiro": KIRO_CLIENT_SPEC,
     "pi": PI_CLIENT_SPEC,
+    "omp": OMP_CLIENT_SPEC,
     "zai": ZAI_CLIENT_SPEC,
     "grok": GROK_CLIENT_SPEC,
 }

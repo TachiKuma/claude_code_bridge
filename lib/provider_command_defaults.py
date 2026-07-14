@@ -21,6 +21,7 @@ _PROVIDER_START_ENV_VARS = {
     'grok': 'GROK_START_CMD',
     'kiro': 'KIRO_START_CMD',
     'pi': 'PI_START_CMD',
+    'omp': 'OMP_START_CMD',
     'zai': 'ZAI_START_CMD',
 }
 
@@ -41,6 +42,7 @@ _PROVIDER_DEFAULT_EXECUTABLES = {
     'grok': 'grok',
     'kiro': 'kiro-cli',
     'pi': 'pi',
+    'omp': 'omp',
     'zai': 'zai',
 }
 

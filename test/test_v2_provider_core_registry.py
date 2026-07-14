@@ -48,6 +48,7 @@ def test_default_session_binding_map_uses_backend_owned_entries() -> None:
         'grok',
         'kiro',
         'pi',
+        'omp',
         'zai',
         'grok',
     }
@@ -64,6 +65,7 @@ def test_default_session_binding_map_uses_backend_owned_entries() -> None:
     assert bindings['grok'].session_path_attr == 'grok_session_path'
     assert bindings['kiro'].session_path_attr == 'kiro_session_path'
     assert bindings['pi'].session_path_attr == 'pi_session_path'
+    assert bindings['omp'].session_path_attr == 'omp_session_path'
     assert bindings['zai'].session_path_attr == 'zai_session_path'
     assert bindings['grok'].session_path_attr == 'grok_session_path'
 
@@ -88,6 +90,7 @@ def test_default_runtime_launcher_map_uses_backend_owned_entries() -> None:
         'grok',
         'kiro',
         'pi',
+        'omp',
         'zai',
         'grok',
     }
@@ -104,6 +107,7 @@ def test_default_runtime_launcher_map_uses_backend_owned_entries() -> None:
     assert launchers['grok'].launch_mode == 'simple_tmux'
     assert launchers['kiro'].launch_mode == 'simple_tmux'
     assert launchers['pi'].launch_mode == 'simple_tmux'
+    assert launchers['omp'].launch_mode == 'simple_tmux'
     assert launchers['zai'].launch_mode == 'simple_tmux'
     assert launchers['grok'].launch_mode == 'simple_tmux'
 
@@ -122,5 +126,6 @@ def test_session_filename_for_agent_follows_agent_first_naming() -> None:
     assert session_filename_for_agent('grok', 'grok1') == '.grok-grok1-session'
     assert session_filename_for_agent('kiro', 'kiro1') == '.kiro-kiro1-session'
     assert session_filename_for_agent('pi', 'pi1') == '.pi-pi1-session'
+    assert session_filename_for_agent('omp', 'omp1') == '.omp-omp1-session'
     assert session_filename_for_agent('zai', 'zai1') == '.zai-zai1-session'
     assert session_filename_for_agent('grok', 'grok1') == '.grok-grok1-session'
