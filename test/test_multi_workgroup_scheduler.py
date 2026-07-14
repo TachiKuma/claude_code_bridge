@@ -14,7 +14,9 @@ from cli.services.loop_orchestration_bundle import bundle_digest, task_input_dig
 from cli.services.multi_workgroup_scheduler import (
     MultiWorkgroupScheduler,
     _round_decision,
+    _review_decision_with_reason,
     _verification_commands,
+    _worker_terminal_decision,
     resume_pending_multi_workgroup_scheduler,
 )
 from cli.services.workgroup_integration import GitIntegrationError
@@ -306,7 +308,7 @@ class Harness:
         purpose: str,
         *,
         attempt: int | None = None,
-        reply: str = 'done',
+        reply: str = 'status: done',
         status: str = 'completed',
     ):
         result = (
@@ -357,12 +359,16 @@ class Harness:
         decision = _review_status(reply)
         maximum = int(self.bundle['policy']['max_node_rework_rounds'])
         if status != 'completed' or decision in {'pass', 'blocked', 'non_converged'}:
-            root.update(status='completed', terminal=True, reply='result: done' if decision == 'pass' else 'result: blocked')
+            root.update(
+                status='completed',
+                terminal=True,
+                reply='status: done' if decision == 'pass' else 'status: blocked',
+            )
             return
         if decision == 'rework_required' and len(chain) <= maximum:
             self._start_internal_job(node_id, 'worker_rework', attempt=len(chain))
             return
-        root.update(status='completed', terminal=True, reply='result: non_converged')
+        root.update(status='completed', terminal=True, reply='status: done')
 
     def _start_internal_job(self, node_id: str, purpose: str, *, attempt: int) -> None:
         attempt_key = (node_id, purpose, attempt)
@@ -637,6 +643,50 @@ def test_scheduler_rejects_bare_node_reviewer_pass_without_status_contract(tmp_p
     assert integration.payload['status'] != 'accepted'
 
 
+@pytest.mark.parametrize(
+    ('reply', 'decision', 'reason'),
+    [
+        ('status: pass', 'pass', 'reviewer_status'),
+        ('\n\nstatus: pass', 'pass', 'reviewer_status'),
+        ('status: rework_required\nRepair this file.', 'rework_required', 'reviewer_status'),
+        ('- status: pass', None, 'malformed_reviewer_status'),
+        ('Status: pass', None, 'malformed_reviewer_status'),
+        ('```\nstatus: pass', None, 'malformed_reviewer_status'),
+        ('Reviewed.\nstatus: pass', None, 'malformed_reviewer_status'),
+        ('status: approved', None, 'malformed_reviewer_status'),
+        ('status: pass\nstatus: pass', None, 'duplicate_or_conflicting_reviewer_status'),
+        ('status: pass\n- STATUS: blocked', None, 'duplicate_or_conflicting_reviewer_status'),
+    ],
+)
+def test_reviewer_terminal_status_parser_is_strict(
+    reply: str,
+    decision: str | None,
+    reason: str,
+) -> None:
+    assert _review_decision_with_reason(reply) == (decision, reason)
+
+
+@pytest.mark.parametrize(
+    ('reply', 'decision', 'reason'),
+    [
+        ('status: done', 'done', 'worker_status'),
+        ('\nstatus: done', 'done', 'worker_status'),
+        ('status: blocked\nCannot access worktree.', 'blocked', 'worker_status'),
+        ('status: needs_rework', 'needs_rework', 'worker_status'),
+        ('done', None, 'malformed_worker_status'),
+        ('Status: done', None, 'malformed_worker_status'),
+        ('status: pass', None, 'malformed_worker_status'),
+        ('status: done\nstatus: blocked', None, 'duplicate_or_conflicting_worker_status'),
+    ],
+)
+def test_worker_terminal_status_parser_is_strict(
+    reply: str,
+    decision: str | None,
+    reason: str,
+) -> None:
+    assert _worker_terminal_decision(reply) == (decision, reason)
+
+
 def test_scheduler_worker_prompt_injects_only_assigned_reviewer_chain_contract(tmp_path: Path) -> None:
     scheduler, harness, _integration = _scheduler(tmp_path, 1)
     scheduler.run_once()
@@ -665,7 +715,7 @@ def test_scheduler_rejects_completed_worker_without_review_chain(tmp_path: Path)
     scheduler, harness, integration = _scheduler(tmp_path, 1)
     scheduler.run_once()
     root = harness.jobs[('node-001', 'worker')]
-    root.update(status='completed', terminal=True, reply='result: done')
+    root.update(status='completed', terminal=True, reply='status: done')
 
     final = scheduler.run_once()
 
@@ -674,6 +724,68 @@ def test_scheduler_rejects_completed_worker_without_review_chain(tmp_path: Path)
     assert 'review_chain_missing' in final['nodes']['node-001']['failure']['reasons']
     assert integration.payload['nodes']['node-001']['reviewed_commit'] is None
     assert harness.controller_submissions == [('node-001', 'worker')]
+
+
+@pytest.mark.parametrize(
+    ('reply', 'reason'),
+    [
+        ('status: blocked', 'worker_terminal_not_done_blocked'),
+        ('status: needs_rework', 'worker_terminal_not_done_needs_rework'),
+        ('done', 'malformed_worker_status'),
+        ('status: done\nstatus: blocked', 'duplicate_or_conflicting_worker_status'),
+    ],
+)
+def test_invalid_worker_terminal_never_finalizes_node(
+    tmp_path: Path,
+    reply: str,
+    reason: str,
+) -> None:
+    scheduler, harness, integration = _scheduler(tmp_path, 1)
+    scheduler.run_once()
+    root = harness.jobs[('node-001', 'worker')]
+    root.update(
+        status='completed',
+        terminal=True,
+        reply=reply,
+        chain_evidence=[
+            {
+                'edge_id': 'cb-pass',
+                'child_job_id': 'job-pass',
+                'child_agent': 'compact-node-001-reviewer',
+                'state': 'done',
+                'child_status': 'completed',
+                'reply': 'status: pass',
+                'review_tree_digest': 'git-tree:sha1:node-001',
+            }
+        ],
+    )
+
+    final = scheduler.run_once()
+
+    node = final['nodes']['node-001']
+    assert node['status'] == 'review_failed'
+    assert node['failure']['source'] == 'worker_terminal_invalid'
+    assert node['failure']['reasons'] == [reason]
+    assert integration.payload['nodes']['node-001']['reviewed_commit'] is None
+    assert ('finalize_node', 'node-001') not in integration.calls
+
+
+def test_invalid_reviewer_verdict_never_finalizes_node(tmp_path: Path) -> None:
+    scheduler, harness, integration = _scheduler(tmp_path, 1)
+    scheduler.run_once()
+    harness.complete('node-001', 'worker')
+    scheduler.run_once()
+    harness.complete('node-001', 'reviewer', reply='status: pass\nstatus: blocked')
+
+    final = scheduler.run_once()
+
+    node = final['nodes']['node-001']
+    assert node['status'] == 'review_failed'
+    assert node['failure']['source'] == 'reviewer_verdict_invalid'
+    assert 'review_chain_final_malformed' in node['failure']['reasons']
+    assert 'reviewer_verdict_duplicate_or_conflicting_reviewer_status' in node['failure']['reasons']
+    assert integration.payload['nodes']['node-001']['reviewed_commit'] is None
+    assert ('finalize_node', 'node-001') not in integration.calls
 
 
 def test_scheduler_rejects_chain_to_unassigned_reviewer(tmp_path: Path) -> None:
@@ -717,7 +829,7 @@ def test_scheduler_rejects_nonfinal_pass_hidden_before_final_pass(tmp_path: Path
     root.update(
         status='completed',
         terminal=True,
-        reply='result: done',
+        reply='status: done',
         chain_evidence=[
             {
                 'edge_id': 'cb-early-pass',

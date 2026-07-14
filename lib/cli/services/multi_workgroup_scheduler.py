@@ -453,11 +453,30 @@ class MultiWorkgroupScheduler:
         result: dict[str, object],
         integration,
     ) -> None:
+        worker_terminal, worker_terminal_reason = _worker_terminal_decision(
+            str(result.get('reply') or '')
+        )
+        if worker_terminal != 'done':
+            reason = (
+                f'worker_terminal_not_done_{worker_terminal}'
+                if worker_terminal is not None
+                else worker_terminal_reason
+            )
+            node['status'] = 'review_failed'
+            node['failure'] = {
+                'source': 'worker_terminal_invalid',
+                'reasons': [reason],
+                'worker_job_id': result.get('job_id'),
+                'worker_reply': result.get('reply'),
+            }
+            return
+
         chain = result.get('chain_evidence')
         records = [dict(item) for item in chain if isinstance(item, dict)] if isinstance(chain, list) else []
         expected_reviewer = str(node.get('reviewer_agent') or '')
         maximum = int(self.bundle['policy']['max_node_rework_rounds'])
-        decisions = [_review_decision(str(item.get('reply') or '')) for item in records]
+        parsed_decisions = [_review_decision_with_reason(str(item.get('reply') or '')) for item in records]
+        decisions = [decision or 'malformed' for decision, _reason in parsed_decisions]
         node['rework_count'] = max(0, len(records) - 1)
         node['rework_history'] = [
             {
@@ -491,10 +510,19 @@ class MultiWorkgroupScheduler:
             reasons.append(f'review_chain_final_{decisions[-1]}')
         if any(decision != 'rework_required' for decision in decisions[:-1]):
             reasons.append('review_chain_nonfinal_verdict_invalid')
+        reasons.extend(
+            f'reviewer_verdict_{reason}'
+            for decision, reason in parsed_decisions
+            if decision is None
+        )
         if reasons:
             node['status'] = 'review_failed'
             node['failure'] = {
-                'source': 'worker_owned_review_chain_invalid',
+                'source': (
+                    'reviewer_verdict_invalid'
+                    if any(decision is None for decision, _reason in parsed_decisions)
+                    else 'worker_owned_review_chain_invalid'
+                ),
                 'reasons': list(dict.fromkeys(reasons)),
                 'worker_job_id': result.get('job_id'),
                 'chain_evidence': records,
@@ -1411,20 +1439,54 @@ def _verification_executable_exists(project_root: Path, executable: str) -> bool
         return False
     return resolved.is_file()
 
+
+def _strict_terminal_status(
+    reply: str,
+    *,
+    allowed: set[str],
+    role: str,
+) -> tuple[str | None, str]:
+    lines = str(reply or '').splitlines()
+    first_index: int | None = None
+    first_line = ''
+    for index, raw_line in enumerate(lines):
+        line = raw_line.strip()
+        if line:
+            first_index = index
+            first_line = line
+            break
+    if first_index is None:
+        return None, f'missing_{role}_status'
+
+    decision = next((value for value in allowed if first_line == f'status: {value}'), None)
+    if decision is None:
+        return None, f'malformed_{role}_status'
+
+    for raw_line in lines[first_index + 1:]:
+        if re.match(r'^\s*(?:[-*+]\s*)?status\s*:', raw_line, flags=re.IGNORECASE):
+            return None, f'duplicate_or_conflicting_{role}_status'
+    return decision, f'{role}_status'
+
+
+def _review_decision_with_reason(reply: str) -> tuple[str | None, str]:
+    return _strict_terminal_status(
+        reply,
+        allowed={'pass', 'rework_required', 'blocked', 'non_converged'},
+        role='reviewer',
+    )
+
+
 def _review_decision(reply: str) -> str:
-    allowed = {'pass', 'rework_required', 'blocked', 'non_converged'}
-    for raw_line in reply.splitlines():
-        line = raw_line.strip().lstrip('-').strip()
-        if not line:
-            continue
-        lowered = line.lower()
-        if not lowered.startswith('status:'):
-            return 'malformed'
-        value = line.split(':', 1)[1].strip().lower()
-        if value in allowed:
-            return value
-        return 'malformed'
-    return 'malformed'
+    decision, _reason = _review_decision_with_reason(reply)
+    return decision or 'malformed'
+
+
+def _worker_terminal_decision(reply: str) -> tuple[str | None, str]:
+    return _strict_terminal_status(
+        reply,
+        allowed={'done', 'blocked', 'needs_rework'},
+        role='worker',
+    )
 
 
 def _round_decision(reply: str) -> tuple[str | None, str]:
