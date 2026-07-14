@@ -49,7 +49,7 @@ export CLAUDE_START_CMD="${STUB_BIN}/claude"
 export CCB_TMUX_SOCKET="${TMUX_SOCKET}"
 export CCB_REPLY_LANG="en"
 export CCB_CLAUDE_SKILLS=0
-export CCB_SYNC_TIMEOUT=30
+export CCB_STARTUP_TRANSACTION_TIMEOUT_S=30
 export CCB_WATCH_TIMEOUT_S=30
 export CCB_WATCH_POLL_INTERVAL_S=0.1
 export CCB_GEMINI_READY_TIMEOUT_S=0.5
@@ -493,7 +493,7 @@ run_mixed_matrix() {
   init_git_repo "${project}"
   write_mixed_config "${project}"
   start_project "${session}" "${project}"
-  if wait_for_start "${project}" 20 && wait_for_mount "${project}" 20; then
+  if wait_for_start "${project}" 35 && wait_for_mount "${project}" 20; then
     ok "mixed project start"
   else
     fail "mixed project start"
@@ -527,7 +527,7 @@ run_dual_provider_matrix() {
   init_git_repo "${project}"
   write_dual_provider_config "${project}" "${provider}" "${agent_a}" "${agent_b}"
   start_project "${session}" "${project}"
-  if wait_for_start "${project}" 20 && wait_for_mount "${project}" 20; then
+  if wait_for_start "${project}" 35 && wait_for_mount "${project}" 20; then
     ok "dual ${provider} start"
   else
     fail "dual ${provider} start"
@@ -592,13 +592,13 @@ run_cross_project_matrix() {
   write_cross_project_config "${project_b}"
   start_project "${session_a}" "${project_a}"
   start_project "${session_b}" "${project_b}"
-  if wait_for_start "${project_a}" 20 && wait_for_mount "${project_a}" 20; then
+  if wait_for_start "${project_a}" 35 && wait_for_mount "${project_a}" 20; then
     ok "project A start"
   else
     fail "project A start"
     return
   fi
-  if wait_for_start "${project_b}" 20 && wait_for_mount "${project_b}" 20; then
+  if wait_for_start "${project_b}" 35 && wait_for_mount "${project_b}" 20; then
     ok "project B start"
   else
     fail "project B start"

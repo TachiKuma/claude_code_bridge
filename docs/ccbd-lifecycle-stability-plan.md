@@ -408,7 +408,7 @@ CLI 不再直接 spawn `ccbd`。CLI 只负责：
   - foreground attach 失败必须区分 control-plane ping 不响应和 tmux namespace/window 不可 attach，不能回灌成 daemon startup transaction 失败
 
 默认策略上，`startup_transaction_timeout_s` 应该是冷启动 ceiling，而不是 steady-state latency 目标。
-实现上可以允许 20 到 30 秒的事务上限，但正常路径必须在 ready 后立刻返回，不能把该值表现成每次调用都要等待的固定延迟。
+默认事务上限为 30 秒，以覆盖 macOS 和 WSL 文件系统上的多 agent 冷启动；正常路径必须在 ready 后立刻返回，不能把该值表现成每次调用都要等待的固定延迟。
 
 ### 6.6 bootstrap 分层
 

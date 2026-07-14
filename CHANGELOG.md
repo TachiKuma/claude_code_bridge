@@ -21,6 +21,10 @@
   checks use an external sender, while agent-originated broadcasts explicitly
   use silent delivery so CI does not create recursive reply traffic or violate
   the active-task `--chain`/`--silence` contract.
+- **Multi-Agent Cold Starts Have Platform Headroom**: the bounded startup
+  transaction ceiling is 30 seconds, preventing valid dual-Claude startup on
+  macOS and mounted WSL filesystems from being cut off by the former 20-second
+  default while still returning immediately when readiness is reached.
 
 ### Release Surface
 

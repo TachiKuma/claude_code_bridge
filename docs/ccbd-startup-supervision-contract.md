@@ -388,6 +388,7 @@ Startup waiter rules:
 - CLI callers must not own an independent direct-spawn startup path or a separate local "daemon must be ready in N seconds" authority
 - instead, CLI callers express desired lifecycle state, observe the keeper-owned `startup_id` / generation transaction, and return as soon as that transaction reaches success or failure
 - `startup_transaction_timeout_s` is the maximum budget ceiling for one keeper-owned cold-start transaction:
+  - the default ceiling is 30 seconds so multi-agent cold starts have bounded headroom on supported macOS and WSL filesystems
   - it is not a fixed sleep
   - it is not a generic per-RPC timeout
   - foreground `ccb` startup may use it for the scoped `start` RPC that completes namespace, desired-agent, and startup-report work after control-plane readiness is reached
