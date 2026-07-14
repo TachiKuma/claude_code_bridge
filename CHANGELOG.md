@@ -1,5 +1,25 @@
 # Changelog
 
+## v8.1.6 (2026-07-14)
+
+### Release Validation
+
+- **Test Dependencies Are Explicit**: GitHub Actions installs the
+  `jsonschema` package used by the workflow evidence and campaign tests, so
+  clean Linux, macOS, and WSL runners can collect the complete Python suite.
+- **Lifecycle Jobs Build Their Accelerator**: Tests, Cross-Platform, and CCBD
+  Real Platform jobs now build the repository's `ccb-runtime-accelerator`
+  before asserting accelerator ownership and shutdown behavior.
+- **WSL Uses A Current Rust Toolchain**: mounted-drive jobs install a minimal
+  stable rustup toolchain instead of depending on an older distribution Cargo
+  that may not support the repository lockfile.
+
+### Release Surface
+
+- **Corrective Patch Published Without Rewriting History**: 8.1.6 retains the
+  8.1.5 runtime payload and advances all CLI, npm, Mobile, workflow, download,
+  badge, and release-note version surfaces after the validation repair.
+
 ## v8.1.5 (2026-07-14)
 
 ### Agentic Workflow Foundation

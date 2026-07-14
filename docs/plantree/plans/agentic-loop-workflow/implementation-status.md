@@ -97,8 +97,9 @@ project-local `AGENT_ROLES_STORE`.
   `/home/bfly/yunwei/test_ccb2/phase2-pinned-gate-123ee43c-20260714T115921Z`,
   `83 passed`, fixed detached HEAD, short paths, zero residue.
 - Model qualification is partial: only Codex `gpt-5.4` has old live evidence;
-  no Claude-family exact ID is proven. G7 preflight rejects occupied `8.1.4`;
-  the current minimum patch candidate is `8.1.5`, pending a final recheck.
+  no Claude-family exact ID is proven. G7 preflight rejects occupied `8.1.4`
+  and `8.1.5`; the current minimum patch candidate is `8.1.6`, pending a final
+  recheck.
 
 ## Non-Claims
 
