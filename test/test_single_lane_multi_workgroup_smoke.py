@@ -547,7 +547,7 @@ def test_fake_multi_workgroup_round_reviewer_uses_scheduler_contract() -> None:
         now='2026-07-11T00:00:00Z',
     )
 
-    assert submission.reply.splitlines()[0] == 'round_result: pass'
+    assert submission.reply.splitlines()[0] == 'round result: pass'
 
 
 def test_fake_multi_workgroup_round_reviewer_accepts_hashed_dynamic_agent_name() -> None:
@@ -565,7 +565,7 @@ def test_fake_multi_workgroup_round_reviewer_accepts_hashed_dynamic_agent_name()
         now='2026-07-11T00:00:00Z',
     )
 
-    assert submission.reply.splitlines()[0] == 'round_result: pass'
+    assert submission.reply.splitlines()[0] == 'round result: pass'
 
 
 def test_fake_multi_workgroup_round_reviewer_preserves_blocked_scenario() -> None:
@@ -587,7 +587,7 @@ def test_fake_multi_workgroup_round_reviewer_preserves_blocked_scenario() -> Non
         now='2026-07-11T00:00:00Z',
     )
 
-    assert submission.reply.splitlines()[0] == 'round_result: blocked'
+    assert submission.reply.splitlines()[0] == 'round result: blocked'
 
 
 def test_v3_config_is_fake_git_worktree_required() -> None:

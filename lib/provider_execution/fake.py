@@ -1068,7 +1068,7 @@ def _workflow_round_checker_reply(
             else 'pass'
         )
         return (
-            f'round_result: {result}\n'
+            f'round result: {result}\n'
             'verification performed: fake provider deterministic multi-workgroup smoke\n'
             'hidden degradation audit: no degradation requested\n'
             'evidence refs: scheduler state, reviewed commits, integration state, release evidence\n'
