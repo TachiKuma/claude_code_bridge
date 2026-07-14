@@ -2144,8 +2144,8 @@ def test_codex_launcher_repairs_activity_hook_trust_for_existing_home(monkeypatc
     project_root = tmp_path / 'repo-codex-existing-hooks'
     runtime_dir = project_root / '.ccb' / 'agents' / 'agent1' / 'provider-runtime' / 'codex'
     runtime_dir.mkdir(parents=True, exist_ok=True)
-    system_home = tmp_path / 'system-home'
-    system_codex = system_home / '.codex'
+    source_home = tmp_path / 'source-home'
+    system_codex = source_home / '.codex'
     omx_command = '"/usr/bin/node" "/usr/lib/node_modules/oh-my-codex/dist/scripts/codex-native-hook.js"'
     system_codex.mkdir(parents=True, exist_ok=True)
     (system_codex / 'hooks.json').write_text(
@@ -2178,7 +2178,10 @@ def test_codex_launcher_repairs_activity_hook_trust_for_existing_home(monkeypatc
         ),
         encoding='utf-8',
     )
-    monkeypatch.setenv('CODEX_HOME', str(system_codex))
+    host_codex = tmp_path / 'host-codex'
+    host_codex.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv('CCB_SOURCE_HOME', str(source_home))
+    monkeypatch.setenv('CODEX_HOME', str(host_codex))
 
     spec = _spec('agent1')
     command = ParsedStartCommand(project=None, agent_names=('agent1',), restore=False, auto_permission=True)
@@ -2198,6 +2201,17 @@ def test_codex_launcher_repairs_activity_hook_trust_for_existing_home(monkeypatc
     user_prompt_key = f'{codex_home / "hooks.json"}:user_prompt_submit:0:0'
     assert state[user_prompt_key]['enabled'] is True
     assert str(state[user_prompt_key]['trusted_hash']).startswith('sha256:')
+
+    codex_launcher.build_start_cmd(
+        command,
+        spec,
+        runtime_dir,
+        'sess-existing-hooks-repeat',
+        prepared_state=_codex_prepared_state(runtime_dir),
+    )
+
+    repeated_config = tomllib.loads((codex_home / 'config.toml').read_text(encoding='utf-8'))
+    assert repeated_config['hooks']['state'] == state
 
 
 def test_codex_launcher_build_start_cmd_uses_agent_scoped_resume_session(monkeypatch, tmp_path: Path) -> None:
