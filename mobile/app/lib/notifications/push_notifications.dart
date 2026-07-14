@@ -248,6 +248,7 @@ class PushNotificationRuntime {
   StreamSubscription<String>? _tokenRefreshSubscription;
   StreamSubscription<PushNotificationRoute>? _routeSubscription;
   StreamSubscription<PushNotificationRoute>? _foregroundRouteSubscription;
+  final Set<String> _foregroundRouteDedupeKeys = <String>{};
   GatewayPairedHost? _host;
   GatewayPairedHost? _registeredHost;
   bool _started = false;
@@ -292,6 +293,7 @@ class PushNotificationRuntime {
     _tokenRefreshSubscription = null;
     _routeSubscription = null;
     _foregroundRouteSubscription = null;
+    _foregroundRouteDedupeKeys.clear();
     if (registeredHost != null) {
       await _registration.delete(host: registeredHost);
     }
@@ -324,8 +326,16 @@ class PushNotificationRuntime {
     if (!_acceptsRoute(route)) {
       return;
     }
-    if (!await _markRouteSeenIfNew(route)) return;
+    if (!_rememberForegroundRoute(route.dedupeKey)) return;
     await _onForegroundRoute?.call(route);
+  }
+
+  bool _rememberForegroundRoute(String dedupeKey) {
+    if (!_foregroundRouteDedupeKeys.add(dedupeKey)) return false;
+    while (_foregroundRouteDedupeKeys.length > 256) {
+      _foregroundRouteDedupeKeys.remove(_foregroundRouteDedupeKeys.first);
+    }
+    return true;
   }
 
   bool _acceptsRoute(PushNotificationRoute route) {

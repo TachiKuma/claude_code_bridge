@@ -33,8 +33,10 @@ The registration protocol is deliberately small:
 
 The gateway stores the FCM token in owner-only private state. Sender data
 payloads are exactly `id`, `kind`, `project_id`, `project_short_name`,
-`agent`, `completed_at`, and `dedupe_key`; they must not include prompts,
-terminal output, paths, errors, credentials, or a device token. For Android
+`agent`, `completed_at`, `dedupe_key`, `host_id`, and `device_id`. The final
+two fields bind the route to the paired profile selected by the gateway; they
+must not include prompts, terminal output, paths, errors, credentials, or a
+device token. For Android
 background and terminated delivery, the deployment-owned FCM sender must wrap
 those route fields in a real FCM notification+data message; data-only messages
 are not accepted as production evidence for background user-visible delivery.
@@ -46,12 +48,15 @@ stored paired profile, records the push `dedupe_key` in the same seen store
 used by the foreground SSE notification stream, and resumes the existing
 cursor-based notification catch-up, then loads the requested project and
 selects its agent. Invalid, unpaired, stale, or cross-profile routes stop at
-the project list. Because the production payload whitelist intentionally omits
-host and device identity, identity-free push routes are treated as ambiguous
-when the app has more than one stored profile; in that case the app does not
-deep-link to a project/agent. Handling a push never submits a prompt, replays
+the project list. Legacy identity-free push routes remain accepted only when
+the stored profile is unambiguous. Handling a push never submits a prompt, replays
 terminal input, retries a mutation, or writes project files. The notification
 route is a view-selection request only.
+
+Foreground FCM receipt does not write the persistent SSE dedupe store. It uses
+a bounded in-memory trigger dedupe and asks the cursor stream to catch up; the
+SSE event remains authoritative for unread markers, local notification policy,
+and durable completion dedupe.
 
 Only the device whose visible target exactly matches the event's project and
 agent may be suppressed. Visibility is sent to the gateway as paired-device

@@ -10,6 +10,7 @@ import pytest
 from mobile_gateway.fcm import (
     FcmHttpV1PushSender,
     FcmSenderConfig,
+    _GoogleAuthAccessTokenProvider,
     build_fcm_sender_from_env,
 )
 
@@ -46,6 +47,8 @@ def _payload() -> dict[str, object]:
         'agent': 'worker',
         'completed_at': '2026-07-14T01:02:03Z',
         'dedupe_key': 'proj-demo:7:worker:1',
+        'host_id': 'host-demo',
+        'device_id': 'device-demo',
     }
 
 
@@ -81,12 +84,12 @@ def test_fcm_sender_posts_notification_and_whitelisted_string_data() -> None:
     assert message['token'] == 'fcm-device-token'
     assert message['notification'] == {
         'title': 'CCB Mobile',
-        'body': 'Task completed. Open CCB Mobile to view it.',
+        'body': 'demo / worker 任务完成',
     }
     assert message['android']['notification']['channel_id'] == 'ccb_task_completion'
     assert set(message['data']) == set(_payload())
     assert message['data'] == {key: str(value) for key, value in _payload().items()}
-    assert 'worker' not in json.dumps(message['notification'])
+    assert 'proj-demo:7:worker:1' not in json.dumps(message['notification'])
 
 
 def test_fcm_sender_retries_transient_http_errors_then_succeeds() -> None:
@@ -216,3 +219,53 @@ def test_fcm_sender_reports_transport_error_after_retry_budget() -> None:
     assert result.sent is False
     assert result.retryable is True
     assert result.error_code == 'transport_error'
+
+
+def test_google_auth_provider_reuses_valid_access_token() -> None:
+    class Credentials:
+        token = 'cached-access-token'
+        valid = True
+        refresh_calls = 0
+
+        def refresh(self, _request) -> None:
+            self.refresh_calls += 1
+
+    credentials = Credentials()
+    provider = _GoogleAuthAccessTokenProvider(credentials)
+
+    assert provider.access_token(timeout=1.0) == 'cached-access-token'
+    assert provider.access_token(timeout=1.0) == 'cached-access-token'
+    assert credentials.refresh_calls == 0
+
+
+def test_google_auth_provider_refresh_uses_bounded_transport(monkeypatch: pytest.MonkeyPatch) -> None:
+    transport_calls: list[dict[str, object]] = []
+
+    def transport(*_args: object, **kwargs: object) -> object:
+        transport_calls.append(dict(kwargs))
+        return object()
+
+    monkeypatch.setattr(
+        'google.auth.transport.requests.Request',
+        lambda: transport,
+    )
+
+    class Credentials:
+        token = None
+        valid = False
+
+        def refresh(self, request) -> None:
+            request(url='https://oauth.example.test/token', method='POST')
+            self.token = 'fresh-access-token'
+            self.valid = True
+
+    provider = _GoogleAuthAccessTokenProvider(Credentials())
+
+    assert provider.access_token(timeout=1.25) == 'fresh-access-token'
+    assert transport_calls == [
+        {
+            'url': 'https://oauth.example.test/token',
+            'method': 'POST',
+            'timeout': 1.25,
+        }
+    ]

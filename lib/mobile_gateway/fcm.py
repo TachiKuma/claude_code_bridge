@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
+import threading
 import time
 from typing import Callable, Mapping, Protocol
 from urllib.error import HTTPError, URLError
@@ -21,6 +22,8 @@ _COMPLETION_FIELDS = (
     'agent',
     'completed_at',
     'dedupe_key',
+    'host_id',
+    'device_id',
 )
 _TRANSIENT_HTTP_CODES = {408, 429, 500, 502, 503, 504}
 _TRANSIENT_FCM_STATUSES = {'ABORTED', 'DEADLINE_EXCEEDED', 'INTERNAL', 'QUOTA_EXCEEDED', 'UNAVAILABLE'}
@@ -98,15 +101,26 @@ class FcmHttpV1PushSender:
 class _GoogleAuthAccessTokenProvider:
     def __init__(self, credentials: object) -> None:
         self._credentials = credentials
+        self._lock = threading.Lock()
 
     def access_token(self, *, timeout: float) -> str:
         from google.auth.transport.requests import Request as GoogleAuthRequest
 
-        self._credentials.refresh(GoogleAuthRequest(timeout=timeout))  # type: ignore[attr-defined]
-        token = str(getattr(self._credentials, 'token', '') or '').strip()
-        if not token:
-            raise RuntimeError('google auth did not return an access token')
-        return token
+        with self._lock:
+            token = str(getattr(self._credentials, 'token', '') or '').strip()
+            if token and bool(getattr(self._credentials, 'valid', False)):
+                return token
+            request = GoogleAuthRequest()
+
+            def bounded_request(*args: object, **kwargs: object) -> object:
+                kwargs.setdefault('timeout', timeout)
+                return request(*args, **kwargs)
+
+            self._credentials.refresh(bounded_request)  # type: ignore[attr-defined]
+            token = str(getattr(self._credentials, 'token', '') or '').strip()
+            if not token:
+                raise RuntimeError('google auth did not return an access token')
+            return token
 
 
 def build_fcm_sender_from_env(
@@ -221,7 +235,7 @@ def _fcm_request_body(token: str, data: dict[str, str]) -> dict[str, object]:
             'token': token,
             'notification': {
                 'title': 'CCB Mobile',
-                'body': 'Task completed. Open CCB Mobile to view it.',
+                'body': f"{data['project_short_name']} / {data['agent']} 任务完成",
             },
             'data': data,
             'android': {

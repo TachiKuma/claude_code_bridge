@@ -478,6 +478,7 @@ class MobileGatewayService:
         self._push_dispatcher = (
             MobilePushDispatcher(
                 pairing_store=self._pairing_store,
+                host_id=self._project_id,
                 sender=push_sender,
                 timeout_seconds=push_sender_timeout_seconds,
                 max_workers=push_sender_max_workers,

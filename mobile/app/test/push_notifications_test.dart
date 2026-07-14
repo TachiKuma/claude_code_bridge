@@ -179,16 +179,20 @@ void main() {
     await runtime.dispose();
   });
 
-  test('foreground push message is validated and deduped without opening', () async {
+  test('foreground push reconciles without consuming SSE dedupe', () async {
     final messaging = _FakePushMessagingClient(token: 'token');
     final opened = <PushNotificationRoute>[];
     final seen = <String>[];
+    final reconciled = <String>[];
     final runtime = PushNotificationRuntime(
       messaging: messaging,
       registration: _AlwaysRegisteredPushRegistrationClient(),
       markSeenIfNew: (dedupeKey) async {
         seen.add(dedupeKey);
         return true;
+      },
+      onForegroundRoute: (route) async {
+        reconciled.add(route.dedupeKey);
       },
       onRouteOpened: (route) async => opened.add(route),
       isEnabled: () => true,
@@ -212,24 +216,22 @@ void main() {
     );
     await _drain();
 
-    expect(seen, ['foreground']);
+    expect(seen, isEmpty);
+    expect(reconciled, ['foreground']);
     expect(opened, isEmpty);
 
     await runtime.dispose();
   });
 
-  test('foreground push reconciles only when dedupe is new', () async {
+  test('duplicate foreground push reconciles once in memory', () async {
     final messaging = _FakePushMessagingClient(token: 'token');
-    var isNew = true;
     final order = <String>[];
     final runtime = PushNotificationRuntime(
       messaging: messaging,
       registration: _AlwaysRegisteredPushRegistrationClient(),
       markSeenIfNew: (dedupeKey) async {
         order.add('seen:$dedupeKey');
-        final result = isNew;
-        isNew = false;
-        return result;
+        return true;
       },
       onForegroundRoute: (route) async {
         order.add('reconcile:${route.dedupeKey}');
@@ -250,11 +252,7 @@ void main() {
     messaging.foreground(route);
     await _drain();
 
-    expect(order, [
-      'seen:foreground',
-      'reconcile:foreground',
-      'seen:foreground',
-    ]);
+    expect(order, ['reconcile:foreground']);
 
     await runtime.dispose();
   });
@@ -411,7 +409,8 @@ class _FakePushMessagingClient implements PushMessagingClient {
   Stream<PushNotificationRoute> get onRouteOpened => _routes.stream;
 
   @override
-  Stream<PushNotificationRoute> get onForegroundRoute => _foregroundRoutes.stream;
+  Stream<PushNotificationRoute> get onForegroundRoute =>
+      _foregroundRoutes.stream;
 
   @override
   Stream<String> get onTokenRefresh => _refreshes.stream;

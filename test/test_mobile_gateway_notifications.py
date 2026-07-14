@@ -88,6 +88,7 @@ def _service(
     project_registry: MobileGatewayProjectRegistry | None = None,
     push_sender=None,
     push_sender_timeout_seconds: float = 2.0,
+    push_sender_max_workers: int = 4,
 ) -> MobileGatewayService:
     return MobileGatewayService(
         project_id=client.project_id,
@@ -98,6 +99,7 @@ def _service(
         clock=lambda: '2026-06-30T01:02:03Z',
         push_sender=push_sender,
         push_sender_timeout_seconds=push_sender_timeout_seconds,
+        push_sender_max_workers=push_sender_max_workers,
     )
 
 
@@ -370,8 +372,16 @@ def test_push_delivery_is_device_bound_deduped_and_visible_target_scoped(tmp_pat
     events = service.notification_events_since('/v1/mobile/notifications?once=1', second_headers)
     completion = next(event for event in events if event['kind'] == 'task_completed')
 
-    assert [(token, payload) for token, payload, _timeout in sent] == [('token-second', completion)]
-    assert set(sent[0][1]) == {'id', 'kind', 'project_id', 'project_short_name', 'agent', 'completed_at', 'dedupe_key'}
+    expected_push = {
+        **completion,
+        'host_id': 'proj-demo',
+        'device_id': str(second['device']['device_id']),
+    }
+    assert [(token, payload) for token, payload, _timeout in sent] == [('token-second', expected_push)]
+    assert set(sent[0][1]) == {
+        'id', 'kind', 'project_id', 'project_short_name', 'agent',
+        'completed_at', 'dedupe_key', 'host_id', 'device_id',
+    }
     assert sent[0][1]['dedupe_key'] == completion['dedupe_key']
     assert service.dispatch_delete('/v1/devices/me/push-token', second_headers)[0] == 200
     assert service._require_pairing_store().push_tokens_for_delivery() == [(str(first['device']['device_id']), 'token-first')]
@@ -382,6 +392,48 @@ def test_push_delivery_is_device_bound_deduped_and_visible_target_scoped(tmp_pat
     assert audit['attempted'] == 1
     assert audit['suppressed_visible'] == 1
     assert 'token-second' not in json.dumps(audit)
+
+
+def test_push_delivery_runs_multiple_device_sends_concurrently(tmp_path: Path) -> None:
+    client = _ActivityCcbdClient(project_id='proj-demo', project_root='/srv/demo', display_name='demo')
+    sent: list[str] = []
+
+    def sender(token: str, _payload: dict[str, object], _timeout: float) -> PushSendResult:
+        time.sleep(0.12)
+        sent.append(token)
+        return PushSendResult(sent=True)
+
+    service = _service(
+        client,
+        mobile_dir=tmp_path / 'mobile',
+        push_sender=sender,
+        push_sender_timeout_seconds=1.0,
+        push_sender_max_workers=3,
+    )
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        reusable_claims=True,
+    )
+    for index in range(3):
+        _, claim = service.dispatch_post(
+            '/v1/pairing/claim',
+            {'pairing_code': pairing['pairing_code']},
+        )
+        headers = {'Authorization': f'Bearer {claim["device_token"]}'}
+        service.dispatch_put(
+            '/v1/devices/me/push-token',
+            {'token': f'token-{index}'},
+            headers,
+        )
+
+    service.project_view_payload('proj-demo')
+    client.activity_state = 'idle'
+    started = time.monotonic()
+    service.project_view_payload('proj-demo')
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 0.28
+    assert sorted(sent) == ['token-0', 'token-1', 'token-2']
 
 
 def test_push_invalid_token_cleanup_revoke_and_scope_compatibility(tmp_path: Path) -> None:

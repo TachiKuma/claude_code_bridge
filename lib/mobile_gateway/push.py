@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
+from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError
 from dataclasses import dataclass
 import threading
+import time
 from typing import Callable, Mapping
 
 from .notifications import MobileNotificationEvent, NOTIFICATION_KIND_TASK_COMPLETED
@@ -29,11 +30,13 @@ class MobilePushDispatcher:
         self,
         *,
         pairing_store: MobileGatewayPairingStore,
+        host_id: str,
         sender: PushSender | None,
         timeout_seconds: float = 2.0,
         max_workers: int = 4,
     ) -> None:
         self._pairing_store = pairing_store
+        self._host_id = str(host_id)
         self._sender = sender
         self._timeout_seconds = max(0.1, float(timeout_seconds))
         self._max_workers = max(1, int(max_workers))
@@ -62,14 +65,29 @@ class MobilePushDispatcher:
     def deliver(self, event: MobileNotificationEvent) -> None:
         if self._sender is None or event.kind != NOTIFICATION_KIND_TASK_COMPLETED:
             return
-        payload = completion_payload(event)
+        completion = completion_payload(event)
+        pending: list[tuple[str, Future[PushSendResult]]] = []
         for device_id, token in self._pairing_store.push_tokens_for_delivery():
-            if self._is_visible_target(device_id, payload):
+            if self._is_visible_target(device_id, completion):
                 self._increment_audit('suppressed_visible')
                 continue
             if not self._claim(device_id):
                 continue
-            result = self._send_bounded(device_id, token, payload)
+            payload = {
+                **completion,
+                'host_id': self._host_id,
+                'device_id': device_id,
+            }
+            future = self._submit_send(device_id, token, payload)
+            if future is not None:
+                pending.append((device_id, future))
+
+        deadline = time.monotonic() + self._timeout_seconds
+        for device_id, future in pending:
+            try:
+                result = future.result(timeout=max(0.0, deadline - time.monotonic()))
+            except TimeoutError:
+                result = None
             if result is not None and result.invalid_token:
                 self._pairing_store.delete_push_token(device_id=device_id, reason='invalid_sender_token')
             self._record_result(result)
@@ -112,17 +130,19 @@ class MobilePushDispatcher:
             self._audit['attempted'] += 1
             return True
 
-    def _send_bounded(self, device_id: str, token: str, payload: dict[str, object]) -> PushSendResult | None:
+    def _submit_send(
+        self,
+        device_id: str,
+        token: str,
+        payload: dict[str, object],
+    ) -> Future[PushSendResult] | None:
         try:
             future = self._executor.submit(self._call_sender, token, payload)
         except RuntimeError:
             self._release(device_id)
             return None
         future.add_done_callback(lambda _future: self._release(device_id))
-        try:
-            return future.result(timeout=self._timeout_seconds)
-        except TimeoutError:
-            return None
+        return future
 
     def _call_sender(self, token: str, payload: dict[str, object]) -> PushSendResult:
         try:
