@@ -175,7 +175,11 @@ def test_update_via_tarball_uses_staged_unix_installer(monkeypatch, tmp_path: Pa
         return True
 
     monkeypatch.setattr(update_runtime, "download_tarball", _fake_download)
-    monkeypatch.setattr(update_runtime, "get_version_info", lambda _install_dir: {"version": "6.0.8"})
+    monkeypatch.setattr(
+        update_runtime,
+        "get_version_info",
+        lambda _path: {"version": "6.0.8", "commit": "targetbuild"},
+    )
     monkeypatch.setattr(update_runtime, "_print_update_outcome", lambda old_info, new_info: None)
     post_update_calls: list[dict[str, object]] = []
 
@@ -218,9 +222,86 @@ def test_update_via_tarball_uses_staged_unix_installer(monkeypatch, tmp_path: Pa
         {
             "install_dir": install_dir,
             "old_info": {"version": "6.0.7"},
-            "new_info": {"version": "6.0.8"},
+            "new_info": {"version": "6.0.8", "commit": "targetbuild"},
         }
     ]
+
+
+def test_update_rejects_same_version_different_build_before_install(monkeypatch, tmp_path: Path, capsys) -> None:
+    tmp_base = tmp_path / "tmp-base"
+    tmp_base.mkdir()
+    install_dir = tmp_path / "install"
+    install_dir.mkdir()
+    calls: list[str] = []
+    monkeypatch.setattr(update_runtime.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(update_runtime.platform, "machine", lambda: "x86_64")
+
+    def _fake_download(_url: str, destination: Path) -> bool:
+        extracted_dir = tmp_path / "payload-src"
+        extracted_dir.mkdir()
+        (extracted_dir / "install.sh").write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+        (extracted_dir / "VERSION").write_text("8.1.4\n", encoding="utf-8")
+        (extracted_dir / "BUILD_INFO.json").write_text(
+            '{"version": "8.1.4", "commit": "newbuild"}\n', encoding="utf-8"
+        )
+        with tarfile.open(destination, "w:gz") as archive:
+            archive.add(extracted_dir, arcname="ccb-linux-x86_64")
+        return True
+
+    monkeypatch.setattr(update_runtime, "download_tarball", _fake_download)
+    monkeypatch.setattr(update_runtime, "run_staged_unix_installer", lambda *_args, **_kwargs: calls.append("install") or 0)
+
+    code = update_runtime._update_via_tarball(
+        tmp_base,
+        install_dir=install_dir,
+        target_version="8.1.4",
+        old_info={"version": "8.1.4", "commit": "oldbuild"},
+    )
+
+    assert code == 1
+    assert calls == []
+    assert "same-version build identity collision" in capsys.readouterr().out
+
+
+def test_update_restores_prior_prefix_when_installer_fails(monkeypatch, tmp_path: Path) -> None:
+    tmp_base = tmp_path / "tmp-base"
+    tmp_base.mkdir()
+    install_dir = tmp_path / "install"
+    install_dir.mkdir()
+    (install_dir / "identity.txt").write_text("old build\n", encoding="utf-8")
+    monkeypatch.setattr(update_runtime.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(update_runtime.platform, "machine", lambda: "x86_64")
+
+    def _fake_download(_url: str, destination: Path) -> bool:
+        extracted_dir = tmp_path / "payload-src"
+        extracted_dir.mkdir()
+        (extracted_dir / "install.sh").write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+        (extracted_dir / "VERSION").write_text("8.1.3\n", encoding="utf-8")
+        (extracted_dir / "BUILD_INFO.json").write_text(
+            '{"version": "8.1.3", "commit": "rollback1"}\n', encoding="utf-8"
+        )
+        with tarfile.open(destination, "w:gz") as archive:
+            archive.add(extracted_dir, arcname="ccb-linux-x86_64")
+        return True
+
+    def _fake_install(*_args, **_kwargs) -> int:
+        shutil.rmtree(install_dir)
+        install_dir.mkdir()
+        (install_dir / "identity.txt").write_text("partial replacement\n", encoding="utf-8")
+        return 23
+
+    monkeypatch.setattr(update_runtime, "download_tarball", _fake_download)
+    monkeypatch.setattr(update_runtime, "run_staged_unix_installer", _fake_install)
+
+    code = update_runtime._update_via_tarball(
+        tmp_base,
+        install_dir=install_dir,
+        target_version="8.1.3",
+        old_info={"version": "8.1.4", "commit": "oldbuild"},
+    )
+
+    assert code == 23
+    assert (install_dir / "identity.txt").read_text(encoding="utf-8") == "old build\n"
 
 
 def test_post_update_delegation_runs_installed_entrypoint(monkeypatch, tmp_path: Path) -> None:
@@ -937,7 +1018,11 @@ def test_update_via_tarball_uses_macos_release_artifact(monkeypatch, tmp_path: P
         return True
 
     monkeypatch.setattr(update_runtime, "download_tarball", _fake_download)
-    monkeypatch.setattr(update_runtime, "get_version_info", lambda _install_dir: {"version": "6.0.8"})
+    monkeypatch.setattr(
+        update_runtime,
+        "get_version_info",
+        lambda _path: {"version": "6.0.8", "commit": "targetbuild"},
+    )
     monkeypatch.setattr(update_runtime, "_print_update_outcome", lambda old_info, new_info: None)
     monkeypatch.setattr(update_runtime, "_run_post_update_with_new_entrypoint", lambda **_kwargs: True)
 

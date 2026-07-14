@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 from pathlib import Path
 import tarfile
@@ -24,6 +25,35 @@ def test_normalize_arch_maps_common_aliases() -> None:
     assert module.normalize_arch("x86_64") == "x86_64"
     assert module.normalize_arch("arm64") == "aarch64"
     assert module.normalize_arch("aarch64") == "aarch64"
+
+
+def test_release_identity_requires_matching_package_version_and_unique_manifest(tmp_path: Path) -> None:
+    module = _load_module()
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    (repo_root / "package.json").write_text(json.dumps({"version": "8.1.5"}), encoding="utf-8")
+    manifest = tmp_path / "releases.json"
+    manifest.write_text(json.dumps({"releases": [{"version": "8.1.4", "commit": "oldbuild"}]}), encoding="utf-8")
+
+    module.validate_release_identity(
+        repo_root,
+        version="8.1.5",
+        commit="newbuild",
+        release_manifest=manifest,
+    )
+
+    manifest.write_text(json.dumps({"releases": [{"version": "8.1.5", "commit": "oldbuild"}]}), encoding="utf-8")
+    try:
+        module.validate_release_identity(
+            repo_root,
+            version="8.1.5",
+            commit="newbuild",
+            release_manifest=manifest,
+        )
+    except RuntimeError as exc:
+        assert "collision" in str(exc)
+    else:
+        raise AssertionError("expected a release manifest collision")
 
 
 def test_copy_repo_tree_excludes_runtime_state(tmp_path: Path) -> None:

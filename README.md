@@ -66,6 +66,11 @@ After CCB is installed, use CCB's updater:
 ccb update
 ```
 
+To roll back, use the same transactional updater with an older released version,
+for example `ccb update 8.1.3`. CCB rejects a same-version artifact whose build
+identity differs from the installed build, and restores the prior local prefix
+if the update transaction fails.
+
 <details>
 <summary><b>GitHub release package and source install fallbacks</b></summary>
 

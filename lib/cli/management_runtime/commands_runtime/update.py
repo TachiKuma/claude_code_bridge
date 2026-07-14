@@ -155,6 +155,17 @@ def _update_via_tarball(tmp_base: Path, *, install_dir: Path, target_version: st
         with tarfile.open(tarball_path, "r:gz") as tar:
             safe_extract_tar(tar, tmp_dir)
         extracted_dir = tmp_dir / _release_extract_dir_name(extracted_name)
+        staged_info = get_version_info(extracted_dir)
+        identity_error = _update_identity_error(
+            old_info=old_info,
+            staged_info=staged_info,
+            target_version=target_version,
+        )
+        if identity_error:
+            print(f"❌ Update failed: {identity_error}")
+            return 1
+
+        backup_dir = _backup_install_prefix(install_dir=install_dir, transaction_dir=tmp_dir)
 
         print("🔧 Installing...")
         returncode = run_staged_unix_installer(
@@ -168,20 +179,84 @@ def _update_via_tarball(tmp_base: Path, *, install_dir: Path, target_version: st
             },
         )
         if returncode != 0:
+            _restore_install_prefix(install_dir=install_dir, backup_dir=backup_dir)
             print(f"❌ Update failed: installer exited with code {returncode}")
             return returncode
 
         new_info = get_version_info(install_dir)
+        installed_identity_error = _installed_identity_error(staged_info=staged_info, new_info=new_info)
+        if installed_identity_error:
+            _restore_install_prefix(install_dir=install_dir, backup_dir=backup_dir)
+            print(f"❌ Update failed: {installed_identity_error}")
+            return 1
         _print_update_outcome(old_info, new_info)
         if not _run_post_update_with_new_entrypoint(install_dir=install_dir, old_info=old_info, new_info=new_info):
+            _restore_install_prefix(install_dir=install_dir, backup_dir=backup_dir)
             return 1
         return 0
     except Exception as exc:
+        if 'backup_dir' in locals():
+            try:
+                _restore_install_prefix(install_dir=install_dir, backup_dir=backup_dir)
+            except Exception as restore_exc:
+                print(f"❌ Update rollback failed: {restore_exc}")
         print(f"❌ Update failed: {exc}")
         return 1
     finally:
         if tmp_dir.exists():
             shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def _update_identity_error(
+    *,
+    old_info: dict[str, object],
+    staged_info: dict[str, object],
+    target_version: str,
+) -> str | None:
+    staged_version = _identity_value(staged_info, "version")
+    if staged_version != target_version:
+        return f"release artifact version mismatch (requested v{target_version}, artifact v{staged_version or 'unknown'})"
+    old_version = _identity_value(old_info, "version")
+    if old_version != staged_version:
+        return None
+    old_commit = _identity_value(old_info, "commit")
+    staged_commit = _identity_value(staged_info, "commit")
+    if old_commit and staged_commit and old_commit == staged_commit:
+        return None
+    return "same-version build identity collision; use a uniquely versioned release artifact"
+
+
+def _installed_identity_error(*, staged_info: dict[str, object], new_info: dict[str, object]) -> str | None:
+    for field in ("version", "commit"):
+        staged_value = _identity_value(staged_info, field)
+        installed_value = _identity_value(new_info, field)
+        if not staged_value or staged_value != installed_value:
+            return f"installed build identity does not match the release artifact ({field})"
+    return None
+
+
+def _identity_value(info: dict[str, object], field: str) -> str | None:
+    value = str(info.get(field) or "").strip()
+    return value or None
+
+
+def _backup_install_prefix(*, install_dir: Path, transaction_dir: Path) -> Path | None:
+    if not install_dir.exists():
+        return None
+    backup_dir = transaction_dir / "previous-install"
+    shutil.copytree(install_dir, backup_dir, symlinks=True)
+    return backup_dir
+
+
+def _restore_install_prefix(*, install_dir: Path, backup_dir: Path | None) -> None:
+    if install_dir.exists() or install_dir.is_symlink():
+        if install_dir.is_dir() and not install_dir.is_symlink():
+            shutil.rmtree(install_dir)
+        else:
+            install_dir.unlink()
+    if backup_dir is None:
+        return
+    shutil.copytree(backup_dir, install_dir, symlinks=True)
 
 
 def maybe_handle_post_update_command(tokens: list[str], *, script_root: Path) -> int | None:
