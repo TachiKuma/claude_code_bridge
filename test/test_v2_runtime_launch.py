@@ -1348,7 +1348,10 @@ def test_ensure_agent_runtime_falls_back_to_detached_tmux_session(monkeypatch, t
 
     assert result.binding is not None
     assert result.binding.runtime_ref == 'tmux:%88'
-    assert any(name == 'start-server' for name, _ in calls)
+    assert not any(name == 'start-server' for name, _ in calls)
+    assert next(index for index, (name, _) in enumerate(calls) if name == 'new-session') < next(
+        index for index, (name, _) in enumerate(calls) if name == 'set-option'
+    )
     assert any(name == 'set-option' for name, _ in calls)
     assert ('set-option', ('set-option', '-g', 'mouse', 'on')) in calls
     assert ('set-option', ('set-option', '-g', 'history-limit', '50000')) in calls
@@ -1531,7 +1534,10 @@ def test_ensure_agent_runtime_outside_tmux_relaunches_stale_binding_via_detached
     assert result.binding is not None
     assert result.binding.runtime_ref == 'tmux:%88'
     assert ('kill', ('sock-dead', '%44')) in calls
-    assert any(name == 'start-server' for name, _ in calls)
+    assert not any(name == 'start-server' for name, _ in calls)
+    assert next(index for index, (name, _) in enumerate(calls) if name == 'new-session') < next(
+        index for index, (name, _) in enumerate(calls) if name == 'set-option'
+    )
     assert ('set-option', ('set-option', '-g', 'mouse', 'on')) in calls
     assert ('set-option', ('set-option', '-g', 'history-limit', '50000')) in calls
     assert ('set-option', ('set-option', '-g', 'set-clipboard', 'on')) in calls
@@ -1998,7 +2004,10 @@ def test_ensure_agent_runtime_falls_back_when_created_pane_is_too_small(monkeypa
     assert result.binding is not None
     assert result.binding.runtime_ref == 'tmux:%88'
     assert ('kill', ('%42',)) in calls
-    assert any(name == 'start-server' for name, _ in calls)
+    assert not any(name == 'start-server' for name, _ in calls)
+    assert next(index for index, (name, _) in enumerate(calls) if name == 'new-session') < next(
+        index for index, (name, _) in enumerate(calls) if name == 'set-option'
+    )
     assert any(name == 'set-option' for name, _ in calls)
     assert ('set-option', ('set-option', '-g', 'mouse', 'on')) in calls
     assert ('set-option', ('set-option', '-g', 'history-limit', '50000')) in calls

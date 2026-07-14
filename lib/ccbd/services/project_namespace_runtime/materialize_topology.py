@@ -14,7 +14,6 @@ from .backend import (
     create_session,
     ensure_window,
     ensure_server_policy,
-    prepare_server,
     rename_window,
     select_window,
     session_window_target,
@@ -74,7 +73,6 @@ def materialize_topology(
     windows = tuple(getattr(topology_plan, 'windows', ()) or ())
     if not windows:
         return {}
-    prepare_server(context.backend, timeout_s=timeout_s)
     first_window = windows[0]
     if not context.session_is_alive:
         create_session(

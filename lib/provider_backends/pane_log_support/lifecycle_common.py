@@ -25,8 +25,9 @@ _AUTH_REVOKED_SIGNATURES = (
 _CRASH_REASON_DETAIL = {
     'provider_auth_revoked': (
         'Provider authentication was revoked or expired; the captured crash log '
-        'matched a re-authentication signature. Restarting the pane will not fix '
-        'this — re-authenticate the provider (e.g. run `codex login`) and remount.'
+        'matched a re-authentication signature. CCB may refresh changed inherited '
+        'Codex auth once; otherwise run `codex login` in the source profile or '
+        'repair agent-local auth, then remount.'
     ),
 }
 

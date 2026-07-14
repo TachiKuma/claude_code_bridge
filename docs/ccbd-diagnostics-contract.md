@@ -118,6 +118,9 @@ Rules:
 - daemon and keeper must append logs to stable file paths
 - diagnostics readers must treat these as evidence, not authority
 - large logs may be tailed during export, but the manifest must explicitly mark truncation
+- provider runtime `pane-crash-*.reason.json` records are paired diagnostics
+  for their matching `pane-crash-*.log`; cleanup must remove the reason record
+  when retention removes the matching crash log
 
 ### 3.5 Namespace State And Lifecycle
 

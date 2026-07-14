@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import shutil
 import sys
+import tempfile
 
 from provider_core.memory_projection import (
     materialize_provider_memory_file,
@@ -94,6 +95,13 @@ class CodexApiAuthority:
     base_url: str
     wire_api: str = 'responses'
     requires_openai_auth: bool = False
+
+
+@dataclass(frozen=True)
+class CodexAuthRefreshResult:
+    refreshed: bool
+    detail: str
+    changed_files: tuple[str, ...] = ()
 
 
 def materialize_codex_home_config(
@@ -279,6 +287,72 @@ def codex_provider_authority_fingerprint(profile) -> str | None:
     }
     encoded = json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(',', ':')).encode('utf-8')
     return hashlib.sha256(encoded).hexdigest()[:16]
+
+
+def refresh_codex_auth_projection(
+    target_home: Path,
+    *,
+    profile=None,
+    source_home: Path | None = None,
+) -> CodexAuthRefreshResult:
+    """Refresh only inherited Codex authentication after a revoked-token crash."""
+    target_home = Path(target_home).expanduser()
+    source_home = Path(source_home).expanduser() if source_home is not None else _system_codex_home()
+    if codex_api_authority(profile) is not None:
+        return CodexAuthRefreshResult(
+            False,
+            'Codex authentication uses explicit API authority; inherited auth was not changed',
+        )
+    if not _inherits_auth(profile):
+        return CodexAuthRefreshResult(
+            False,
+            'Codex provider profile has inherit_auth=false; local auth was preserved',
+        )
+    if _same_path(source_home, target_home):
+        return CodexAuthRefreshResult(False, 'Codex authentication source and managed home are the same path')
+
+    source_auth = source_home / 'auth.json'
+    if not _valid_codex_auth_file(source_auth):
+        return CodexAuthRefreshResult(
+            False,
+            f'Inherited Codex authentication is missing or invalid: {source_auth}',
+        )
+
+    source_config = source_home / 'config.toml'
+    sidecar_names = tuple(
+        name
+        for name in sorted(_codex_auth_sidecar_names(source_home, source_config))
+        if (source_home / name).is_file()
+    )
+    projected_names = ('auth.json', *sidecar_names)
+    changed_names = tuple(
+        name
+        for name in projected_names
+        if _file_sha256(source_home / name) != _file_sha256(target_home / name)
+    )
+    if not changed_names:
+        return CodexAuthRefreshResult(
+            False,
+            'Inherited Codex authentication is unchanged; run `codex login` in the source profile before remounting',
+        )
+
+    try:
+        for name in changed_names:
+            _atomic_sync_secret_file(source_home / name, target_home / name)
+        _write_auth_projection_manifest(
+            source_home,
+            target_home,
+            projected_sidecars=sidecar_names,
+            profile=profile,
+            status='inherited_auth_recovered',
+        )
+    except Exception as exc:
+        return CodexAuthRefreshResult(False, f'Failed to refresh inherited Codex authentication: {exc}')
+    return CodexAuthRefreshResult(
+        True,
+        f'Refreshed inherited Codex authentication files: {", ".join(changed_names)}',
+        changed_files=changed_names,
+    )
 
 
 def _inherits_api(profile) -> bool:
@@ -903,6 +977,31 @@ def _sync_secret_file(source: Path, target: Path) -> None:
         os.chmod(target, 0o600)
     except Exception:
         pass
+
+
+def _valid_codex_auth_file(path: Path) -> bool:
+    try:
+        payload = json.loads(Path(path).read_text(encoding='utf-8'))
+    except Exception:
+        return False
+    return isinstance(payload, dict) and bool(payload)
+
+
+def _atomic_sync_secret_file(source: Path, target: Path) -> None:
+    source = Path(source).expanduser()
+    target = Path(target).expanduser()
+    if _same_path(source, target):
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f'.{target.name}.ccb-auth-', dir=str(target.parent))
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    try:
+        shutil.copy2(source, tmp_path)
+        os.chmod(tmp_path, 0o600)
+        os.replace(tmp_path, target)
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 def _read_auth_projection_manifest(target_home: Path) -> dict[str, object]:
@@ -1863,8 +1962,10 @@ def _render_toml_inline_table(payload: dict[object, object]) -> str:
 
 __all__ = [
     'CodexApiAuthority',
+    'CodexAuthRefreshResult',
     'codex_api_authority',
     'codex_provider_authority_fingerprint',
     'materialize_codex_home_config',
+    'refresh_codex_auth_projection',
     'repair_codex_activity_hooks',
 ]

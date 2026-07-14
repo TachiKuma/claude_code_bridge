@@ -126,8 +126,11 @@ sidecar files referenced by source `config.toml`, such as
 `company-codex-api-key`, `company-codex.config.toml`, or other safe
 auth/key/token filenames at the source Codex home root. These sidecars and the
 `.ccb-auth-projection.json` evidence manifest are secret, agent-local startup
-material; they are refreshed during managed-home materialization, not while a
-running Codex process is hot-swapped.
+material. They are normally refreshed during managed-home materialization. If
+a dead managed Codex pane is classified as `provider_auth_revoked`, recovery
+may refresh only inherited auth files from the stable source Codex home before
+respawning; it must not refresh config, plugins, memory, skills, commands, or
+session authority in that recovery path.
 The managed `CODEX_HOME/AGENTS.md` file is a CCB-generated memory bundle, not user data; it
 combines filtered inheritable source-home `AGENTS.md`, project shared
 `.ccb/ccb_memory.md`, and agent-private `.ccb/agents/<agent>/memory.md` when
@@ -296,6 +299,17 @@ Runtime pane reuse is a separate proof obligation from session-file binding:
 - if the live process identity is missing, unknown, or proves a different/non-resume Codex command without a committed managed in-pane switch, startup must reject that pane as reusable evidence and relaunch through the normal managed start command
 - the persisted `start_cmd` or `codex_start_cmd` is desired launch authority, not proof that the current pane process was launched with that command
 - relaunch after identity mismatch must preserve the agent-scoped `codex_home`, derived `codex_session_root`, and bound `codex_session_id` so ordinary `ccb` restores history while `ccb -n` remains the explicit fresh-start path
+- after a dead pane reports revoked provider auth, recovery may respawn once
+  only when `inherit_auth=true`, the stable source-home `auth.json` is valid,
+  and its auth projection differs from the managed home
+- missing, invalid, same-path, or unchanged source auth must block pane respawn
+  and replacement-pane creation with an actionable error; recovery must not
+  loop on the same revoked credential
+- a blocked dead pane must persist `pane_recovery_block` in the managed session
+  record so heartbeat does not repeatedly capture the same crash or retry the
+  same credential; a successful live pane or a normal remount clears the block
+- `inherit_auth=false` and explicit API authority must preserve their existing
+  agent-local credential boundary and must not be overwritten from global auth
 - when the current explicit agent-local Codex provider authority differs from
   the provider authority recorded for the last managed session, startup must
   skip `resume` and start a fresh Codex conversation inside the same managed

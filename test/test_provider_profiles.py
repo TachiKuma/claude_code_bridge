@@ -112,6 +112,59 @@ def _write_codex_plugin_source(
     )
 
 
+def test_refresh_codex_auth_projection_updates_only_auth_files(tmp_path: Path) -> None:
+    source_home = tmp_path / 'source'
+    target_home = tmp_path / 'target'
+    source_home.mkdir()
+    target_home.mkdir()
+    (source_home / 'auth.json').write_text('{"tokens":{"refresh_token":"fresh"}}\n', encoding='utf-8')
+    (source_home / 'config.toml').write_text(
+        'token_file = "$CODEX_HOME/company-extra-token"\n',
+        encoding='utf-8',
+    )
+    (source_home / 'company-extra-token').write_text('fresh-token\n', encoding='utf-8')
+    (target_home / 'auth.json').write_text('{"tokens":{"refresh_token":"revoked"}}\n', encoding='utf-8')
+    (target_home / 'config.toml').write_text('model = "managed"\n', encoding='utf-8')
+    (target_home / 'company-extra-token').write_text('old-token\n', encoding='utf-8')
+
+    result = codex_home_config.refresh_codex_auth_projection(
+        target_home,
+        source_home=source_home,
+    )
+
+    assert result.refreshed is True
+    assert result.changed_files == ('auth.json', 'company-extra-token')
+    assert (target_home / 'auth.json').read_text(encoding='utf-8') == '{"tokens":{"refresh_token":"fresh"}}\n'
+    assert (target_home / 'company-extra-token').read_text(encoding='utf-8') == 'fresh-token\n'
+    assert (target_home / 'config.toml').read_text(encoding='utf-8') == 'model = "managed"\n'
+    manifest = json.loads((target_home / '.ccb-auth-projection.json').read_text(encoding='utf-8'))
+    assert manifest['status'] == 'inherited_auth_recovered'
+
+
+@pytest.mark.parametrize('source_text', [None, 'not-json\n', '{}\n'])
+def test_refresh_codex_auth_projection_preserves_target_when_source_is_invalid(
+    tmp_path: Path,
+    source_text: str | None,
+) -> None:
+    source_home = tmp_path / 'source'
+    target_home = tmp_path / 'target'
+    source_home.mkdir()
+    target_home.mkdir()
+    target_auth = '{"tokens":{"refresh_token":"local"}}\n'
+    (target_home / 'auth.json').write_text(target_auth, encoding='utf-8')
+    if source_text is not None:
+        (source_home / 'auth.json').write_text(source_text, encoding='utf-8')
+
+    result = codex_home_config.refresh_codex_auth_projection(
+        target_home,
+        source_home=source_home,
+    )
+
+    assert result.refreshed is False
+    assert 'missing or invalid' in result.detail
+    assert (target_home / 'auth.json').read_text(encoding='utf-8') == target_auth
+
+
 def test_materialize_codex_profile_copies_inherited_assets(tmp_path: Path, monkeypatch) -> None:
     project_root = tmp_path / 'repo'
     source_home = tmp_path / 'system-codex-home'

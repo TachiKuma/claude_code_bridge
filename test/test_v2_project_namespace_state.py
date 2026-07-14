@@ -1189,7 +1189,7 @@ def test_project_namespace_reflow_targets_transient_window_by_id(tmp_path: Path)
         assert target.startswith(f'{layout.ccbd_tmux_session_name}:@')
 
 
-def test_project_namespace_controller_uses_silent_server_commands(tmp_path: Path) -> None:
+def test_project_namespace_controller_bootstraps_with_silent_session_before_server_policy(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-silent'
     layout = PathLayout(project_root)
     backend = _FakeTmuxBackend()
@@ -1206,7 +1206,14 @@ def test_project_namespace_controller_uses_silent_server_commands(tmp_path: Path
     new_session_calls = [args for args, _capture in backend.tmux_calls if args[:2] == ['new-session', '-d']]
     assert len(new_session_calls) == 1
     assert new_session_calls[0][-3:] == ['sh', '-lc', 'while :; do sleep 3600; done']
-    assert (['start-server'], True) in backend.tmux_calls
+    assert (['start-server'], True) not in backend.tmux_calls
+    new_session_index = next(index for index, (args, _capture) in enumerate(backend.tmux_calls) if args[:2] == ['new-session', '-d'])
+    policy_index = next(
+        index
+        for index, (args, _capture) in enumerate(backend.tmux_calls)
+        if args == ['set-option', '-g', 'destroy-unattached', 'off']
+    )
+    assert new_session_index < policy_index
     assert (['set-option', '-g', 'destroy-unattached', 'off'], True) in backend.tmux_calls
     assert (['set-option', '-g', 'mouse', 'on'], True) in backend.tmux_calls
     assert (['set-option', '-g', 'history-limit', '50000'], True) in backend.tmux_calls
