@@ -117,7 +117,11 @@ def record_runtime_accelerator_owner(
         socket_path=socket,
     )
     if not _matches_accelerator_process(identity, project_root=root, socket_path=socket):
-        raise RuntimeAcceleratorOwnershipError(f"runtime_accelerator_identity_mismatch:pid={pid}")
+        raise RuntimeAcceleratorOwnershipError(
+            "runtime_accelerator_identity_mismatch:"
+            f"pid={pid}:argv={identity.argv!r}:cwd={identity.cwd}:"
+            f"executable={identity.executable}:start_token={identity.start_token!r}"
+        )
     assert identity.executable is not None
     owner = RuntimeAcceleratorOwner(
         project_id=compute_project_id(root),
