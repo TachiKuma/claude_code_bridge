@@ -539,6 +539,16 @@ def test_planner_rolepack_defines_revision_fenced_replan_and_task_set_closure_mo
     assert 'multiple replan children produce one coherent macro proposal' in combined.lower()
     assert 'never output a complete semantic result for non-pass' in combined.lower()
     assert 'do not modify plantree or send frontdesk messages' in combined.lower()
+    assert 'Its mode must be exactly\n`detailer_replan`' in combined
+    assert 'never emit `task_set_closure` for that activation' in combined
+    assert '"mode": "detailer_replan"' in combined
+    assert '"mode": "task_set_closure"' in combined
+    assert 'task identity and task revision' in combined
+    assert 'supplied Detailer macro-adjustment evidence exactly' in combined
+    assert 'preserve accepted facts' in combined.lower()
+    assert 'complete replacement macro proposal' in combined.lower()
+    assert 'invalidates and replaces old orchestration semantics' in ' '.join(combined.split()).lower()
+    assert 'Use this output contract only when the activation mode is exactly\n`task_set_closure`' not in combined
 
 
 def test_frontdesk_rolepack_reports_validated_closure_without_reinterpreting_result() -> None:
@@ -788,12 +798,30 @@ def test_p1_node_rolepacks_bind_canonical_packet_and_exact_review_tree() -> None
 def test_p1_round_reviewer_is_immaculate_and_rejects_unproven_integration() -> None:
     root = role_root('agentroles.ccb_round_reviewer')
     manifest = load_role_manifest(root)
+    policy = load_role_command_policy(manifest)
     combined = _combined_role_contract('agentroles.ccb_round_reviewer')
     template = (root / 'templates' / 'round-result.md').read_text(encoding='utf-8')
 
     assert manifest.table('activation')['context_lifecycle'] == 'immaculate'
     assert manifest.table('activation')['context_scope'] == 'activation'
+    assert manifest.manifest['permissions']['read_files'] is False
     assert manifest.manifest['permissions']['write_files'] is False
+    assert manifest.manifest['adapters']['ccb']['command_surface'] == 'adapters/ccb/command-surface.toml'
+    assert policy is not None
+    assert policy.mode == 'deny_all_except'
+    assert policy.enforcement == 'required'
+    assert policy.if_unsupported == 'fail_mount'
+    assert policy.generic_shell is False
+    assert policy.generic_ccb is False
+    assert policy.supported_providers == ('codex', 'claude')
+    assert policy.allowed_effects == ('semantic_round_review_reply',)
+    assert policy.allowed == ()
+    assert policy.provider_tools == ()
+    assert claude_permission_allowlist(policy) == ()
+    assert {
+        'shell_exec', 'file_read', 'file_write', 'test_exec', 'generic_ccb',
+        'wait', 'watch', 'ask', 'authority_mutation',
+    } <= set(policy.forbidden_effects)
     assert template.startswith('round result: pass|partial|replan_required|blocked')
     normalized_contract = ' '.join((combined + template).split()).lower()
     for required in (
@@ -837,6 +865,7 @@ def test_p2_task_detailer_has_only_restricted_direct_planner_replan_capability()
     manifest = load_role_manifest(root)
     policy = load_role_command_policy(manifest)
     combined = _combined_role_contract('agentroles.ccb_task_detailer').lower()
+    readme = (root / 'README.md').read_text(encoding='utf-8')
 
     assert manifest.manifest['permissions']['write_files'] is False
     assert policy is not None
@@ -866,6 +895,10 @@ def test_p2_task_detailer_has_only_restricted_direct_planner_replan_capability()
         'do not add `--chain`',
     ):
         assert required in combined
+    assert 'Its only Decision 029 exception is exactly one' in readme
+    assert 'restricted direct silent Planner replan handoff' in readme
+    assert 'arbitrary asks, `--chain`,\nwait/watch, and every other target remain forbidden' in readme
+    assert 'submits asks,' not in readme
 
 
 def test_p1_rolepacks_are_provider_neutral_and_keep_project_config_authority() -> None:

@@ -35,7 +35,7 @@ memory = ["memory.md"]
 skills = ["skills/round-verification"]
 
 [permissions]
-read_files = true
+read_files = false
 write_files = false
 network = false
 secrets = "none"

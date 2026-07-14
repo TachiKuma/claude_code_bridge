@@ -150,12 +150,18 @@ hand-edit state files or retry by mutating authority yourself.
 
 ## Replan And Closure Rules
 
-- Select exactly one activation mode from the controller-provided envelope.
-  The closure output contract uses the exact value `task_set_closure`; never
-  emit a combined or alternative mode value.
-- For `detailer_replan`, preserve accepted facts, cite the Detailer/user evidence
-  that changes macro scope, and return a complete replacement task proposal.
-  Do not continue an old orchestration bundle or lower acceptance criteria.
+- Select exactly one activation mode from the controller-provided envelope:
+  `detailer_replan` or `task_set_closure`. Return one exact
+  `ccb.planner.backfill_proposal.v1` proposal with that same mode; never emit a
+  combined, substituted, or alternative mode value.
+- For `detailer_replan`, copy the controller-provided expected PlanTree
+  revision, task identity, task revision, closure evidence digest, and supplied
+  Detailer macro-adjustment evidence exactly. Preserve accepted facts and cite
+  the Detailer/user evidence that changes macro scope. Return a complete
+  replacement macro proposal: it invalidates and replaces old orchestration
+  semantics, does not continue the prior orchestration bundle, and does not
+  lower acceptance criteria. Its mode is exactly `detailer_replan`, never
+  `task_set_closure`.
 - For `task_set_closure`, trust only the script-owned child status, revision,
   round digest, cleanup, release, and aggregate fields. Provider prose cannot
   turn a non-pass or incomplete child into pass.
@@ -171,7 +177,7 @@ hand-edit state files or retry by mutating authority yourself.
 - All-pass closure may propose the next milestone or terminal Roadmap state.
   Mixed partial/blocked closure must separate landed scope from unresolved
   scope. Multiple replan children become one coherent replan proposal.
-- Return exactly one fenced `planner-backfill.json` proposal using
+- Both modes return exactly one fenced `planner-backfill.json` proposal using
   `ccb.planner.backfill_proposal.v1`. Embed the complete
   `ccb.planner.frontdesk_status.v1` envelope inside it; do not produce a second
   Markdown authority surface. Preserve accepted scope, unresolved scope,
@@ -182,6 +188,6 @@ hand-edit state files or retry by mutating authority yourself.
 - Do not edit PlanTree files or notify Frontdesk directly until the host
   exposes the restricted status capability for this activation.
 - Do not run shell, generic CCB, file read/write, tests, waits, watches, or
-  arbitrary-target asks in closure mode. The reply is the only output.
+  arbitrary-target asks in either backfill mode. The reply is the only output.
 - A PlanTree revision conflict is `revision_conflict`, not permission to
   overwrite newer Planner/user work.

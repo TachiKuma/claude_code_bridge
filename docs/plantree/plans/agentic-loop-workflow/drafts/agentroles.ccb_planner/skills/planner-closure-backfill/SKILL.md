@@ -1,22 +1,47 @@
 ---
 name: planner-closure-backfill
-description: Produce revision-fenced Planner replan or task-set closure proposals and compact Frontdesk status evidence from validated workflow envelopes.
+description: Produce one revision-fenced Planner backfill proposal for either a Detailer replan or task-set closure, with compact Frontdesk status evidence.
 ---
 
 # Planner Closure Backfill
 
-Use this output contract only when the activation mode is exactly
-`task_set_closure`. Initial intake remains owned by `planner-task-packet`.
-Detailer replan input remains a distinct activation contract and must not be
-mixed into this task-set closure proposal.
+Use this output contract only when the controller activation mode is exactly
+one of `detailer_replan` or `task_set_closure`. Initial intake remains owned by
+`planner-task-packet`. Return one proposal for one activation; never combine
+the two modes or substitute one mode for the other.
+
+## Activation Modes
+
+### `detailer_replan`
+
+Use only the controller-provided task identity and task revision, expected
+PlanTree revision, closure evidence digest, accepted facts, and supplied
+Detailer/user macro-adjustment evidence. Copy those authority fields and
+evidence refs exactly; do not read or infer unsupplied state.
+
+Preserve accepted facts. Then return a complete replacement macro proposal for
+the task: it invalidates and replaces the old orchestration semantics rather
+than continuing, replaying, or patching the prior orchestration bundle. Do not
+lower acceptance criteria. The proposal `mode` must be exactly
+`detailer_replan`; it must never masquerade as `task_set_closure`.
+
+### `task_set_closure`
+
+Use only the script-owned child status, revision, round digest, cleanup,
+release, aggregate, and closure envelope. Preserve the task-set aggregate,
+closure, and Frontdesk-status rules below. The proposal `mode` must be exactly
+`task_set_closure`; do not treat a closure as a Detailer replacement proposal.
 
 ## Inputs
 
-- expected PlanTree and task/task-set revisions
+- controller-provided expected PlanTree and task/task-set revisions
 - original intake and Planner task refs
-- validated Detailer macro-impact evidence, or task-set closure envelope
-- child round, release, cleanup, and evidence digests
-- script-owned `closure_ref` with its canonical project-relative closure path
+- for `detailer_replan`: validated Detailer macro-impact and user evidence
+- for `task_set_closure`: validated child round, release, cleanup, aggregate,
+  and closure evidence
+- controller-provided `closure_evidence_digest` and ordered evidence refs
+- for `task_set_closure`: script-owned `closure_ref` with its canonical
+  project-relative closure path
 - current Brief/Roadmap/TODO summary supplied by the host
 
 Do not run shell commands, file reads/searches, tests, builds, CCB commands, or
@@ -35,18 +60,23 @@ Planner decides:
 - what concise status Frontdesk may report to the user.
 
 Planner does not decide whether child evidence, cleanup, release, identity, or
-revision checks passed. Those are script-owned input facts.
+revision checks passed. Those are controller-owned input facts.
 
 ## Output
 
-Return exactly this one fenced section and no alternative authority shape:
+Return exactly this one fenced section and no alternative authority shape. Set
+`mode` to the exact activation value, not a placeholder and not a renamed mode.
+For `detailer_replan`, the JSON line is exactly
+`"mode": "detailer_replan"`. For `task_set_closure`, it is exactly
+`"mode": "task_set_closure"`. The bracketed value in the shape below is a
+documentation selector only and is never a permitted emitted value.
 
 ````markdown
 **planner-backfill.json**
 ```json
 {
   "schema": "ccb.planner.backfill_proposal.v1",
-  "mode": "task_set_closure",
+  "mode": "<detailer_replan|task_set_closure: exact activation mode>",
   "expected_plan_revision": "sha256:<64 lowercase hex>",
   "task_or_task_set_id": "stable-id",
   "task_or_task_set_revision": 1,
@@ -88,30 +118,36 @@ Return exactly this one fenced section and no alternative authority shape:
 ```
 ````
 
+`templates/planner-backfill.json` is a `task_set_closure` exemplar. It does
+not authorize emitting that mode for a `detailer_replan` activation.
+
 ## Rules
 
 - `expected_plan_revision is a digest`: copy the supplied
   `sha256:<64 lowercase hex>` value exactly. Never convert it to a counter,
   infer a newer revision, or repair a stale value in provider prose.
-- Preserve the script-owned `aggregate_result` exactly. The complete mapping is
-  `pass -> closure_complete`, `partial -> closure_partial`,
+- Copy `task_or_task_set_id`, `task_or_task_set_revision`,
+  `closure_evidence_digest`, and the ordered supplied evidence refs exactly.
+  `detailer_replan` uses the supplied task identity and task revision, never a
+  task-set identity or an inferred replacement revision.
+- Preserve the controller-owned `aggregate_result` exactly. The complete
+  mapping is `pass -> closure_complete`, `partial -> closure_partial`,
   `replan_required -> task_set_replanned`, and
-  `blocked -> closure_blocked`. Never output a complete semantic result for
-  non-pass; never output a complete semantic result for non-pass aggregate
-  evidence.
-- Treat `closure_ref` as script-owned input. Copy `closure_ref.path` exactly
-  into proposal `evidence_refs` and the embedded Frontdesk `evidence_refs`.
-  Never rewrite, normalize, infer, or reconstruct that path from provider prose.
-  Preserve validated child refs in their supplied order, append the closure
-  path once, and do not duplicate any ref.
+  `blocked -> closure_blocked`. Never output a complete semantic result for non-pass aggregate evidence.
+- For `task_set_closure`: Treat `closure_ref` as script-owned input. Copy
+  `closure_ref.path` exactly into proposal `evidence_refs` and the embedded
+  Frontdesk `evidence_refs`. Never rewrite, normalize, infer, or reconstruct that path from provider prose. Preserve validated child refs in their
+  supplied order, append the closure path once, and do not duplicate any ref.
 - Derive `accepted_scope`, `unresolved_scope`, `blockers`, `replan_inputs`, and
-  `evidence_refs` from the validated ordered child authority. These are Planner
-  semantics and are not fields in script-owned `ccb.plan.task_set_closure.v1`.
-  Never invent accepted scope or pass from missing/nonterminal evidence. `pass`
-  requires empty unresolved/blocker/replan fields. Every non-pass requires
-  non-empty `unresolved_scope`; `blocked` requires blockers and
-  `replan_required` requires replan inputs.
-- Never omit unresolved required scope from mixed outcomes.
+  `evidence_refs` from validated controller authority. Never invent accepted
+  scope or pass from missing/nonterminal evidence. `pass` requires empty
+  unresolved/blocker/replan fields. Every non-pass requires non-empty
+  `unresolved_scope`; `blocked` requires blockers and `replan_required`
+  requires replan inputs.
+- A `detailer_replan` retains accepted facts but replaces old orchestration
+  semantics. Do not replay, merge with, or claim continuity of the old bundle.
+  A `task_set_closure` retains its aggregate and closure semantics. Never
+  exchange those activation rules.
 - Multiple replan children produce one coherent macro proposal, not multiple
   independent Planner actions.
 - Never overwrite a newer PlanTree revision. Return `revision_conflict` and the

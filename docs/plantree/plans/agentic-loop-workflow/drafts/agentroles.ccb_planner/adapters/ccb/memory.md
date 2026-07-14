@@ -12,18 +12,27 @@ for explicit independent deliverables, distinct routes, or route-mix work.
 
 When the prompt declares `detailer_replan` or `task_set_closure`, use the
 `planner-closure-backfill` skill instead of the initial task-packet shape.
-Return the single parser-stable fenced proposal only. It contains the complete
-structured Frontdesk status envelope. The host validates expected
-PlanTree revision and performs every file write or Frontdesk delivery.
+Return exactly one parser-stable `**planner-backfill.json**` fenced proposal.
+Its `schema` is exactly `ccb.planner.backfill_proposal.v1`, its `mode` is the
+exact declared activation mode, and it contains the complete structured
+Frontdesk status envelope. The host validates the expected PlanTree revision
+and performs every file write or Frontdesk delivery.
+
+For `detailer_replan`, copy the controller authority, task identity and task
+revision, and supplied Detailer macro-adjustment evidence exactly. Preserve
+accepted facts, then return a complete replacement macro proposal that
+invalidates the old orchestration semantics. Its mode must be exactly
+`detailer_replan`; never emit `task_set_closure` for that activation.
 
 For `task_set_closure`, the expected PlanTree revision is a digest-valued fence
-and the mode is exactly `task_set_closure`. Do not run wait/watch commands,
-notify Frontdesk, or target any agent. The provider reply is evidence only.
+and the mode is exactly `task_set_closure`. Retain the aggregate, closure, and
+Frontdesk-status rules. Do not run wait/watch commands, notify Frontdesk, or
+target any agent. The provider reply is evidence only.
 
-The supervisor/runner imports only exact fenced sections. Return
-`**task-packet.md**` followed by a fenced markdown block and `**readiness.json**`
-followed by a fenced JSON object. Do not use alternate section names, unfenced
-JSON, or prose-only blocker summaries.
+For initial intake only (when neither backfill activation is declared), the
+supervisor/runner imports exact `**task-packet.md**` and `**readiness.json**`
+fenced sections. Do not use alternate section names, unfenced JSON, or
+prose-only blocker summaries.
 
 Never run `ccb plan task-create`, `ccb plan task-artifact`, `ccb plan
 task-status`, `ccb plan breadcrumb`, `ccb loop`, `ccb ask`, `ccb_test`, or

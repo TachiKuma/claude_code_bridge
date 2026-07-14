@@ -1533,6 +1533,36 @@ def test_task_detailer_rolepack_forbids_generic_commands_and_allows_only_planner
     assert len(policy.allowed) == 1
 
 
+def test_round_reviewer_rolepack_is_a_readless_reply_only_command_surface() -> None:
+    root = (
+        REPO_ROOT
+        / 'docs'
+        / 'plantree'
+        / 'plans'
+        / 'agentic-loop-workflow'
+        / 'drafts'
+        / 'agentroles.ccb_round_reviewer'
+    )
+    role = load_role_manifest(root)
+    policy = load_role_command_policy(role)
+
+    assert role.table('permissions')['read_files'] is False
+    assert role.table('permissions')['write_files'] is False
+    assert role.table('adapters')['ccb']['command_surface'] == 'adapters/ccb/command-surface.toml'
+    assert policy is not None
+    assert policy.mode == 'deny_all_except'
+    assert policy.enforcement == 'required'
+    assert policy.if_unsupported == 'fail_mount'
+    assert policy.supported_providers == ('codex', 'claude')
+    assert policy.generic_shell is False
+    assert policy.generic_ccb is False
+    assert policy.allowed_effects == ('semantic_round_review_reply',)
+    assert policy.allowed == ()
+    assert {'file_read', 'file_write', 'test_exec', 'ask', 'authority_mutation'} <= set(
+        policy.forbidden_effects
+    )
+
+
 def test_legacy_ccb_store_migrates_to_spec_owned_store(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv('XDG_DATA_HOME', str(tmp_path / 'xdg-data'))
     monkeypatch.setenv('AGENT_ROLES_STORE', str(tmp_path / '.roles'))
