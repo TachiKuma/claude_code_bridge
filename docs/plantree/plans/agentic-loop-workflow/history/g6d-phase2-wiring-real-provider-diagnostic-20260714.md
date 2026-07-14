@@ -1,7 +1,7 @@
 # G6D Phase2 Wiring And Real-Provider Diagnostic
 
 Date: 2026-07-14
-Status: repair landed; broadened regression rerun pending
+Status: repair and broadened regression gate accepted
 Repair commit: `62753d63791f8b644ee6f5f5433fe57070fb2c84`
 
 ## Admission Baseline
@@ -91,8 +91,20 @@ The first broadened Phase2 run at
 is retained as rejected evidence. Its 19 pane/adapter failures used a long
 `XDG_RUNTIME_DIR`; the log contains repeated `AF_UNIX path too long` failures.
 The full loop-capacity, multi-workgroup, task-set, and public auto-runner rows
-in that run passed. A short `/tmp` HOME/XDG/basetemp rerun of the unfiltered
-Phase2 glob is required before accepting the repair gate.
+in that run passed. The short-path rerun at
+`/home/bfly/yunwei/test_ccb2/phase2-short-gate-62753d63-20260714T115135Z`
+then passed all 83 Phase2 tests; it was retained as non-final because `main`
+advanced during execution.
+
+The immutable rerun pinned detached HEAD `123ee43c` at
+`/home/bfly/yunwei/ccb_worktrees/phase2-gate-123ee43c-job_2bc8203d0954`.
+Only PlanTree files differ between `62753d63` and `123ee43c`. Its evidence root
+`/home/bfly/yunwei/test_ccb2/phase2-pinned-gate-123ee43c-20260714T115921Z`
+records `83 passed in 246.93s`, exit zero, fixed HEAD before and after, short
+isolated HOME/XDG/basetemp paths, and zero test-owned residue. This accepts the
+Phase2 wiring regression surface when combined with the same-code loop
+capacity `256 passed`, scheduler `92 passed`, task-set `17 passed`, and public
+auto-runner exit-zero/idle evidence.
 
 ## Cleanup
 
@@ -107,7 +119,8 @@ audit evidence remains under each lane's `evidence/talk2-audit` directory.
 
 ## Claim Boundary
 
-This checkpoint accepts the root cause, minimal repair shape, focused tests,
-and rejected-lane cleanup. It does not yet accept the broadened repair gate,
-fresh C1/C2/C3, weak-model repeatability, installed-candidate behavior,
-publication, or tagging.
+This checkpoint accepts the root cause, minimal repair, broadened Phase2 gate,
+and rejected-lane cleanup. It does not accept Planner provider permission
+enforcement, fresh C1/C2/C3, weak-model repeatability, installed-candidate
+behavior, publication, or tagging. The next blocker is recorded in the G6E
+Planner readless diagnostic.

@@ -42,11 +42,16 @@ Date: 2026-06-24
   [topics/planner-feedback-and-task-set-closure-plan.md](topics/planner-feedback-and-task-set-closure-plan.md).
 - Current-main source acceptance is complete at `2c936a48`. The first fresh
   Codex/Claude lanes then exposed a production Phase2 service-wiring defect;
-  the minimal repair landed as `62753d63`, and its broadened short-path
-  regression rerun is active. Evidence is in
+  the minimal repair landed as `62753d63`, and its pinned short-path regression
+  gate passed all 83 Phase2 tests with zero residue. Evidence is in
   [history/g6d-phase2-wiring-real-provider-diagnostic-20260714.md](history/g6d-phase2-wiring-real-provider-diagnostic-20260714.md).
-  Next are fresh C1/C2/C3 visible lanes, exact weaker-model repetition, and G7
-  installed-candidate gates.
+  The same rejected lanes exposed a P0 Planner permission defect: the readless
+  RolePack retained file-backed skills and both providers exposed forbidden
+  tools. Provider hard enforcement, strict reply parsing, RolePack refreeze,
+  and zero-tool behavior tests now precede fresh C1/C2/C3. See
+  [history/g6e-planner-readless-provider-projection-diagnostic-20260714.md](history/g6e-planner-readless-provider-projection-diagnostic-20260714.md).
+  Exact weaker-model repetition and G7 installed-candidate gates follow only
+  after those fresh lanes pass.
 
 ## Done
 

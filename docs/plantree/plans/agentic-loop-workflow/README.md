@@ -100,6 +100,10 @@ recoverable workflow loops.
   rejected Codex/Claude Frontdesk-to-Planner lanes, the production
   `loop_runner_auto`/Frontdesk service-assembly defect, repair `62753d63`,
   focused regression evidence, and zero-residue cleanup boundary.
+- [history/g6e-planner-readless-provider-projection-diagnostic-20260714.md](history/g6e-planner-readless-provider-projection-diagnostic-20260714.md):
+  accepted Phase2 regression closure, rejected real Planner permission
+  projection, provider/model qualification boundaries, RolePack refreeze
+  requirements, and the next safe admission order.
 - [history/phase1-6-deployment-readiness-p2-frontdesk-pressure-20260708.md](history/phase1-6-deployment-readiness-p2-frontdesk-pressure-20260708.md):
   P2 post-acceptance deployment-readiness evidence for real-project
   frontdesk macro-intake pressure across direct, detail, macro-adjustment, and
