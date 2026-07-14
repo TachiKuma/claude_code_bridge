@@ -86,6 +86,85 @@ def test_submit_ask_rejects_explicit_cross_project_target(
         ask_service.submit_ask(context, command)
 
 
+def test_submit_ask_rejects_unanchored_explicit_project_without_source_test_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = tmp_path / 'target'
+    unanchored_cwd = tmp_path / 'unanchored'
+    project_root.mkdir()
+    unanchored_cwd.mkdir()
+    _write_config(project_root)
+    monkeypatch.delenv('CCB_TEST_ENTRYPOINT', raising=False)
+    monkeypatch.delenv('CCB_SOURCE_ALLOWED_ROOTS', raising=False)
+    monkeypatch.delenv('CCB_TEST_ROOTS', raising=False)
+    command = ParsedAskCommand(project=str(project_root), target='agent1', sender=None, message='hello')
+    context = CliContextBuilder().build(command, cwd=unanchored_cwd, bootstrap_if_missing=False)
+
+    with pytest.raises(ValueError, match='cannot select a CCB project from outside'):
+        ask_service.submit_ask(context, command)
+
+
+def test_submit_ask_allows_unanchored_source_test_explicit_project_from_allowed_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    test_root = tmp_path / 'test-root'
+    project_root = test_root / 'target'
+    unanchored_cwd = test_root / 'unanchored'
+    project_root.mkdir(parents=True)
+    unanchored_cwd.mkdir()
+    _write_config(project_root)
+    monkeypatch.setenv('CCB_TEST_ENTRYPOINT', '1')
+    monkeypatch.setenv('CCB_SOURCE_ALLOWED_ROOTS', str(test_root))
+    command = ParsedAskCommand(
+        project=str(project_root),
+        target='agent1',
+        sender=None,
+        message='hello',
+        callback=True,
+        allowed_chain_targets=('reviewer',),
+        bind_chain_workspace_tree=True,
+    )
+    context = CliContextBuilder().build(command, cwd=unanchored_cwd, bootstrap_if_missing=False)
+    captured: dict[str, object] = {}
+
+    class _FakeClient:
+        def submit(self, envelope) -> dict:
+            captured['project_id'] = envelope.project_id
+            captured['to_agent'] = envelope.to_agent
+            captured['from_actor'] = envelope.from_actor
+            captured['route_options'] = envelope.route_options
+            return {
+                'job_id': 'job_1',
+                'agent_name': envelope.to_agent,
+                'target_name': envelope.to_agent,
+                'status': 'accepted',
+            }
+
+    monkeypatch.setattr(
+        ask_service,
+        'invoke_mounted_daemon',
+        lambda context, allow_restart_stale, request_fn: request_fn(_FakeClient()),
+    )
+
+    summary = ask_service.submit_ask(context, command)
+
+    assert context.project.source == 'explicit'
+    assert context.cwd == unanchored_cwd
+    assert captured == {
+        'project_id': context.project.project_id,
+        'to_agent': 'agent1',
+        'from_actor': 'user',
+        'route_options': {
+            'mode': 'chain',
+            'allowed_chain_targets': ['reviewer'],
+            'bind_chain_workspace_tree': True,
+        },
+    }
+    assert summary.jobs[0]['job_id'] == 'job_1'
+
+
 def test_submit_ask_allows_internal_explicit_project_context_from_outer_project(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
