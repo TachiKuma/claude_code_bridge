@@ -43,6 +43,15 @@
 - **Fake Runtime Rework Chains Are Race-Free**: the full-flow smoke driver
   retries only the brief active-parent transition before reviewer recheck, so
   it cannot consume a valid rework chain before its continuation is ready.
+- **Fake Runtime Chain Windows Tolerate Loaded Runners**: G5 Workers remain
+  active long enough for the external source CLI to submit their reviewer
+  child without turning valid pass and rollback scenarios into node failures.
+- **Schedulers Wait For Callback Completion**: a completed reviewer whose edge
+  is still publishing its parent continuation remains pending until the edge
+  reaches `done`, instead of being misclassified as invalid review evidence.
+- **Restart Replay Isolates Its Recovery Target**: the restart smoke waits for
+  parallel reviewer children to finish before killing ccbd, leaving exactly
+  one persisted in-flight child as the intended resume assertion.
 - **Workflow Cleanup Gates Use Current Public Evidence**: CI runs the
   bundle-first G5 CLI smoke and validates its release, agent, worktree,
   process, and socket cleanup checks instead of the retired one-shot path.

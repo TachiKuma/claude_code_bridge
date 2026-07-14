@@ -769,6 +769,33 @@ def test_scheduler_rejects_completed_worker_without_review_chain(tmp_path: Path)
     assert harness.controller_submissions == [('node-001', 'worker')]
 
 
+def test_scheduler_waits_for_callback_edge_to_finish_before_validating_chain(
+    tmp_path: Path,
+) -> None:
+    scheduler, harness, integration = _scheduler(tmp_path, 1)
+    scheduler.run_once()
+    harness.complete('node-001', 'worker')
+    scheduler.run_once()
+    harness.complete('node-001', 'reviewer', reply='status: pass')
+    root = harness.jobs[('node-001', 'worker')]
+    root['chain_evidence'][0]['state'] = 'continuation_submitted'
+
+    pending = scheduler.run_once()
+
+    node = pending['nodes']['node-001']
+    assert node['status'] == 'worker_pending'
+    assert node['worker']['pending_source'] == 'worker_review_chain_pending'
+    assert node['worker']['terminal'] is False
+    assert node['failure'] is None
+    assert ('finalize_node', 'node-001') not in integration.calls
+
+    root['chain_evidence'][0]['state'] = 'done'
+    completed = scheduler.run_once()
+
+    assert completed['nodes']['node-001']['status'] == 'integrated'
+    assert ('finalize_node', 'node-001') in integration.calls
+
+
 @pytest.mark.parametrize(
     ('reply', 'reason'),
     [

@@ -809,7 +809,7 @@ def _write_task_inputs(
             'count': count,
             'shape': shape,
             'selected_node': 'node-001',
-            'restart_latency_ms': 3000 if scenario == 'restart_replay_pass' else 0,
+            'restart_latency_ms': 10000 if scenario == 'restart_replay_pass' else 0,
         },
         separators=(',', ':'),
     )
@@ -896,6 +896,8 @@ def _run_until_terminal(
     label_prefix: str = 'loop_runner_auto',
 ) -> list[dict[str, Any]]:
     results = []
+    last_task_status = ''
+    last_scheduler_status = ''
     for attempt in range(1, 97):
         runner = _run_logged(
             command_log,
@@ -930,13 +932,24 @@ def _run_until_terminal(
             timeout_s=timeout_s,
             label=f'{label_prefix}_task_show_{attempt}',
         )
+        last_task_status = str(_task_record(shown).get('status') or '')
+        loop_id = _find_loop_id(project_root, TASK_ID)
+        if loop_id:
+            state = _read_json(
+                project_root / '.ccb' / 'runtime' / 'loops' / loop_id / 'workgroup_scheduler_state.json'
+            )
+            last_scheduler_status = str(state.get('status') or '')
         if (
-            _task_record(shown).get('status') in TERMINAL_TASK_STATUSES
+            last_task_status in TERMINAL_TASK_STATUSES
             and _terminal_release_complete(project_root)
         ):
             return results
         time.sleep(0.1)
-    raise SmokeFailure('loop runner did not reach terminal task authority in 96 activations')
+    raise SmokeFailure(
+        'loop runner did not reach terminal task authority in 96 activations: '
+        f'task_status={last_task_status or "missing"}, '
+        f'scheduler_status={last_scheduler_status or "missing"}'
+    )
 
 
 def _submit_pending_worker_reviews(
@@ -1208,6 +1221,11 @@ def _run_restart_replay(
         time.sleep(0.25)
     if pending_job is None or pending_edge is None:
         raise SmokeFailure('restart replay did not establish a durable pending reviewer job')
+    _wait_for_restart_target_isolation(
+        project_root,
+        pending_job_id=str(pending_job.get('job_id') or ''),
+        timeout_s=5.0,
+    )
 
     lease_path = project_root / '.ccb' / 'ccbd' / 'lease.json'
     lease_before = _read_json(lease_path)
@@ -1261,6 +1279,49 @@ def _run_restart_replay(
         'daemon_pid_after': daemon_after,
         'restart_returncode': restarted['returncode'],
     }
+
+
+def _wait_for_restart_target_isolation(
+    project_root: Path,
+    *,
+    pending_job_id: str,
+    timeout_s: float,
+) -> None:
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        loop_id = _find_loop_id(project_root, TASK_ID)
+        state = _read_json(
+            project_root / '.ccb' / 'runtime' / 'loops' / loop_id / 'workgroup_scheduler_state.json'
+        )
+        nodes = _mapping(state.get('nodes'))
+        child_job_ids: list[str] = []
+        for node in nodes.values():
+            reviewer = str(_mapping(node).get('reviewer_agent') or '')
+            if not reviewer:
+                continue
+            child_job_ids.extend(
+                str(edge.get('child_job_id') or '')
+                for edge in _review_edges(project_root, reviewer=reviewer)
+                if str(edge.get('child_job_id') or '')
+            )
+        jobs = _collect_jobs(project_root)
+        pending = jobs.get(pending_job_id, {})
+        others = [job_id for job_id in child_job_ids if job_id != pending_job_id]
+        if (
+            len(set(child_job_ids)) == len(nodes)
+            and str(pending.get('status') or '') not in TERMINAL_JOB_STATUSES
+            and all(
+                str(jobs.get(job_id, {}).get('status') or '') in TERMINAL_JOB_STATUSES
+                for job_id in others
+            )
+        ):
+            return
+        if str(pending.get('status') or '') in TERMINAL_JOB_STATUSES:
+            break
+        time.sleep(0.05)
+    raise SmokeFailure(
+        'restart replay could not isolate one resumable reviewer job before daemon termination'
+    )
 
 
 def _record_script_action(

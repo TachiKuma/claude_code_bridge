@@ -36,6 +36,9 @@ from .fake_runtime import (
 )
 
 
+G5_EXTERNAL_CHAIN_WINDOW_SECONDS = 3.0
+
+
 class FakeProviderAdapter:
     def __init__(
         self,
@@ -1453,11 +1456,11 @@ def _g5_scenario_directive(
         )
     if purpose == 'worker':
         # G5 drives the real CCB ask --chain boundary from outside the fake
-        # provider. Keep the Worker active long enough for that tool action;
-        # real providers execute it within their own turn.
+        # provider. Keep the Worker active long enough to start a second source
+        # CLI even on loaded CI runners; real providers execute it in-turn.
         return replace(
             directive,
-            latency_seconds=max(1.0, directive.latency_seconds),
+            latency_seconds=max(G5_EXTERNAL_CHAIN_WINDOW_SECONDS, directive.latency_seconds),
             script=(),
         )
     if (
