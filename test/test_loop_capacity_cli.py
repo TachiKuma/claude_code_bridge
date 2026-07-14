@@ -7556,13 +7556,10 @@ Design:
 
 External approval import detail is now scoped to a small lab-local Python validator plus focused unittest coverage.
 
-**detail-packet.md**
-
-Task: `clarify-external-approval-import-feature-20260707041234`
-
-Readiness recommendation: `local_detail_ready`
-
-Recommended route: `direct_execution`
+detail-packet.manifest.json:
+```json
+{"schema":"ccb.detail_packet_manifest.v1","detail_result":"local_detail_ready","readiness":"detail_ready","global_impact":"none"}
+```
 """,
     )
 
@@ -13107,10 +13104,9 @@ Resolved.
 Resolved.
 ```
 
-## Artifact: `detail-packet.md`
-```markdown
-# Detail Packet
-detail_readiness_recommendation: detail_ready
+detail-packet.manifest.json:
+```json
+{"schema":"ccb.detail_packet_manifest.v1","detail_result":"local_detail_ready","readiness":"detail_ready","global_impact":"none"}
 ```
 """,
     )
