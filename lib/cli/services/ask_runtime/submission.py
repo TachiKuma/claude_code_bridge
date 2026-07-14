@@ -95,6 +95,7 @@ def submit_ask(
         message_body,
         owner_id=f'{normalized_sender}-to-{normalized_target}',
         force=bool(getattr(command, 'artifact_request', False)),
+        inline=bool(getattr(command, 'inline_request', False)),
     )
     payload = invoke_mounted_daemon_fn(
         context,
@@ -126,10 +127,21 @@ def _route_options(command) -> dict[str, object]:
         options['artifact_request'] = True
     if bool(getattr(command, 'artifact_reply', False)):
         options['artifact_reply'] = True
+    allowed_chain_targets = tuple(
+        str(value or '').strip().lower()
+        for value in (getattr(command, 'allowed_chain_targets', ()) or ())
+        if str(value or '').strip()
+    )
+    if allowed_chain_targets:
+        options['allowed_chain_targets'] = list(dict.fromkeys(allowed_chain_targets))
+    if bool(getattr(command, 'bind_chain_workspace_tree', False)):
+        options['bind_chain_workspace_tree'] = True
     return options
 
 
-def _artifact_request_body(layout, message_body: str, *, owner_id: str, force: bool):
+def _artifact_request_body(layout, message_body: str, *, owner_id: str, force: bool, inline: bool = False):
+    if inline:
+        return message_body, None
     if force:
         artifact = write_text_artifact(
             layout,

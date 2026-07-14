@@ -550,6 +550,104 @@ def test_submit_ask_maps_artifact_route_options(monkeypatch: pytest.MonkeyPatch,
     assert captured['route_options'] == {'mode': 'chain', 'artifact_request': True, 'artifact_reply': True}
 
 
+def test_submit_ask_keeps_inline_request_body_at_daemon_submission(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / 'repo-ask-inline-request'
+    project_root.mkdir()
+    context = _build_context(project_root)
+    captured: dict[str, object] = {}
+
+    class _FakeClient:
+        def submit(self, envelope) -> dict:
+            captured['body'] = envelope.body
+            captured['body_artifact'] = envelope.body_artifact
+            return {
+                'job_id': 'job_1',
+                'agent_name': 'agent2',
+                'target_name': 'agent2',
+                'status': 'accepted',
+            }
+
+    monkeypatch.setattr(
+        ask_service,
+        'load_project_config',
+        lambda project_root: SimpleNamespace(config=SimpleNamespace(agents={'agent1': {}, 'agent2': {}})),
+    )
+    monkeypatch.setattr(ask_service, 'resolve_ask_sender', lambda context, sender: 'agent1')
+    monkeypatch.setattr(
+        ask_service,
+        'invoke_mounted_daemon',
+        lambda context, allow_restart_stale, request_fn: request_fn(_FakeClient()),
+    )
+
+    summary = ask_service.submit_ask(
+        context,
+        ParsedAskCommand(
+            project=None,
+            target='agent2',
+            sender=None,
+            message='inline task',
+            artifact_request=True,
+            inline_request=True,
+        ),
+    )
+
+    assert summary.jobs[0]['job_id'] == 'job_1'
+    assert str(captured['body']).startswith('inline task')
+    assert captured['body_artifact'] is None
+
+
+def test_submit_ask_maps_restricted_chain_workspace_binding(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-ask-restricted-chain'
+    project_root.mkdir()
+    context = _build_context(project_root)
+    captured: dict[str, object] = {}
+
+    class _FakeClient:
+        def submit(self, envelope) -> dict:
+            captured['route_options'] = envelope.route_options
+            return {
+                'job_id': 'job_1',
+                'agent_name': 'agent2',
+                'target_name': 'agent2',
+                'status': 'accepted',
+            }
+
+    monkeypatch.setattr(
+        ask_service,
+        'load_project_config',
+        lambda project_root: SimpleNamespace(config=SimpleNamespace(agents={'agent1': {}, 'agent2': {}})),
+    )
+    monkeypatch.setattr(ask_service, 'resolve_ask_sender', lambda context, sender: 'agent1')
+    monkeypatch.setattr(
+        ask_service,
+        'invoke_mounted_daemon',
+        lambda context, allow_restart_stale, request_fn: request_fn(_FakeClient()),
+    )
+
+    summary = ask_service.submit_ask(
+        context,
+        ParsedAskCommand(
+            project=None,
+            target='agent2',
+            sender=None,
+            message='review task',
+            callback=True,
+            allowed_chain_targets=('Reviewer', 'reviewer', 'other-reviewer', 'Reviewer'),
+            bind_chain_workspace_tree=True,
+        ),
+    )
+
+    assert summary.jobs[0]['job_id'] == 'job_1'
+    assert captured['route_options'] == {
+        'mode': 'chain',
+        'allowed_chain_targets': ['reviewer', 'other-reviewer'],
+        'bind_chain_workspace_tree': True,
+    }
+
+
 def test_submit_ask_spills_large_body_before_daemon_submit(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-ask-large-body'
     project_root.mkdir()
