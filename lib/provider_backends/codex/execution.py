@@ -26,6 +26,7 @@ from .session_runtime.follow_policy import codex_session_root_path, should_follo
 
 class CodexProviderAdapter:
     provider = 'codex'
+    restart_resume_supported = True
     completion_reliability_policy = CompletionReliabilityPolicy(
         provider='codex',
         primary_authority='protocol_log',

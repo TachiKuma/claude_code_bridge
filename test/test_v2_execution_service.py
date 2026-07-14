@@ -79,6 +79,17 @@ def _runtime_context(tmp_path: Path) -> ProviderRuntimeContext:
     )
 
 
+def _restored_runtime_context(tmp_path: Path) -> ProviderRuntimeContext:
+    return ProviderRuntimeContext(
+        agent_name='agent1',
+        workspace_path=str(tmp_path),
+        backend_type='pane-backed',
+        runtime_ref='codex:agent1:attached',
+        session_ref='session:agent1',
+        runtime_health='restored',
+    )
+
+
 def test_execution_service_completes_fake_provider_jobs() -> None:
     ticks = iter([
         '2026-03-18T00:00:00Z',
@@ -1221,7 +1232,7 @@ def test_execution_service_claude_adapter_can_resume_after_restart(monkeypatch: 
     assert persisted.submission.runtime_state['state']['carry'] == b''
 
     restarted = ExecutionService(build_default_execution_registry(), clock=lambda: '2026-03-18T00:00:05Z', state_store=state_store)
-    restored = restarted.restore(job, runtime_context=_runtime_context(tmp_path))
+    restored = restarted.restore(job, runtime_context=_restored_runtime_context(tmp_path))
     assert restored.restored is True
 
     update = restarted.poll()[0]
@@ -1294,7 +1305,7 @@ def test_execution_service_claude_persists_before_ready_wait_and_resumes_prompt_
     assert pane_reads == []
 
     restarted = ExecutionService(build_default_execution_registry(), clock=lambda: '2026-03-18T00:00:01Z', state_store=state_store)
-    restored = restarted.restore(job, runtime_context=_runtime_context(tmp_path))
+    restored = restarted.restore(job, runtime_context=_restored_runtime_context(tmp_path))
     assert restored.restored is True
 
     assert restarted.poll() == ()
@@ -1925,7 +1936,7 @@ def test_execution_service_codex_adapter_can_resume_after_restart(monkeypatch: p
     assert str(persisted.submission.runtime_state['state']['log_path']).endswith('codex-session.jsonl')
 
     restarted = ExecutionService(build_default_execution_registry(), clock=lambda: '2026-03-18T00:00:05Z', state_store=state_store)
-    restored = restarted.restore(job, runtime_context=_runtime_context(tmp_path))
+    restored = restarted.restore(job, runtime_context=_restored_runtime_context(tmp_path))
     assert restored.restored is True
 
     update = restarted.poll()[0]
