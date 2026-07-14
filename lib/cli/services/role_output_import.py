@@ -447,6 +447,12 @@ def _consume_planner(
     activation: dict[str, object] | None,
 ) -> dict[str, object]:
     job_id = str(snapshot.get('job_id') or '')
+    activation_error = _detailer_replan_activation_error(activation, job_id=job_id)
+    if activation_error is not None:
+        return _blocked_payload(
+            context, job_id=job_id, agent_name=str(snapshot.get('agent_name') or ''),
+            reason='detailer_replan_activation_invalid', evidence={'error': activation_error},
+        )
     planner_contract = _planner_contract_from_activation(activation, reply=reply)
     parsed = _parse_planner_reply_for_contract(reply, planner_contract=planner_contract)
     if parsed.get('status') != 'ok':
@@ -2505,8 +2511,9 @@ def _consume_detailer_replan_planner_backfill(context, deps, *, snapshot, reply:
     consume the strict planner-backfill section authenticated by its activation.
     """
     job_id = str(snapshot.get('job_id') or '')
-    if not isinstance(activation, dict):
-        return _blocked_payload(context, job_id=job_id, agent_name='planner', reason='detailer_replan_activation_missing', evidence={})
+    activation_error = _detailer_replan_activation_error(activation, job_id=job_id)
+    if activation_error is not None:
+        return _blocked_payload(context, job_id=job_id, agent_name='planner', reason='detailer_replan_activation_invalid', evidence={'error': activation_error})
     authority = activation.get('planner_authority')
     if not isinstance(authority, dict):
         return _blocked_payload(context, job_id=job_id, agent_name='planner', reason='detailer_replan_authority_missing', evidence={})
@@ -3932,10 +3939,55 @@ def _iter_activation_records(context):
 
 
 def _activation_for_job(context, job_id: str) -> dict[str, object] | None:
+    matches = []
     for _path, activation in _iter_activation_records(context):
         ask = activation.get('ask') if isinstance(activation.get('ask'), dict) else {}
         if str(ask.get('job_id') or '').strip() == job_id:
-            return activation
+            matches.append(activation)
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        return {'_activation_error': 'duplicate managed activations for Planner job'}
+    return None
+
+
+def _detailer_replan_activation_error(activation: dict[str, object] | None, *, job_id: str) -> str | None:
+    if not isinstance(activation, dict):
+        return None
+    if '_activation_error' in activation:
+        return str(activation['_activation_error'])
+    record_type = str(activation.get('record_type') or '')
+    if record_type != 'ccb_loop_detailer_planner_replan_activation':
+        if activation.get('planner_contract') == _PLANNER_CONTRACT_DETAILER_REPLAN:
+            return 'Detailer replan activation record type invalid'
+        return None
+    required = {
+        'schema_version', 'record_type', 'activation_id', 'status', 'target', 'task_id', 'task_revision',
+        'source_task_revision', 'plan_slug', 'planner_contract', 'reason_for_activation', 'source_job',
+        'source_replan_request', 'planner_authority', 'ask', 'auto_runner',
+    }
+    # auto_runner is written after submission; its absence is valid only before import starts.
+    if set(activation) - {'auto_runner'} != required - {'auto_runner'}:
+        return 'Detailer replan activation fields invalid'
+    ask = activation.get('ask') if isinstance(activation.get('ask'), dict) else {}
+    source = activation.get('source_replan_request') if isinstance(activation.get('source_replan_request'), dict) else {}
+    authority = activation.get('planner_authority') if isinstance(activation.get('planner_authority'), dict) else {}
+    if (
+        activation.get('schema_version') != 1 or activation.get('target') != 'planner'
+        or activation.get('planner_contract') != _PLANNER_CONTRACT_DETAILER_REPLAN
+        or str(ask.get('target') or '') != 'planner' or str(ask.get('job_id') or '') != job_id
+        or not str(activation.get('task_id') or '') or not isinstance(activation.get('task_revision'), int)
+        or authority.get('task_id') != activation.get('task_id')
+        or authority.get('task_revision') != activation.get('task_revision')
+        or authority.get('plan_slug') != activation.get('plan_slug')
+    ):
+        return 'Detailer replan activation binding invalid'
+    body = source.get('source_request_body')
+    digest = source.get('source_request_body_sha256')
+    if not isinstance(body, str) or digest != hashlib.sha256(body.encode('utf-8')).hexdigest():
+        return 'Detailer replan raw request binding invalid'
+    if authority.get('request_identity') != source.get('request_identity') or authority.get('detail_digest') != source.get('detail_digest') or authority.get('macro_impact_digest') != source.get('macro_impact_digest'):
+        return 'Detailer replan authority/source binding invalid'
     return None
 
 

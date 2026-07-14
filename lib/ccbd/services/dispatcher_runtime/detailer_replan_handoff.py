@@ -149,7 +149,7 @@ def _prepare(
     existing = _read_json_optional(intent_path)
     body_sha256 = hashlib.sha256(request.body.encode('utf-8')).hexdigest()
     if existing is not None:
-        _validate_existing_intent(dispatcher, existing, payload=payload)
+        _validate_existing_intent(dispatcher, existing, payload=payload, request=request)
         intent = existing
     else:
         intent = {
@@ -242,7 +242,7 @@ def _prepare(
         activation_path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_json(activation_path, activation)
     else:
-        _validate_existing_activation(dispatcher, activation, payload=payload, accepted_revision=accepted_revision)
+        _validate_existing_activation(dispatcher, activation, payload=payload, accepted_revision=accepted_revision, request=request)
     intent = dict(intent)
     intent['status'] = 'authority_accepted'
     intent['accepted_task_revision'] = accepted_revision
@@ -504,7 +504,7 @@ def _planner_request(request: MessageEnvelope, activation: Mapping[str, object])
     )
 
 
-def _validate_existing_intent(dispatcher, intent: Mapping[str, object], *, payload: Mapping[str, object]) -> None:
+def _validate_existing_intent(dispatcher, intent: Mapping[str, object], *, payload: Mapping[str, object], request: MessageEnvelope) -> None:
     for key in (
         'request_identity',
         'task_id',
@@ -516,6 +516,12 @@ def _validate_existing_intent(dispatcher, intent: Mapping[str, object], *, paylo
             raise dispatcher._dispatch_error('Detailer replan request identity conflict')
     if intent.get('source_task_revision') != payload.get('task_revision'):
         raise dispatcher._dispatch_error('Detailer replan request identity conflict')
+    request_record = intent.get('request') if isinstance(intent.get('request'), Mapping) else {}
+    if (
+        request_record.get('body') != request.body
+        or intent.get('request_body_sha256') != hashlib.sha256(request.body.encode('utf-8')).hexdigest()
+    ):
+        raise dispatcher._dispatch_error('Detailer replan raw request identity conflict')
 
 
 def _validate_existing_activation(
@@ -524,6 +530,7 @@ def _validate_existing_activation(
     *,
     payload: Mapping[str, object],
     accepted_revision: int,
+    request: MessageEnvelope,
 ) -> None:
     source = activation.get('source_replan_request')
     if not isinstance(source, Mapping):
@@ -534,6 +541,8 @@ def _validate_existing_activation(
         or source.get('request_identity') != payload['request_identity']
         or source.get('detail_digest') != payload['detail_digest']
         or source.get('macro_impact_digest') != payload['macro_impact_digest']
+        or source.get('source_request_body') != request.body
+        or source.get('source_request_body_sha256') != hashlib.sha256(request.body.encode('utf-8')).hexdigest()
     ):
         raise dispatcher._dispatch_error('Detailer replan activation identity conflict')
 
