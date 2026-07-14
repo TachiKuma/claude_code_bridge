@@ -163,6 +163,33 @@ def test_recorded_owner_waits_through_pre_exec_identity(monkeypatch, tmp_path: P
     assert owner.executable == Path("/opt/ccb/bin/ccb-runtime-accelerator")
 
 
+def test_recorded_owner_accepts_canonical_socket_alias_in_process_argv(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    runtime_root = tmp_path / "private-tmp"
+    runtime_root.mkdir()
+    socket_alias_root = tmp_path / "tmp"
+    socket_alias_root.symlink_to(runtime_root, target_is_directory=True)
+    socket_argument = socket_alias_root / "accelerator.sock"
+    socket_path = socket_argument.resolve()
+    identity = _identity(
+        project_root.resolve(),
+        socket_path,
+        argv=(
+            "/opt/ccb/bin/ccb-runtime-accelerator",
+            "serve",
+            "--socket",
+            str(socket_argument),
+        ),
+    )
+    monkeypatch.setattr("runtime_accelerator.ownership._wait_for_process_identity", lambda pid: identity)
+
+    owner = record_runtime_accelerator_owner(project_root, socket_path=socket_argument, pid=321)
+
+    assert owner.socket_path == socket_path
+    assert owner == load_runtime_accelerator_owner(project_root)
+
+
 def test_recorded_owner_persistent_lookalike_still_fails_closed(monkeypatch, tmp_path: Path) -> None:
     project_root = tmp_path / "project"
     project_root.mkdir()

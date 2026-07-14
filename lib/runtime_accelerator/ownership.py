@@ -391,7 +391,7 @@ def _matches_accelerator_process(
 def _argv_matches_accelerator(argv: tuple[str, ...], *, socket_path: Path) -> bool:
     if len(argv) != 4 or not _is_accelerator_executable(Path(argv[0])):
         return False
-    return argv[1:] == ("serve", "--socket", str(socket_path))
+    return argv[1:3] == ("serve", "--socket") and _resolved_path(argv[3]) == socket_path
 
 
 def _is_accelerator_executable(path: Path) -> bool:

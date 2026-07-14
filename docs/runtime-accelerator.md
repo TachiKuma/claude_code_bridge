@@ -9,6 +9,8 @@ When ccbd starts the sidecar, it records exact PID, cwd, argv, executable,
 socket, and process-start-token ownership. Linux resolves that evidence through
 `/proc`; macOS uses `ps` plus the executable and cwd mappings reported by
 `lsof` while retaining the same fail-closed identity checks.
+Socket arguments are compared by canonical path so platform aliases such as
+macOS `/tmp` and `/private/tmp` identify the same owned Unix socket.
 
 ## Python/Rust switch controls
 
