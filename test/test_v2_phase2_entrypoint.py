@@ -3001,11 +3001,16 @@ def test_ccb_codex_real_adapter_blackbox_watch_chain_without_done_marker(monkeyp
 
 
 @pytest.mark.provider_blackbox
-def test_ccb_codex_real_adapter_recovers_after_ccbd_restart(monkeypatch, tmp_path: Path) -> None:
+def test_ccb_codex_real_adapter_recovers_after_ccbd_restart(
+    monkeypatch,
+    tmp_path: Path,
+    phase2_runtime_owner,
+) -> None:
     from provider_execution import codex as codex_adapter_module
 
     fixed_req_id = 'job_c0de12'
     project_root = tmp_path / 'repo-codex-resume'
+    phase2_runtime_owner.track(project_root, in_process=True)
     _write(project_root / '.ccb' / 'ccb.config', _single_agent_config_text('codex'))
     _write(
         project_root / '.ccb' / '.codex-session',
@@ -4151,12 +4156,15 @@ def test_ccb_two_named_opencode_agents_concurrent_ask_isolated(
 
 @pytest.mark.provider_blackbox
 def test_ccb_gemini_real_adapter_recovers_after_ccbd_restart_and_rotate_clears_stale_preview(
-    monkeypatch, tmp_path: Path
+    monkeypatch,
+    tmp_path: Path,
+    phase2_runtime_owner,
 ) -> None:
     from provider_execution import gemini as gemini_adapter_module
 
     fixed_req_id = 'job_6e1101'
     project_root = tmp_path / 'grr'
+    phase2_runtime_owner.track(project_root, in_process=True)
     old_session_path = str(tmp_path / 'gso.json')
     new_session_path = str(tmp_path / 'gsn.json')
     _write(project_root / '.ccb' / 'ccb.config', _single_agent_config_text('gemini'))
@@ -4627,11 +4635,16 @@ def test_ccb_claude_real_adapter_blackbox_watch_chain_without_done_marker(monkey
 
 
 @pytest.mark.provider_blackbox
-def test_ccb_claude_real_adapter_recovers_after_ccbd_restart(monkeypatch, tmp_path: Path) -> None:
+def test_ccb_claude_real_adapter_recovers_after_ccbd_restart(
+    monkeypatch,
+    tmp_path: Path,
+    phase2_runtime_owner,
+) -> None:
     from provider_execution import claude as claude_adapter_module
 
     fixed_req_id = 'job_ca1de3'
     project_root = tmp_path / 'repo-claude-resume'
+    phase2_runtime_owner.track(project_root, in_process=True)
     _write(project_root / '.ccb' / 'ccb.config', _single_agent_config_text('claude'))
     _write(
         project_root / '.ccb' / '.claude-demo-session',
@@ -4917,12 +4930,15 @@ def test_ccb_claude_real_adapter_blackbox_rotate_and_subagent_only_new_main_boun
 
 @pytest.mark.provider_blackbox
 def test_ccb_claude_real_adapter_recovers_after_ccbd_restart_rotate_and_subagent_only_new_main_boundary_completes(
-    monkeypatch, tmp_path: Path
+    monkeypatch,
+    tmp_path: Path,
+    phase2_runtime_owner,
 ) -> None:
     from provider_execution import claude as claude_adapter_module
 
     fixed_req_id = 'job_ca1de5'
     project_root = tmp_path / 'crsr'
+    phase2_runtime_owner.track(project_root, in_process=True)
     old_session_path = str(tmp_path / 'rcso.jsonl')
     new_session_path = str(tmp_path / 'rcsn.jsonl')
     _write(project_root / '.ccb' / 'ccb.config', _single_agent_config_text('claude'))
@@ -5542,11 +5558,16 @@ def test_ccb_gemini_real_adapter_blackbox_clears_stale_reply_preview_after_rotat
 
 
 @pytest.mark.provider_blackbox
-def test_ccb_gemini_real_adapter_recovers_after_ccbd_restart(monkeypatch, tmp_path: Path) -> None:
+def test_ccb_gemini_real_adapter_recovers_after_ccbd_restart(
+    monkeypatch,
+    tmp_path: Path,
+    phase2_runtime_owner,
+) -> None:
     from provider_execution import gemini as gemini_adapter_module
 
     fixed_req_id = 'job_6e1106'
     project_root = tmp_path / 'repo-gemini-resume'
+    phase2_runtime_owner.track(project_root, in_process=True)
     _write(project_root / '.ccb' / 'ccb.config', _single_agent_config_text('gemini'))
     _write(
         project_root / '.ccb' / '.gemini-session',
@@ -5685,12 +5706,15 @@ def test_ccb_gemini_real_adapter_recovers_after_ccbd_restart(monkeypatch, tmp_pa
 
 @pytest.mark.provider_blackbox
 def test_ccb_gemini_real_adapter_recovers_after_ccbd_restart_and_waits_for_post_restart_mutation_settle(
-    monkeypatch, tmp_path: Path
+    monkeypatch,
+    tmp_path: Path,
+    phase2_runtime_owner,
 ) -> None:
     from provider_execution import gemini as gemini_adapter_module
 
     fixed_req_id = 'job_6e1107'
     project_root = tmp_path / 'grm'
+    phase2_runtime_owner.track(project_root, in_process=True)
     session_path = str(tmp_path / 'grm.json')
     _write(project_root / '.ccb' / 'ccb.config', _single_agent_config_text('gemini'))
     _write(
@@ -5857,12 +5881,15 @@ def test_ccb_gemini_real_adapter_recovers_after_ccbd_restart_and_waits_for_post_
 
 @pytest.mark.provider_blackbox
 def test_ccb_gemini_real_adapter_recovers_after_restart_rotate_and_waits_for_new_session_mutation_settle(
-    monkeypatch, tmp_path: Path
+    monkeypatch,
+    tmp_path: Path,
+    phase2_runtime_owner,
 ) -> None:
     from provider_execution import gemini as gemini_adapter_module
 
     fixed_req_id = 'job_6e1108'
     project_root = tmp_path / 'grrm'
+    phase2_runtime_owner.track(project_root, in_process=True)
     old_session_path = str(tmp_path / 'grrmo.json')
     new_session_path = str(tmp_path / 'grrmn.json')
     _write(project_root / '.ccb' / 'ccb.config', _single_agent_config_text('gemini'))

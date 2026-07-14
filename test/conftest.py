@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -112,7 +113,10 @@ class _Phase2RuntimeOwner:
                 failures.append(
                     f'{project_root}: rc={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r}'
                 )
-        residue = _wait_for_process_residue(self.tmp_root, timeout=3.0)
+        residue = [
+            *_wait_for_process_residue(self.tmp_root, timeout=3.0),
+            *_wait_for_socket_residue(self.tmp_root, timeout=3.0),
+        ]
         if failures or residue:
             raise AssertionError(
                 'phase2 test-owned runtime cleanup failed:\n' + '\n'.join([*failures, *residue])
@@ -183,6 +187,37 @@ def _process_lines_containing(path: Path) -> list[str]:
         if marker in line or (cwd is not None and (cwd == root or root in cwd.parents)):
             residue.append(f'{line.strip()} cwd={cwd or "unavailable"}')
     return residue
+
+
+def _wait_for_socket_residue(tmp_root: Path, *, timeout: float) -> list[str]:
+    deadline = time.time() + timeout
+    residue: list[str] = []
+    while time.time() < deadline:
+        residue = _listening_socket_lines_containing(tmp_root)
+        if not residue:
+            return []
+        time.sleep(0.05)
+    return residue
+
+
+def _listening_socket_lines_containing(path: Path) -> list[str]:
+    if shutil.which('ss') is None:
+        return []
+    result = subprocess.run(
+        ['ss', '-xlpn'],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise AssertionError(f'failed to inspect test-owned listening sockets: {result.stderr}')
+    marker = str(path.resolve())
+    return [
+        f'listening_socket: {line.strip()}'
+        for line in result.stdout.splitlines()
+        if marker in line
+    ]
 
 
 def _process_cwd(pid: int) -> Path | None:
