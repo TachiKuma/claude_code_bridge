@@ -2680,6 +2680,105 @@ void main() {
     );
   });
 
+  testWidgets('paired Tab quick key uploads and queues image attachment', (
+    tester,
+  ) async {
+    await setTestSurfaceSize(tester, const Size(390, 844));
+
+    final originalPicker = FilePickerPlatform.instance;
+    final tempDir = Directory.systemTemp.createTempSync(
+      'ccb-mobile-tab-image-',
+    );
+    final image = File('${tempDir.path}/picked-image-cache');
+    image.writeAsBytesSync([0xff, 0xd8, 0xff, 0xd9]);
+    addTearDown(() {
+      FilePickerPlatform.instance = originalPicker;
+      tempDir.deleteSync(recursive: true);
+    });
+    FilePickerPlatform.instance = _FakeFilePicker([
+      FilePickerResult([
+        PlatformFile(
+          name: 'queued-photo.jpg',
+          path: image.path,
+          size: image.lengthSync(),
+        ),
+      ]),
+    ]);
+
+    final secureStore = MemorySecureStore();
+    final profileStore = GatewayHostProfileStore(secureStore: secureStore);
+    final host = GatewayPairedHost(
+      profile: GatewayHostProfile(
+        hostId: 'proj-demo',
+        deviceId: 'dev-tab-image',
+        routeProvider: RouteProvider(
+          kind: RouteProviderKind.lan,
+          gatewayUrl: Uri.parse('http://127.0.0.1:8787'),
+        ),
+        scopes: const {'view', 'content', 'focus', 'terminal_input', 'notify'},
+      ),
+      deviceToken: 'device-secret',
+      projectId: 'proj-demo',
+    );
+    await profileStore.save(host);
+    final terminalTransport = RecordingTerminalTransport();
+    final repository = ImageUploadGatewayRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProjectHomeScreen(
+          repository: FakeMobileCcbRepository.demo(),
+          profileStore: profileStore,
+          gatewayRepositoryFactory: (profile) => repository,
+          gatewayTerminalTransportFactory: (profile) => terminalTransport,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await activateStoredGatewayProfile(tester);
+
+    await tester.tap(find.byKey(const ValueKey('agent-attachment-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('agent-attachment-pick-image')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-composer')),
+      'queue this image',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('agent-quick-key-tab')));
+    for (
+      var attempt = 0;
+      attempt < 20 && repository.pathUploads.isEmpty;
+      attempt += 1
+    ) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await tester.pumpAndSettle();
+
+    expect(repository.pathUploads.single.fileName, 'queued-photo.jpg');
+    expect(repository.pathUploads.single.mimeType, 'image/jpeg');
+    expect(
+      terminalTransport.sessions.single.pasted.single,
+      contains('queue this image'),
+    );
+    expect(
+      terminalTransport.sessions.single.pasted.single,
+      contains('queued-photo.jpg'),
+    );
+    expect(terminalTransport.sessions.single.written, [
+      [9],
+    ]);
+    expect(find.text('queue this image'), findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey('conversation-attachment-chip-uploaded-image-1'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('agent-attachment-tray')), findsNothing);
+  });
+
   testWidgets(
     'stale namespace epoch keeps the draft and never replays chat send',
     (tester) async {

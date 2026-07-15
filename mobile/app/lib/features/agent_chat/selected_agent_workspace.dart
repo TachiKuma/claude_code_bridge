@@ -595,47 +595,34 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace>
   }) async {
     final controller = _draftController(agent.name);
     final body = controller.text;
-    if (body.isEmpty) {
+    final attachments = _draftAttachments(agent.name);
+    if (body.trim().isEmpty && attachments.isEmpty) {
       await _sendPaneKey(agent, bytes: bytes, label: label);
       return;
     }
-    final outcome = await _paneMessageSubmitter.sendTextThenKey(
-      transport: widget.terminalTransport,
+    if (!widget.sendEnabled || widget.view.namespaceEpoch == null) {
+      _showSnack(widget.sendDisabledReason ?? 'Refresh target before sending');
+      return;
+    }
+    await _messageSubmitCoordinator.send(
       agent: agent,
-      view: widget.view,
-      refreshView: widget.onRefreshView,
       body: body,
-      bytes: bytes,
+      attachments: attachments,
+      view: widget.view,
+      repository: widget.repository,
+      terminalTransport: widget.terminalTransport,
+      usePaneInput: true,
+      paneSubmitBytes: bytes,
+      refreshView: widget.onRefreshView,
+      onAccepted: () {
+        controller.clear();
+        _uiControllers.clearDraftAttachments(agent.name);
+        _localExceptionStatusAgentNames.remove(agent.name);
+        _recentPaneOutputText.remove(agent.name);
+        _markAwaitingPaneResponse(agent.name);
+        widget.onProjectActivity?.call();
+      },
     );
-    if (!mounted || widget.agent?.name != agent.name) {
-      return;
-    }
-    if (!outcome.sent) {
-      _showSnack('Could not send $label: ${outcome.error}');
-      return;
-    }
-    final queuedMessage = CcbConversationItem.userMessage(
-      id: _chatController.nextLocalMessageId(agent.name),
-      agentName: agent.name,
-      body: body.trim(),
-      state: CcbConversationDeliveryState.sent,
-      sentAt: DateTime.now().toUtc(),
-    );
-    _mutateChatState(() {
-      _chatController.addLocalMessage(agent.name, queuedMessage);
-      controller.clear();
-      _localExceptionStatusAgentNames.remove(agent.name);
-      _recentPaneOutputText.remove(agent.name);
-      _markAwaitingPaneResponse(agent.name);
-      _chatController.recordTimelineAppendState(
-        agentName: agent.name,
-        changed: true,
-        shouldScroll: true,
-      );
-    });
-    widget.onProjectActivity?.call();
-    _scrollTimelineToEnd(agent.name);
-    _refreshLatest(agent.name);
   }
 
   Future<void> _pickAttachments({
