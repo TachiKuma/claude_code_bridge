@@ -713,6 +713,102 @@ void main() {
     },
   );
 
+  testWidgets(
+    'file picker accepts an extension-only MP4 and submits uploaded video',
+    (tester) async {
+      final originalPicker = FilePickerPlatform.instance;
+      final tempDir = Directory.systemTemp.createTempSync(
+        'ccb-mobile-picker-video-',
+      );
+      final video = File('${tempDir.path}/picked-video-cache');
+      video.writeAsBytesSync([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]);
+      addTearDown(() {
+        FilePickerPlatform.instance = originalPicker;
+        tempDir.deleteSync(recursive: true);
+      });
+      final picker = _FakeFilePicker([
+        FilePickerResult([
+          PlatformFile(
+            name: 'phone-clip.mp4',
+            path: video.path,
+            size: video.lengthSync(),
+          ),
+        ]),
+      ]);
+      FilePickerPlatform.instance = picker;
+      final repository = ImageUploadGatewayRepository();
+      final agent = const CcbAgent(
+        name: 'mobile',
+        provider: 'codex',
+        window: 'main',
+        order: 0,
+        active: true,
+        queueDepth: 0,
+        paneId: '%2',
+      );
+      final view = _workspaceView(agent);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SelectedAgentWorkspace(
+              repository: repository,
+              terminalTransport: null,
+              usePaneInputForMessages: false,
+              view: view,
+              agent: agent,
+              enableComposerCollapse: true,
+              onRefreshView: () async => view,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('agent-attachment-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('agent-attachment-pick-file')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(picker.requestedTypes, [FileType.any]);
+      expect(
+        find.byKey(const ValueKey('agent-attachment-chip-draft-mobile-0')),
+        findsOneWidget,
+      );
+      expect(
+        find.text('phone-clip.mp4 is not a supported attachment type'),
+        findsNothing,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('agent-message-composer')),
+        'please inspect this video',
+      );
+      await tester.tap(find.byKey(const ValueKey('agent-message-send-button')));
+      for (
+        var attempt = 0;
+        attempt < 20 && repository.pathUploads.isEmpty;
+        attempt += 1
+      ) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      expect(repository.pathUploads.single.mimeType, 'video/mp4');
+      expect(repository.pathUploads.single.fileName, 'phone-clip.mp4');
+      final submittedAttachment =
+          repository.submittedMessages.single.attachments.single;
+      expect(submittedAttachment.fileName, 'phone-clip.mp4');
+      expect(submittedAttachment.mimeType, 'video/mp4');
+      expect(
+        submittedAttachment.effectiveKind,
+        CcbMessageAttachmentKind.document,
+      );
+      expect(find.text('Failed'), findsNothing);
+    },
+  );
+
   testWidgets('pane image echo merges into one attachment message', (
     tester,
   ) async {
@@ -2732,6 +2828,7 @@ class _FakeFilePicker extends FilePickerPlatform {
   _FakeFilePicker(this.results);
 
   final List<FilePickerResult?> results;
+  final requestedTypes = <FileType>[];
   var _index = 0;
 
   @override
@@ -2749,6 +2846,7 @@ class _FakeFilePicker extends FilePickerPlatform {
     bool readSequential = false,
     bool cancelUploadOnWindowBlur = true,
   }) async {
+    requestedTypes.add(type);
     if (_index >= results.length) {
       return null;
     }

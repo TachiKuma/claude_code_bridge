@@ -646,10 +646,6 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace>
       final result = await FilePicker.pickFiles(
         allowMultiple: true,
         type: type,
-        allowedExtensions:
-            type == FileType.custom
-                ? const ['pdf', 'txt', 'md', 'doc', 'docx']
-                : null,
       );
       if (result == null || result.files.isEmpty) {
         return;
@@ -1214,7 +1210,7 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace>
             onPickFileAttachment: () {
               _pickAttachments(
                 agentName: selectedAgent.name,
-                type: FileType.custom,
+                type: FileType.any,
               );
             },
             onRemoveAttachment: (localId) {
@@ -1322,6 +1318,11 @@ String? _mimeTypeForExtension(String? extension) {
     'heic' => 'image/heic',
     'heif' => 'image/heif',
     'bmp' => 'image/bmp',
+    'mp4' || 'm4v' => 'video/mp4',
+    'mov' => 'video/quicktime',
+    'webm' => 'video/webm',
+    'mkv' => 'video/x-matroska',
+    'avi' => 'video/x-msvideo',
     'pdf' => 'application/pdf',
     'txt' => 'text/plain',
     'md' => 'text/markdown',
