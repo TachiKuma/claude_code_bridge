@@ -66,6 +66,14 @@ The latest startup report must capture the most recent startup-related transacti
 - `desired_agents`
 - `actions_taken`
 - `agent_results`
+  - each result may include `duration_ms`, `provider_prepare_ms`,
+    `provider_prepare_count`, and a machine-readable `binding_reject_reason`
+- `timings_ms`
+  - non-negative stage durations, including `namespace_ensure`,
+    `context_and_layout_plan`, `tmux_namespace_runtime`,
+    `agent_prepare_and_classify`, `tmux_layout`, `active_panes_and_cmd`,
+    `agent_runtime_commit`, `tmux_cleanup`, `flow_total`, and
+    `supervisor_total` when those stages were reached
 - `inspection`
 - `socket_placement`
   - at minimum preferred/effective socket paths plus root kind and fallback reason for both `ccbd` and project tmux socket selection
@@ -75,6 +83,13 @@ Rules:
 
 - daemon boot must write a startup report
 - foreground `start` must overwrite it with the more specific `start_command` report
+- accepted binding reuse must report `provider_prepare_count=0`; launch and
+  relaunch through the normal managed start path must report exactly one
+  provider preparation pass
+- timing fields are diagnostics only, must not affect lifecycle authority, and
+  malformed/non-finite persisted values must be ignored by readers
+- `ping('ccbd')` and `doctor` must surface the latest startup timing map and
+  aggregate provider preparation count when a startup report is available
 - startup report write failure must not replace the original startup error with a diagnostics-only error
 - when project tmux preparation fails, `failure_reason` must preserve the user-facing startup failure plus tmux command context, the effective tmux socket path, socket path byte length when known, and original tmux stderr/stdout detail when available
 

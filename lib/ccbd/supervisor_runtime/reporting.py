@@ -16,6 +16,7 @@ def record_startup_report(
     cleanup_summaries,
     agent_results,
     failure_reason: str | None,
+    timings_ms: dict[str, float] | None = None,
 ) -> None:
     try:
         inspection = supervisor._ownership_guard.inspect()
@@ -42,6 +43,7 @@ def record_startup_report(
             cleanup_summaries=cleanup_summaries_from_objects(cleanup_summaries),
             agent_results=tuple(agent_results),
             failure_reason=failure_reason,
+            timings_ms=dict(timings_ms or {}),
         )
         supervisor._startup_report_store.save(report)
     except Exception:

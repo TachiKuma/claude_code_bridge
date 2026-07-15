@@ -1,6 +1,6 @@
 # Roadmap
 
-Date: 2026-06-16
+Date: 2026-07-15
 
 ## Done
 
@@ -32,32 +32,37 @@ Date: 2026-06-16
   followed by a second focus request, with old-daemon fallback preserved.
 - Added `dev_tools/perf_sidebar_click_latency.py` as a focused single-RPC
   latency probe for live daemon socket measurements.
+- Fixed explicit multi-window startup binding so logical window and namespace
+  epoch determine reuse while actual tmux window ids remain runtime facts.
+- Enforced zero provider preparation for reuse and one preparation pass for
+  launch/relaunch, including one Codex managed-home projection per launch.
+- Added request-scoped tmux and Codex process snapshots, tmux pane-identity
+  batching, unchanged-identity suppression, and scoped no-op persistence.
+- Added persisted startup stage/per-agent timings and surfaced them through
+  `doctor`.
+- Validated a 5-window, 10-agent isolated source runtime: 20 warm starts had
+  p50 about `0.555s`, p95 `0.63s`, 10/10 attaches, zero relaunches, and zero
+  provider preparation.
 
 ## In Progress
 
-- Main-agent review of remaining interactive latency after the sidebar
-  single-RPC slice. The slice is allowed as a local current-branch commit only;
-  it must not be merged to main or included in binary/release packaging until
-  live latency data justifies promotion and the user explicitly approves it.
-- Main-agent review of the highest CPU paths identified by corrected profiling:
-  persistent/batched ask submission for high-load operation and lazy or
-  policy-controlled provider mounting for startup.
+- Cross-platform and real-provider qualification of the completed startup
+  critical-path implementation.
+- Remaining optional P0 counters and decision evidence for bounded cold-launch
+  concurrency.
 
 ## Next
 
-1. Design a low-risk persistent or batched ask submission path that avoids one
-   Python process per `ccb ask` while preserving current CLI semantics.
-2. Design startup provider-mount policy knobs so non-target providers can be
-   deferred without breaking configured-agent supervision.
-3. Add a repeatable startup profile gate with wall time, cumulative CPU, peak
-   process count, and provider mount timing.
-4. Add a high-load profile matrix by provider mix: Codex-only, Gemini-only,
-   mixed mounted-idle, and mixed active.
-5. Run the interactive latency probe on a live test daemon, then decide whether
-   tmux focus commands or foreground border/status hooks are the next
-   visible-latency owner.
-6. Promote the highest-ROI implementation slice only after the refined profile
-   shows a clear owner and acceptance threshold.
+1. Add remaining tmux/process/projection/write counters if production evidence
+   shows stage timings alone are insufficient.
+2. Run macOS, WSL ext4, and WSL mounted-drive warm/cold baselines.
+3. Run exact real Codex primary and Claude cross-provider qualification.
+4. Add measured, bounded provider-launch concurrency only after the serial
+   authority stages are explicit.
+5. Evaluate foreground-first readiness as a separate opt-in policy after the
+   current startup semantics meet their performance and reliability gates.
+6. Resume persistent/batched ask and interactive-latency work after the startup
+   regression is isolated and accepted.
 
 ## Deferred
 

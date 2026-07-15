@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from project.discovery import load_workspace_binding
-from storage.atomic import atomic_write_json
+from storage.atomic import atomic_write_json, atomic_write_json_if_changed
 from workspace.models import WorkspaceBinding, WorkspacePlan
 
 
@@ -36,7 +36,7 @@ class WorkspaceBindingStore:
             workspace_path=str(plan.workspace_path),
             branch_name=plan.branch_name,
         )
-        atomic_write_json(plan.binding_path, binding.to_record())
+        atomic_write_json_if_changed(plan.binding_path, binding.to_record())
         return plan.binding_path
 
     def bind_controller_worktree(

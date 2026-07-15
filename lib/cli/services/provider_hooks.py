@@ -111,6 +111,7 @@ def prepare_provider_workspace(
             layout=layout,
             spec=spec,
             workspace_path=workspace_path,
+            materialize_home=False,
         )
         if refresh_profile
         else load_resolved_provider_profile(runtime_dir)
@@ -120,6 +121,7 @@ def prepare_provider_workspace(
             layout=layout,
             spec=spec,
             workspace_path=workspace_path,
+            materialize_home=False,
         )
     _materialize_provider_home(
         layout=layout,

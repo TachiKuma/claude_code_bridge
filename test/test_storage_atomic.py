@@ -278,3 +278,24 @@ def test_atomic_write_json_format_is_unchanged(tmp_path: Path) -> None:
     atomic.atomic_write_json(target, {'z': '雪', 'a': 1})
 
     assert target.read_text() == '{\n  "z": "雪",\n  "a": 1\n}\n'
+
+
+def test_atomic_write_text_if_changed_skips_identical_target(monkeypatch, tmp_path: Path) -> None:
+    target = tmp_path / 'state.txt'
+    target.write_text('same', encoding='utf-8')
+    monkeypatch.setattr(os, 'fsync', lambda fd: pytest.fail(f'unexpected fsync: {fd}'))
+    monkeypatch.setattr(os, 'replace', lambda *args, **kwargs: pytest.fail('unexpected replace'))
+
+    changed = atomic.atomic_write_text_if_changed(target, 'same')
+
+    assert changed is False
+    assert target.read_text(encoding='utf-8') == 'same'
+
+
+def test_atomic_write_json_if_changed_reports_material_change(tmp_path: Path) -> None:
+    target = tmp_path / 'state.json'
+
+    assert atomic.atomic_write_json_if_changed(target, {'value': 1}) is True
+    assert atomic.atomic_write_json_if_changed(target, {'value': 1}) is False
+    assert atomic.atomic_write_json_if_changed(target, {'value': 2}) is True
+    assert json.loads(target.read_text(encoding='utf-8')) == {'value': 2}

@@ -13,6 +13,8 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
 
 from agents.models import AgentSpec, PermissionMode, ProviderProfileSpec, QueuePolicy, RestoreMode, RuntimeMode, WorkspaceMode
 from cli.services.provider_hooks import prepare_provider_workspace, prepare_workspace_provider_hooks
+import cli.services.provider_hooks as provider_hooks_module
+import provider_profiles.materializer as provider_profile_materializer
 import provider_core.source_home as source_home_module
 from provider_hooks.settings import (
     build_hook_command,
@@ -682,6 +684,46 @@ def test_prepare_provider_workspace_records_codex_memory_projection_event_once(
     marker_path = layout.agent_provider_runtime_dir('agent1', 'codex') / 'codex-memory-projection.json'
     marker = json.loads(marker_path.read_text(encoding='utf-8'))
     assert marker['status'] == 'ok'
+
+
+def test_prepare_provider_workspace_materializes_codex_home_once(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project_root = tmp_path / 'repo'
+    workspace = project_root / 'workspace'
+    source_codex_home = tmp_path / 'source-home' / '.codex'
+    source_codex_home.mkdir(parents=True)
+    project_root.mkdir(parents=True)
+    _write_project_memory(project_root, 'shared ccb memory\n')
+    monkeypatch.setenv('CODEX_HOME', str(source_codex_home))
+    layout = PathLayout(project_root)
+    calls: list[Path] = []
+    real_materialize = provider_hooks_module.materialize_codex_home_config
+
+    def counted_materialize(path, **kwargs):
+        calls.append(Path(path))
+        return real_materialize(path, **kwargs)
+
+    monkeypatch.setattr(provider_hooks_module, 'materialize_codex_home_config', counted_materialize)
+    monkeypatch.setattr(
+        provider_profile_materializer,
+        'materialize_codex_home_config',
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError('profile resolution must not project the Codex home')
+        ),
+    )
+
+    prepare_provider_workspace(
+        layout=layout,
+        spec=_spec('agent1', provider='codex'),
+        workspace_path=workspace,
+        completion_dir=layout.agent_provider_runtime_dir('agent1', 'codex') / 'completion',
+        agent_name='agent1',
+        refresh_profile=True,
+    )
+
+    assert len(calls) == 1
 
 
 def test_prepare_provider_workspace_does_not_materialize_codex_activity_hooks(

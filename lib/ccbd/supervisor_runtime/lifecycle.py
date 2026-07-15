@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import replace
+import time
+
 from ccbd.services import CcbdLifecycleStore
 from ccbd.services.project_namespace_runtime import build_namespace_topology_plan
 
@@ -22,6 +25,8 @@ def start_supervisor(
     background_maintenance: bool,
     run_start_flow_fn,
 ):
+    supervisor_started_ns = time.monotonic_ns()
+    namespace_started_ns = supervisor_started_ns
     try:
         topology_plan = None
         namespace_layout_signature = None
@@ -51,6 +56,7 @@ def start_supervisor(
             if supervisor._project_namespace is not None
             else None
         )
+        namespace_ms = (time.monotonic_ns() - namespace_started_ns) / 1_000_000
         summary = run_start_flow_fn(
             project_root=supervisor._project_root,
             project_id=supervisor._project_id,
@@ -69,10 +75,19 @@ def start_supervisor(
             workspace_window_id=getattr(namespace, 'workspace_window_id', None) if namespace is not None else None,
             workspace_epoch=getattr(namespace, 'workspace_epoch', None) if namespace is not None else None,
             namespace_agent_panes=getattr(supervisor._project_namespace, '_last_materialized_agent_panes', None),
+            namespace_pane_records=getattr(supervisor._project_namespace, '_last_topology_pane_records', None),
             namespace_active_panes=getattr(supervisor._project_namespace, '_last_topology_active_panes', None),
             fresh_namespace=bool(getattr(namespace, 'created_this_call', False)),
             fresh_workspace=bool(getattr(namespace, 'workspace_recreated_this_call', False)),
             clock=supervisor._clock,
+        )
+        summary = replace(
+            summary,
+            timings_ms={
+                'namespace_ensure': namespace_ms,
+                **dict(getattr(summary, 'timings_ms', {}) or {}),
+                'supervisor_total': (time.monotonic_ns() - supervisor_started_ns) / 1_000_000,
+            },
         )
         _sync_lifecycle_namespace_epoch(supervisor, namespace=namespace)
     except Exception as exc:
@@ -86,6 +101,7 @@ def start_supervisor(
             cleanup_summaries=(),
             agent_results=(),
             failure_reason=str(exc),
+            timings_ms={'supervisor_total': (time.monotonic_ns() - supervisor_started_ns) / 1_000_000},
         )
         raise
 
@@ -99,6 +115,7 @@ def start_supervisor(
         cleanup_summaries=summary.cleanup_summaries,
         agent_results=summary.agent_results,
         failure_reason=None,
+        timings_ms=summary.timings_ms,
     )
     return summary
 

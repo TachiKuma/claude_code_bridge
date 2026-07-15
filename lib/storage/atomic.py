@@ -110,3 +110,21 @@ def atomic_write_text(path: Path, text: str, *, encoding: str = 'utf-8') -> None
 
 def atomic_write_json(path: Path, payload: Any, *, encoding: str = 'utf-8') -> None:
     atomic_write_text(path, json.dumps(payload, ensure_ascii=False, indent=2) + '\n', encoding=encoding)
+
+
+def atomic_write_text_if_changed(path: Path, text: str, *, encoding: str = 'utf-8') -> bool:
+    target = Path(path)
+    try:
+        if target.read_text(encoding=encoding) == text:
+            return False
+    except FileNotFoundError:
+        pass
+    except (OSError, UnicodeError):
+        pass
+    atomic_write_text(target, text, encoding=encoding)
+    return True
+
+
+def atomic_write_json_if_changed(path: Path, payload: Any, *, encoding: str = 'utf-8') -> bool:
+    text = json.dumps(payload, ensure_ascii=False, indent=2) + '\n'
+    return atomic_write_text_if_changed(path, text, encoding=encoding)

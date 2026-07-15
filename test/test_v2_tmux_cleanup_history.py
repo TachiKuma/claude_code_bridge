@@ -600,6 +600,7 @@ def test_doctor_summary_includes_startup_and_shutdown_report_fields(tmp_path: Pa
             cleanup_summaries=(),
             agent_results=(),
             failure_reason=None,
+            timings_ms={'flow_total': 12.5},
         )
     )
     CcbdShutdownReportStore(context.paths).save(
@@ -625,6 +626,8 @@ def test_doctor_summary_includes_startup_and_shutdown_report_fields(tmp_path: Pa
     assert payload['ccbd']['startup_last_trigger'] == 'start_command'
     assert payload['ccbd']['startup_last_status'] == 'ok'
     assert payload['ccbd']['startup_last_daemon_started'] is True
+    assert payload['ccbd']['startup_last_timings_ms'] == {'flow_total': 12.5}
+    assert payload['ccbd']['startup_last_provider_prepare_count'] == 0
     assert payload['ccbd']['shutdown_last_trigger'] == 'kill'
     assert payload['ccbd']['shutdown_last_status'] == 'ok'
     assert payload['ccbd']['shutdown_last_reason'] == 'kill'

@@ -15,6 +15,7 @@ from .materialize_topology import (
     topology_active_panes,
     topology_recreate_reason,
 )
+from ccbd.services.project_namespace_pane import snapshot_project_namespace_panes
 
 
 def ensure_project_namespace(
@@ -39,36 +40,60 @@ def ensure_project_namespace(
         context,
         timeout_s=session_probe_timeout_s,
     )
+    pane_records = (
+        snapshot_project_namespace_panes(context.backend)
+        if topology_plan is not None and context.session_is_alive and context.current is not None
+        else None
+    )
 
     if force_recreate:
         context = force_recreate_namespace(controller, context)
     context = recreate_for_layout_change(controller, context)
     if topology_plan is not None and context.session_is_alive and context.current is not None:
-        reason = topology_recreate_reason(controller, context, topology_plan=topology_plan)
+        reason = topology_recreate_reason(
+            controller,
+            context,
+            topology_plan=topology_plan,
+            pane_records=pane_records,
+        )
         if reason is not None:
             context = force_recreate_namespace(
                 controller,
                 context.with_updates(recreate_cause=reason),
             )
+            pane_records = None
 
     if context.session_is_alive and context.current is not None:
         if topology_plan is not None:
-            agent_panes = existing_topology_agent_panes(controller, context, topology_plan=topology_plan)
+            agent_panes = existing_topology_agent_panes(
+                controller,
+                context,
+                topology_plan=topology_plan,
+                pane_records=pane_records,
+            )
             refresh_topology_ui_for_project(
                 controller,
                 context,
                 topology_plan=topology_plan,
                 timeout_s=session_probe_timeout_s,
+                pane_records=pane_records,
             )
             setattr(controller, '_last_materialized_agent_panes', agent_panes)
             setattr(
                 controller,
                 '_last_topology_active_panes',
-                topology_active_panes(controller, context, topology_plan=topology_plan),
+                topology_active_panes(
+                    controller,
+                    context,
+                    topology_plan=topology_plan,
+                    pane_records=pane_records,
+                ),
             )
+            setattr(controller, '_last_topology_pane_records', pane_records)
         else:
             setattr(controller, '_last_materialized_agent_panes', {})
             setattr(controller, '_last_topology_active_panes', ())
+            setattr(controller, '_last_topology_pane_records', {})
         return persist_refreshed_namespace(
             controller,
             context,
@@ -85,12 +110,19 @@ def ensure_project_namespace(
             terminal_size=terminal_size,
             timeout_s=session_probe_timeout_s,
         )
+        pane_records = snapshot_project_namespace_panes(context.backend)
         setattr(controller, '_last_materialized_agent_panes', agent_panes)
         setattr(
             controller,
             '_last_topology_active_panes',
-            topology_active_panes(controller, context, topology_plan=topology_plan),
+            topology_active_panes(
+                controller,
+                context,
+                topology_plan=topology_plan,
+                pane_records=pane_records,
+            ),
         )
+        setattr(controller, '_last_topology_pane_records', pane_records)
     else:
         prepare_namespace_root_pane(
             controller,
@@ -101,6 +133,7 @@ def ensure_project_namespace(
         )
         setattr(controller, '_last_materialized_agent_panes', {})
         setattr(controller, '_last_topology_active_panes', ())
+        setattr(controller, '_last_topology_pane_records', {})
     return build_created_namespace(
         controller,
         context,

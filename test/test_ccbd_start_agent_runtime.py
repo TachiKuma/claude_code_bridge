@@ -4,12 +4,14 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from agents.models import AgentRuntime, AgentState, RuntimeBindingSource
+from ccbd.services.project_namespace_pane import ProjectNamespacePaneRecord
 from ccbd.start_runtime.agent_runtime import start_agent_runtime
 from cli.services.provider_binding import AgentBinding
 from cli.services.runtime_launch import RuntimeLaunchResult
 from project.ids import compute_project_id
 from project.resolver import ProjectContext
 from storage.paths import PathLayout
+from terminal_runtime.tmux_identity import pane_visual
 
 
 class _RuntimeService:
@@ -125,7 +127,7 @@ def test_start_agent_runtime_degrades_unresolved_stale_binding() -> None:
 
     execution = start_agent_runtime(
         context=object(),
-        command=SimpleNamespace(restore=False),
+        command=SimpleNamespace(restore=True),
         runtime_service=runtime_service,
         agent_name='agent1',
         spec=SimpleNamespace(provider='codex', runtime_mode=SimpleNamespace(value='pane-backed')),
@@ -156,7 +158,7 @@ def test_start_agent_runtime_records_namespace_pane_without_provider_binding() -
 
     execution = start_agent_runtime(
         context=object(),
-        command=SimpleNamespace(restore=False),
+        command=SimpleNamespace(restore=True),
         runtime_service=runtime_service,
         agent_name='agent1',
         spec=SimpleNamespace(provider='fake-codex', runtime_mode=SimpleNamespace(value='pane-backed')),
@@ -190,9 +192,11 @@ def test_start_agent_runtime_records_namespace_pane_without_provider_binding() -
     assert runtime_service.attach_calls[-1]['runtime_ref'] == 'tmux:%9'
     assert runtime_service.attach_calls[-1]['pane_id'] == '%9'
     assert runtime_service.attach_calls[-1]['tmux_window_name'] == 'main'
+    assert runtime_service.restore_calls == ['agent1']
+    assert 'restore_runtime:agent1' in execution.actions_taken
 
 
-def test_start_agent_runtime_reuses_binding_and_restores_when_requested() -> None:
+def test_start_agent_runtime_reuses_binding_without_restore_bookkeeping() -> None:
     runtime_service = _RuntimeService()
     binding = _binding()
     relabel_calls: list[dict[str, object]] = []
@@ -223,14 +227,73 @@ def test_start_agent_runtime_reuses_binding_and_restores_when_requested() -> Non
     assert execution.actions_taken == (
         'relabel_runtime_pane:agent1:%5',
         'reuse_binding:agent1',
-        'restore_runtime:agent1',
     )
     assert execution.runtime_pane_id == '%5'
     assert execution.project_socket_active_pane_id == '%5'
-    assert runtime_service.restore_calls == ['agent1']
+    assert runtime_service.restore_calls == []
     assert relabel_calls[-1]['window_name'] == 'main'
     assert runtime_service.attach_calls[-1]['tmux_window_name'] == 'main'
     assert execution.agent_result.tmux_window_name == 'main'
+    assert execution.agent_result.provider_prepare_count == 0
+    assert execution.agent_result.duration_ms is not None
+
+
+def test_start_agent_runtime_skips_current_reused_pane_identity() -> None:
+    runtime_service = _RuntimeService()
+    binding = _binding()
+    visual = pane_visual(
+        project_id='proj-1',
+        slot_key='agent1',
+        order_index=1,
+        is_cmd=False,
+        role='agent',
+    )
+    record = ProjectNamespacePaneRecord(
+        pane_id='%5',
+        session_name='ccb-demo',
+        window_id='@1',
+        window_name='main',
+        pane_title='agent1',
+        role='agent',
+        slot_key='agent1',
+        ccb_window='main',
+        agent_label='agent1',
+        label_style=visual.label_style,
+        border_style=visual.border_style,
+        active_border_style=visual.active_border_style,
+        project_id='proj-1',
+        managed_by='ccbd',
+        namespace_epoch=3,
+        alive=True,
+    )
+
+    execution = start_agent_runtime(
+        context=object(),
+        command=SimpleNamespace(restore=False),
+        runtime_service=runtime_service,
+        agent_name='agent1',
+        spec=SimpleNamespace(provider='codex', runtime_mode=SimpleNamespace(value='pane-backed')),
+        plan=SimpleNamespace(workspace_path='/tmp/ws'),
+        binding=binding,
+        raw_binding=binding,
+        stale_binding=False,
+        assigned_pane_id=None,
+        style_index=1,
+        project_id='proj-1',
+        tmux_socket_path='/tmp/ccb.sock',
+        namespace_epoch=3,
+        namespace_pane_records={'%5': record},
+        ensure_agent_runtime_fn=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError('should not relaunch')),
+        launch_binding_hint_fn=lambda **kwargs: None,
+        relabel_project_namespace_pane_fn=lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError('current pane identity must not be rewritten')
+        ),
+        same_tmux_socket_path_fn=lambda left, right: left == right,
+        window_name='main',
+    )
+
+    assert execution.agent_result.action == 'attached'
+    assert execution.actions_taken == ('reuse_binding:agent1',)
 
 
 def test_start_agent_runtime_relaunches_and_tracks_project_socket_pane() -> None:
@@ -239,7 +302,7 @@ def test_start_agent_runtime_relaunches_and_tracks_project_socket_pane() -> None
 
     execution = start_agent_runtime(
         context=object(),
-        command=SimpleNamespace(restore=False),
+        command=SimpleNamespace(restore=True),
         runtime_service=runtime_service,
         agent_name='agent1',
         spec=SimpleNamespace(provider='codex', runtime_mode=SimpleNamespace(value='pane-backed')),
@@ -256,16 +319,24 @@ def test_start_agent_runtime_relaunches_and_tracks_project_socket_pane() -> None
         launch_binding_hint_fn=lambda **kwargs: 'hint',
         relabel_project_namespace_pane_fn=lambda **kwargs: '%7',
         same_tmux_socket_path_fn=lambda left, right: left == right,
+        provider_prepared=True,
+        provider_prepare_ms=12.5,
+        binding_reject_reason='namespace_epoch_mismatch',
     )
 
     assert execution.agent_result.action == 'relaunched'
     assert execution.actions_taken == (
         'relabel_runtime_pane:agent1:%7',
         'relaunch_runtime:agent1',
+        'restore_runtime:agent1',
     )
     assert execution.runtime_pane_id == '%7'
     assert execution.project_socket_active_pane_id == '%7'
     assert runtime_service.attach_calls[-1]['runtime_ref'] == 'tmux:%7'
+    assert runtime_service.restore_calls == ['agent1']
+    assert execution.agent_result.provider_prepare_count == 1
+    assert execution.agent_result.provider_prepare_ms == 12.5
+    assert execution.agent_result.binding_reject_reason == 'namespace_epoch_mismatch'
 
 
 def test_start_agent_runtime_uses_runtime_service_for_helper_ownership(tmp_path: Path) -> None:

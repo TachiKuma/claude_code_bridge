@@ -1,6 +1,6 @@
 # CCB Runtime Performance Plan
 
-Date: 2026-06-16
+Date: 2026-07-15
 
 ## Purpose
 
@@ -30,6 +30,16 @@ Out of scope for the first phase:
 
 ## Current Finding
 
+The 2026-07-15 startup incident had a correctness-led critical path: explicit
+multi-window panes were checked against the single entry-window id, so healthy
+non-entry panes could be rejected and relaunched. The P0-P3 core fix now uses
+logical-window identity, reuse-aware exactly-once provider preparation,
+request-scoped discovery, batched/no-op tmux updates, scoped no-op persistence,
+and persisted stage timings. Implementation and evidence are recorded in:
+[topics/startup-critical-path-optimization-2026-07-15.md](topics/startup-critical-path-optimization-2026-07-15.md).
+
+Earlier lifecycle attribution remains relevant:
+
 The first real lifecycle profile shows CCB core is not the dominant CPU cost:
 
 - Startup: CCB core `16.5%`, provider `24.1%`, shell/tmux/system `56.0%`.
@@ -45,8 +55,9 @@ and interactive refresh isolation rather than broad CCB-core rewrites.
 3. [history/real-lifecycle-cpu-profile-2026-06-16.md](history/real-lifecycle-cpu-profile-2026-06-16.md)
 4. [history/shell-system-bucket-split-2026-06-16.md](history/shell-system-bucket-split-2026-06-16.md)
 5. [topics/startup-and-runtime-low-latency-plan.md](topics/startup-and-runtime-low-latency-plan.md)
-6. [topics/candidate-commit-scope-2026-06-16.md](topics/candidate-commit-scope-2026-06-16.md)
-7. [open-questions.md](open-questions.md)
+6. [topics/startup-critical-path-optimization-2026-07-15.md](topics/startup-critical-path-optimization-2026-07-15.md)
+7. [topics/candidate-commit-scope-2026-06-16.md](topics/candidate-commit-scope-2026-06-16.md)
+8. [open-questions.md](open-questions.md)
 
 ## Related Plans
 

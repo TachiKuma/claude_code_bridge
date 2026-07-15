@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Any
 
 from ccbd.models_runtime.common import API_VERSION, SCHEMA_VERSION, CcbdModelError
@@ -30,6 +31,7 @@ class CcbdStartupReport:
     cleanup_summaries: tuple[CcbdTmuxCleanupSummary, ...] = ()
     agent_results: tuple[CcbdStartupAgentResult, ...] = ()
     failure_reason: str | None = None
+    timings_ms: dict[str, float] | None = None
     api_version: int = API_VERSION
 
     def __post_init__(self) -> None:
@@ -62,6 +64,7 @@ class CcbdStartupReport:
             'cleanup_summaries': [item.to_record() for item in self.cleanup_summaries],
             'agent_results': [item.to_record() for item in self.agent_results],
             'failure_reason': self.failure_reason,
+            'timings_ms': dict(self.timings_ms or {}),
         }
 
     def summary_fields(self) -> dict[str, Any]:
@@ -77,6 +80,10 @@ class CcbdStartupReport:
             'startup_last_actions': list(self.actions_taken),
             'startup_last_cleanup_killed': total_killed,
             'startup_last_failure_reason': self.failure_reason,
+            'startup_last_timings_ms': dict(self.timings_ms or {}),
+            'startup_last_provider_prepare_count': sum(
+                item.provider_prepare_count for item in self.agent_results
+            ),
             'startup_last_agent_results_text': 'none'
             if not self.agent_results
             else '; '.join(item.summary_token() for item in self.agent_results),
@@ -112,6 +119,7 @@ class CcbdStartupReport:
                 if isinstance(item, dict)
             ),
             failure_reason=clean_text(record.get('failure_reason')),
+            timings_ms=_clean_timings(record.get('timings_ms')),
             api_version=int(record.get('api_version', API_VERSION)),
         )
 
@@ -121,6 +129,21 @@ def _validate_record(record: dict[str, Any], *, expected_type: str) -> None:
         raise ValueError(f'schema_version must be {SCHEMA_VERSION}')
     if record.get('record_type') != expected_type:
         raise ValueError(f"record_type must be '{expected_type}'")
+
+
+def _clean_timings(value: object) -> dict[str, float]:
+    if not isinstance(value, dict):
+        return {}
+    timings: dict[str, float] = {}
+    for key, raw_value in value.items():
+        try:
+            parsed = float(raw_value)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(parsed):
+            continue
+        timings[str(key)] = max(0.0, parsed)
+    return timings
 
 
 __all__ = ['CcbdStartupReport']

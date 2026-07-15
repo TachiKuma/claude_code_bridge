@@ -57,25 +57,27 @@ def ensure_agent_runtime(
     assigned_pane_id: str | None = None,
     style_index: int = 0,
     tmux_socket_path: str | None = None,
+    provider_prepared: bool = False,
 ) -> RuntimeLaunchResult:
     launcher = _runtime_launcher(spec.provider)
     runtime_dir = context.paths.agent_provider_runtime_dir(spec.name, spec.provider)
     effective_command = _command_for_role_policy(command, spec)
-    provider_workspace_path = provider_workspace_path_for_prepare(
-        command=effective_command,
-        spec=spec,
-        plan=plan,
-        runtime_dir=runtime_dir,
-        launcher=launcher,
-    )
-    prepare_provider_workspace(
-        layout=context.paths,
-        spec=spec,
-        workspace_path=provider_workspace_path,
-        completion_dir=runtime_dir / 'completion',
-        agent_name=spec.name,
-        auto_permission=effective_command.auto_permission,
-    )
+    if not provider_prepared:
+        provider_workspace_path = provider_workspace_path_for_prepare(
+            command=effective_command,
+            spec=spec,
+            plan=plan,
+            runtime_dir=runtime_dir,
+            launcher=launcher,
+        )
+        prepare_provider_workspace(
+            layout=context.paths,
+            spec=spec,
+            workspace_path=provider_workspace_path,
+            completion_dir=runtime_dir / 'completion',
+            agent_name=spec.name,
+            auto_permission=effective_command.auto_permission,
+        )
     return _ensure_agent_runtime_impl(
         context,
         effective_command,

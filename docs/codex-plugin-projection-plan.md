@@ -94,6 +94,12 @@ Startup refresh must be deterministic:
 The fast path should use `.tmp/plugins.sha` when available because the plugin
 bundle tree can be large and should not be fully recopied on every launch.
 
+Binding classification precedes this refresh. An already live,
+identity-proven Codex binding performs no plugin projection because no Codex
+process is launched. A launch or relaunch performs exactly one managed-home
+refresh; provider-profile resolution must not project the home and then repeat
+the same projection in `prepare_provider_workspace`.
+
 ## 6. Ownership Boundary
 
 The managed plugin projection belongs to the managed Codex home, not to:
@@ -121,3 +127,5 @@ The regression surface must include:
   freshness marker changes
 - refresh removes stale managed plugin residue when the source projection is no
   longer present
+- accepted binding reuse performs zero plugin refreshes, while one managed
+  launch performs exactly one refresh

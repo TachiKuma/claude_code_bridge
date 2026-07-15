@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from agents.config_loader import load_project_config
 from agents.models import AgentRestoreState, RestoreMode, WorkspaceMode
+from ccbd.services.project_namespace_pane import ProjectNamespacePaneRecord
 from ccbd.start_preparation import prepare_start_agents
 from cli.context import CliContextBuilder
 from cli.models import ParsedStartCommand
@@ -14,6 +16,16 @@ from provider_backends.claude import launcher as claude_launcher
 from provider_backends.runtime_restore import ProviderRestoreTarget
 from project.resolver import bootstrap_project
 from storage.paths import PathLayout
+
+
+def _single_codex_project(tmp_path: Path, name: str):
+    project_root = tmp_path / name
+    (project_root / '.ccb').mkdir(parents=True)
+    (project_root / '.ccb' / 'ccb.config').write_text('agent1:codex\n', encoding='utf-8')
+    bootstrap_project(project_root)
+    command = ParsedStartCommand(project=None, agent_names=('agent1',), restore=True, auto_permission=False)
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+    return project_root, context, load_project_config(project_root).config, PathLayout(project_root)
 
 
 def test_prepare_start_agents_rejects_git_worktree_for_non_git_project(tmp_path: Path) -> None:
@@ -44,6 +56,132 @@ def test_prepare_start_agents_rejects_git_worktree_for_non_git_project(tmp_path:
         )
 
     assert paths.workspace_path('agent1').exists() is False
+
+
+def test_prepare_start_agents_skips_provider_preparation_for_reused_binding(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, context, config, paths = _single_codex_project(tmp_path, 'repo-start-prep-reuse')
+    binding = SimpleNamespace(runtime_ref='tmux:%1')
+    calls: list[str] = []
+    monkeypatch.setattr(
+        'ccbd.start_preparation.prepare_provider_workspace',
+        lambda **kwargs: calls.append(kwargs['agent_name']),
+    )
+
+    prepared = prepare_start_agents(
+        targets=('agent1',),
+        config=config,
+        paths=paths,
+        context=context,
+        project_root=project_root,
+        project_id=context.project.project_id,
+        tmux_socket_path=None,
+        tmux_session_name=None,
+        workspace_window_id=None,
+        resolve_agent_binding_fn=lambda **kwargs: binding,
+        project_binding_filter_fn=lambda candidate, **kwargs: candidate,
+        restore_state_builder=lambda restore_mode: AgentRestoreState(
+            restore_mode=RestoreMode(restore_mode),
+            last_checkpoint=None,
+            conversation_summary='pending restore',
+        ),
+    )
+
+    assert calls == []
+    assert prepared[0].binding is binding
+    assert prepared[0].provider_prepared is False
+
+
+def test_prepare_start_agents_prepares_missing_binding_once(monkeypatch, tmp_path: Path) -> None:
+    project_root, context, config, paths = _single_codex_project(tmp_path, 'repo-start-prep-launch')
+    calls: list[str] = []
+    monkeypatch.setattr(
+        'ccbd.start_preparation.prepare_provider_workspace',
+        lambda **kwargs: calls.append(kwargs['agent_name']),
+    )
+
+    prepared = prepare_start_agents(
+        targets=('agent1',),
+        config=config,
+        paths=paths,
+        context=context,
+        project_root=project_root,
+        project_id=context.project.project_id,
+        tmux_socket_path=None,
+        tmux_session_name=None,
+        workspace_window_id=None,
+        resolve_agent_binding_fn=lambda **kwargs: None,
+        project_binding_filter_fn=lambda candidate, **kwargs: candidate,
+        restore_state_builder=lambda restore_mode: AgentRestoreState(
+            restore_mode=RestoreMode(restore_mode),
+            last_checkpoint=None,
+            conversation_summary='pending restore',
+        ),
+    )
+
+    assert calls == ['agent1']
+    assert prepared[0].provider_prepared is True
+    assert prepared[0].binding_reject_reason == 'binding_missing'
+
+
+def test_prepare_start_agents_reports_logical_window_reject_reason(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-start-prep-window-mismatch'
+    (project_root / '.ccb').mkdir(parents=True)
+    (project_root / '.ccb' / 'ccb.config').write_text(
+        'version = 2\n\n[windows]\nreview = "agent1:codex"\n',
+        encoding='utf-8',
+    )
+    bootstrap_project(project_root)
+    command = ParsedStartCommand(project=None, agent_names=('agent1',), restore=False, auto_permission=False)
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+    config = load_project_config(project_root).config
+    paths = PathLayout(project_root)
+    raw_binding = SimpleNamespace(
+        runtime_ref='tmux:%41',
+        pane_id='%41',
+        active_pane_id='%41',
+        pane_state='alive',
+        provider_identity_state='match',
+    )
+    record = ProjectNamespacePaneRecord(
+        pane_id='%41',
+        session_name='ccb-demo',
+        window_id='@1',
+        window_name='main',
+        role='agent',
+        slot_key='agent1',
+        ccb_window='main',
+        project_id=context.project.project_id,
+        managed_by='ccbd',
+        namespace_epoch=7,
+        alive=True,
+    )
+    monkeypatch.setattr('ccbd.start_preparation.prepare_provider_workspace', lambda **kwargs: None)
+
+    prepared = prepare_start_agents(
+        targets=('agent1',),
+        config=config,
+        paths=paths,
+        context=context,
+        project_root=project_root,
+        project_id=context.project.project_id,
+        tmux_socket_path='/tmp/ccb.sock',
+        tmux_session_name='ccb-demo',
+        workspace_window_id='@0',
+        namespace_epoch=7,
+        namespace_pane_records={'%41': record},
+        resolve_agent_binding_fn=lambda **kwargs: raw_binding,
+        project_binding_filter_fn=lambda candidate, **kwargs: None,
+        restore_state_builder=lambda restore_mode: AgentRestoreState(
+            restore_mode=RestoreMode(restore_mode),
+            last_checkpoint=None,
+            conversation_summary='pending restore',
+        ),
+    )
+
+    assert prepared[0].binding_reject_reason == 'logical_window_mismatch'
 
 
 def test_prepare_start_agents_honors_windows_overlay_inplace_for_non_git_project(tmp_path: Path) -> None:

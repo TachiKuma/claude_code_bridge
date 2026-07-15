@@ -134,6 +134,8 @@ def render_doctor(payload: Mapping[str, object]) -> tuple[str, ...]:
         f'ccbd_startup_last_actions: {ccbd.get("startup_last_actions")}',
         f'ccbd_startup_last_cleanup_killed: {ccbd.get("startup_last_cleanup_killed")}',
         f'ccbd_startup_last_failure_reason: {ccbd.get("startup_last_failure_reason")}',
+        f'ccbd_startup_last_timings_ms: {ccbd.get("startup_last_timings_ms")}',
+        f'ccbd_startup_last_provider_prepare_count: {ccbd.get("startup_last_provider_prepare_count")}',
         f'ccbd_startup_last_agent_results_text: {ccbd.get("startup_last_agent_results_text")}',
         f'ccbd_shutdown_last_at: {ccbd.get("shutdown_last_at")}',
         f'ccbd_shutdown_last_trigger: {ccbd.get("shutdown_last_trigger")}',

@@ -9,6 +9,7 @@ from agents.models import layout_tool_alias_command, layout_tool_alias_label, pa
 from terminal_runtime.placeholders import pane_placeholder_cmd
 from terminal_runtime.tmux_identity import apply_ccb_pane_identity
 from terminal_runtime.tmux_theme import tmux_theme_profile
+from ccbd.services.project_namespace_pane import ProjectNamespacePaneRecord
 
 from .backend import (
     create_session,
@@ -38,15 +39,29 @@ def refresh_topology_ui_for_project(
     *,
     topology_plan,
     timeout_s: float | None = None,
+    pane_records: dict[str, ProjectNamespacePaneRecord] | None = None,
+    refresh_sidebar_helpers: bool = True,
 ) -> None:
-    refresh_topology_sidebar_helpers(controller, context.backend, topology_plan=topology_plan)
+    if refresh_sidebar_helpers:
+        refresh_topology_sidebar_helpers(
+            controller,
+            context.backend,
+            topology_plan=topology_plan,
+            pane_records=pane_records,
+        )
     apply_project_tmux_ui(
         tmux_socket_path=context.desired_socket_path,
         ccbd_socket_path=str(controller._layout.ccbd_socket_path),
         tmux_session_name=context.desired_session_name,
         backend=context.backend,
     )
-    _sync_topology_sidebar_widths(controller, context, topology_plan=topology_plan, timeout_s=timeout_s)
+    _sync_topology_sidebar_widths(
+        controller,
+        context,
+        topology_plan=topology_plan,
+        timeout_s=timeout_s,
+        pane_records=pane_records,
+    )
 
 
 def sync_topology_sidebar_widths(
@@ -144,6 +159,7 @@ def materialize_topology(
         context,
         topology_plan=topology_plan,
         timeout_s=timeout_s,
+        refresh_sidebar_helpers=False,
     )
     select_window(
         context.backend,
@@ -152,30 +168,45 @@ def materialize_topology(
     return agent_panes
 
 
-def existing_topology_agent_panes(controller, context, *, topology_plan) -> dict[str, str]:
+def existing_topology_agent_panes(
+    controller,
+    context,
+    *,
+    topology_plan,
+    pane_records: dict[str, ProjectNamespacePaneRecord] | None = None,
+) -> dict[str, str]:
     agent_panes: dict[str, str] = {}
     for window in tuple(getattr(topology_plan, 'windows', ()) or ()):
         for agent_name in tuple(getattr(window, 'agent_names', ()) or ()):
-            matches = _list_panes_by_user_options(
+            expected = {
+                '@ccb_project_id': controller._project_id,
+                '@ccb_role': 'agent',
+                '@ccb_slot': str(agent_name),
+                '@ccb_window': str(window.name),
+                '@ccb_managed_by': 'ccbd',
+            }
+            matches = _matching_pane_ids(
+                pane_records,
                 context.backend,
-                {
-                    '@ccb_project_id': controller._project_id,
-                    '@ccb_role': 'agent',
-                    '@ccb_slot': str(agent_name),
-                    '@ccb_window': str(window.name),
-                    '@ccb_managed_by': 'ccbd',
-                },
+                expected,
             )
             if len(matches) == 1:
                 agent_panes[str(agent_name)] = matches[0]
     return agent_panes
 
 
-def topology_active_panes(controller, context, *, topology_plan) -> tuple[str, ...]:
+def topology_active_panes(
+    controller,
+    context,
+    *,
+    topology_plan,
+    pane_records: dict[str, ProjectNamespacePaneRecord] | None = None,
+) -> tuple[str, ...]:
     expected_windows = {str(window.name) for window in tuple(getattr(topology_plan, 'windows', ()) or ())}
     panes: list[str] = []
     for role in ('sidebar', 'agent', 'tool'):
-        matches = _list_panes_by_user_options(
+        matches = _matching_pane_ids(
+            pane_records,
             context.backend,
             {
                 '@ccb_project_id': controller._project_id,
@@ -184,35 +215,68 @@ def topology_active_panes(controller, context, *, topology_plan) -> tuple[str, .
             },
         )
         for pane_id in matches:
-            window_name = _pane_option(context.backend, pane_id, '@ccb_window')
-            sidebar_instance = _pane_option(context.backend, pane_id, '@ccb_sidebar_instance')
+            record = pane_records.get(pane_id) if pane_records is not None else None
+            window_name = (
+                str(getattr(record, 'ccb_window', '') or '').strip()
+                if record is not None
+                else _pane_option(context.backend, pane_id, '@ccb_window')
+            )
+            sidebar_instance = (
+                str(getattr(record, 'sidebar_instance', '') or '').strip()
+                if record is not None
+                else _pane_option(context.backend, pane_id, '@ccb_sidebar_instance')
+            )
             if (window_name in expected_windows) or (sidebar_instance in expected_windows):
                 panes.append(pane_id)
     return tuple(dict.fromkeys(panes))
 
 
-def topology_recreate_reason(controller, context, *, topology_plan) -> str | None:
+def topology_recreate_reason(
+    controller,
+    context,
+    *,
+    topology_plan,
+    pane_records: dict[str, ProjectNamespacePaneRecord] | None = None,
+) -> str | None:
     if context.current is not None:
         current_workspace = str(getattr(context.current, 'workspace_window_name', '') or '').strip()
         if current_workspace and current_workspace != context.desired_workspace_window_name:
             return 'topology_workspace_changed'
 
     windows = tuple(getattr(topology_plan, 'windows', ()) or ())
-    for window in windows:
-        if _find_window(context, str(window.name)) is None:
-            return f'topology_window_missing:{window.name}'
+    if pane_records is not None:
+        observed_windows = {
+            str(record.window_name or '').strip()
+            for record in pane_records.values()
+            if str(record.session_name or '').strip() == context.desired_session_name
+        }
+        for window in windows:
+            if str(window.name) not in observed_windows:
+                return f'topology_window_missing:{window.name}'
+    else:
+        for window in windows:
+            if _find_window(context, str(window.name)) is None:
+                return f'topology_window_missing:{window.name}'
 
     expected_agents = {
         str(agent_name)
         for window in windows
         for agent_name in tuple(getattr(window, 'agent_names', ()) or ())
     }
-    if set(existing_topology_agent_panes(controller, context, topology_plan=topology_plan)) != expected_agents:
+    if set(
+        existing_topology_agent_panes(
+            controller,
+            context,
+            topology_plan=topology_plan,
+            pane_records=pane_records,
+        )
+    ) != expected_agents:
         return 'topology_agent_panes_changed'
 
     if bool(getattr(topology_plan, 'sidebar_enabled', False)):
         for window in windows:
-            matches = _list_panes_by_user_options(
+            matches = _matching_pane_ids(
+                pane_records,
                 context.backend,
                 {
                     '@ccb_project_id': controller._project_id,
@@ -225,7 +289,8 @@ def topology_recreate_reason(controller, context, *, topology_plan) -> str | Non
                 return 'topology_sidebar_panes_changed'
     expected_tools = _expected_tool_slots(windows)
     for window_name, slot_key in expected_tools:
-        matches = _list_panes_by_user_options(
+        matches = _matching_pane_ids(
+            pane_records,
             context.backend,
             {
                 '@ccb_project_id': controller._project_id,
@@ -344,7 +409,13 @@ def _materialize_sidebar(
     return user_root
 
 
-def refresh_topology_sidebar_helpers(controller, backend, *, topology_plan) -> tuple[str, ...]:
+def refresh_topology_sidebar_helpers(
+    controller,
+    backend,
+    *,
+    topology_plan,
+    pane_records: dict[str, ProjectNamespacePaneRecord] | None = None,
+) -> tuple[str, ...]:
     desired_identity = sidebar_helper_fingerprint()
     if not desired_identity:
         return ()
@@ -353,7 +424,8 @@ def refresh_topology_sidebar_helpers(controller, backend, *, topology_plan) -> t
         sidebar = getattr(window, 'sidebar', None)
         if sidebar is None:
             continue
-        matches = _list_panes_by_user_options(
+        matches = _matching_pane_ids(
+            pane_records,
             backend,
             {
                 '@ccb_project_id': controller._project_id,
@@ -365,7 +437,13 @@ def refresh_topology_sidebar_helpers(controller, backend, *, topology_plan) -> t
         if len(matches) != 1:
             continue
         pane_id = matches[0]
-        if _pane_option(backend, pane_id, SIDEBAR_HELPER_ID_OPTION) == desired_identity:
+        record = pane_records.get(pane_id) if pane_records is not None else None
+        current_identity = (
+            str(getattr(record, 'sidebar_helper_id', '') or '').strip()
+            if record is not None
+            else _pane_option(backend, pane_id, SIDEBAR_HELPER_ID_OPTION)
+        )
+        if current_identity == desired_identity:
             continue
         _respawn_sidebar(
             backend,
@@ -598,6 +676,7 @@ def _sync_topology_sidebar_widths(
     *,
     topology_plan,
     timeout_s: float | None = None,
+    pane_records: dict[str, ProjectNamespacePaneRecord] | None = None,
 ) -> None:
     if topology_plan is None or not bool(getattr(topology_plan, 'sidebar_enabled', False)):
         return
@@ -620,6 +699,7 @@ def _sync_topology_sidebar_widths(
             context.backend,
             session_name=context.desired_session_name,
             project_id=project_id,
+            pane_records=pane_records,
         ):
             configured_width = width_override or width_by_window.get(record['sidebar_instance'])
             if configured_width is None:
@@ -640,7 +720,29 @@ def _list_sidebar_geometry_records(
     *,
     session_name: str,
     project_id: str = '',
+    pane_records: dict[str, ProjectNamespacePaneRecord] | None = None,
 ) -> list[dict[str, str]]:
+    if pane_records is not None:
+        records: list[dict[str, str]] = []
+        for pane_id, record in pane_records.items():
+            if str(record.session_name or '').strip() != session_name:
+                continue
+            if record.role != 'sidebar' or record.managed_by != 'ccbd':
+                continue
+            if project_id and record.project_id != project_id:
+                continue
+            sidebar_instance = str(record.sidebar_instance or '').strip()
+            if not pane_id.startswith('%') or not sidebar_instance:
+                continue
+            records.append(
+                {
+                    'pane_id': pane_id,
+                    'window_width': str(record.window_width or ''),
+                    'pane_width': str(record.pane_width or ''),
+                    'sidebar_instance': sidebar_instance,
+                }
+            )
+        return records
     runner = getattr(backend, '_tmux_run', None)
     if not callable(runner):
         return []
@@ -833,6 +935,36 @@ def _list_panes_by_user_options(backend, expected: dict[str, str]) -> list[str]:
         if all((parts[index + 1] or '').strip() == expected[option] for index, option in enumerate(options)):
             matches.append(pane_id)
     return matches
+
+
+def _matching_pane_ids(
+    pane_records: dict[str, ProjectNamespacePaneRecord] | None,
+    backend,
+    expected: dict[str, str],
+) -> list[str]:
+    if pane_records is None:
+        return _list_panes_by_user_options(backend, expected)
+    matches: list[str] = []
+    for pane_id, record in pane_records.items():
+        if all(_pane_record_option(record, option) == value for option, value in expected.items()):
+            matches.append(pane_id)
+    return matches
+
+
+def _pane_record_option(record: ProjectNamespacePaneRecord, option: str) -> str:
+    field_names = {
+        '@ccb_project_id': 'project_id',
+        '@ccb_role': 'role',
+        '@ccb_slot': 'slot_key',
+        '@ccb_window': 'ccb_window',
+        '@ccb_sidebar_instance': 'sidebar_instance',
+        '@ccb_managed_by': 'managed_by',
+        '@ccb_namespace_epoch': 'namespace_epoch',
+    }
+    field_name = field_names.get(option)
+    if field_name is None:
+        return ''
+    return str(getattr(record, field_name, None) or '').strip()
 
 
 def _sidebar_percent(width: object) -> int:

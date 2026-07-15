@@ -390,6 +390,12 @@ def test_runtime_supervisor_start_persists_startup_report(tmp_path: Path, monkey
     assert len(report.agent_results) == 1
     assert report.agent_results[0].agent_name == 'demo'
     assert report.agent_results[0].action == 'launched'
+    assert report.agent_results[0].provider_prepare_count == 1
+    assert report.agent_results[0].duration_ms is not None
+    assert report.timings_ms is not None
+    assert report.timings_ms['namespace_ensure'] >= 0
+    assert report.timings_ms['agent_prepare_and_classify'] >= 0
+    assert report.timings_ms['supervisor_total'] >= 0
 
 
 def test_runtime_supervisor_start_passes_visible_layout_signature_to_namespace(tmp_path: Path, monkeypatch) -> None:

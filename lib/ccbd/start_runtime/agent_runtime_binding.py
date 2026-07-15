@@ -23,6 +23,8 @@ def resolve_runtime_binding_state(
     launch_binding_hint_fn,
     relabel_project_namespace_pane_fn,
     same_tmux_socket_path_fn,
+    provider_prepared: bool = False,
+    reused_pane_identity_current: bool = False,
 ) -> RuntimeBindingState:
     binding, agent_action = launch_or_reuse_binding(
         context=context,
@@ -37,20 +39,22 @@ def resolve_runtime_binding_state(
         tmux_socket_path=tmux_socket_path,
         ensure_agent_runtime_fn=ensure_agent_runtime_fn,
         launch_binding_hint_fn=launch_binding_hint_fn,
+        provider_prepared=provider_prepared,
     )
     actions_taken: list[str] = []
-    actions_taken.extend(
-        relabel_runtime_pane(
-            binding=binding,
-            agent_name=agent_name,
-            project_id=project_id,
-            style_index=style_index,
-            tmux_socket_path=tmux_socket_path,
-            namespace_epoch=namespace_epoch,
-            window_name=window_name,
-            relabel_project_namespace_pane_fn=relabel_project_namespace_pane_fn,
+    if not (agent_action == 'attached' and reused_pane_identity_current):
+        actions_taken.extend(
+            relabel_runtime_pane(
+                binding=binding,
+                agent_name=agent_name,
+                project_id=project_id,
+                style_index=style_index,
+                tmux_socket_path=tmux_socket_path,
+                namespace_epoch=namespace_epoch,
+                window_name=window_name,
+                relabel_project_namespace_pane_fn=relabel_project_namespace_pane_fn,
+            )
         )
-    )
     runtime_ref, session_ref, health, lifecycle_state, agent_action = runtime_status(
         binding=binding,
         stale_binding=stale_binding,
@@ -92,6 +96,7 @@ def launch_or_reuse_binding(
     tmux_socket_path: str | None,
     ensure_agent_runtime_fn,
     launch_binding_hint_fn,
+    provider_prepared: bool = False,
 ):
     if binding is not None:
         return binding, 'attached'
@@ -111,6 +116,7 @@ def launch_or_reuse_binding(
         assigned_pane_id=assigned_pane_id,
         style_index=style_index,
         tmux_socket_path=tmux_socket_path,
+        provider_prepared=provider_prepared,
     )
     binding = launch.binding
     if stale_binding and launch.launched:

@@ -157,6 +157,10 @@ When `ccb` starts a managed Codex agent:
 - it must refresh only inheritable Codex config, auth, skills, commands,
   plugin-bundle, and memory projections into the managed home on each managed
   launch so source-home and project-memory updates become visible after restart
+- accepting an already live, identity-proven binding is not a managed launch and
+  must not re-project the Codex home underneath that running process; when
+  startup must launch or relaunch, it performs the managed-home refresh exactly
+  once before process creation
 - for Codex official-login auth with `inherit_auth=false` and no explicit API
   authority, it must leave an existing managed-home `auth.json` untouched rather
   than deleting it, because that file may be an agent-local ChatGPT login stream

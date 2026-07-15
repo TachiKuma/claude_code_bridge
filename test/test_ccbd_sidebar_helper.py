@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+from ccbd.services.project_namespace_pane import ProjectNamespacePaneRecord
 from ccbd.services.project_namespace_runtime import materialize_topology
 from ccbd.services.project_namespace_runtime.sidebar_helper import (
     SIDEBAR_ENV_PATH,
@@ -134,3 +135,27 @@ def test_changed_sidebar_helper_respawns_only_sidebar_pane(monkeypatch, tmp_path
 
     assert respawns == [('%1', sidebar.launch_args, str(tmp_path))]
     assert pane_options['%1']['@ccb_sidebar_helper_id'] == 'sha256:new'
+
+
+def test_current_sidebar_helper_uses_startup_snapshot_without_tmux_reads(monkeypatch, tmp_path: Path) -> None:
+    controller = SimpleNamespace(_project_id='project-1', _layout=SimpleNamespace(project_root=tmp_path))
+    sidebar = SimpleNamespace(launch_args=('ccb-agent-sidebar', '--pane-window', 'main'))
+    topology_plan = SimpleNamespace(windows=(SimpleNamespace(name='main', sidebar=sidebar),))
+    record = ProjectNamespacePaneRecord(
+        pane_id='%1',
+        role='sidebar',
+        sidebar_instance='main',
+        sidebar_helper_id='sha256:current',
+        project_id='project-1',
+        managed_by='ccbd',
+    )
+    monkeypatch.setattr(materialize_topology, 'sidebar_helper_fingerprint', lambda: 'sha256:current')
+
+    refreshed = materialize_topology.refresh_topology_sidebar_helpers(
+        controller,
+        object(),
+        topology_plan=topology_plan,
+        pane_records={'%1': record},
+    )
+
+    assert refreshed == ()

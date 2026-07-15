@@ -282,6 +282,15 @@ Managed provider startup mutation rules:
   memory/config projections during normal pane startup; provider command
   builders should only read the already prepared paths/env and must not refresh
   auth/config/session material as a side effect
+- startup must classify reusable bindings before provider preparation:
+  - an accepted live binding performs zero provider-home/profile/memory
+    preparation because no provider process is being launched
+  - a missing or rejected binding performs exactly one
+    `prepare_provider_workspace` pass before its launch or relaunch
+  - the launch path must consume that prepared state and must not repeat profile
+    materialization or provider-home projection
+- content-addressable generated records and projections must not be replaced or
+  fsynced when their serialized content is unchanged
 - managed provider home projection must receive project root, agent name, and
   workspace path explicitly from the startup context; it must not recover
   project identity by walking up from relocated runtime-state paths
@@ -372,6 +381,24 @@ Startup must be a single project-scoped transaction:
 11. commit startup actions
 12. emit startup result and persist startup report
 
+Startup critical-path rules:
+
+- one existing-namespace validation pass should reuse one tmux pane snapshot
+  for topology validation, active-pane discovery, and binding membership; a
+  failed snapshot may fall back to direct inspection without weakening identity
+  checks
+- Codex live-process validation for one startup batch must lazily reuse one
+  `/proc` parent-map snapshot; the snapshot scope must end before post-launch
+  validation so newly launched processes cannot be hidden by stale data
+- pane identity options should be committed as one tmux command batch per pane
+  rather than one subprocess per option
+- provider launches remain dependency-ordered unless a future bounded scheduler
+  proves provider/home/tmux ownership is disjoint; startup must not introduce
+  unbounded launch concurrency merely to reduce wall time
+- startup reports must expose stage and per-agent timings so optimization and
+  regressions can be evaluated from persisted evidence rather than inferred
+  from foreground attach latency
+
 Startup waiter rules:
 
 - lifecycle `phase=mounted` publishes backend control-plane readiness only
@@ -409,7 +436,11 @@ Startup waiter rules:
 - the project tmux namespace has the current session-scoped CCB UI contract applied on that project-owned socket/session
 - that project session contains the current namespace window contract:
   - one control window used as the long-lived session anchor
-  - one workspace window used as the visible pane layout anchor
+  - for legacy layouts, one workspace window used as the visible pane layout
+    anchor
+  - for explicit `[windows]` topology, every declared logical window required
+    by the current topology signature; `entry_window` is the foreground anchor
+    and is not the identity of agents in the other logical windows
 - project-generated tmux identifiers must remain tmux-target-safe:
   - project namespace session names must be normalized before use as tmux targets
   - transient workspace reflow operations must address windows by tmux `window_id`, not temporary dotted window names
@@ -509,7 +540,14 @@ Project namespace compatibility:
   - same project-owned tmux socket
   - same authoritative tmux session
   - same logical `slot_key`
-  - same current authoritative workspace `window_id`
+  - for explicit `[windows]` topology, same logical window name from
+    `@ccb_window` (or the matching tmux window name for compatibility) and same
+    current `namespace_epoch`
+  - for legacy records without logical-window metadata, same current
+    authoritative workspace `window_id`
+  - the actual tmux `window_id` is captured as a generation-local locator and
+    runtime fact; the entry window id must not be required for an agent whose
+    explicit logical window matches
 - for managed Codex agents with a bound `codex_session_id`, exact namespace membership is still not sufficient:
   - startup must also prove that the live pane process is running the bound `resume <codex_session_id>` conversation
   - for explicit managed Codex routes, the persisted bound-session authority
@@ -578,8 +616,12 @@ Important rule:
 - when `cmd` is enabled, pane death or slot drift for `cmd` must also be detected and repaired on heartbeat even if no user command is running in that pane
 - `cmd` recovery must first try session-preserving local slot replacement inside the current workspace window before escalating to project reflow
 - ordinary `pane-dead` / `pane-missing` recovery must not use project-server destruction as the first-line path
-- pane-backed runtime authority must carry `slot_key`, current workspace `window_id`, and `workspace_epoch`; pane id is evidence, not identity
-- local replacement must target the authoritative current workspace window for that project session, not whichever tmux target the provider backend would create by default
+- pane-backed runtime authority must carry `slot_key`, current logical-window
+  `window_id`, logical window name when explicit, and `workspace_epoch`; pane id
+  is evidence, not identity
+- local replacement must target the authoritative current logical window for
+  that slot in the project session, not whichever tmux target the provider
+  backend would create by default
 - if local replacement changes pane id inside a project-owned namespace and project-wide reflow is currently safe, the daemon must immediately continue into session-preserving workspace reflow so the pane returns to canonical layout position
 - session-preserving workspace reflow is the first namespace-level escalation for `pane_recovery:*`
 - if local replacement cannot restore `cmd`, `cmd` slot recovery must escalate through that same session-preserving `pane_recovery:*` reflow path, with `pane_recovery:cmd` as the canonical reason

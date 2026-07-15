@@ -1,70 +1,36 @@
 # Implementation Status
 
-Date: 2026-06-16
+Date: 2026-07-15
 
 ## Current Phase
 
-Main-agent execution of the first interactive-latency slice. The first real
-lifecycle profile is recorded; broad optimization still waits on narrower
-attribution, but the current working-tree slice now targets click-to-focus
-latency without expanding the Rust/helper scope.
+P0-P3 core implementation and Linux source-runtime validation are complete for
+the reported 20-second startup path. The false explicit multi-window relaunch
+defect is fixed, provider preparation is reuse-aware and exactly once for actual
+launches, global tmux/process observations are request-scoped, unchanged pane
+identity and durable records are not rewritten, and startup timings are visible
+through the persisted report and `doctor`.
 
-Worker1 profiling harness returned and main review found/fixed two blockers:
-default `ccb_test` invocation now uses project cwd instead of invalid
-`--project ... start`, and process classification is project-scoped so other
-running CCB daemons do not pollute the target project's CCB core buckets.
-
-Worker2 startup slice returned with an artifact/worktree mismatch: the reported
-tmux prepare cache and tests were not present. Main implemented the low-risk
-cache directly: detached tmux server preparation is skipped only for the same
-socket identity and same environment fingerprint, and failed prepare attempts
-are not cached.
-
-Worker3 interactive slice returned with an artifact/worktree mismatch and large
-project_view/Rust-helper changes that are not accepted as part of this plan.
-Main implemented only the narrow focus fast path in project_focus: after cache
-invalidation, focus requests queue sidebar refresh through project_view when
-available and fall back to the old synchronous sidebar refresh if the request
-path is unavailable or fails.
-
-Main review also found a blocker in the current worker3 project_view dirty
-state: pending sidebar refresh called an undefined
-`_record_project_view_sidebar_refresh`. Main fixed only that blocking path by
-adding the metrics helper, declaring the metrics fields, removing duplicate
-success recording, and covering `request_sidebar_refresh()` followed by
-`build_response()`.
-
-Interactive latency slice: `ccb __sidebar-click` now prefers a single
-`project_sidebar_click` daemon RPC. The daemon resolves the current sidebar row
-from the project_view payload and focuses the target in the same request,
-preserving the previous `project_view` plus `project_focus_*` fallback for older
-daemons that return `unknown op`. A focused dev probe,
-`dev_tools/perf_sidebar_click_latency.py`, measures the single-RPC path against
-an existing daemon socket when live UI timing evidence is needed.
+The implementation sequence, invariants, SLOs, test matrix, and rollback rules
+are recorded in
+[topics/startup-critical-path-optimization-2026-07-15.md](topics/startup-critical-path-optimization-2026-07-15.md).
 
 ## Active TODO
 
-- Main: keep worker3's wider project_view/Rust-helper changes quarantined until
-  they receive a separate review decision; do not bundle them with the accepted
-  focus fast-path and pending-refresh fix unless explicitly selected.
-- Main: measure the remaining click-to-focus delay after the single-RPC slice;
-  if latency is still noticeable, inspect tmux select-pane/window cost and the
-  foreground border/status hook path next.
-- Main: design the high-load optimization around persistent or batched ask
-  submission; current corrected profile shows one Python `ccb ask` process per
-  submission is the largest high-load CPU owner.
-- Main: design startup optimization around provider mount policy; current
-  corrected profile shows provider launch dominates startup CPU.
-- Next workload pass: run a mixed-provider matrix for Codex, Gemini, Claude,
-  OpenCode mounted-idle, and active asks.
+- Add remaining P0 counters for tmux commands, process snapshots, projection
+  file/byte scans, and durable writes if production diagnostics need them.
+- Run equivalent warm/cold baselines on macOS and WSL, especially mounted-drive
+  metadata paths.
+- Qualify real Codex and Claude provider starts separately from the completed
+  deterministic Codex-stub runtime test.
+- Decide P4 provider-specific concurrency limits only from cold-start evidence;
+  do not enable unbounded parallel startup.
 
 ## Blockers
 
-- Current high-load sample primarily targeted Codex; Claude/OpenCode/Gemini
-  active-load shares still need a controlled mixed-provider matrix.
-- The current worktree still contains unrelated and unaccepted dirty changes,
-  including project_view/Rust-helper work from worker3; commit packaging must be
-  path-scoped.
+- No implementation blocker remains for the landed P0-P3 core.
+- Final provider concurrency caps and slow-filesystem SLOs remain evidence
+  dependent and do not block the correctness fix.
 
 ## Last Landed
 
@@ -78,29 +44,36 @@ an existing daemon socket when live UI timing evidence is needed.
 
 ## Next Commit Target
 
-Do not land the remaining Rust/helper and tmux parser slices in the next
-performance commit. They stay quarantined until they show lifecycle-level
-benefit over the Python paths and pass a fresh scoped review, staged-tree tests,
-and source-runtime smoke.
-
-Next optimization target is refined attribution of the `shell-system` bucket
-into tmux server work, ask CLI process creation, shell wrappers, terminal
-frontend, and unrelated system/UI work. First pass completed in
-`history/shell-system-bucket-split-2026-06-16.md`; next implementation slice
-should target high-load `ask-cli-subprocess` overhead before tmux CPU work.
-
-Current working-tree interactive slice is path-scoped to sidebar click routing:
-`dev_tools/perf_sidebar_click_latency.py`, `lib/sidebar_click_targets.py`,
-`lib/cli/sidebar_click.py`, `lib/ccbd/handlers/project_focus.py`,
-`lib/ccbd/app_runtime/handlers.py`, `lib/ccbd/socket_client_runtime/endpoints.py`,
-and focused tests. It should not be bundled with Rust/helper residual work.
-Per user decision, this slice may be committed locally on the current branch,
-but it must not be merged to main or included in binary/release packaging until
-live latency data justifies promotion and the user explicitly approves that
-promotion.
+Package only the reviewed startup files, contracts, tests, and runtime
+performance PlanTree updates. Keep unrelated dirty worktree changes out. P4
+concurrency and P5 readiness remain separate future changes.
 
 ## Last Verified
 
+- Isolated source-runtime project:
+  `/home/bfly/yunwei/test_ccb2/startup-perf-talk1-20260715` with 5 explicit
+  windows, 10 Codex-stub agents, isolated `HOME` / `CCB_SOURCE_HOME`, and the
+  absolute source `ccb_test` wrapper.
+- Cold start after clean kill: `2.20s`. Twenty unchanged warm starts ranged
+  from `0.52s` to `0.64s`, p50 about `0.555s`, p95 `0.63s`.
+- Warm report proved 10 `attached`, zero relaunches, zero provider preparation,
+  actual tmux window ids `@0` through `@4`, and no repeated pane relabel actions.
+- `doctor` surfaced `startup_last_timings_ms` and
+  `startup_last_provider_prepare_count=0`.
+- Focused changed-surface regression: `322 passed`.
+- Full Python run: `5069 passed, 2 skipped`, then one restore-contract failure.
+  The failure was corrected and its black-box test plus impacted startup tests
+  passed (`8 passed`); the broader changed-surface matrix passed afterward.
+- `git diff --check` passed.
+- 2026-07-15 static startup trace covered `start_flow_runtime`,
+  `start_preparation`, binding matching, topology health assessment, provider
+  preparation/materialization, Codex live identity, tmux topology discovery,
+  and durable runtime stores.
+- Read-only live facts confirmed an explicit five-window layout with entry
+  window `@0` and managed panes in `@0` through `@4`, while project state holds
+  only one `workspace_window_id`.
+- The inherited Codex plugin projection source contained about 5,279 files and
+  87 MB, confirming that repeated scans/copies have material amplification.
 - Source runtime profile artifact:
   `/tmp/perf_realtarget/real_provider_cpu_profile_accurate3.json`
 - Worker1 harness review:
@@ -163,14 +136,13 @@ promotion.
   `python_rust_phase4_storage_scan_helper.json`, and
   `python_rust_phase12_storage_summary_helper.json`.
 
-## Dispatch Notes
+## Execution Notes
 
-- Workers must not commit, push, reset, checkout, or delete unrelated dirty
-  worktree changes.
-- Reviewer agents are not part of this task; `reviewer1` dispatch
-  `job_1d22628e6e26` was cancelled at the user's request.
+- `talk1` owns analysis, implementation, and verification directly for this
+  workstream. Do not dispatch worker agents unless the user explicitly changes
+  that instruction.
 - Source runtime validation must run from `/home/bfly/yunwei/test_ccb2` with
   `/home/bfly/yunwei/ccb_source/ccb_test` and isolated `HOME` /
   `CCB_SOURCE_HOME`.
-- Each worker reply must include changed files, commands/tests run, measured
-  before/after values when available, residual risk, and rollback notes.
+- Do not use the source checkout as a live runtime directory and do not mutate
+  its installed-release `.ccb` runtime state during source validation.
