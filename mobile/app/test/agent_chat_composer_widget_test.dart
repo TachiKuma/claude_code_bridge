@@ -1523,7 +1523,7 @@ void main() {
     tester,
   ) async {
     final repository = DownloadGateRepository(
-      attachmentSizeBytes: agentMessageMaxAttachmentBytes + 1,
+      attachmentSizeBytes: agentMessageMaxDownloadBytes + 1,
     );
     await tester.pumpWidget(
       MaterialApp(home: ProjectHomeScreen(repository: repository)),
@@ -1552,10 +1552,52 @@ void main() {
     await tester.pump();
 
     expect(repository.downloadCalls, 0);
-    expect(find.text('gateway-notes.txt is larger than 25 MB'), findsOneWidget);
+    expect(
+      find.text('gateway-notes.txt is larger than 128 MB'),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('agent-attachment-progress-gateway-file')),
       findsNothing,
+    );
+  });
+
+  testWidgets('release sized gateway attachment can start download', (
+    tester,
+  ) async {
+    final repository = DownloadGateRepository(
+      attachmentSizeBytes: 74 * 1024 * 1024,
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: ProjectHomeScreen(repository: repository)),
+    );
+    await tester.pumpAndSettle();
+    await openCurrentProject(tester);
+
+    await dragUntilVisible(
+      tester,
+      const ValueKey('conversation-attachment-chip-gateway-file'),
+      const Offset(0, -700),
+    );
+    tester
+        .widget<InkWell>(
+          find.byKey(
+            const ValueKey('conversation-attachment-chip-gateway-file'),
+          ),
+        )
+        .onTap!();
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(
+        const ValueKey('conversation-attachment-action-download-gateway-file'),
+      ),
+    );
+    await tester.pump();
+
+    expect(repository.downloadCalls, 1);
+    expect(
+      find.byKey(const ValueKey('agent-attachment-progress-gateway-file')),
+      findsOneWidget,
     );
   });
 

@@ -1674,6 +1674,52 @@ def test_agent_conversation_keeps_codex_response_assistant_with_event_user(
     assert 'hidden context' not in json.dumps(payload)
 
 
+def test_codex_native_user_file_link_has_download_attachment(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo'
+    release_path = tmp_path / 'downloads' / 'ccb-mobile-release.apk'
+    release_path.parent.mkdir()
+    release_path.write_bytes(b'release apk body\n')
+    _write_codex_rollout(
+        project_root,
+        agent='mobile',
+        thread_id='thread-native-file',
+        records=[
+            {
+                'timestamp': '2026-06-25T12:00:00.000Z',
+                'type': 'event_msg',
+                'payload': {
+                    'type': 'user_message',
+                    'message': f'[release]({release_path.as_uri()})',
+                },
+            },
+        ],
+    )
+    service = _service(
+        _FakeCcbdClient(),
+        project_root=project_root,
+        mobile_dir=tmp_path / 'mobile',
+    )
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view',),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
+
+    _, payload = service.dispatch_get(
+        '/v1/projects/proj-demo/agents/mobile/conversation?namespace_epoch=4&limit=20',
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+
+    item = payload['conversation']['items'][0]
+    assert item['body'].startswith('[release](ccb-artifact://')
+    assert [attachment['file_name'] for attachment in item['attachments']] == [
+        'ccb-mobile-release.apk',
+    ]
+
+
 def test_agent_conversation_completes_codex_response_assistant_from_task_marker(
     tmp_path: Path,
 ) -> None:
@@ -2905,15 +2951,24 @@ def test_agent_conversation_maps_artifact_links_from_gateway_file_store(tmp_path
 
 def test_non_native_conversation_resolves_project_file_links(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo'
+    outside_dir = tmp_path / 'downloads'
     snapshot_dir = project_root / '.ccb' / 'ccbd' / 'snapshots'
     jobs_dir = project_root / '.ccb' / 'agents' / 'mobile'
     docs_dir = project_root / 'docs'
     snapshot_dir.mkdir(parents=True)
     jobs_dir.mkdir(parents=True)
     docs_dir.mkdir(parents=True)
+    outside_dir.mkdir()
     report_path = docs_dir / 'report.txt'
+    release_path = outside_dir / 'ccb-mobile-release.apk'
+    notes_path = outside_dir / 'release-notes.txt'
+    oversized_path = outside_dir / 'oversized.bin'
     hidden_path = project_root / '.ccb' / 'secret.txt'
     report_path.write_text('report body\n', encoding='utf-8')
+    release_path.write_bytes(b'release apk body\n')
+    notes_path.write_text('release notes\n', encoding='utf-8')
+    with oversized_path.open('wb') as oversized_file:
+        oversized_file.truncate(129 * 1024 * 1024)
     hidden_path.write_text('hidden\n', encoding='utf-8')
     (jobs_dir / 'jobs.jsonl').write_text(
         json.dumps(
@@ -2935,7 +2990,11 @@ def test_non_native_conversation_resolves_project_file_links(tmp_path: Path) -> 
                         'Generated files:\n'
                         '- [report](docs/report.txt)\n'
                         '- [hidden](.ccb/secret.txt)\n'
-                        '- [outside](/etc/hosts)\n'
+                        f'- [outside]({release_path})\n'
+                        f'- [file URI]({notes_path.as_uri()})\n'
+                        f'- [directory]({outside_dir})\n'
+                        f'- [oversized]({oversized_path})\n'
+                        '- [remote file URI](file://remote-host/etc/hosts)\n'
                     ),
                 },
             }
@@ -2956,7 +3015,7 @@ def test_non_native_conversation_resolves_project_file_links(tmp_path: Path) -> 
     )
     pairing = service.create_pairing_payload(
         gateway_url='http://127.0.0.1:8787',
-        scopes=('view',),
+        scopes=('view', 'file_download'),
     )
     _, claim = service.dispatch_post(
         '/v1/pairing/claim',
@@ -2975,8 +3034,27 @@ def test_non_native_conversation_resolves_project_file_links(tmp_path: Path) -> 
     )
     assert 'ccb-artifact://' in reply['body']
     assert '[hidden](.ccb/secret.txt)' in reply['body']
-    assert '[outside](/etc/hosts)' in reply['body']
-    assert [item['file_name'] for item in reply['attachments']] == ['report.txt']
+    assert '[directory]' in reply['body']
+    assert f'[oversized]({oversized_path})' in reply['body']
+    assert '[remote file URI](file://remote-host/etc/hosts)' in reply['body']
+    assert [item['file_name'] for item in reply['attachments']] == [
+        'report.txt',
+        'ccb-mobile-release.apk',
+        'release-notes.txt',
+    ]
+
+    release = next(
+        item
+        for item in reply['attachments']
+        if item['file_name'] == 'ccb-mobile-release.apk'
+    )
+    status, content, headers = service.dispatch_file_download(
+        f'/v1/projects/proj-demo/agents/mobile/files/{release["file_id"]}',
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+    assert status == 200
+    assert content == b'release apk body\n'
+    assert headers['x-ccb-file-name'] == 'ccb-mobile-release.apk'
 
 
 def test_agent_conversation_requires_view_auth_and_fresh_epoch(tmp_path: Path) -> None:
@@ -3429,7 +3507,11 @@ def test_agent_file_routes_use_registry_project_id(tmp_path: Path) -> None:
 
 
 def test_agent_file_routes_require_file_scopes(tmp_path: Path) -> None:
-    service = _service(_FakeCcbdClient(), mobile_dir=tmp_path / 'mobile')
+    service = _service(
+        _FakeCcbdClient(project_root=str(tmp_path / 'repo')),
+        project_root=tmp_path / 'repo',
+        mobile_dir=tmp_path / 'mobile',
+    )
     pairing = service.create_pairing_payload(
         gateway_url='http://127.0.0.1:8787',
         scopes=('view',),
@@ -3451,6 +3533,29 @@ def test_agent_file_routes_require_file_scopes(tmp_path: Path) -> None:
             },
         )
     assert denied.value.status_code == 403
+
+    upload_pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('file_upload',),
+    )
+    _, upload_claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(upload_pairing['pairing_code'])},
+    )
+    _, upload = service.dispatch_file_upload(
+        '/v1/projects/proj-demo/agents/mobile/files',
+        b'host file',
+        {
+            'Authorization': f'Bearer {upload_claim["device_token"]}',
+            'X-Ccb-File-Name': 'host.txt',
+        },
+    )
+    with pytest.raises(MobileGatewayError) as download_denied:
+        service.dispatch_file_download(
+            f'/v1/projects/proj-demo/agents/mobile/files/{upload["file_id"]}',
+            {'Authorization': f'Bearer {token}'},
+        )
+    assert download_denied.value.status_code == 403
 
 
 def test_pairing_claim_creates_hashed_device_records_and_audit(tmp_path: Path) -> None:

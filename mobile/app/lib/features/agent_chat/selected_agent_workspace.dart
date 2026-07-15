@@ -30,6 +30,7 @@ import 'selected_agent_workspace_view.dart';
 
 const agentMessageMaxAttachments = 5;
 const agentMessageMaxAttachmentBytes = 25 * 1024 * 1024;
+const agentMessageMaxDownloadBytes = 128 * 1024 * 1024;
 const selectedAgentTabKeyBytes = [9];
 const selectedAgentEscapeKeyBytes = [27];
 const selectedAgentExpandScrollDuration = Duration(milliseconds: 220);
@@ -755,8 +756,8 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace>
         }
         return downloadedPath;
       }
-      if (attachment.sizeBytes > agentMessageMaxAttachmentBytes) {
-        _showSnack('${attachment.fileName} is larger than 25 MB');
+      if (attachment.sizeBytes > agentMessageMaxDownloadBytes) {
+        _showSnack('${attachment.fileName} is larger than 128 MB');
         return null;
       }
       if (_downloadingAttachmentIds.contains(attachment.fileId)) {
@@ -770,9 +771,9 @@ class _SelectedAgentWorkspaceState extends State<SelectedAgentWorkspace>
         agentName: agent.name,
         fileId: attachment.fileId,
       );
-      if (bytes.length > agentMessageMaxAttachmentBytes) {
+      if (bytes.length > agentMessageMaxDownloadBytes) {
         if (_isCurrentAgentSelection(projectId: projectId, agent: agent)) {
-          _showSnack('${attachment.fileName} is larger than 25 MB');
+          _showSnack('${attachment.fileName} is larger than 128 MB');
         }
         return null;
       }

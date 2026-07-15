@@ -16,6 +16,7 @@ import select
 import shutil
 import socket
 import sqlite3
+import stat
 import threading
 import time
 from typing import Callable, Mapping
@@ -87,7 +88,8 @@ _DEFAULT_PAIRING_SCOPES = (
     'terminal_input',
     'lifecycle',
 )
-_MAX_MOBILE_FILE_BYTES = 25 * 1024 * 1024
+_MAX_MOBILE_UPLOAD_FILE_BYTES = 25 * 1024 * 1024
+_MAX_MOBILE_DOWNLOAD_FILE_BYTES = 128 * 1024 * 1024
 _NOTIFICATION_STREAM_POLL_SECONDS = 1.0
 _INVALIDATION_WATCH_MIN_INTERVAL_SECONDS = 0.75
 _INVALIDATION_WATCH_TARGET_LIMIT = 32
@@ -1049,7 +1051,7 @@ class MobileGatewayService:
             headers,
             allowed_scopes=('file_upload', 'message_submit', 'ask'),
         )
-        if len(body) > _MAX_MOBILE_FILE_BYTES:
+        if len(body) > _MAX_MOBILE_UPLOAD_FILE_BYTES:
             raise MobileGatewayError('file too large', status_code=413)
         view_payload = self._request_project_view(project)
         view = _map(view_payload.get('view'))
@@ -1115,10 +1117,7 @@ class MobileGatewayService:
             raise MobileGatewayError('not found', status_code=404)
         project_id, agent, file_id = target
         project = self._require_project(project_id)
-        self._authenticate_any_scope(
-            headers,
-            allowed_scopes=('file_download', 'content', 'view'),
-        )
+        self._authenticate(headers, required_scopes=('file_download',))
         directory = self._mobile_file_dir(project.project_id, agent, file_id)
         metadata = _read_file_metadata(directory)
         if not metadata:
@@ -2194,7 +2193,7 @@ def build_mobile_gateway_server(listen: ListenAddress, service: MobileGatewaySer
                 if service.file_upload_target_from_path(self.path) is not None:
                     status, payload = service.dispatch_file_upload(
                         self.path,
-                        self._read_raw_body(max_bytes=_MAX_MOBILE_FILE_BYTES),
+                        self._read_raw_body(max_bytes=_MAX_MOBILE_UPLOAD_FILE_BYTES),
                         self.headers,
                     )
                 else:
@@ -3160,7 +3159,12 @@ def _claude_native_conversation_items(
                         'format': 'markdown',
                         'source': 'provider_native/claude',
                         'state': 'sent',
-                        'attachments': [],
+                        'attachments': _artifact_link_attachments(
+                            body,
+                            file_roots=file_roots,
+                            project_id=project_id,
+                            agent=agent,
+                        ),
                     }
                 else:
                     item = {
@@ -3905,7 +3909,12 @@ def _codex_rollout_conversation_items(
                 'format': 'markdown',
                 'source': 'provider_native/codex',
                 'state': 'sent',
-                'attachments': [],
+                'attachments': _artifact_link_attachments(
+                    body,
+                    file_roots=file_roots,
+                    project_id=project_id,
+                    agent=agent,
+                ),
             }
         else:
             item = {
@@ -4297,7 +4306,12 @@ def _codex_event_message_conversation_item(
             'format': 'markdown',
             'source': 'provider_native/codex',
             'state': 'sent',
-            'attachments': [],
+            'attachments': _artifact_link_attachments(
+                body,
+                file_roots=file_roots,
+                project_id=project_id,
+                agent=agent,
+            ),
         }
     if payload_type == 'agent_message':
         return {
@@ -4357,35 +4371,46 @@ def _inject_workspace_artifacts(
         text = match.group(1)
         url = match.group(2)
         parsed = urlparse(url)
-        if parsed.scheme or parsed.netloc or url.startswith('#'):
+        if url.startswith('#'):
+            return match.group(0)
+        if parsed.scheme not in {'', 'file'}:
+            return match.group(0)
+        if parsed.netloc not in {'', 'localhost'}:
             return match.group(0)
         try:
             link_path = unquote(parsed.path)
             if not link_path.strip():
                 return match.group(0)
-            target_path = Path(link_path)
+            target_path = Path(link_path).expanduser()
             if not target_path.is_absolute():
                 target_path = project_root / target_path
             target_path = target_path.resolve(strict=False)
             try:
                 relative_path = target_path.relative_to(project_root_resolved)
             except ValueError:
+                relative_path = None
+            if (
+                relative_path is not None
+                and not _workspace_artifact_relative_path_allowed(relative_path)
+            ):
                 return match.group(0)
-            if not _workspace_artifact_relative_path_allowed(relative_path):
+            target_stat = target_path.stat()
+            if not stat.S_ISREG(target_stat.st_mode):
                 return match.group(0)
-            if not target_path.is_file():
+            if target_stat.st_size > _MAX_MOBILE_DOWNLOAD_FILE_BYTES:
                 return match.group(0)
-            stat = target_path.stat()
-            if stat.st_size > _MAX_MOBILE_FILE_BYTES:
-                return match.group(0)
-            content = target_path.read_bytes()
-            digest = hashlib.sha256(content).hexdigest()
+            digest = _file_sha256(target_path)
+            path_identity = (
+                relative_path.as_posix()
+                if relative_path is not None
+                else target_path.as_posix()
+            )
             identity = '\0'.join(
                 (
                     project_id,
                     agent,
-                    relative_path.as_posix(),
-                    str(stat.st_size),
+                    path_identity,
+                    str(target_stat.st_size),
                     digest,
                 )
             ).encode('utf-8')
@@ -4399,8 +4424,7 @@ def _inject_workspace_artifacts(
             if not mobile_file_dir.is_dir():
                 mobile_file_dir.mkdir(parents=True, exist_ok=True)
                 content_path = mobile_file_dir / 'content.bin'
-                content_path.write_bytes(content)
-                shutil.copystat(target_path, content_path, follow_symlinks=True)
+                shutil.copy2(target_path, content_path, follow_symlinks=True)
                 mime_type = (
                     mimetypes.guess_type(target_path.name)[0]
                     or 'application/octet-stream'
@@ -4413,7 +4437,7 @@ def _inject_workspace_artifacts(
                     'device_id': 'auto-injected',
                     'file_name': target_path.name,
                     'mime_type': mime_type,
-                    'size_bytes': stat.st_size,
+                    'size_bytes': target_stat.st_size,
                     'sha256': digest,
                     'created_at': _utc_now(),
                 }
@@ -4426,6 +4450,14 @@ def _inject_workspace_artifacts(
             return match.group(0)
 
     return re.sub(r'\[([^\]]+)\]\(([^)]+)\)', repl, body)
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open('rb') as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _clean_native_message_text(text: str) -> str:
