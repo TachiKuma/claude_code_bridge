@@ -380,14 +380,31 @@ def test_tests_workflow_runs_workflow_closure_layout_cleanup_smoke() -> None:
     text = Path(".github/workflows/test.yml").read_text(encoding="utf-8")
 
     assert "Guard workflow closure layout cleanup smoke" in text
-    assert "scripts/workflow_closure_smoke.py" in text
-    assert "ci-workflow-closure" in text
+    assert "scripts/single_lane_multi_workgroup_smoke.py" in text
+    assert "--count 1" in text
+    assert "--shape parallel" in text
+    assert "--scenario pass" in text
     assert "matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'" in text
-    assert 'run["workflow_smoke_status"] == "ok"' in text
-    assert 'release["loop_capacity_status"] == "released"' in text
-    assert 'release["retained_count"] == 0' in text
-    assert 'not apply["namespace_reflow_errors"]' in text
-    assert 'not apply["pane_identity_report"]["reflow_errors"]' in text
+    assert 'payload["status"] == "pass"' in text
+    for key in (
+        "release_clean",
+        "raw_observed_no_live_agents",
+        "dynamic_residue_absent",
+        "child_worktree_residue_absent",
+        "external_cleanup_succeeded",
+        "process_residue_absent",
+        "socket_residue_absent",
+        "socket_filesystem_entries_absent",
+    ):
+        assert f'"{key}",' in text
+
+
+def test_wsl_test_job_activates_python_311_venv() -> None:
+    text = Path(".github/workflows/test.yml").read_text(encoding="utf-8")
+    step = text.split("- name: Run tests in WSL with tmux", 1)[1].split("\n      - name:", 1)[0]
+
+    assert 'export PATH="/tmp/ccb-ci-py311/bin:$PATH"' in step
+    assert 'python -m pytest test/' in step
 
 
 def _json(payload: dict[str, object]) -> str:

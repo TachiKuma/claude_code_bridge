@@ -1,5 +1,136 @@
 # Changelog
 
+## v8.1.6 (2026-07-14)
+
+### Release Validation
+
+- **Test Dependencies Are Explicit**: GitHub Actions installs the
+  `jsonschema` package used by the workflow evidence and campaign tests, so
+  clean Linux, macOS, and WSL runners can collect the complete Python suite.
+- **Lifecycle Jobs Build Their Accelerator**: Tests, Cross-Platform, and CCBD
+  Real Platform jobs now build the repository's `ccb-runtime-accelerator`
+  before asserting accelerator ownership and shutdown behavior.
+- **macOS Sidecar Identity Is Observable**: ccbd obtains the launched
+  accelerator's executable mapping through `lsof` when `/proc` is unavailable,
+  canonicalizes `/tmp` socket aliases, and preserves exact argv, cwd,
+  executable, socket, and start-token validation.
+- **WSL Uses A Current Rust Toolchain**: mounted-drive jobs install a minimal
+  stable rustup toolchain instead of depending on an older distribution Cargo
+  that may not support the repository lockfile.
+- **Communication Smoke Matches Nested Ask Policy**: independent provider
+  checks use an external sender, while agent-originated broadcasts explicitly
+  use silent delivery so CI does not create recursive reply traffic or violate
+  the active-task `--chain`/`--silence` contract.
+- **Multi-Agent Cold Starts Have Platform Headroom**: the bounded startup
+  transaction ceiling is 30 seconds, preventing valid dual-Claude startup on
+  macOS and mounted WSL filesystems from being cut off by the former 20-second
+  default while still returning immediately when readiness is reached.
+- **Historical Evidence Tests Are Checkout-Portable**: PlanTree acceptance
+  tests validate committed launch packets and B7 records without requiring
+  author-machine experiment directories that cannot exist on clean CI hosts.
+- **Python 3.10 Keeps The Correct Test Boundary**: the core compatibility lane
+  still runs the source/fake workflow unit coverage, while the 13 full-flow
+  cases that invoke the Python 3.11+ Agent Roles runtime are gated explicitly.
+- **macOS Validation Respects Native Filesystems**: planner projection selects
+  the exact case-preserved plan entry, and durability, timeout, and push tests
+  no longer depend on Linux `/proc`, GNU `timeout`, or narrow wall-clock races.
+- **Scheduler Tests Follow Durable Progress**: real git integration coverage
+  waits through bounded scheduler transitions before completing round review,
+  matching the public one-step-at-a-time runtime contract across Python builds.
+- **Real Integration Verification Is Cross-Version**: scheduler fixtures run a
+  concrete worker-output unittest instead of treating an empty unittest suite
+  as success, preserving the integration gate on Python 3.10 through 3.12.
+- **Fake Runtime Rework Chains Are Race-Free**: the full-flow smoke driver
+  retries only the brief active-parent transition before reviewer recheck, so
+  it cannot consume a valid rework chain before its continuation is ready.
+- **Fake Runtime Chain Windows Tolerate Loaded Runners**: G5 Workers remain
+  active long enough for the external source CLI to submit their reviewer
+  child without turning valid pass and rollback scenarios into node failures.
+- **Schedulers Wait For Callback Completion**: a completed reviewer whose edge
+  is still publishing its parent continuation remains pending until the edge
+  reaches `done`, instead of being misclassified as invalid review evidence.
+- **Restart Replay Isolates Its Recovery Target**: the restart smoke waits for
+  parallel reviewer children to finish before killing ccbd, leaving exactly
+  one persisted in-flight child as the intended resume assertion.
+- **WSL Tests Activate Their Python Environment**: mounted-drive validation
+  exposes the Python 3.11 venv on `PATH`, and source G5 smokes install draft
+  RolePacks from explicit checkout paths instead of host discovery.
+- **Workflow Cleanup Gates Use Current Public Evidence**: CI runs the
+  bundle-first G5 CLI smoke and validates its release, agent, worktree,
+  process, and socket cleanup checks instead of the retired one-shot path.
+
+### Release Surface
+
+- **Corrective Patch Published Without Rewriting History**: 8.1.6 retains the
+  8.1.5 runtime payload and advances all CLI, npm, Mobile, workflow, download,
+  badge, and release-note version surfaces after the validation repair.
+
+## v8.1.5 (2026-07-14)
+
+### Agentic Workflow Foundation
+
+- **Single-Lane Workflow Authority Is Script-Owned**: planner, orchestrator,
+  task-detailer, worker-review, round-review, and frontdesk handoffs now use
+  validated artifacts, exact authority boundaries, and deterministic status
+  transitions instead of relying on provider conversation state.
+- **Planner Replans Are Revision-Fenced**: macro-impact feedback and task-set
+  outcomes are authenticated, serialized by plan, replay-safe, and projected
+  into PlanTree only after the active revision is verified.
+- **Dynamic Workgroups Retain Lifecycle Evidence**: role capacity, pane layout,
+  worktree topology, review chains, integration gates, and release accounting
+  are represented by bounded runtime services with source and fake-provider
+  regression coverage.
+- **Restricted Roles Fail Closed**: provider projection and strict reply
+  parsing prevent readless planning roles from silently gaining file-backed
+  skills, forbidden tools, or unsupported retry authority.
+
+### Provider Lifecycle Recovery
+
+- **Codex And Claude Resume After Backend Restart**: persisted session
+  bindings are restored through exact job anchors instead of drifting to an
+  unrelated current provider session.
+- **Rotated Codex Login State Can Recover In Place**: managed Codex homes
+  refresh stable inherited auth state before respawn, allowing a repaired pane
+  to reuse its existing slot without remounting the project.
+- **Revoked Authentication Stops Restart Loops**: unrecoverable provider auth
+  crashes persist an actionable reason and recovery block; repeated daemon
+  heartbeats do not keep respawning the same broken pane.
+- **Cold Tmux Bootstrap Is Deterministic**: first startup creates the project
+  server before applying socket policy, and a missing project socket is
+  classified as absent rather than as a live backend failure.
+
+### Oh My Pi Provider
+
+- **OMP Is A Native Backend**: the new `omp` provider launches Oh My Pi with
+  its supported JSON event mode, session directory, and approval settings
+  without passing legacy Pi-only flags.
+- **OMP Uses Independent Runtime State**: provider homes, sessions, commands,
+  storage classification, catalog entries, and native lifecycle tests remain
+  separate from the existing Pi adapter.
+
+### Mobile Push Delivery
+
+- **Push Routes Are Device-Bound**: feature-gated FCM delivery binds tokens to
+  the paired device and gateway contract while deduplicating route updates and
+  completion notifications.
+- **Terminal Startup Selects A Compatible Tmux Client**: Mobile gateway
+  startup avoids inheriting an incompatible client when attaching to project
+  sessions.
+
+### Release Update Safety
+
+- **Colliding Builds Are Rejected**: an update cannot replace an installed
+  release with a different payload that claims the same version and commit.
+- **Rollback Backups Survive Failed Updates**: interrupted installation keeps
+  the verified previous payload available until the new release is committed
+  successfully.
+
+### Release Surface
+
+- **Release Metadata Synchronized**: VERSION, source CLI metadata,
+  `package.json`, Mobile app metadata and download links, workflow dispatch
+  defaults, localized README badges, and release notes are aligned for 8.1.5.
+
 ## v8.1.4 (2026-07-13)
 
 ### Mobile Connection Recovery

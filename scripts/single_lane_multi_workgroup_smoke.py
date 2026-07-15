@@ -16,6 +16,9 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+ROLE_SOURCE_ROOT = (
+    REPO_ROOT / 'docs' / 'plantree' / 'plans' / 'agentic-loop-workflow' / 'drafts'
+)
 ROLE_IDS = (
     'agentroles.ccb_frontdesk',
     'agentroles.ccb_planner',
@@ -203,7 +206,7 @@ def run_smoke(
             _run_logged(
                 command_log,
                 f'role_install_{role_id.rsplit(".", 1)[-1]}',
-                [str(ccb_test), 'roles', 'install', role_id, '--skip-tools'],
+                _role_install_command(ccb_test, role_id),
                 cwd=test_root,
                 env=env,
                 logs_dir=logs_dir,
@@ -388,6 +391,21 @@ def run_smoke(
             except Exception:
                 pass
         raise
+
+
+def _role_install_command(ccb_test: Path, role_id: str) -> list[str]:
+    source_path = ROLE_SOURCE_ROOT / role_id
+    if not (source_path / 'role.toml').is_file():
+        raise SmokeFailure(f'G5 role source is unavailable: {source_path}')
+    return [
+        str(ccb_test),
+        'roles',
+        'install',
+        role_id,
+        '--path',
+        str(source_path),
+        '--skip-tools',
+    ]
 
 
 def _build_report(
@@ -809,7 +827,7 @@ def _write_task_inputs(
             'count': count,
             'shape': shape,
             'selected_node': 'node-001',
-            'restart_latency_ms': 3000 if scenario == 'restart_replay_pass' else 0,
+            'restart_latency_ms': 10000 if scenario == 'restart_replay_pass' else 0,
         },
         separators=(',', ':'),
     )
@@ -896,6 +914,8 @@ def _run_until_terminal(
     label_prefix: str = 'loop_runner_auto',
 ) -> list[dict[str, Any]]:
     results = []
+    last_task_status = ''
+    last_scheduler_status = ''
     for attempt in range(1, 97):
         runner = _run_logged(
             command_log,
@@ -930,13 +950,24 @@ def _run_until_terminal(
             timeout_s=timeout_s,
             label=f'{label_prefix}_task_show_{attempt}',
         )
+        last_task_status = str(_task_record(shown).get('status') or '')
+        loop_id = _find_loop_id(project_root, TASK_ID)
+        if loop_id:
+            state = _read_json(
+                project_root / '.ccb' / 'runtime' / 'loops' / loop_id / 'workgroup_scheduler_state.json'
+            )
+            last_scheduler_status = str(state.get('status') or '')
         if (
-            _task_record(shown).get('status') in TERMINAL_TASK_STATUSES
+            last_task_status in TERMINAL_TASK_STATUSES
             and _terminal_release_complete(project_root)
         ):
             return results
         time.sleep(0.1)
-    raise SmokeFailure('loop runner did not reach terminal task authority in 96 activations')
+    raise SmokeFailure(
+        'loop runner did not reach terminal task authority in 96 activations: '
+        f'task_status={last_task_status or "missing"}, '
+        f'scheduler_status={last_scheduler_status or "missing"}'
+    )
 
 
 def _submit_pending_worker_reviews(
@@ -1008,17 +1039,62 @@ def _submit_pending_worker_reviews(
             )
         )
     submitted = []
-    for result in _run_logged_concurrent(
+    for result in _run_chain_commands_with_parent_retry(
         command_log,
         commands,
         cwd=test_root,
         env=env,
         logs_dir=logs_dir,
         timeout_s=timeout_s,
-        allow_failure=True,
     ):
         if result['returncode'] == 0:
             submitted.append(_json_object(result['stdout']))
+    return submitted
+
+
+def _run_chain_commands_with_parent_retry(
+    command_log: list[dict[str, Any]],
+    commands: list[tuple[str, list[str]]],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    logs_dir: Path,
+    timeout_s: int,
+    retry_attempts: int = 31,
+    retry_delay_s: float = 0.1,
+) -> list[dict[str, Any]]:
+    pending = list(commands)
+    submitted: list[dict[str, Any]] = []
+    for retry_index in range(retry_attempts):
+        if not pending:
+            break
+        if retry_index:
+            time.sleep(retry_delay_s)
+        attempted = [
+            (
+                label if retry_index == 0 else f'{label}_parent_retry_{retry_index}',
+                argv,
+            )
+            for label, argv in pending
+        ]
+        records = _run_logged_concurrent(
+            command_log,
+            attempted,
+            cwd=cwd,
+            env=env,
+            logs_dir=logs_dir,
+            timeout_s=timeout_s,
+            allow_failure=True,
+        )
+        retry_pending: list[tuple[str, list[str]]] = []
+        for original, record in zip(pending, records):
+            if record['returncode'] == 0:
+                submitted.append(record)
+                continue
+            error = f'{record.get("stderr") or ""}\n{record.get("stdout") or ""}'
+            if 'ask --chain requires an active parent job for the sender' in error:
+                retry_pending.append(original)
+        pending = retry_pending
     return submitted
 
 
@@ -1163,6 +1239,11 @@ def _run_restart_replay(
         time.sleep(0.25)
     if pending_job is None or pending_edge is None:
         raise SmokeFailure('restart replay did not establish a durable pending reviewer job')
+    _wait_for_restart_target_isolation(
+        project_root,
+        pending_job_id=str(pending_job.get('job_id') or ''),
+        timeout_s=5.0,
+    )
 
     lease_path = project_root / '.ccb' / 'ccbd' / 'lease.json'
     lease_before = _read_json(lease_path)
@@ -1216,6 +1297,49 @@ def _run_restart_replay(
         'daemon_pid_after': daemon_after,
         'restart_returncode': restarted['returncode'],
     }
+
+
+def _wait_for_restart_target_isolation(
+    project_root: Path,
+    *,
+    pending_job_id: str,
+    timeout_s: float,
+) -> None:
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        loop_id = _find_loop_id(project_root, TASK_ID)
+        state = _read_json(
+            project_root / '.ccb' / 'runtime' / 'loops' / loop_id / 'workgroup_scheduler_state.json'
+        )
+        nodes = _mapping(state.get('nodes'))
+        child_job_ids: list[str] = []
+        for node in nodes.values():
+            reviewer = str(_mapping(node).get('reviewer_agent') or '')
+            if not reviewer:
+                continue
+            child_job_ids.extend(
+                str(edge.get('child_job_id') or '')
+                for edge in _review_edges(project_root, reviewer=reviewer)
+                if str(edge.get('child_job_id') or '')
+            )
+        jobs = _collect_jobs(project_root)
+        pending = jobs.get(pending_job_id, {})
+        others = [job_id for job_id in child_job_ids if job_id != pending_job_id]
+        if (
+            len(set(child_job_ids)) == len(nodes)
+            and str(pending.get('status') or '') not in TERMINAL_JOB_STATUSES
+            and all(
+                str(jobs.get(job_id, {}).get('status') or '') in TERMINAL_JOB_STATUSES
+                for job_id in others
+            )
+        ):
+            return
+        if str(pending.get('status') or '') in TERMINAL_JOB_STATUSES:
+            break
+        time.sleep(0.05)
+    raise SmokeFailure(
+        'restart replay could not isolate one resumable reviewer job before daemon termination'
+    )
 
 
 def _record_script_action(

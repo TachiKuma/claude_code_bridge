@@ -40,6 +40,11 @@ PENDING_NODE_STATUSES = {
     'worker_pending',
     'worker_submission_unknown',
 }
+PENDING_CHAIN_EDGE_STATES = {
+    'pending',
+    'child_completed',
+    'continuation_submitted',
+}
 
 
 class _SchedulerPending(RuntimeError):
@@ -121,6 +126,7 @@ class MultiWorkgroupScheduler:
                     continue
                 previous = str(node['status'])
                 result = self._submit_node_job(state, node, purpose='worker')
+                result = _defer_pending_worker_chain(result, purpose='worker')
                 node['worker'] = result
                 if not bool(result.get('terminal')):
                     node['status'] = _pending_status(result, purpose='worker')
@@ -433,6 +439,7 @@ class MultiWorkgroupScheduler:
                 continue
             purpose = _pending_purpose(node)
             result = self._submit_node_job(state, node, purpose=purpose)
+            result = _defer_pending_worker_chain(result, purpose=purpose)
             _set_job_result(node, purpose, result)
             if not bool(result.get('terminal')):
                 node['status'] = _pending_status(result, purpose=purpose)
@@ -1658,6 +1665,31 @@ def _pending_job_ids(state: dict[str, object]) -> list[str]:
 def _set_job_result(node: dict[str, object], purpose: str, result: dict[str, object]) -> None:
     field = purpose
     node[field] = result
+
+
+def _defer_pending_worker_chain(
+    result: dict[str, object],
+    *,
+    purpose: str,
+) -> dict[str, object]:
+    if (
+        purpose != 'worker'
+        or not bool(result.get('terminal'))
+        or str(result.get('status') or '') != 'completed'
+    ):
+        return result
+    chain = result.get('chain_evidence')
+    records = [item for item in chain if isinstance(item, dict)] if isinstance(chain, list) else []
+    if not records or not any(
+        str(item.get('state') or '') in PENDING_CHAIN_EDGE_STATES
+        for item in records
+    ):
+        return result
+    return {
+        **result,
+        'terminal': False,
+        'pending_source': 'worker_review_chain_pending',
+    }
 
 
 def _pending_status(result: dict[str, object], *, purpose: str) -> str:

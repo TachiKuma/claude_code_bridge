@@ -21,6 +21,10 @@ from provider_execution.fake import FakeProviderAdapter
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'scripts' / 'single_lane_multi_workgroup_smoke.py'
+REQUIRES_AGENT_ROLES_RUNTIME = pytest.mark.skipif(
+    sys.version_info < (3, 11),
+    reason='Agent Roles runtime requires Python 3.11+',
+)
 
 
 def _scenario_contract(
@@ -36,7 +40,7 @@ def _scenario_contract(
         'count': count,
         'shape': shape,
         'selected_node': 'node-001',
-        'restart_latency_ms': 3000 if scenario == 'restart_replay_pass' else 0,
+        'restart_latency_ms': 10000 if scenario == 'restart_replay_pass' else 0,
     }
 
 
@@ -47,6 +51,25 @@ def _load_script():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_source_smoke_installs_rolepacks_from_explicit_checkout_paths() -> None:
+    module = _load_script()
+    ccb_test = Path('/source/ccb_test')
+
+    for role_id in module.ROLE_IDS:
+        command = module._role_install_command(ccb_test, role_id)
+        source_path = module.ROLE_SOURCE_ROOT / role_id
+        assert command == [
+            str(ccb_test),
+            'roles',
+            'install',
+            role_id,
+            '--path',
+            str(source_path),
+            '--skip-tools',
+        ]
+        assert (source_path / 'role.toml').is_file()
 
 
 def _job(
@@ -284,6 +307,7 @@ def test_fake_scheduler_worker_writes_only_node_bound_allowed_path(tmp_path: Pat
     assert (workspace / 'g5_outputs/node-002.txt').is_file()
     assert not (workspace / 'g5_outputs/node-001.txt').exists()
     assert 'changed_files: g5_outputs/node-002.txt' in submission.reply
+    assert submission.ready_at == '2026-07-11T00:00:03Z'
 
 
 @pytest.mark.parametrize(
@@ -453,7 +477,7 @@ def test_fake_worker_continuation_recovers_contract_from_verified_project_artifa
         now='2026-07-11T00:00:00Z',
     )
 
-    assert submission.ready_at == '2026-07-11T00:00:01Z'
+    assert submission.ready_at == '2026-07-11T00:00:03Z'
     assert 'status: done' in submission.reply
 
 
@@ -792,7 +816,76 @@ def test_logged_concurrent_commands_launch_in_same_observation_window(tmp_path: 
     assert 'second released first' in (tmp_path / 'second.stdout').read_text(encoding='utf-8')
 
 
+def test_chain_submission_retries_only_while_parent_continuation_is_pending(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script()
+    outcomes = [
+        (1, '', 'error: ask --chain requires an active parent job for the sender'),
+        (1, '', 'error: ask --chain requires an active parent job for the sender'),
+        (0, '{"job_id":"job-recheck"}', ''),
+    ]
+
+    def run_concurrent(command_log, commands, **_kwargs):
+        records = []
+        for label, argv in commands:
+            returncode, stdout, stderr = outcomes.pop(0)
+            record = {
+                'label': label,
+                'argv': argv,
+                'returncode': returncode,
+                'stdout': stdout,
+                'stderr': stderr,
+            }
+            command_log.append(record)
+            records.append(record)
+        return records
+
+    monkeypatch.setattr(module, '_run_logged_concurrent', run_concurrent)
+    command_log: list[dict[str, object]] = []
+
+    submitted = module._run_chain_commands_with_parent_retry(
+        command_log,
+        [('worker_chain_node-001_2_6', ['ccb_test', 'ask', '--chain'])],
+        cwd=tmp_path,
+        env={},
+        logs_dir=tmp_path,
+        timeout_s=5,
+        retry_attempts=3,
+        retry_delay_s=0,
+    )
+
+    assert [item['label'] for item in command_log] == [
+        'worker_chain_node-001_2_6',
+        'worker_chain_node-001_2_6_parent_retry_1',
+        'worker_chain_node-001_2_6_parent_retry_2',
+    ]
+    assert [item['label'] for item in submitted] == [
+        'worker_chain_node-001_2_6_parent_retry_2'
+    ]
+    assert outcomes == []
+
+    outcomes.append((1, '', 'error: permission denied'))
+    command_log = []
+    submitted = module._run_chain_commands_with_parent_retry(
+        command_log,
+        [('worker_chain_node-001_2_7', ['ccb_test', 'ask', '--chain'])],
+        cwd=tmp_path,
+        env={},
+        logs_dir=tmp_path,
+        timeout_s=5,
+        retry_attempts=3,
+        retry_delay_s=0,
+    )
+
+    assert [item['label'] for item in command_log] == ['worker_chain_node-001_2_7']
+    assert submitted == []
+    assert outcomes == []
+
+
 @pytest.mark.ccb_lifecycle_smoke
+@REQUIRES_AGENT_ROLES_RUNTIME
 @pytest.mark.parametrize(
     ('count', 'shape'),
     ((1, 'parallel'), (2, 'parallel'), (3, 'mixed_dag'), (4, 'mixed_dag')),
@@ -825,6 +918,7 @@ def test_real_cli_fake_multi_workgroup_full_flow(
 
 
 @pytest.mark.ccb_lifecycle_smoke
+@REQUIRES_AGENT_ROLES_RUNTIME
 @pytest.mark.parametrize(
     ('scenario', 'count', 'shape', 'expected_classification'),
     (

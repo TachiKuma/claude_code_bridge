@@ -195,6 +195,14 @@ def test_spawned_ccbd_readiness_probe_uses_shared_control_plane_timeout(monkeypa
     assert captured == [ccbd_daemon_process.CONTROL_PLANE_RPC_TIMEOUT_S]
 
 
+def test_startup_policy_defaults_to_thirty_second_cold_start_budget(monkeypatch) -> None:
+    monkeypatch.delenv('CCB_STARTUP_TRANSACTION_TIMEOUT_S', raising=False)
+
+    reloaded = importlib.reload(startup_policy)
+
+    assert reloaded.STARTUP_TRANSACTION_TIMEOUT_S == 30.0
+
+
 def test_startup_policy_clamps_foreground_attach_timeout_to_startup_budget(monkeypatch) -> None:
     monkeypatch.setenv('CCB_STARTUP_TRANSACTION_TIMEOUT_S', '4.0')
     monkeypatch.setenv('CCB_FOREGROUND_ATTACH_RPC_TIMEOUT_S', '2.5')

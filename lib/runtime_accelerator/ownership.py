@@ -117,7 +117,11 @@ def record_runtime_accelerator_owner(
         socket_path=socket,
     )
     if not _matches_accelerator_process(identity, project_root=root, socket_path=socket):
-        raise RuntimeAcceleratorOwnershipError(f"runtime_accelerator_identity_mismatch:pid={pid}")
+        raise RuntimeAcceleratorOwnershipError(
+            "runtime_accelerator_identity_mismatch:"
+            f"pid={pid}:argv={identity.argv!r}:cwd={identity.cwd}:"
+            f"executable={identity.executable}:start_token={identity.start_token!r}"
+        )
     assert identity.executable is not None
     owner = RuntimeAcceleratorOwner(
         project_id=compute_project_id(root),
@@ -321,7 +325,7 @@ def inspect_process_identity(pid: int) -> ProcessIdentity | None:
     if not argv:
         argv = _split_cmdline(read_proc_cmdline(pid))
     cwd = read_proc_path(pid, "cwd") or _read_process_cwd_via_lsof(pid)
-    executable = read_proc_path(pid, "exe")
+    executable = read_proc_path(pid, "exe") or _read_process_executable_via_lsof(pid)
     if executable is None and argv:
         executable = _resolve_executable(argv[0], cwd=cwd)
     start_token = _read_process_start_token(pid)
@@ -387,7 +391,7 @@ def _matches_accelerator_process(
 def _argv_matches_accelerator(argv: tuple[str, ...], *, socket_path: Path) -> bool:
     if len(argv) != 4 or not _is_accelerator_executable(Path(argv[0])):
         return False
-    return argv[1:] == ("serve", "--socket", str(socket_path))
+    return argv[1:3] == ("serve", "--socket") and _resolved_path(argv[3]) == socket_path
 
 
 def _is_accelerator_executable(path: Path) -> bool:
@@ -482,6 +486,27 @@ def _read_process_cwd_via_lsof(pid: int) -> Path | None:
     for line in str(result.stdout or "").splitlines():
         if line.startswith("n") and len(line) > 1:
             return Path(line[1:])
+    return None
+
+
+def _read_process_executable_via_lsof(pid: int) -> Path | None:
+    try:
+        result = subprocess.run(
+            ["lsof", "-a", "-p", str(int(pid)), "-d", "txt", "-Fn"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except Exception:
+        return None
+    if result.returncode != 0:
+        return None
+    for line in str(result.stdout or "").splitlines():
+        if not line.startswith("n") or len(line) <= 1:
+            continue
+        candidate = Path(line[1:])
+        if _is_accelerator_executable(candidate):
+            return candidate
     return None
 
 

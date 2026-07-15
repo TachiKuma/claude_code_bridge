@@ -409,6 +409,36 @@ class Harness:
         return {'status': 'done' if command.result == 'pass' else command.result, 'result': command.result}
 
 
+def _run_until_job_submitted(
+    scheduler: MultiWorkgroupScheduler,
+    harness: Harness,
+    node_id: str,
+    purpose: str,
+    *,
+    max_runs: int = 4,
+) -> None:
+    last_state: dict[str, object] | None = None
+    for _attempt in range(max_runs):
+        if (node_id, purpose) in harness.jobs:
+            return
+        payload = scheduler.run_once()
+        last_state = {
+            key: payload.get(key)
+            for key in (
+                'scheduler_action',
+                'controller_status',
+                'round_result',
+                'round_result_source',
+                'failure',
+            )
+            if payload.get(key) is not None
+        }
+    raise AssertionError(
+        f'job was not submitted after {max_runs} scheduler runs: '
+        f'{node_id}/{purpose}; last_state={last_state}'
+    )
+
+
 def _review_status(reply: str) -> str:
     for line in str(reply or '').splitlines():
         if line.strip().lower().startswith('status:'):
@@ -418,7 +448,20 @@ def _review_status(reply: str) -> str:
 
 def _record(root: Path) -> dict[str, object]:
     artifact = root / 'execution-contract.md'
-    artifact.write_text('# Execution Contract\n\nVerification:\n- python -m unittest\n', encoding='utf-8')
+    artifact.write_text(
+        '# Execution Contract\n\nVerification:\n- python -m unittest test_integration.py\n',
+        encoding='utf-8',
+    )
+    (root / 'test_integration.py').write_text(
+        'from pathlib import Path\n'
+        'import unittest\n\n'
+        'class IntegrationTest(unittest.TestCase):\n'
+        '    def test_worker_outputs(self):\n'
+        "        outputs = list(Path('parts').glob('*/result.txt'))\n"
+        '        self.assertTrue(outputs)\n'
+        '        self.assertTrue(all(path.read_text().strip() for path in outputs))\n',
+        encoding='utf-8',
+    )
     return {
         'task_id': 'task-g3',
         'task_revision': 1,
@@ -724,6 +767,33 @@ def test_scheduler_rejects_completed_worker_without_review_chain(tmp_path: Path)
     assert 'review_chain_missing' in final['nodes']['node-001']['failure']['reasons']
     assert integration.payload['nodes']['node-001']['reviewed_commit'] is None
     assert harness.controller_submissions == [('node-001', 'worker')]
+
+
+def test_scheduler_waits_for_callback_edge_to_finish_before_validating_chain(
+    tmp_path: Path,
+) -> None:
+    scheduler, harness, integration = _scheduler(tmp_path, 1)
+    scheduler.run_once()
+    harness.complete('node-001', 'worker')
+    scheduler.run_once()
+    harness.complete('node-001', 'reviewer', reply='status: pass')
+    root = harness.jobs[('node-001', 'worker')]
+    root['chain_evidence'][0]['state'] = 'continuation_submitted'
+
+    pending = scheduler.run_once()
+
+    node = pending['nodes']['node-001']
+    assert node['status'] == 'worker_pending'
+    assert node['worker']['pending_source'] == 'worker_review_chain_pending'
+    assert node['worker']['terminal'] is False
+    assert node['failure'] is None
+    assert ('finalize_node', 'node-001') not in integration.calls
+
+    root['chain_evidence'][0]['state'] = 'done'
+    completed = scheduler.run_once()
+
+    assert completed['nodes']['node-001']['status'] == 'integrated'
+    assert ('finalize_node', 'node-001') in integration.calls
 
 
 @pytest.mark.parametrize(
@@ -1191,7 +1261,7 @@ def test_scheduler_uses_real_r2_worktrees_commits_merge_promotion_and_cleanup(tm
     scheduler.run_once()
     for node_id in ('node-001', 'node-002'):
         harness.complete(node_id, 'reviewer', reply='status: pass')
-    scheduler.run_once()
+    _run_until_job_submitted(scheduler, harness, 'round', 'ccb_round_reviewer')
     harness.complete('round', 'ccb_round_reviewer', reply='round result: pass')
 
     final = scheduler.run_once()
@@ -1238,7 +1308,7 @@ def test_real_r2_scheduler_records_rework_cycles_then_integrates(
         scheduler.run_once()
 
     harness.complete('node-001', 'reviewer_recheck', attempt=cycles, reply='status: pass')
-    scheduler.run_once()
+    _run_until_job_submitted(scheduler, harness, 'round', 'ccb_round_reviewer')
     harness.complete('round', 'ccb_round_reviewer', reply='round result: pass')
     final = scheduler.run_once()
     integration = json.loads(
