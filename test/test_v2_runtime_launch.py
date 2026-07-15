@@ -1833,6 +1833,44 @@ def test_native_cli_launcher_builds_provider_state_payload(
         assert visible_parts == [default_executable, '--demo']
 
 
+def test_grok_launcher_fullscreen_startup_arg_overrides_default_minimal(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.delenv('GROK_START_CMD', raising=False)
+    project_root = tmp_path / 'repo-grok-fullscreen'
+    command = ParsedStartCommand(
+        project=None,
+        agent_names=('grok1',),
+        restore=True,
+        auto_permission=False,
+    )
+    ctx = _context(project_root, command)
+    spec = _spec('grok1', provider='grok', startup_args=('--fullscreen', '--demo'))
+    plan = WorkspacePlanner().plan(spec, ctx.project)
+    plan.workspace_path.mkdir(parents=True, exist_ok=True)
+    runtime_dir = ctx.paths.agent_provider_runtime_dir('grok1', 'grok')
+    launcher = build_default_runtime_launcher_map(include_optional=True)['grok']
+
+    prepared = launcher.prepare_launch_context(ctx, spec, plan, runtime_dir, {})
+    start_cmd = launcher.build_start_cmd(
+        command,
+        spec,
+        runtime_dir,
+        'sess-grok-fullscreen',
+        prepared_state=prepared,
+    )
+
+    assert shlex.split(start_cmd.rsplit('; ', 1)[-1]) == [
+        'grok',
+        '--no-auto-update',
+        '--cwd',
+        str(plan.workspace_path),
+        '--fullscreen',
+        '--demo',
+    ]
+
+
 def test_grok_launcher_projects_system_login_into_managed_home(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

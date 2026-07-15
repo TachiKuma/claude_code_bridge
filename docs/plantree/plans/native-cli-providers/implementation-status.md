@@ -41,8 +41,15 @@ require provider-native `EndTurn` evidence with a non-empty reply. Process exit
 without native terminal evidence is incomplete, and neither model-printed
 `CCB_DONE` nor an internal CCB turn-boundary item is completion authority.
 
+Grok startup argument normalization for Issue #255 has landed in source.
+Explicit `startup_args = ["--fullscreen"]` now suppresses CCB's injected
+`--minimal` default; unrelated startup arguments retain the minimal default.
+
 ## Last Landed
 
+- Fixed Issue #255 without changing the shared native CLI launcher: Grok
+  selects a prebuilt fullscreen launch configuration only when its explicit
+  startup arguments contain `--fullscreen`.
 - Shared pane-quiet support and Kimi/DeepSeek provider backends were added in
   the earlier first slice and remain as compatibility/test support.
 - Source-runtime smoke project added at
@@ -158,6 +165,15 @@ Kimi hardening source work is unblocked. Remaining Kimi prompt-mode and auth
 diagnostic ideas stay deferred/open until real usage needs them.
 
 ## Last Verified
+
+Grok fullscreen startup regression, 2026-07-15:
+
+- The default/unrelated-argument path and explicit fullscreen override path
+  passed together (`9 passed`).
+- The expanded Grok, native CLI provider/execution/completion, launcher, and
+  session-file regression set passed (`186 passed`).
+- Config loading, provider catalog/registry, and repository hygiene regressions
+  passed (`139 passed`).
 
 Grok native CCB skill projection verification, 2026-07-13:
 

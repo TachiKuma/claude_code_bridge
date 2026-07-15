@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from agents.models import AgentSpec
@@ -33,6 +34,10 @@ _GROK_LAUNCH_CONFIG = NativeCliLaunchConfig(
     home_env='HOME',
     visible_args=('--no-auto-update', '--minimal'),
     visible_args_builder=_grok_visible_args,
+)
+_GROK_FULLSCREEN_LAUNCH_CONFIG = replace(
+    _GROK_LAUNCH_CONFIG,
+    visible_args=tuple(arg for arg in _GROK_LAUNCH_CONFIG.visible_args if arg != '--minimal'),
 )
 
 
@@ -77,8 +82,13 @@ def build_start_cmd(
         launch_context['grok_skill_permissions_enabled'] = bool(
             command.auto_permission and grok_ccb_skills_ready(home_dir)
         )
+    launch_config = (
+        _GROK_FULLSCREEN_LAUNCH_CONFIG
+        if '--fullscreen' in spec.startup_args
+        else _GROK_LAUNCH_CONFIG
+    )
     return native_build_start_cmd(
-        _GROK_LAUNCH_CONFIG,
+        launch_config,
         command,
         spec,
         runtime_dir,

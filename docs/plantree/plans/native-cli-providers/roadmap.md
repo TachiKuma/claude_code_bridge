@@ -268,6 +268,11 @@ Date: 2026-06-13
     files passed with `54 passed`; wider provider/registry tests passed with
     `31 passed`; a real authenticated Grok ask completed from native
     `EndTurn` as `grok_run_stop`.
+- Fixed Issue #255 in Grok visible startup: explicit `--fullscreen` agent
+  startup arguments suppress CCB's injected `--minimal` default, while default
+  and unrelated-argument launches continue to use minimal mode. Focused and
+  expanded provider regressions passed with `9 passed` and `186 passed`; config,
+  registry/catalog, and repository hygiene coverage passed with `139 passed`.
 - Added Grok-native CCB skills and execution context:
   - `ask` and `ccb-clear` project independently into each managed
     `.grok/skills` directory with inspectable ownership markers.
