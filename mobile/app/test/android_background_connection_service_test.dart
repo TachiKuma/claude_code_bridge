@@ -28,6 +28,10 @@ void main() {
     );
     expect(manifest, contains('android:exported="false"'));
     expect(activity, contains('io.ccb.mobile/background_connection'));
+    expect(activity, contains('isBackgroundRestricted'));
+    expect(activity, contains('isIgnoringBatteryOptimizations'));
+    expect(activity, contains('isLowPowerStandbyEnabled'));
+    expect(activity, contains('ACTION_APPLICATION_DETAILS_SETTINGS'));
     expect(service, contains('startForeground('));
     expect(service, contains('START_NOT_STICKY'));
     expect(service, contains('.setOngoing(true)'));

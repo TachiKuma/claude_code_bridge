@@ -33,6 +33,34 @@ abstract interface class BackgroundConnectionPlatform {
   Future<bool> start();
 
   Future<void> stop();
+
+  Future<BackgroundConnectionSystemStatus> readSystemStatus();
+
+  Future<bool> openSystemSettings();
+}
+
+class BackgroundConnectionSystemStatus {
+  const BackgroundConnectionSystemStatus({
+    required this.backgroundRestricted,
+    required this.batteryOptimizationExempt,
+    required this.lowPowerStandbyRestricted,
+  });
+
+  factory BackgroundConnectionSystemStatus.fromMap(
+    Map<Object?, Object?> value,
+  ) {
+    return BackgroundConnectionSystemStatus(
+      backgroundRestricted: value['background_restricted'] == true,
+      batteryOptimizationExempt: value['battery_optimization_exempt'] == true,
+      lowPowerStandbyRestricted: value['low_power_standby_restricted'] == true,
+    );
+  }
+
+  final bool backgroundRestricted;
+  final bool batteryOptimizationExempt;
+  final bool lowPowerStandbyRestricted;
+
+  bool get isRestricted => backgroundRestricted || lowPowerStandbyRestricted;
 }
 
 class BackgroundConnectionPlatformException implements Exception {
@@ -72,6 +100,40 @@ class MethodChannelBackgroundConnectionPlatform
     } on MissingPluginException {
       throw const BackgroundConnectionPlatformException(
         'Background connection is not supported on this platform.',
+      );
+    }
+  }
+
+  @override
+  Future<BackgroundConnectionSystemStatus> readSystemStatus() async {
+    try {
+      final value = await _channel.invokeMethod<Map<Object?, Object?>>(
+        'readSystemStatus',
+      );
+      if (value == null) {
+        throw const BackgroundConnectionPlatformException(
+          'Android did not return background restriction status.',
+        );
+      }
+      return BackgroundConnectionSystemStatus.fromMap(value);
+    } on PlatformException catch (error) {
+      throw BackgroundConnectionPlatformException(error.message ?? error.code);
+    } on MissingPluginException {
+      throw const BackgroundConnectionPlatformException(
+        'Background settings are not supported on this platform.',
+      );
+    }
+  }
+
+  @override
+  Future<bool> openSystemSettings() async {
+    try {
+      return await _channel.invokeMethod<bool>('openSystemSettings') ?? false;
+    } on PlatformException catch (error) {
+      throw BackgroundConnectionPlatformException(error.message ?? error.code);
+    } on MissingPluginException {
+      throw const BackgroundConnectionPlatformException(
+        'Background settings are not supported on this platform.',
       );
     }
   }

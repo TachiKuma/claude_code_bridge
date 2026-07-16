@@ -106,6 +106,35 @@ void main() {
     await tester.ensureVisible(restoredSwitch);
     expect(tester.widget<SwitchListTile>(restoredSwitch).value, isTrue);
   });
+
+  testWidgets('settings shows Android background restriction and opens it', (
+    tester,
+  ) async {
+    final platform = _SettingsBackgroundConnectionPlatform();
+
+    await tester.pumpWidget(
+      CcbMobileApp(
+        enableProductOnboarding: true,
+        backgroundConnectionPreferenceStore:
+            MemoryBackgroundConnectionPreferenceStore(),
+        backgroundConnectionPlatform: platform,
+        profileStore: GatewayHostProfileStore(secureStore: MemorySecureStore()),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final settingsFinder = find.byKey(
+      const ValueKey('background-connection-system-settings'),
+    );
+    await tester.ensureVisible(settingsFinder);
+    final tile = tester.widget<ListTile>(settingsFinder);
+    expect((tile.leading! as Icon).icon, Icons.warning_amber_outlined);
+
+    await tester.tap(settingsFinder);
+    await tester.pump();
+    expect(platform.openSettingsCalls, 1);
+  });
 }
 
 class MemoryThemePreferenceStore implements CcbThemePreferenceStore {
@@ -132,5 +161,31 @@ class MemoryBackgroundConnectionPreferenceStore
   @override
   Future<void> write(bool enabled) async {
     this.enabled = enabled;
+  }
+}
+
+class _SettingsBackgroundConnectionPlatform
+    implements BackgroundConnectionPlatform {
+  var openSettingsCalls = 0;
+
+  @override
+  Future<bool> start() async => true;
+
+  @override
+  Future<void> stop() async {}
+
+  @override
+  Future<BackgroundConnectionSystemStatus> readSystemStatus() async {
+    return const BackgroundConnectionSystemStatus(
+      backgroundRestricted: true,
+      batteryOptimizationExempt: false,
+      lowPowerStandbyRestricted: false,
+    );
+  }
+
+  @override
+  Future<bool> openSystemSettings() async {
+    openSettingsCalls += 1;
+    return true;
   }
 }

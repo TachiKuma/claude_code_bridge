@@ -263,6 +263,9 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
   late final MobilePresenceCoordinator _presenceCoordinator;
   bool _taskNotificationsSuspendedForBackground = false;
   late final BackgroundConnectionRuntime _backgroundConnectionRuntime;
+  BackgroundConnectionSystemStatus? _backgroundConnectionSystemStatus;
+  bool _backgroundConnectionSystemStatusLoading = false;
+  int _backgroundConnectionSystemStatusGeneration = 0;
 
   @override
   void initState() {
@@ -317,6 +320,11 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     _activeRepository = widget.repository;
     _viewFuture = _loadActiveProjectView();
     _bootstrapProfiles();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_refreshBackgroundConnectionSystemStatus());
+      }
+    });
     if (widget.backgroundConnectionEnabled &&
         widget.backgroundConnectionPreferenceLoaded) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -338,6 +346,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
 
   @override
   void dispose() {
+    _backgroundConnectionSystemStatusGeneration += 1;
     unawaited(_backgroundConnectionRuntime.dispose());
     WidgetsBinding.instance.removeObserver(this);
     _pairingForm.dispose();
@@ -355,6 +364,9 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     _appLifecycleState = state;
     if (state == AppLifecycleState.resumed) {
       _presenceCoordinator.setVisible(true);
+      if (_showPairingSetup || _shouldShowUnpairedOnboarding) {
+        unawaited(_refreshBackgroundConnectionSystemStatus());
+      }
       _requestBackgroundConnectionReconcile();
       _connectionSupervisor.foregroundResume();
       final profile = _selectedProfile;
@@ -675,6 +687,11 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
       backgroundConnectionEnabled: widget.backgroundConnectionEnabled,
       onBackgroundConnectionEnabledChanged:
           widget.onBackgroundConnectionEnabledChanged,
+      backgroundConnectionSystemStatus: _backgroundConnectionSystemStatus,
+      backgroundConnectionSystemStatusLoading:
+          _backgroundConnectionSystemStatusLoading,
+      onOpenBackgroundConnectionSystemSettings:
+          _openBackgroundConnectionSystemSettings,
       onRouteKindChanged: (value) {
         setState(() {
           _setPairingRouteKind(value);
@@ -1554,6 +1571,7 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
     setState(() {
       _showPairingSetup = true;
     });
+    unawaited(_refreshBackgroundConnectionSystemStatus());
   }
 
   Future<void> _scanGatewayProfile() async {
@@ -2123,6 +2141,45 @@ class _ProjectHomeViewState extends State<_ProjectHomeView>
       _mode == AppRuntimeMode.pairedGateway &&
       _selectedProfile != null &&
       _gatewayProfileActivationSucceeded;
+
+  Future<void> _refreshBackgroundConnectionSystemStatus() async {
+    final generation = ++_backgroundConnectionSystemStatusGeneration;
+    if (mounted) {
+      setState(() {
+        _backgroundConnectionSystemStatusLoading = true;
+      });
+    }
+    BackgroundConnectionSystemStatus? status;
+    try {
+      status = await widget.backgroundConnectionPlatform.readSystemStatus();
+    } on BackgroundConnectionPlatformException {
+      status = null;
+    }
+    if (!mounted || generation != _backgroundConnectionSystemStatusGeneration) {
+      return;
+    }
+    setState(() {
+      _backgroundConnectionSystemStatus = status;
+      _backgroundConnectionSystemStatusLoading = false;
+    });
+  }
+
+  Future<void> _openBackgroundConnectionSystemSettings() async {
+    var opened = false;
+    try {
+      opened = await widget.backgroundConnectionPlatform.openSystemSettings();
+    } on BackgroundConnectionPlatformException {
+      opened = false;
+    }
+    if (!mounted || opened) {
+      return;
+    }
+    _showSnack(
+      CcbMobileLocalizations.of(
+        context,
+      ).backgroundConnectionSystemSettingsCouldNotOpen,
+    );
+  }
 
   void _requestBackgroundConnectionReconcile() {
     if (!widget.backgroundConnectionPreferenceLoaded) {

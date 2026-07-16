@@ -767,6 +767,18 @@ class _RecordingBackgroundConnectionPlatform
     stopCalls += 1;
     running = false;
   }
+
+  @override
+  Future<BackgroundConnectionSystemStatus> readSystemStatus() async {
+    return const BackgroundConnectionSystemStatus(
+      backgroundRestricted: false,
+      batteryOptimizationExempt: true,
+      lowPowerStandbyRestricted: false,
+    );
+  }
+
+  @override
+  Future<bool> openSystemSettings() async => true;
 }
 
 class _ImmediateCancelStream extends Stream<TaskCompletionNotificationEvent> {

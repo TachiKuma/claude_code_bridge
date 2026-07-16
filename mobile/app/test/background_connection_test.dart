@@ -5,6 +5,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ccb_mobile/ccb_mobile.dart';
 
 void main() {
+  test('system status preserves Android restriction signals', () {
+    final status = BackgroundConnectionSystemStatus.fromMap(const {
+      'background_restricted': false,
+      'battery_optimization_exempt': false,
+      'low_power_standby_restricted': true,
+    });
+
+    expect(status.backgroundRestricted, isFalse);
+    expect(status.batteryOptimizationExempt, isFalse);
+    expect(status.lowPowerStandbyRestricted, isTrue);
+    expect(status.isRestricted, isTrue);
+  });
+
   test('runtime starts after an initially disabled reconciliation', () async {
     final platform = _FakeBackgroundConnectionPlatform();
     final states = <bool>[];
@@ -68,4 +81,16 @@ class _FakeBackgroundConnectionPlatform
   Future<void> stop() async {
     stopCalls += 1;
   }
+
+  @override
+  Future<BackgroundConnectionSystemStatus> readSystemStatus() async {
+    return const BackgroundConnectionSystemStatus(
+      backgroundRestricted: false,
+      batteryOptimizationExempt: true,
+      lowPowerStandbyRestricted: false,
+    );
+  }
+
+  @override
+  Future<bool> openSystemSettings() async => true;
 }
