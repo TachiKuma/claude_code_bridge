@@ -1980,6 +1980,8 @@ is_python_entrypoint() {
 is_ccb_launcher_entrypoint() {
   local source_path="$1"
   [[ -f "$source_path" ]] || return 1
+  [[ "$(basename "$source_path")" != "_ccb-python" ]] || return 1
+  [[ -f "$source_path.py" ]] || return 1
   local first_line=""
   IFS= read -r first_line < "$source_path" || true
   [[ "$first_line" == '#!'*bash* ]] || return 1
@@ -2030,6 +2032,14 @@ install_entrypoint_executable() {
   local absolute_source="$source_path"
   if [[ "$absolute_source" != /* ]]; then
     absolute_source="$(cd "$(dirname "$source_path")" && pwd)/$(basename "$source_path")"
+  fi
+
+  local source_identity destination_identity
+  source_identity="$(canonical_existing_parent_path "$absolute_source")"
+  destination_identity="$(canonical_existing_parent_path "$destination_path")"
+  if [[ "$source_identity" == "$destination_identity" ]]; then
+    chmod +x "$absolute_source" 2>/dev/null || true
+    return 0
   fi
 
   # New-form launchers (bash, exec _ccb-python <name>.py): under live source we

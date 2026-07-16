@@ -54,6 +54,10 @@
   links, checksums, and localized version badges all target 8.2.0.
 - **Community Asset Packaging Is Current**: the updated PNG community image is
   included and verified by the release builder.
+- **Fresh Installs Preserve The Python Launcher**: release installs keep the
+  shared interpreter resolver intact when the executable directory is inside
+  the install prefix, preventing recursive launcher invocation during smoke
+  checks and custom-prefix installs.
 
 ## v8.1.6 (2026-07-14) — Withdrawn
 
