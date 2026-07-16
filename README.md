@@ -6,7 +6,7 @@
 **Coordinate Codex, Claude, Gemini, and other CLI agents in visible, controllable workflows you can take over**
 
 <p>
-  <img src="https://img.shields.io/badge/version-8.1.6-orange.svg" alt="version">
+  <img src="https://img.shields.io/badge/version-8.2.0-orange.svg" alt="version">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WSL-lightgrey.svg" alt="platform">
   <img src="https://img.shields.io/badge/providers-17%20CLI%20families-0B7285.svg" alt="providers">
 </p>
@@ -186,9 +186,9 @@ This command guides installation and configuration.
 <details>
 <summary><b>Mobile App details, safety boundary, and source</b></summary>
 
-CCB 8.1.6 includes the Flutter CCB Mobile source in [`mobile/`](mobile/) and publishes the Android APK through GitHub Releases:
+CCB 8.2.0 includes the Flutter CCB Mobile source in [`mobile/`](mobile/) and publishes the Android APK through GitHub Releases:
 
-- [Download CCB Mobile v8.1.6 APK](https://github.com/SeemSeam/claude_codex_bridge/releases/download/v8.1.6/ccb-mobile-v8.1.6.apk)
+- [Download CCB Mobile v8.2.0 APK](https://github.com/SeemSeam/claude_codex_bridge/releases/download/v8.2.0/ccb-mobile-v8.2.0.apk)
 - App source: [`mobile/app`](mobile/app)
 - Server gateway source: [`lib/mobile_gateway`](lib/mobile_gateway)
 
@@ -272,22 +272,27 @@ Thanks to [tmux-agent-sidebar](https://github.com/hiroppy/tmux-agent-sidebar) fo
 ## Release Notes
 
 <details open>
-<summary><b>v8.1.6</b> - Cross-platform release validation correction</summary>
+<summary><b>v8.2.0</b> - Faster startup, provider fixes, and Mobile reliability</summary>
 
-- Added the missing `jsonschema` test dependency to clean CI environments, built the repository runtime accelerator before platform lifecycle assertions, and made macOS ownership checks canonicalize `/tmp` socket aliases.
-- Aligned communication smoke coverage with nested `ask --chain` / `--silence` policy and raised the bounded cold-start ceiling to 30 seconds for valid multi-agent startup on macOS and mounted WSL filesystems.
-- Kept the 8.1.5 runtime changes intact while publishing a new immutable patch version instead of rewriting the existing tag.
+- Reduced repeated ccbd startup work while preserving lifecycle and ownership checks.
+- Fixed Grok fullscreen startup, Claude credential-kind preservation, and Config UI model/thinking selections reverting to inherited values.
+- Kept Codex ask delivery session-bound and stopped accepted empty transport acknowledgements from requeueing indefinitely.
+- Improved Mobile recovery, conversation and terminal interaction, image/document/video attachments, linked-file downloads, and device-bound FCM delivery.
+- Synchronized Linux, macOS, npm, and signed Android artifacts for 8.2.0.
 
 </details>
 
-<details open>
-<summary><b>v8.1.5</b> - Workflow authority, provider recovery, and OMP support</summary>
+<details>
+<summary><b>v8.1.6</b> - Withdrawn</summary>
 
-- Added the script-owned single-lane Agentic Workflow foundation with validated planner, detailer, orchestrator, review, workgroup, and integration artifacts; replans are authenticated, revision-fenced, serialized, and replay-safe.
-- Restored Codex and Claude execution after backend restarts through exact job/session anchors, and made Codex pane recovery refresh rotated inherited auth while stopping repeat respawns for unchanged revoked credentials.
-- Hardened cold tmux startup so the project server exists before socket policy is applied and missing project sockets are classified as absent.
-- Added Oh My Pi as an independent native `omp` backend with its supported JSON event lifecycle, approval mode, session storage, provider catalog, and regression coverage.
-- Added device-bound, feature-gated Mobile FCM delivery with deduplicated routes, compatible tmux client selection, and safer release update collision and rollback handling.
+- Superseded by later releases. Detailed notes are intentionally omitted.
+
+</details>
+
+<details>
+<summary><b>v8.1.5</b> - Withdrawn</summary>
+
+- Withdrawn and superseded. Detailed notes are intentionally omitted.
 
 </details>
 

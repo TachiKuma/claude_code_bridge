@@ -6,7 +6,7 @@
 **Codex, Claude, Gemini 등 CLI Agent를 보이고 제어 가능하며 직접 이어받을 수 있는 워크플로로 조율**
 
 <p>
-  <img src="https://img.shields.io/badge/version-8.1.6-orange.svg" alt="version">
+  <img src="https://img.shields.io/badge/version-8.2.0-orange.svg" alt="version">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WSL-lightgrey.svg" alt="platform">
   <img src="https://img.shields.io/badge/providers-17%20CLI%20families-0B7285.svg" alt="providers">
 </p>
@@ -180,9 +180,9 @@ ccb update mobile
 <details>
 <summary><b>Mobile App 세부 정보, 안전 경계, 소스</b></summary>
 
-CCB 8.1.6은 Flutter CCB Mobile 소스를 [`mobile/`](../mobile/)에 포함하며 Android APK를 GitHub Releases로 배포합니다.
+CCB 8.2.0은 Flutter CCB Mobile 소스를 [`mobile/`](../mobile/)에 포함하며 Android APK를 GitHub Releases로 배포합니다.
 
-- [CCB Mobile v8.1.6 APK 다운로드](https://github.com/SeemSeam/claude_codex_bridge/releases/download/v8.1.6/ccb-mobile-v8.1.6.apk)
+- [CCB Mobile v8.2.0 APK 다운로드](https://github.com/SeemSeam/claude_codex_bridge/releases/download/v8.2.0/ccb-mobile-v8.2.0.apk)
 - 앱 소스: [`mobile/app`](../mobile/app)
 - 서버 gateway 소스: [`lib/mobile_gateway`](../lib/mobile_gateway)
 
@@ -259,6 +259,15 @@ sidebar 아이디어와 영감을 준 [tmux-agent-sidebar](https://github.com/hi
 <a id="release-notes"></a>
 
 ## 릴리스 노트
+
+<details open>
+<summary><b>v8.2.0</b> - 시작 속도 향상, Provider 수정, Mobile 안정성</summary>
+
+- lifecycle 및 ownership 검증을 유지하면서 ccbd 시작 경로의 반복 작업을 줄였습니다.
+- Grok fullscreen 시작, Claude credential 종류 보존, model/thinking 선택 유지, Codex ask/reply 전달을 수정하고 강화했습니다.
+- Mobile recovery, chat, terminal, 첨부, download, FCM을 개선하고 Linux, macOS, npm, 서명된 Android artifact를 8.2.0으로 동기화했습니다.
+
+</details>
 
 <details open>
 <summary><b>v8.0.14</b> - README 디렉터리 정리와 모바일 릴리스 표면 동기화</summary>

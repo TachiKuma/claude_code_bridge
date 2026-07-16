@@ -6,7 +6,7 @@
 **Coordina Codex, Claude, Gemini y otros agentes CLI en flujos visibles y controlables que puedes tomar directamente**
 
 <p>
-  <img src="https://img.shields.io/badge/version-8.1.6-orange.svg" alt="version">
+  <img src="https://img.shields.io/badge/version-8.2.0-orange.svg" alt="version">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WSL-lightgrey.svg" alt="platform">
   <img src="https://img.shields.io/badge/providers-17%20CLI%20families-0B7285.svg" alt="providers">
 </p>
@@ -180,9 +180,9 @@ Este comando guía la instalación y configuración.
 <details>
 <summary><b>Detalles de Mobile App, límite de seguridad y fuente</b></summary>
 
-CCB 8.1.6 incluye el código Flutter de CCB Mobile en [`mobile/`](../mobile/) y publica el APK Android mediante GitHub Releases:
+CCB 8.2.0 incluye el código Flutter de CCB Mobile en [`mobile/`](../mobile/) y publica el APK Android mediante GitHub Releases:
 
-- [Descargar CCB Mobile v8.1.6 APK](https://github.com/SeemSeam/claude_codex_bridge/releases/download/v8.1.6/ccb-mobile-v8.1.6.apk)
+- [Descargar CCB Mobile v8.2.0 APK](https://github.com/SeemSeam/claude_codex_bridge/releases/download/v8.2.0/ccb-mobile-v8.2.0.apk)
 - Fuente de la app: [`mobile/app`](../mobile/app)
 - Fuente del gateway del servidor: [`lib/mobile_gateway`](../lib/mobile_gateway)
 
@@ -259,6 +259,15 @@ Gracias a [tmux-agent-sidebar](https://github.com/hiroppy/tmux-agent-sidebar) po
 <a id="release-notes"></a>
 
 ## Notas de versión
+
+<details open>
+<summary><b>v8.2.0</b> - Inicio más rápido, correcciones de providers y Mobile fiable</summary>
+
+- Reduce trabajo repetido durante el inicio de ccbd sin debilitar las comprobaciones de lifecycle y ownership.
+- Corrige el inicio fullscreen de Grok, conserva el tipo de credencial de Claude, estabiliza la selección de model/thinking y refuerza la entrega ask/reply de Codex.
+- Mejora recovery, chat, terminal, adjuntos, descargas y FCM en Mobile; sincroniza los artefactos Linux, macOS, npm y Android firmado con 8.2.0.
+
+</details>
 
 <details open>
 <summary><b>v8.0.14</b> - Limpieza del directorio README y superficie mobile</summary>
