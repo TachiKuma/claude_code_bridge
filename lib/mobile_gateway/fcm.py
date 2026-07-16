@@ -99,18 +99,24 @@ class FcmHttpV1PushSender:
 
 
 class _GoogleAuthAccessTokenProvider:
-    def __init__(self, credentials: object) -> None:
+    def __init__(
+        self,
+        credentials: object,
+        *,
+        request_factory: Callable[[], object] | None = None,
+    ) -> None:
         self._credentials = credentials
         self._lock = threading.Lock()
+        self._request_factory = (
+            request_factory if request_factory is not None else _google_auth_request
+        )
 
     def access_token(self, *, timeout: float) -> str:
-        from google.auth.transport.requests import Request as GoogleAuthRequest
-
         with self._lock:
             token = str(getattr(self._credentials, 'token', '') or '').strip()
             if token and bool(getattr(self._credentials, 'valid', False)):
                 return token
-            request = GoogleAuthRequest()
+            request = self._request_factory()
 
             def bounded_request(*args: object, **kwargs: object) -> object:
                 kwargs.setdefault('timeout', timeout)
@@ -121,6 +127,12 @@ class _GoogleAuthAccessTokenProvider:
             if not token:
                 raise RuntimeError('google auth did not return an access token')
             return token
+
+
+def _google_auth_request() -> object:
+    from google.auth.transport.requests import Request as GoogleAuthRequest
+
+    return GoogleAuthRequest()
 
 
 def build_fcm_sender_from_env(
