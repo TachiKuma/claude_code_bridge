@@ -1432,6 +1432,223 @@ def test_cli_only_command_failure_stops_and_preserves_report(runner, tmp_path: P
     assert run["startup_report"]["startup_run_id"] is None
 
 
+def test_cli_only_resource_profile_correlates_without_startup_run_id(
+    runner,
+    tmp_path: Path,
+) -> None:
+    options = _fixture_options(
+        runner,
+        tmp_path,
+        scenario="cli-only",
+        warmup=0,
+        iterations=1,
+    )
+    starts = 0
+
+    def control_runner(argv, cwd, env, timeout_s):
+        del env, timeout_s
+        _write_unmounted(cwd)
+        return runner.CommandResult(tuple(argv), 0, "stopped", "", False)
+
+    def profiled_runner(argv, cwd, env, timeout_s, sample_interval_s, known_instances):
+        nonlocal starts
+        del env, timeout_s, sample_interval_s, known_instances
+        command = tuple(argv)
+        if command[-1] == "--print-version":
+            return runner.CommandResult(
+                command,
+                0,
+                _cli_only_stdout(),
+                "",
+                False,
+                resource_profile=_raw_resource_profile(wall_ms=0.0),
+                tracked_process_instances=((900_001, 101),),
+                active_process_instances=(),
+                command_wall_ms=0.0,
+                startup_process_trace_id=None,
+            )
+        starts += 1
+        run_id = _write_mounted_round(
+            cwd,
+            sequence=starts,
+            action="launched",
+            daemon_started=True,
+            exact_t1=True,
+        )
+        return runner.CommandResult(
+            command,
+            0,
+            _startup_stdout(run_id),
+            "",
+            False,
+            resource_profile=_raw_resource_profile(wall_ms=0.0),
+            tracked_process_instances=((900_000, 100),),
+            active_process_instances=((900_000, 100),),
+            command_wall_ms=0.0,
+            startup_process_trace_id="trace_" + "a" * 32,
+        )
+
+    summary = runner.run_startup_benchmark(
+        options,
+        dependencies=runner.BenchmarkDependencies(
+            command_runner=control_runner,
+            start_command_runner=profiled_runner,
+            sleep=lambda _value: None,
+        ),
+        environ=_stub_environ(),
+    )
+
+    assert summary["status"] == "ok"
+    assert summary["resource_gate"]["status"] == "pass"
+    assert summary["resource_gate"]["profiles_expected"] == 1
+    assert summary["resource_gate"]["profiles_verified"] == 1
+    assert summary["readiness_gate"]["status"] == "not_applicable_cli_only"
+    run = json.loads(
+        (
+            Path(summary["fixture"]["result_dir"])
+            / "run-0001"
+            / "run.json"
+        ).read_text(encoding="utf-8")
+    )
+    correlation = run["resource_profile"]["correlation"]
+    assert correlation["status"] == "verified"
+    assert correlation["stdout_startup_run_id"] is None
+    assert correlation["report_startup_run_id"] is None
+    assert correlation["cli_only_report_unchanged"] is True
+    assert correlation["cli_only_authority_token"]
+    assert run["resource_profile"]["quality"]["formal_eligible"] is True
+
+
+def test_cli_only_resource_profile_rejects_more_than_one_created_process(
+    runner,
+    tmp_path: Path,
+) -> None:
+    options = _fixture_options(
+        runner,
+        tmp_path,
+        scenario="cli-only",
+        warmup=0,
+        iterations=1,
+    )
+
+    def control_runner(argv, cwd, env, timeout_s):
+        del env, timeout_s
+        _write_unmounted(cwd)
+        return runner.CommandResult(tuple(argv), 0, "stopped", "", False)
+
+    def profiled_runner(argv, cwd, env, timeout_s, sample_interval_s, known_instances):
+        del env, timeout_s, sample_interval_s, known_instances
+        command = tuple(argv)
+        profile = _raw_resource_profile(wall_ms=0.0)
+        if command[-1] == "--print-version":
+            profile["metrics"]["created_process_instance_count"] = 2
+            return runner.CommandResult(
+                command,
+                0,
+                _cli_only_stdout(),
+                "",
+                False,
+                resource_profile=profile,
+                command_wall_ms=0.0,
+            )
+        run_id = _write_mounted_round(
+            cwd,
+            sequence=1,
+            action="launched",
+            daemon_started=True,
+            exact_t1=True,
+        )
+        return runner.CommandResult(
+            command,
+            0,
+            _startup_stdout(run_id),
+            "",
+            False,
+            resource_profile=profile,
+            command_wall_ms=0.0,
+            startup_process_trace_id="trace_" + "a" * 32,
+        )
+
+    summary = runner.run_startup_benchmark(
+        options,
+        dependencies=runner.BenchmarkDependencies(
+            command_runner=control_runner,
+            start_command_runner=profiled_runner,
+            sleep=lambda _value: None,
+        ),
+        environ=_stub_environ(),
+    )
+
+    assert summary["status"] == "incomplete"
+    assert "exactly one created process instance" in summary["abort_reason"]
+
+
+def test_cli_only_command_surface_and_profile_trace_policy(
+    runner,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    options = _fixture_options(
+        runner,
+        tmp_path,
+        scenario="cli-only",
+        restore_policy="fresh",
+    )
+    context = runner.validate_preflight(options, environ=_stub_environ())
+    measured = runner._start_command(options, context, round_role="measured")
+    prime = runner._start_command(options, context, round_role="prime")
+
+    assert measured == (sys.executable, str(context.ccb_test_path), "--print-version")
+    assert "-n" not in measured
+    assert prime == (sys.executable, str(context.ccb_test_path), "-n")
+    assert runner._is_cli_only_command(measured) is True
+    assert runner._is_cli_only_command(prime) is False
+
+    trace_flags: list[bool] = []
+
+    class Outcome:
+        def __init__(self, argv, trace: bool):
+            self.argv = tuple(argv)
+            self.returncode = 0
+            self.stdout = _cli_only_stdout() if not trace else ""
+            self.stderr = ""
+            self.timed_out = False
+            self.resource_profile = {
+                "window": {"command_wall_ms": 1.0},
+            }
+            self.tracked_process_instances = ()
+            self.active_process_instances = ()
+            self.startup_timing_trace_id = "trace_" + "a" * 32 if trace else None
+
+    def fake_profiled(argv, cwd, env, timeout_s, **kwargs):
+        del cwd, env, timeout_s
+        trace = bool(kwargs["startup_timing_trace"])
+        trace_flags.append(trace)
+        return Outcome(argv, trace)
+
+    monkeypatch.setattr(runner, "run_profiled_command", fake_profiled)
+    cli_result = runner._default_start_command_runner(
+        measured,
+        context.project_root,
+        {},
+        1.0,
+        0.01,
+        (),
+    )
+    startup_result = runner._default_start_command_runner(
+        prime,
+        context.project_root,
+        {},
+        1.0,
+        0.01,
+        (),
+    )
+
+    assert trace_flags == [False, True]
+    assert cli_result.startup_process_trace_id is None
+    assert startup_result.startup_process_trace_id == "trace_" + "a" * 32
+
+
 def test_warmup_is_excluded_and_each_round_snapshots_report(runner, tmp_path: Path) -> None:
     options = _fixture_options(runner, tmp_path, warmup=2, iterations=3)
     calls: list[tuple[str, ...]] = []
