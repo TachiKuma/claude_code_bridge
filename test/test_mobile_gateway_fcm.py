@@ -5,8 +5,6 @@ import json
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 
-import pytest
-
 from mobile_gateway.fcm import (
     FcmHttpV1PushSender,
     FcmSenderConfig,
@@ -231,24 +229,25 @@ def test_google_auth_provider_reuses_valid_access_token() -> None:
             self.refresh_calls += 1
 
     credentials = Credentials()
-    provider = _GoogleAuthAccessTokenProvider(credentials)
+    def unexpected_request_factory() -> object:
+        raise AssertionError('valid cached token must not load the optional Google transport')
+
+    provider = _GoogleAuthAccessTokenProvider(
+        credentials,
+        request_factory=unexpected_request_factory,
+    )
 
     assert provider.access_token(timeout=1.0) == 'cached-access-token'
     assert provider.access_token(timeout=1.0) == 'cached-access-token'
     assert credentials.refresh_calls == 0
 
 
-def test_google_auth_provider_refresh_uses_bounded_transport(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_google_auth_provider_refresh_uses_bounded_transport() -> None:
     transport_calls: list[dict[str, object]] = []
 
     def transport(*_args: object, **kwargs: object) -> object:
         transport_calls.append(dict(kwargs))
         return object()
-
-    monkeypatch.setattr(
-        'google.auth.transport.requests.Request',
-        lambda: transport,
-    )
 
     class Credentials:
         token = None
@@ -259,7 +258,10 @@ def test_google_auth_provider_refresh_uses_bounded_transport(monkeypatch: pytest
             self.token = 'fresh-access-token'
             self.valid = True
 
-    provider = _GoogleAuthAccessTokenProvider(Credentials())
+    provider = _GoogleAuthAccessTokenProvider(
+        Credentials(),
+        request_factory=lambda: transport,
+    )
 
     assert provider.access_token(timeout=1.25) == 'fresh-access-token'
     assert transport_calls == [

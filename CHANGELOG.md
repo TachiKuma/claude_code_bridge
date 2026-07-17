@@ -47,9 +47,10 @@
 - **Terminal And Conversation Interaction Is Smoother**: terminal input opens
   from the latest output, expanded bubbles hand scrolling back predictably,
   and background refreshes preserve the visible timeline.
-- **Production Push Delivery Is Hardened**: device-bound FCM registration,
-  deduplication, foreground/background lifecycle handling, and Android release
-  configuration ship with the signed APK.
+- **Opt-In Push Delivery Is Hardened**: device-bound FCM registration,
+  deduplication, and foreground/background lifecycle handling are available to
+  deployment-configured builds; the signed public APK keeps Firebase disabled
+  by default and fails closed without operator-owned configuration.
 
 ### Release Surface
 
