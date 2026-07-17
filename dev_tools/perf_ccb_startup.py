@@ -1894,6 +1894,36 @@ def _cli_only_manifest_baseline(identity: Mapping[str, Any] | None) -> dict[str,
     }
 
 
+def _capture_cli_only_preservation_audit(
+    context: ValidatedContext,
+    *,
+    benchmark_id: str,
+    baseline: Mapping[str, Any],
+) -> dict[str, Any]:
+    try:
+        current = _capture_scenario_identity(context, benchmark_id=benchmark_id)
+        reasons = _cli_only_identity_reason_codes(
+            current,
+            configured_agent_count=context.configured_agent_count,
+            baseline=baseline,
+            phase="pre_teardown",
+        )
+    except Exception as exc:
+        return {
+            "status": "failed",
+            "reason_codes": [f"cli_only_preservation_audit_exception:{type(exc).__name__}"],
+            "failure_reason": str(exc),
+            "baseline": _cli_only_manifest_baseline(baseline),
+            "observed": None,
+        }
+    return {
+        "status": "failed" if reasons else "pass",
+        "reason_codes": reasons,
+        "baseline": _cli_only_manifest_baseline(baseline),
+        "observed": _cli_only_manifest_baseline(current),
+    }
+
+
 def _prepare_scenario_construction_manifest(
     manifest: dict[str, Any],
     *,
@@ -2420,6 +2450,7 @@ def run_startup_benchmark(
     warm_daemon_generation: int | None = None
     warm_reuse_identity: dict[str, Any] | None = None
     cli_only_baseline: dict[str, Any] | None = None
+    cli_only_preservation_audit: dict[str, Any] | None = None
     seen_startup_run_ids: set[str] = set()
     active_resource_instances: set[tuple[int, int]] = set()
     cleanup_resource_instances: set[tuple[int, int]] = set()
@@ -2588,6 +2619,17 @@ def run_startup_benchmark(
             pending_exception = exc
             abort_reason = f"unexpected {type(exc).__name__}: {exc}"
         finally:
+            if options.scenario == "cli-only" and cli_only_baseline is not None:
+                cli_only_preservation_audit = _capture_cli_only_preservation_audit(
+                    context,
+                    benchmark_id=benchmark_id,
+                    baseline=cli_only_baseline,
+                )
+                if cli_only_preservation_audit.get("status") != "pass" and abort_reason is None:
+                    reasons = cli_only_preservation_audit.get("reason_codes") or ()
+                    abort_reason = "cli-only pre-teardown preservation failed: " + (
+                        ", ".join(str(reason) for reason in reasons) or "unknown"
+                    )
             if benchmark_may_have_started and cleanup_permitted:
                 source_drift = _source_drift_reason(context)
                 if source_drift is None:
@@ -2641,6 +2683,8 @@ def run_startup_benchmark(
                 benchmark_may_have_started=benchmark_may_have_started,
             )
             cleanup_verdict = dict(cleanup_verdict)
+            if cli_only_preservation_audit is not None:
+                cleanup_verdict["pre_teardown_preservation"] = cli_only_preservation_audit
             cleanup_verdict["resource_audit"] = {
                 "snapshot": "cleanup-resource-audit.json",
                 "status": cleanup_resource_audit.get("status"),
@@ -2799,6 +2843,7 @@ def _execute_round(
     if instrumentation_arm not in {"control", "instrumented"}:
         raise ReportValidationError(f"unsupported instrumentation arm: {instrumentation_arm}")
     instrumented = instrumentation_arm == "instrumented"
+    cli_only_measurement = options.scenario == "cli-only" and round_role != "prime"
     precondition: dict[str, Any] = dict(
         precondition_override or {"kind": "none", "status": "not_required"}
     )
@@ -2962,6 +3007,11 @@ def _execute_round(
     started_utc = dependencies.utc_now().astimezone(timezone.utc)
     started_ns = dependencies.perf_counter_ns()
     command = _start_command(options, context, round_role=round_role)
+    command_env = (
+        {key: value for key, value in env.items() if not _stub_launch_environment_key(key)}
+        if cli_only_measurement
+        else env
+    )
     selected_start_runner = (
         dependencies.start_command_runner
         if instrumented
@@ -2972,7 +3022,7 @@ def _execute_round(
         result = selected_start_runner(
             command,
             context.project_root,
-            env,
+            command_env,
             options.command_timeout_s,
             options.resource_sample_interval_ms / 1000.0,
             tuple(active_resource_instances),
@@ -2981,7 +3031,7 @@ def _execute_round(
         result = dependencies.command_runner(
             command,
             context.project_root,
-            env,
+            command_env,
             options.command_timeout_s,
         )
     ended_ns = dependencies.perf_counter_ns()
@@ -3009,136 +3059,186 @@ def _execute_round(
     stdout_process_trace_id: str | None = None
     process_bootstrap_timings_ms: dict[str, float] | None = None
     stdout_parse_error: str | None = None
-    try:
-        (
-            stdout_run_id,
-            cli_timings_ms,
-            stdout_process_trace_id,
-            process_bootstrap_timings_ms,
-        ) = _parse_start_stdout(result.stdout)
-    except ReportValidationError as exc:
-        stdout_parse_error = str(exc)
-    if instrumented and result.resource_profile is not None:
-        expected_trace_id = str(result.startup_process_trace_id or "").strip()
-        if not expected_trace_id:
-            stdout_parse_error = "profiled startup runner did not retain its process trace id"
-        elif stdout_process_trace_id != expected_trace_id:
-            stdout_parse_error = (
-                "startup process trace correlation mismatch: expected "
-                f"{expected_trace_id}, got {stdout_process_trace_id or '<missing>'}"
+    if cli_only_measurement:
+        try:
+            _validate_cli_only_stdout(
+                result.stdout,
+                expected_version=_read_version(context.source_root),
             )
-        elif process_bootstrap_timings_ms is None:
-            stdout_parse_error = "startup process bootstrap timings are missing"
-        else:
-            missing_process_timings = sorted(
-                set(PROCESS_BOOTSTRAP_TIMING_KEYS) - set(process_bootstrap_timings_ms)
-            )
-            if missing_process_timings:
+            if result.stderr:
+                raise ReportValidationError("cli-only command unexpectedly emitted stderr")
+        except ReportValidationError as exc:
+            stdout_parse_error = str(exc)
+        if instrumented and result.resource_profile is not None:
+            if result.startup_process_trace_id is not None:
                 stdout_parse_error = (
-                    "startup process timing trace is missing bootstrap keys: "
-                    + ", ".join(missing_process_timings)
+                    "cli-only runner unexpectedly retained a startup process trace id"
                 )
-        if stdout_parse_error is None and process_bootstrap_timings_ms is not None:
-            extra_process_timings = sorted(
-                set(process_bootstrap_timings_ms) - set(PROCESS_BOOTSTRAP_TIMING_KEYS)
-            )
-            if extra_process_timings:
+        elif profile_evidence_required:
+            stdout_parse_error = "instrumented cli-only runner did not supply a resource profile"
+        elif not instrumented and result.resource_profile is not None:
+            stdout_parse_error = "control cli-only command unexpectedly supplied a resource profile"
+        elif not instrumented and result.startup_process_trace_id is not None:
+            stdout_parse_error = "control cli-only command unexpectedly retained a process trace id"
+    else:
+        try:
+            (
+                stdout_run_id,
+                cli_timings_ms,
+                stdout_process_trace_id,
+                process_bootstrap_timings_ms,
+            ) = _parse_start_stdout(result.stdout)
+        except ReportValidationError as exc:
+            stdout_parse_error = str(exc)
+        if instrumented and result.resource_profile is not None:
+            expected_trace_id = str(result.startup_process_trace_id or "").strip()
+            if not expected_trace_id:
+                stdout_parse_error = "profiled startup runner did not retain its process trace id"
+            elif stdout_process_trace_id != expected_trace_id:
                 stdout_parse_error = (
-                    "startup process timing trace has unsupported bootstrap keys: "
-                    + ", ".join(extra_process_timings)
+                    "startup process trace correlation mismatch: expected "
+                    f"{expected_trace_id}, got {stdout_process_trace_id or '<missing>'}"
                 )
-        if stdout_parse_error is None and stdout_process_trace_id is None:
-            stdout_parse_error = (
-                "startup process trace id is missing from profiled startup stdout"
-            )
-    elif profile_evidence_required:
-        stdout_parse_error = "instrumented startup runner did not supply a resource profile"
-    elif not instrumented:
-        if result.resource_profile is not None:
-            stdout_parse_error = "control startup unexpectedly supplied a resource profile"
-        elif result.startup_process_trace_id is not None:
-            stdout_parse_error = "control startup unexpectedly retained a process trace id"
-        elif stdout_process_trace_id is not None or process_bootstrap_timings_ms is not None:
-            stdout_parse_error = "control startup unexpectedly emitted process trace evidence"
+            elif process_bootstrap_timings_ms is None:
+                stdout_parse_error = "startup process bootstrap timings are missing"
+            else:
+                missing_process_timings = sorted(
+                    set(PROCESS_BOOTSTRAP_TIMING_KEYS) - set(process_bootstrap_timings_ms)
+                )
+                if missing_process_timings:
+                    stdout_parse_error = (
+                        "startup process timing trace is missing bootstrap keys: "
+                        + ", ".join(missing_process_timings)
+                    )
+            if stdout_parse_error is None and process_bootstrap_timings_ms is not None:
+                extra_process_timings = sorted(
+                    set(process_bootstrap_timings_ms) - set(PROCESS_BOOTSTRAP_TIMING_KEYS)
+                )
+                if extra_process_timings:
+                    stdout_parse_error = (
+                        "startup process timing trace has unsupported bootstrap keys: "
+                        + ", ".join(extra_process_timings)
+                    )
+            if stdout_parse_error is None and stdout_process_trace_id is None:
+                stdout_parse_error = (
+                    "startup process trace id is missing from profiled startup stdout"
+                )
+        elif profile_evidence_required:
+            stdout_parse_error = "instrumented startup runner did not supply a resource profile"
+        elif not instrumented:
+            if result.resource_profile is not None:
+                stdout_parse_error = "control startup unexpectedly supplied a resource profile"
+            elif result.startup_process_trace_id is not None:
+                stdout_parse_error = "control startup unexpectedly retained a process trace id"
+            elif stdout_process_trace_id is not None or process_bootstrap_timings_ms is not None:
+                stdout_parse_error = "control startup unexpectedly emitted process trace evidence"
 
-    report_bytes, after = _wait_for_changed_report(
-        report_path,
-        before=before,
-        wait_s=options.report_wait_s,
-        dependencies=dependencies,
-    )
-    snapshot_path = run_dir / "startup-report.json"
-    validation_error: str | None = None
+    report_read_error: str | None = None
+    if cli_only_measurement:
+        report_bytes, after, report_read_error = _read_unchanged_report(
+            report_path,
+            before=before,
+        )
+        snapshot_path = run_dir / "startup-report-sentinel.json"
+    else:
+        report_bytes, after = _wait_for_changed_report(
+            report_path,
+            before=before,
+            wait_s=options.report_wait_s,
+            dependencies=dependencies,
+        )
+        snapshot_path = run_dir / "startup-report.json"
+    validation_error: str | None = report_read_error
     report: dict[str, Any] | None = None
+    sentinel_report: dict[str, Any] | None = None
     readiness_timeline: dict[str, Any] | None = None
     observed_warm_reuse_identity: dict[str, Any] | None = None
     if report_bytes is not None:
         _write_bytes(snapshot_path, report_bytes)
         try:
-            report = json.loads(report_bytes.decode("utf-8"))
-            if not isinstance(report, dict):
+            decoded_report = json.loads(report_bytes.decode("utf-8"))
+            if not isinstance(decoded_report, dict):
                 raise ReportValidationError("startup report root must be an object")
-            _validate_startup_report(
-                report,
-                before=before,
-                after=after,
-                started_utc=started_utc,
-                ended_utc=ended_utc,
-                project_root=context.project_root,
-                command_succeeded=(not result.timed_out and result.returncode == 0),
-                stdout_run_id=stdout_run_id,
-                expected_config_signature=expected_config_signature,
-                expected_daemon_generation=expected_daemon_generation,
-                expected_daemon_started=expected_daemon_started,
-                expected_agent_count=context.configured_agent_count,
-                expected_provider_counts=dict(context.provider_counts),
-                require_cold_launch=require_cold_launch,
-            )
-            raw_readiness = report.get("readiness_timeline")
-            if instrumented and isinstance(raw_readiness, Mapping):
-                readiness_timeline = _validate_readiness_timeline(
-                    raw_readiness,
-                    startup_run_id=str(report.get("startup_run_id") or ""),
-                    stdout_process_trace_id=stdout_process_trace_id,
-                    daemon_generation=report.get("daemon_generation"),
-                    desired_agents=report.get("desired_agents"),
-                    command_wall_ms=wall_ms,
-                    require_complete=profile_evidence_required,
+            if cli_only_measurement:
+                _validate_cli_only_report_sentinel(
+                    decoded_report,
+                    before=before,
+                    after=after,
+                    expected_config_signature=expected_config_signature,
+                    expected_daemon_generation=expected_daemon_generation,
                 )
-            elif profile_evidence_required:
-                raise ReportValidationError(
-                    "profiled source startup report is missing readiness_timeline"
-                )
-            elif isinstance(raw_readiness, Mapping) and raw_readiness:
-                raise ReportValidationError(
-                    "control startup unexpectedly persisted readiness_timeline"
-                )
-            elif raw_readiness not in (None, {}):
-                raise ReportValidationError(
-                    "control startup has invalid disabled readiness_timeline"
-                )
-            if capture_warm_reuse_identity:
-                observed_warm_reuse_identity = _capture_stable_warm_reuse_identity(
+                sentinel_report = decoded_report
+                readiness_timeline = {
+                    "schema_version": 1,
+                    "status": "not_applicable_cli_only",
+                    "reason": "no_startup_transaction",
+                    "timeline_complete": False,
+                }
+            else:
+                report = decoded_report
+                _validate_startup_report(
                     report,
+                    before=before,
+                    after=after,
+                    started_utc=started_utc,
+                    ended_utc=ended_utc,
                     project_root=context.project_root,
-                    dependencies=dependencies,
+                    command_succeeded=(not result.timed_out and result.returncode == 0),
+                    stdout_run_id=stdout_run_id,
+                    expected_config_signature=expected_config_signature,
+                    expected_daemon_generation=expected_daemon_generation,
+                    expected_daemon_started=expected_daemon_started,
+                    expected_agent_count=context.configured_agent_count,
+                    expected_provider_counts=dict(context.provider_counts),
+                    require_cold_launch=require_cold_launch,
                 )
-            if require_warm_reuse:
-                _validate_warm_reuse_report(
-                    report,
-                    expected_identity=expected_warm_reuse_identity,
-                    observed_identity=observed_warm_reuse_identity,
-                )
-            if options.scenario == "mixed-recovery" and round_role != "prime":
-                _validate_mixed_recovery_report(
-                    report,
-                    target_agent_name=_mixed_recovery_target_name(context),
-                    configured_agent_names=context.configured_agent_names,
-                )
+                raw_readiness = report.get("readiness_timeline")
+                if instrumented and isinstance(raw_readiness, Mapping):
+                    readiness_timeline = _validate_readiness_timeline(
+                        raw_readiness,
+                        startup_run_id=str(report.get("startup_run_id") or ""),
+                        stdout_process_trace_id=stdout_process_trace_id,
+                        daemon_generation=report.get("daemon_generation"),
+                        desired_agents=report.get("desired_agents"),
+                        command_wall_ms=wall_ms,
+                        require_complete=profile_evidence_required,
+                    )
+                elif profile_evidence_required:
+                    raise ReportValidationError(
+                        "profiled source startup report is missing readiness_timeline"
+                    )
+                elif isinstance(raw_readiness, Mapping) and raw_readiness:
+                    raise ReportValidationError(
+                        "control startup unexpectedly persisted readiness_timeline"
+                    )
+                elif raw_readiness not in (None, {}):
+                    raise ReportValidationError(
+                        "control startup has invalid disabled readiness_timeline"
+                    )
+                if capture_warm_reuse_identity:
+                    observed_warm_reuse_identity = _capture_stable_warm_reuse_identity(
+                        report,
+                        project_root=context.project_root,
+                        dependencies=dependencies,
+                    )
+                if require_warm_reuse:
+                    _validate_warm_reuse_report(
+                        report,
+                        expected_identity=expected_warm_reuse_identity,
+                        observed_identity=observed_warm_reuse_identity,
+                    )
+                if options.scenario == "mixed-recovery" and round_role != "prime":
+                    _validate_mixed_recovery_report(
+                        report,
+                        target_agent_name=_mixed_recovery_target_name(context),
+                        configured_agent_names=context.configured_agent_names,
+                    )
         except (UnicodeDecodeError, json.JSONDecodeError, ReportValidationError, ValueError) as exc:
             validation_error = str(exc)
     else:
-        validation_error = "startup report was not created or updated within the report wait window"
+        validation_error = validation_error or (
+            "startup report was not created or updated within the report wait window"
+        )
     if stdout_parse_error is not None:
         validation_error = stdout_parse_error
     source_drift = _source_drift_reason(context)
@@ -3165,6 +3265,19 @@ def _execute_round(
             wall_ms=wall_ms,
             runner_outer_wall_ms=runner_outer_wall_ms,
             tracked_process_instances=result.tracked_process_instances,
+            measurement_kind=("cli_only" if cli_only_measurement else "startup"),
+            command_stdout=result.stdout,
+            cli_only_report_unchanged=(
+                cli_only_measurement
+                and before is not None
+                and after is not None
+                and before == after
+            ),
+            cli_only_authority_token=(
+                _scenario_identity_stability_token(cli_only_baseline)
+                if cli_only_measurement and isinstance(cli_only_baseline, Mapping)
+                else None
+            ),
         )
         resource_write_error = _best_effort_write_json(resource_snapshot_path, resource_profile)
         if resource_write_error is not None:
@@ -3203,16 +3316,83 @@ def _execute_round(
     failure_reason = None
     if result.timed_out:
         status = "timeout"
-        failure_reason = "startup command timed out"
+        failure_reason = (
+            "cli-only command timed out" if cli_only_measurement else "startup command timed out"
+        )
     elif result.returncode != 0:
         status = "failed"
-        failure_reason = f"startup command exited with status {result.returncode}"
+        failure_reason = (
+            f"{'cli-only' if cli_only_measurement else 'startup'} command exited "
+            f"with status {result.returncode}"
+        )
     elif validation_error is not None:
         status = "failed"
-        failure_reason = f"startup report validation failed: {validation_error}"
+        failure_reason = (
+            f"{'cli-only evidence' if cli_only_measurement else 'startup report'} "
+            f"validation failed: {validation_error}"
+        )
     elif resource_integrity_error is not None:
         status = "failed"
         failure_reason = f"resource profile validation failed: {resource_integrity_error}"
+
+    evidence_report = sentinel_report if cli_only_measurement else report
+    if cli_only_measurement:
+        startup_report_record = {
+            "policy": "unchanged_existing_start_report",
+            "snapshot_role": "preexisting_unchanged_sentinel",
+            "snapshot": snapshot_path.name if report_bytes is not None else None,
+            "before": before,
+            "after": after,
+            "bytes_unchanged": bool(before is not None and after is not None and before == after),
+            "validation": "ok" if validation_error is None else "failed",
+            "validation_error": validation_error,
+            "native_run_id_available": False,
+            "startup_run_id": None,
+            "new_startup_run_id_observed": False,
+            "correlation": (
+                "benchmark_coordinates+exclusive_lock+frozen_authority+"
+                "pre_post_identical_report_identity"
+            ),
+            "trigger": evidence_report.get("trigger") if evidence_report else None,
+            "generated_at": evidence_report.get("generated_at") if evidence_report else None,
+            "daemon_generation": (
+                evidence_report.get("daemon_generation") if evidence_report else None
+            ),
+            "config_signature": (
+                evidence_report.get("config_signature") if evidence_report else None
+            ),
+            "timings_ms": {},
+            "operation_counts": {},
+            "warm_reuse_identity": None,
+        }
+    else:
+        startup_report_record = {
+            "policy": "changed_start_report",
+            "snapshot_role": "report_generated_by_round_start_command",
+            "snapshot": snapshot_path.name if report_bytes is not None else None,
+            "before": before,
+            "after": after,
+            "validation": "ok" if validation_error is None else "failed",
+            "validation_error": validation_error,
+            "native_run_id_available": bool(native_run_id),
+            "startup_run_id": native_run_id,
+            "correlation": (
+                "stdout_report_run_id+exclusive_lock+pre_post_hash+mtime+generated_at_window"
+                if native_run_id
+                else "exclusive_lock+pre_post_hash+mtime+generated_at_window"
+            ),
+            "trigger": report.get("trigger") if report else None,
+            "generated_at": report.get("generated_at") if report else None,
+            "daemon_generation": report.get("daemon_generation") if report else None,
+            "config_signature": report.get("config_signature") if report else None,
+            "timings_ms": _duration_mapping_for_record(
+                report.get("timings_ms") if report else None
+            ),
+            "operation_counts": _operation_mapping_for_record(
+                report.get("operation_counts") if report else None
+            ),
+            "warm_reuse_identity": observed_warm_reuse_identity,
+        }
 
     record = _base_run_record(
         benchmark_id=benchmark_id,
@@ -3237,31 +3417,7 @@ def _execute_round(
             "stdout": _output_metadata(result.stdout),
             "stderr": _output_metadata(result.stderr),
             "runner_outer_wall_ms": runner_outer_wall_ms,
-            "startup_report": {
-                "snapshot": snapshot_path.name if report_bytes is not None else None,
-                "before": before,
-                "after": after,
-                "validation": "ok" if validation_error is None else "failed",
-                "validation_error": validation_error,
-                "native_run_id_available": bool(native_run_id),
-                "startup_run_id": native_run_id,
-                "correlation": (
-                    "stdout_report_run_id+exclusive_lock+pre_post_hash+mtime+generated_at_window"
-                    if native_run_id
-                    else "exclusive_lock+pre_post_hash+mtime+generated_at_window"
-                ),
-                "trigger": report.get("trigger") if report else None,
-                "generated_at": report.get("generated_at") if report else None,
-                "daemon_generation": report.get("daemon_generation") if report else None,
-                "config_signature": report.get("config_signature") if report else None,
-                "timings_ms": _duration_mapping_for_record(
-                    report.get("timings_ms") if report else None
-                ),
-                "operation_counts": _operation_mapping_for_record(
-                    report.get("operation_counts") if report else None
-                ),
-                "warm_reuse_identity": observed_warm_reuse_identity,
-            },
+            "startup_report": startup_report_record,
             "resource_profile": {
                 "snapshot": resource_snapshot_path.name if instrumented else None,
                 "sha256": (
@@ -3297,11 +3453,15 @@ def _execute_round(
                 )
             ),
             "derived_timings_ms": derived_timings_ms,
-            "attribution": _attribution_record(
-                wall_ms=wall_ms,
-                cli_timings_ms=cli_timings_ms,
-                process_bootstrap_timings_ms=process_bootstrap_timings_ms,
-                report=report,
+            "attribution": (
+                _cli_only_attribution_record(wall_ms)
+                if cli_only_measurement
+                else _attribution_record(
+                    wall_ms=wall_ms,
+                    cli_timings_ms=cli_timings_ms,
+                    process_bootstrap_timings_ms=process_bootstrap_timings_ms,
+                    report=report,
+                )
             ),
         }
     )
@@ -3349,8 +3509,12 @@ def _finalize_resource_profile(
     wall_ms: float,
     runner_outer_wall_ms: float,
     tracked_process_instances: Sequence[tuple[int, int]],
+    measurement_kind: str = "startup",
+    command_stdout: str = "",
+    cli_only_report_unchanged: bool = False,
+    cli_only_authority_token: str | None = None,
 ) -> tuple[dict[str, Any], str | None]:
-    """Bind a raw sampler envelope to validated startup coordinates."""
+    """Bind a raw sampler envelope to validated command coordinates."""
 
     integrity_errors: list[str] = []
     allowed_fields = {
@@ -3448,15 +3612,40 @@ def _finalize_resource_profile(
             f"({signed_outer_residual_ms:.6f} ms residual)"
         )
 
+    if measurement_kind not in {"startup", "cli_only"}:
+        integrity_errors.append("unsupported resource profile measurement_kind")
     correlation_reasons: list[str] = []
-    if not native_run_id:
-        correlation_reasons.append("native_startup_run_id_missing")
-    if not stdout_run_id:
-        correlation_reasons.append("stdout_startup_run_id_missing")
-    if native_run_id and stdout_run_id and native_run_id != stdout_run_id:
-        correlation_reasons.append("stdout_report_startup_run_id_mismatch")
+    if measurement_kind == "cli_only":
+        if native_run_id or stdout_run_id:
+            correlation_reasons.append("unexpected_startup_run_id_for_cli_only")
+        if not cli_only_report_unchanged:
+            correlation_reasons.append("cli_only_report_identity_not_unchanged")
+        if not cli_only_authority_token:
+            correlation_reasons.append("cli_only_frozen_authority_token_missing")
+        if raw_profile is not None:
+            metrics = profile.get("metrics")
+            created_count = (
+                metrics.get("created_process_instance_count")
+                if isinstance(metrics, Mapping)
+                else None
+            )
+            if type(created_count) is not int or created_count != 1:
+                integrity_errors.append(
+                    "cli-only resource profile must prove exactly one created process instance"
+                )
+    else:
+        if not native_run_id:
+            correlation_reasons.append("native_startup_run_id_missing")
+        if not stdout_run_id:
+            correlation_reasons.append("stdout_startup_run_id_missing")
+        if native_run_id and stdout_run_id and native_run_id != stdout_run_id:
+            correlation_reasons.append("stdout_report_startup_run_id_mismatch")
     if report_validation_error is not None:
-        correlation_reasons.append("startup_report_not_validated")
+        correlation_reasons.append(
+            "cli_only_evidence_not_validated"
+            if measurement_kind == "cli_only"
+            else "startup_report_not_validated"
+        )
     if profile.get("status") == "unavailable":
         correlation_reasons.append("resource_profile_unavailable")
     correlation_status = (
@@ -3478,6 +3667,7 @@ def _finalize_resource_profile(
             "record_type": "ccb_startup_resource_profile",
             "benchmark_id": benchmark_id,
             "startup_run_id": native_run_id,
+            "measurement_kind": measurement_kind,
             "run": {
                 "ordinal": ordinal,
                 "measured_index": measured_index,
@@ -3487,8 +3677,23 @@ def _finalize_resource_profile(
             },
             "correlation": {
                 "status": correlation_status,
+                "method": (
+                    "benchmark_coordinates+profile_id+command_output_hash+"
+                    "frozen_authority+unchanged_start_report"
+                    if measurement_kind == "cli_only"
+                    else "stdout_report_startup_run_id+benchmark_coordinates"
+                ),
                 "stdout_startup_run_id": stdout_run_id,
                 "report_startup_run_id": native_run_id,
+                "command_stdout_sha256": hashlib.sha256(
+                    command_stdout.encode("utf-8", errors="replace")
+                ).hexdigest(),
+                "cli_only_report_unchanged": (
+                    cli_only_report_unchanged if measurement_kind == "cli_only" else None
+                ),
+                "cli_only_authority_token": (
+                    cli_only_authority_token if measurement_kind == "cli_only" else None
+                ),
                 "startup_report_sha256": hashlib.sha256(report_bytes).hexdigest()
                 if report_bytes is not None
                 else None,
@@ -4801,6 +5006,77 @@ def _mixed_recovery_manifest_audit(
     return tuple(sorted(set(reasons)))
 
 
+def _cli_only_manifest_audit(
+    payload: Mapping[str, Any],
+    *,
+    run: Mapping[str, Any],
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    round_role = str(run.get("round_role") or "")
+    expectation = payload.get("expectation")
+    observation = payload.get("observation")
+    if not isinstance(expectation, Mapping) or not isinstance(observation, Mapping):
+        return ("cli_only_manifest_semantics_missing",)
+    expected_policy = (
+        "changed_start_report" if round_role == "prime" else "unchanged_existing_start_report"
+    )
+    if expectation.get("report_policy") != expected_policy:
+        reasons.append("cli_only_manifest_report_policy_invalid")
+    startup_report = run.get("startup_report")
+    if not isinstance(startup_report, Mapping):
+        reasons.append("cli_only_run_startup_report_evidence_missing")
+        return tuple(sorted(set(reasons)))
+    if round_role == "prime":
+        if run.get("measurement_kind") != "startup":
+            reasons.append("cli_only_prime_measurement_kind_invalid")
+        if startup_report.get("native_run_id_available") is not True:
+            reasons.append("cli_only_prime_native_run_id_missing")
+        if observation.get("startup_report_snapshot_role") != (
+            "report_generated_by_round_start_command"
+        ):
+            reasons.append("cli_only_prime_snapshot_role_invalid")
+        return tuple(sorted(set(reasons)))
+
+    if run.get("measurement_kind") != "cli_only":
+        reasons.append("cli_only_measurement_kind_invalid")
+    if observation.get("startup_report_snapshot_role") != "preexisting_unchanged_sentinel":
+        reasons.append("cli_only_manifest_snapshot_role_invalid")
+    frozen = expectation.get("frozen_baseline")
+    if not isinstance(frozen, Mapping) or frozen.get("status") != "ok":
+        reasons.append("cli_only_manifest_frozen_baseline_missing")
+    relations = observation.get("relations")
+    if not isinstance(relations, Mapping):
+        reasons.append("cli_only_manifest_relations_missing")
+    else:
+        for key in (
+            "daemon_identity_digest",
+            "namespace_identity_digest",
+            "agent_runtime_identity_digest",
+            "daemon_generation",
+            "startup_report_identity",
+        ):
+            if relations.get(key) != "same":
+                reasons.append(f"cli_only_manifest_{key}_not_same")
+    if startup_report.get("policy") != "unchanged_existing_start_report":
+        reasons.append("cli_only_run_report_policy_invalid")
+    if startup_report.get("snapshot_role") != "preexisting_unchanged_sentinel":
+        reasons.append("cli_only_run_report_snapshot_role_invalid")
+    if startup_report.get("native_run_id_available") is not False:
+        reasons.append("cli_only_run_native_id_availability_invalid")
+    if startup_report.get("startup_run_id") is not None:
+        reasons.append("cli_only_run_unexpected_startup_run_id")
+    if startup_report.get("new_startup_run_id_observed") is not False:
+        reasons.append("cli_only_run_new_startup_id_semantics_invalid")
+    if startup_report.get("bytes_unchanged") is not True:
+        reasons.append("cli_only_run_report_not_unchanged")
+    before = startup_report.get("before")
+    after = startup_report.get("after")
+    frozen_report = frozen.get("startup_report_identity") if isinstance(frozen, Mapping) else None
+    if not isinstance(before, Mapping) or before != after or before != frozen_report:
+        reasons.append("cli_only_run_report_identity_not_frozen")
+    return tuple(sorted(set(reasons)))
+
+
 def _scenario_construction_reference_audit(
     reference: Mapping[str, Any],
     *,
@@ -4819,7 +5095,7 @@ def _scenario_construction_reference_audit(
         reasons.append("scenario_manifest_reference_digest_invalid")
     if str(reference.get("snapshot") or "") != "scenario-construction.json":
         reasons.append("scenario_manifest_reference_snapshot_invalid")
-    if str(reference.get("scenario_id") or "") not in {"S1", "S3", "S4", "S5a"}:
+    if str(reference.get("scenario_id") or "") not in {"S0", "S1", "S3", "S4", "S5a"}:
         reasons.append("scenario_manifest_reference_scenario_invalid")
     if str(reference.get("status") or "") not in {"pass", "failed"}:
         reasons.append("scenario_manifest_reference_status_invalid")
@@ -4943,6 +5219,8 @@ def _scenario_construction_reference_audit(
                 run_directory_name=artifact_path.parts[0],
             )
         )
+    if reference.get("status") == "pass" and expected_scenario_id == "S0":
+        reasons.extend(_cli_only_manifest_audit(payload, run=run))
     audit_phase = payload.get("audit_phase")
     if not isinstance(audit_phase, Mapping) or audit_phase.get("name") != "final":
         reasons.append("scenario_manifest_final_phase_invalid")
@@ -5153,6 +5431,7 @@ def _build_summary(
     instrumentation_ab_plan: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     ab_mode = options.instrumentation_mode == "instrumentation-ab"
+    cli_only_scenario = options.scenario == "cli-only"
     measured_all = [run for run in runs if run.get("included_in_statistics")]
     measured = (
         [run for run in measured_all if run.get("instrumentation_arm") == "instrumented"]
@@ -5175,20 +5454,40 @@ def _build_summary(
         for run in measured_all
         if run.get("status") == "timeout" or run.get("timed_out")
     )
+    startup_transaction_runs = [
+        run
+        for run in runs
+        if run.get("started_at") is not None and run.get("measurement_kind") == "startup"
+    ]
+    cli_only_command_runs = [
+        run
+        for run in runs
+        if run.get("started_at") is not None and run.get("measurement_kind") == "cli_only"
+    ]
     native_run_count = sum(
         1
-        for run in runs
+        for run in startup_transaction_runs
         if isinstance(run.get("startup_report"), Mapping)
         and bool(run["startup_report"].get("native_run_id_available"))
     )
-    startup_command_count = sum(1 for run in runs if run.get("started_at") is not None)
+    startup_command_count = len(startup_transaction_runs)
     instrumented_start_runs = [
         run
-        for run in runs
+        for run in startup_transaction_runs
         if run.get("started_at") is not None
         and run.get("instrumentation_arm") != "control"
     ]
     instrumented_startup_count = len(instrumented_start_runs)
+    instrumented_profiled_runs = (
+        [
+            run
+            for run in cli_only_command_runs
+            if run.get("instrumentation_arm") != "control"
+        ]
+        if cli_only_scenario
+        else instrumented_start_runs
+    )
+    instrumented_profiled_count = len(instrumented_profiled_runs)
     readiness_timelines = [
         run.get("readiness_timeline")
         for run in instrumented_start_runs
@@ -5234,7 +5533,7 @@ def _build_summary(
     )
     resource_profiles = [
         run.get("resource_profile")
-        for run in instrumented_start_runs
+        for run in instrumented_profiled_runs
         if isinstance(run.get("resource_profile"), Mapping)
     ]
     measured_resource_profiles = [
@@ -5273,9 +5572,9 @@ def _build_summary(
         and profile["capabilities"].get("process_io") == "available"
     )
     resource_profiles_correlated = (
-        instrumented_startup_count > 0
-        and len(resource_profiles) == instrumented_startup_count
-        and resource_profiles_verified == instrumented_startup_count
+        instrumented_profiled_count > 0
+        and len(resource_profiles) == instrumented_profiled_count
+        and resource_profiles_verified == instrumented_profiled_count
     )
     resource_profiles_formal_complete = (
         resource_profiles_correlated
@@ -5327,9 +5626,9 @@ def _build_summary(
     qualification_reasons.append("scenario_matrix_incomplete")
     if not scenario_construction_complete:
         qualification_reasons.insert(1, "scenario_construction_missing_or_failed")
-    if not readiness_complete:
+    if not cli_only_scenario and not readiness_complete:
         qualification_reasons.insert(1, "readiness_timeline_incomplete")
-    elif readiness_t1_upper_bounds:
+    elif not cli_only_scenario and readiness_t1_upper_bounds:
         qualification_reasons.insert(1, "readiness_keeper_intent_checkpoint_upper_bound")
     if not resource_profiles_correlated:
         qualification_reasons.insert(1, "resource_profile_not_correlated")
@@ -5359,6 +5658,67 @@ def _build_summary(
     qualification = "smoke_only"
     formal_claim_allowed = False
     prime = next((run for run in runs if run.get("round_role") == "prime"), None)
+    cli_only_unchanged_report_count = sum(
+        1
+        for run in cli_only_command_runs
+        if isinstance(run.get("startup_report"), Mapping)
+        and run["startup_report"].get("policy") == "unchanged_existing_start_report"
+        and run["startup_report"].get("bytes_unchanged") is True
+        and run["startup_report"].get("startup_run_id") is None
+        and run["startup_report"].get("validation") == "ok"
+    )
+    if cli_only_scenario:
+        readiness_gate = {
+            "status": "not_applicable_cli_only",
+            "reason": "no_startup_transaction_in_measured_command",
+            "timelines_expected": 0,
+            "timelines_present": 0,
+            "timelines_complete": 0,
+            "prime_startup_timeline_excluded": bool(instrumented_startup_count),
+        }
+    else:
+        readiness_gate = {
+            "status": (
+                "provisional_upper_bound"
+                if readiness_complete and readiness_t1_upper_bounds
+                else (
+                    "pass"
+                    if readiness_complete
+                    and readiness_t1_exact + readiness_t1_not_required
+                    == len(readiness_timelines)
+                    else "incomplete"
+                )
+            ),
+            "timelines_expected": instrumented_startup_count,
+            "timelines_present": len(readiness_timelines),
+            "timelines_complete": readiness_timelines_complete,
+            "t1_exact_keeper_checkpoints": readiness_t1_exact,
+            "t1_exact_statistics_ms": summarize_samples(
+                [
+                    float(timeline["points"]["T1_lifecycle_intent"]["elapsed_ms"])
+                    for timeline in readiness_timelines
+                    if isinstance(timeline.get("points"), Mapping)
+                    and isinstance(
+                        timeline["points"].get("T1_lifecycle_intent"),
+                        Mapping,
+                    )
+                    and timeline["points"]["T1_lifecycle_intent"].get("status")
+                    == "reached"
+                    and timeline["points"]["T1_lifecycle_intent"].get("elapsed_ms")
+                    is not None
+                ]
+            ),
+            "t1_observed_upper_bounds": readiness_t1_upper_bounds,
+            "t1_not_required_already_mounted": readiness_t1_not_required,
+            "no_attach_t5_not_applicable": sum(
+                1
+                for timeline in readiness_timelines
+                if isinstance(timeline.get("points"), Mapping)
+                and isinstance(timeline["points"].get("T5_foreground_attached"), Mapping)
+                and timeline["points"]["T5_foreground_attached"].get("status")
+                == "not_applicable_no_attach"
+            ),
+        }
     return {
         "schema_version": SCHEMA_VERSION,
         "record_type": SUMMARY_RECORD_TYPE,
@@ -5416,7 +5776,7 @@ def _build_summary(
                 "failure_reason": prime.get("failure_reason") if isinstance(prime, Mapping) else "missing",
                 "precondition": prime.get("precondition") if isinstance(prime, Mapping) else None,
             }
-            if options.scenario in {"warm", "mixed-recovery"}
+            if options.scenario in {"cli-only", "warm", "mixed-recovery"}
             else {"required": False, "status": "not_applicable"}
         ),
         "platform": {
@@ -5429,63 +5789,39 @@ def _build_summary(
             "filesystem": _filesystem_metadata(context.project_root),
         },
         "report_correlation": {
-            "native_run_id_required": True,
-            "native_run_id_available": startup_command_count > 0 and native_run_count == startup_command_count,
+            "native_run_id_required": not cli_only_scenario,
+            "native_run_id_available": (
+                False
+                if cli_only_scenario
+                else startup_command_count > 0 and native_run_count == startup_command_count
+            ),
             "native_run_id_runs": native_run_count,
             "startup_command_runs": startup_command_count,
+            "cli_only_command_runs": len(cli_only_command_runs),
+            "cli_only_unchanged_report_runs": cli_only_unchanged_report_count,
+            "cli_only_native_run_id_status": (
+                "not_applicable"
+                if cli_only_scenario
+                else "startup_transaction_required"
+            ),
             "config_signature": formal_config_signature,
-            "method": "stdout_report_run_id+exclusive_lock+pre_post_hash+mtime+generated_at_window+lease_identity",
+            "method": (
+                "benchmark_coordinates+exclusive_lock+frozen_authority+"
+                "pre_post_identical_report_identity"
+                if cli_only_scenario
+                else "stdout_report_run_id+exclusive_lock+pre_post_hash+mtime+"
+                "generated_at_window+lease_identity"
+            ),
         },
         "scenario_construction_gate": scenario_construction,
-        "readiness_gate": {
-            "status": (
-                "provisional_upper_bound"
-                if readiness_complete and readiness_t1_upper_bounds
-                else (
-                    "pass"
-                    if readiness_complete
-                    and readiness_t1_exact + readiness_t1_not_required
-                    == len(readiness_timelines)
-                    else "incomplete"
-                )
-            ),
-            "timelines_expected": instrumented_startup_count,
-            "timelines_present": len(readiness_timelines),
-            "timelines_complete": readiness_timelines_complete,
-            "t1_exact_keeper_checkpoints": readiness_t1_exact,
-            "t1_exact_statistics_ms": summarize_samples(
-                [
-                    float(timeline["points"]["T1_lifecycle_intent"]["elapsed_ms"])
-                    for timeline in readiness_timelines
-                    if isinstance(timeline.get("points"), Mapping)
-                    and isinstance(
-                        timeline["points"].get("T1_lifecycle_intent"),
-                        Mapping,
-                    )
-                    and timeline["points"]["T1_lifecycle_intent"].get("status")
-                    == "reached"
-                    and timeline["points"]["T1_lifecycle_intent"].get("elapsed_ms")
-                    is not None
-                ]
-            ),
-            "t1_observed_upper_bounds": readiness_t1_upper_bounds,
-            "t1_not_required_already_mounted": readiness_t1_not_required,
-            "no_attach_t5_not_applicable": sum(
-                1
-                for timeline in readiness_timelines
-                if isinstance(timeline.get("points"), Mapping)
-                and isinstance(timeline["points"].get("T5_foreground_attached"), Mapping)
-                and timeline["points"]["T5_foreground_attached"].get("status")
-                == "not_applicable_no_attach"
-            ),
-        },
+        "readiness_gate": readiness_gate,
         "resource_gate": {
             "status": (
                 "pass"
                 if io_and_residue_complete
                 else ("degraded" if resource_profiles else "unavailable")
             ),
-            "profiles_expected": instrumented_startup_count,
+            "profiles_expected": instrumented_profiled_count,
             "profiles_present": len(resource_profiles),
             "profiles_verified": resource_profiles_verified,
             "profiles_formal_eligible": resource_profiles_formal_eligible,
@@ -5600,6 +5936,7 @@ def _build_summary(
                 "measured_index": run.get("measured_index"),
                 "included_in_statistics": run.get("included_in_statistics"),
                 "round_role": run.get("round_role"),
+                "measurement_kind": run.get("measurement_kind"),
                 "instrumentation_arm": run.get("instrumentation_arm"),
                 "instrumentation_pair_index": run.get("instrumentation_pair_index"),
                 "instrumentation_pair_sequence": run.get("instrumentation_pair_sequence"),
@@ -6127,6 +6464,9 @@ def _base_run_record(
         "included_in_statistics": included_in_statistics,
         "scenario": scenario,
         "round_role": round_role,
+        "measurement_kind": (
+            "cli_only" if scenario == "cli-only" and round_role != "prime" else "startup"
+        ),
         "instrumentation_arm": instrumentation_arm,
         "status": status,
         "wall_ms": wall_ms,
@@ -6216,6 +6556,39 @@ def _read_unchanged_report(
     if dict(before) != after:
         return data, after, "cli-only startup report sentinel changed"
     return data, after, None
+
+
+def _validate_cli_only_report_sentinel(
+    report: Mapping[str, Any],
+    *,
+    before: Mapping[str, Any] | None,
+    after: Mapping[str, Any] | None,
+    expected_config_signature: str | None,
+    expected_daemon_generation: int | None,
+) -> None:
+    """Validate an old report as an unchanged sentinel, never as this run's result."""
+
+    if before is None or after is None or dict(before) != dict(after):
+        raise ReportValidationError("cli-only startup report sentinel identity changed")
+    if report.get("schema_version") != STARTUP_REPORT_SCHEMA_VERSION:
+        raise ReportValidationError("cli-only startup report sentinel schema is unsupported")
+    if report.get("api_version") != STARTUP_REPORT_API_VERSION:
+        raise ReportValidationError("cli-only startup report sentinel API is unsupported")
+    if report.get("record_type") != "ccbd_startup_report":
+        raise ReportValidationError("cli-only sentinel is not a ccbd_startup_report")
+    if report.get("trigger") != "start_command" or report.get("status") != "ok":
+        raise ReportValidationError("cli-only startup report sentinel is not a successful start")
+    run_id = str(report.get("startup_run_id") or "").strip()
+    if not re.fullmatch(r"start_[0-9a-f]{32}", run_id):
+        raise ReportValidationError("cli-only startup report sentinel has an invalid run id")
+    signature = str(report.get("config_signature") or "").strip()
+    generation = report.get("daemon_generation")
+    if not signature or type(generation) is not int or generation < 1:
+        raise ReportValidationError("cli-only startup report sentinel lacks authority identity")
+    if expected_config_signature is not None and signature != expected_config_signature:
+        raise ReportValidationError("cli-only startup report sentinel config signature changed")
+    if expected_daemon_generation is not None and generation != expected_daemon_generation:
+        raise ReportValidationError("cli-only startup report sentinel generation changed")
 
 
 def _wait_for_changed_report(
@@ -6776,6 +7149,23 @@ def _parse_start_stdout(
     )
 
 
+def _validate_cli_only_stdout(value: str, *, expected_version: str | None) -> None:
+    """Require deterministic introspection output and reject start-transaction evidence."""
+
+    if expected_version is None:
+        raise ReportValidationError("source VERSION is unavailable for cli-only validation")
+    metadata_prefixes = (
+        "startup_run_id:",
+        "startup_cli_timings_ms:",
+        "startup_process_trace_id:",
+        "startup_process_bootstrap_timings_ms:",
+    )
+    if any(line.strip().startswith(metadata_prefixes) for line in value.splitlines()):
+        raise ReportValidationError("cli-only stdout contains unexpected startup metadata")
+    if value != f"v{expected_version}\n":
+        raise ReportValidationError("cli-only stdout does not exactly match the source version")
+
+
 def _validate_readiness_timeline(
     value: Mapping[str, Any],
     *,
@@ -7200,6 +7590,20 @@ def _attribution_record(
         "external": _coverage_payload(total=wall_ms, named=external_named),
         "supervisor": _coverage_payload(total=supervisor_total, named=supervisor_named),
         "flow": _coverage_payload(total=flow_total, named=flow_named),
+    }
+
+
+def _cli_only_attribution_record(wall_ms: float) -> dict[str, Any]:
+    return {
+        "external": _coverage_payload(total=wall_ms, named=wall_ms),
+        "supervisor": {
+            "status": "not_applicable_cli_only",
+            **_coverage_payload(total=None, named=None),
+        },
+        "flow": {
+            "status": "not_applicable_cli_only",
+            **_coverage_payload(total=None, named=None),
+        },
     }
 
 

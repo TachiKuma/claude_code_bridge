@@ -158,6 +158,10 @@ def _control_startup_stdout(run_id: str, **timing_overrides: float) -> str:
     )
 
 
+def _cli_only_stdout() -> str:
+    return f"v{(REPO_ROOT / 'VERSION').read_text(encoding='utf-8').strip()}\n"
+
+
 def _raw_resource_profile(*, wall_ms: float = 5.0) -> dict[str, object]:
     return {
         "schema_version": 1,
@@ -1110,6 +1114,322 @@ def test_summary_statistics_include_robust_dispersion(runner) -> None:
     assert summary["mad"] == 1.0
     assert summary["iqr"] == 1.5
     assert summary["cv"] == pytest.approx(0.4472135955)
+
+
+def test_cli_only_primes_once_then_measures_unchanged_report(runner, tmp_path: Path) -> None:
+    options = _fixture_options(
+        runner,
+        tmp_path,
+        scenario="cli-only",
+        warmup=1,
+        iterations=2,
+    )
+    calls: list[tuple[str, ...]] = []
+    cli_envs: list[dict[str, str]] = []
+    starts = 0
+
+    def fake_run(argv, cwd, env, timeout_s):
+        nonlocal starts
+        del timeout_s
+        command = tuple(argv)
+        calls.append(command)
+        if command[-1] == "kill":
+            _write_unmounted(cwd)
+            return runner.CommandResult(command, 0, "stopped", "", False)
+        if command[-1] == "--print-version":
+            cli_envs.append(dict(env))
+            return runner.CommandResult(command, 0, _cli_only_stdout(), "", False)
+        starts += 1
+        run_id = _write_mounted_round(
+            cwd,
+            sequence=starts,
+            action="launched",
+            daemon_started=True,
+        )
+        return runner.CommandResult(command, 0, _startup_stdout(run_id), "", False)
+
+    summary = runner.run_startup_benchmark(
+        options,
+        dependencies=runner.BenchmarkDependencies(command_runner=fake_run),
+        environ=_stub_environ(),
+    )
+
+    assert summary["status"] == "ok"
+    assert starts == 1
+    assert [Path(command[-1]).name for command in calls] == [
+        "kill",
+        "ccb_test",
+        "--print-version",
+        "--print-version",
+        "--print-version",
+        "kill",
+    ]
+    assert all(
+        not runner._stub_launch_environment_key(key)
+        for env in cli_envs
+        for key in env
+    )
+    assert summary["readiness_gate"] == {
+        "status": "not_applicable_cli_only",
+        "reason": "no_startup_transaction_in_measured_command",
+        "timelines_expected": 0,
+        "timelines_present": 0,
+        "timelines_complete": 0,
+        "prime_startup_timeline_excluded": True,
+    }
+    assert summary["report_correlation"]["native_run_id_required"] is False
+    assert summary["report_correlation"]["native_run_id_runs"] == 1
+    assert summary["report_correlation"]["startup_command_runs"] == 1
+    assert summary["report_correlation"]["cli_only_command_runs"] == 3
+    assert summary["report_correlation"]["cli_only_unchanged_report_runs"] == 3
+    assert summary["cleanup"]["pre_teardown_preservation"]["status"] == "pass"
+    assert summary["scenario_construction_gate"]["by_scenario"] == {
+        "S0": {"present": 4, "passed": 4, "failed": 0}
+    }
+
+    result_dir = Path(summary["fixture"]["result_dir"])
+    prime = json.loads((result_dir / "prime-0001" / "run.json").read_text(encoding="utf-8"))
+    prime_id = prime["startup_report"]["startup_run_id"]
+    assert prime_id
+    for label in ("warmup-0001", "run-0001", "run-0002"):
+        run_dir, run, manifest = _read_scenario_evidence(summary, label)
+        assert run["measurement_kind"] == "cli_only"
+        assert run["command"][-1] == "--print-version"
+        assert run["startup_report"]["startup_run_id"] is None
+        assert run["startup_report"]["bytes_unchanged"] is True
+        assert run["startup_report"]["snapshot_role"] == "preexisting_unchanged_sentinel"
+        assert (run_dir / "startup-report-sentinel.json").is_file()
+        assert not (run_dir / "startup-report.json").exists()
+        assert manifest["scenario"]["id"] == "S0"
+        assert manifest["observation"]["relations"] == {
+            "daemon_generation": "same",
+            "daemon_identity_digest": "same",
+            "namespace_identity_digest": "same",
+            "agent_runtime_identity_digest": "same",
+            "startup_report_identity": "same",
+        }
+        sentinel = json.loads(
+            (run_dir / "startup-report-sentinel.json").read_text(encoding="utf-8")
+        )
+        assert sentinel["startup_run_id"] == prime_id
+
+
+@pytest.mark.parametrize("transition", ["rewrite_same_bytes", "change_content", "delete"])
+def test_cli_only_rejects_any_report_transition(
+    runner,
+    tmp_path: Path,
+    transition: str,
+) -> None:
+    options = _fixture_options(
+        runner,
+        tmp_path,
+        scenario="cli-only",
+        warmup=0,
+        iterations=2,
+    )
+    version_calls = 0
+
+    def fake_run(argv, cwd, env, timeout_s):
+        nonlocal version_calls
+        del env, timeout_s
+        command = tuple(argv)
+        if command[-1] == "kill":
+            _write_unmounted(cwd)
+            return runner.CommandResult(command, 0, "stopped", "", False)
+        if command[-1] != "--print-version":
+            run_id = _write_mounted_round(
+                cwd,
+                sequence=1,
+                action="launched",
+                daemon_started=True,
+            )
+            return runner.CommandResult(command, 0, _startup_stdout(run_id), "", False)
+        version_calls += 1
+        report_path = cwd / ".ccb" / "ccbd" / "startup-report.json"
+        original = report_path.read_bytes()
+        if transition == "rewrite_same_bytes":
+            report_path.write_bytes(original)
+            file_stat = report_path.stat()
+            os.utime(
+                report_path,
+                ns=(file_stat.st_atime_ns, file_stat.st_mtime_ns + 1_000_000_000),
+            )
+        elif transition == "change_content":
+            report = json.loads(original)
+            report["sequence_for_test"] = 999
+            report_path.write_text(json.dumps(report) + "\n", encoding="utf-8")
+        else:
+            report_path.unlink()
+        return runner.CommandResult(command, 0, _cli_only_stdout(), "", False)
+
+    summary = runner.run_startup_benchmark(
+        options,
+        dependencies=runner.BenchmarkDependencies(command_runner=fake_run),
+        environ=_stub_environ(),
+    )
+
+    assert summary["status"] == "incomplete"
+    assert version_calls == 1
+    assert summary["counts"]["completed"] == 1
+    assert "startup report sentinel" in summary["abort_reason"]
+    run = json.loads(
+        (
+            Path(summary["fixture"]["result_dir"])
+            / "run-0001"
+            / "run.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert run["startup_report"]["startup_run_id"] is None
+    assert run["status"] == "failed"
+
+
+def test_cli_only_rejects_startup_metadata_in_stdout(runner, tmp_path: Path) -> None:
+    options = _fixture_options(
+        runner,
+        tmp_path,
+        scenario="cli-only",
+        warmup=0,
+        iterations=1,
+    )
+
+    def fake_run(argv, cwd, env, timeout_s):
+        del env, timeout_s
+        command = tuple(argv)
+        if command[-1] == "kill":
+            _write_unmounted(cwd)
+            return runner.CommandResult(command, 0, "stopped", "", False)
+        if command[-1] == "--print-version":
+            return runner.CommandResult(
+                command,
+                0,
+                _cli_only_stdout() + f"startup_run_id: start_{'f' * 32}\n",
+                "",
+                False,
+            )
+        run_id = _write_mounted_round(
+            cwd,
+            sequence=1,
+            action="launched",
+            daemon_started=True,
+        )
+        return runner.CommandResult(command, 0, _startup_stdout(run_id), "", False)
+
+    summary = runner.run_startup_benchmark(
+        options,
+        dependencies=runner.BenchmarkDependencies(command_runner=fake_run),
+        environ=_stub_environ(),
+    )
+
+    assert summary["status"] == "incomplete"
+    assert "unexpected startup metadata" in summary["abort_reason"]
+    assert summary["report_correlation"]["native_run_id_runs"] == 1
+    assert summary["report_correlation"]["cli_only_command_runs"] == 1
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "expected_reason"),
+    [
+        ("health", "failed", "healthy_active_runtime_record_count_mismatch"),
+        ("health", "degraded", "healthy_active_runtime_record_count_mismatch"),
+        ("reconcile_state", "recovering", "steady_active_runtime_record_count_mismatch"),
+    ],
+)
+def test_cli_only_requires_strict_healthy_mounted_baseline(
+    runner,
+    tmp_path: Path,
+    field: str,
+    value: str,
+    expected_reason: str,
+) -> None:
+    options = _fixture_options(
+        runner,
+        tmp_path,
+        scenario="cli-only",
+        warmup=0,
+        iterations=1,
+    )
+    version_calls = 0
+
+    def fake_run(argv, cwd, env, timeout_s):
+        nonlocal version_calls
+        del env, timeout_s
+        command = tuple(argv)
+        if command[-1] == "kill":
+            _write_unmounted(cwd)
+            return runner.CommandResult(command, 0, "stopped", "", False)
+        if command[-1] == "--print-version":
+            version_calls += 1
+            return runner.CommandResult(command, 0, _cli_only_stdout(), "", False)
+        run_id = _write_mounted_round(
+            cwd,
+            sequence=1,
+            action="launched",
+            daemon_started=True,
+        )
+        runtime_path = cwd / ".ccb" / "agents" / "agent1" / "runtime.json"
+        runtime = json.loads(runtime_path.read_text(encoding="utf-8"))
+        runtime[field] = value
+        runtime_path.write_text(json.dumps(runtime) + "\n", encoding="utf-8")
+        return runner.CommandResult(command, 0, _startup_stdout(run_id), "", False)
+
+    summary = runner.run_startup_benchmark(
+        options,
+        dependencies=runner.BenchmarkDependencies(command_runner=fake_run),
+        environ=_stub_environ(),
+    )
+
+    assert summary["status"] == "incomplete"
+    assert version_calls == 0
+    assert expected_reason in summary["abort_reason"]
+
+
+def test_cli_only_command_failure_stops_and_preserves_report(runner, tmp_path: Path) -> None:
+    options = _fixture_options(
+        runner,
+        tmp_path,
+        scenario="cli-only",
+        warmup=0,
+        iterations=2,
+    )
+    version_calls = 0
+
+    def fake_run(argv, cwd, env, timeout_s):
+        nonlocal version_calls
+        del env, timeout_s
+        command = tuple(argv)
+        if command[-1] == "kill":
+            _write_unmounted(cwd)
+            return runner.CommandResult(command, 0, "stopped", "", False)
+        if command[-1] == "--print-version":
+            version_calls += 1
+            return runner.CommandResult(command, 23, "", "version failed", False)
+        run_id = _write_mounted_round(
+            cwd,
+            sequence=1,
+            action="launched",
+            daemon_started=True,
+        )
+        return runner.CommandResult(command, 0, _startup_stdout(run_id), "", False)
+
+    summary = runner.run_startup_benchmark(
+        options,
+        dependencies=runner.BenchmarkDependencies(command_runner=fake_run),
+        environ=_stub_environ(),
+    )
+
+    assert summary["status"] == "incomplete"
+    assert version_calls == 1
+    assert "cli-only command exited with status 23" in summary["abort_reason"]
+    assert summary["cleanup"]["pre_teardown_preservation"]["status"] == "pass"
+    run = json.loads(
+        (
+            Path(summary["fixture"]["result_dir"])
+            / "run-0001"
+            / "run.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert run["startup_report"]["bytes_unchanged"] is True
+    assert run["startup_report"]["startup_run_id"] is None
 
 
 def test_warmup_is_excluded_and_each_round_snapshots_report(runner, tmp_path: Path) -> None:
@@ -2440,6 +2760,8 @@ def test_pristine_constructor_proves_empty_fixture_then_created_authority(
         "configured_runtime_record_count": 0,
         "active_runtime_record_count": 0,
         "live_active_runtime_record_count": 0,
+        "healthy_active_runtime_record_count": 0,
+        "steady_active_runtime_record_count": 0,
         "source_home_empty": True,
     }
     assert manifest["ready_for_measurement"]["constructor_resource_audit"]["status"] == "clean"
