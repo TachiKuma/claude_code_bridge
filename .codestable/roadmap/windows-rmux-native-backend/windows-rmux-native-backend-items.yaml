@@ -1,0 +1,174 @@
+roadmap: windows-rmux-native-backend
+created: 2026-07-06
+
+items:
+  - slug: rmux-capability-gate
+    description: 在原生 Windows 上建立 Rmux capability probe、报告格式和 blocking gap 判定
+    depends_on: []
+    status: in-progress
+    feature: 2026-07-06-rmux-capability-gate
+    minimal_loop: true
+    notes: 不修改主链路；必须覆盖 resize-pane、select-layout、swap-pane、move-pane 等 layout/reflow/reload required 命令；完成状态只表示 probe completed
+
+  - slug: rmux-route-approval
+    description: 基于 capability report、blocking gaps、partial workaround 和用户或 owner 判断，明确 Rmux 路线继续、暂停或重新选型
+    depends_on: [rmux-capability-gate]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: 必须落盘 approval evidence；后续实现 item 只能依赖此 item，不直接依赖 probe completed
+
+  - slug: backend-resolver-opt-in-contract
+    description: 定义 Rmux opt-in 配置、平台默认、auto 探测、fallback 和 fail-fast 语义，以及 diagnostics selection result
+    depends_on: [rmux-route-approval]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: 覆盖 backend_selection.py 当前 tmux-only 分支；显式 rmux 缺失或未批准时必须 fail fast，不能静默 fallback
+
+  - slug: mux-backend-contract
+    description: 定义 MuxBackend 组合能力、ProjectNamespaceBackend higher-level policy、namespace 与 pane 引用、capability、error 契约和 fake backend 测试替身
+    depends_on: [backend-resolver-opt-in-contract]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: 先建 seam 和测试替身，避免实现直接耦合 Rmux
+
+  - slug: tmux-backend-contract-adapter
+    description: 将现有 TmuxBackend 适配到 MuxBackend，保持 Linux、macOS、WSL 行为不变
+    depends_on: [mux-backend-contract]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: 回归重点是当前 tmux lifecycle 与 provider path 不漂移
+
+  - slug: windows-namespace-ipc-schema
+    description: 增加 mux-agnostic namespace state、named pipe IPC 字段、ping/doctor payload 和旧 namespace_tmux 字段兼容别名策略
+    depends_on: [mux-backend-contract]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: 不直接启动 Rmux；先让 namespace schema、foreground attach 输入和 diagnostics 字段可测
+
+  - slug: windows-shell-log-builder
+    description: 增加 Windows shell command builder、pipe/log command builder、stderr redirection 和默认 shell 诊断
+    depends_on: [mux-backend-contract]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: 替代 sh -lc、tee -a 等 Unix-only 命令构造
+
+  - slug: windows-job-object-runtime-evidence
+    description: 增加 Windows Job Object 进程树 evidence、runtime authority 字段和 kill/recovery 判定输入
+    depends_on: [windows-namespace-ipc-schema]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: pane alive 不等于 provider healthy；job evidence 是第二生命信号
+
+  - slug: provider-runtime-backend-session-contract
+    description: 将 provider launch、session payload、runtime health 和 provider env 迁移到 backend-neutral mux 字段，并保留旧 tmux 字段兼容别名
+    depends_on: [mux-backend-contract, windows-namespace-ipc-schema]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: 覆盖共享 session writer、provider-specific launcher、pane_log_support session reader、provider env 和 TmuxBackend 直接导入；不改变 provider completion 解析
+
+  - slug: rmux-daemon-ownership-boundary
+    description: 定义 Rmux daemon discovery、start、health、crash、cleanup 的 ownership 和 diagnostics evidence
+    depends_on: [mux-backend-contract, windows-namespace-ipc-schema]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: Rmux daemon 只能是 backend evidence，不能成为 project authority；共享 daemon 与 per-project cleanup 必须可诊断
+
+  - slug: rmux-backend-core
+    description: 实现 Rmux namespace、session、window、pane、list、split、respawn、kill、title、user-option、style 的 backend core
+    depends_on: [tmux-backend-contract-adapter, windows-namespace-ipc-schema, windows-shell-log-builder, provider-runtime-backend-session-contract, rmux-daemon-ownership-boundary]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: 必须消费 capability report，unsupported required command 不能静默降级
+
+  - slug: rmux-send-capture-logging
+    description: 实现 Rmux send-text、send-key、capture-pane、pipe-pane、logging，并覆盖 Ctrl-C、Ctrl-D 与大文本输入
+    depends_on: [rmux-backend-core]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: 重点替换 load-buffer/paste-buffer/tee -a 的 Windows 语义；必须用 provider completion parser golden fixtures 验证 capture 格式保真
+
+  - slug: ccbd-rmux-namespace-lifecycle
+    description: 将 RmuxBackend 接入 ccb、ccbd project namespace ensure、foreground attach、layout projection 和 ccb kill
+    depends_on: [rmux-send-capture-logging, windows-job-object-runtime-evidence, ccbd-windows-tcp-loopback-transport]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: 第一条真正用户可见闭环；必须通过 mux-agnostic foreground attach，仍建议 opt-in；native Windows 下其验收依赖 ccbd 控制面 transport 可用（见 transport track）
+
+  - slug: rmux-supervision-recovery
+    description: 接入 pane death、provider process death、namespace crash、Rmux daemon crash 的 supervision、recovery 与 diagnostics
+    depends_on: [ccbd-rmux-namespace-lifecycle]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: 必须证明 pane evidence 与 process/job evidence 的边界
+
+  - slug: rmux-windows-validation-matrix
+    description: 建立 Windows 原生真实平台验证矩阵和可重复 runbook，覆盖多 agent、ask、kill、restart、多项目
+    depends_on: [rmux-supervision-recovery]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: 包含 CI 可跑部分与手工真机证据部分
+
+  - slug: rmux-packaging-docs-contracts
+    description: 更新 installer、package、docs、contracts，将 Rmux 后端从实验能力收口为受支持入口或明确 beta
+    depends_on: [rmux-windows-validation-matrix]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: 包含用户安装说明、diagnostics bundle 字段、README/contract 同步；区分 Windows npm 分发与 install.ps1 本地安装两个入口
+
+  # ---- CCBD 控制面 transport track（2026-07-19 v8.2.1 再基线新增）----
+  # 与 rmux mux 后端正交的独立前置：native Windows 无 AF_UNIX，ccb→ccbd 控制面 RPC 起不来。
+  # 这是 owner 终点「全链路跑通」在 mux 之外的必经 blocker，原 roadmap 缺失。
+  - slug: ccbd-control-plane-transport-seam
+    description: 为 ccbd 控制面 RPC 抽出 transport seam（connect/listen/accept/same-user 鉴权/liveness/stale 清理/端点发现），Unix 保持 AF_UNIX 行为不变
+    depends_on: []
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: 帧协议与 handler dispatch 保持 transport-neutral，业务零改动；先建 seam + Unix adapter + fake transport 测试替身，不改 Windows 行为。实测硬编码点见 roadmap §8
+
+  - slug: ccbd-windows-tcp-loopback-transport
+    description: 实现 Windows TCP loopback transport adapter（127.0.0.1 + OS 分配端口 + same-user token 握手，token 文件 icacls 收敛 ACL、无法收敛则 fail-fast），替换 Unix peer-path 鉴权与 inode stale 判定
+    depends_on: [ccbd-control-plane-transport-seam]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: 复用 JSON-line 帧与 30+ handler；bootstrap self-ping 走 seam 鉴权路径；端点发现写 .ccb/ ccbd 端点存储、旧 socket_path 兼容别名。v8.0.16 另一 checkout 的 TCP 方案仅作蓝本，v8.2.1 重验；备选方案 B = named pipe
+
+  - slug: accelerator-transport-windows-guard
+    description: 修复 lib/runtime_accelerator 控制面在 native Windows 的 AF_UNIX AttributeError（client.py:53 / ownership.py:534 无 guard），使 ccb ask 的 codex accelerator caller 不崩
+    depends_on: []
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: AF_UNIX 属性访问在 except OSError 之外抛 AttributeError；codex_accelerator_enabled() 默认 True，poll_with_accelerator 在默认 codex ask/poll 路径调用，故默认路径下即 ask 必经，列 milestone-内。design 决定深度：给 Windows transport 还是 guard+clean fallback
+
+  - slug: ccbd-windows-process-liveness
+    description: 抽出跨平台进程存活判定，替换 ccbd 控制面 system.py:43 process_exists 的 os.kill(pid,0)——Windows 上 signal 0 是 CTRL_C_EVENT 语义（会误判活进程为死、甚至误投 Ctrl-C），破坏 keeper/health/ownership 的存活与 recovery 判定
+    depends_on: []
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: 独立审查发现的第四个控制面 blocker，与 transport/mux 正交。被 ccbd/keeper.py、services/health.py、services/ownership.py 等约 10 个文件消费；Windows 用 OpenProcess/WaitForSingleObject 或 psutil。与 windows-job-object-runtime-evidence 区分：后者是 kill/recovery 的 job-object 进程树 evidence，本项是基本 pid 存活判定
+
+  - slug: ccbd-windows-full-chain-smoke
+    description: 在 native Windows 真机证明 ccb→ccbd→rmux 全链路跑通（ccb 启动项目 namespace、ccb ask 至少一个 provider、ccb kill 清理），不经 probe 直驱 rmux 旁路
+    depends_on: [ccbd-windows-tcp-loopback-transport, ccbd-rmux-namespace-lifecycle, accelerator-transport-windows-guard, ccbd-windows-process-liveness]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: 本轮 owner 终点的验收 item；证据必须是真链路 command transcript，非 probe。范围不含 supervision-recovery/多项目/打包/文档收口
