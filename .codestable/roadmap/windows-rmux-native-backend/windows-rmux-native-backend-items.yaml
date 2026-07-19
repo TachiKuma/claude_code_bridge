@@ -13,80 +13,80 @@ items:
   - slug: rmux-route-approval
     description: 基于 capability report、blocking gaps、partial workaround 和用户或 owner 判断，明确 Rmux 路线继续、暂停或重新选型
     depends_on: [rmux-capability-gate]
-    status: planned
-    feature: null
+    status: in-progress
+    feature: 2026-07-19-rmux-route-approval
     minimal_loop: false
     notes: 必须落盘 approval evidence；后续实现 item 只能依赖此 item，不直接依赖 probe completed
 
   - slug: backend-resolver-opt-in-contract
     description: 定义 Rmux opt-in 配置、平台默认、auto 探测、fallback 和 fail-fast 语义，以及 diagnostics selection result
     depends_on: [rmux-route-approval]
-    status: planned
-    feature: null
+    status: in-progress
+    feature: 2026-07-19-backend-resolver-opt-in-contract
     minimal_loop: false
     notes: 覆盖 backend_selection.py 当前 tmux-only 分支；显式 rmux 缺失或未批准时必须 fail fast，不能静默 fallback
 
   - slug: mux-backend-contract
     description: 定义 MuxBackend 组合能力、ProjectNamespaceBackend higher-level policy、namespace 与 pane 引用、capability、error 契约和 fake backend 测试替身
     depends_on: [backend-resolver-opt-in-contract]
-    status: planned
-    feature: null
+    status: in-progress
+    feature: 2026-07-19-mux-backend-contract
     minimal_loop: false
     notes: 先建 seam 和测试替身，避免实现直接耦合 Rmux
 
   - slug: tmux-backend-contract-adapter
     description: 将现有 TmuxBackend 适配到 MuxBackend，保持 Linux、macOS、WSL 行为不变
     depends_on: [mux-backend-contract]
-    status: planned
-    feature: null
+    status: in-progress
+    feature: 2026-07-19-tmux-backend-contract-adapter
     minimal_loop: false
     notes: 回归重点是当前 tmux lifecycle 与 provider path 不漂移
 
   - slug: windows-namespace-ipc-schema
     description: 增加 mux-agnostic namespace state、named pipe IPC 字段、ping/doctor payload 和旧 namespace_tmux 字段兼容别名策略
     depends_on: [mux-backend-contract]
-    status: planned
-    feature: null
+    status: in-progress
+    feature: 2026-07-19-windows-namespace-ipc-schema
     minimal_loop: false
     notes: 不直接启动 Rmux；先让 namespace schema、foreground attach 输入和 diagnostics 字段可测
 
   - slug: windows-shell-log-builder
     description: 增加 Windows shell command builder、pipe/log command builder、stderr redirection 和默认 shell 诊断
     depends_on: [mux-backend-contract]
-    status: planned
-    feature: null
+    status: in-progress
+    feature: 2026-07-20-windows-shell-log-builder
     minimal_loop: false
     notes: 替代 sh -lc、tee -a 等 Unix-only 命令构造
 
   - slug: windows-job-object-runtime-evidence
     description: 增加 Windows Job Object 进程树 evidence、runtime authority 字段和 kill/recovery 判定输入
     depends_on: [windows-namespace-ipc-schema]
-    status: planned
-    feature: null
+    status: in-progress
+    feature: 2026-07-20-windows-job-object-runtime-evidence
     minimal_loop: false
     notes: pane alive 不等于 provider healthy；job evidence 是第二生命信号
 
   - slug: provider-runtime-backend-session-contract
     description: 将 provider launch、session payload、runtime health 和 provider env 迁移到 backend-neutral mux 字段，并保留旧 tmux 字段兼容别名
     depends_on: [mux-backend-contract, windows-namespace-ipc-schema]
-    status: planned
-    feature: null
+    status: in-progress
+    feature: 2026-07-20-provider-runtime-backend-session-contract
     minimal_loop: false
     notes: 覆盖共享 session writer、provider-specific launcher、pane_log_support session reader、provider env 和 TmuxBackend 直接导入；不改变 provider completion 解析
 
   - slug: rmux-daemon-ownership-boundary
     description: 定义 Rmux daemon discovery、start、health、crash、cleanup 的 ownership 和 diagnostics evidence
     depends_on: [mux-backend-contract, windows-namespace-ipc-schema]
-    status: planned
-    feature: null
+    status: in-progress
+    feature: 2026-07-20-rmux-daemon-ownership-boundary
     minimal_loop: false
     notes: Rmux daemon 只能是 backend evidence，不能成为 project authority；共享 daemon 与 per-project cleanup 必须可诊断
 
   - slug: rmux-backend-core
     description: 实现 Rmux namespace、session、window、pane、list、split、respawn、kill、title、user-option、style 的 backend core
     depends_on: [tmux-backend-contract-adapter, windows-namespace-ipc-schema, windows-shell-log-builder, provider-runtime-backend-session-contract, rmux-daemon-ownership-boundary]
-    status: planned
-    feature: null
+    status: in-progress
+    feature: 2026-07-20-rmux-backend-core
     minimal_loop: false
     notes: 必须消费 capability report，unsupported required command 不能静默降级
 

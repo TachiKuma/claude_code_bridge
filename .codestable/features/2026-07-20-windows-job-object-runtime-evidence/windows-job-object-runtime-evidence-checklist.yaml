@@ -1,0 +1,129 @@
+feature: 2026-07-20-windows-job-object-runtime-evidence
+created: 2026-07-20
+
+steps:
+  - action: "process_ref contract：定义 ProcessRef 形状、runtime authority 字段和 diagnostics 投影"
+    exit_signal: "AgentRuntime / ProviderRuntimeFacts / diagnostics 都能承载 process_ref，且 job handle 不进入持久化记录"
+    status: pending
+  - action: "evidence probe seam：在 provider_runtime/process_ref.py 增加 Windows Job Object 首选、process tree 降级的可注入 evidence builder 与 cleanup eligibility evaluator"
+    exit_signal: "能区分 job attached、tree degraded、unsupported，且调用层不各自解释 process_ref"
+    status: pending
+  - action: "runtime wiring：让 provider launch / rebind / helper manifest / health 统一消费 process_ref"
+    exit_signal: "runtime store roundtrip、ProviderRuntimeFacts 生成和 health snapshot 投影都带上 process_ref"
+    status: pending
+  - action: "kill / recovery gating：收紧 Windows ownership 判定，按 process_ref + runtime generation + project ownership 决定 destructive cleanup"
+    exit_signal: "Windows 下不再依赖 pid_matches_project 的无条件 True；kill/cleanup 只在 ownership evidence 明确时发生"
+    status: pending
+  - action: "diagnostics exposure：doctor / project view / health 输出并列展示 pane、process、job 证据"
+    exit_signal: "pane_state、process_ref.evidence_state、process_ref.job_id 或 process_ref.owner_pid 能在 diagnostics 中同时观察到"
+    status: pending
+  - action: "regression and guard：补齐 runtime facts、health、kill、helper cleanup、legacy 兼容测试与 rg 守护"
+    exit_signal: "CMD-001 到 CMD-006 通过，且 Windows-only 宽松分支被 evidence-first 逻辑替换"
+    status: pending
+
+checks:
+  - item: "AgentRuntime 和 ProviderRuntimeFacts 同时承载 process_ref，旧记录可读"
+    source: design §2.1 / AC-001 / AC-007
+    status: pending
+  - item: "ProcessRef 区分 windows_job_object / process_tree / legacy_pid，且 evidence_state 不是单一布尔值"
+    source: design §2.1 / AC-002
+    status: pending
+  - item: "job handle 不入持久化 runtime record，只保留逻辑 job identity / owner pid / runtime generation"
+    source: design §2.1 / 反向核对项
+    status: pending
+  - item: "canonical authority 字段固定为 process_ref.owner_pid；job_owner_pid 只能是 diagnostics / legacy alias"
+    source: design §2.1 / roadmap §4.3 / psmux §10.1
+    status: pending
+  - item: "provider_runtime/process_ref.py 是唯一 builder + eligibility seam，调用层不各自解释 kind/evidence_state/runtime_generation"
+    source: design §2.1 / design §2.3
+    status: pending
+  - item: "Windows Job Object 作为首选 evidence，process tree 仅作为 degraded evidence"
+    source: design §2.2 / AC-002 / AC-003
+    status: pending
+  - item: "pane alive 只表示 pane evidence，不代表 provider healthy"
+    source: design §2.2 / AC-004
+    status: pending
+  - item: "runtime_health 在 pane success 短路前读取 process_ref，stale/missing/degraded process evidence 不得返回 healthy"
+    source: design §2.2 / AC-004 / DOD-IMPL-003
+    status: pending
+  - item: "kill eligibility 需要 process_ref + runtime generation + project ownership，不能走任意 pid 清扫"
+    source: design §2.2 / AC-003 / AC-005 / DOD-IMPL-002
+    status: pending
+  - item: "helper manifest 继续作为 cleanup 辅助输入，但不作为唯一 job evidence"
+    source: design §2.3 / AC-005
+    status: pending
+  - item: "provider_runtime_facts、health、kill_runtime、runtime_pid_cleanup 统一消费 process_ref"
+    source: design §2.3 / design §2.4
+    status: pending
+  - item: "旧 runtime 记录缺少 process_ref 时仍可加载，不崩溃"
+    source: AC-007
+    status: pending
+  - item: "Windows 下 pid_matches_project 不再无条件 return True 作为 destructive cleanup 门"
+    source: AC-003 / AC-005 / CMD-006
+    status: pending
+  - item: "taskkill /T /PID 只作为降级 primitive，不冒充 Job Object evidence"
+    source: 明确不做 / DOD-IMPL-004
+    status: pending
+  - item: "非 Windows 路径现有 tmux / POSIX cleanup 语义保持不变"
+    source: 明确不做 / AC-008
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-20-windows-job-object-runtime-evidence/windows-job-object-runtime-evidence-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_v2_provider_health_store.py test/test_ccbd_health_monitor_rebind.py test/test_ccbd_health_assessment_provider_pane.py"
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - runtime_facts_process_ref
+        - health_diagnostics_process_ref
+        - pane_vs_process_evidence
+    - id: CMD-004
+      command: "python -m pytest -q test/test_provider_helper_cleanup.py test/test_cli_kill_runtime_processes.py test/test_v2_kill_service.py test/test_ccbd_stop_flow_runtime.py"
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - helper_cleanup_gating
+        - kill_cleanup_evidence
+        - destructive_cleanup_ownership
+    - id: CMD-005
+      command: "python -m pytest -q test/test_ccbd_project_view.py test/test_ccbd_runtime_refresh.py test/test_ccbd_registry.py -k \"process_ref or runtime_authority or job or pane_state\""
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - project_view_diagnostics
+        - runtime_refresh_roundtrip
+        - registry_roundtrip
+    - id: CMD-006
+      command: "rg -n -e \"os\\.kill\\(pid, 0\\)\" -e \"if os_name == 'nt':\" -e \"return True\" -e \"taskkill\" -e \"/T\" -e \"process_ref\" -e \"job_id\" -e \"owner_pid\" \"lib/ccbd/system.py\" \"lib/runtime_pid_cleanup\" \"lib/provider_runtime\" \"lib/ccbd/services/provider_runtime_facts.py\""
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - ownership_guard
+        - windows_job_evidence_guard
+        - leakage_guard
+  evidence_required:
+    - runtime_process_ref_field
+    - provider_runtime_facts_process_ref_field
+    - job_object_probe_or_fake
+    - health_snapshot_process_ref_diagnostics
+    - kill_gating_regression
+    - helper_cleanup_regression
+    - legacy_roundtrip_compatibility
+    - leakage_guard_output
+    - items_yaml_diff
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
+    job_handle_persistence: forbidden
+    arbitrary_pid_destructive_cleanup: forbidden

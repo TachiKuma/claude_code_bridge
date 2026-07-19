@@ -518,9 +518,9 @@ blocking_gaps:
 {
   "backend_family": "tmux-family",
   "backend_impl": "rmux",
-  "namespace_id": "ccb-<project-id>",
+  "namespace_id": "<project-id>",
   "namespace_ref": {
-    "session_name": "ccb-<project-id>",
+    "session_name": "<project-id>",
     "ipc_kind": "named_pipe",
     "ipc_ref": "\\\\.\\pipe\\rmux-<project-id>"
   },
@@ -1006,7 +1006,7 @@ class RpcTransportAuthError(Exception):
   - ccbd 控制面（有 guard）：`lib/ccbd/socket_client_runtime/transport.py:31`（`connect_socket`，guard@23 仅 raise）、`lib/ccbd/socket_server_runtime/lifecycle.py:19`（`listen_server`，guard@15 抛 `RuntimeError`，非裸 `AttributeError`）、`lib/ccbd/system.py:59`（`unix_socket_connectable`，guard@57 返回 False）。
   - ccbd 控制面（无 guard，裸 `AttributeError`）：`lib/ccbd/socket_server_runtime/lifecycle.py:86`（`_socket_path_connectable`）、`lib/ccbd/socket_server_runtime/bootstrap_probe.py:33`（self-ping）。
   - accelerator（无 guard）：`lib/runtime_accelerator/client.py:53`、`lib/runtime_accelerator/ownership.py:534`（`AttributeError` 不被 `except OSError`/`except AcceleratorError` 接住）。
-- **进程存活判定 blocker（独立审查发现，第四个控制面 blocker）**：`lib/ccbd/system.py:43` `process_exists` 用 `os.kill(pid, 0)`。Windows 上 `os.kill` 对 signal 0 == `CTRL_C_EVENT`——不是存活探测：普通 pid 抛 OSError 被吞 → 活进程恒判死；pid 恰为 console group 时**真的投递 Ctrl-C**（副作用）。被 `ccbd/keeper.py`、`ccbd/services/health.py`、`ccbd/services/ownership.py` 等约 10 个文件消费，破坏 ccbd 存活与 recovery 判定。由 `ccbd-windows-process-liveness`（item 21）覆盖。
+- **进程存活判定 blocker（独立审查发现，第四个控制面 blocker）**：`lib/ccbd/system.py:43` `process_exists` 用 `os.kill(pid, 0)`。Windows 上 `os.kill` 对 signal 0 == `CTRL_C_EVENT`——不是存活探测：普通 pid 抛 OSError 被吞 → 活进程恒判死；pid 恰为 console group 时**真的投递 Ctrl-C**（副作用）。被 `ccbd/keeper.py`、`ccbd/services/health.py`、`ccbd/services/ownership.py` 等约 10 个文件消费，破坏 ccbd 存活与 recovery 判定。由 `ccbd-windows-process-liveness`（item 20）覆盖。
 - **ADR 提示**：Windows 控制面 transport seam（AF_UNIX vs TCP loopback）符合 ADR 三判据（难回退 + 不显然 + 真实权衡：token 鉴权 vs Unix 文件权限）。`ccbd-windows-tcp-loopback-transport` 落地、接口稳定后应由 `cs-domain` 补一条 ADR。另一 checkout 曾就此拍板 Option 1（TCP loopback）并 approved，但那份决策不在本 checkout，本轮须在 v8.2.1 重新确认后再记 ADR。
 - **probe-bypass 观察**：历史 `scripts/probe_rmux_*.py` 直驱 rmux，绕过 ccbd，不能作为全链路证据；`ccbd-windows-full-chain-smoke` 必须走真链路。
 

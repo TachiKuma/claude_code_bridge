@@ -1,0 +1,88 @@
+feature: 2026-07-19-mux-backend-contract
+created: 2026-07-19
+
+steps:
+  - action: "contract datatypes：定义 MuxNamespaceRef、MuxPaneRef、MuxCapabilities、MuxCommandError，字段包含 backend_impl、backend-local refs、command/evidence diagnostics"
+    exit_signal: "contract import smoke 通过，类型不依赖 tmux implementation module，MuxCapabilities 对齐 command_status/semantic_status/blocking_gaps"
+    status: pending
+  - action: "capability protocols：按 namespace lifecycle、window layout、pane io、pane presentation、diagnostics 拆小协议，并提供组合 facade 类型"
+    exit_signal: "protocol 列表不包含 _tmux_run，调用方可只依赖所需能力"
+    status: pending
+  - action: "fake backend：实现状态机式 fake，支持 session/window/pane create、attach/destroy/exists、window root/list/reflow_window/move/swap/select_layout、split、send/capture/kill、identity、logging、capabilities、failure injection"
+    exit_signal: "fake backend tests 可断言 namespace/window/pane state、event log、reflow_window canonical seam 和 structured failure"
+    status: pending
+  - action: "compatibility facade：保持 TmuxBackend 现有 public methods 不变，并让其可作为后续 adapter 底座"
+    exit_signal: "旧 tmux import 与基础 terminal backend tests 不回退"
+    status: pending
+  - action: "leakage inventory：记录当前 _tmux_run / tmux argv 泄漏点，作为 tmux-backend-contract-adapter 输入"
+    exit_signal: "inventory 至少覆盖 layouts_models/layouts_root、ccbd namespace backend、agent reflow/move/remove、runtime_launch tmux panes、foreground attach、pane log helpers 等真实调用点"
+    status: pending
+  - action: "tests：补 contract/fake backend tests 与 tmux/layout/runtime 抽样回归"
+    exit_signal: "CMD-003 与 CMD-004 覆盖核心场景并通过"
+    status: pending
+
+checks:
+  - item: "contract module 不依赖 tmux implementation module"
+    source: 验收契约 AC-001
+    status: pending
+  - item: "backend-neutral refs 不要求 Rmux pane id 伪装成 tmux %N"
+    source: 验收契约 AC-002
+    status: pending
+  - item: "fake backend 用 namespace/window/pane state 与 event log 断言行为，不做 tmux argv recorder"
+    source: 验收契约 AC-003
+    status: pending
+  - item: "backend failure 归一为 MuxCommandError.category，并保留 command/evidence/ipc_ref/detail 供 diagnostics"
+    source: 验收契约 AC-004
+    status: pending
+  - item: "MuxCapabilities 必须包含 backend_impl、command_status、semantic_status、blocking_gaps"
+    source: roadmap §4.1
+    status: pending
+  - item: "旧 TmuxBackend public methods 不删除，tmux 默认行为不变"
+    source: 验收契约 AC-005
+    status: pending
+  - item: "新 public MuxBackend protocol 不包含 _tmux_run(args)"
+    source: 验收契约 AC-006
+    status: pending
+  - item: "split_pane direction 使用 right/bottom 语义 literal，不泄漏 tmux -h/-v"
+    source: roadmap §4.1
+    status: pending
+  - item: "reflow_window 是 window reflow 的 canonical seam；select_layout 只能作为低阶 adapter primitive"
+    source: roadmap §4.1
+    status: pending
+  - item: "不新增 RmuxBackend、不修改 provider session payload、不修改 ccbd transport endpoint schema"
+    source: 明确不做
+    status: pending
+  - item: "protocol 按能力拆分，fake backend 不被迫实现无关方法"
+    source: roadmap §4.1
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-19-mux-backend-contract/mux-backend-contract-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_mux_backend_contract.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-004
+      command: "python -m pytest -q test/test_terminal_backend_selection.py test/test_agent_window_reflow.py test/test_v2_phase2_entrypoint.py -k \"tmux or layout or runtime\""
+      core: true
+      failure_handling: fix-or-block
+  evidence_required:
+    - contract_module
+    - fake_backend_tests
+    - leakage_inventory
+    - tmux_regression_tests
+    - items_yaml_diff
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
+    capability_artifact_payload_copy: forbidden

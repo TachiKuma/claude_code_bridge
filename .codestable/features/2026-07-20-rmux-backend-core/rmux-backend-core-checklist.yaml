@@ -1,0 +1,101 @@
+feature: 2026-07-20-rmux-backend-core
+created: 2026-07-20
+
+steps:
+  - action: "capability gate：实现 capability report projection、required command guard 和 unsupported error mapping"
+    exit_signal: "unsupported required command 在 construction/operation 中都抛 MuxCommandError(category=unsupported)"
+    status: pending
+  - action: "command client seam：实现 Rmux command client interface 和 fake client，command evidence 只留在 diagnostics/error"
+    exit_signal: "unit tests 不需要真实 Rmux，也不 mock tmux argv"
+    status: pending
+  - action: "namespace/window core：实现 prepare/create/session_alive/kill_namespace/list_windows/ensure_window/kill_window"
+    exit_signal: "fake client tests 验证 namespace/window refs、missing/unreachable errors"
+    status: pending
+  - action: "pane core：实现 list_panes/split_pane/respawn_pane/kill_pane"
+    exit_signal: "fake client tests 验证 pane refs、direction/percent/cwd/cmd 映射和 errors"
+    status: pending
+  - action: "presentation core：实现 title、user options、style 和 set_pane_identity orchestration"
+    exit_signal: "tests 断言 title/user-options/style 逐项 guarded，partial failure 有 diagnostics"
+    status: pending
+  - action: "compatibility guard：确认 Rmux core 不导入 TmuxBackend，tmux path 不导入 Rmux module"
+    exit_signal: "import guard test + tmux regression 抽样通过"
+    status: pending
+
+checks:
+  - item: "required command unsupported 必须 fail-fast，不能 fallback 到 tmux"
+    source: design §1 / AC-001 / DOD-IMPL-001
+    status: pending
+  - item: "RmuxBackend public API 只接受 MuxNamespaceRef / MuxPaneRef，不暴露 Rmux command strings"
+    source: design §2.1 / AC-002 / AC-003
+    status: pending
+  - item: "namespace/window core 返回 backend-neutral refs / records，并映射 not-found/unreachable errors"
+    source: design §3.1 / AC-002 / DOD-IMPL-002
+    status: pending
+  - item: "pane core 不伪造 tmux %N pane id，返回 Rmux backend-local MuxPaneRef"
+    source: design §3.1 / AC-003 / DOD-IMPL-003
+    status: pending
+  - item: "presentation core 覆盖 title/user-options/style，set_pane_identity partial failure 可诊断"
+    source: design §3.1 / AC-004 / DOD-IMPL-004
+    status: pending
+  - item: "command errors 统一映射为 MuxCommandError，保留 operation/capability/daemon/endpoint/command evidence"
+    source: design §2.1 / AC-005 / DOD-IMPL-005
+    status: pending
+  - item: "不实现 send_text/send_key/capture_pane/pipe-pane/logging/provider completion parser"
+    source: 明确不做 / AC-006 / DOD-IMPL-006
+    status: pending
+  - item: "Rmux core 不导入 TmuxBackend，tmux path 不导入 Rmux module"
+    source: design §2.2 / AC-007 / DOD-IMPL-007
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-20-rmux-backend-core/rmux-backend-core-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_rmux_backend_core.py"
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - capability_guard
+        - namespace_window_core
+        - pane_core
+        - presentation_core
+        - error_mapping
+    - id: CMD-004
+      command: "python -m pytest -q test/test_terminal_backend_selection.py test/test_v2_project_namespace_backend.py test/test_cli_runtime_launch_tmux_panes.py -k \"tmux or backend or pane or namespace\""
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - tmux_compatibility
+        - namespace_backend_regression
+    - id: CMD-005
+      command: "python -m pytest -q test/test_rmux_backend_core_import_guard.py"
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - rmux_tmux_import_boundary
+        - no_io_logging_scope_leak
+  evidence_required:
+    - rmux_backend_core_module
+    - fake_rmux_command_client_tests
+    - capability_guard_tests
+    - namespace_window_tests
+    - pane_core_tests
+    - presentation_tests
+    - error_mapping_tests
+    - import_guard_tests
+    - tmux_compatibility_regression
+    - items_yaml_diff
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
+    tmux_argv_parser_copy: forbidden
+    send_capture_logging_implementation: forbidden

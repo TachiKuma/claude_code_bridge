@@ -1,0 +1,124 @@
+feature: 2026-07-20-provider-runtime-backend-session-contract
+created: 2026-07-20
+
+steps:
+  - action: "payload seam：新增 provider_runtime/session_payload.py，定义 canonical mux payload、compat alias 和 canonical-first reader"
+    exit_signal: "tmux / rmux payload fixtures 都能生成同一 MuxSessionView，且旧 session 可 fallback"
+    status: pending
+  - action: "shared writer protected merge：write_session_file 通过 helper 写 terminal=mux、backend_*、pane_ref、namespace_ref、compat，并实现 provider_payload protected-key canonical-wins merge"
+    exit_signal: "session file tests 断言 canonical 与 alias 同源，冲突 provider_payload 不能覆盖 shared keys，并记录 protected_key_conflicts diagnostics"
+    status: pending
+  - action: "provider payload cleanup：Codex、Claude、Gemini、native CLI、Kimi、MiMo、DeepSeek 等 launcher 只写 provider-specific 字段，移除重复 shared canonical key"
+    exit_signal: "allowlist guard 确认 provider launchers 不再各自写 terminal=tmux / tmux_session 作为 canonical"
+    status: pending
+  - action: "reader migration：pane_log_support session、session_binding_evidence fields/backend、ProviderRuntimeFacts 改为 canonical-first、alias-fallback"
+    exit_signal: "旧 tmux session fixture 和新 mux session fixture 都可刷新 runtime authority"
+    status: pending
+  - action: "provider env projection：新增 CCB_MUX_* env；Codex/Gemini/OpenCode runtime loaders canonical-first 读取，并保留 CCB_TMUX_*、CODEX_TMUX_SESSION、GEMINI_TMUX_SESSION、OPENCODE_TMUX_SESSION、CODEX_TMUX_LOG compatibility fallback"
+    exit_signal: "provider start command/env tests 能断言 mux-neutral 优先、旧 env fallback 和 CODEX_TMUX_LOG compatibility 行为"
+    status: pending
+  - action: "runtime launch backend context：把 runtime_launch.py 的 direct TmuxBackend 依赖收进 adapter/context，不作为唯一 production truth"
+    exit_signal: "existing tmux launch tests 通过，fake backend 可驱动 mux payload"
+    status: pending
+  - action: "regression and guard：补 writer、launcher、reader、provider facts、env、tmux compatibility 和 allowlist guard"
+    exit_signal: "CMD-003 到 CMD-007 通过或记录既有基线红灯"
+    status: pending
+
+checks:
+  - item: "session payload helper 统一生成 terminal=mux、backend_family、backend_impl、pane_ref、namespace_ref、compat"
+    source: design §2.1 / AC-001 / DOD-IMPL-001
+    status: pending
+  - item: "旧 tmux_session / tmux_socket_path / tmux_socket_name 只作为 compatibility alias，不能作为 canonical authority"
+    source: roadmap §4.7 / AC-002 / 反向核对项
+    status: pending
+  - item: "provider_payload protected-key 冲突必须 canonical wins，并记录 payload_diagnostics.protected_key_conflicts"
+    source: design §2.2 / AC-005
+    status: pending
+  - item: "Codex / native CLI / provider-specific launchers 不再各自写 canonical terminal=tmux 或 tmux_session"
+    source: design §2.4 / CMD-007
+    status: pending
+  - item: "PaneLogProjectSessionBase 和 session_binding_evidence canonical-first、alias-fallback"
+    source: design §2.3 / AC-004 / AC-006
+    status: pending
+  - item: "ProviderRuntimeFacts 从 canonical view 派生 runtime_ref、terminal_backend、backend_family、backend_impl、pane_ref、namespace_ref"
+    source: design §2.2 / AC-006
+    status: pending
+  - item: "provider env 暴露 CCB_MUX_* canonical-first，旧 CCB_TMUX_* / CODEX_TMUX_SESSION / GEMINI_TMUX_SESSION / OPENCODE_TMUX_SESSION / CODEX_TMUX_LOG 仅 compatibility"
+    source: roadmap §4.7 / AC-007 / DOD-IMPL-004
+    status: pending
+  - item: "runtime_launch.py 不再把 TmuxBackend 当唯一 production truth"
+    source: roadmap §4.7 / AC-008 / DOD-IMPL-005
+    status: pending
+  - item: "不修改 provider completion parser 或 provider JSONL session 内容"
+    source: 明确不做
+    status: pending
+  - item: "不新增 RmuxBackend production implementation"
+    source: 明确不做
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-20-provider-runtime-backend-session-contract/provider-runtime-backend-session-contract-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_v2_runtime_launch_session_files.py"
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - shared_writer_canonical_payload
+        - compatibility_aliases
+    - id: CMD-004
+      command: "python -m pytest -q test/test_v2_runtime_launch.py -k \"session or payload or backend or env or tmux\""
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - provider_launcher_payload
+        - provider_env_projection
+        - backend_context
+    - id: CMD-005
+      command: "python -m pytest -q test/test_ccbd_runtime_refresh.py test/test_ccbd_health_monitor_rebind.py"
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - reader_canonical_first
+        - provider_runtime_facts
+    - id: CMD-006
+      command: "python -m pytest -q test/test_cli_runtime_launch_tmux_panes.py test/test_v2_runtime_launch.py -k \"tmux or pane or detached\""
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - tmux_compatibility
+        - detached_pane_regression
+    - id: CMD-007
+      command: "python -m pytest -q test/test_provider_runtime_session_payload_guard.py"
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - allowlisted_tmux_compat_aliases
+        - forbidden_canonical_tmux_leakage
+        - provider_specific_env_fallback_guard
+        - tmux_backend_adapter_boundary
+  evidence_required:
+    - provider_runtime_session_payload_helper
+    - shared_writer_tests
+    - provider_launcher_payload_tests
+    - reader_projection_tests
+    - provider_runtime_facts_tests
+    - provider_env_projection_tests
+    - provider_specific_env_loader_tests
+    - backend_context_tests
+    - allowlist_guard_output
+    - items_yaml_diff
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
+    duplicated_payload_construction: forbidden
+    rmux_backend_implementation: forbidden

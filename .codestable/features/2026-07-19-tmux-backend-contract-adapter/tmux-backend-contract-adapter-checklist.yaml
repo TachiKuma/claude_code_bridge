@@ -1,0 +1,117 @@
+feature: 2026-07-19-tmux-backend-contract-adapter
+created: 2026-07-19
+
+steps:
+  - action: "implementation admission gate：确认 mux-backend-contract item 已 done，contract module、fake backend、MuxCommandError、capability protocols 可导入；未满足则阻塞实现"
+    exit_signal: "admission check 有 yes/no 证据，不通过时不进入 adapter 实现"
+    status: pending
+  - action: "adapter shell：实现 TmuxMuxBackendAdapter 与 ref/capability helpers，backend_impl=tmux、ipc evidence 和 old backend 包装可导入"
+    exit_signal: "contract import 与 adapter construction 单测通过，capabilities shape 对齐 MuxCapabilities，socket path/name/default 映射均可断言"
+    status: pending
+  - action: "error mapping：集中实现 TmuxCommandError、transient、returncode 到 MuxCommandError 的映射，保留 command/socket/detail/stdout/stderr evidence"
+    exit_signal: "failure injection tests 覆盖 transient、not-found、permission、unsupported、command-failed、TimeoutExpired、CalledProcessError、FileNotFoundError，category 与 evidence 可断言"
+    status: pending
+  - action: "namespace lifecycle adapter methods：用现有 tmux readiness helpers 和 _tmux_run 实现 prepare/server policy/create/exists/attach/root/destroy"
+    exit_signal: "fake tmux runner tests 证明命令顺序与旧 namespace lifecycle 等价，namespace_id/ipc_ref 稳定"
+    status: pending
+  - action: "window layout adapter methods：实现 list/select/ensure/kill/reflow/move/swap，reflow_window 是调用层 canonical seam"
+    exit_signal: "layout/reflow tests 通过，调用层不直接拼 select-layout/swap-pane"
+    status: pending
+  - action: "pane/io/presentation/logging adapter methods：复用 TmuxBackend mixin/service 提供 send/capture/respawn/kill/title/user option/style/log methods，并转换 MuxPaneRef"
+    exit_signal: "pane ref 到旧 pane_id 的适配测试通过，旧 public methods 仍可直接调用"
+    status: pending
+  - action: "representative caller migration：迁移 layout root、ccbd namespace backend、runtime launch detached pane/server policy、agent window reflow 到 mux-facing seam；foreground attach、provider-specific launcher/session runtime、project clear、materialize topology 等剩余泄漏点更新 inventory"
+    exit_signal: "新增代码路径不直接新增 _tmux_run 调用，旧抽样测试仍通过，inventory 点名未迁移项"
+    status: pending
+  - action: "regression and guard tests：补 adapter contract tests、namespace/layout/runtime launch 抽样回归，以及 _tmux_run public leakage guard"
+    exit_signal: "CMD-003、CMD-004、CMD-005 通过或记录既有基线红灯"
+    status: pending
+
+checks:
+  - item: "implementation admission 已确认 mux-backend-contract item done，contract module、fake backend、MuxCommandError、capability protocols 可导入"
+    source: 验收契约 AC-008
+    status: pending
+  - item: "tmux adapter 暴露 backend_impl=tmux，MuxNamespaceRef/MuxPaneRef 包含稳定 namespace_id、session、pane、ipc evidence"
+    source: 验收契约 AC-001
+    status: pending
+  - item: "socket_path 映射为 ipc_kind=unix_socket 且 ipc_ref 为 expanded path；socket_name/default 映射为 ipc_kind=socket_name 且 ipc_ref 稳定"
+    source: 验收契约 AC-001
+    status: pending
+  - item: "namespace_id 优先使用 project namespace id，缺省时使用 session_name，不随机生成"
+    source: 验收契约 AC-002
+    status: pending
+  - item: "TmuxCommandError、TmuxTransientServerUnavailable、permission、unsupported、TimeoutExpired、CalledProcessError、FileNotFoundError、returncode failure 映射到 MuxCommandError.category 且 evidence 不丢"
+    source: 验收契约 AC-005
+    status: pending
+  - item: "旧 TmuxBackend public methods 不删除、不改名，send_text/is_alive/kill_pane/activate/create_pane/split/logs 等仍可直接调用"
+    source: 验收契约 AC-004
+    status: pending
+  - item: "namespace lifecycle 保持 create session、server policy、root pane 解析顺序与旧路径等价"
+    source: 验收契约 AC-002
+    status: pending
+  - item: "window reflow 通过 reflow_window canonical seam 表达；select_layout 只是 adapter primitive"
+    source: 验收契约 AC-003
+    status: pending
+  - item: "代表性调用方迁移后不直接新增 _tmux_run 使用面，剩余泄漏 inventory 点名 foreground attach、provider-specific runtime、project clear、materialize topology、move/remove patch agents、pane log helpers"
+    source: 验收契约 AC-007
+    status: pending
+  - item: "Linux、macOS、WSL 当前 tmux 默认路径行为不漂移"
+    source: 验收契约 AC-006
+    status: pending
+  - item: "不新增 RmuxBackend、rmux_* production module 或 Rmux CLI/SDK 调用"
+    source: 明确不做
+    status: pending
+  - item: "不修改 provider session payload 的 namespace_tmux_* / tmux_* 兼容字段"
+    source: 明确不做
+    status: pending
+  - item: "不修改 ccbd control-plane transport、accelerator AF_UNIX guard 或 Windows process liveness"
+    source: 明确不做
+    status: pending
+  - item: "不新增 sh -lc、PowerShell/cmd、tee/log builder 的平台分支"
+    source: 明确不做
+    status: pending
+  - item: "public MuxBackend protocol 不包含 _tmux_run(args)"
+    source: roadmap §4.1
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-19-tmux-backend-contract-adapter/tmux-backend-contract-adapter-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_tmux_mux_backend_adapter.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-004
+      command: "python -m pytest -q test/test_agent_window_reflow.py test/test_cli_runtime_launch_tmux_panes.py test/test_ccbd_project_clear.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-005
+      command: "python -m pytest -q test/test_v2_runtime_launch.py test/test_ccbd_start_runtime_layout.py -k \"tmux or layout or namespace\""
+      core: true
+      failure_handling: document-baseline
+    - id: CMD-006
+      command: "python -c \"from terminal_runtime.mux_backend_contract import MuxCommandError; from terminal_runtime.fake_mux_backend import FakeMuxBackend\""
+      core: true
+      failure_handling: fix-or-block
+  evidence_required:
+    - implementation_admission
+    - tmux_adapter_module
+    - adapter_contract_tests
+    - error_mapping_tests
+    - tmux_regression_tests
+    - leakage_inventory
+    - items_yaml_diff
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
+    capability_artifact_payload_copy: forbidden
+    unrequested_platform_branch: forbidden

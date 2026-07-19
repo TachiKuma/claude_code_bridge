@@ -3,11 +3,115 @@ doc_type: roadmap-review
 roadmap: windows-rmux-native-backend
 status: passed
 reviewed: 2026-07-19
-round: 5
+round: 6
 review_state: passed
 ---
 
 # windows-rmux-native-backend roadmap 审查报告
+
+## Round 6（2026-07-19 · 用户触发独立复审）
+
+### 1. Scope And Inputs
+
+- Roadmap: `.codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-roadmap.md`
+- Items: `.codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml`
+- Existing review: `.codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-roadmap-review.md`
+- Feature context: `.codestable/features/2026-07-06-rmux-capability-gate/rmux-capability-gate-design.md`、`rmux-capability-gate-checklist.yaml`、`rmux-capability-gate-design-review.md`
+- Related docs: `docs/ccbd-windows-psmux-plan.md`、`docs/plantree/plans/windows-wezterm-native/README.md`、`docs/ccbd-startup-supervision-contract.md`、`docs/ccbd-diagnostics-contract.md`、`docs/ccb-config-layout-contract.md`
+- Code facts checked: `lib/terminal_runtime/backend_selection.py`、`lib/ccbd/socket_client_runtime/transport.py`、`lib/ccbd/socket_server_runtime/lifecycle.py`、`lib/ccbd/socket_server_runtime/bootstrap_probe.py`、`lib/ccbd/system.py`、`lib/runtime_accelerator/client.py`、`lib/runtime_accelerator/ownership.py`、`lib/cli/kill_runtime/processes.py`
+- Validation: `python ".codestable/tools/validate-yaml.py" --file ".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml"` passed；items DAG 手工脚本核验 21 项、无未知依赖、无自依赖、无环，唯一 `minimal_loop` 为 `rmux-capability-gate`。
+
+### Independent Review
+
+- Status: completed
+- Detection: independent-agent
+- Provider / agent: subagent `019f7ae4-6388-72c0-bafe-ce4898e41636`
+- Raw output: reviewer 建议 `changes-requested`；无 blocking；提出 3 条 important、1 条 nit、1 条 suggestion 和 2 条 residual-risk。
+- Merge policy: 主 agent 已逐条本地核验 reviewer findings；可由仓库事实支撑的 finding 合并如下。owner 于 2026-07-19 明确表示 review 通过并开始执行 `cs-epic`，已记录 `.codestable/roadmap/windows-rmux-native-backend/approval-report.md#roadmap-review`。
+- Gate effect: owner 接受 Round 6 important findings 作为 residual risk / downstream hard constraints 后放行。
+
+### 2. Roadmap Summary
+
+- Goal completion signal: 本轮终点是 native Windows `ccb→ccbd→rmux` 真链路跑通，覆盖 `ccb` 启动、`ccb ask`、`ccb kill`，不把 probe 直驱 rmux 当作全链路证据。
+- Module split: Rmux mux backend track 与 ccbd control-plane transport track 已正交拆分；accelerator guard 与 process liveness 作为独立 blocker 纳入里程碑。
+- Interface contracts: roadmap 已定义 `MuxBackend`、provider session backend-neutral payload、Windows shell/log/process evidence、Rmux daemon ownership、`RpcTransport` / `RpcEndpointRef` 等字段级契约。
+- Items: 21 项；`rmux-capability-gate` 为唯一 minimal loop，当前状态 `in-progress`；其余 20 项 planned。
+- Dependency shape: DAG，无循环、无悬空依赖。
+
+### 3. Findings
+
+#### blocking
+
+none
+
+#### important
+
+- [x] RMR-001 `ccbd-windows-process-liveness` 覆盖面偏窄，未显式纳入 full-chain `ccb kill` 会用到的共享 pid liveness helper。（owner accepted residual risk）
+  - Evidence: items 只写替换 `lib/ccbd/system.py:43 process_exists`；但 `lib/cli/kill_runtime/processes.py:28 is_pid_alive()` 同样调用 `os.kill(pid, 0)`，并被 `runtime_accelerator/ownership.py`、`cli/services/daemon_runtime/processes.py`、`cli/kill_runtime/zombies.py` 等 kill / daemon / accelerator 路径复用。
+  - Impact: `ccbd-windows-full-chain-smoke` 明确包含 `ccb kill`；若只修 ccbd-local `process_exists`，Windows 下 kill/cleanup/accelerator reclaim 仍可能误判存活或触发 Ctrl-C 副作用。
+  - Expected fix scope: 将 `ccbd-windows-process-liveness` 扩为“共享跨平台 pid liveness”边界，覆盖 `ccbd.system.process_exists` 与 `cli.kill_runtime.processes.is_pid_alive`，并在 full-chain smoke 前要求 Windows 回归测试。
+
+- [x] RMR-002 控制面 transport 会改变 authority / diagnostics schema，但 authoritative contract 文档同步被放到里程碑外，时机偏晚。（owner accepted residual risk）
+  - Evidence: roadmap §4.9 定义 `RpcEndpointRef`、TCP `host/port/token_ref`、端点发现存储和旧 `socket_path` 兼容别名；而 `docs/ccbd-startup-supervision-contract.md` 仍要求 lifecycle/lease 记录 active `socket_path`，`docs/ccbd-diagnostics-contract.md` 仍围绕 socket placement 展示诊断。`rmux-packaging-docs-contracts` 又依赖 `rmux-windows-validation-matrix`，属于 post-milestone。
+  - Impact: transport feature-design 可能落地 TCP endpoint/token 字段，却没有同步启动/诊断权威契约，后续 ping、doctor、support bundle、lease/lifecycle schema 容易漂移。
+  - Expected fix scope: 在 `ccbd-control-plane-transport-seam` 或 `ccbd-windows-tcp-loopback-transport` 的验收中加入 startup/diagnostics contract delta；用户安装文档仍可留给 `rmux-packaging-docs-contracts`。
+
+- [x] RMR-003 roadmap 已是 `status: active`，但目录内没有 canonical `approval-report.md`，owner 确认状态不可恢复。（fixed）
+  - Evidence: roadmap frontmatter 为 `status: active`；`.codestable/reference/approval-conventions.md` 指定 roadmap approval surface 为 `.codestable/roadmap/{slug}/approval-report.md`，除非已有 stage report 覆盖 decision/options/recommendation/tradeoffs/evidence/consequence/next action。
+  - Impact: 流程可能把 “review passed” 误当作 “owner 已确认 roadmap”，后续恢复时无法证明 active 状态来自哪次 owner 决策。
+  - Resolution: 已补 `.codestable/roadmap/windows-rmux-native-backend/approval-report.md`，记录 owner 2026-07-19 放行。
+
+#### nit
+
+- [x] RMR-004 roadmap §8 把 `ccbd-windows-process-liveness` 写作 “item 21”，但列表中该项实际为 item 20，item 21 是 `ccbd-windows-full-chain-smoke`。（fixed）
+  - Expected fix scope: 只修编号文字，不影响 DAG。
+  - Resolution: 已将 roadmap §8 改为 `ccbd-windows-process-liveness`（item 20）。
+
+#### suggestion
+
+- `rmux-route-approval` acceptance 可明确要求沉淀三个后续决策位置：Rmux 取代旧 psmux、TCP loopback transport 选择、capability gate 结果。roadmap §8 已提示 ADR / docs-neat / domain，但 route approval 作为决策点更适合绑定产物。
+
+#### learning
+
+- `backend_selection.py` 仍是 tmux-only，roadmap 关于 backend resolver / opt-in 的前置判断成立。
+- ccbd 控制面 AF_UNIX 问题与 Rmux mux backend 正交；只证明 rmux probe 能跑，不能证明 `ccb→ccbd→rmux` 全链路可用。
+- `rmux-capability-gate` design 已 approved，但 checklist 全部 pending；当前只能证明规划边界，不能证明 Rmux 能力事实。
+
+#### praise
+
+- roadmap 把 capability gate 与 route approval 分开，避免 probe completed 直接解锁实现。
+- 新增 ccbd transport track 后，路线没有把 “rmux 能跑” 误认为 “control plane 能跑”。
+
+### 4. User Review Focus
+
+- 用户已拍板：2026-07-19 已确认 review 通过并开始执行 `cs-epic`；approval evidence 已补。
+- 后续 feature-design 需要重点复核：process liveness 是否覆盖共享 kill helper；TCP endpoint/token 字段是否同步 startup/diagnostics authoritative docs。
+- 不能靠 roadmap review 完全确认的点：Rmux v0.8+ 在 Windows 真机的命令/语义支持；TCP loopback + same-user token 在多用户 Windows 主机上的安全性；ConPTY capture 对 provider parser 的真实影响。
+
+### 5. Evidence Confidence Ledger
+
+| Check | Verdict | Evidence Class | Basis | Follow-up |
+|---|---|---|---|---|
+| Granularity Gate | pass | E | roadmap §2 说明该需求跨 terminal runtime、ccbd namespace、foreground attach、diagnostics、installer、Windows IPC/process lifecycle 和真实平台测试 | none |
+| Goal Coverage Matrix | warn | E/C | roadmap Goal Coverage Matrix 覆盖 full-chain，但 process liveness 只写 ccbd 进程存活，未显式覆盖共享 kill helper | downstream design must consume RMR-001 |
+| DAG and minimal loop | pass | E | YAML 校验通过；21 items，无未知依赖、自依赖、循环；唯一 minimal loop 为 `rmux-capability-gate` | none |
+| Interface contract usability | warn | E/C | `RpcEndpointRef` 契约具体，但 authoritative startup/diagnostics docs 仍是 socket_path/socket placement 口径 | downstream design must consume RMR-002 |
+| Module interface depth | pass | E/C | mux backend 与 ccbd transport 正交拆分，`RpcTransport` seam 不要求 handler 分叉；`MuxBackend` 为组合能力集合 | none |
+
+Summary: E=5, C=3, H=0, H-only core checks=none。
+
+### 6. Residual Risk
+
+- RMR-001 / RMR-002 已由 owner 接受为 downstream hard constraints：后续对应 feature design 必须显式覆盖共享 pid liveness helper和 startup/diagnostics contract delta。
+- Rmux 能力仍未被 Windows 真机 evidence 验证；`rmux-capability-gate` 实现和 CMD-003 artifacts 仍是后续 route approval 前置阻塞证据。
+- TCP loopback same-user token 的安全性需要真实 ACL / 跨用户 smoke；本 review 只能确认规划方向，不能证明实现安全。
+
+### 7. Verdict
+
+- Status: passed
+- Next: 进入 `cs-epic` 后续阶段；downstream feature design 必须消费 RMR-001 / RMR-002，RMR-004 可随规划或文档整理修正。
+
+---
 
 ## Round 5（2026-07-19 · v8.2.1 再基线 update 审查）
 
