@@ -1,0 +1,14 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-1176-20260720t041953z",
+    "list-windows",
+    "-t",
+    "ccb-rmux-probe"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "0: cmd.exe* (1 panes) [80x24] [layout b25d,80x24,0,0,0] @0 (active)\n",
+  "timeout": 8.0
+}

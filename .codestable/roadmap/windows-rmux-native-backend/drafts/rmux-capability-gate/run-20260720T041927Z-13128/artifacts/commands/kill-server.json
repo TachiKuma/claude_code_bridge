@@ -1,0 +1,12 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-13128-20260720t041927z",
+    "kill-server"
+  ],
+  "returncode": 1,
+  "stderr": "error connecting to \\\\.\\pipe\\rmux-S-1-5-21-2326131813-1843213555-486215722-500-il-high-ccb-rmux-probe-13128-20260720t041927z (No such file or directory)\n",
+  "stdout": "",
+  "timeout": 8.0
+}

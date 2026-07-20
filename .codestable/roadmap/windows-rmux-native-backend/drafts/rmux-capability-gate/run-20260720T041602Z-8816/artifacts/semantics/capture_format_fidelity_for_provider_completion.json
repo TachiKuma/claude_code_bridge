@@ -1,0 +1,110 @@
+{
+  "cases": [
+    {
+      "absorbed": true,
+      "consumer_strip": {
+        "claude_normalized": "• Working (1s • esc to interrupt)",
+        "codex_normalized": "• Working (1s • esc to interrupt)"
+      },
+      "dimension": "trailing_whitespace",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      },
+      "raw": "• Working (1s • esc to interrupt)   \n"
+    },
+    {
+      "absorbed": true,
+      "consumer_strip": {
+        "claude_normalized": "• Working (1s • esc to interrupt)",
+        "codex_normalized": "• Working (1s • esc to interrupt)"
+      },
+      "dimension": "csi",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      },
+      "raw": "\u001b[31m• Working (1s • esc to interrupt)\u001b[0m\n"
+    },
+    {
+      "absorbed": false,
+      "consumer_strip": {
+        "claude_normalized": "\u001b]0;title\u0007• Working (1s • esc to interrupt)",
+        "codex_normalized": "\u001b]0;title\u0007• Working (1s • esc to interrupt)"
+      },
+      "dimension": "osc",
+      "direct_stdout": {
+        "claude_reason": "no_known_status_pattern",
+        "claude_state": "unknown",
+        "codex_reason": "no_known_status_pattern",
+        "codex_state": "unknown"
+      },
+      "raw": "\u001b]0;title\u0007• Working (1s • esc to interrupt)\n"
+    },
+    {
+      "absorbed": false,
+      "consumer_strip": {
+        "claude_normalized": "• Working (1s • esc to interrupt)\nwrapped-body-without-logical-line-rebuild",
+        "codex_normalized": "• Working (1s • esc to interrupt)\nwrapped-body-without-logical-line-rebuild"
+      },
+      "dimension": "wrapping",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      },
+      "raw": "• Working (1s • esc to interrupt)\nwrapped-body-without-logical-line-rebuild\n"
+    },
+    {
+      "absorbed": false,
+      "consumer_strip": {
+        "claude_normalized": "• Working (1s • esc to interrupt)\n宽字符列宽需要 Rmux/tmux 输出平价证明",
+        "codex_normalized": "• Working (1s • esc to interrupt)\n宽字符列宽需要 Rmux/tmux 输出平价证明"
+      },
+      "dimension": "wide_char",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      },
+      "raw": "• Working (1s • esc to interrupt)\n宽字符列宽需要 Rmux/tmux 输出平价证明\n"
+    },
+    {
+      "absorbed": false,
+      "consumer_strip": {
+        "claude_normalized": "old\n• Working (1s • esc to interrupt)",
+        "codex_normalized": "old\n• Working (1s • esc to interrupt)"
+      },
+      "dimension": "last_n_tail",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      },
+      "raw": "old\n• Working (1s • esc to interrupt)\n"
+    }
+  ],
+  "normalization_responsibility": {
+    "csi": "current strip_ansi handles CSI sequences",
+    "last_n_tail": "must be proven by rmux/tmux capture tail equivalence",
+    "osc": "current strip_ansi does not remove OSC/non-CSI sequences",
+    "trailing_whitespace": "parser normalize_screen strips line tails",
+    "wide_char": "current parser does not correct display width",
+    "wrapping": "current parser does not rebuild logical lines"
+  },
+  "parser_paths": [
+    "consumer_strip",
+    "direct_stdout"
+  ],
+  "providers": [
+    "codex",
+    "claude"
+  ]
+}

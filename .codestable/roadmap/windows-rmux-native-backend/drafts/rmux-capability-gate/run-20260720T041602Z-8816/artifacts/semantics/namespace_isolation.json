@@ -1,0 +1,8 @@
+{
+  "dependencies": [
+    "new-session",
+    "has-session"
+  ],
+  "missing": [],
+  "status": "supported"
+}

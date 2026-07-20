@@ -1,0 +1,16 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-8816-20260720t041602z",
+    "set-window-option",
+    "-t",
+    "ccb-rmux-probe:0",
+    "@ccb_probe_window",
+    "1"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "",
+  "timeout": 8.0
+}

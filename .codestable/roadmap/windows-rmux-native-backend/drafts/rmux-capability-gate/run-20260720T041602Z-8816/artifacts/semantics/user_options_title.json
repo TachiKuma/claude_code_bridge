@@ -1,0 +1,9 @@
+{
+  "dependencies": [
+    "set-option",
+    "set-window-option",
+    "rename-window"
+  ],
+  "missing": [],
+  "status": "supported"
+}

@@ -1,0 +1,13 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-1784-20260720t041819z",
+    "load-buffer",
+    "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-rmux-native-backend\\drafts\\rmux-capability-gate\\run-20260720T041819Z-1784\\work\\buffer.txt"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "",
+  "timeout": 8.0
+}

@@ -4,25 +4,25 @@ created: 2026-07-06
 steps:
   - action: "schema 骨架：定义 probe 输入、capability report 输出、status 枚举和 blocking gap 推导"
     exit_signal: "fake result 能生成合法 report，且 required unsupported / workaround.accepted != true 会进入带 degrade_impact / consequence 的 blocking_gaps"
-    status: pending
+    status: done
   - action: "命令 probe 编排：建立 roadmap command catalog 和逐项执行、记录、归档机制"
     exit_signal: "单元测试证明 command status、required flag、evidence 路径和失败分类可预测"
-    status: pending
+    status: done
   - action: "语义 probe 编排：建立 session、namespace、attach、layout、pane identity、send、death、cleanup 场景记录"
     exit_signal: "fake runner 覆盖 supported、partial、unsupported、workaround 四类 semantic result"
-    status: pending
+    status: done
   - action: "capture fidelity：加入 provider completion 相关 golden 比较维度"
     exit_signal: "测试覆盖尾部空白、CSI/OSC/非 CSI 转义、wrapping、宽字符、last-N 截断至少一组通过和一组失败；失败样例至少一个落在 wrapping、宽字符、OSC / 非 CSI 转义，并穿过 Codex/Claude pane parser"
-    status: pending
+    status: done
   - action: "artifact/report 输出：接通 CLI 参数、run dir、redaction、artifact index 和 report 写盘"
     exit_signal: "每个 evidence 路径都能从 artifact_index 反查，且 artifact 只含相对路径和已脱敏内容"
-    status: pending
+    status: done
   - action: "Windows 真机 runbook：接通真实 probe 命令、隔离 namespace、daemon 预状态、cleanup evidence 和 daemon 行为记录"
     exit_signal: "Windows 真机运行 probe 后生成 capability report 和 artifacts，且 preflight 记录 daemon 预状态；无 Windows evidence 时不能进入 route approval"
-    status: pending
+    status: done
   - action: "验证与回归：补齐 YAML 校验、probe 单测、既有 probe 回归和 Windows evidence 归档说明"
     exit_signal: "必跑命令完成；若 Windows evidence 缺失，明确阻塞 route approval 而不是标记路线通过"
-    status: pending
+    status: done
 
 checks:
   - item: "CapabilityReport 包含 backend_impl、version、platform、generated_at、probe_status、preflight.daemon_pre_state、commands、semantics、blocking_gaps、artifact_index"

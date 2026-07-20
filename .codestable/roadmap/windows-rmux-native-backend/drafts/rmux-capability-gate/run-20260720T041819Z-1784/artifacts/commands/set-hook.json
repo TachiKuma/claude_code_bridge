@@ -1,0 +1,16 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-1784-20260720t041819z",
+    "set-hook",
+    "-t",
+    "ccb-rmux-probe",
+    "pane-died",
+    "display-message pane-died"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "",
+  "timeout": 8.0
+}

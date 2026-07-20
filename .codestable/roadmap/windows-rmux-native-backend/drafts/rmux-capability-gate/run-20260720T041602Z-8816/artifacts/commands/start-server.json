@@ -1,0 +1,12 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-8816-20260720t041602z",
+    "start-server"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "",
+  "timeout": 8.0
+}

@@ -1,0 +1,8 @@
+{
+  "dependencies": [
+    "respawn-pane",
+    "kill-window"
+  ],
+  "missing": [],
+  "status": "supported"
+}

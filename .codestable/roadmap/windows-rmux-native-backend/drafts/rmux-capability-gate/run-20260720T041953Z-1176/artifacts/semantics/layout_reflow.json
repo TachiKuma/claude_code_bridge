@@ -1,0 +1,12 @@
+{
+  "dependencies": [
+    "resize-pane",
+    "select-layout",
+    "swap-pane",
+    "move-pane"
+  ],
+  "missing": [
+    "move-pane"
+  ],
+  "status": "unsupported"
+}

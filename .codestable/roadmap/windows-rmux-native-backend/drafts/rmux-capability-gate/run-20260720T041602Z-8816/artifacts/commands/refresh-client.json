@@ -1,0 +1,13 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-8816-20260720t041602z",
+    "refresh-client",
+    "-S"
+  ],
+  "returncode": 1,
+  "stderr": "refresh-client requires an attached client\n",
+  "stdout": "",
+  "timeout": 8.0
+}

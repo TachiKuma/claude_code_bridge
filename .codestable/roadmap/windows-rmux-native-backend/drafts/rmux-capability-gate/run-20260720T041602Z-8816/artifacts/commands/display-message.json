@@ -1,0 +1,16 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-8816-20260720t041602z",
+    "display-message",
+    "-p",
+    "-t",
+    "ccb-rmux-probe",
+    "#{session_name}"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "ccb-rmux-probe\n",
+  "timeout": 8.0
+}

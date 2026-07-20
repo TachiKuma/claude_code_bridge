@@ -1,0 +1,10 @@
+{
+  "dependencies": [
+    "start-server",
+    "kill-server"
+  ],
+  "missing": [
+    "kill-server"
+  ],
+  "status": "unsupported"
+}

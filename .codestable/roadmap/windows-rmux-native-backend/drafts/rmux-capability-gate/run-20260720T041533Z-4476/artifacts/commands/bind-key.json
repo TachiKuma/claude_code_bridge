@@ -1,0 +1,15 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-4476-20260720t041533z",
+    "bind-key",
+    "C-b",
+    "display-message",
+    "probe"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "",
+  "timeout": 8.0
+}

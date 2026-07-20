@@ -1,0 +1,53 @@
+{
+  "gate_id": "dod-runner",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "command": "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-06-rmux-capability-gate/rmux-capability-gate-checklist.yaml\" --yaml-only",
+      "exit_code": 0,
+      "stdout": "Validated 1 file(s): 1 passed, 0 failed.\n\n  ✓ .codestable\\features\\2026-07-06-rmux-capability-gate\\rmux-capability-gate-checklist.yaml\n\nAll files valid.\n",
+      "stderr": "",
+      "id": "CMD-001",
+      "core": true,
+      "failure_handling": "fix-or-block"
+    },
+    {
+      "command": "python -m pytest -q test/test_rmux_capability_probe.py",
+      "exit_code": 0,
+      "stdout": ".....                                                                    [100%]\n5 passed in 1.16s\n",
+      "stderr": "",
+      "id": "CMD-002",
+      "core": true,
+      "failure_handling": "fix-or-block"
+    },
+    {
+      "command": "python \"scripts/probe_rmux_capability.py\" --work-root \".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate\"",
+      "exit_code": 0,
+      "stdout": "{\"ok\": true, \"report\": \"E:\\\\GitHub\\u5f00\\u6e90\\u9879\\u76ee\\\\TachiKuma\\\\claude_code_bridge\\\\.codestable\\\\roadmap\\\\windows-rmux-native-backend\\\\drafts\\\\rmux-capability-gate\\\\run-20260720T041953Z-1176\\\\capability-report.json\", \"blocking_gaps\": 7}\n",
+      "stderr": "",
+      "id": "CMD-003",
+      "core": true,
+      "failure_handling": "fix-or-block"
+    },
+    {
+      "command": "python -m pytest -q test/test_codex_pane_status_probe.py",
+      "exit_code": 0,
+      "stdout": ".....................................                                    [100%]\n37 passed in 1.29s\n",
+      "stderr": "",
+      "id": "CMD-004",
+      "core": false,
+      "failure_handling": "fix-or-block"
+    }
+  ],
+  "providers": {},
+  "feature": "2026-07-06-rmux-capability-gate",
+  "inputs": {
+    "checklist": ".codestable/features/2026-07-06-rmux-capability-gate/rmux-capability-gate-checklist.yaml"
+  },
+  "input_digests": {
+    "checklist": "c1b785e5c0ec01f7c39d21a89cbe32bd739ee480e8aa003ae37773baee6cf220"
+  }
+}

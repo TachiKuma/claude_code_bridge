@@ -1,0 +1,15 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-1784-20260720t041819z",
+    "select-layout",
+    "-t",
+    "ccb-rmux-probe",
+    "even-horizontal"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "",
+  "timeout": 8.0
+}
