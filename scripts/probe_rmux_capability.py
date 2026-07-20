@@ -31,7 +31,9 @@ from provider_pane_status.codex_pane import (  # noqa: E402
 
 
 TOKEN_RE = re.compile(r"(sk-[A-Za-z0-9_-]{6,}|sess-[A-Za-z0-9_-]{6,}|Bearer\s+[A-Za-z0-9._-]+)")
-SECRET_RE = re.compile(r"(?i)\b(api[_-]?key|token|secret|password)\s*[:=]\s*\S+")
+SECRET_RE = re.compile(
+    r"(?i)([\"']?\b(api[_-]?key|token|secret|password)[\"']?\s*[:=]\s*)([\"']?)([^\"'\s,}]+)([\"']?)"
+)
 
 COMMAND_CATALOG: dict[str, dict[str, str | bool]] = {
     "start-server": {"required": True, "degrade_impact": "core-lifecycle", "consequence": "无法建立 mux server"},
@@ -88,10 +90,10 @@ COMMAND_ORDER = [
     "capture-pane",
     "pipe-pane",
     "respawn-pane",
-    "move-pane",
     "resize-pane",
     "select-layout",
     "swap-pane",
+    "move-pane",
     "attach-session",
     "refresh-client",
     "list-clients",
@@ -126,6 +128,8 @@ class CommandResult:
     stdout: str
     stderr: str
     timeout: float
+    stdout_bytes: bytes = b""
+    stderr_bytes: bytes = b""
 
 
 class SubprocessRunner:
@@ -133,18 +137,39 @@ class SubprocessRunner:
         try:
             completed = subprocess.run(
                 args,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
                 capture_output=True,
                 timeout=timeout,
                 check=False,
             )
         except subprocess.TimeoutExpired as exc:
-            return CommandResult(args, 124, exc.stdout or "", exc.stderr or "timeout", timeout)
+            stdout_bytes = exc.stdout or b""
+            stderr_bytes = exc.stderr or b"timeout"
+            if isinstance(stdout_bytes, str):
+                stdout_bytes = stdout_bytes.encode("utf-8", errors="replace")
+            if isinstance(stderr_bytes, str):
+                stderr_bytes = stderr_bytes.encode("utf-8", errors="replace")
+            return CommandResult(
+                args,
+                124,
+                stdout_bytes.decode("utf-8", errors="replace"),
+                stderr_bytes.decode("utf-8", errors="replace"),
+                timeout,
+                stdout_bytes,
+                stderr_bytes,
+            )
         except OSError as exc:
             return CommandResult(args, 127, "", str(exc), timeout)
-        return CommandResult(args, completed.returncode, completed.stdout, completed.stderr, timeout)
+        stdout_bytes = completed.stdout or b""
+        stderr_bytes = completed.stderr or b""
+        return CommandResult(
+            args,
+            completed.returncode,
+            stdout_bytes.decode("utf-8", errors="replace"),
+            stderr_bytes.decode("utf-8", errors="replace"),
+            timeout,
+            stdout_bytes,
+            stderr_bytes,
+        )
 
 
 def utc_now() -> str:
@@ -153,7 +178,7 @@ def utc_now() -> str:
 
 def redact_text(text: str) -> str:
     value = TOKEN_RE.sub("[REDACTED]", text or "")
-    return SECRET_RE.sub(lambda match: f"{match.group(1)}=[REDACTED]", value)
+    return SECRET_RE.sub(lambda match: f"{match.group(1)}{match.group(3)}[REDACTED]{match.group(5)}", value)
 
 
 def command_name(args: list[str]) -> str:
@@ -195,7 +220,7 @@ def _command_args(rmux_bin: str, namespace: str, session: str, name: str, work_d
     if name == "new-session":
         return [*base, "new-session", "-d", "-s", session]
     if name == "attach-session":
-        return [*base, "attach-session", "-t", session, "-d"]
+        return [*base, "attach-session", "-t", session, "-d", "-E"]
     if name == "has-session":
         return [*base, "has-session", *target]
     if name == "kill-session":
@@ -213,13 +238,13 @@ def _command_args(rmux_bin: str, namespace: str, session: str, name: str, work_d
     if name == "kill-window":
         return [*base, "kill-window", "-t", f"{session}:probe-extra"]
     if name == "move-pane":
-        return [*base, "move-pane", "-s", f"{session}:0.0", "-t", f"{session}:0.0"]
+        return [*base, "move-pane", "-s", f"{session}:0.0", "-t", f"{session}:probe-extra"]
     if name == "resize-pane":
         return [*base, "resize-pane", *pane, "-Z"]
     if name == "select-layout":
         return [*base, "select-layout", *target, "even-horizontal"]
     if name == "swap-pane":
-        return [*base, "swap-pane", "-s", f"{session}:0.0", "-t", f"{session}:0.0"]
+        return [*base, "swap-pane", "-s", f"{session}:0.0", "-t", f"{session}:0.1"]
     if name == "split-window":
         return [*base, "split-window", "-d", *pane]
     if name == "list-panes":
@@ -253,12 +278,21 @@ def _command_args(rmux_bin: str, namespace: str, session: str, name: str, work_d
     if name == "list-clients":
         return [*base, "list-clients", *target]
     if name == "refresh-client":
-        return [*base, "refresh-client", "-S"]
+        return [*base, "refresh-client", "-S", "-t", session]
     return [*base, name]
 
 
-def _status_for_result(result: CommandResult) -> str:
-    return "supported" if result.returncode == 0 else "unsupported"
+def _command_status_and_notes(name: str, result: CommandResult) -> tuple[str, str]:
+    if result.returncode == 0:
+        return "supported", ""
+    scenario_sensitive = {"attach-session", "refresh-client", "move-pane", "swap-pane", "kill-server"}
+    combined = f"{result.stdout}\n{result.stderr}".lower()
+    if name in scenario_sensitive and any(
+        marker in combined
+        for marker in ("no current client", "not a client", "can't find client", "ambiguous", "same pane", "no such file or directory")
+    ):
+        return "partial", "scenario-invalid: command requires live client/server or distinct pane/window context; not classified as command missing"
+    return "unsupported", ""
 
 
 def _result_record(
@@ -268,6 +302,7 @@ def _result_record(
     evidence: str,
     workaround: dict[str, Any] | None = None,
     returncode: int | None = None,
+    notes: str = "",
 ) -> dict[str, Any]:
     record: dict[str, Any] = {
         "required": bool(catalog["required"]),
@@ -276,7 +311,7 @@ def _result_record(
         "workaround": workaround,
         "degrade_impact": str(catalog["degrade_impact"]),
         "consequence": str(catalog["consequence"]),
-        "notes": "",
+        "notes": notes,
     }
     if returncode is not None:
         record["returncode"] = returncode
@@ -308,7 +343,7 @@ def _blocking_gaps(commands: dict[str, Any], semantics: dict[str, Any]) -> list[
     return gaps
 
 
-def _capture_fidelity_evidence(path: Path) -> dict[str, Any]:
+def _capture_fidelity_evidence(path: Path, capture_result: CommandResult | None) -> dict[str, Any]:
     cases = [
         {
             "dimension": "trailing_whitespace",
@@ -356,9 +391,41 @@ def _capture_fidelity_evidence(path: Path) -> dict[str, Any]:
             "claude_reason": claude_status.reason,
         }
 
+    rmux_observation: dict[str, Any]
+    if capture_result is None or capture_result.returncode != 0:
+        rmux_observation = {
+            "available": False,
+            "reason": "capture-pane did not produce successful real Rmux stdout in this run",
+        }
+    else:
+        decoded = redact_text(capture_result.stdout)
+        rmux_observation = {
+            "available": True,
+            "returncode": capture_result.returncode,
+            "raw_bytes_sha256": hashlib.sha256(capture_result.stdout_bytes or capture_result.stdout.encode("utf-8")).hexdigest(),
+            "raw_bytes_size": len(capture_result.stdout_bytes or capture_result.stdout.encode("utf-8")),
+            "decoded_text": decoded,
+            "consumer_strip": {
+                "codex_normalized": normalize_codex_screen(decoded),
+                "claude_normalized": normalize_claude_screen(decoded),
+            },
+            "direct_stdout": {
+                "codex_state": parse_codex_pane_status(decoded).state,
+                "codex_reason": parse_codex_pane_status(decoded).reason,
+                "claude_state": parse_claude_pane_status(decoded).state,
+                "claude_reason": parse_claude_pane_status(decoded).reason,
+            },
+            "observed_dimensions": {
+                "contains_csi": "\x1b[" in capture_result.stdout,
+                "contains_osc": "\x1b]" in capture_result.stdout,
+                "line_count": len(capture_result.stdout.splitlines()),
+            },
+        }
+
     payload = {
         "parser_paths": ["consumer_strip", "direct_stdout"],
         "providers": ["codex", "claude"],
+        "rmux_capture_observation": rmux_observation,
         "normalization_responsibility": {
             "trailing_whitespace": "parser normalize_screen strips line tails",
             "csi": "current strip_ansi handles CSI sequences",
@@ -373,9 +440,81 @@ def _capture_fidelity_evidence(path: Path) -> dict[str, Any]:
     return payload
 
 
-def _derive_semantics(command_results: dict[str, Any], run_dir: Path, artifact_index: list[dict[str, Any]]) -> dict[str, Any]:
+def _assert_semantic(name: str, command_results: dict[str, Any], raw_results: dict[str, CommandResult]) -> tuple[str, list[dict[str, Any]], str]:
+    def supported(command: str) -> bool:
+        return command_results.get(command, {}).get("status") == "supported"
+
+    checks_by_name: dict[str, list[tuple[str, bool]]] = {
+        "session_survival": [
+            ("new-session returned success", supported("new-session")),
+            ("has-session confirmed target session", supported("has-session")),
+        ],
+        "namespace_isolation": [
+            ("new-session used probe namespace", supported("new-session")),
+            ("has-session lookup stayed inside probe namespace", supported("has-session")),
+        ],
+        "attach_reattach": [("attach-session accepted non-interactive attach probe", supported("attach-session"))],
+        "window_policy": [
+            ("list-windows succeeded", supported("list-windows")),
+            ("new-window succeeded", supported("new-window")),
+            ("rename-window succeeded", supported("rename-window")),
+            ("select-window succeeded", supported("select-window")),
+            ("kill-window succeeded", supported("kill-window")),
+        ],
+        "layout_reflow": [
+            ("resize-pane succeeded", supported("resize-pane")),
+            ("select-layout succeeded", supported("select-layout")),
+            ("swap-pane succeeded with distinct pane targets", supported("swap-pane")),
+            ("move-pane succeeded with distinct window target", supported("move-pane")),
+        ],
+        "pane_id_stability": [
+            ("list-panes succeeded", supported("list-panes")),
+            ("list-panes returned a pane identity", bool(raw_results.get("list-panes", CommandResult([], 1, "", "", 0)).stdout.strip())),
+        ],
+        "user_options_title": [
+            ("set-option succeeded", supported("set-option")),
+            ("set-window-option succeeded", supported("set-window-option")),
+            ("rename-window succeeded", supported("rename-window")),
+        ],
+        "capture_last_n_lines": [
+            ("capture-pane succeeded", supported("capture-pane")),
+            ("capture-pane produced stdout", bool(raw_results.get("capture-pane", CommandResult([], 1, "", "", 0)).stdout)),
+        ],
+        "buffer_paste": [
+            ("load-buffer succeeded", supported("load-buffer")),
+            ("paste-buffer succeeded", supported("paste-buffer")),
+            ("delete-buffer succeeded", supported("delete-buffer")),
+        ],
+        "ctrl_c_ctrl_d": [("send-keys accepted control/input path", supported("send-keys"))],
+        "pane_death": [
+            ("respawn-pane succeeded", supported("respawn-pane")),
+            ("kill-window cleanup command succeeded", supported("kill-window")),
+        ],
+        "kill_session_cleanup": [("kill-session cleanup succeeded", supported("kill-session"))],
+        "daemon_crash_cleanup_evidence": [
+            ("start-server evidence recorded", supported("start-server")),
+            ("kill-server evidence recorded", supported("kill-server")),
+        ],
+        "provider_process_distinction_workaround_evidence": [
+            ("list-panes returned pane identity", bool(raw_results.get("list-panes", CommandResult([], 1, "", "", 0)).stdout.strip())),
+            ("capture-pane produced pane text", bool(raw_results.get("capture-pane", CommandResult([], 1, "", "", 0)).stdout)),
+        ],
+    }
+    checks = [{"name": check_name, "passed": passed} for check_name, passed in checks_by_name.get(name, [])]
+    if all(check["passed"] for check in checks):
+        return "supported", checks, ""
+    if any(check["passed"] for check in checks):
+        return "partial", checks, "one or more scenario assertions failed despite at least one prerequisite passing"
+    return "unsupported", checks, "scenario assertions failed"
+
+
+def _derive_semantics(
+    command_results: dict[str, Any],
+    raw_results: dict[str, CommandResult],
+    run_dir: Path,
+    artifact_index: list[dict[str, Any]],
+) -> dict[str, Any]:
     semantics: dict[str, Any] = {}
-    command_status = {name: value["status"] for name, value in command_results.items()}
     dependencies = {
         "session_survival": ["new-session", "has-session"],
         "namespace_isolation": ["new-session", "has-session"],
@@ -395,20 +534,32 @@ def _derive_semantics(command_results: dict[str, Any], run_dir: Path, artifact_i
     for name, catalog in SEMANTIC_CATALOG.items():
         path = run_dir / "artifacts" / "semantics" / f"{name}.json"
         if name == "capture_format_fidelity_for_provider_completion":
-            evidence = _capture_fidelity_evidence(path)
+            evidence = _capture_fidelity_evidence(path, raw_results.get("capture-pane"))
             status = "partial"
             workaround = {
                 "id": "parser-normalization-boundary",
-                "description": "fixture proves parser-facing paths, but OSC/wrapping/wide-char/last-N require true Rmux artifact equivalence",
+                "description": "fixture and real Rmux capture evidence are recorded, but OSC/wrapping/wide-char/last-N require route-level equivalence acceptance",
                 "evidence": path.relative_to(run_dir).as_posix(),
                 "accepted": False,
             }
+            notes = "real Rmux capture observation is stored separately from parser-facing fixtures"
         else:
             deps = dependencies.get(name, [])
-            missing = [dep for dep in deps if command_status.get(dep) != "supported"]
-            status = "supported" if not missing else "unsupported"
+            status, assertions, notes = _assert_semantic(name, command_results, raw_results)
             workaround = None
-            evidence = {"dependencies": deps, "missing": missing, "status": status}
+            if status == "partial":
+                workaround = {
+                    "id": f"{name}-scenario-gap",
+                    "description": "required command prerequisites did not prove the full CCB semantic scenario",
+                    "evidence": path.relative_to(run_dir).as_posix(),
+                    "accepted": False,
+                }
+            evidence = {
+                "dependencies": deps,
+                "assertions": assertions,
+                "status": status,
+                "notes": notes,
+            }
             _write_json(path, evidence)
         artifact_index.append(_artifact_entry(run_dir, path, kind="semantic", probe=name))
         semantics[name] = _result_record(
@@ -416,21 +567,51 @@ def _derive_semantics(command_results: dict[str, Any], run_dir: Path, artifact_i
             status=status,
             evidence=path.relative_to(run_dir).as_posix(),
             workaround=workaround,
+            notes=notes,
         )
     return semantics
 
 
-def _probe_preflight(runner: Any, rmux_bin: str, run_dir: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+def _probe_preflight(
+    runner: Any,
+    rmux_bin: str,
+    run_dir: Path,
+    *,
+    platform_name: str | None = None,
+    require_executable: bool = True,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     artifacts: list[dict[str, Any]] = []
-    executable = shutil.which(rmux_bin) or rmux_bin
-    version = runner.run([rmux_bin, "-V"], timeout=5.0)
-    daemon_probe = runner.run([rmux_bin, "list-sessions"], timeout=5.0)
+    system_name = (platform_name or platform.system()).lower()
+    executable_path = shutil.which(rmux_bin)
+    explicit_path = Path(rmux_bin).expanduser()
+    executable_found = executable_path is not None or explicit_path.exists()
+    executable = executable_path or str(explicit_path if explicit_path.exists() else rmux_bin)
+    version = runner.run([rmux_bin, "-V"], timeout=5.0) if executable_found or not require_executable else CommandResult(
+        [rmux_bin, "-V"], 127, "", "rmux executable not found", 5.0
+    )
+    daemon_probe = runner.run([rmux_bin, "list-sessions"], timeout=5.0) if version.returncode == 0 else CommandResult(
+        [rmux_bin, "list-sessions"], 127, "", "preflight version check failed", 5.0
+    )
+    failure_reason = None
+    probe_status = "completed"
+    if system_name != "windows":
+        probe_status = "skipped"
+        failure_reason = f"native Windows required, got {system_name}"
+    elif require_executable and not executable_found:
+        probe_status = "failed"
+        failure_reason = "rmux executable not found"
+    elif version.returncode != 0:
+        probe_status = "failed"
+        failure_reason = "rmux version check failed"
     payload = {
-        "platform": platform.system().lower(),
-        "windows_release": platform.release() if platform.system().lower() == "windows" else None,
+        "platform": system_name,
+        "windows_release": platform.release() if system_name == "windows" else None,
         "rmux_executable": executable,
+        "rmux_executable_found": executable_found,
         "version": redact_text((version.stdout or version.stderr).strip()),
         "version_returncode": version.returncode,
+        "probe_status": probe_status,
+        "failure_reason": failure_reason,
         "shell": os.environ.get("ComSpec") or os.environ.get("SHELL"),
         "run_id": run_dir.name,
         "daemon_pre_state": {
@@ -453,7 +634,14 @@ def _probe_preflight(runner: Any, rmux_bin: str, run_dir: Path) -> tuple[dict[st
     return payload, artifacts
 
 
-def run_probe(work_root: Path, *, runner: Any | None = None, rmux_bin: str = "rmux") -> dict[str, Any]:
+def run_probe(
+    work_root: Path,
+    *,
+    runner: Any | None = None,
+    rmux_bin: str = "rmux",
+    platform_name: str | None = None,
+) -> dict[str, Any]:
+    require_executable = runner is None
     runner = runner or SubprocessRunner()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_dir = work_root.expanduser().resolve(strict=False) / f"run-{stamp}-{os.getpid()}"
@@ -463,53 +651,130 @@ def run_probe(work_root: Path, *, runner: Any | None = None, rmux_bin: str = "rm
     session = "ccb-rmux-probe"
 
     artifact_index: list[dict[str, Any]] = []
-    preflight, preflight_artifacts = _probe_preflight(runner, rmux_bin, run_dir)
+    preflight, preflight_artifacts = _probe_preflight(
+        runner,
+        rmux_bin,
+        run_dir,
+        platform_name=platform_name,
+        require_executable=require_executable,
+    )
     artifact_index.extend(preflight_artifacts)
 
+    if preflight["probe_status"] != "completed":
+        report = {
+            "backend_impl": "rmux",
+            "version": preflight.get("version") or "unknown",
+            "platform": preflight["platform"],
+            "generated_at": utc_now(),
+            "probe_status": preflight["probe_status"],
+            "run_dir": str(run_dir),
+            "preflight": preflight,
+            "commands": {},
+            "semantics": {},
+            "artifact_index": artifact_index,
+            "blocking_gaps": [],
+        }
+        report_path = run_dir / "capability-report.json"
+        _write_json(report_path, report)
+        return report
+
     commands: dict[str, Any] = {}
+    raw_results: dict[str, CommandResult] = {}
     for name in COMMAND_ORDER:
+        if name in {"kill-session", "kill-server"}:
+            continue
         catalog = COMMAND_CATALOG[name]
         args = _command_args(rmux_bin, namespace, session, name, work_dir)
         result = runner.run(args, timeout=8.0)
+        raw_results[name] = result
+        status, notes = _command_status_and_notes(name, result)
         artifact_path = run_dir / "artifacts" / "commands" / f"{name}.json"
         _write_json(
             artifact_path,
             {
                 "args": result.args,
                 "returncode": result.returncode,
+                "stdout_raw_sha256": hashlib.sha256(result.stdout_bytes or result.stdout.encode("utf-8")).hexdigest(),
+                "stdout_raw_size": len(result.stdout_bytes or result.stdout.encode("utf-8")),
                 "stdout": redact_text(result.stdout),
                 "stderr": redact_text(result.stderr),
                 "timeout": result.timeout,
+                "classification": status,
+                "notes": notes,
             },
         )
         artifact_index.append(_artifact_entry(run_dir, artifact_path, kind="command", probe=name))
         commands[name] = _result_record(
             catalog=catalog,
-            status=_status_for_result(result),
+            status=status,
             evidence=artifact_path.relative_to(run_dir).as_posix(),
             returncode=result.returncode,
+            notes=notes,
         )
 
-    semantics = _derive_semantics(commands, run_dir, artifact_index)
     cleanup = runner.run([rmux_bin, "-L", namespace, "kill-session", "-t", session], timeout=5.0)
+    raw_results["cleanup.kill-session"] = cleanup
     cleanup_path = run_dir / "artifacts" / "cleanup" / "kill-session.json"
     _write_json(
         cleanup_path,
         {
             "args": cleanup.args,
             "returncode": cleanup.returncode,
+            "stdout_raw_sha256": hashlib.sha256(cleanup.stdout_bytes or cleanup.stdout.encode("utf-8")).hexdigest(),
+            "stdout_raw_size": len(cleanup.stdout_bytes or cleanup.stdout.encode("utf-8")),
             "stdout": redact_text(cleanup.stdout),
             "stderr": redact_text(cleanup.stderr),
         },
     )
     artifact_index.append(_artifact_entry(run_dir, cleanup_path, kind="cleanup", probe="kill-session"))
+    cleanup_catalog = COMMAND_CATALOG["kill-session"]
+    cleanup_status = "supported" if cleanup.returncode == 0 else "unsupported"
+    commands["kill-session"] = _result_record(
+        catalog=cleanup_catalog,
+        status=cleanup_status,
+        evidence=cleanup_path.relative_to(run_dir).as_posix(),
+        returncode=cleanup.returncode,
+    )
+    commands["kill-session"]["cleanup_evidence"] = cleanup_path.relative_to(run_dir).as_posix()
+    if cleanup_status != "supported":
+        commands["kill-session"]["status"] = cleanup_status
+        commands["kill-session"]["notes"] = "final cleanup failed; command support cannot prove this run cleaned its namespace"
+
+    kill_server = runner.run([rmux_bin, "-L", namespace, "kill-server"], timeout=5.0)
+    raw_results["kill-server"] = kill_server
+    kill_server_status, kill_server_notes = _command_status_and_notes("kill-server", kill_server)
+    kill_server_path = run_dir / "artifacts" / "commands" / "kill-server.json"
+    _write_json(
+        kill_server_path,
+        {
+            "args": kill_server.args,
+            "returncode": kill_server.returncode,
+            "stdout_raw_sha256": hashlib.sha256(kill_server.stdout_bytes or kill_server.stdout.encode("utf-8")).hexdigest(),
+            "stdout_raw_size": len(kill_server.stdout_bytes or kill_server.stdout.encode("utf-8")),
+            "stdout": redact_text(kill_server.stdout),
+            "stderr": redact_text(kill_server.stderr),
+            "timeout": kill_server.timeout,
+            "classification": kill_server_status,
+            "notes": kill_server_notes,
+        },
+    )
+    artifact_index.append(_artifact_entry(run_dir, kill_server_path, kind="command", probe="kill-server"))
+    commands["kill-server"] = _result_record(
+        catalog=COMMAND_CATALOG["kill-server"],
+        status=kill_server_status,
+        evidence=kill_server_path.relative_to(run_dir).as_posix(),
+        returncode=kill_server.returncode,
+        notes=kill_server_notes,
+    )
+
+    semantics = _derive_semantics(commands, raw_results, run_dir, artifact_index)
 
     report = {
         "backend_impl": "rmux",
         "version": preflight.get("version") or "unknown",
         "platform": preflight["platform"],
         "generated_at": utc_now(),
-        "probe_status": "completed",
+        "probe_status": preflight["probe_status"],
         "run_dir": str(run_dir),
         "preflight": preflight,
         "commands": commands,
@@ -531,8 +796,20 @@ def main(argv: list[str] | None = None) -> int:
 
     report = run_probe(args.work_root, rmux_bin=args.rmux_bin)
     report_path = Path(report["run_dir"]) / "capability-report.json"
-    print(json.dumps({"ok": True, "report": str(report_path), "blocking_gaps": len(report["blocking_gaps"])}, ensure_ascii=True))
-    return 0
+    ok = report.get("probe_status") == "completed"
+    print(
+        json.dumps(
+            {
+                "ok": ok,
+                "report": str(report_path),
+                "probe_status": report.get("probe_status"),
+                "reason": report.get("preflight", {}).get("failure_reason"),
+                "blocking_gaps": len(report["blocking_gaps"]),
+            },
+            ensure_ascii=True,
+        )
+    )
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
