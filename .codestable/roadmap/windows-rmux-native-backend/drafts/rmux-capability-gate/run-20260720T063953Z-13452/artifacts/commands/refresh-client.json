@@ -1,0 +1,19 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-13452-20260720t063953z",
+    "refresh-client",
+    "-S",
+    "-t",
+    "ccb-rmux-probe"
+  ],
+  "classification": "partial",
+  "notes": "scenario-invalid: command requires client or distinct pane/window context; not classified as command missing",
+  "returncode": 1,
+  "stderr": "can't find client: ccb-rmux-probe\n",
+  "stdout": "",
+  "stdout_raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_raw_size": 0,
+  "timeout": 8.0
+}

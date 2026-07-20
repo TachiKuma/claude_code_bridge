@@ -9,13 +9,13 @@
       "out": ".codestable\\features\\2026-07-06-rmux-capability-gate\\rmux-capability-gate-evidence-pack.md",
       "providers": {
         "archguard": {
-          "status": "skipped",
-          "reason": "archguard collection disabled",
+          "status": "unavailable",
+          "reason": "archguard binary not found on PATH",
           "warnings": []
         },
         "meta_cc": {
-          "status": "skipped",
-          "reason": "meta-cc collection disabled",
+          "status": "unavailable",
+          "reason": "meta-cc summary not found; realtime session collection is out of scope",
           "warnings": []
         }
       }
@@ -33,8 +33,8 @@
   "input_digests": {
     "design": "a956d85ee7942518fcda4bac35236cb28d50619a6572676186543dafca74ac16",
     "checklist": "c1b785e5c0ec01f7c39d21a89cbe32bd739ee480e8aa003ae37773baee6cf220",
-    "dod_results": "c191b5d24bcc20e1b4c1d0b6c16b94fec5358138f13a5b9bbfbe285923210553",
-    "gate_results": "9c7fd78dd684bfa4a730589f573275ce6a3d5a7f79a5dceb3ac5904112c47b96",
-    "out": "e165560f638559f60ce0fd9eedbfafcaf11e93f9acba1fd0334793e4863d0330"
+    "dod_results": "8526766053cb266bdaa9fe5c850bfd6b96d1c03ad76429e63a7f989f8029dba0",
+    "gate_results": "367af236b2ac2f2feb0c40f2d9e8436596b02eeb7edf4997a15b86a85973b8cf",
+    "out": "b7468e889fd5205ef2688b61ac95b02693435f6687031fea648bd2b62bef96d8"
   }
 }

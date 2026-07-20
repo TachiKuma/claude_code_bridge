@@ -1,0 +1,13 @@
+{
+  "assertions": [
+    {
+      "name": "send-keys accepted control/input path",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "send-keys"
+  ],
+  "notes": "",
+  "status": "supported"
+}

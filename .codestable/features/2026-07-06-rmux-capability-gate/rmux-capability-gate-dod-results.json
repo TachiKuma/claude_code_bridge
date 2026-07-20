@@ -17,7 +17,7 @@
     {
       "command": "python -m pytest -q test/test_rmux_capability_probe.py",
       "exit_code": 0,
-      "stdout": ".....                                                                    [100%]\n5 passed in 1.16s\n",
+      "stdout": "..........                                                               [100%]\n10 passed in 1.65s\n",
       "stderr": "",
       "id": "CMD-002",
       "core": true,
@@ -26,7 +26,7 @@
     {
       "command": "python \"scripts/probe_rmux_capability.py\" --work-root \".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate\"",
       "exit_code": 0,
-      "stdout": "{\"ok\": true, \"report\": \"E:\\\\GitHub\\u5f00\\u6e90\\u9879\\u76ee\\\\TachiKuma\\\\claude_code_bridge\\\\.codestable\\\\roadmap\\\\windows-rmux-native-backend\\\\drafts\\\\rmux-capability-gate\\\\run-20260720T041953Z-1176\\\\capability-report.json\", \"blocking_gaps\": 7}\n",
+      "stdout": "{\"ok\": true, \"report\": \"E:\\\\GitHub\\u5f00\\u6e90\\u9879\\u76ee\\\\TachiKuma\\\\claude_code_bridge\\\\.codestable\\\\roadmap\\\\windows-rmux-native-backend\\\\drafts\\\\rmux-capability-gate\\\\run-20260720T064214Z-14748\\\\capability-report.json\", \"probe_status\": \"completed\", \"reason\": null, \"blocking_gaps\": 5}\n",
       "stderr": "",
       "id": "CMD-003",
       "core": true,
@@ -35,7 +35,7 @@
     {
       "command": "python -m pytest -q test/test_codex_pane_status_probe.py",
       "exit_code": 0,
-      "stdout": ".....................................                                    [100%]\n37 passed in 1.29s\n",
+      "stdout": ".....................................                                    [100%]\n37 passed in 1.37s\n",
       "stderr": "",
       "id": "CMD-004",
       "core": false,
