@@ -10,6 +10,11 @@ from ccbd.api_models import RpcRequest
 from ccbd.socket_client_runtime import decode_response, recv_response_line, send_request
 from ccbd.socket_server import CcbdSocketServer
 
+pytestmark = pytest.mark.skipif(
+    not hasattr(socket, 'AF_UNIX'),
+    reason='ccbd bootstrap probe exercises Unix socket semantics',
+)
+
 
 def test_bootstrap_probe_roundtrips_through_normal_request_worker(tmp_path: Path) -> None:
     server = CcbdSocketServer(tmp_path / 'ccbd.sock')

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import socket
+
 import pytest
 
 from ccbd.socket_server_runtime.loop import maintenance_worker_loop, next_timeout, next_worker_timeout, post_request_tick, run_after_response_actions, run_queued_maintenance_ticks, run_tick_if_needed, start_maintenance_worker, start_worker, stop_maintenance_worker, stop_worker, worker_loop
@@ -104,6 +106,8 @@ def test_start_worker_starts_single_worker_lane() -> None:
 
 
 def test_finish_runtime_bootstrap_requires_publication_callback(tmp_path) -> None:
+    if not hasattr(socket, 'AF_UNIX'):
+        pytest.skip('ccbd bootstrap requires Unix socket semantics')
     server = CcbdSocketServer(tmp_path / 'ccbd.sock')
     server.listen()
     start_worker(server, interval=0.2, on_tick=None)
@@ -120,6 +124,8 @@ def test_finish_runtime_bootstrap_requires_publication_callback(tmp_path) -> Non
 
 
 def test_finish_runtime_bootstrap_callback_failure_stops_serving(tmp_path) -> None:
+    if not hasattr(socket, 'AF_UNIX'):
+        pytest.skip('ccbd bootstrap requires Unix socket semantics')
     server = CcbdSocketServer(tmp_path / 'ccbd.sock')
     server.listen()
     start_worker(server, interval=0.2, on_tick=None)
@@ -139,6 +145,8 @@ def test_finish_runtime_bootstrap_callback_failure_stops_serving(tmp_path) -> No
 
 
 def test_finish_runtime_bootstrap_rejects_sticky_worker_error(tmp_path) -> None:
+    if not hasattr(socket, 'AF_UNIX'):
+        pytest.skip('ccbd bootstrap requires Unix socket semantics')
     server = CcbdSocketServer(tmp_path / 'ccbd.sock')
     publication_calls: list[str] = []
     server.listen()
@@ -158,6 +166,8 @@ def test_finish_runtime_bootstrap_rejects_sticky_worker_error(tmp_path) -> None:
 
 
 def test_finish_runtime_bootstrap_rejects_inactive_gate(tmp_path) -> None:
+    if not hasattr(socket, 'AF_UNIX'):
+        pytest.skip('ccbd bootstrap requires Unix socket semantics')
     server = CcbdSocketServer(tmp_path / 'ccbd.sock')
     publication_calls: list[str] = []
     server.listen()
@@ -174,6 +184,8 @@ def test_finish_runtime_bootstrap_rejects_inactive_gate(tmp_path) -> None:
 
 
 def test_serve_forever_preserves_worker_error_recorded_before_serving(tmp_path) -> None:
+    if not hasattr(socket, 'AF_UNIX'):
+        pytest.skip('ccbd bootstrap requires Unix socket semantics')
     server = CcbdSocketServer(tmp_path / 'ccbd.sock')
     serving_calls: list[str] = []
     failure = RuntimeError('pre-serving worker failed')

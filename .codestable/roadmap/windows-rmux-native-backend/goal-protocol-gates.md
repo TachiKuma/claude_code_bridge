@@ -43,6 +43,19 @@ maySkip core reason = not core && isJust reason
 `kind: protocol-only` 表示该 gate 是协议阶段规则，由对应 review / QA / acceptance / audit 技能读取 evidence 后执行；它不是可直接调用的脚本，机器 runner 不应把它当成缺失脚本。
 旧 gate result 缺 `kind` 时只可归一为 `executable`；不得从缺字段推断 `protocol-only`。
 
+## 1.1 Target-Platform Core Evidence
+
+本 roadmap goal 的核心平台是 native Windows。gate 判断 `core` 时必须先区分：
+
+- **target-platform core evidence**：native Windows 上 `ccb -> ccbd -> rmux` 的控制面、mux、provider path、start/ask/kill/full-chain smoke 证据。
+- **compatibility evidence**：Linux/macOS/WSL/Unix `AF_UNIX` 真实 socket 行为、现有 tmux 路径不漂移等跨平台兼容性证据。
+
+缺少 target-platform core evidence 阻塞 QA / acceptance / audit。缺少 compatibility evidence 只有在该 feature 的当前目标明确承诺“本轮必须证明该兼容性”时才阻塞；否则可以在 owner 已记录目标平台证据边界后作为 residual risk 进入后续 Windows 核心 feature。
+
+`ccbd-control-plane-transport-seam` 是特殊边界：它抽 seam 并保留 Unix adapter，但本 milestone 的目标不是在 native Windows 主机证明真实 `AF_UNIX` 行为。当前主机没有 `socket.AF_UNIX` 或 WSL 不可用时，真实 Unix `AF_UNIX` tests skipped 不得单独阻塞 `windows-rmux-native-working`；后续 `ccbd-windows-tcp-loopback-transport` 和 `ccbd-windows-full-chain-smoke` 才是 Windows 控制面核心证据。
+
+Windows collection / import / runtime blocker 不属于 compatibility residual。`mobile_gateway.terminal -> import fcntl`、accelerator `AF_UNIX` AttributeError、Windows pid liveness 等会阻断 native Windows 命令的缺口必须修复或单独记录 owner decision。
+
 ## 2. feature_design.before_approve
 
 必须有：
@@ -100,6 +113,8 @@ maySkip core reason = not core && isJust reason
 - 功能性核心路径有实际运行证据。
 - 非功能性 feature 有替代证据理由。
 - QA 没有把核心缺口写成 residual-risk。
+- native Windows milestone 中，Unix-only `AF_UNIX` 真实主机证据缺失可以写成 compatibility residual，前提是 QA 同时证明 seam/fake/import guard 证据已覆盖目标平台继续推进所需边界，并引用 `approval-report.md` 的 native Windows evidence decision。
+- Windows collection / import blocker 不能借 Unix residual policy 放行；若影响 CMD-005、start/ping/doctor/ask/kill 的收集或运行，QA 必须保持 failed/blocked，除非 owner 对该具体 Windows 缺口另行记录可接受决策。
 - 高风险 feature 建议启用独立 QA Task agent；其输出必须由主流程核验并写入 QA 报告，runner 不替代正式 verdict，结果消费后按 Task agent 生命周期关闭。
 
 失败按 `recover QA`。
@@ -115,6 +130,7 @@ maySkip core reason = not core && isJust reason
 - blocking DoD 均有 pass evidence。
 - roadmap item 已回写。
 - residual risk 不包含核心验收缺口。
+- residual risk 可以包含非目标平台 compatibility 缺口，例如 native Windows 主机无法执行真实 Unix `AF_UNIX` lifecycle；acceptance 必须明确说明该缺口不覆盖 Windows milestone core，并把真正的 Windows 控制面证明交给 `ccbd-windows-tcp-loopback-transport` / `ccbd-windows-full-chain-smoke`。
 - 可选只读 acceptance Task agent auditor 只能提供复核 findings；checklist / roadmap / requirement / acceptance 状态写入必须由主流程 owner 完成，结果消费后按 Task agent 生命周期关闭。
 
 失败先归因：`StageEvidenceDefect` 按 `recover Acceptance`；`ImplementationDefect` 回 implementation 后重跑 review / QA / acceptance。
@@ -139,6 +155,7 @@ maySkip core reason = not core && isJust reason
 - final aggregate commands 已重跑或有非核心 trust-prior 理由。
 - provider warnings 已解释。
 - goal-audit.md 已落盘且 `status=passed`。
+- roadmap final audit 的 `noCoreResidualRisk` 以 native Windows milestone 为准：Unix-only `AF_UNIX` compatibility residual 不阻塞最终审计；native Windows full-chain smoke、TCP loopback auth、accelerator guard、Windows process liveness、Rmux namespace lifecycle 的缺口仍阻塞。
 
 失败按 `recover RoadmapAudit`；同项三轮仍失败则 handoff。
 

@@ -37,6 +37,7 @@ created_at: 2026-07-19
 - 2026-07-19: Owner stated "windows-rmux-native-backend的review通过，开始执行cs-epic". Recorded as approval to proceed with the epic despite Round 6 important findings being carried as residual risk.
 - 2026-07-20: Owner stated "确认一批准所有 child designs". Recorded as approval of all passed child feature designs under `windows-rmux-native-backend`; each child design frontmatter was updated to `status: approved`.
 - 2026-07-20: Owner stated "确认授权 Goal execution". Recorded as approval of `approval_groups.goal-execution` with confirmation id `goal-execution-2026-07-20-windows-rmux-native-backend`, covering `goal-acceptance` and `goal-commits`.
+- 2026-07-20: Owner confirmed the target environment is native Windows and requested CodeStable docs to treat `AF_UNIX` absence as an expected platform fact for this milestone. Recorded as a scope/evidence decision: Unix-only `AF_UNIX` real-host evidence is compatibility evidence, not a blocking core gate for `windows-rmux-native-working`; native Windows blockers such as `mobile_gateway.terminal -> import fcntl` remain milestone blockers until fixed or separately accepted.
 
 ## Decision Needed
 
@@ -59,6 +60,8 @@ Roadmap review Round 6 recorded three important findings:
 This approval accepts proceeding while preserving those findings as required follow-up constraints for downstream feature design and implementation.
 
 All non-dropped child feature designs now have passed design-review reports. The 2026-07-20 child design approval is a batch approval for those designs only; it does not approve implementation results, QA, acceptance, goal execution, commits, push, merge, release, deploy, or production changes.
+
+The 2026-07-20 native Windows evidence decision narrows the current milestone's core proof obligation to native Windows behavior. It does not claim Unix `AF_UNIX` compatibility is verified on this host; it permits the goal driver and later QA/audit stages to carry Unix-only runtime proof as a documented compatibility residual while requiring Windows TCP loopback, accelerator guard, process liveness, Rmux lifecycle, and final full-chain smoke to supply the milestone's core evidence.
 
 ## Options
 

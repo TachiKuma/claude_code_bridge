@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from agents.models import AgentState
 from agents.config_identity import project_config_identity_payload
+from ccbd.control_plane_transport.endpoint import endpoint_from_legacy_socket_path, endpoint_from_record, endpoint_to_record
 from provider_execution.capabilities import execution_restore_capability
 from storage.path_helpers import socket_placement_payload
 
@@ -49,6 +50,13 @@ def build_ccbd_payload(
     socket_path = inspection.socket_path if hasattr(inspection, 'socket_path') else None
     if socket_path is None and inspection.lease is not None:
         socket_path = inspection.lease.socket_path
+    control_plane_endpoint = getattr(inspection, 'control_plane_endpoint', None)
+    if control_plane_endpoint is None and inspection.lease is not None:
+        control_plane_endpoint = getattr(inspection.lease, 'control_plane_endpoint', None)
+    if control_plane_endpoint is not None:
+        control_plane_endpoint = endpoint_to_record(endpoint_from_record(control_plane_endpoint))
+    elif socket_path:
+        control_plane_endpoint = endpoint_to_record(endpoint_from_legacy_socket_path(socket_path))
     process_metrics = _process_metrics(control_plane_metrics)
     serving = dict(serving_identity or {})
     return {
@@ -58,6 +66,7 @@ def build_ccbd_payload(
         'health': inspection.health.value,
         'generation': inspection.generation,
         'socket_path': socket_path,
+        'control_plane_endpoint': control_plane_endpoint,
         'tmux_socket_path': str(paths.ccbd_tmux_socket_placement.effective_path),
         **(paths.runtime_state_payload() if hasattr(paths, 'runtime_state_payload') else {}),
         **socket_placement_payload(paths.ccbd_socket_placement),

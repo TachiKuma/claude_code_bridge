@@ -54,6 +54,14 @@ nextGoal s
   | otherwise                         = Complete
 ```
 
+### 3.1 Target-Platform Evidence Policy
+
+本 goal 的终点是 `windows-rmux-native-working`：native Windows 上 `ccb -> ccbd -> rmux` 真链路跑通。`coreEnvironmentMissing` 只适用于目标平台核心证据缺失；不得把本机缺少 `socket.AF_UNIX`、WSL 不可用、Unix-only `AF_UNIX` 测试跳过，单独判定为本 milestone 的 `CoreEvidenceUnavailable`。
+
+`ccbd-control-plane-transport-seam` 的 Unix adapter 行为仍必须由 fake/unit/import guard 等可用证据证明 seam 没有破坏调用层；真实 Unix `AF_UNIX` bootstrap/lifecycle/stale-cleanup 证据在 native Windows goal 中是 compatibility residual。若 QA 只缺这类 Unix-only 真实主机证据，且 `approval-report.md` 已记录 owner 接受该目标平台证据边界，driver 应继续推进到 Windows TCP loopback feature，而不是要求 Unix/WSL/CI 证据作为恢复条件。
+
+相反，native Windows 上会阻断 collection、start、ping、ask、kill 或 full-chain smoke 的问题仍是目标平台核心阻塞。例如 `mobile_gateway.terminal -> import fcntl` 这类 Windows collection baseline 不能被 `AF_UNIX` residual policy 自动豁免；必须修复、隔离为 Windows-safe import，或由 owner 单独记录可接受缺口。
+
 ## 4. 启动标记
 
 ```text

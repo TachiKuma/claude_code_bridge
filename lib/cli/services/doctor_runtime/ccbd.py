@@ -5,6 +5,7 @@ from pathlib import Path
 import shlex
 import tempfile
 
+from ccbd.control_plane_transport.endpoint import endpoint_from_legacy_socket_path, endpoint_from_record, endpoint_to_record
 from terminal_runtime.tmux import tmux_base
 from .stores import report_summary_fields, safe_report_load
 
@@ -20,6 +21,7 @@ def ccbd_summary(*, local, stores: dict[str, object], errors: list[str], remote:
         'implementation_reason': implementation['reason'],
         'implementation_cmdline': implementation['cmdline'],
         'socket_path': local.socket_path,
+        'control_plane_endpoint': _control_plane_endpoint_payload(local, remote),
         'project_anchor_path': local.project_anchor_path,
         'runtime_state_root': local.runtime_state_root,
         'runtime_root_kind': local.runtime_root_kind,
@@ -181,6 +183,25 @@ def _tmux_start_server_command(socket_path: object) -> str | None:
     if not text:
         return None
     return shlex.join([*tmux_base(socket_path=text), 'start-server'])
+
+
+def _control_plane_endpoint_payload(local, remote: dict | None) -> dict | None:
+    if isinstance(remote, dict):
+        endpoint = remote.get('control_plane_endpoint')
+        if isinstance(endpoint, dict):
+            try:
+                return endpoint_to_record(endpoint_from_record(endpoint))
+            except ValueError:
+                pass
+        if remote.get('socket_path'):
+            try:
+                return endpoint_to_record(endpoint_from_legacy_socket_path(remote['socket_path']))
+            except ValueError:
+                pass
+    socket_path = getattr(local, 'effective_socket_path', None) or getattr(local, 'socket_path', None)
+    if not socket_path:
+        return None
+    return endpoint_to_record(endpoint_from_legacy_socket_path(socket_path))
 
 
 def _remote_metric(remote: dict | None, key: str) -> float | None:

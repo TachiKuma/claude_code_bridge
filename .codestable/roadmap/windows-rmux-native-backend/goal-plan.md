@@ -44,6 +44,7 @@ created: 2026-07-20
 - Opt-in backend resolver diagnostics proving explicit Rmux selection and fail-fast behavior.
 - Existing tmux path regression remains green on Linux/macOS/WSL.
 - Native Windows ccb -> ccbd -> rmux start/ping/ask/kill transcript, with probe_bypass=false.
+- Native Windows control-plane evidence is the milestone core: `ccbd-windows-tcp-loopback-transport` and `ccbd-windows-full-chain-smoke` must prove Windows behavior; Unix-only `AF_UNIX` real-host evidence is compatibility residual for this milestone when unavailable on the current host.
 - Windows validation matrix/report distinguishes fake, provider blackbox, true-host and manual transcript lanes.
 - Packaging/docs contracts explicitly state Windows Rmux support level and installation boundaries.
 
@@ -51,6 +52,7 @@ created: 2026-07-20
 
 - Rmux capability gate and route approval remain valid inputs for implementation.
 - Native Windows true-host evidence may require manual or focused runner outside default CI.
+- The current native Windows host is expected not to expose `socket.AF_UNIX`; goal recovery must not require WSL/Unix evidence for the Windows milestone unless the specific feature is claiming Unix compatibility as its own core deliverable.
 - Provider credentials may be unavailable; provider failure must be classified separately from system failure.
 - .codestable changes are local/TachiKuma-tracked and are not included in upstream SeemSeam scoped submissions unless explicitly requested.
 
@@ -76,6 +78,7 @@ Feature-level commands are defined in each feature checklist and mirrored in goa
 - Gate Policy: scope-gate, dod-runner, vidence-pack, review/QA/acceptance gates and final consistency gate must pass; missing CodeStable tools require runtime repair, not shim creation.
 - Provider Policy: archguard/meta-cc/provider helpers unavailable is recorded as warning/fallback and must be explained by review/QA/audit; unexplained core provider risk can block.
 - Verification Recovery: missing pytest/npm/runner dependencies may be installed or restored through normal dependency/config paths only; do not create same-name shim tools or fake validation output.
+- Evidence Recovery: Unix-only `AF_UNIX` skipped tests are not a Windows milestone recovery blocker after the native Windows evidence decision is recorded; Windows collection/import blockers such as `mobile_gateway.terminal -> import fcntl` remain blockers until fixed or separately accepted.
 
 ## 8. Final Audit Inputs
 

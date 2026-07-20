@@ -1,7 +1,7 @@
 roadmap: windows-rmux-native-backend
 status: handoff
-handoff_reason: CommitDeferredByTurnConstraint
-handoff_next: Commit the accepted rmux-capability-gate scope locally or explicitly resume without commit, then rerun workflow-next from current_feature_index=1; rmux-route-approval must consume blocking_gaps=7 when reached.
+handoff_reason: "CoreEvidenceUnavailable: QA blocked for ccbd-control-plane-transport-seam because current Windows host cannot execute real AF_UNIX bootstrap/lifecycle/stale-cleanup tests and CMD-005 is blocked by existing mobile_gateway.terminal -> fcntl collection baseline."
+handoff_next: "Owner decision recorded: native Windows is the target platform, so real Unix AF_UNIX host evidence is compatibility residual rather than a Windows milestone core gate. Rerun/repair QA for ccbd-control-plane-transport-seam under this target-platform evidence policy, keep status blocked until Windows CMD-005 collection blocker (mobile_gateway.terminal -> import fcntl) is fixed or separately accepted, then continue to ccbd-windows-tcp-loopback-transport for native control-plane proof."
 baseline_ref: eb273de8e1c1839451f3ff6cc583672187bd75d9
 driver_kind: host-agent
 driver_id: 019f7ee1-d690-7e12-8dba-f268635263b7
@@ -31,7 +31,7 @@ features:
     review: .codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-review.md
     qa: .codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-qa.md
     acceptance: .codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-acceptance.md
-    status: pending
+    status: implementing
   - slug: accelerator-transport-windows-guard
     roadmap_item: accelerator-transport-windows-guard
     feature_dir: .codestable/features/2026-07-20-accelerator-transport-windows-guard

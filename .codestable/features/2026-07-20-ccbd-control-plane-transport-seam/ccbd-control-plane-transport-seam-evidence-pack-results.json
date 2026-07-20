@@ -1,0 +1,40 @@
+{
+  "gate_id": "evidence-pack",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "out": ".codestable\\features\\2026-07-20-ccbd-control-plane-transport-seam\\ccbd-control-plane-transport-seam-evidence-pack.md",
+      "providers": {
+        "archguard": {
+          "status": "skipped",
+          "reason": "archguard collection disabled",
+          "warnings": []
+        },
+        "meta_cc": {
+          "status": "skipped",
+          "reason": "meta-cc collection disabled",
+          "warnings": []
+        }
+      }
+    }
+  ],
+  "providers": {},
+  "feature": "2026-07-20-ccbd-control-plane-transport-seam",
+  "inputs": {
+    "design": ".codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-design.md",
+    "checklist": ".codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-checklist.yaml",
+    "out": ".codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-evidence-pack.md",
+    "dod_results": ".codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-dod-results.json",
+    "gate_results": ".codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-scope-gate.json"
+  },
+  "input_digests": {
+    "design": "b13499025ccba42a323ee4cc371acb2d587ad8ab887c3cd9b779dce10a9cde58",
+    "checklist": "103576d89c4529f200048372c5115e06082c1493f9f701bf02d0a6a5d982efed",
+    "dod_results": "5ad5c483ec92b4f928ce304f79d521a9be99e45d4442410ea92dc68ff85efe68",
+    "gate_results": "69bf839ee8e63083bd737255d8bbcfa4cb93ec4a077ccfc1c5e571f7dab36f6d",
+    "out": "a7550b4f98a6d2db7032d510c6cd789b7d8da2c3d43641fb829bd34ea00ca1b2"
+  }
+}

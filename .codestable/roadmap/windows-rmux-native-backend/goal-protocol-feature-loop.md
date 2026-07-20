@@ -101,6 +101,7 @@ CS_STAGE_START feature=<feature-slug> stage=implementation skill=cs-feat
 - 覆盖 design 关键场景、DoD commands、review QA focus、evidence pack residual risks。
 - 功能性核心路径必须有实际运行证据。
 - 非功能性 feature 必须写明替代证据理由。
+- 按 `goal-protocol-gates.md#1.1` 区分 target-platform core evidence 与 compatibility evidence。native Windows goal 中，真实 Unix `AF_UNIX` tests skipped 只能作为 compatibility residual；不得把它作为恢复 goal 的唯一条件。Windows import / collection / runtime blocker 仍按 target-platform core blocker 处理。
 
 `advance QA (Failed _)` 返回 `Remediate Implementation Review` 时打印 `CS_ROADMAP_GOAL_QA_FIX`；
 `Awaiting` 只等待已启动工作，`NeedsHuman` 请求缺失输入，`Blocked` 直接持久化 handoff；三者都不进入 review-fix 循环。
@@ -115,6 +116,7 @@ CS_STAGE_START feature=<feature-slug> stage=implementation skill=cs-feat
 - 确认 review passed 且无 unresolved blocking。
 - 确认 QA passed 且无 unresolved failed / blocked。
 - 复核 evidence pack、DoD Results、Gate Results。
+- 若 QA 曾因 non-target-platform compatibility evidence 不足而 blocked，必须先重跑或修订 QA verdict，使其显式引用 owner evidence decision 并把 Unix-only `AF_UNIX` 真实主机缺口降为 residual；acceptance 不得直接消费 `status=blocked` 的 QA。
 - 填 `{feature-slug}-acceptance.md`。
 - 把 checklist checks 从 `pending` 改为 `passed`。
 - 按 design 第 4 节处理 reference / architecture / requirement 回写。

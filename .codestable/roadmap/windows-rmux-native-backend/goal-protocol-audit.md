@@ -113,6 +113,7 @@ round: 1
 - final aggregate commands
 - E/C/H summary
 - H-only core checks
+- target-platform residual disposition：明确列出 native Windows core 缺口与 compatibility residual。真实 Unix `AF_UNIX` 证据缺失属于 compatibility residual，不得与 Windows TCP loopback / full-chain smoke 缺口混为一类。
 
 ## 6. 完成与学习反思
 

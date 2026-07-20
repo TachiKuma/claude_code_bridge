@@ -6,8 +6,13 @@ import socket
 
 import pytest
 
+import ccbd.control_plane_transport.unix as unix_transport
 from ccbd.socket_server import CcbdSocketServer
-import ccbd.socket_server_runtime.lifecycle as socket_lifecycle
+
+pytestmark = pytest.mark.skipif(
+    not hasattr(socket, 'AF_UNIX'),
+    reason='ccbd socket lifecycle exercises Unix socket semantics',
+)
 
 
 def test_listen_refuses_to_replace_non_socket_path(tmp_path: Path) -> None:
@@ -93,7 +98,7 @@ def test_listen_failure_closes_fd_and_unlinks_only_its_bound_inode(
         def close(self) -> None:
             self.inner.close()
 
-    monkeypatch.setattr(socket_lifecycle.socket, 'socket', FailingSocket)
+    monkeypatch.setattr(unix_transport.socket, 'socket', FailingSocket)
     server = CcbdSocketServer(socket_path)
 
     with pytest.raises(OSError, match=f'planned {failure_stage} failure'):
