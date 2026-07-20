@@ -7,8 +7,8 @@ approvals:
   roadmap-review: approved
   roadmap-plan: approved
   all-child-designs: approved
-  goal-acceptance: pending
-  goal-commits: pending
+  goal-acceptance: approved
+  goal-commits: approved
 approval_groups:
   roadmap-execution:
     status: approved
@@ -22,11 +22,11 @@ approval_groups:
     decisions:
       all-child-designs: approved
   goal-execution:
-    status: pending
-    confirmation_id: ""
+    status: approved
+    confirmation_id: goal-execution-2026-07-20-windows-rmux-native-backend
     decisions:
-      goal-acceptance: pending
-      goal-commits: pending
+      - goal-acceptance
+      - goal-commits
 created_at: 2026-07-19
 ---
 
@@ -36,15 +36,11 @@ created_at: 2026-07-19
 
 - 2026-07-19: Owner stated "windows-rmux-native-backend的review通过，开始执行cs-epic". Recorded as approval to proceed with the epic despite Round 6 important findings being carried as residual risk.
 - 2026-07-20: Owner stated "确认一批准所有 child designs". Recorded as approval of all passed child feature designs under `windows-rmux-native-backend`; each child design frontmatter was updated to `status: approved`.
+- 2026-07-20: Owner stated "确认授权 Goal execution". Recorded as approval of `approval_groups.goal-execution` with confirmation id `goal-execution-2026-07-20-windows-rmux-native-backend`, covering `goal-acceptance` and `goal-commits`.
 
 ## Decision Needed
 
-Goal execution authorization is pending.
-
-Approve or reject launching the generated Goal execution package:
-
-- `goal-acceptance`: allows the Goal driver to complete feature acceptance when evidence passes.
-- `goal-commits`: allows the Goal driver to make automatic per-feature scoped commits after each feature is accepted.
+none
 
 ## Why Now
 
