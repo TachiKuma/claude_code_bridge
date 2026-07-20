@@ -5,7 +5,7 @@ requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: rmux-daemon-ownership-boundary
 execution_lane: goal
-status: draft
+status: approved
 summary: 定义 Rmux daemon discovery、start、health、crash、cleanup 的 ownership 边界和 diagnostics evidence
 tags: [rmux, daemon, ownership, diagnostics, mux-backend, ccbd, epic-child]
 ---

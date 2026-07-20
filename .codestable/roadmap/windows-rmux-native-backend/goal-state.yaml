@@ -1,0 +1,203 @@
+roadmap: windows-rmux-native-backend
+status: awaiting-authorization
+baseline_ref: eb273de8e1c1839451f3ff6cc583672187bd75d9
+driver_kind: none
+driver_id: ""
+execution_confirmation_id: ""
+acceptance_authorization: pending
+acceptance_authorization_ref: approval-report.md#goal-acceptance
+commit_authorization: pending
+commit_authorization_ref: approval-report.md#goal-commits
+handoff_reason: ""
+handoff_next: ""
+current_feature_index: 0
+features:
+  - slug: rmux-capability-gate
+    roadmap_item: rmux-capability-gate
+    feature_dir: .codestable/features/2026-07-06-rmux-capability-gate
+    design: .codestable/features/2026-07-06-rmux-capability-gate/rmux-capability-gate-design.md
+    checklist: .codestable/features/2026-07-06-rmux-capability-gate/rmux-capability-gate-checklist.yaml
+    review: .codestable/features/2026-07-06-rmux-capability-gate/rmux-capability-gate-review.md
+    qa: .codestable/features/2026-07-06-rmux-capability-gate/rmux-capability-gate-qa.md
+    acceptance: .codestable/features/2026-07-06-rmux-capability-gate/rmux-capability-gate-acceptance.md
+    status: pending
+  - slug: ccbd-control-plane-transport-seam
+    roadmap_item: ccbd-control-plane-transport-seam
+    feature_dir: .codestable/features/2026-07-20-ccbd-control-plane-transport-seam
+    design: .codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-design.md
+    checklist: .codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-checklist.yaml
+    review: .codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-review.md
+    qa: .codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-qa.md
+    acceptance: .codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-acceptance.md
+    status: pending
+  - slug: accelerator-transport-windows-guard
+    roadmap_item: accelerator-transport-windows-guard
+    feature_dir: .codestable/features/2026-07-20-accelerator-transport-windows-guard
+    design: .codestable/features/2026-07-20-accelerator-transport-windows-guard/accelerator-transport-windows-guard-design.md
+    checklist: .codestable/features/2026-07-20-accelerator-transport-windows-guard/accelerator-transport-windows-guard-checklist.yaml
+    review: .codestable/features/2026-07-20-accelerator-transport-windows-guard/accelerator-transport-windows-guard-review.md
+    qa: .codestable/features/2026-07-20-accelerator-transport-windows-guard/accelerator-transport-windows-guard-qa.md
+    acceptance: .codestable/features/2026-07-20-accelerator-transport-windows-guard/accelerator-transport-windows-guard-acceptance.md
+    status: pending
+  - slug: ccbd-windows-process-liveness
+    roadmap_item: ccbd-windows-process-liveness
+    feature_dir: .codestable/features/2026-07-20-ccbd-windows-process-liveness
+    design: .codestable/features/2026-07-20-ccbd-windows-process-liveness/ccbd-windows-process-liveness-design.md
+    checklist: .codestable/features/2026-07-20-ccbd-windows-process-liveness/ccbd-windows-process-liveness-checklist.yaml
+    review: .codestable/features/2026-07-20-ccbd-windows-process-liveness/ccbd-windows-process-liveness-review.md
+    qa: .codestable/features/2026-07-20-ccbd-windows-process-liveness/ccbd-windows-process-liveness-qa.md
+    acceptance: .codestable/features/2026-07-20-ccbd-windows-process-liveness/ccbd-windows-process-liveness-acceptance.md
+    status: pending
+  - slug: rmux-route-approval
+    roadmap_item: rmux-route-approval
+    feature_dir: .codestable/features/2026-07-19-rmux-route-approval
+    design: .codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-design.md
+    checklist: .codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-checklist.yaml
+    review: .codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-review.md
+    qa: .codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-qa.md
+    acceptance: .codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-acceptance.md
+    status: pending
+  - slug: ccbd-windows-tcp-loopback-transport
+    roadmap_item: ccbd-windows-tcp-loopback-transport
+    feature_dir: .codestable/features/2026-07-20-ccbd-windows-tcp-loopback-transport
+    design: .codestable/features/2026-07-20-ccbd-windows-tcp-loopback-transport/ccbd-windows-tcp-loopback-transport-design.md
+    checklist: .codestable/features/2026-07-20-ccbd-windows-tcp-loopback-transport/ccbd-windows-tcp-loopback-transport-checklist.yaml
+    review: .codestable/features/2026-07-20-ccbd-windows-tcp-loopback-transport/ccbd-windows-tcp-loopback-transport-review.md
+    qa: .codestable/features/2026-07-20-ccbd-windows-tcp-loopback-transport/ccbd-windows-tcp-loopback-transport-qa.md
+    acceptance: .codestable/features/2026-07-20-ccbd-windows-tcp-loopback-transport/ccbd-windows-tcp-loopback-transport-acceptance.md
+    status: pending
+  - slug: backend-resolver-opt-in-contract
+    roadmap_item: backend-resolver-opt-in-contract
+    feature_dir: .codestable/features/2026-07-19-backend-resolver-opt-in-contract
+    design: .codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-design.md
+    checklist: .codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-checklist.yaml
+    review: .codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-review.md
+    qa: .codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-qa.md
+    acceptance: .codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-acceptance.md
+    status: pending
+  - slug: mux-backend-contract
+    roadmap_item: mux-backend-contract
+    feature_dir: .codestable/features/2026-07-19-mux-backend-contract
+    design: .codestable/features/2026-07-19-mux-backend-contract/mux-backend-contract-design.md
+    checklist: .codestable/features/2026-07-19-mux-backend-contract/mux-backend-contract-checklist.yaml
+    review: .codestable/features/2026-07-19-mux-backend-contract/mux-backend-contract-review.md
+    qa: .codestable/features/2026-07-19-mux-backend-contract/mux-backend-contract-qa.md
+    acceptance: .codestable/features/2026-07-19-mux-backend-contract/mux-backend-contract-acceptance.md
+    status: pending
+  - slug: tmux-backend-contract-adapter
+    roadmap_item: tmux-backend-contract-adapter
+    feature_dir: .codestable/features/2026-07-19-tmux-backend-contract-adapter
+    design: .codestable/features/2026-07-19-tmux-backend-contract-adapter/tmux-backend-contract-adapter-design.md
+    checklist: .codestable/features/2026-07-19-tmux-backend-contract-adapter/tmux-backend-contract-adapter-checklist.yaml
+    review: .codestable/features/2026-07-19-tmux-backend-contract-adapter/tmux-backend-contract-adapter-review.md
+    qa: .codestable/features/2026-07-19-tmux-backend-contract-adapter/tmux-backend-contract-adapter-qa.md
+    acceptance: .codestable/features/2026-07-19-tmux-backend-contract-adapter/tmux-backend-contract-adapter-acceptance.md
+    status: pending
+  - slug: windows-namespace-ipc-schema
+    roadmap_item: windows-namespace-ipc-schema
+    feature_dir: .codestable/features/2026-07-19-windows-namespace-ipc-schema
+    design: .codestable/features/2026-07-19-windows-namespace-ipc-schema/windows-namespace-ipc-schema-design.md
+    checklist: .codestable/features/2026-07-19-windows-namespace-ipc-schema/windows-namespace-ipc-schema-checklist.yaml
+    review: .codestable/features/2026-07-19-windows-namespace-ipc-schema/windows-namespace-ipc-schema-review.md
+    qa: .codestable/features/2026-07-19-windows-namespace-ipc-schema/windows-namespace-ipc-schema-qa.md
+    acceptance: .codestable/features/2026-07-19-windows-namespace-ipc-schema/windows-namespace-ipc-schema-acceptance.md
+    status: pending
+  - slug: windows-shell-log-builder
+    roadmap_item: windows-shell-log-builder
+    feature_dir: .codestable/features/2026-07-20-windows-shell-log-builder
+    design: .codestable/features/2026-07-20-windows-shell-log-builder/windows-shell-log-builder-design.md
+    checklist: .codestable/features/2026-07-20-windows-shell-log-builder/windows-shell-log-builder-checklist.yaml
+    review: .codestable/features/2026-07-20-windows-shell-log-builder/windows-shell-log-builder-review.md
+    qa: .codestable/features/2026-07-20-windows-shell-log-builder/windows-shell-log-builder-qa.md
+    acceptance: .codestable/features/2026-07-20-windows-shell-log-builder/windows-shell-log-builder-acceptance.md
+    status: pending
+  - slug: windows-job-object-runtime-evidence
+    roadmap_item: windows-job-object-runtime-evidence
+    feature_dir: .codestable/features/2026-07-20-windows-job-object-runtime-evidence
+    design: .codestable/features/2026-07-20-windows-job-object-runtime-evidence/windows-job-object-runtime-evidence-design.md
+    checklist: .codestable/features/2026-07-20-windows-job-object-runtime-evidence/windows-job-object-runtime-evidence-checklist.yaml
+    review: .codestable/features/2026-07-20-windows-job-object-runtime-evidence/windows-job-object-runtime-evidence-review.md
+    qa: .codestable/features/2026-07-20-windows-job-object-runtime-evidence/windows-job-object-runtime-evidence-qa.md
+    acceptance: .codestable/features/2026-07-20-windows-job-object-runtime-evidence/windows-job-object-runtime-evidence-acceptance.md
+    status: pending
+  - slug: provider-runtime-backend-session-contract
+    roadmap_item: provider-runtime-backend-session-contract
+    feature_dir: .codestable/features/2026-07-20-provider-runtime-backend-session-contract
+    design: .codestable/features/2026-07-20-provider-runtime-backend-session-contract/provider-runtime-backend-session-contract-design.md
+    checklist: .codestable/features/2026-07-20-provider-runtime-backend-session-contract/provider-runtime-backend-session-contract-checklist.yaml
+    review: .codestable/features/2026-07-20-provider-runtime-backend-session-contract/provider-runtime-backend-session-contract-review.md
+    qa: .codestable/features/2026-07-20-provider-runtime-backend-session-contract/provider-runtime-backend-session-contract-qa.md
+    acceptance: .codestable/features/2026-07-20-provider-runtime-backend-session-contract/provider-runtime-backend-session-contract-acceptance.md
+    status: pending
+  - slug: rmux-daemon-ownership-boundary
+    roadmap_item: rmux-daemon-ownership-boundary
+    feature_dir: .codestable/features/2026-07-20-rmux-daemon-ownership-boundary
+    design: .codestable/features/2026-07-20-rmux-daemon-ownership-boundary/rmux-daemon-ownership-boundary-design.md
+    checklist: .codestable/features/2026-07-20-rmux-daemon-ownership-boundary/rmux-daemon-ownership-boundary-checklist.yaml
+    review: .codestable/features/2026-07-20-rmux-daemon-ownership-boundary/rmux-daemon-ownership-boundary-review.md
+    qa: .codestable/features/2026-07-20-rmux-daemon-ownership-boundary/rmux-daemon-ownership-boundary-qa.md
+    acceptance: .codestable/features/2026-07-20-rmux-daemon-ownership-boundary/rmux-daemon-ownership-boundary-acceptance.md
+    status: pending
+  - slug: rmux-backend-core
+    roadmap_item: rmux-backend-core
+    feature_dir: .codestable/features/2026-07-20-rmux-backend-core
+    design: .codestable/features/2026-07-20-rmux-backend-core/rmux-backend-core-design.md
+    checklist: .codestable/features/2026-07-20-rmux-backend-core/rmux-backend-core-checklist.yaml
+    review: .codestable/features/2026-07-20-rmux-backend-core/rmux-backend-core-review.md
+    qa: .codestable/features/2026-07-20-rmux-backend-core/rmux-backend-core-qa.md
+    acceptance: .codestable/features/2026-07-20-rmux-backend-core/rmux-backend-core-acceptance.md
+    status: pending
+  - slug: rmux-send-capture-logging
+    roadmap_item: rmux-send-capture-logging
+    feature_dir: .codestable/features/2026-07-20-rmux-send-capture-logging
+    design: .codestable/features/2026-07-20-rmux-send-capture-logging/rmux-send-capture-logging-design.md
+    checklist: .codestable/features/2026-07-20-rmux-send-capture-logging/rmux-send-capture-logging-checklist.yaml
+    review: .codestable/features/2026-07-20-rmux-send-capture-logging/rmux-send-capture-logging-review.md
+    qa: .codestable/features/2026-07-20-rmux-send-capture-logging/rmux-send-capture-logging-qa.md
+    acceptance: .codestable/features/2026-07-20-rmux-send-capture-logging/rmux-send-capture-logging-acceptance.md
+    status: pending
+  - slug: ccbd-rmux-namespace-lifecycle
+    roadmap_item: ccbd-rmux-namespace-lifecycle
+    feature_dir: .codestable/features/2026-07-20-ccbd-rmux-namespace-lifecycle
+    design: .codestable/features/2026-07-20-ccbd-rmux-namespace-lifecycle/ccbd-rmux-namespace-lifecycle-design.md
+    checklist: .codestable/features/2026-07-20-ccbd-rmux-namespace-lifecycle/ccbd-rmux-namespace-lifecycle-checklist.yaml
+    review: .codestable/features/2026-07-20-ccbd-rmux-namespace-lifecycle/ccbd-rmux-namespace-lifecycle-review.md
+    qa: .codestable/features/2026-07-20-ccbd-rmux-namespace-lifecycle/ccbd-rmux-namespace-lifecycle-qa.md
+    acceptance: .codestable/features/2026-07-20-ccbd-rmux-namespace-lifecycle/ccbd-rmux-namespace-lifecycle-acceptance.md
+    status: pending
+  - slug: rmux-supervision-recovery
+    roadmap_item: rmux-supervision-recovery
+    feature_dir: .codestable/features/2026-07-20-rmux-supervision-recovery
+    design: .codestable/features/2026-07-20-rmux-supervision-recovery/rmux-supervision-recovery-design.md
+    checklist: .codestable/features/2026-07-20-rmux-supervision-recovery/rmux-supervision-recovery-checklist.yaml
+    review: .codestable/features/2026-07-20-rmux-supervision-recovery/rmux-supervision-recovery-review.md
+    qa: .codestable/features/2026-07-20-rmux-supervision-recovery/rmux-supervision-recovery-qa.md
+    acceptance: .codestable/features/2026-07-20-rmux-supervision-recovery/rmux-supervision-recovery-acceptance.md
+    status: pending
+  - slug: ccbd-windows-full-chain-smoke
+    roadmap_item: ccbd-windows-full-chain-smoke
+    feature_dir: .codestable/features/2026-07-20-ccbd-windows-full-chain-smoke
+    design: .codestable/features/2026-07-20-ccbd-windows-full-chain-smoke/ccbd-windows-full-chain-smoke-design.md
+    checklist: .codestable/features/2026-07-20-ccbd-windows-full-chain-smoke/ccbd-windows-full-chain-smoke-checklist.yaml
+    review: .codestable/features/2026-07-20-ccbd-windows-full-chain-smoke/ccbd-windows-full-chain-smoke-review.md
+    qa: .codestable/features/2026-07-20-ccbd-windows-full-chain-smoke/ccbd-windows-full-chain-smoke-qa.md
+    acceptance: .codestable/features/2026-07-20-ccbd-windows-full-chain-smoke/ccbd-windows-full-chain-smoke-acceptance.md
+    status: pending
+  - slug: rmux-windows-validation-matrix
+    roadmap_item: rmux-windows-validation-matrix
+    feature_dir: .codestable/features/2026-07-20-rmux-windows-validation-matrix
+    design: .codestable/features/2026-07-20-rmux-windows-validation-matrix/rmux-windows-validation-matrix-design.md
+    checklist: .codestable/features/2026-07-20-rmux-windows-validation-matrix/rmux-windows-validation-matrix-checklist.yaml
+    review: .codestable/features/2026-07-20-rmux-windows-validation-matrix/rmux-windows-validation-matrix-review.md
+    qa: .codestable/features/2026-07-20-rmux-windows-validation-matrix/rmux-windows-validation-matrix-qa.md
+    acceptance: .codestable/features/2026-07-20-rmux-windows-validation-matrix/rmux-windows-validation-matrix-acceptance.md
+    status: pending
+  - slug: rmux-packaging-docs-contracts
+    roadmap_item: rmux-packaging-docs-contracts
+    feature_dir: .codestable/features/2026-07-20-rmux-packaging-docs-contracts
+    design: .codestable/features/2026-07-20-rmux-packaging-docs-contracts/rmux-packaging-docs-contracts-design.md
+    checklist: .codestable/features/2026-07-20-rmux-packaging-docs-contracts/rmux-packaging-docs-contracts-checklist.yaml
+    review: .codestable/features/2026-07-20-rmux-packaging-docs-contracts/rmux-packaging-docs-contracts-review.md
+    qa: .codestable/features/2026-07-20-rmux-packaging-docs-contracts/rmux-packaging-docs-contracts-qa.md
+    acceptance: .codestable/features/2026-07-20-rmux-packaging-docs-contracts/rmux-packaging-docs-contracts-acceptance.md
+    status: pending

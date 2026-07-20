@@ -5,7 +5,7 @@ requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: ccbd-windows-process-liveness
 execution_lane: goal
-status: draft
+status: approved
 summary: 为 ccbd 控制面提供无副作用的跨平台 pid 存活判定，避免 Windows 上 os.kill(pid, 0) 误判或投递 Ctrl-C
 tags: [ccbd, windows, process-liveness, keeper, health, ownership, epic-child]
 ---

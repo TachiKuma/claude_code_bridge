@@ -5,7 +5,7 @@ requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: rmux-windows-validation-matrix
 execution_lane: goal
-status: draft
+status: approved
 summary: 建立 Windows Rmux 的自动化与真机验证矩阵、证据 schema 和可重复 runbook，覆盖多 agent、ask、kill、restart、多项目场景
 tags: [windows, rmux, validation, matrix, runbook, provider-blackbox, epic-child]
 ---

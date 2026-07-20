@@ -4,7 +4,7 @@ feature: 2026-07-19-backend-resolver-opt-in-contract
 requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: backend-resolver-opt-in-contract
-status: draft
+status: approved
 execution_lane: goal
 summary: 定义 mux backend opt-in、selection result、fail-fast 与 diagnostics 契约
 tags: [windows, rmux, backend-resolver, config, diagnostics, epic-child]

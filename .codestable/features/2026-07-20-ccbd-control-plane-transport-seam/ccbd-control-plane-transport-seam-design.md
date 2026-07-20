@@ -5,7 +5,7 @@ requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: ccbd-control-plane-transport-seam
 execution_lane: goal
-status: draft
+status: approved
 summary: 为 ccbd 控制面 RPC 抽出 transport seam，Unix 保持 AF_UNIX 行为不变，并提供 fake transport 测试替身
 tags: [ccbd, control-plane, transport, af-unix, windows, rpc, epic-child]
 ---

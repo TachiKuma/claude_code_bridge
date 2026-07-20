@@ -5,7 +5,7 @@ requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: ccbd-windows-full-chain-smoke
 execution_lane: goal
-status: draft
+status: approved
 summary: 在 native Windows 真机用命令 transcript 证明 ccb→ccbd→rmux 的 start、ask、kill 最小全链路跑通，且不经 probe 旁路
 tags: [ccbd, rmux, windows, smoke, true-host, transcript, epic-child]
 ---

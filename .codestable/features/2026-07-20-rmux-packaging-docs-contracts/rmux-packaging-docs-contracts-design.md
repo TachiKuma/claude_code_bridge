@@ -5,7 +5,7 @@ requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: rmux-packaging-docs-contracts
 execution_lane: goal
-status: draft
+status: approved
 summary: 将 Windows Rmux 后端的安装、打包、诊断和文档契约收口为明确 beta 或受支持入口，并区分 npm 与 install.ps1 路线
 tags: [rmux, windows, packaging, docs, installer, diagnostics, contract, epic-child]
 ---

@@ -4,7 +4,7 @@ feature: 2026-07-19-rmux-route-approval
 requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: rmux-route-approval
-status: draft
+status: approved
 execution_lane: goal
 summary: 基于 Rmux capability report 和 owner 决策落盘路线批准、暂停或重新选型结论
 tags: [windows, rmux, route-approval, capability-gate, epic-child]

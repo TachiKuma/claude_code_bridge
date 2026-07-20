@@ -6,6 +6,9 @@ reason: route-choice
 approvals:
   roadmap-review: approved
   roadmap-plan: approved
+  all-child-designs: approved
+  goal-acceptance: pending
+  goal-commits: pending
 approval_groups:
   roadmap-execution:
     status: approved
@@ -13,6 +16,17 @@ approval_groups:
     decisions:
       roadmap-review: approved
       roadmap-plan: approved
+  child-designs:
+    status: approved
+    confirmation_id: child-designs-2026-07-20-windows-rmux-native-backend
+    decisions:
+      all-child-designs: approved
+  goal-execution:
+    status: pending
+    confirmation_id: ""
+    decisions:
+      goal-acceptance: pending
+      goal-commits: pending
 created_at: 2026-07-19
 ---
 
@@ -21,14 +35,22 @@ created_at: 2026-07-19
 ## Decision History
 
 - 2026-07-19: Owner stated "windows-rmux-native-backend的review通过，开始执行cs-epic". Recorded as approval to proceed with the epic despite Round 6 important findings being carried as residual risk.
+- 2026-07-20: Owner stated "确认一批准所有 child designs". Recorded as approval of all passed child feature designs under `windows-rmux-native-backend`; each child design frontmatter was updated to `status: approved`.
 
 ## Decision Needed
 
-none
+Goal execution authorization is pending.
+
+Approve or reject launching the generated Goal execution package:
+
+- `goal-acceptance`: allows the Goal driver to complete feature acceptance when evidence passes.
+- `goal-commits`: allows the Goal driver to make automatic per-feature scoped commits after each feature is accepted.
 
 ## Why Now
 
 `cs-epic` requires a recoverable owner approval surface before moving from reviewed roadmap planning into execution-oriented child design / goal stages.
+
+All child designs are now approved and the goal package has been generated. The next step is a separate execution authorization because Goal mode can run implementation, review, QA, acceptance, and local scoped commits.
 
 ## Context
 
@@ -40,10 +62,14 @@ Roadmap review Round 6 recorded three important findings:
 
 This approval accepts proceeding while preserving those findings as required follow-up constraints for downstream feature design and implementation.
 
+All non-dropped child feature designs now have passed design-review reports. The 2026-07-20 child design approval is a batch approval for those designs only; it does not approve implementation results, QA, acceptance, goal execution, commits, push, merge, release, deploy, or production changes.
+
 ## Options
 
 - Approved: proceed with `cs-epic` for `windows-rmux-native-backend`, carrying Round 6 important findings as residual risk and downstream hard constraints.
 - Rejected: stop execution and return to planning revision before any child design or goal work.
+- Approve Goal execution: authorize both `goal-acceptance` and `goal-commits` for the generated package.
+- Reject Goal execution: keep the package as handoff material and do not dispatch a Goal driver.
 
 ## Recommendation
 
@@ -58,6 +84,10 @@ Approved, because the findings are actionable constraints that can be enforced i
 
 This approval does not authorize git commit, git push, merge, release, deploy, publishing, production changes, or changing upstream repository state.
 
+The pending Goal execution authorization may authorize local per-feature scoped commits only if `goal-commits` is explicitly approved. It still does not authorize remote push, merge, publish, release, deploy, promotion, production cutover, or changing upstream repository state.
+
 ## After You Answer
 
 Proceed with `cs-epic` state restoration and continue to the next recoverable stage.
+
+If Goal execution is approved, atomically mark `approval_groups.goal-execution`, `goal-acceptance`, and `goal-commits` approved with the same confirmation id, then sync `goal-state.yaml` to `ready-to-dispatch`. If rejected, persist handoff and do not dispatch.

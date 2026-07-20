@@ -4,7 +4,7 @@ feature: 2026-07-19-windows-namespace-ipc-schema
 requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: windows-namespace-ipc-schema
-status: draft
+status: approved
 execution_lane: goal
 summary: 为 ccbd namespace state、ping/doctor payload 和 foreground attach 输入引入 mux-neutral canonical 字段并保留旧 alias
 tags: [windows, rmux, namespace, ipc, diagnostics, ccbd, epic-child]

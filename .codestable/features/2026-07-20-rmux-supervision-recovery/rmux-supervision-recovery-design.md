@@ -5,7 +5,7 @@ requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: rmux-supervision-recovery
 execution_lane: goal
-status: draft
+status: approved
 summary: 将 Rmux pane、provider process/job、namespace 和 daemon health 纳入 ccbd supervision/recovery，并提供可诊断的恢复或降级路径
 tags: [rmux, supervision, recovery, diagnostics, pane-health, process-health, daemon-health, epic-child]
 ---

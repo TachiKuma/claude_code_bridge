@@ -4,7 +4,7 @@ feature: 2026-07-19-mux-backend-contract
 requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: mux-backend-contract
-status: draft
+status: approved
 execution_lane: goal
 summary: 定义 backend-neutral mux 能力协议、引用类型、错误契约和 fake backend 测试替身
 tags: [windows, rmux, mux-backend, terminal-runtime, protocol, epic-child]

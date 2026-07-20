@@ -4,7 +4,7 @@ feature: 2026-07-19-tmux-backend-contract-adapter
 requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: tmux-backend-contract-adapter
-status: draft
+status: approved
 execution_lane: goal
 summary: 将现有 TmuxBackend 适配到 MuxBackend 契约并保持 tmux 平台行为不漂移
 tags: [windows, rmux, mux-backend, tmux, adapter, terminal-runtime, epic-child]

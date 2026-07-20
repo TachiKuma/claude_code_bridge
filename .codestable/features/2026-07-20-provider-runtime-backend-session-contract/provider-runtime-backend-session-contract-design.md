@@ -5,7 +5,7 @@ requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: provider-runtime-backend-session-contract
 execution_lane: goal
-status: draft
+status: approved
 summary: 将 provider launch、session payload、runtime health 和 provider env 迁移到 backend-neutral mux 字段，并保留旧 tmux 字段兼容别名
 tags: [provider-runtime, session-payload, mux-backend, tmux, rmux, diagnostics, epic-child]
 ---

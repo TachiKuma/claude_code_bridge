@@ -4,7 +4,7 @@ feature: 2026-07-20-windows-shell-log-builder
 requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: windows-shell-log-builder
-status: draft
+status: approved
 execution_lane: goal
 summary: 建立 Windows shell/log command builder，集中处理 provider 命令包装、pipe-pane 日志追加、stderr redirection 和默认 shell 诊断
 tags: [windows, rmux, shell, logging, terminal-runtime, tmux, epic-child]

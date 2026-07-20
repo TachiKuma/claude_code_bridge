@@ -5,7 +5,7 @@ requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: ccbd-windows-tcp-loopback-transport
 execution_lane: goal
-status: draft
+status: approved
 summary: 实现 Windows TCP loopback control-plane transport adapter，使用 same-user token 握手与端点 store，复用 ccbd JSON-line 帧和 handler
 tags: [ccbd, windows, tcp-loopback, control-plane, transport, token, epic-child]
 ---

@@ -5,7 +5,7 @@ requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: windows-job-object-runtime-evidence
 execution_lane: goal
-status: draft
+status: approved
 summary: 增加 Windows Job Object 进程树 evidence、runtime authority 字段和 kill/recovery 判定输入
 tags: [windows, rmux, job-object, runtime-evidence, ccbd, diagnostics, epic-child]
 ---

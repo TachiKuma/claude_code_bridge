@@ -5,7 +5,7 @@ requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: ccbd-rmux-namespace-lifecycle
 execution_lane: goal
-status: draft
+status: approved
 summary: 将 RmuxBackend 接入 ccbd project namespace ensure、layout projection、foreground attach 和 ccb kill，形成 native Windows 的第一条用户可见 Rmux 闭环
 tags: [ccbd, rmux, namespace, lifecycle, foreground-attach, kill, mux-backend, epic-child]
 ---

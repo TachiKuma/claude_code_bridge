@@ -5,7 +5,7 @@ requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: rmux-backend-core
 execution_lane: goal
-status: draft
+status: approved
 summary: 实现 Rmux namespace、session、window、pane、list、split、respawn、kill、title、user-option、style 的 backend core
 tags: [rmux, mux-backend, terminal-runtime, namespace, pane, layout, epic-child]
 ---

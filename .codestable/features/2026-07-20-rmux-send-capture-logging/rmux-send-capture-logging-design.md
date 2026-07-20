@@ -5,7 +5,7 @@ requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: rmux-send-capture-logging
 execution_lane: goal
-status: draft
+status: approved
 summary: 实现 Rmux send-text、send-key、capture-pane、pipe-pane/logging，并用 provider completion golden fixtures 证明 capture 格式保真
 tags: [rmux, mux-backend, pane-io, capture, logging, completion, epic-child]
 ---

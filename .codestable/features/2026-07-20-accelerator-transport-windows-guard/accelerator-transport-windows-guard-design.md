@@ -5,7 +5,7 @@ requirement:
 roadmap: windows-rmux-native-backend
 roadmap_item: accelerator-transport-windows-guard
 execution_lane: goal
-status: draft
+status: approved
 summary: 在 native Windows 无 AF_UNIX 时让 runtime accelerator 干净不可用，避免 codex ask/poll 路径抛 AttributeError 并回落普通 polling
 tags: [runtime-accelerator, codex, windows, af-unix, fallback, epic-child]
 ---
