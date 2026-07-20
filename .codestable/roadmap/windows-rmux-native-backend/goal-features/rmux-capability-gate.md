@@ -3,7 +3,7 @@ doc_type: roadmap-goal-feature
 roadmap: windows-rmux-native-backend
 roadmap_item: rmux-capability-gate
 feature: 2026-07-06-rmux-capability-gate
-status: pending
+status: accepted
 ---
 
 # rmux-capability-gate Goal Feature Spec
@@ -47,4 +47,5 @@ Windows Rmux capability probe 与 gap report
 ## 6. Evidence And Cleanliness
 
 - Evidence required: design/checklist/review/QA/acceptance, gate JSON, evidence pack, command outputs, roadmap/items writeback.
+- Accepted evidence: `.codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T094438Z-4728/capability-report.json` with `probe_status=completed` and `blocking_gaps=7`.
 - Cleanliness: no debug output, temporary TODO/FIXME/XXX, commented-out code, dead imports, same-name validation shims or unexplained scope drift.

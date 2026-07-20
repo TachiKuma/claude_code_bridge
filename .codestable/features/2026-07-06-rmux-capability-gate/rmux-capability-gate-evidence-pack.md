@@ -16,7 +16,7 @@ status: generated
 ```json
 {
   "gate_id": "dod-runner",
-  "stage": "implementation.before_review",
+  "stage": "acceptance",
   "status": "passed",
   "blocking": [],
   "warnings": [],
@@ -33,7 +33,7 @@ status: generated
     {
       "command": "python -m pytest -q test/test_rmux_capability_probe.py",
       "exit_code": 0,
-      "stdout": "..........                                                               [100%]\n10 passed in 1.65s\n",
+      "stdout": ".............                                                            [100%]\n13 passed in 1.98s\n",
       "stderr": "",
       "id": "CMD-002",
       "core": true,
@@ -42,7 +42,7 @@ status: generated
     {
       "command": "python \"scripts/probe_rmux_capability.py\" --work-root \".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate\"",
       "exit_code": 0,
-      "stdout": "{\"ok\": true, \"report\": \"E:\\\\GitHub\\u5f00\\u6e90\\u9879\\u76ee\\\\TachiKuma\\\\claude_code_bridge\\\\.codestable\\\\roadmap\\\\windows-rmux-native-backend\\\\drafts\\\\rmux-capability-gate\\\\run-20260720T064214Z-14748\\\\capability-report.json\", \"probe_status\": \"completed\", \"reason\": null, \"blocking_gaps\": 5}\n",
+      "stdout": "{\"ok\": true, \"report\": \"E:\\\\GitHub\\u5f00\\u6e90\\u9879\\u76ee\\\\TachiKuma\\\\claude_code_bridge\\\\.codestable\\\\roadmap\\\\windows-rmux-native-backend\\\\drafts\\\\rmux-capability-gate\\\\run-20260720T094438Z-4728\\\\capability-report.json\", \"probe_status\": \"completed\", \"reason\": null, \"blocking_gaps\": 7}\n",
       "stderr": "",
       "id": "CMD-003",
       "core": true,
@@ -51,7 +51,7 @@ status: generated
     {
       "command": "python -m pytest -q test/test_codex_pane_status_probe.py",
       "exit_code": 0,
-      "stdout": ".....................................                                    [100%]\n37 passed in 1.37s\n",
+      "stdout": ".....................................                                    [100%]\n37 passed in 1.39s\n",
       "stderr": "",
       "id": "CMD-004",
       "core": false,
@@ -64,7 +64,7 @@ status: generated
     "checklist": ".codestable/features/2026-07-06-rmux-capability-gate/rmux-capability-gate-checklist.yaml"
   },
   "input_digests": {
-    "checklist": "c1b785e5c0ec01f7c39d21a89cbe32bd739ee480e8aa003ae37773baee6cf220"
+    "checklist": "115ef76ac7523371b80e425062313eeab89c64a3d61ff0caeb5d3f515c809e79"
   }
 }
 ```
@@ -76,24 +76,25 @@ Extracted from checklist `dod.commands`; see DoD Results for command status.
 ## 4. Scope And Cleanliness
 
 Design bytes: 24127
-Checklist bytes: 6213
+Checklist bytes: 6191
 
 ## 5. Residual Risks
 
-- none
+- Latest capability report is `.codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T094438Z-4728/capability-report.json`.
+- The report intentionally records `probe_status=completed` with `blocking_gaps=7`; these gaps are downstream route-approval inputs, not evidence-pack failures.
 
 ## 6. Provider Signals
 
 ```json
 {
   "archguard": {
-    "status": "unavailable",
-    "reason": "archguard binary not found on PATH",
+    "status": "skipped",
+    "reason": "archguard collection disabled",
     "warnings": []
   },
   "meta_cc": {
-    "status": "unavailable",
-    "reason": "meta-cc summary not found; realtime session collection is out of scope",
+    "status": "skipped",
+    "reason": "meta-cc collection disabled",
     "warnings": []
   }
 }
@@ -110,173 +111,17 @@ Checklist bytes: 6213
   "warnings": [],
   "evidence": [
     {
-      "changed_files": [
-        ".codestable/features/2026-07-06-rmux-capability-gate/rmux-capability-gate-review.md",
-        ".codestable/roadmap/windows-rmux-native-backend/goal-state.yaml",
-        "scripts/probe_rmux_capability.py",
-        "test/test_rmux_capability_probe.py",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/cleanup/kill-session.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/attach-session.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/bind-key.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/capture-pane.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/delete-buffer.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/display-message.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/has-session.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/kill-server.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/kill-window.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/list-clients.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/list-panes.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/list-windows.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/load-buffer.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/move-pane.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/new-session.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/new-window.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/paste-buffer.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/pipe-pane.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/refresh-client.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/rename-window.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/resize-pane.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/respawn-pane.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/select-layout.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/select-window.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/send-keys.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/set-hook.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/set-option.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/set-window-option.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/split-window.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/start-server.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/commands/swap-pane.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/preflight/daemon-pre-state.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/semantics/attach_reattach.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/semantics/buffer_paste.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/semantics/capture_format_fidelity_for_provider_completion.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/semantics/capture_last_n_lines.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/semantics/ctrl_c_ctrl_d.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/semantics/daemon_crash_cleanup_evidence.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/semantics/kill_session_cleanup.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/semantics/layout_reflow.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/semantics/namespace_isolation.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/semantics/pane_death.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/semantics/pane_id_stability.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/semantics/provider_process_distinction_workaround_evidence.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/semantics/session_survival.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/semantics/user_options_title.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/artifacts/semantics/window_policy.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/capability-report.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063847Z-15112/work/buffer.txt",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/cleanup/kill-session.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/attach-session.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/bind-key.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/capture-pane.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/delete-buffer.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/display-message.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/has-session.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/kill-server.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/kill-window.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/list-clients.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/list-panes.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/list-windows.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/load-buffer.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/move-pane.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/new-session.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/new-window.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/paste-buffer.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/pipe-pane.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/refresh-client.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/rename-window.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/resize-pane.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/respawn-pane.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/select-layout.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/select-window.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/send-keys.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/set-hook.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/set-option.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/set-window-option.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/split-window.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/start-server.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/commands/swap-pane.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/preflight/daemon-pre-state.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/semantics/attach_reattach.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/semantics/buffer_paste.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/semantics/capture_format_fidelity_for_provider_completion.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/semantics/capture_last_n_lines.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/semantics/ctrl_c_ctrl_d.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/semantics/daemon_crash_cleanup_evidence.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/semantics/kill_session_cleanup.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/semantics/layout_reflow.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/semantics/namespace_isolation.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/semantics/pane_death.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/semantics/pane_id_stability.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/semantics/provider_process_distinction_workaround_evidence.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/semantics/session_survival.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/semantics/user_options_title.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/artifacts/semantics/window_policy.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/capability-report.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T063953Z-13452/work/buffer.txt",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/cleanup/kill-session.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/attach-session.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/bind-key.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/capture-pane.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/delete-buffer.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/display-message.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/has-session.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/kill-server.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/kill-window.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/list-clients.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/list-panes.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/list-windows.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/load-buffer.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/move-pane.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/new-session.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/new-window.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/paste-buffer.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/pipe-pane.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/refresh-client.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/rename-window.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/resize-pane.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/respawn-pane.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/select-layout.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/select-window.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/send-keys.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/set-hook.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/set-option.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/set-window-option.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/split-window.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/start-server.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/commands/swap-pane.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/preflight/daemon-pre-state.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/semantics/attach_reattach.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/semantics/buffer_paste.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/semantics/capture_format_fidelity_for_provider_completion.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/semantics/capture_last_n_lines.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/semantics/ctrl_c_ctrl_d.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/semantics/daemon_crash_cleanup_evidence.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/semantics/kill_session_cleanup.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/semantics/layout_reflow.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/semantics/namespace_isolation.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/semantics/pane_death.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/semantics/pane_id_stability.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/semantics/provider_process_distinction_workaround_evidence.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/semantics/session_survival.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/semantics/user_options_title.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/artifacts/semantics/window_policy.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/capability-report.json",
-        ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T064054Z-10824/work/buffer.txt"
-      ],
+      "changed_files": [],
       "ignored_machine_artifacts": [],
       "allowed_prefixes": [
         ".codestable/features/2026-07-06-rmux-capability-gate",
         "scripts/probe_rmux_capability.py",
         "test/test_rmux_capability_probe.py",
-        ".codestable/roadmap/windows-rmux-native-backend"
+        ".codestable/roadmap/windows-rmux-native-backend",
+        ".codestable/reference/agent-conventions.md"
       ]
     }
   ],
-  "providers": {},
-  "feature": "2026-07-06-rmux-capability-gate",
-  "inputs": {
-    "feature_dir": ".codestable/features/2026-07-06-rmux-capability-gate"
-  },
-  "input_digests": {}
+  "providers": {}
 }
 ```

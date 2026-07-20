@@ -766,9 +766,9 @@ class RpcTransportAuthError(Exception):
 1. **rmux-capability-gate** — 在原生 Windows 上建立 Rmux capability probe、报告格式和 blocking gap 判定。
    - 所属模块：Capability Gate
    - 依赖：无
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：最小闭环；不修改主链路；完成状态只表示 probe completed，不批准后续实现。
+   - 状态：accepted
+   - 对应 feature：`2026-07-06-rmux-capability-gate`
+   - 备注：最小闭环；不修改主链路；完成状态只表示 probe completed，不批准后续实现。最新验收 report 为 `.codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T094438Z-4728/capability-report.json`，`blocking_gaps=7`，后续 `rmux-route-approval` 必须消费。
 
 2. **rmux-route-approval** — 基于 capability report、blocking gaps、partial workaround 和用户/owner 判断，明确 Rmux 路线继续、暂停或重新选型。
    - 所属模块：Capability Gate

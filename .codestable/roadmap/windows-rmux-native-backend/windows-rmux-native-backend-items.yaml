@@ -5,7 +5,7 @@ items:
   - slug: rmux-capability-gate
     description: 在原生 Windows 上建立 Rmux capability probe、报告格式和 blocking gap 判定
     depends_on: []
-    status: in-progress
+    status: done
     feature: 2026-07-06-rmux-capability-gate
     minimal_loop: true
     notes: 不修改主链路；必须覆盖 resize-pane、select-layout、swap-pane、move-pane 等 layout/reflow/reload required 命令；完成状态只表示 probe completed

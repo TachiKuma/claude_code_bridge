@@ -1,0 +1,31 @@
+{
+  "assertions": [
+    {
+      "kind": "prerequisite",
+      "name": "load-buffer succeeded",
+      "passed": true
+    },
+    {
+      "kind": "prerequisite",
+      "name": "paste-buffer succeeded",
+      "passed": true
+    },
+    {
+      "kind": "prerequisite",
+      "name": "delete-buffer succeeded",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "capture contains the pasted probe marker",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "load-buffer",
+    "paste-buffer",
+    "delete-buffer"
+  ],
+  "notes": "",
+  "status": "supported"
+}

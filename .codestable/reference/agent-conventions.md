@@ -115,8 +115,10 @@ acceptance，并把证据写回仓库。
 Goal driver 需要可写、可观察，并且能在自身执行环境内再次启动独立 reviewer。宿主 adapter
 只要满足这些行为事实即可参与选择。可观察必须包含用户能直接打开或查看的 observation handle
 （例如窗口 / 面板 / URL / transcript ref）；只有内部 tool 返回的 id 或 nickname 不算可见。
-当前 Codex `multi_agent_v1.spawn_agent` 只有内部 agent id 时，不满足 `visibleHostDriver`，必须
-打印 `/goal` 让用户粘贴到新的可见会话执行。
+`canSpawnReviewer` 必须证明 driver 自身执行上下文里能再启动独立 reviewer，而不是只证明主线程能
+spawn agent。当前 Codex `multi_agent_v1.spawn_agent` 只有内部 agent id，或只在主线程可用而未证明
+driver 内也可用时，不满足 `visibleHostDriver && canSpawnReviewer`，必须打印 `/goal` 让用户粘贴到
+新的可见会话执行。
 
 ```haskell
 data DriverDecision = StartHostDriver | PrintGoal Command | DriverBlocked Reason
@@ -134,8 +136,9 @@ selectGoalDriver s e
 driver 在 implementation / review / QA / acceptance 普通 checkpoint 被截停。除 `/goal`
 指令本身外，只能附加查看方式、agent id 写回要求和 complete / handoff 标记说明。
 
-派发成功后立即把 driver 形态、标识和可观察句柄写回对应 `goal-state.yaml`（`driver_kind:
-host-agent`、`driver_id`、`driver_observation`）。重入时先读 goal-state：状态为 running 且该 driver 仍可见时，
+派发成功后立即把 driver 形态、标识、可观察句柄和嵌套 reviewer 能力写回对应
+`goal-state.yaml`（`driver_kind: host-agent`、`driver_id`、`driver_observation`、
+`driver_reviewer_capability: confirmed`）。重入时先读 goal-state：状态为 running 且该 driver 仍可见时，
 汇报进度和查看方式，不重复派发；driver 已不可见时，以仓库事实修正 state，再续跑或重派。
 driver 完成或 handoff 且结果已被主流程消费后，按 Task Agent 生命周期关闭。
 

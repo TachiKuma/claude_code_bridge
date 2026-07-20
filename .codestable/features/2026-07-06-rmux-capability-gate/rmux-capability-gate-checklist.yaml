@@ -27,70 +27,70 @@ steps:
 checks:
   - item: "CapabilityReport 包含 backend_impl、version、platform、generated_at、probe_status、preflight.daemon_pre_state、commands、semantics、blocking_gaps、artifact_index"
     source: 名词契约
-    status: pending
+    status: passed
   - item: "Command catalog 覆盖 start-server/new-session/attach-session/has-session/kill-session/kill-server/list-windows/new-window/rename-window/select-window/kill-window/move-pane/resize-pane/select-layout/swap-pane/split-window/list-panes/display-message/set-option/set-window-option/set-hook/bind-key/send-keys/load-buffer/paste-buffer/delete-buffer/capture-pane/pipe-pane/respawn-pane/list-clients/refresh-client"
     source: 名词契约
-    status: pending
+    status: passed
   - item: "Semantic catalog 覆盖 session survival、namespace isolation、attach/reattach、window policy、layout/reflow、pane id stability、user options/title、capture last N lines、capture format fidelity、buffer paste、Ctrl-C/Ctrl-D、pane death、daemon crash/cleanup evidence、provider/process distinction workaround evidence"
     source: 名词契约
-    status: pending
+    status: passed
   - item: "partial / workaround 状态必须显式写 workaround: null | {id, description, evidence, accepted}；blocking gap 推导不得读取 notes"
     source: 名词契约
-    status: pending
+    status: passed
   - item: "每个 command/semantic 必须写 degrade_impact 和 consequence；每个 blocking gap 必须带同样的 degrade 语境"
     source: 名词契约
-    status: pending
+    status: passed
   - item: "每个 commands.*.evidence / semantics.*.evidence 都必须能在 artifact_index 中按相对路径反查"
     source: 名词契约
-    status: pending
+    status: passed
   - item: "主流程保持 preflight → isolated namespace → command probes → semantic probes → capture fidelity probes → gap generation → report/artifacts → cleanup"
     source: 编排骨架
-    status: pending
+    status: passed
   - item: "单项 probe 失败不应中断整个 probe；失败必须结构化写入 report 和 evidence"
     source: 流程级约束
-    status: pending
+    status: passed
   - item: "stdout/stderr、环境摘要、pane capture、raw logs 写盘前必须 redaction，且不记录完整环境变量"
     source: 流程级约束
-    status: pending
+    status: passed
   - item: "本 feature 不新增 RmuxBackend production implementation"
     source: 范围守护
-    status: pending
+    status: passed
   - item: "本 feature 不修改 backend_selection.py 以新增 rmux 选择分支"
     source: 范围守护
-    status: pending
+    status: passed
   - item: "本 feature 不新增或启用 runtime.mux.backend / CCB_MUX_BACKEND 运行时配置"
     source: 范围守护
-    status: pending
+    status: passed
   - item: "Capability report 不包含 route_approved=true 或等价字段"
     source: 范围守护
-    status: pending
+    status: passed
   - item: "Provider completion parser 不因本 feature 被重写；只允许新增或使用 fixture 与比较证据"
     source: 范围守护
-    status: pending
+    status: passed
   - item: "主链路不把 rmux executable 当作 tmux executable 的透明替换"
     source: 范围守护
-    status: pending
+    status: passed
   - item: "Probe CLI、probe tests、roadmap drafts/report 产物约定是本 feature 的全部挂载点"
     source: 挂载点
-    status: pending
+    status: passed
   - item: "Windows 真机 preflight report 记录 platform、Rmux executable、version、shell、run id、daemon 预状态；失败时给出可行动原因"
     source: 验收场景
-    status: pending
+    status: passed
   - item: "blocking_gaps 可由 required/status/workaround.accepted/evidence 机械推导，并携带 degrade_impact / consequence"
     source: 验收场景
-    status: pending
+    status: passed
   - item: "capture fidelity evidence 比较尾部空白、CSI/OSC/非 CSI 转义、wrapping、宽字符、last-N 截断，并穿过 consumer-strip 与 direct-stdout 两类 Codex/Claude parser 入口，不只证明 capture-pane 能返回文本"
     source: 验收场景
-    status: pending
+    status: passed
   - item: "capture fidelity 必须逐维标注归一化责任：CSI 可由 strip_ansi 处理，OSC/非 CSI、wrapping、宽字符不被当前 normalize 吸收，必须靠输出平价或失败样例证明"
     source: 验收场景
-    status: pending
+    status: passed
   - item: "合成 fixture 单测与 Windows 真机 Rmux artifacts 不可互替，AC-005 必须同时保留两类证据"
     source: 验收场景
-    status: pending
+    status: passed
   - item: "cleanup evidence 记录 daemon 预状态和本次 session/window/pane 清理结果，daemon 行为只采 evidence 不定义 ownership"
     source: 验收场景
-    status: pending
+    status: passed
 
 dod:
   commands:

@@ -1,6 +1,6 @@
 {
   "gate_id": "evidence-pack",
-  "stage": "implementation.before_review",
+  "stage": "acceptance",
   "status": "passed",
   "blocking": [],
   "warnings": [],
@@ -9,13 +9,13 @@
       "out": ".codestable\\features\\2026-07-06-rmux-capability-gate\\rmux-capability-gate-evidence-pack.md",
       "providers": {
         "archguard": {
-          "status": "unavailable",
-          "reason": "archguard binary not found on PATH",
+          "status": "skipped",
+          "reason": "archguard collection disabled",
           "warnings": []
         },
         "meta_cc": {
-          "status": "unavailable",
-          "reason": "meta-cc summary not found; realtime session collection is out of scope",
+          "status": "skipped",
+          "reason": "meta-cc collection disabled",
           "warnings": []
         }
       }
@@ -32,9 +32,9 @@
   },
   "input_digests": {
     "design": "a956d85ee7942518fcda4bac35236cb28d50619a6572676186543dafca74ac16",
-    "checklist": "c1b785e5c0ec01f7c39d21a89cbe32bd739ee480e8aa003ae37773baee6cf220",
-    "dod_results": "8526766053cb266bdaa9fe5c850bfd6b96d1c03ad76429e63a7f989f8029dba0",
-    "gate_results": "367af236b2ac2f2feb0c40f2d9e8436596b02eeb7edf4997a15b86a85973b8cf",
-    "out": "b7468e889fd5205ef2688b61ac95b02693435f6687031fea648bd2b62bef96d8"
+    "checklist": "115ef76ac7523371b80e425062313eeab89c64a3d61ff0caeb5d3f515c809e79",
+    "dod_results": "7b6ccace396adc53367770d98baaecda28b6fc92013e32befa80a94e1fccfee0",
+    "gate_results": "084adf194f5a2b0ad0d7f8414af1eb15006c868081716d9749173986cd1a22c2",
+    "out": "bb87fda0930e9a4878910e13461052487addc0f18a81a80619a1d166b1d11b9c"
   }
 }

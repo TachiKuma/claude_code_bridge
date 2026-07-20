@@ -1,0 +1,17 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-12508-20260720t091916z",
+    "load-buffer",
+    "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-rmux-native-backend\\drafts\\rmux-capability-gate\\run-20260720T091916Z-12508\\work\\buffer.txt"
+  ],
+  "classification": "supported",
+  "notes": "",
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "",
+  "stdout_raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_raw_size": 0,
+  "timeout": 8.0
+}

@@ -1,0 +1,24 @@
+{
+  "assertions": [
+    {
+      "kind": "prerequisite",
+      "name": "send-keys accepted input path",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "probe captures text sent through send-keys",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "Ctrl-C/Ctrl-D control semantics were exercised",
+      "passed": false
+    }
+  ],
+  "dependencies": [
+    "send-keys"
+  ],
+  "notes": "one or more scenario assertions failed despite at least one prerequisite passing",
+  "status": "partial"
+}

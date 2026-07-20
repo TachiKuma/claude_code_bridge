@@ -1,0 +1,183 @@
+{
+  "cases": [
+    {
+      "absorbed": true,
+      "consumer_strip": {
+        "claude_normalized": "• Working (1s • esc to interrupt)",
+        "codex_normalized": "• Working (1s • esc to interrupt)"
+      },
+      "dimension": "trailing_whitespace",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      },
+      "raw": "• Working (1s • esc to interrupt)   \n"
+    },
+    {
+      "absorbed": true,
+      "consumer_strip": {
+        "claude_normalized": "• Working (1s • esc to interrupt)",
+        "codex_normalized": "• Working (1s • esc to interrupt)"
+      },
+      "dimension": "csi",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      },
+      "raw": "\u001b[31m• Working (1s • esc to interrupt)\u001b[0m\n"
+    },
+    {
+      "absorbed": false,
+      "consumer_strip": {
+        "claude_normalized": "\u001b]0;title\u0007• Working (1s • esc to interrupt)",
+        "codex_normalized": "\u001b]0;title\u0007• Working (1s • esc to interrupt)"
+      },
+      "dimension": "osc",
+      "direct_stdout": {
+        "claude_reason": "no_known_status_pattern",
+        "claude_state": "unknown",
+        "codex_reason": "no_known_status_pattern",
+        "codex_state": "unknown"
+      },
+      "raw": "\u001b]0;title\u0007• Working (1s • esc to interrupt)\n"
+    },
+    {
+      "absorbed": false,
+      "consumer_strip": {
+        "claude_normalized": "• Working (1s • esc to interrupt)\nwrapped-body-without-logical-line-rebuild",
+        "codex_normalized": "• Working (1s • esc to interrupt)\nwrapped-body-without-logical-line-rebuild"
+      },
+      "dimension": "wrapping",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      },
+      "raw": "• Working (1s • esc to interrupt)\nwrapped-body-without-logical-line-rebuild\n"
+    },
+    {
+      "absorbed": false,
+      "consumer_strip": {
+        "claude_normalized": "• Working (1s • esc to interrupt)\n宽字符列宽需要 Rmux/tmux 输出平价证明",
+        "codex_normalized": "• Working (1s • esc to interrupt)\n宽字符列宽需要 Rmux/tmux 输出平价证明"
+      },
+      "dimension": "wide_char",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      },
+      "raw": "• Working (1s • esc to interrupt)\n宽字符列宽需要 Rmux/tmux 输出平价证明\n"
+    },
+    {
+      "absorbed": false,
+      "consumer_strip": {
+        "claude_normalized": "old\n• Working (1s • esc to interrupt)",
+        "codex_normalized": "old\n• Working (1s • esc to interrupt)"
+      },
+      "dimension": "last_n_tail",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      },
+      "raw": "old\n• Working (1s • esc to interrupt)\n"
+    }
+  ],
+  "normalization_responsibility": {
+    "csi": "current strip_ansi handles CSI sequences",
+    "last_n_tail": "must be proven by rmux/tmux capture tail equivalence",
+    "osc": "current strip_ansi does not remove OSC/non-CSI sequences",
+    "trailing_whitespace": "parser normalize_screen strips line tails",
+    "wide_char": "current parser does not correct display width",
+    "wrapping": "current parser does not rebuild logical lines"
+  },
+  "parser_paths": [
+    "consumer_strip",
+    "direct_stdout"
+  ],
+  "providers": [
+    "codex",
+    "claude"
+  ],
+  "real_dimension_checks": {
+    "last_n_tail": false,
+    "osc": false,
+    "trailing_whitespace": false,
+    "wide_char": true,
+    "wrapping": false
+  },
+  "rmux_capture_fixture_observation": {
+    "available": true,
+    "consumer_strip": {
+      "claude_normalized": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>echo CCB_RMUX_TRAILING   & echo C\nCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcd\nefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 & echo CCB_RMUX_WIDE_\n宽字符 & echo CCB_RMUX_LASTN\nCCB_RMUX_TRAILING\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nE:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n\n",
+      "codex_normalized": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>echo CCB_RMUX_TRAILING   & echo C\nCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcd\nefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 & echo CCB_RMUX_WIDE_\n宽字符 & echo CCB_RMUX_LASTN\nCCB_RMUX_TRAILING\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nE:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n\n"
+    },
+    "decoded_text": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>echo CCB_RMUX_TRAILING   & echo C\nCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcd\nefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 & echo CCB_RMUX_WIDE_\n宽字符 & echo CCB_RMUX_LASTN\nCCB_RMUX_TRAILING\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nE:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+    "direct_stdout": {
+      "claude_reason": "no_known_status_pattern",
+      "claude_state": "unknown",
+      "codex_reason": "no_known_status_pattern",
+      "codex_state": "unknown"
+    },
+    "observed_dimensions": {
+      "contains_csi": false,
+      "contains_osc": false,
+      "line_count": 24
+    },
+    "raw_bytes_sha256": "07014292c10d3fbb1c74f2f884fc7c090a049f841875d7f9297d843e05243c99",
+    "raw_bytes_size": 543,
+    "returncode": 0
+  },
+  "rmux_capture_observation": {
+    "available": true,
+    "consumer_strip": {
+      "claude_normalized": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>echo ccb-rmux-probe\nccb-rmux-probe\n\nE:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>ccb-rmux-probe\\r\n系统找不到指定的路径。\n\nE:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>\n\n\n\n\n",
+      "codex_normalized": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>echo ccb-rmux-probe\nccb-rmux-probe\n\nE:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>ccb-rmux-probe\\r\n系统找不到指定的路径。\n\nE:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>\n\n\n\n\n"
+    },
+    "decoded_text": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>echo ccb-rmux-probe\nccb-rmux-probe\n\nE:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>ccb-rmux-probe\\r\n系统找不到指定的路径。\n\nE:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>\n\n\n\n\n\n",
+    "direct_stdout": {
+      "claude_reason": "no_known_status_pattern",
+      "claude_state": "unknown",
+      "codex_reason": "no_known_status_pattern",
+      "codex_state": "unknown"
+    },
+    "observed_dimensions": {
+      "contains_csi": false,
+      "contains_osc": false,
+      "line_count": 12
+    },
+    "raw_bytes_sha256": "6c8221ed40f11584107b202d5c2cc6ad74620ab49f751c32738aae95f665eb02",
+    "raw_bytes_size": 247,
+    "returncode": 0
+  },
+  "rmux_last_n_observation": {
+    "available": true,
+    "consumer_strip": {
+      "claude_normalized": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>echo CCB_RMUX_TRAILING   & echo C\nCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcd\nefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 & echo CCB_RMUX_WIDE_\n宽字符 & echo CCB_RMUX_LASTN\nCCB_RMUX_TRAILING\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nE:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n\n",
+      "codex_normalized": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>echo CCB_RMUX_TRAILING   & echo C\nCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcd\nefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 & echo CCB_RMUX_WIDE_\n宽字符 & echo CCB_RMUX_LASTN\nCCB_RMUX_TRAILING\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nE:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n\n"
+    },
+    "decoded_text": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>echo CCB_RMUX_TRAILING   & echo C\nCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcd\nefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 & echo CCB_RMUX_WIDE_\n宽字符 & echo CCB_RMUX_LASTN\nCCB_RMUX_TRAILING\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nE:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+    "direct_stdout": {
+      "claude_reason": "no_known_status_pattern",
+      "claude_state": "unknown",
+      "codex_reason": "no_known_status_pattern",
+      "codex_state": "unknown"
+    },
+    "observed_dimensions": {
+      "contains_csi": false,
+      "contains_osc": false,
+      "line_count": 24
+    },
+    "raw_bytes_sha256": "07014292c10d3fbb1c74f2f884fc7c090a049f841875d7f9297d843e05243c99",
+    "raw_bytes_size": 543,
+    "returncode": 0
+  }
+}

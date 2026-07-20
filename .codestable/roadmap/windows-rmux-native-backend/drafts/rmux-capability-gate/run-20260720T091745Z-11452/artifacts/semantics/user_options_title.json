@@ -1,0 +1,31 @@
+{
+  "assertions": [
+    {
+      "kind": "prerequisite",
+      "name": "set-option succeeded",
+      "passed": true
+    },
+    {
+      "kind": "prerequisite",
+      "name": "set-window-option succeeded",
+      "passed": true
+    },
+    {
+      "kind": "prerequisite",
+      "name": "rename-window succeeded",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "window title evidence contains probe-main",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "set-option",
+    "set-window-option",
+    "rename-window"
+  ],
+  "notes": "",
+  "status": "supported"
+}
