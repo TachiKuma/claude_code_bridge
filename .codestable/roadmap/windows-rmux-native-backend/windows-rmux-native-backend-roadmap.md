@@ -886,8 +886,9 @@ class RpcTransportAuthError(Exception):
 17. **ccbd-control-plane-transport-seam** — 为 ccbd 控制面 RPC 抽 transport seam，Unix 保持 AF_UNIX 行为不变。
    - 所属模块：CCBD Control Plane Transport
    - 依赖：无（可与 `rmux-capability-gate` 并行起步）
-   - 状态：planned
-   - 备注：先建 seam + Unix adapter + fake transport 替身；帧与 handler dispatch 零改动。
+   - 状态：accepted
+   - 对应 feature：`2026-07-20-ccbd-control-plane-transport-seam`
+   - 备注：先建 seam + Unix adapter + fake transport 替身；帧与 handler dispatch 零改动。2026-07-20 accepted：越界 Windows import/locking/atomic 兼容改动已拆出至独立 feature（`pending-split/windows-runtime-import-lock-compat`）；CMD-005 `mobile_gateway.terminal -> fcntl` 为 owner-accepted document-baseline，真实 Unix AF_UNIX 为 compatibility residual。
 
 18. **ccbd-windows-tcp-loopback-transport** — 实现 Windows TCP loopback adapter（127.0.0.1 + OS 端口 + same-user token 握手，token 文件 icacls 收敛、无法收敛 fail-fast），替换 Unix peer-path 鉴权与 inode stale 判定。
    - 所属模块：CCBD Control Plane Transport

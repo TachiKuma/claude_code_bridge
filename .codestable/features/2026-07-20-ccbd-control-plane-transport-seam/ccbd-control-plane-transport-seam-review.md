@@ -84,12 +84,12 @@ lane_b_reason: ""
 - QA 必须重点复核：endpoint descriptor canonical-first、legacy `socket_path` record fallback、Unix listener `fileno()` / bootstrap endpoint path、fake bootstrap nonce 与 closed/connectability 语义、lease/ping/doctor endpoint projection。
 - Evidence pack residual risks / gate warnings：CMD-005 在 Windows 因 `mobile_gateway.terminal -> fcntl` collection baseline 失败；按 checklist `failure_handling=document-baseline` 记录，不视作本 feature 新失败。
 - 建议新增或加强的测试：none blocking；后续如使用 fake restart lifecycle，可增加 fake one-shot / restart contract 测试。
-- 不能靠 review 完全确认的点：当前 Windows 环境跳过真实 AF_UNIX bootstrap/lifecycle 用例，需 Unix CI/真机复跑。
+- 不能靠 review 完全确认的点：当前 Windows 环境跳过真实 AF_UNIX bootstrap/lifecycle 用例；按 native Windows evidence decision 这是 compatibility residual，后续由 Unix CI/真机复跑。
 
 ## 6. Residual Risk
 
 - Windows 本机 CMD-005 仍因既有 `mobile_gateway.terminal -> fcntl` collection error 失败，start/ping/doctor 抽样命令无法在本环境完整执行。
-- 真实 Unix AF_UNIX bootstrap、stale cleanup、deferred external connection 仍需要在 Unix 环境复核；当前 Windows 证据中相关测试为 skip。
+- 真实 Unix AF_UNIX bootstrap、stale cleanup、deferred external connection 仍需要在 Unix 环境复核；当前 Windows 证据中相关测试为 skip，按本 milestone 口径不阻塞 native Windows core。
 
 ## 7. Verdict
 

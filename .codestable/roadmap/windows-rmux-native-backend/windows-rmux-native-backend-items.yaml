@@ -136,7 +136,7 @@ items:
   - slug: ccbd-control-plane-transport-seam
     description: 为 ccbd 控制面 RPC 抽出 transport seam（connect/listen/accept/same-user 鉴权/liveness/stale 清理/端点发现），Unix 保持 AF_UNIX 行为不变
     depends_on: []
-    status: in-progress
+    status: done
     feature: 2026-07-20-ccbd-control-plane-transport-seam
     minimal_loop: false
     notes: 帧协议与 handler dispatch 保持 transport-neutral，业务零改动；先建 seam + Unix adapter + fake transport 测试替身，不改 Windows 行为。实测硬编码点见 roadmap §8

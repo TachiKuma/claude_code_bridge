@@ -27,28 +27,28 @@ steps:
 checks:
   - item: "endpoint descriptor canonical-first，旧 socket_path 兼容投影和 store fallback 保留"
     source: design §1 / AC-001 / DOD-IMPL-001
-    status: pending
+    status: passed
   - item: "connection protocol 覆盖 settimeout、sendall、recv、close 和 context-manager close 语义"
     source: design §1 / AC-004 / DOD-IMPL-003a
-    status: pending
+    status: passed
   - item: "Unix adapter 保持 AF_UNIX connect/listen/stale cleanup/bootstrap 行为不漂移"
     source: design §2.4 / AC-002 / AC-003 / DOD-IMPL-002
-    status: pending
+    status: passed
   - item: "fake transport 可验证 lifecycle/handler，不依赖真实 socket"
     source: design §2.4 / AC-004 / DOD-IMPL-003
-    status: pending
+    status: passed
   - item: "RpcRequest/RpcResponse JSON-line frame 与 handler dispatch 不变"
     source: design §1 / AC-005 / DOD-IMPL-004
-    status: pending
+    status: passed
   - item: "endpoint discovery/store adapter 负责从 descriptor 或 legacy socket_path 构造 endpoint，diagnostics/lease 含 endpoint descriptor 且旧 socket_path 字段可用"
     source: design §2.2 / AC-006 / DOD-IMPL-005
-    status: pending
+    status: passed
   - item: "Unix adapter 外无裸 socket.AF_UNIX 新增，Windows TCP adapter 不在本 feature 实现"
     source: design §3.2 / AC-007 / DOD-IMPL-006
-    status: pending
+    status: passed
   - item: "不修改 pid liveness、mux backend、provider runtime、RPC handlers"
     source: 明确不做 / AC-008
-    status: pending
+    status: passed
 
 dod:
   commands:
