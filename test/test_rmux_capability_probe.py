@@ -34,13 +34,35 @@ class FakeRunner:
         name = probe.command_name(args)
         if args[-1] == "-V":
             return probe.CommandResult(args, self.version_returncode, "rmux 0.8.0", "version failed", timeout)
+        if name == "has-session" and "-L" not in args:
+            return probe.CommandResult(args, 1, "", "can't find session", timeout)
         if name == "kill-session" and "cleanup-fails" in self.failures:
             return probe.CommandResult(args, self.cleanup_returncode or 1, "", "cleanup failed", timeout)
         if name in self.failures:
             return probe.CommandResult(args, 1, "", f"{name} unsupported", timeout)
+        if name == "attach-session" and "interactive-attach-timeout" in self.failures:
+            return probe.CommandResult(args, 124, "\x1b[?1049hprobe-main\x1b[?2004h", "timeout", timeout)
+        if name == "list-windows":
+            return probe.CommandResult(args, 0, "0: probe-main* (1 panes)\n1: probe-extra (1 panes)\n", "", timeout)
         if name == "list-panes":
             return probe.CommandResult(args, 0, "" if self.empty_panes else "%0\n", "token=sk-secret-value", timeout)
         if name == "capture-pane":
+            if "-2" in args:
+                return probe.CommandResult(args, 0, "CCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n", "token=sk-secret-value", timeout)
+            if "-12" in args:
+                return probe.CommandResult(
+                    args,
+                    0,
+                    (
+                        "CCB_RMUX_TRAILING   \n"
+                        "CCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+                        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\n"
+                        "CCB_RMUX_WIDE_宽字符\n"
+                        "CCB_RMUX_LASTN\n"
+                    ),
+                    "token=sk-secret-value",
+                    timeout,
+                )
             return probe.CommandResult(args, 0, "old\n• Working (1s • esc to interrupt)\n", "token=sk-secret-value", timeout)
         if name == "display-message":
             return probe.CommandResult(args, 0, "ccb-rmux-probe\n", "token=sk-secret-value", timeout)
@@ -161,3 +183,44 @@ def test_cleanup_failure_updates_cleanup_semantic(tmp_path: Path) -> None:
     assert report["commands"]["kill-session"]["status"] == "unsupported"
     assert report["semantics"]["kill_session_cleanup"]["status"] == "unsupported"
     assert "kill_session_cleanup" in {gap["name"] for gap in report["blocking_gaps"]}
+
+
+def test_semantic_requires_real_assertion_not_only_command_success(tmp_path: Path) -> None:
+    report = probe.run_probe(tmp_path, runner=FakeRunner(), rmux_bin="rmux", platform_name="windows")
+
+    semantic = report["semantics"]["ctrl_c_ctrl_d"]
+    evidence_path = Path(report["run_dir"]) / semantic["evidence"]
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+
+    assert semantic["status"] == "partial"
+    assert any(check["kind"] == "prerequisite" and check["passed"] for check in evidence["assertions"])
+    assert any(check["name"] == "Ctrl-C/Ctrl-D control semantics were exercised" and not check["passed"] for check in evidence["assertions"])
+
+
+def test_attach_timeout_with_tui_is_scenario_invalid() -> None:
+    result = probe.CommandResult(["rmux", "attach-session"], 124, "\x1b[?1049hprobe-main\x1b[?2004h", "timeout", 8.0)
+
+    status, notes = probe._command_status_and_notes("attach-session", result)
+
+    assert status == "partial"
+    assert "scenario-invalid" in notes
+
+
+def test_capture_trailing_whitespace_requires_output_line_not_echo_command(tmp_path: Path) -> None:
+    raw_results = {
+        "capture-pane": probe.CommandResult(["rmux", "capture-pane"], 0, "ok", "", 5.0),
+        "verify.capture-fidelity": probe.CommandResult(
+            ["rmux", "capture-pane"],
+            0,
+            "E:\\repo>echo CCB_RMUX_TRAILING   & echo next\nCCB_RMUX_TRAILING\nnext\n",
+            "",
+            5.0,
+        ),
+        "verify.capture-last-n": probe.CommandResult(["rmux", "capture-pane"], 0, "CCB_RMUX_LASTN\n", "", 5.0),
+    }
+
+    evidence, status, workaround, _notes = probe._capture_fidelity_evidence(tmp_path / "capture.json", raw_results)
+
+    assert evidence["real_dimension_checks"]["trailing_whitespace"] is False
+    assert status == "partial"
+    assert "trailing_whitespace" in workaround["missing_real_dimensions"]

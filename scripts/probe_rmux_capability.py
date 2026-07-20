@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from typing import Any
 
 
@@ -198,6 +199,33 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _write_command_artifact(
+    run_dir: Path,
+    result: CommandResult,
+    *,
+    kind: str,
+    probe: str,
+    status: str | None = None,
+    notes: str = "",
+) -> Path:
+    artifact_path = run_dir / "artifacts" / kind / f"{probe}.json"
+    payload: dict[str, Any] = {
+        "args": result.args,
+        "returncode": result.returncode,
+        "stdout_raw_sha256": hashlib.sha256(result.stdout_bytes or result.stdout.encode("utf-8")).hexdigest(),
+        "stdout_raw_size": len(result.stdout_bytes or result.stdout.encode("utf-8")),
+        "stdout": redact_text(result.stdout),
+        "stderr": redact_text(result.stderr),
+        "timeout": result.timeout,
+    }
+    if status is not None:
+        payload["classification"] = status
+    if notes:
+        payload["notes"] = notes
+    _write_json(artifact_path, payload)
+    return artifact_path
+
+
 def _artifact_entry(run_dir: Path, path: Path, *, kind: str, probe: str, redacted: bool = True) -> dict[str, Any]:
     rel_path = path.relative_to(run_dir).as_posix()
     return {
@@ -287,11 +315,24 @@ def _command_status_and_notes(name: str, result: CommandResult) -> tuple[str, st
         return "supported", ""
     scenario_sensitive = {"attach-session", "refresh-client", "move-pane", "swap-pane", "kill-server"}
     combined = f"{result.stdout}\n{result.stderr}".lower()
+    attach_started_tui = name == "attach-session" and result.returncode == 124 and any(
+        marker in result.stdout for marker in ("\x1b[?1049h", "\x1b[?2004h", "\x1b]0;", "probe-main", "probe-extra")
+    )
     if name in scenario_sensitive and any(
         marker in combined
-        for marker in ("no current client", "not a client", "can't find client", "ambiguous", "same pane", "no such file or directory")
+        for marker in (
+            "no current client",
+            "not a client",
+            "can't find client",
+            "ambiguous",
+            "same pane",
+            "no such file or directory",
+            "timeout",
+        )
     ):
         return "partial", "scenario-invalid: command requires live client/server or distinct pane/window context; not classified as command missing"
+    if attach_started_tui:
+        return "partial", "scenario-invalid: attach opened an interactive TUI and hit the non-interactive probe timeout"
     return "unsupported", ""
 
 
@@ -343,7 +384,16 @@ def _blocking_gaps(commands: dict[str, Any], semantics: dict[str, Any]) -> list[
     return gaps
 
 
-def _capture_fidelity_evidence(path: Path, capture_result: CommandResult | None) -> dict[str, Any]:
+def _pane_ids(result: CommandResult | None) -> list[str]:
+    if result is None or result.returncode != 0:
+        return []
+    return [line.strip() for line in result.stdout.splitlines() if line.strip().startswith("%")]
+
+
+def _capture_fidelity_evidence(path: Path, raw_results: dict[str, CommandResult]) -> tuple[dict[str, Any], str, dict[str, Any] | None, str]:
+    capture_result = raw_results.get("capture-pane")
+    fixture_result = raw_results.get("verify.capture-fidelity")
+    tail_result = raw_results.get("verify.capture-last-n")
     cases = [
         {
             "dimension": "trailing_whitespace",
@@ -391,19 +441,18 @@ def _capture_fidelity_evidence(path: Path, capture_result: CommandResult | None)
             "claude_reason": claude_status.reason,
         }
 
-    rmux_observation: dict[str, Any]
-    if capture_result is None or capture_result.returncode != 0:
-        rmux_observation = {
-            "available": False,
-            "reason": "capture-pane did not produce successful real Rmux stdout in this run",
-        }
-    else:
-        decoded = redact_text(capture_result.stdout)
-        rmux_observation = {
+    def capture_observation(result: CommandResult | None) -> dict[str, Any]:
+        if result is None or result.returncode != 0:
+            return {
+                "available": False,
+                "reason": "capture-pane did not produce successful real Rmux stdout in this run",
+            }
+        decoded = redact_text(result.stdout)
+        return {
             "available": True,
-            "returncode": capture_result.returncode,
-            "raw_bytes_sha256": hashlib.sha256(capture_result.stdout_bytes or capture_result.stdout.encode("utf-8")).hexdigest(),
-            "raw_bytes_size": len(capture_result.stdout_bytes or capture_result.stdout.encode("utf-8")),
+            "returncode": result.returncode,
+            "raw_bytes_sha256": hashlib.sha256(result.stdout_bytes or result.stdout.encode("utf-8")).hexdigest(),
+            "raw_bytes_size": len(result.stdout_bytes or result.stdout.encode("utf-8")),
             "decoded_text": decoded,
             "consumer_strip": {
                 "codex_normalized": normalize_codex_screen(decoded),
@@ -416,16 +465,50 @@ def _capture_fidelity_evidence(path: Path, capture_result: CommandResult | None)
                 "claude_reason": parse_claude_pane_status(decoded).reason,
             },
             "observed_dimensions": {
-                "contains_csi": "\x1b[" in capture_result.stdout,
-                "contains_osc": "\x1b]" in capture_result.stdout,
-                "line_count": len(capture_result.stdout.splitlines()),
+                "contains_csi": "\x1b[" in result.stdout,
+                "contains_osc": "\x1b]" in result.stdout,
+                "line_count": len(result.stdout.splitlines()),
             },
+        }
+
+    fixture_text = fixture_result.stdout if fixture_result and fixture_result.returncode == 0 else ""
+    tail_text = tail_result.stdout if tail_result and tail_result.returncode == 0 else ""
+    fixture_lines = fixture_text.splitlines()
+    real_dimension_checks = {
+        "trailing_whitespace": any(line == "CCB_RMUX_TRAILING   " for line in fixture_lines),
+        "osc": "\x1b]" in fixture_text,
+        "wrapping": "CCB_RMUX_WRAP_" in fixture_text and len(max(fixture_text.splitlines() or [""], key=len)) >= 100,
+        "wide_char": "CCB_RMUX_WIDE_宽字符" in fixture_text,
+        "last_n_tail": "CCB_RMUX_LASTN" in tail_text and "CCB_RMUX_TRAILING" not in tail_text,
+    }
+
+    if capture_result is None or capture_result.returncode != 0:
+        status = "unsupported"
+        notes = "real Rmux capture did not succeed"
+        workaround = None
+    elif all(real_dimension_checks.values()):
+        status = "supported"
+        notes = "real Rmux capture covered every parser fidelity dimension"
+        workaround = None
+    else:
+        status = "partial"
+        notes = "real Rmux capture succeeded but one or more parser fidelity dimensions lack real evidence"
+        missing = [name for name, passed in real_dimension_checks.items() if not passed]
+        workaround = {
+            "id": "parser-normalization-boundary",
+            "description": "real Rmux capture evidence is incomplete for parser fidelity dimensions",
+            "evidence": path.relative_to(path.parents[2]).as_posix(),
+            "accepted": False,
+            "missing_real_dimensions": missing,
         }
 
     payload = {
         "parser_paths": ["consumer_strip", "direct_stdout"],
         "providers": ["codex", "claude"],
-        "rmux_capture_observation": rmux_observation,
+        "rmux_capture_observation": capture_observation(capture_result),
+        "rmux_capture_fixture_observation": capture_observation(fixture_result),
+        "rmux_last_n_observation": capture_observation(tail_result),
+        "real_dimension_checks": real_dimension_checks,
         "normalization_responsibility": {
             "trailing_whitespace": "parser normalize_screen strips line tails",
             "csi": "current strip_ansi handles CSI sequences",
@@ -437,71 +520,107 @@ def _capture_fidelity_evidence(path: Path, capture_result: CommandResult | None)
         "cases": cases,
     }
     _write_json(path, payload)
-    return payload
+    return payload, status, workaround, notes
 
 
 def _assert_semantic(name: str, command_results: dict[str, Any], raw_results: dict[str, CommandResult]) -> tuple[str, list[dict[str, Any]], str]:
     def supported(command: str) -> bool:
         return command_results.get(command, {}).get("status") == "supported"
 
-    checks_by_name: dict[str, list[tuple[str, bool]]] = {
+    def output(command: str) -> str:
+        return raw_results.get(command, CommandResult([], 1, "", "", 0)).stdout
+
+    def passed_assertion(check_name: str, passed: bool, *, kind: str = "semantic") -> dict[str, Any]:
+        return {"name": check_name, "passed": passed, "kind": kind}
+
+    initial_panes = set(_pane_ids(raw_results.get("list-panes")))
+    verify_panes = set(_pane_ids(raw_results.get("verify.list-panes-after-layout")))
+    capture_text = output("capture-pane")
+    fixture_capture_text = output("verify.capture-fidelity")
+    namespace_default = raw_results.get("verify.namespace-default-has-session")
+    attach_result = raw_results.get("attach-session")
+    attach_started_tui = bool(
+        attach_result
+        and attach_result.returncode == 124
+        and any(marker in attach_result.stdout for marker in ("\x1b[?1049h", "\x1b[?2004h", "\x1b]0;", "probe-main", "probe-extra"))
+    )
+
+    checks_by_name: dict[str, list[dict[str, Any]]] = {
         "session_survival": [
-            ("new-session returned success", supported("new-session")),
-            ("has-session confirmed target session", supported("has-session")),
+            passed_assertion("new-session returned success", supported("new-session"), kind="prerequisite"),
+            passed_assertion("has-session confirmed target session", supported("has-session"), kind="prerequisite"),
+            passed_assertion("display-message read back the probe session name", output("display-message").strip() == "ccb-rmux-probe"),
         ],
         "namespace_isolation": [
-            ("new-session used probe namespace", supported("new-session")),
-            ("has-session lookup stayed inside probe namespace", supported("has-session")),
+            passed_assertion("probe namespace session exists inside the explicit rmux namespace", supported("has-session"), kind="prerequisite"),
+            passed_assertion(
+                "same session is not visible from rmux default namespace",
+                namespace_default is not None and namespace_default.returncode != 0,
+            ),
         ],
-        "attach_reattach": [("attach-session accepted non-interactive attach probe", supported("attach-session"))],
+        "attach_reattach": [
+            passed_assertion("attach-session opened an interactive TUI", attach_started_tui),
+            passed_assertion("attach-session can complete in this non-interactive probe", supported("attach-session")),
+        ],
         "window_policy": [
-            ("list-windows succeeded", supported("list-windows")),
-            ("new-window succeeded", supported("new-window")),
-            ("rename-window succeeded", supported("rename-window")),
-            ("select-window succeeded", supported("select-window")),
-            ("kill-window succeeded", supported("kill-window")),
+            passed_assertion("list-windows succeeded", supported("list-windows"), kind="prerequisite"),
+            passed_assertion("new-window succeeded", supported("new-window"), kind="prerequisite"),
+            passed_assertion("rename-window succeeded", supported("rename-window"), kind="prerequisite"),
+            passed_assertion("select-window succeeded", supported("select-window"), kind="prerequisite"),
+            passed_assertion("window listing observed renamed probe windows", "probe-main" in output("verify.list-windows-after-policy")),
         ],
         "layout_reflow": [
-            ("resize-pane succeeded", supported("resize-pane")),
-            ("select-layout succeeded", supported("select-layout")),
-            ("swap-pane succeeded with distinct pane targets", supported("swap-pane")),
-            ("move-pane succeeded with distinct window target", supported("move-pane")),
+            passed_assertion("resize-pane succeeded", supported("resize-pane"), kind="prerequisite"),
+            passed_assertion("select-layout succeeded", supported("select-layout"), kind="prerequisite"),
+            passed_assertion("swap-pane succeeded with distinct pane targets", supported("swap-pane"), kind="prerequisite"),
+            passed_assertion("move-pane succeeded with distinct window target", supported("move-pane"), kind="prerequisite"),
+            passed_assertion("pane identity remained discoverable after layout operations", bool(initial_panes & verify_panes)),
         ],
         "pane_id_stability": [
-            ("list-panes succeeded", supported("list-panes")),
-            ("list-panes returned a pane identity", bool(raw_results.get("list-panes", CommandResult([], 1, "", "", 0)).stdout.strip())),
+            passed_assertion("list-panes succeeded", supported("list-panes"), kind="prerequisite"),
+            passed_assertion("initial list-panes returned pane identity", bool(initial_panes)),
+            passed_assertion("follow-up list-panes preserved at least one pane identity", bool(initial_panes & verify_panes)),
         ],
         "user_options_title": [
-            ("set-option succeeded", supported("set-option")),
-            ("set-window-option succeeded", supported("set-window-option")),
-            ("rename-window succeeded", supported("rename-window")),
+            passed_assertion("set-option succeeded", supported("set-option"), kind="prerequisite"),
+            passed_assertion("set-window-option succeeded", supported("set-window-option"), kind="prerequisite"),
+            passed_assertion("rename-window succeeded", supported("rename-window"), kind="prerequisite"),
+            passed_assertion("window title evidence contains probe-main", "probe-main" in output("verify.list-windows-after-policy")),
         ],
         "capture_last_n_lines": [
-            ("capture-pane succeeded", supported("capture-pane")),
-            ("capture-pane produced stdout", bool(raw_results.get("capture-pane", CommandResult([], 1, "", "", 0)).stdout)),
+            passed_assertion("capture-pane succeeded", supported("capture-pane"), kind="prerequisite"),
+            passed_assertion("capture-pane produced stdout", bool(capture_text)),
+            passed_assertion("last-N capture contains the tail marker without the earlier marker", "CCB_RMUX_LASTN" in output("verify.capture-last-n") and "CCB_RMUX_TRAILING" not in output("verify.capture-last-n")),
         ],
         "buffer_paste": [
-            ("load-buffer succeeded", supported("load-buffer")),
-            ("paste-buffer succeeded", supported("paste-buffer")),
-            ("delete-buffer succeeded", supported("delete-buffer")),
+            passed_assertion("load-buffer succeeded", supported("load-buffer"), kind="prerequisite"),
+            passed_assertion("paste-buffer succeeded", supported("paste-buffer"), kind="prerequisite"),
+            passed_assertion("delete-buffer succeeded", supported("delete-buffer"), kind="prerequisite"),
+            passed_assertion("capture contains the pasted probe marker", "ccb-rmux-probe" in capture_text),
         ],
-        "ctrl_c_ctrl_d": [("send-keys accepted control/input path", supported("send-keys"))],
+        "ctrl_c_ctrl_d": [
+            passed_assertion("send-keys accepted input path", supported("send-keys"), kind="prerequisite"),
+            passed_assertion("probe captures text sent through send-keys", "ccb-rmux-probe" in capture_text),
+            passed_assertion("Ctrl-C/Ctrl-D control semantics were exercised", False),
+        ],
         "pane_death": [
-            ("respawn-pane succeeded", supported("respawn-pane")),
-            ("kill-window cleanup command succeeded", supported("kill-window")),
+            passed_assertion("respawn-pane succeeded", supported("respawn-pane"), kind="prerequisite"),
+            passed_assertion("kill-window cleanup command succeeded", supported("kill-window"), kind="prerequisite"),
+            passed_assertion("pane identity remains observable after respawn/cleanup path", bool(verify_panes)),
         ],
-        "kill_session_cleanup": [("kill-session cleanup succeeded", supported("kill-session"))],
+        "kill_session_cleanup": [passed_assertion("kill-session cleanup succeeded", supported("kill-session"))],
         "daemon_crash_cleanup_evidence": [
-            ("start-server evidence recorded", supported("start-server")),
-            ("kill-server evidence recorded", supported("kill-server")),
+            passed_assertion("start-server evidence recorded", supported("start-server"), kind="prerequisite"),
+            passed_assertion("kill-server evidence recorded", supported("kill-server"), kind="prerequisite"),
         ],
         "provider_process_distinction_workaround_evidence": [
-            ("list-panes returned pane identity", bool(raw_results.get("list-panes", CommandResult([], 1, "", "", 0)).stdout.strip())),
-            ("capture-pane produced pane text", bool(raw_results.get("capture-pane", CommandResult([], 1, "", "", 0)).stdout)),
+            passed_assertion("list-panes returned pane identity", bool(initial_panes)),
+            passed_assertion("capture-pane produced pane text", bool(capture_text or fixture_capture_text)),
         ],
     }
-    checks = [{"name": check_name, "passed": passed} for check_name, passed in checks_by_name.get(name, [])]
-    if all(check["passed"] for check in checks):
+    checks = checks_by_name.get(name, [])
+    semantic_checks = [check for check in checks if check.get("kind") != "prerequisite"]
+    if checks and semantic_checks and all(check["passed"] for check in checks):
         return "supported", checks, ""
     if any(check["passed"] for check in checks):
         return "partial", checks, "one or more scenario assertions failed despite at least one prerequisite passing"
@@ -534,15 +653,7 @@ def _derive_semantics(
     for name, catalog in SEMANTIC_CATALOG.items():
         path = run_dir / "artifacts" / "semantics" / f"{name}.json"
         if name == "capture_format_fidelity_for_provider_completion":
-            evidence = _capture_fidelity_evidence(path, raw_results.get("capture-pane"))
-            status = "partial"
-            workaround = {
-                "id": "parser-normalization-boundary",
-                "description": "fixture and real Rmux capture evidence are recorded, but OSC/wrapping/wide-char/last-N require route-level equivalence acceptance",
-                "evidence": path.relative_to(run_dir).as_posix(),
-                "accepted": False,
-            }
-            notes = "real Rmux capture observation is stored separately from parser-facing fixtures"
+            evidence, status, workaround, notes = _capture_fidelity_evidence(path, raw_results)
         else:
             deps = dependencies.get(name, [])
             status, assertions, notes = _assert_semantic(name, command_results, raw_results)
@@ -711,6 +822,39 @@ def run_probe(
             returncode=result.returncode,
             notes=notes,
         )
+
+    verification_commands = {
+        "namespace-default-has-session": [rmux_bin, "has-session", "-t", session],
+        "list-panes-after-layout": [rmux_bin, "-L", namespace, "list-panes", "-t", session, "-F", "#{pane_id}"],
+        "list-windows-after-policy": [rmux_bin, "-L", namespace, "list-windows", "-t", session],
+    }
+    for probe_name, args in verification_commands.items():
+        result = runner.run(args, timeout=5.0)
+        raw_results[f"verify.{probe_name}"] = result
+        artifact_path = _write_command_artifact(run_dir, result, kind="verification", probe=probe_name)
+        artifact_index.append(_artifact_entry(run_dir, artifact_path, kind="verification", probe=probe_name))
+
+    fixture_command = (
+        "echo CCB_RMUX_TRAILING   & "
+        "echo CCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 & "
+        "echo CCB_RMUX_WIDE_宽字符 & "
+        "echo CCB_RMUX_LASTN"
+    )
+    fixture_send = runner.run([rmux_bin, "-L", namespace, "send-keys", "-t", f"{session}:0.0", fixture_command, "Enter"], timeout=5.0)
+    raw_results["verify.capture-fidelity-send"] = fixture_send
+    fixture_send_path = _write_command_artifact(run_dir, fixture_send, kind="verification", probe="capture-fidelity-send")
+    artifact_index.append(_artifact_entry(run_dir, fixture_send_path, kind="verification", probe="capture-fidelity-send"))
+    if isinstance(runner, SubprocessRunner):
+        time.sleep(0.5)
+    fixture_capture = runner.run([rmux_bin, "-L", namespace, "capture-pane", "-t", f"{session}:0.0", "-p", "-S", "-12"], timeout=5.0)
+    raw_results["verify.capture-fidelity"] = fixture_capture
+    fixture_capture_path = _write_command_artifact(run_dir, fixture_capture, kind="verification", probe="capture-fidelity")
+    artifact_index.append(_artifact_entry(run_dir, fixture_capture_path, kind="verification", probe="capture-fidelity"))
+    tail_capture = runner.run([rmux_bin, "-L", namespace, "capture-pane", "-t", f"{session}:0.0", "-p", "-S", "-2"], timeout=5.0)
+    raw_results["verify.capture-last-n"] = tail_capture
+    tail_capture_path = _write_command_artifact(run_dir, tail_capture, kind="verification", probe="capture-last-n")
+    artifact_index.append(_artifact_entry(run_dir, tail_capture_path, kind="verification", probe="capture-last-n"))
 
     cleanup = runner.run([rmux_bin, "-L", namespace, "kill-session", "-t", session], timeout=5.0)
     raw_results["cleanup.kill-session"] = cleanup
