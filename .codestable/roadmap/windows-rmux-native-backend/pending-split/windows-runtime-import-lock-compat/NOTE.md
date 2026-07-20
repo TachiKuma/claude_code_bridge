@@ -40,7 +40,9 @@
 
 ```
 git apply .codestable/roadmap/windows-rmux-native-backend/pending-split/windows-runtime-import-lock-compat/compat-changes.patch
-cp .../tests/*.py test/
+cp .codestable/roadmap/windows-rmux-native-backend/pending-split/windows-runtime-import-lock-compat/import-guard-tests/*.py test/
 ```
+
+> 注：保存目录用 `import-guard-tests/` 而非 `tests/`，因为仓库 `.gitignore` 忽略任意 `tests/` 目录。
 
 然后以 `cs-feat` 新建独立 feature（建议 slug `windows-runtime-import-lock-compat`）走 design → review → impl → QA → accept。
