@@ -1,15 +1,15 @@
 roadmap: windows-rmux-native-backend
-status: ready-to-dispatch
+status: handoff
 baseline_ref: eb273de8e1c1839451f3ff6cc583672187bd75d9
 driver_kind: host-agent
-driver_id: 019f7d8d-eeaf-7d12-893b-12d8a0e47204
+driver_id: 019f7db5-6631-7b03-977d-54b6f7fc6cdd
 execution_confirmation_id: goal-execution-2026-07-20-windows-rmux-native-backend
 acceptance_authorization: approved
 acceptance_authorization_ref: approval-report.md#goal-acceptance
 commit_authorization: approved
 commit_authorization_ref: approval-report.md#goal-commits
-handoff_reason: ""
-handoff_next: ""
+handoff_reason: "IndependentReviewUnavailable"
+handoff_next: "在可见 Task agent reviewer 可用的宿主中恢复 rmux-capability-gate code review；background refs claude:20260720-122432-878-1516、gemini:20260720-122905-251-6840、opencode:20260720-123024-165-9380、codex:20260720-123139-589-13156 均未产出可消费 findings；foreground qwen/codebuddy/copilot/droid 无 active session，gemini/claude/opencode pane not alive；不要用 OCR、CodeGraph 或主线程 self-review 替代环节 A。"
 current_feature_index: 0
 features:
   - slug: rmux-capability-gate
@@ -20,7 +20,7 @@ features:
     review: .codestable/features/2026-07-06-rmux-capability-gate/rmux-capability-gate-review.md
     qa: .codestable/features/2026-07-06-rmux-capability-gate/rmux-capability-gate-qa.md
     acceptance: .codestable/features/2026-07-06-rmux-capability-gate/rmux-capability-gate-acceptance.md
-    status: pending
+    status: implementing
   - slug: ccbd-control-plane-transport-seam
     roadmap_item: ccbd-control-plane-transport-seam
     feature_dir: .codestable/features/2026-07-20-ccbd-control-plane-transport-seam
