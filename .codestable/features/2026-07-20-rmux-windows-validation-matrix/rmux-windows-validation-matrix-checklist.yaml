@@ -1,0 +1,170 @@
+feature: 2026-07-20-rmux-windows-validation-matrix
+created: 2026-07-20
+
+steps:
+  - action: "matrix schema 与 manifest：定义 lane、case、artifact、failure classification 和 selected-case 语义"
+    exit_signal: "单测证明 missing / unknown / duplicate case fail closed，且 windows_true_host 必须含 host_kind/control_plane/probe_bypass/backend_selection_source"
+    status: pending
+  - action: "report builder：把 fake/provider/windows/manual evidence 归一为 rows、summary、JSONL、markdown"
+    exit_signal: "sample evidence 可生成 selected_cases_status/full_matrix_status，row classification 覆盖 pass、missing_evidence、system_failure、provider_failure、test_design_failure"
+    status: pending
+  - action: "fake lane runner：复用或包裹现有 lifecycle/multi-workgroup fake smoke，输出 Rmux projection placeholders 并明确 not_true_host"
+    exit_signal: "fake lane 可在非 Windows 上跑 report，但不满足 true-host core case"
+    status: pending
+  - action: "Windows true-host runbook runner：定义 PowerShell 命令序列、环境检查、rmux opt-in、start/ping/ask/kill/restart/multi-project transcript"
+    exit_signal: "scripts/rmux-windows-validation-runbook.ps1 与 markdown runbook 共享 sidecar schema；缺字段时 report 不通过"
+    status: pending
+  - action: "provider blackbox lane：将至少一个真实 provider ask case 与 fake provider baseline 分离，支持 auth failure 分类"
+    exit_signal: "provider auth failure 分类为 provider_failure，不影响 fake/control-plane rows"
+    status: pending
+  - action: "CI integration：新增或扩展 workflow，只跑 deterministic fake 与可无凭证的 Windows sanity"
+    exit_signal: "CI 不要求 secrets 即可给出 selection_scope=subset report；CI 只断言 selected_cases_status=pass，不把 subset 当 full pass"
+    status: pending
+  - action: "cleanup/residue evidence：补 Windows-native residue 检查，覆盖 ccbd endpoint、TCP token refs、rmux namespace/session、provider/job process"
+    exit_signal: "kill case 后 artifact 显示 no owned namespace/process residue 或 bounded retained reason"
+    status: pending
+  - action: "scope guard：禁止 installer/package/docs contract 收口和 production behavior 变更混入本 feature"
+    exit_signal: "diff guard 使用 git diff --name-only 与结构解析证明未改 package.json os、README/install docs contract、provider parser、backend implementation"
+    status: pending
+
+checks:
+  - item: "matrix manifest 覆盖 start/ping/ask/kill/restart/multi-agent/multi-project/recovery/diagnostics 核心 cases"
+    source: design §3.1 / AC-001 / DOD-IMPL-001
+    status: pending
+  - item: "windows_true_host case 强制 host_kind=native_windows、control_plane=ccbd、probe_bypass=false、backend_selection_source 可追溯"
+    source: design §1 / AC-003 / DOD-IMPL-001
+    status: pending
+  - item: "fake、provider_blackbox、windows_true_host、manual_transcript lane 明确隔离"
+    source: design §1 / AC-002 / AC-008
+    status: pending
+  - item: "Windows true-host case 强制 host_kind=native_windows、backend_impl=rmux、control_plane=ccbd、probe_bypass=false"
+    source: design §1 / AC-003 / AC-004 / AC-005
+    status: pending
+  - item: "manual transcript schema 可解析、可脱敏、缺字段 fail closed"
+    source: design §2.2 / AC-008 / DOD-IMPL-004
+    status: pending
+  - item: "PowerShell runbook 与 markdown runbook 同时作为交付物，且共享 transcript sidecar schema"
+    source: design §1 / §2.3 / DOD-IMPL-004
+    status: pending
+  - item: "rmux-supervision-recovery 未 ready 时 recovery rows 不计 full pass"
+    source: design §1 / AC-006
+    status: pending
+  - item: "provider failure 与 system failure 分离，auth/credential failure 不误算 Rmux failure"
+    source: design §1 / AC-004 / AC-008
+    status: pending
+  - item: "Windows cleanup/residue 检查覆盖 ccbd endpoint、TCP token ref、rmux namespace/session、owned process/job"
+    source: design §2.4 / AC-005 / DOD-IMPL-005
+    status: pending
+  - item: "subset CI report 只断言 selected_cases_status，不冒充 full_matrix_status"
+    source: design §2.4 / AC-002 / DOD-IMPL-006
+    status: pending
+  - item: "scope guard 使用 git diff --name-only、package.json.os 解析和 forbidden path set，禁止修改 packaging/docs contract、backend implementation、provider parser"
+    source: 明确不做 / AC-009 / DOD-IMPL-007
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-20-rmux-windows-validation-matrix/rmux-windows-validation-matrix-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_rmux_windows_validation_matrix.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - manifest_schema
+        - true_host_anti_spoof_fields
+        - report_builder
+        - subset_full_status
+        - transcript_parser
+        - dirty_transcript_redaction_fixture
+        - failure_classification
+    - id: CMD-004
+      command: "python scripts/rmux_windows_validation_matrix.py --lane fake --scope subset --json"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - fake_lane_report
+        - not_true_host_projection
+    - id: CMD-005
+      command: "python scripts/rmux_windows_validation_matrix.py --transcript \"artifacts/rmux-windows/manual-transcript.json\" --json"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - manual_transcript_import
+        - missing_evidence_fail_closed
+        - redaction_summary
+    - id: CMD-006
+      command: "python -m pytest -q -m ccb_lifecycle_smoke test/test_v2_phase2_entrypoint.py test/test_v2_ccbd_start_matrix.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: existing
+      covers:
+        - lifecycle_baseline
+        - start_ping_subset
+    - id: CMD-007
+      command: "python -m pytest -q -m provider_blackbox test/test_v2_phase2_entrypoint.py"
+      core: false
+      failure_handling: record-provider-failure
+      test_status: existing-focused
+      covers:
+        - provider_blackbox_baseline
+        - auth_failure_classification
+    - id: CMD-008
+      command: "powershell -NoProfile -ExecutionPolicy Bypass -File \".\\scripts\\rmux-windows-validation-runbook.ps1\" -ProjectRoot \"$env:TEMP\\ccb-rmux-validation\" -Json"
+      core: true
+      manual: true
+      failure_handling: attach-transcript-or-block-full-pass
+      test_status: new
+      covers:
+        - native_windows_true_host
+        - start_ping
+        - ask
+        - kill_cleanup
+        - restart_replay
+        - multi_project
+        - transcript_sidecar_schema
+    - id: CMD-009
+      command: "python -m pytest -q test/test_rmux_windows_validation_scope_guard.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - no_package_os_change
+        - package_json_os_parser
+        - git_diff_name_only_guard
+        - no_install_docs_contract_change
+        - no_backend_implementation_change
+        - no_provider_parser_change
+  evidence_required:
+    - matrix_manifest
+    - powershell_runbook
+    - markdown_runbook
+    - report_json
+    - rows_jsonl
+    - summary_markdown
+    - sample_transcript_fixtures
+    - dirty_transcript_redaction_fixture
+    - windows_true_host_transcript_sidecar
+    - redaction_summary
+    - workflow_subset_report
+    - scope_guard
+    - items_yaml_diff
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
+    secret_in_transcript: forbidden
+    package_os_change: forbidden
+    install_docs_contract_change: forbidden
+    backend_implementation_change: forbidden
+    provider_parser_change: forbidden

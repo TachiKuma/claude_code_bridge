@@ -1,0 +1,136 @@
+feature: 2026-07-20-rmux-supervision-recovery
+created: 2026-07-20
+
+steps:
+  - action: "evidence ledger：定义 pane/process/namespace/daemon evidence model 和 redacted diagnostics projection"
+    exit_signal: "unit tests 可构造四类 evidence 并序列化到 SupervisionEvent.details"
+    status: pending
+  - action: "backend-neutral matching：替换 tmux_socket_path / % pane id 归属判断为 namespace_ref / pane_ref matching"
+    exit_signal: "tmux regression 通过；Rmux pane id 不以 % 开头仍可判断 replacement"
+    status: pending
+  - action: "process/job recovery split：把 process dead/job exited 与 pane dead/missing 分开分类"
+    exit_signal: "pane alive + process dead 不返回 healthy；process dead 触发 restart/remount 或 degraded"
+    status: pending
+  - action: "namespace crash recovery：namespace missing/crashed/foreign 触发 reflow/remount 或 hard diagnostics"
+    exit_signal: "fake backend tests 覆盖 namespace missing、marker mismatch、reflow blocked"
+    status: pending
+  - action: "daemon crash diagnostics/recovery：接入 Rmux daemon ownership evidence"
+    exit_signal: "shared daemon crash 只记录 degraded/外部恢复 evidence；owned generation mismatch 走 approved cleanup/restart path"
+    status: pending
+  - action: "event/project view/doctor projection：SupervisionEvent、project view、doctor bundle 展示 ledger summary"
+    exit_signal: "snapshot tests 覆盖 pane/process/namespace/daemon 四类 evidence"
+    status: pending
+  - action: "Windows recovery smoke：kill pane、kill provider process、观察 shared daemon degraded、owned daemon restart 的 focused smoke"
+    exit_signal: "transcript 展示 pane/process 恢复、shared daemon degraded-only、owned daemon approved restart 或明确 degraded diagnostics"
+    status: pending
+  - action: "scope guard：不改 provider parser、backend resolver、namespace lifecycle、process liveness implementation"
+    exit_signal: "diff/import guard + focused review 通过"
+    status: pending
+
+checks:
+  - item: "evidence ledger 分离 pane/process/namespace/daemon health"
+    source: design §1 / AC-007 / DOD-IMPL-001
+    status: pending
+  - item: "Rmux pane id 不依赖 %，namespace 匹配不依赖 tmux_socket_path"
+    source: design §1 / AC-002 / DOD-IMPL-002
+    status: pending
+  - item: "process/job death 与 pane death 分开恢复或降级"
+    source: design §2.4 / AC-003 / DOD-IMPL-003
+    status: pending
+  - item: "namespace crash 触发 reflow/remount 或 hard diagnostics"
+    source: design §2.4 / AC-004 / DOD-IMPL-004
+    status: pending
+  - item: "daemon crash 使用 ownership evidence，不误杀 shared daemon"
+    source: design §2.4 / AC-005 / AC-006 / DOD-IMPL-005
+    status: pending
+  - item: "SupervisionEvent/project view/doctor 输出 evidence ledger"
+    source: design §2.4 / AC-007 / DOD-IMPL-006
+    status: pending
+  - item: "不改 provider parser、resolver、namespace lifecycle、process liveness"
+    source: 明确不做 / AC-008 / DOD-IMPL-007
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-20-rmux-supervision-recovery/rmux-supervision-recovery-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_ccbd_supervision.py test/test_ccbd_supervision_recovery.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - tmux_regression
+        - recovery_transitions
+        - recovery_decision_table
+    - id: CMD-004
+      command: "python -m pytest -q test/test_ccbd_rmux_supervision_evidence.py test/test_ccbd_rmux_supervision_recovery.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - rmux_evidence_ledger
+        - pane_recovery
+        - process_job_recovery
+        - namespace_recovery
+    - id: CMD-005
+      command: "python -m pytest -q test/test_ccbd_rmux_daemon_supervision.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - daemon_crash
+        - generation_mismatch
+        - shared_daemon_policy
+        - no_shared_daemon_auto_restart
+        - owned_daemon_approved_restart
+    - id: CMD-006
+      command: "python -m pytest -q test/test_ccbd_supervision_diagnostics.py test/test_ccbd_project_view.py test/test_cli_doctor_supervision.py test/test_cli_ping_supervision.py test/test_ccbd_diagnostics_bundle_supervision.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new-or-extended
+      covers:
+        - supervision_event_projection
+        - project_view_projection
+        - doctor_bundle_projection
+        - doctor_projection
+        - ping_projection
+        - evidence_ledger_projection_keys
+    - id: CMD-007
+      command: "python -m pytest -q test/test_ccbd_rmux_supervision_guard.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - no_tmux_socket_dependency_for_rmux
+        - no_percent_pane_id_requirement_for_rmux
+        - no_provider_parser_change
+        - no_process_liveness_implementation_change
+        - no_backend_resolver_policy_change
+        - no_namespace_lifecycle_implementation_change
+        - no_validation_matrix_scope
+  evidence_required:
+    - evidence_ledger
+    - backend_neutral_matching_helpers
+    - process_job_split_tests
+    - namespace_crash_tests
+    - daemon_health_tests
+    - diagnostics_snapshots
+    - windows_recovery_smoke_transcript
+    - scope_guard
+    - items_yaml_diff
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
+    provider_parser_change: forbidden
+    process_liveness_implementation_change: forbidden
+    backend_resolver_change: forbidden
+    namespace_lifecycle_scope_expansion: forbidden

@@ -1,0 +1,117 @@
+feature: 2026-07-20-ccbd-windows-tcp-loopback-transport
+created: 2026-07-20
+
+steps:
+  - action: "endpoint store + platform selection：实现 Windows platform default tcp_loopback，endpoint store read/write/legacy projection"
+    exit_signal: "factory tests 断言 Windows 选 TCP、Unix 选 Unix，CLI 不分叉平台读取"
+    status: pending
+  - action: "token auth + ACL convergence：实现 token generation、ACL convergence、redacted diagnostics"
+    exit_signal: "tests 覆盖 success、icacls failure、unparseable ACL、token missing、no token logging"
+    status: pending
+  - action: "TCP listener/connector：实现 bind 127.0.0.1:0、OS port discovery、connect timeout、shutdown cleanup"
+    exit_signal: "unit/fake socket tests 断言 host/port/token_ref 和 cleanup ownership"
+    status: pending
+  - action: "handshake before handler：auth prelude 在 JSON-line RPC 前完成，失败连接不入队"
+    exit_signal: "valid token 可 ping；bad/missing token 不触发 handler"
+    status: pending
+  - action: "bootstrap self-ping：bootstrap probe 通过 factory/connector 走同一 token path"
+    exit_signal: "bootstrap nonce success、auth failure、endpoint stale 均可诊断"
+    status: pending
+  - action: "diagnostics and redaction：ping/doctor/start payload、log、snapshot、error detail、异常链和 artifact 展示 token_ref/acl status/fingerprint，不输出 token"
+    exit_signal: "snapshot/error/log tests 与 grep guard 证明 token redacted"
+    status: pending
+  - action: "regression and guard：确认 frame/handler 不变，不新增 named pipe production 分支，不修 pid liveness"
+    exit_signal: "focused ccbd tests + import/secret guard 通过"
+    status: pending
+
+checks:
+  - item: "Windows platform default 使用 tcp_loopback，Unix adapter 不漂移"
+    source: design §1 / AC-001 / DOD-IMPL-001
+    status: pending
+  - item: "server listen 绑定 127.0.0.1:0，endpoint descriptor 含 host/port/token_ref"
+    source: design §2.2 / AC-002
+    status: pending
+  - item: "token ACL 可证明收敛；无法收敛 fail-fast 且不 publish endpoint"
+    source: design §1 / AC-003 / DOD-IMPL-002
+    status: pending
+  - item: "client/server token handshake 在 handler 前完成，bad/missing token 不入队"
+    source: design §2.4 / AC-004 / AC-005 / DOD-IMPL-003
+    status: pending
+  - item: "bootstrap self-ping 走同一 auth path，nonce 校验保持"
+    source: design §2.4 / AC-006 / DOD-IMPL-004
+    status: pending
+  - item: "endpoint store canonical-first；Windows legacy socket_path/socket_path 投影为 null，不写 placeholder，不作为 connect/liveness/stale authority"
+    source: design §1 / DOD-IMPL-005
+    status: pending
+  - item: "diagnostics/log/snapshot/error/artifact redacts token，只输出 token_ref/acl_status/fingerprint"
+    source: design §2.2 / AC-007 / DOD-IMPL-006
+    status: pending
+  - item: "不改 RpcRequest/RpcResponse、handler dispatch、named pipe、pid liveness、mux/backend/provider"
+    source: 明确不做 / AC-008 / DOD-IMPL-007
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-20-ccbd-windows-tcp-loopback-transport/ccbd-windows-tcp-loopback-transport-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_ccbd_windows_tcp_loopback_transport.py"
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - tcp_adapter
+        - token_acl
+        - handshake
+        - endpoint_store
+    - id: CMD-004
+      command: "python -m pytest -q test/test_ccbd_bootstrap_probe.py test/test_ccbd_control_plane_transport_fake.py"
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - bootstrap_probe
+        - seam_regression
+    - id: CMD-005
+      command: "python -m pytest -q test/test_v2_start_service.py test/test_v2_phase2_entrypoint.py -k \"ccbd or endpoint or ping or socket\""
+      core: true
+      failure_handling: document-baseline
+      covers:
+        - start_service
+        - ping
+        - control_plane_regression
+    - id: CMD-006
+      command: "python -m pytest -q test/test_ccbd_windows_tcp_loopback_import_guard.py"
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - token_redaction_diagnostics
+        - token_redaction_log
+        - token_redaction_snapshot
+        - token_redaction_error
+        - token_redaction_artifact
+        - no_named_pipe_adapter
+        - no_handler_schema_change
+        - no_pid_liveness_change
+  evidence_required:
+    - windows_tcp_adapter
+    - token_auth_helper
+    - endpoint_store_update
+    - token_acl_tests
+    - handshake_tests
+    - bootstrap_regression
+    - diagnostics_redaction_tests
+    - scope_guard
+    - items_yaml_diff
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
+    token_plaintext_logging: forbidden
+    named_pipe_production_branch: forbidden
+    rpc_handler_schema_change: forbidden

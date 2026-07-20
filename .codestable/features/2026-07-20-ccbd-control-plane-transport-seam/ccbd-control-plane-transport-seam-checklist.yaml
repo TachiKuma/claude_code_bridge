@@ -1,0 +1,112 @@
+feature: 2026-07-20-ccbd-control-plane-transport-seam
+created: 2026-07-20
+
+steps:
+  - action: "endpoint contract：定义 EndpointRef、legacy socket path projection、endpoint store/factory 和 endpoint diagnostics"
+    exit_signal: "Path、descriptor 和 legacy socket_path store fallback 都能投影为 Unix endpoint，CLI 不散落平台判断"
+    status: pending
+  - action: "transport interface + frames split：定义 connection/listener/factory protocol，并确认 JSON-line frame helper 不依赖 socket"
+    exit_signal: "frame tests 仍通过，send_request/recv_response_line/decode_response 可消费 fake connection，fake connection 覆盖 settimeout 与 context-manager close 语义"
+    status: pending
+  - action: "Unix adapter extraction：把 AF_UNIX connect/listen/stale cleanup/bound identity 迁入 Unix adapter"
+    exit_signal: "现有 ccbd socket client/server/bootstrap tests 在 Unix path 下不漂移"
+    status: pending
+  - action: "bootstrap probe seam：把 probe client path、readiness/select/poll、peer evidence matcher、deferred connection logic 收敛到 adapter-facing 接口"
+    exit_signal: "fake transport 不依赖真实 socket 也覆盖 self-ping、nonce mismatch、external deferred enqueue、deferred overflow close"
+    status: pending
+  - action: "fake transport tests：用 fake listener/connection/probe 跑通 server lifecycle、client request、bootstrap gate"
+    exit_signal: "不创建真实 AF_UNIX socket 也能验证 handler dispatch、request timeout、context-manager close 不变"
+    status: pending
+  - action: "lease/diagnostics projection：mounted lease / ping / doctor payload 新增 endpoint descriptor，保留 socket_path"
+    exit_signal: "existing socket_path assertions 继续通过，新 tests 断言 endpoint kind/address"
+    status: pending
+  - action: "guard and regression：禁止新增裸 socket.AF_UNIX 到 control-plane 调用层，允许只在 Unix adapter/tests 内出现"
+    exit_signal: "focused grep guard + ccbd client/server/start tests 通过"
+    status: pending
+
+checks:
+  - item: "endpoint descriptor canonical-first，旧 socket_path 兼容投影和 store fallback 保留"
+    source: design §1 / AC-001 / DOD-IMPL-001
+    status: pending
+  - item: "connection protocol 覆盖 settimeout、sendall、recv、close 和 context-manager close 语义"
+    source: design §1 / AC-004 / DOD-IMPL-003a
+    status: pending
+  - item: "Unix adapter 保持 AF_UNIX connect/listen/stale cleanup/bootstrap 行为不漂移"
+    source: design §2.4 / AC-002 / AC-003 / DOD-IMPL-002
+    status: pending
+  - item: "fake transport 可验证 lifecycle/handler，不依赖真实 socket"
+    source: design §2.4 / AC-004 / DOD-IMPL-003
+    status: pending
+  - item: "RpcRequest/RpcResponse JSON-line frame 与 handler dispatch 不变"
+    source: design §1 / AC-005 / DOD-IMPL-004
+    status: pending
+  - item: "endpoint discovery/store adapter 负责从 descriptor 或 legacy socket_path 构造 endpoint，diagnostics/lease 含 endpoint descriptor 且旧 socket_path 字段可用"
+    source: design §2.2 / AC-006 / DOD-IMPL-005
+    status: pending
+  - item: "Unix adapter 外无裸 socket.AF_UNIX 新增，Windows TCP adapter 不在本 feature 实现"
+    source: design §3.2 / AC-007 / DOD-IMPL-006
+    status: pending
+  - item: "不修改 pid liveness、mux backend、provider runtime、RPC handlers"
+    source: 明确不做 / AC-008
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_ccbd_control_plane_transport_unix.py test/test_ccbd_control_plane_transport_fake.py"
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - endpoint_descriptor
+        - endpoint_store_factory
+        - unix_adapter
+        - fake_transport
+    - id: CMD-004
+      command: "python -m pytest -q test/test_ccbd_bootstrap_probe.py test/test_ccbd_socket_server.py test/test_ccbd_socket_client.py"
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - bootstrap_probe
+        - server_regression
+        - client_regression
+    - id: CMD-005
+      command: "python -m pytest -q test/test_v2_start_service.py test/test_v2_phase2_entrypoint.py -k \"ccbd or socket or endpoint or ping\""
+      core: true
+      failure_handling: document-baseline
+      covers:
+        - start_service
+        - ping
+        - lease_diagnostics
+    - id: CMD-006
+      command: "python -m pytest -q test/test_ccbd_control_plane_transport_import_guard.py"
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - af_unix_boundary
+        - no_windows_tcp_adapter
+        - no_rpc_handler_change
+  evidence_required:
+    - endpoint_descriptor
+    - transport_interface
+    - unix_adapter
+    - fake_transport
+    - bootstrap_probe_seam_tests
+    - client_server_regression
+    - diagnostics_projection_tests
+    - import_guard
+    - items_yaml_diff
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
+    windows_transport_implementation: forbidden
+    rpc_handler_change: forbidden

@@ -1,0 +1,157 @@
+feature: 2026-07-20-rmux-packaging-docs-contracts
+created: 2026-07-20
+
+steps:
+  - action: "support projection owner + classifier：从 route approval、capability、validation matrix 机器字段、local install smoke、可选 npm gate 计算 support projection"
+    exit_signal: "缺证据 fail closed；只有 selection_scope=full + full_matrix_status=pass + true-host/manual core rows observed 才能输出 supported"
+    status: pending
+  - action: "diagnostics projection：doctor/bundle 增加 rmux support/install/validation 字段"
+    exit_signal: "snapshot 覆盖 experimental/beta/supported/blocked"
+    status: pending
+  - action: "install.ps1 contract：增加 rmux prerequisite detect_only/warn/fail_fast 行为和同环境说明"
+    exit_signal: "PowerShell installer tests 覆盖 missing/partial/ok，不自动下载 rmux"
+    status: pending
+  - action: "npm packaging gate：决定是否加入 win32；若不加入，README 明确 native Windows 使用 install.ps1/source route"
+    exit_signal: "若启用 npm，artifactForHost win32、Windows artifact/checksum、postinstall tests、package files/docs strategy、npm run pack:check 全部通过；若不启用 npm，落 no-change rationale"
+    status: pending
+  - action: "README/docs sync：同步 README、install runbook、diagnostics contract、support contract"
+    exit_signal: "parser/snapshot docs consistency test 不存在 beta/supported 冲突文案、入口映射冲突或 release note 未来承诺"
+    status: pending
+  - action: "fallback and troubleshooting：写清 route approval failed、rmux missing、capability partial、provider auth failure、validation incomplete 的诊断和回退"
+    exit_signal: "docs grep/snapshot 覆盖每类 failure reason"
+    status: pending
+  - action: "release contract guard：禁止发布、tag、push、release upload；只准备可审 diff"
+    exit_signal: "scope guard 证明没有 release artifact 或 remote operation"
+    status: pending
+  - action: "acceptance evidence pack：汇总 package/install/docs/doctor/validation refs，作为 supported/beta 判定输入"
+    exit_signal: "机器可读索引含 route_approval_ref、validation_report_ref、full_matrix_status、package_gate_ref、docs_consistency_ref、final_support_tier"
+    status: pending
+
+checks:
+  - item: "support projection owner/classifier 绑定 route approval、capability gate、validation matrix 机器字段、local install smoke、可选 npm gate"
+    source: design §1 / AC-001 / DOD-IMPL-001
+    status: pending
+  - item: "validation matrix 未满足 selection_scope=full + full_matrix_status=pass + true-host/manual core rows observed 前不得声明 supported"
+    source: 支持档决策表 / AC-001 / AC-004
+    status: pending
+  - item: "support_tier 正式枚举 blocked/experimental/beta/supported，doctor/docs/tests 使用同一枚举"
+    source: design §0 / §1 / DOD-IMPL-001
+    status: pending
+  - item: "install.ps1 rmux 行为明确为 detect_only/warn/fail_fast，默认不自动下载 rmux"
+    source: design §1 / AC-003 / DOD-IMPL-002
+    status: pending
+  - item: "npm win32 gate 与 package.json/os、artifactForHost win32、artifact/checksum strategy、postinstall、package files/docs strategy、README 文案一致"
+    source: design §1 / AC-005 / AC-006 / DOD-IMPL-003
+    status: pending
+  - item: "doctor/diagnostics bundle 输出 rmux support/version/capability/validation/install_entry/fallback 字段"
+    source: design §1 / AC-007 / DOD-IMPL-004
+    status: pending
+  - item: "README/docs/support contract 通过 parser/snapshot gate，无 beta/supported/experimental、入口映射、release note 未来承诺冲突"
+    source: design §2.4 / AC-003 / AC-004 / DOD-IMPL-005
+    status: pending
+  - item: "troubleshooting 覆盖 route/capability/rmux missing/provider auth/validation incomplete"
+    source: design §2.4 / AC-008 / DOD-IMPL-006
+    status: pending
+  - item: "不执行发布、tag、push、npm publish、release upload"
+    source: 明确不做 / AC-009 / DOD-IMPL-007
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-20-rmux-packaging-docs-contracts/rmux-packaging-docs-contracts-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_rmux_packaging_docs_contracts.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - support_projection_owner
+        - support_tier_classifier
+        - validation_machine_fields
+        - package_docs_consistency
+        - windows_npm_gate
+    - id: CMD-004
+      command: "python -m pytest -q test/test_install_windows_rmux_contract.py test/test_windows_bootstrap_script.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new-or-extended
+      covers:
+        - install_ps1_rmux_detect_warn_failfast
+        - no_rmux_auto_download
+        - bootstrap_regression
+    - id: CMD-005
+      command: "python -m pytest -q test/test_ccbd_diagnostics_bundle_rmux.py test/test_cli_doctor_rmux_packaging.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new-or-extended
+      covers:
+        - diagnostics_support_tier_fields
+        - validation_ref_projection
+        - fallback_guidance_projection
+    - id: CMD-006
+      command: "npm run pack:check"
+      core: false
+      conditional_core: package_touched
+      failure_handling: fix-or-block-if-package-touched
+      test_status: existing
+      covers:
+        - npm_pack_dry_run
+        - package_files_projection
+        - conditional_npm_entry_gate
+    - id: CMD-007
+      command: "python -m pytest -q test/test_rmux_packaging_release_guard.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - no_git_push
+        - no_git_tag
+        - no_npm_publish
+        - no_release_upload
+    - id: CMD-008
+      command: "python -m pytest -q test/test_rmux_docs_consistency_gate.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - docs_wording_consistency
+        - install_entry_consistency
+        - support_tier_single_source
+        - release_note_no_future_promise
+    - id: CMD-009
+      command: "rg -n \"Windows Rmux|rmux|supported|beta|experimental|npm install -g @seemseam/ccb\" README.md README docs/ccbd-diagnostics-contract.md docs/plantree/plans/windows-rmux-native-backend"
+      core: false
+      failure_handling: inspect-output
+      test_status: manual-review
+      covers:
+        - docs_wording_consistency
+        - install_entry_consistency
+  evidence_required:
+    - support_contract_doc
+    - support_projection_module_or_artifact
+    - install_runbook_or_update
+    - readme_docs_diff
+    - diagnostics_contract_diff
+    - package_metadata_diff_or_no_change_rationale
+    - npm_gate_evidence_when_package_touched
+    - installer_snapshot_tests
+    - docs_consistency_parser_output
+    - pack_check_output_when_package_touched
+    - release_guard
+    - acceptance_evidence_pack_index
+    - items_yaml_diff
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
+    secret_in_docs: forbidden
+    auto_third_party_download: forbidden
+    publish_or_push_action: forbidden

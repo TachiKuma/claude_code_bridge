@@ -1,0 +1,172 @@
+feature: 2026-07-20-ccbd-rmux-namespace-lifecycle
+created: 2026-07-20
+
+steps:
+  - action: "namespace_ref state bridge：state/event/summary/ping payload 写 canonical namespace_ref，并保留旧 tmux aliases"
+    exit_signal: "tmux payload 不漂移；Rmux payload legacy socket path 为 null，canonical fields 完整"
+    status: pending
+  - action: "ProjectNamespaceBackend factory：controller/ensure_context 从 resolver result 构造 backend policy adapter"
+    exit_signal: "fake backend 可注入；tmux adapter 行为与旧 TmuxBackend(socket_path=...) 等价"
+    status: pending
+  - action: "ensure/reflow/layout projection backend-neutralization：create session/window/split/root pane/identity marker 通过 backend interface"
+    exit_signal: "fake backend 证明 ensure、layout recreate、reflow 不调用 tmux primitive；tmux regression 通过"
+    status: pending
+  - action: "foreground attach adapter：start_foreground 读取 canonical payload 并调用 MuxBackend/NamespaceLifecycle attach capability 或前序批准 attach adapter"
+    exit_signal: "Rmux payload attach test 不调用 tmux_base；tmux attach tests 不漂移"
+    status: pending
+  - action: "kill namespace adapter：CLI kill phase 明确 remote stop → local prepare evidence/registry → backend kill_namespace → daemon diagnostics → final PID/orphan/report cleanup"
+    exit_signal: "kill ordering tests 证明 evidence/registry prepare 先于 namespace kill、actual PID cleanup 仍在 finalize 阶段执行；shared daemon 不被误杀"
+    status: pending
+  - action: "cross-cutting namespace readers：project view、start_flow/runtime binding、health assessment、slot replacement、project_clear/restart、layout/doctor/ping 改读 canonical namespace projection"
+    exit_signal: "Rmux namespace 缺 legacy tmux socket 时不被误判 unavailable；tmux-only probes 只在 tmux adapter 内运行"
+    status: pending
+  - action: "diagnostics and compatibility：ping/doctor/project view/startup/kill report 展示 canonical namespace_ref 和 legacy aliases"
+    exit_signal: "snapshot tests 证明 tmux old fields 保留，Rmux canonical fields 可读"
+    status: pending
+  - action: "Windows/Rmux lifecycle smoke：可用 Rmux / fake Rmux 环境跑 start→attach→kill focused smoke"
+    exit_signal: "native Windows 或 marked integration transcript 证明 namespace created、attached、killed；full ask 留给后续 smoke item"
+    status: pending
+  - action: "scope guard：禁止本 feature 修改 provider parser、accelerator、process liveness、supervision/recovery 或 direct rmux CLI in ccbd/cli layers"
+    exit_signal: "diff/import guard + focused code review 通过"
+    status: pending
+
+checks:
+  - item: "namespace state canonical-first，tmux legacy aliases 保留，Rmux legacy socket path 为 null"
+    source: design §1 / AC-001 / AC-007 / DOD-IMPL-001
+    status: pending
+  - item: "ProjectNamespaceController 通过 resolver/factory 消费 ProjectNamespaceBackend"
+    source: design §1 / AC-002 / DOD-IMPL-002
+    status: pending
+  - item: "ensure/reflow/layout projection 不直接调用 tmux/rmux primitive，使用 backend interface"
+    source: design §2.4 / AC-003 / DOD-IMPL-003
+    status: pending
+  - item: "foreground attach Rmux 路径调用 MuxBackend/NamespaceLifecycle attach 或前序批准 adapter，不私自扩 ProjectNamespaceBackend，不调用 tmux attach-session/list-clients"
+    source: design §1 / AC-004 / DOD-IMPL-004
+    status: pending
+  - item: "backend selection mismatch 时 recreate 或 fail-fast，不静默复用错误 backend"
+    source: design §2.2 / AC-005
+    status: pending
+  - item: "kill phase ordering 为 remote stop → local prepare evidence/registry → kill namespace → daemon diagnostics → final PID/orphan/report cleanup；shared daemon 不被误杀"
+    source: design §2.4 / AC-006 / DOD-IMPL-005
+    status: pending
+  - item: "project view、start_flow/runtime binding、health assessment、slot replacement、project_clear/restart 使用 canonical namespace projection"
+    source: design §2.4 / AC-007 / DOD-IMPL-006
+    status: pending
+  - item: "diagnostics/ping/doctor/startup/kill report 展示 canonical namespace_ref 与兼容 aliases"
+    source: design §2.4 / AC-008 / DOD-IMPL-007
+    status: pending
+  - item: "不改 provider parser、accelerator、process liveness、supervision/recovery，不在调用层直接拼 rmux CLI"
+    source: 明确不做 / AC-009 / DOD-IMPL-008
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-20-ccbd-rmux-namespace-lifecycle/ccbd-rmux-namespace-lifecycle-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_ccbd_project_namespace_backend.py test/test_ccbd_project_namespace_runtime.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new-or-extended
+      covers:
+        - project_namespace_backend
+        - ensure_lifecycle
+        - namespace_ref_state
+    - id: CMD-004
+      command: "python -m pytest -q test/test_ccb_start_foreground.py test/test_ccbd_project_namespace_attach.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new-or-extended
+      covers:
+        - foreground_attach
+        - no_tmux_attach_for_rmux
+        - no_project_namespace_backend_attach_extension
+    - id: CMD-005
+      command: "python -m pytest -q test/test_cli_kill.py test/test_ccbd_project_namespace_kill.py test/test_ccbd_rmux_namespace_kill_ordering.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new-or-extended
+      covers:
+        - remote_stop_before_local_prepare
+        - local_prepare_evidence_before_namespace_kill
+        - namespace_destroy
+        - daemon_cleanup_diagnostics
+        - final_pid_cleanup_still_runs
+        - orphan_cleanup_report_merge
+    - id: CMD-006
+      command: "python -m pytest -q test/test_v2_start_service.py test/test_v2_phase2_entrypoint.py -k \"namespace or attach or kill or ping\""
+      core: true
+      failure_handling: document-baseline
+      covers:
+        - start_service
+        - ping
+        - kill_regression
+    - id: CMD-007
+      command: "python -m pytest -q test/test_ccbd_project_view.py test/test_ccbd_project_focus.py test/test_ccbd_health_assessment.py test/test_ccbd_project_slot_replacement.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new-or-extended
+      covers:
+        - project_view_namespace_reader
+        - project_focus_namespace_reader
+        - health_namespace_reader
+        - slot_replacement_namespace_reader
+    - id: CMD-008
+      command: "python -m pytest -q test/test_ccbd_start_flow_backend_neutral.py test/test_ccbd_runtime_binding_backend_neutral.py test/test_ccbd_runtime_launch_backend_neutral.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - start_flow_namespace_projection
+        - runtime_binding_namespace_projection
+        - runtime_launch_namespace_projection
+    - id: CMD-009
+      command: "python -m pytest -q test/test_ccbd_project_clear_restart_backend_neutral.py test/test_cli_layout_status_backend_neutral.py test/test_cli_doctor_ping_namespace_projection.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - project_clear_namespace_projection
+        - project_restart_namespace_projection
+        - layout_status_namespace_projection
+        - doctor_namespace_projection
+        - ping_namespace_projection
+    - id: CMD-010
+      command: "python -m pytest -q test/test_ccbd_rmux_namespace_lifecycle_guard.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - no_direct_rmux_cli_in_calling_layers
+        - no_project_namespace_backend_attach_extension
+        - no_provider_parser_change
+        - no_accelerator_change
+        - no_process_liveness_change
+        - no_supervision_recovery_change
+  evidence_required:
+    - namespace_ref_state_bridge
+    - project_namespace_backend_factory
+    - fake_backend_lifecycle_tests
+    - foreground_attach_adapter
+    - kill_namespace_adapter
+    - cross_cutting_namespace_reader_updates
+    - diagnostics_snapshots
+    - rmux_focused_smoke
+    - scope_guard
+    - items_yaml_diff
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
+    direct_rmux_cli_in_calling_layers: forbidden
+    provider_parser_change: forbidden
+    accelerator_transport_change: forbidden
+    process_liveness_change: forbidden
+    supervision_recovery_change: forbidden

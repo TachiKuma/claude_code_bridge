@@ -1,0 +1,116 @@
+feature: 2026-07-20-rmux-send-capture-logging
+created: 2026-07-20
+
+steps:
+  - action: "IO capability guard：扩展 Rmux capability projection，覆盖 send/capture/logging required set"
+    exit_signal: "unsupported required 在每个 IO operation 前抛 MuxCommandError(category=unsupported)"
+    status: pending
+  - action: "send text strategy：实现小文本、大文本、多行和 submit Enter 的 Rmux-safe 发送策略"
+    exit_signal: "fake client tests 覆盖空文本 no-op、长文本、换行、shell metachar 和 command failure"
+    status: pending
+  - action: "send key mapping：实现 key allowlist，覆盖 Ctrl-C、Ctrl-D、Enter、Tab、Escape、Backspace、方向键和清屏类键"
+    exit_signal: "tests 断言控制键不走普通 text path，未知 key fail-fast"
+    status: pending
+  - action: "capture parser：实现 line range、ANSI/plain mode、trailing whitespace policy 和 malformed output diagnostics"
+    exit_signal: "capture fixtures 覆盖 ANSI、宽字符、wrap、多行边界、empty pane、range"
+    status: pending
+  - action: "logging bridge：实现 Rmux pipe/logging 与 WindowsCommandBuilder 的桥接"
+    exit_signal: "tests 断言 Rmux IO 不出现 shell literal，Windows path 用 builder 输出"
+    status: pending
+  - action: "provider completion golden fixtures：把 Rmux capture/log 输出喂给 completion detectors"
+    exit_signal: "Codex、Claude、DeepSeek/AGY 或对应 completion family 的 fixtures 得到期望 CompletionDecision / items"
+    status: pending
+  - action: "compatibility and guard：补 import/grep guard，确认不改 provider parser、不引入 tmux buffer fallback、不接 ccbd lifecycle"
+    exit_signal: "guard tests + focused tmux send/log/capture 回归通过"
+    status: pending
+
+checks:
+  - item: "send/capture/logging required unsupported 必须 fail-fast，不能 fallback 到 tmux"
+    source: design §1 / AC-001 / DOD-IMPL-001
+    status: pending
+  - item: "send_text 覆盖小文本、大文本、多行和 submit Enter，不复用 tmux load-buffer/paste-buffer"
+    source: design §2.4 / AC-002 / DOD-IMPL-002
+    status: pending
+  - item: "send_key 覆盖 Ctrl-C、Ctrl-D 和常用特殊键，未知 key fail-fast"
+    source: design §2.4 / AC-003 / DOD-IMPL-003
+    status: pending
+  - item: "capture_pane 输出格式、ANSI、尾部空白、range 和 malformed output 可诊断"
+    source: design §2.1 / AC-004 / DOD-IMPL-004
+    status: pending
+  - item: "logging 消费 WindowsCommandBuilder，不在 Rmux IO 层拼 tee/sh/powershell/cmd 字符串"
+    source: design §1 / AC-006 / DOD-IMPL-005
+    status: pending
+  - item: "provider completion golden fixtures 证明 capture/log 格式保真"
+    source: design §3.1 / AC-007 / DOD-IMPL-006
+    status: pending
+  - item: "不修改 provider completion parser，不接 ccbd lifecycle、foreground attach 或 mobile gateway production path"
+    source: 明确不做 / AC-008 / DOD-IMPL-007
+    status: pending
+  - item: "Rmux IO 不导入 TmuxBackend，不使用 tmux buffer fallback，不伪装 tmux pane id"
+    source: design §3.2 / scope guard
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-20-rmux-send-capture-logging/rmux-send-capture-logging-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_rmux_send_capture_logging.py"
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - capability_guard
+        - text_send
+        - key_send
+        - capture_parser
+        - logging_bridge
+        - error_mapping
+    - id: CMD-004
+      command: "python -m pytest -q test/test_rmux_completion_capture_fixtures.py"
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - provider_completion_golden_fixtures
+        - capture_format_fidelity
+    - id: CMD-005
+      command: "python -m pytest -q test/test_terminal_runtime_tmux_send.py test/test_terminal_runtime_tmux_logs.py test/test_ccbd_project_view.py -k \"send or log or capture or pane\""
+      core: true
+      failure_handling: document-baseline
+      covers:
+        - tmux_send_compatibility
+        - tmux_log_compatibility
+        - project_view_capture_regression
+    - id: CMD-006
+      command: "python -m pytest -q test/test_rmux_send_capture_logging_import_guard.py"
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - no_tmux_buffer_fallback
+        - no_shell_literal_leakage
+        - no_completion_parser_change
+        - no_ccbd_lifecycle_wiring
+  evidence_required:
+    - rmux_io_module
+    - fake_rmux_client_tests
+    - send_text_tests
+    - send_key_tests
+    - capture_parser_tests
+    - logging_bridge_tests
+    - completion_golden_fixtures
+    - scope_guard_tests
+    - tmux_compatibility_regression
+    - items_yaml_diff
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
+    tmux_buffer_paste_copy: forbidden
+    shell_literal_in_rmux_io: forbidden
+    provider_completion_parser_change: forbidden

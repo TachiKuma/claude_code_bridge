@@ -1,0 +1,126 @@
+feature: 2026-07-20-ccbd-windows-full-chain-smoke
+created: 2026-07-20
+
+steps:
+  - action: "transcript schema/parser：定义 sidecar schema、command record、verdict/failure_class、ask_case_kind、classification、redaction requirements"
+    exit_signal: "sample pass/provider_failure/system_failure/test_design_failure/blocked/missing fixtures 生成稳定 verdict，缺 host/control/backend/probe/verdict/failure_class 字段 fail closed"
+    status: pending
+  - action: "PowerShell runner skeleton：实现 preflight、command capture、artifact paths、finally cleanup、redaction summary"
+    exit_signal: "dry-run 或 fixture mode 可在非真机测试 parser；runner 不含 provider secret allowlist 外输出"
+    status: pending
+  - action: "dependency preflight：记录四个前置 item 的 acceptance/review/evidence 是否 ready"
+    exit_signal: "任一前置 pending/blocked 时 transcript verdict=blocked 且 failure_class=dependency_pending，不误归类为 full-chain system failure"
+    status: pending
+  - action: "start/ping evidence：记录 native host、rmux version、backend selection、ccbd transport、ccb ping ccbd、ccb doctor、mounted output"
+    exit_signal: "parser 能证明 host_kind=native_windows、backend_impl=rmux、control_plane=ccbd、ccbd_transport=tcp_loopback，且命令记录包含 ccb ping ccbd"
+    status: pending
+  - action: "ask evidence：运行至少一个 provider ask，记录 ask_case_kind、task id、provider、reply/terminal state、runtime/session evidence"
+    exit_signal: "ask pass 或 provider_failure 分类可复核；fake_provider 仅在 CCB_TEST_ENTRYPOINT=1 等测试入口下可接受；full pass 需要至少一个 accepted provider case"
+    status: pending
+  - action: "kill cleanup evidence：执行 ccb kill -f 并扫描 ccbd endpoint、TCP token、Rmux namespace/session、owned process/job residue"
+    exit_signal: "cleanup pass 或 bounded retained reason；无证据不能 pass"
+    status: pending
+  - action: "true-host gate and scope guard：禁止 probe/fake-backend/WSL/pass-through；禁止越界生产实现和 packaging/docs"
+    exit_signal: "parser + deterministic scope guard 证明 smoke 只新增验证资产；forbidden path 命中 fail closed"
+    status: pending
+
+checks:
+  - item: "transcript sidecar 强制 host_kind=native_windows、control_plane=ccbd、backend_impl=rmux、probe_bypass=false、backend_selection_source、ccbd_transport=tcp_loopback、verdict、failure_class、ask_case_kind"
+    source: design §1 / AC-001 / AC-008 / DOD-IMPL-001
+    status: pending
+  - item: "dependency_status 覆盖 ccbd-windows-tcp-loopback-transport、ccbd-rmux-namespace-lifecycle、accelerator-transport-windows-guard、ccbd-windows-process-liveness；前置未 ready 时归为 blocked/dependency_pending"
+    source: design §1 / design §2.4 / DOD-IMPL-001
+    status: pending
+  - item: "PowerShell runner 记录 argv/cwd/env allowlist/timing/returncode/stdout/stderr artifact，并在 finally 中尝试 kill/cleanup"
+    source: design §2.2 / DOD-IMPL-002
+    status: pending
+  - item: "start/ping evidence 证明 native Windows + ccbd control plane + Rmux backend + tcp_loopback transport，且使用 ccb ping ccbd / ccb doctor 等当前 CLI 可执行命令"
+    source: AC-002 / AC-003 / AC-004 / DOD-IMPL-003
+    status: pending
+  - item: "ccb ask 至少一个 provider 有 ask_case_kind、task id、runtime/session/reply 或 accepted terminal evidence；provider auth/credential failure 分类为 provider_failure；fake_provider 与 fake backend/probe 明确区分"
+    source: AC-005 / AC-006 / DOD-IMPL-004
+    status: pending
+  - item: "ccb kill -f 后 endpoint/token/rmux namespace/session/owned process/job residue 有清理证据或 bounded retained reason"
+    source: AC-007 / DOD-IMPL-005
+    status: pending
+  - item: "probe/fake backend/WSL/direct rmux transcript negative fixtures 不得 pass"
+    source: AC-008 / DOD-IMPL-006
+    status: pending
+  - item: "deterministic scope guard 对 production runtime、packaging/docs、provider parser、installer/package 越界 fail closed"
+    source: AC-009 / DOD-IMPL-007
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-20-ccbd-windows-full-chain-smoke/ccbd-windows-full-chain-smoke-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - checklist_yaml
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+      test_status: existing
+      covers:
+        - roadmap_item_backlink
+    - id: CMD-003
+      command: "python -m pytest -q test/test_ccbd_windows_full_chain_smoke.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - transcript_parser
+        - classification
+        - failure_class
+        - fake_provider_entrypoint
+        - redaction
+        - negative_probe_wsl_fake_fixtures
+        - scope_guard
+    - id: CMD-004
+      command: "powershell -NoProfile -ExecutionPolicy Bypass -File \".\\scripts\\ccbd-windows-full-chain-smoke.ps1\" -ProjectRoot \"$env:TEMP\\ccb-rmux-full-chain\" -Backend rmux -Json"
+      core: true
+      manual: true
+      failure_handling: attach-transcript-or-block-pass
+      test_status: new
+      covers:
+        - native_windows_true_host_transcript
+        - start_ping_ask_kill
+    - id: CMD-005
+      command: "python scripts/ccbd_windows_full_chain_smoke.py --transcript \"artifacts/ccbd-windows-full-chain-smoke/transcript.json\" --json"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - parser_verdict
+    - id: CMD-006
+      command: "python scripts/ccbd_windows_full_chain_smoke.py --scope-guard --diff-base HEAD --json"
+      core: true
+      failure_handling: fix-or-block
+      test_status: guard
+      covers:
+        - scope_guard
+  evidence_required:
+    - powershell_runner
+    - python_parser
+    - parser_fixtures
+    - negative_probe_wsl_fake_fixtures
+    - failure_class_fixtures
+    - fake_provider_entrypoint_fixture
+    - redaction_tests
+    - native_windows_transcript_sidecar
+    - stdout_stderr_artifact_refs
+    - cleanup_evidence
+    - deterministic_scope_guard_output
+    - acceptance_report
+    - items_yaml_diff
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
+    transcript_secret_plaintext: forbidden
+    probe_bypass_pass: forbidden
+    production_runtime_changes: out_of_scope

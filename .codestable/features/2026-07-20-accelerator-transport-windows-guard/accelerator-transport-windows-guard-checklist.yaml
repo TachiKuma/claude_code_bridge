@@ -1,0 +1,139 @@
+feature: 2026-07-20-accelerator-transport-windows-guard
+created: 2026-07-20
+
+steps:
+  - action: "availability helper：新增 runtime accelerator 单一 transport availability helper 和稳定 unsupported reason"
+    exit_signal: "no-AF_UNIX 模拟下 helper 返回 unsupported；AF_UNIX 可用下保持 available"
+    status: pending
+  - action: "client guard：call() 在创建 socket 前把 unsupported transport 转成 AcceleratorError，call_or_fallback 触发 fallback"
+    exit_signal: "单测证明 call() 不抛 AttributeError，call_or_fallback 返回 fallback 值"
+    status: pending
+  - action: "codex polling fallback：默认 accelerator enabled 且 no-AF_UNIX 时 poll_with_accelerator()/poll_submission() 回落普通 polling"
+    exit_signal: "poll_with_accelerator 返回 None；poll_submission 可继续 Python reader fallback"
+    status: pending
+  - action: "lifecycle guard：maybe_start_runtime_accelerator 在 unsupported transport 下返回 fallback handle"
+    exit_signal: "unsupported check 早于 accelerator_binary、reclaim、mkdir、Popen；startup actions 含 unsupported_platform:windows_no_af_unix"
+    status: pending
+  - action: "ownership direct-call guard：socket probe、direct reclaim、corrupt recovery 在 unsupported transport 下 clean fallback"
+    exit_signal: "不抛 AttributeError、不调用 terminate_pid_tree、不删除 owner/socket evidence、不误报 active socket"
+    status: pending
+  - action: "Windows baseline and Unix regression：修正或隔离当前 Windows 上与本 feature 无关但会阻断 core 命令的 baseline-red，并保留 AF_UNIX 行为"
+    exit_signal: "test_default_socket_path_uses_project_ccb_for_short_paths 在 Windows 的 path expectation 已平台中立或记录为非 feature failure；既有 accelerator tests 通过"
+    status: pending
+  - action: "scope guard：禁止越界到 ccbd transport/Rmux/process liveness/provider parser/packaging/docs"
+    exit_signal: "git diff scope 仅包含 runtime accelerator/codex polling tests 相关改动"
+    status: pending
+
+checks:
+  - item: "runtime accelerator availability helper 为单一 owner，client/lifecycle/ownership 使用同一 unsupported reason"
+    source: design §1 / §2.1 / DOD-IMPL-001
+    status: pending
+  - item: "client.call no-AF_UNIX 抛 AcceleratorError 而非 AttributeError"
+    source: AC-001 / DOD-IMPL-002
+    status: pending
+  - item: "call_or_fallback no-AF_UNIX 返回 fallback 值"
+    source: AC-002 / DOD-IMPL-002
+    status: pending
+  - item: "poll_with_accelerator no-AF_UNIX 返回 None，不扩大 catch-all"
+    source: AC-003 / DOD-IMPL-003
+    status: pending
+  - item: "poll_submission no-AF_UNIX 可继续普通 Python reader fallback"
+    source: AC-004 / DOD-IMPL-003
+    status: pending
+  - item: "maybe_start_runtime_accelerator no-AF_UNIX 在 accelerator_binary、reclaim、mkdir、Popen 前返回 fallback handle"
+    source: AC-005 / DOD-IMPL-004
+    status: pending
+  - item: "ccbd startup actions 投影 runtime_accelerator_fallback:unsupported_platform:windows_no_af_unix"
+    source: AC-006 / DOD-IMPL-004
+    status: pending
+  - item: "ownership connectability no-AF_UNIX 返回 false，不抛 AttributeError，不把无法 probe 误判为 active socket"
+    source: AC-007 / DOD-IMPL-005
+    status: pending
+  - item: "direct reclaim no-AF_UNIX 不调用 terminate_pid_tree、不删除 owner manifest/socket evidence，返回空 reclaim 或 clean no-op"
+    source: AC-008 / DOD-IMPL-005
+    status: pending
+  - item: "corrupt owner recovery no-AF_UNIX 不因无法 probe AF_UNIX 删除 corrupt owner/socket evidence，返回 blocked/warning 或等价 fail-closed"
+    source: AC-009 / DOD-IMPL-005
+    status: pending
+  - item: "Windows baseline-red 已处理：test_default_socket_path_uses_project_ccb_for_short_paths 的 Path('/repo') expectation 平台中立，或在验证报告中归因为既有测试问题后再判断本 feature"
+    source: AC-010 / DOD-IMPL-006
+    status: pending
+  - item: "Unix / AF_UNIX client、lifecycle、ownership、polling regression 不漂移"
+    source: AC-011 / DOD-IMPL-006
+    status: pending
+  - item: "scope guard 无 ccbd transport、Rmux backend、process liveness、provider parser、packaging/docs 越界"
+    source: AC-012 / DOD-IMPL-007
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-20-accelerator-transport-windows-guard/accelerator-transport-windows-guard-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - checklist_yaml
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+      test_status: existing
+      covers:
+        - roadmap_item_backlink
+    - id: CMD-003
+      command: "python -m pytest -q test/test_runtime_accelerator_client.py test/test_runtime_accelerator_lifecycle.py test/test_runtime_accelerator_ownership.py test/test_codex_runtime_accelerator_polling.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: extended
+      covers:
+        - client_guard
+        - lifecycle_guard
+        - ownership_guard
+        - ownership_direct_reclaim_noop
+        - corrupt_recovery_fail_closed
+        - codex_polling_fallback
+        - windows_path_baseline
+        - unix_regression
+      baseline_note: "当前 Windows 工作区已知 test_default_socket_path_uses_project_ccb_for_short_paths 的 Path('/repo') expectation 会红；implementation 必须先平台中立修正或在验证报告中归因为既有红灯"
+    - id: CMD-004
+      command: "python -m pytest -q test/test_codex_runtime_accelerator_polling.py -k \"accelerator\""
+      core: true
+      failure_handling: fix-or-block
+      test_status: extended
+      covers:
+        - codex_ask_poll_fallback
+    - id: CMD-005
+      command: "git diff --name-only -- lib/runtime_accelerator lib/provider_backends/codex/execution_runtime test"
+      core: true
+      failure_handling: inspect-output
+      test_status: manual-review
+      covers:
+        - scope_guard
+    - id: CMD-006
+      command: "rg -n \"socket\\.AF_UNIX\" lib/runtime_accelerator test/test_runtime_accelerator_*.py test/test_codex_runtime_accelerator_polling.py"
+      core: false
+      failure_handling: inspect-output
+      test_status: manual-review
+      covers:
+        - af_unix_access_guard
+  evidence_required:
+    - availability_helper
+    - client_guard_diff
+    - lifecycle_guard_diff
+    - ownership_guard_diff
+    - codex_polling_fallback_tests
+    - lifecycle_startup_action_test
+    - ownership_connectability_direct_reclaim_corrupt_recovery_tests
+    - windows_baseline_red_fix_or_note
+    - unix_regression_output
+    - scope_guard_diff
+    - acceptance_report
+    - items_yaml_diff
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
+    catch_all_fallback: forbidden
+    windows_accelerator_transport: out_of_scope
