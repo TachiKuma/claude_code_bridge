@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-import fcntl
 import os
-import pty
 import re
 import select
 import struct
 import subprocess
-import termios
 import time
 from typing import Mapping
 
@@ -204,6 +201,9 @@ class TmuxTerminalSession:
         self._closed = True
 
     def _resize(self, geometry: TerminalGeometry) -> None:
+        import fcntl
+        import termios
+
         rows = max(1, int(geometry.rows))
         columns = max(1, int(geometry.columns))
         pixels_y = max(0, int(geometry.pixel_height))

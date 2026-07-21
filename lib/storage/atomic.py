@@ -14,14 +14,20 @@ from runtime_observability import (
 )
 
 
+def _supports_directory_fsync() -> bool:
+    return hasattr(os, 'O_DIRECTORY')
+
+
 def _open_directory(path: Path) -> int:
-    if not hasattr(os, 'O_DIRECTORY'):
+    if not _supports_directory_fsync():
         raise NotImplementedError('durable atomic writes require directory fsync support')
     flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, 'O_CLOEXEC', 0)
     return os.open(path, flags)
 
 
 def _fsync_directory(path: Path) -> None:
+    if not _supports_directory_fsync():
+        return
     fd = _open_directory(path)
     try:
         os.fsync(fd)
@@ -82,6 +88,9 @@ def atomic_write_text(path: Path, text: str, *, encoding: str = 'utf-8') -> None
     if collect_metrics:
         record_startup_operation('atomic_durable_write_attempt_count')
     ensure_durable_directory(target.parent)
+    if not _supports_directory_fsync():
+        _atomic_write_text_by_path(target, text, encoding=encoding, collect_metrics=collect_metrics)
+        return
     directory_fd = _open_directory(target.parent)
     _verify_directory_path(directory_fd, target.parent)
     tmp_name = f'.{target.name}.{secrets.token_hex(8)}.tmp'
@@ -122,6 +131,56 @@ def atomic_write_text(path: Path, text: str, *, encoding: str = 'utf-8') -> None
         raise
     else:
         os.close(directory_fd)
+    if collect_metrics:
+        counts = {'atomic_durable_write_count': 1}
+        if written_bytes is not None:
+            counts['atomic_durable_write_byte_count'] = written_bytes
+        if in_startup_operation_scope('provider_prepare'):
+            counts['provider_prepare_atomic_write_count'] = 1
+            if written_bytes is not None:
+                counts['provider_prepare_atomic_write_byte_count'] = written_bytes
+        record_startup_operations(counts)
+
+
+def _atomic_write_text_by_path(
+    target: Path,
+    text: str,
+    *,
+    encoding: str,
+    collect_metrics: bool,
+) -> None:
+    # Windows fallback: no directory fd / directory fsync (see design D-DURABLE).
+    # os.replace stays an atomic rename (half-writes never visible); the file
+    # content is still fsync'd. Crash durability of the directory entry is
+    # weakened relative to the Unix dir_fd path.
+    tmp_path = target.parent / f'.{target.name}.{secrets.token_hex(8)}.tmp'
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_CLOEXEC', 0)
+    fd = os.open(tmp_path, flags, 0o600)
+    handle_opened = False
+    written_bytes: int | None = None
+    try:
+        with os.fdopen(fd, 'w', encoding=encoding) as handle:
+            handle_opened = True
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+            if collect_metrics:
+                try:
+                    written_bytes = max(0, int(os.fstat(handle.fileno()).st_size))
+                except Exception:
+                    written_bytes = None
+        os.replace(tmp_path, target)
+    except BaseException:
+        if not handle_opened:
+            try:
+                os.close(fd)
+            except BaseException:
+                pass
+        try:
+            tmp_path.unlink()
+        except BaseException:
+            pass
+        raise
     if collect_metrics:
         counts = {'atomic_durable_write_count': 1}
         if written_bytes is not None:

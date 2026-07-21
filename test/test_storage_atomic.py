@@ -10,6 +10,17 @@ import pytest
 from storage import atomic
 
 
+# Windows lacks os.O_DIRECTORY, so atomic_write_text takes the by-path fallback
+# (no directory fd / directory fsync — see windows-runtime-import-lock-compat
+# design D-DIRSYNC / D-DURABLE). These tests observe directory-fd behavior
+# (fsync ordering, dir-fd failure injection, inode replacement detection) that
+# only exists on the Unix path, so they skip where directory fsync is unsupported.
+requires_directory_fsync = pytest.mark.skipif(
+    not atomic._supports_directory_fsync(),
+    reason='directory fsync (os.O_DIRECTORY) unavailable on this platform',
+)
+
+
 def _is_directory_fd(fd: int) -> bool:
     return stat.S_ISDIR(os.fstat(fd).st_mode)
 
@@ -27,6 +38,7 @@ def _track_open_directories(monkeypatch) -> dict[int, Path]:
     return opened
 
 
+@requires_directory_fsync
 def test_atomic_write_text_orders_file_and_directory_sync(monkeypatch, tmp_path: Path) -> None:
     target = tmp_path / 'state.txt'
     events: list[str] = []
@@ -97,6 +109,7 @@ def test_failure_before_replace_preserves_old_target(monkeypatch, tmp_path: Path
     assert list(tmp_path.glob('.state.txt.*.tmp')) == []
 
 
+@requires_directory_fsync
 def test_directory_fsync_failure_surfaces_after_complete_replace(monkeypatch, tmp_path: Path) -> None:
     target = tmp_path / 'state.json'
     target.write_text('{"version": "old"}\n')
@@ -115,6 +128,7 @@ def test_directory_fsync_failure_surfaces_after_complete_replace(monkeypatch, tm
     assert json.loads(target.read_text()) == {'version': 'new'}
 
 
+@requires_directory_fsync
 def test_nested_parent_entries_are_synced(monkeypatch, tmp_path: Path) -> None:
     target = tmp_path / 'one' / 'two' / 'state.txt'
     synced_directories: list[Path] = []
@@ -134,6 +148,7 @@ def test_nested_parent_entries_are_synced(monkeypatch, tmp_path: Path) -> None:
     assert synced_directories == [tmp_path, tmp_path / 'one', tmp_path / 'one' / 'two']
 
 
+@requires_directory_fsync
 def test_ensure_durable_directory_orders_parent_syncs(monkeypatch, tmp_path: Path) -> None:
     target = tmp_path / 'one' / 'two'
     events: list[Path] = []
@@ -175,6 +190,7 @@ def test_ensure_durable_directory_rejects_file_and_symlink_parent(tmp_path: Path
     assert not (outside / 'child').exists()
 
 
+@requires_directory_fsync
 def test_ensure_durable_directory_surfaces_parent_fsync_failure(monkeypatch, tmp_path: Path) -> None:
     def fail_fsync(_fd):
         raise OSError('parent fsync failed')
@@ -208,6 +224,7 @@ def test_temp_cleanup_does_not_replace_original_failure(monkeypatch, tmp_path: P
     assert len(list(tmp_path.glob('.state.txt.*.tmp'))) == 1
 
 
+@requires_directory_fsync
 def test_directory_close_failure_is_surfaced(monkeypatch, tmp_path: Path) -> None:
     target = tmp_path / 'state.txt'
     real_close = os.close
@@ -226,6 +243,7 @@ def test_directory_close_failure_is_surfaced(monkeypatch, tmp_path: Path) -> Non
     assert target.read_text() == 'new'
 
 
+@requires_directory_fsync
 def test_directory_close_failure_does_not_replace_original_failure(monkeypatch, tmp_path: Path) -> None:
     target = tmp_path / 'state.txt'
     target.write_text('old')
@@ -249,6 +267,7 @@ def test_directory_close_failure_does_not_replace_original_failure(monkeypatch, 
     assert target.read_text() == 'old'
 
 
+@requires_directory_fsync
 def test_parent_replacement_is_detected(monkeypatch, tmp_path: Path) -> None:
     parent = tmp_path / 'parent'
     parent.mkdir()
@@ -277,7 +296,7 @@ def test_atomic_write_json_format_is_unchanged(tmp_path: Path) -> None:
 
     atomic.atomic_write_json(target, {'z': '雪', 'a': 1})
 
-    assert target.read_text() == '{\n  "z": "雪",\n  "a": 1\n}\n'
+    assert target.read_text(encoding='utf-8') == '{\n  "z": "雪",\n  "a": 1\n}\n'
 
 
 def test_atomic_write_text_if_changed_skips_identical_target(monkeypatch, tmp_path: Path) -> None:

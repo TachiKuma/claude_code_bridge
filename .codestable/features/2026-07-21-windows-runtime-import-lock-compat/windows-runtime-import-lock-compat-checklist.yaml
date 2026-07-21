@@ -1,0 +1,84 @@
+feature: 2026-07-21-windows-runtime-import-lock-compat
+created: 2026-07-21
+
+steps:
+  - action: "import 安全：terminal.py 删死 pty import，fcntl/termios 延迟到 _resize 内 import；四模块在无 fcntl 平台可 import"
+    exit_signal: "无 fcntl 解释器下 mobile_gateway.terminal / maintenance_heartbeat.lock / storage.locks / storage.atomic 均 import 成功，import guard 测试通过"
+    status: done
+  - action: "storage/atomic Windows 回退：_supports_directory_fsync + _fsync_directory 加 Windows 早返回门控（D-DIRSYNC，使 ensure_durable_directory 创建缺失目录不抛错）+ _atomic_write_text_by_path（无目录 fsync，os.replace 原子，保留 metrics）；给 test_storage_atomic.py 依赖 dir-fsync 的一簇测试加 Unix-only skip 守卫；Unix dir_fd 路径不变"
+    exit_signal: "Windows atomic_write_text/json 写读回一致（含父目录不存在需创建）且顺序为 [write,flush,file-fsync,replace]；Unix 现有 test_storage_atomic.py 整簇（顺序/嵌套/inode/dir-fsync）全绿，Windows 上该簇 skip 而非 fail"
+    status: done
+  - action: "storage/locks 跨平台锁：用 platform_info.is_windows() 判定，Windows msvcrt 分支对齐 ProviderLock 手法（占位字节、seek(0) 锁固定 byte-0、LK_NBLCK+退避重试模拟阻塞），Unix fcntl.flock(LOCK_EX) 分支逐字不变，无 fcntl 非 Windows 降级 no-lock"
+    exit_signal: "Windows 第二 acquirer 阻塞至释放后取得锁（并发测试覆盖两 acquirer 文件大小不同）；Unix flock 分支不变；file_lock 目标占位字节不污染消费方"
+    status: done
+  - action: "maintenance_heartbeat 跨平台锁 + 异常收窄：platform_info.is_windows() 判定，Windows msvcrt 非阻塞、try/except 紧包 msvcrt.locking 单点（作用域收窄优先），竞争 errno(EACCES/EDEADLOCK/EDEADLK)→MaintenanceHeartbeatLockBusy、非竞争 OSError 上抛；Unix fcntl 非阻塞分支不变"
+    exit_signal: "Windows 已持有→busy；注入到非加锁调用的 OSError 不被吞；Unix 分支不变；errno 集合经实测校准"
+    status: pending
+  - action: "回归 + 根因验证：现有 storage/heartbeat 测试 + 新并发/import/顺序测试全绿；CMD-005 在 Windows collection 不再因 fcntl 失败"
+    exit_signal: "compileall 与全部测试通过；CMD-005 collection 不再报 mobile_gateway.terminal -> import fcntl"
+    status: pending
+
+checks:
+  - item: "terminal + heartbeat.lock（顶层 fcntl 真失败模块）在无 fcntl 平台可 import；locks/atomic 保持可 import"
+    source: design §3 / AC-001 / DOD-IMPL-001
+    status: pending
+  - item: "Windows file_lock 阻塞跨进程互斥（第二 acquirer 等到取锁），对齐 ProviderLock 手法"
+    source: design §3 / AC-002 / DOD-IMPL-002
+    status: pending
+  - item: "Unix file_lock 与 atomic Unix 分支逐字不漂移（含 test_storage_atomic 顺序断言全绿）"
+    source: design §3 / AC-003 / AC-007 / DOD-IMPL-005
+    status: pending
+  - item: "Windows heartbeat 已持有→busy，异常映射收窄不吞非竞争 OSError"
+    source: design §3 / AC-004 / AC-005 / DOD-IMPL-003
+    status: pending
+  - item: "Windows atomic_write 可用（含父目录不存在需创建，ensure_durable_directory 不抛错）、rename 原子、metrics 记账、顺序为 [write,flush,file-fsync,replace]，dir-fsync 测试簇 Windows skip 而非 fail"
+    source: design §3 / AC-006 / AC-008 / DOD-IMPL-004
+    status: pending
+  - item: "file_lock 占位字节不污染任何读锁文件内容的消费方（D-SENTINEL 反向核对）"
+    source: design §3 / AC-009 / DOD-IMPL-002
+    status: pending
+  - item: "对外签名/异常类型不变，死 pty import 已删，平台判定用 platform_info.is_windows()"
+    source: design §3.2 / AC-001 / DOD-IMPL-006
+    status: pending
+  - item: "根因：Windows CMD-005 collection 不再因 fcntl 失败"
+    source: design §3 / AC-010 / DOD-QA-001
+    status: pending
+  - item: "acceptance 确认 owner 已按 goal-protocol §3.1 落盘接受 Windows durability 弱化（崩溃恢复 journal）"
+    source: design §4 / R-1 / DOD-ACCEPT-001
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python -m compileall lib/storage lib/maintenance_heartbeat lib/mobile_gateway"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python -m pytest -q test/test_storage_atomic.py test/test_maintenance_heartbeat.py test/test_windows_runtime_import_lock_compat.py"
+      core: true
+      failure_handling: fix-or-block
+      covers:
+        - import_safety
+        - file_lock_mutex
+        - heartbeat_busy
+        - atomic_write_windows
+        - atomic_order_platform_conditioned
+    - id: CMD-003
+      command: "python -m pytest -q test/test_v2_start_service.py test/test_v2_phase2_entrypoint.py -k \"ccbd or socket or endpoint or ping\""
+      core: true
+      failure_handling: document-collection-only
+      covers:
+        - fcntl_collection_root_cause
+  evidence_required:
+    - import_guard_tests
+    - windows_lock_concurrency_tests
+    - windows_atomic_write_tests
+    - atomic_order_platform_assertions
+    - unix_branch_diff_review
+    - cmd005_collection_output
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
+    windows_todo_placeholder: forbidden
