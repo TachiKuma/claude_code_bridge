@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import queue
 import threading
 
 from ccbd.control_plane_transport import endpoint_from_legacy_socket_path, transport_for_endpoint
+from ccbd.control_plane_transport.factory import transport_for_legacy_socket_path
+from ccbd.control_plane_transport.windows_tcp import WindowsTcpControlPlaneTransport
 
 from .bootstrap_probe import bootstrap_readiness_probe
 from .lifecycle import listen_server, shutdown_server
@@ -36,8 +39,19 @@ class CcbdSocketServer:
     def __init__(self, socket_path: str | Path, *, control_plane_transport=None) -> None:
         self._socket_path = Path(socket_path)
         if control_plane_transport is None:
-            self._control_plane_endpoint = endpoint_from_legacy_socket_path(self._socket_path)
-            self._control_plane_transport = transport_for_endpoint(self._control_plane_endpoint)
+            transport = transport_for_legacy_socket_path(
+                self._socket_path,
+                prefer_windows=os.name == 'nt',
+            )
+            if os.name == 'nt' and not isinstance(transport, WindowsTcpControlPlaneTransport):
+                transport = WindowsTcpControlPlaneTransport(None, legacy_socket_path=self._socket_path)
+            self._control_plane_transport = transport
+            endpoint = getattr(self._control_plane_transport, 'endpoint', None)
+            self._control_plane_endpoint = (
+                dict(endpoint)
+                if isinstance(endpoint, dict)
+                else endpoint_from_legacy_socket_path(self._socket_path)
+            )
         else:
             self._control_plane_transport = control_plane_transport
             endpoint = getattr(control_plane_transport, 'endpoint', None)
@@ -58,7 +72,7 @@ class CcbdSocketServer:
         self._bootstrap_gate_lock = threading.RLock()
         self._bootstrap_probe_active = False
         self._runtime_bootstrap_active = False
-        self._bound_socket_stat: tuple[int, int] | None = None
+        self._bound_socket_stat = None
         self._maintenance_state_lock = threading.Lock()
         self._after_response_actions: list[callable] = []
         self._pending_maintenance_ticks = 0

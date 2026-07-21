@@ -47,6 +47,7 @@ class MountManager:
         config_signature: str | None = None,
         keeper_pid: int | None = None,
         daemon_instance_id: str | None = None,
+        control_plane_endpoint: dict | None = None,
     ) -> CcbdLease:
         timestamp = started_at or self._clock()
         lease = CcbdLease(
@@ -70,7 +71,11 @@ class MountManager:
                 if daemon_instance_id is not None
                 else None
             ),
-            control_plane_endpoint=endpoint_to_record(endpoint_from_legacy_socket_path(socket_path)),
+            control_plane_endpoint=endpoint_to_record(
+                endpoint_from_record(control_plane_endpoint)
+                if control_plane_endpoint
+                else endpoint_from_legacy_socket_path(socket_path)
+            ),
         )
         self._store.save(self._layout.ccbd_lease_path, lease, serializer=lambda value: value.to_record())
         return lease

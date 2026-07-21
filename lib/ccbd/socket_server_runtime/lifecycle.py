@@ -14,10 +14,14 @@ def listen_server(server) -> None:
             if listener is not None:
                 listener.close()
         finally:
-            server._control_plane_transport.unlink_bound_endpoint(bound_identity=bound_socket_stat)
+            if bound_socket_stat is not None:
+                server._control_plane_transport.unlink_bound_endpoint(bound_identity=bound_socket_stat)
         raise
     server._reset_worker_error()
     server._server = listener
+    endpoint = getattr(listener, 'endpoint', None)
+    if isinstance(endpoint, dict):
+        server._control_plane_endpoint = dict(endpoint)
     server._bound_socket_stat = bound_socket_stat
     server._stop_event.clear()
 

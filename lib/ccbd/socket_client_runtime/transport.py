@@ -4,16 +4,14 @@ from pathlib import Path
 import json
 
 from ccbd.api_models import RpcRequest, RpcResponse
-from ccbd.control_plane_transport.endpoint import endpoint_from_legacy_socket_path
-from ccbd.control_plane_transport.factory import connect_endpoint
+from ccbd.control_plane_transport.factory import transport_for_legacy_socket_path
 
 from .errors import CcbdClientError  # re-exported compatibility surface
 
 
 def connect_socket(socket_path: Path, *, timeout_s: float):
-    endpoint = endpoint_from_legacy_socket_path(socket_path)
     try:
-        return connect_endpoint(endpoint, timeout_s=timeout_s)
+        return transport_for_legacy_socket_path(socket_path).connect(timeout_s=timeout_s)
     except CcbdClientError:
         raise
     except Exception as exc:
