@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import sys
 
 
@@ -69,6 +70,18 @@ class FakeRunner:
         return probe.CommandResult(args, 0, f"{name} ok", "token=sk-secret-value", timeout)
 
 
+class TimeoutProcess:
+    def __init__(self) -> None:
+        self.pid = 4242
+        self.returncode = None
+
+    def communicate(self, timeout: float):
+        raise subprocess.TimeoutExpired(["rmux", "start-server"], timeout, output=b"out", stderr=b"err")
+
+    def poll(self):
+        return self.returncode
+
+
 def test_required_unsupported_command_enters_blocking_gaps(tmp_path: Path) -> None:
     report = probe.run_probe(tmp_path, runner=FakeRunner({"capture-pane"}), rmux_bin="rmux", platform_name="windows")
 
@@ -78,6 +91,73 @@ def test_required_unsupported_command_enters_blocking_gaps(tmp_path: Path) -> No
     assert report["commands"]["capture-pane"]["status"] == "unsupported"
     assert report["commands"]["capture-pane"]["degrade_impact"] == "parser-fidelity"
     assert report["commands"]["capture-pane"]["consequence"]
+
+
+def test_core_command_timeout_writes_report_and_stops_early(tmp_path: Path) -> None:
+    report = probe.run_probe(tmp_path, runner=FakeRunner({"start-server"}), rmux_bin="rmux", platform_name="windows")
+
+    assert report["probe_status"] == "completed"
+    assert report["early_stop"]["command"] == "start-server"
+    assert report["commands"]["start-server"]["status"] == "unsupported"
+    assert report["semantics"] == {}
+    assert {gap["name"] for gap in report["blocking_gaps"]} == {"start-server"}
+    assert (Path(report["run_dir"]) / "capability-report.json").exists()
+
+
+def test_subprocess_runner_timeout_kills_windows_process_tree(monkeypatch) -> None:
+    process = TimeoutProcess()
+    taskkill_calls: list[list[str]] = []
+
+    monkeypatch.setattr(probe.subprocess, "Popen", lambda *args, **kwargs: process)
+    monkeypatch.setattr(probe.platform, "system", lambda: "Windows")
+
+    def fake_run(args, **kwargs):
+        taskkill_calls.append(args)
+
+        class _Result:
+            returncode = 0
+
+        return _Result()
+
+    monkeypatch.setattr(probe.subprocess, "run", fake_run)
+
+    result = probe.SubprocessRunner().run(["rmux", "start-server"], timeout=0.01)
+
+    assert result.returncode == 124
+    assert result.stdout == "out"
+    assert result.stderr == "err"
+    assert taskkill_calls == [["taskkill", "/PID", "4242", "/T", "/F"]]
+
+
+def test_core_command_early_stop_records_cleanup_evidence(monkeypatch, tmp_path: Path) -> None:
+    cleanup_calls: list[tuple[str, Path]] = []
+
+    class EarlyStopRunner(probe.SubprocessRunner):
+        def run(self, args: list[str], *, timeout: float = 5.0) -> probe.CommandResult:
+            name = probe.command_name(args)
+            if args[-1] == "-V":
+                return probe.CommandResult(args, 0, "rmux 0.9.0", "", timeout)
+            if name == "has-session" and "-L" not in args:
+                return probe.CommandResult(args, 1, "", "can't find session", timeout)
+            if name == "start-server":
+                return probe.CommandResult(args, 124, "", "timeout", timeout)
+            return probe.CommandResult(args, 0, "", "", timeout)
+
+    def fake_cleanup(namespace: str, run_dir: Path) -> Path:
+        cleanup_calls.append((namespace, run_dir))
+        path = run_dir / "artifacts" / "cleanup" / "orphan-daemons.json"
+        probe._write_json(path, {"namespace": namespace, "returncode": 0})
+        return path
+
+    monkeypatch.setattr(probe, "_cleanup_windows_probe_daemons", fake_cleanup)
+
+    report = probe.run_probe(tmp_path, runner=EarlyStopRunner(), rmux_bin="rmux", platform_name="windows")
+
+    cleanup_evidence = report["early_stop"]["cleanup_evidence"]
+    assert cleanup_calls
+    assert cleanup_evidence == "artifacts/cleanup/orphan-daemons.json"
+    assert any(entry["probe"] == "orphan-daemons" for entry in report["artifact_index"])
+    assert (Path(report["run_dir"]) / cleanup_evidence).exists()
 
 
 def test_partial_without_accepted_workaround_enters_blocking_gaps(tmp_path: Path) -> None:
@@ -147,6 +227,12 @@ def test_preflight_hard_fail_writes_skipped_report(tmp_path: Path) -> None:
     assert report["preflight"]["failure_reason"]
     assert report["commands"] == {}
     assert report["semantics"] == {}
+
+
+def test_report_backend_impl_follows_rmux_bin_name(tmp_path: Path) -> None:
+    report = probe.run_probe(tmp_path, runner=FakeRunner(), rmux_bin="psmux", platform_name="windows")
+
+    assert report["backend_impl"] == "psmux"
 
 
 def test_preflight_version_failure_writes_failed_report(tmp_path: Path) -> None:

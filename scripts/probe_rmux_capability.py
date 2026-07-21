@@ -135,14 +135,16 @@ class CommandResult:
 
 class SubprocessRunner:
     def run(self, args: list[str], *, timeout: float = 5.0) -> CommandResult:
+        process: subprocess.Popen[bytes] | None = None
         try:
-            completed = subprocess.run(
+            process = subprocess.Popen(
                 args,
-                capture_output=True,
-                timeout=timeout,
-                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
             )
+            stdout_bytes, stderr_bytes = process.communicate(timeout=timeout)
         except subprocess.TimeoutExpired as exc:
+            self._terminate_process_tree(process)
             stdout_bytes = exc.stdout or b""
             stderr_bytes = exc.stderr or b"timeout"
             if isinstance(stdout_bytes, str):
@@ -160,17 +162,29 @@ class SubprocessRunner:
             )
         except OSError as exc:
             return CommandResult(args, 127, "", str(exc), timeout)
-        stdout_bytes = completed.stdout or b""
-        stderr_bytes = completed.stderr or b""
         return CommandResult(
             args,
-            completed.returncode,
+            process.returncode if process is not None else 127,
             stdout_bytes.decode("utf-8", errors="replace"),
             stderr_bytes.decode("utf-8", errors="replace"),
             timeout,
             stdout_bytes,
             stderr_bytes,
         )
+
+    @staticmethod
+    def _terminate_process_tree(process: subprocess.Popen[bytes] | None) -> None:
+        if process is None or process.poll() is not None:
+            return
+        if platform.system().lower() == "windows":
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            return
+        process.kill()
 
 
 def utc_now() -> str:
@@ -188,6 +202,11 @@ def command_name(args: list[str]) -> str:
         if item in catalog:
             return item
     return Path(args[0]).name if args else "unknown"
+
+
+def backend_impl_name(rmux_bin: str) -> str:
+    name = Path(str(rmux_bin or "rmux")).stem.strip().lower()
+    return name or "rmux"
 
 
 def _sha256(path: Path) -> str:
@@ -745,6 +764,44 @@ def _probe_preflight(
     return payload, artifacts
 
 
+def _cleanup_windows_probe_daemons(namespace: str, run_dir: Path) -> Path | None:
+    if platform.system().lower() != "windows":
+        return None
+    env = dict(os.environ)
+    env["CCB_RMUX_PROBE_NAMESPACE"] = namespace
+    command = (
+        "Get-CimInstance Win32_Process | "
+        "Where-Object { "
+        "($_.Name -eq 'rmux.exe' -or $_.Name -eq 'psmux.exe') -and "
+        "$_.CommandLine -like \"*$env:CCB_RMUX_PROBE_NAMESPACE*\" "
+        "} | ForEach-Object { "
+        "$targetPid = $_.ProcessId; Stop-Process -Id $targetPid -Force; $targetPid "
+        "}"
+    )
+    result = subprocess.run(
+        ["powershell", "-NoProfile", "-Command", command],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=10,
+        check=False,
+        env=env,
+    )
+    path = run_dir / "artifacts" / "cleanup" / "orphan-daemons.json"
+    _write_json(
+        path,
+        {
+            "args": ["powershell", "-NoProfile", "-Command", "cleanup rmux/psmux daemon by probe namespace"],
+            "namespace": namespace,
+            "returncode": result.returncode,
+            "stdout": redact_text(result.stdout),
+            "stderr": redact_text(result.stderr),
+        },
+    )
+    return path
+
+
 def run_probe(
     work_root: Path,
     *,
@@ -773,7 +830,7 @@ def run_probe(
 
     if preflight["probe_status"] != "completed":
         report = {
-            "backend_impl": "rmux",
+            "backend_impl": backend_impl_name(rmux_bin),
             "version": preflight.get("version") or "unknown",
             "platform": preflight["platform"],
             "generated_at": utc_now(),
@@ -822,6 +879,32 @@ def run_probe(
             returncode=result.returncode,
             notes=notes,
         )
+        if name in {"start-server", "new-session", "has-session"} and status == "unsupported":
+            cleanup_path = _cleanup_windows_probe_daemons(namespace, run_dir) if isinstance(runner, SubprocessRunner) else None
+            if cleanup_path is not None:
+                artifact_index.append(_artifact_entry(run_dir, cleanup_path, kind="cleanup", probe="orphan-daemons"))
+            report = {
+                "backend_impl": backend_impl_name(rmux_bin),
+                "version": preflight.get("version") or "unknown",
+                "platform": preflight["platform"],
+                "generated_at": utc_now(),
+                "probe_status": preflight["probe_status"],
+                "run_dir": str(run_dir),
+                "preflight": preflight,
+                "commands": commands,
+                "semantics": {},
+                "artifact_index": artifact_index,
+                "blocking_gaps": _blocking_gaps(commands, {}),
+                "early_stop": {
+                    "command": name,
+                    "reason": f"required core command {name} is unsupported; dependent checks skipped",
+                    "evidence": artifact_path.relative_to(run_dir).as_posix(),
+                    "cleanup_evidence": cleanup_path.relative_to(run_dir).as_posix() if cleanup_path is not None else None,
+                },
+            }
+            report_path = run_dir / "capability-report.json"
+            _write_json(report_path, report)
+            return report
 
     verification_commands = {
         "namespace-default-has-session": [rmux_bin, "has-session", "-t", session],
@@ -914,7 +997,7 @@ def run_probe(
     semantics = _derive_semantics(commands, raw_results, run_dir, artifact_index)
 
     report = {
-        "backend_impl": "rmux",
+        "backend_impl": backend_impl_name(rmux_bin),
         "version": preflight.get("version") or "unknown",
         "platform": preflight["platform"],
         "generated_at": utc_now(),
