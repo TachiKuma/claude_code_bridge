@@ -4,57 +4,57 @@ created: 2026-07-20
 steps:
   - action: "liveness owner skeleton：新增 lib/process_liveness.py，定义 process_exists、platform dispatch、invalid pid fast false、ctypes wrapper seam"
     exit_signal: "invalid pid fast false；ccbd.system / kill_runtime 可 import 该 owner；Windows/POSIX backend 细节由后续步骤完成"
-    status: pending
+    status: done
   - action: "Windows backend：实现 OpenProcess/WaitForSingleObject/CloseHandle 查询，不调用 os.kill(pid,0)，固定错误码映射表"
     exit_signal: "monkeypatch os.kill 为 fail，Windows alive/exited/access denied/invalid/not-found/unknown/wait-failed 分支测试通过；CloseHandle 调用被断言"
-    status: pending
+    status: done
   - action: "POSIX regression：迁移或复用 zombie state 逻辑，保持 zombie dead 和 PermissionError alive"
     exit_signal: "test_cli_kill_runtime_zombies.py 与新增 POSIX liveness tests 通过"
-    status: pending
+    status: done
   - action: "ccbd default wiring：ccbd.system.process_exists 和 ccbd keeper/ownership/health 默认依赖消费新 helper"
     exit_signal: "focused integration tests 证明默认 OwnershipGuard / keeper state / health monitor 使用新 helper，可注入 seam 保持"
-    status: pending
+    status: done
   - action: "shared kill_runtime wiring and blast-radius regression：cli.kill_runtime.processes.is_pid_alive 复用 helper，kill_pid / terminate_pid_tree 终止语义不改，传递消费者做显式回归/审查"
     exit_signal: "kill_runtime tests 通过；runtime_accelerator/ownership、daemon runtime processes、mobile host、provider helper cleanup、ccbd stop-flow pid cleanup 等消费者有 rg 清单和风险分层测试/审查证据"
-    status: pending
+    status: done
   - action: "scope guard and full-chain handoff：禁止扩入 job object、transport、Rmux、provider parser；记录 full-chain smoke 仍需真机验证"
     exit_signal: "diff scope 清楚，roadmap item 20 可由 design-review 追踪到实现验收"
-    status: pending
+    status: done
 
 checks:
   - item: "单一 process liveness owner 固定为 lib/process_liveness.py，ccbd.system.process_exists 与 cli.kill_runtime.processes.is_pid_alive 复用同一底层 helper"
     source: design §1 / DOD-IMPL-001
-    status: pending
+    status: passed
   - item: "Windows liveness 使用 OpenProcess/WaitForSingleObject/CloseHandle，不调用 os.kill(pid,0)，不投递 Ctrl-C"
     source: AC-002 / DOD-IMPL-002
-    status: pending
+    status: passed
   - item: "Windows 错误码映射固定并有单测：access denied=true，invalid/not-found/unknown/wait-failed=false，handle 必须关闭"
     source: AC-002 / AC-003 / AC-004
-    status: pending
+    status: passed
   - item: "invalid pid fast false，不调用平台 API"
     source: AC-001
-    status: pending
+    status: passed
   - item: "POSIX ProcessLookupError=false、PermissionError=true、generic OSError=false，zombie state Z=false"
     source: AC-005 / AC-006 / DOD-IMPL-003
-    status: pending
+    status: passed
   - item: "OwnershipGuard 默认 pid_exists 消费新 helper，可注入 pid_exists seam 不变"
     source: AC-008 / DOD-IMPL-004
-    status: pending
+    status: passed
   - item: "keeper_state_is_running 默认 process_exists_fn 消费新 helper，project/cmdline check 不漂移"
     source: AC-009 / DOD-IMPL-004
-    status: pending
+    status: passed
   - item: "HealthMonitor runtime_health 使用新 helper判 provider pid；alive 不误降级、dead 标 orphaned"
     source: AC-010 / DOD-IMPL-004
-    status: pending
+    status: passed
   - item: "terminate_pid_tree / kill_pid 终止语义不改，仍可通过 injected liveness 等待退出"
     source: AC-011 / DOD-IMPL-005
-    status: pending
+    status: passed
   - item: "共享 is_pid_alive 的传递消费者有 rg 清单和风险分层测试/审查，覆盖 runtime_accelerator/ownership、daemon runtime processes、mobile host、provider helper cleanup、ccbd stop-flow pid cleanup"
     source: AC-012 / DOD-IMPL-005
-    status: pending
+    status: passed
   - item: "不新增 psutil 必需依赖，不扩入 job-object evidence、ccbd transport、Rmux backend、accelerator、provider parser、packaging/docs"
     source: AC-013 / DOD-IMPL-006
-    status: pending
+    status: passed
 
 dod:
   commands:
@@ -120,7 +120,7 @@ dod:
         - no_windows_signal_probe
         - posix_only_exceptions_reviewed
     - id: CMD-008
-      command: "git diff --name-only -- lib/ccbd lib/cli/kill_runtime lib/process_liveness.py test"
+      command: "git status --porcelain -uall"
       core: true
       failure_handling: inspect-output
       test_status: guard

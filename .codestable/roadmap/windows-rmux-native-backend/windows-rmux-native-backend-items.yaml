@@ -160,7 +160,7 @@ items:
   - slug: ccbd-windows-process-liveness
     description: 抽出跨平台进程存活判定，替换 ccbd 控制面 system.py:43 process_exists 的 os.kill(pid,0)——Windows 上 signal 0 是 CTRL_C_EVENT 语义（会误判活进程为死、甚至误投 Ctrl-C），破坏 keeper/health/ownership 的存活与 recovery 判定
     depends_on: []
-    status: in-progress
+    status: done
     feature: 2026-07-20-ccbd-windows-process-liveness
     minimal_loop: false
     notes: 独立审查发现的第四个控制面 blocker，与 transport/mux 正交。被 ccbd/keeper.py、services/health.py、services/ownership.py 等约 10 个文件消费；Windows 用 OpenProcess/WaitForSingleObject 或 psutil。与 windows-job-object-runtime-evidence 区分：后者是 kill/recovery 的 job-object 进程树 evidence，本项是基本 pid 存活判定

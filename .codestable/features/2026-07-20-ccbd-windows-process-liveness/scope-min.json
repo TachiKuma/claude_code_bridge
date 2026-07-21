@@ -1,0 +1,24 @@
+{
+  "gate_id": "scope-gate",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "changed_files": [
+        ".codestable/features/2026-07-20-ccbd-windows-process-liveness/ccbd-windows-process-liveness-checklist.yaml"
+      ],
+      "ignored_machine_artifacts": [],
+      "allowed_prefixes": [
+        ".codestable/features/2026-07-20-ccbd-windows-process-liveness"
+      ]
+    }
+  ],
+  "providers": {},
+  "feature": "2026-07-20-ccbd-windows-process-liveness",
+  "inputs": {
+    "feature_dir": ".codestable/features/2026-07-20-ccbd-windows-process-liveness"
+  },
+  "input_digests": {}
+}

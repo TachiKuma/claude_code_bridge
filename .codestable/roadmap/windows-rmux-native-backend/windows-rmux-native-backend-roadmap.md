@@ -906,8 +906,9 @@ class RpcTransportAuthError(Exception):
 20. **ccbd-windows-process-liveness** — 抽出跨平台进程存活判定，替换 `system.py:43 process_exists` 的 `os.kill(pid,0)`（Windows signal 0 == `CTRL_C_EVENT`，误判 + 副作用）。
    - 所属模块：CCBD Control Plane Transport（控制面 liveness）
    - 依赖：无（可与 transport seam 并行）
-   - 状态：planned
-   - 备注：独立审查发现的第四个控制面 blocker；被 keeper/health/ownership 约 10 文件消费；与 `windows-job-object-runtime-evidence`（job 树 evidence）区分，本项是基本 pid 存活。
+   - 状态：accepted
+   - 对应 feature：`2026-07-20-ccbd-windows-process-liveness`
+   - 备注：2026-07-22 accepted：共享 liveness owner 落在 `lib/process_liveness.py`；`ccbd.system`、`kill_runtime`、`provider_core.runtime_lock` 复用该 owner；Windows 用 WinAPI handle probe，POSIX 保留 signal probe + zombie dead 语义。Windows TCP control-plane transport 与 full-chain smoke 仍由后续 feature 证明。
 
 21. **ccbd-windows-full-chain-smoke** — native Windows 真机证明 `ccb→ccbd→rmux` 全链路跑通（`ccb` 启动 namespace / `ccb ask` / `ccb kill`），不经 probe 旁路。
    - 所属模块：Validation & Packaging（终点验收）
