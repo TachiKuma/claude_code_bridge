@@ -1,17 +1,22 @@
 roadmap: windows-rmux-native-backend
-status: running
+status: handoff
+handoff_reason: OwnerStop
+handoff_next: "Owner requested pause after committing accelerator-transport-windows-guard. Wait for explicit owner resume, then continue index 3 ccbd-windows-process-liveness per goal-protocol."
+resume_decision: "Owner requested cs-goal recovery on 2026-07-21: resume from IndependentReviewUnavailable handoff, continue accelerator-transport-windows-guard toward QA, then continue goal features toward ccbd-windows-full-chain-smoke."
 resume_note: "Handoff resolved 2026-07-20 (approval-report.md Decision History): owner split out-of-scope Windows import/locking/atomic compat into a separate feature (pending-split/windows-runtime-import-lock-compat) and separately accepted the mobile_gateway.terminal -> import fcntl collection gap as CMD-005 documented baseline. QA for ccbd-control-plane-transport-seam is runnable; record CMD-005 as documented baseline and real Unix AF_UNIX as compatibility residual, then continue to ccbd-windows-tcp-loopback-transport."
 baseline_ref: eb273de8e1c1839451f3ff6cc583672187bd75d9
 driver_kind: host-agent
-driver_id: 019f7ee1-d690-7e12-8dba-f268635263b7
-driver_observation: multi_agent_v1.wait_agent:019f7ee1-d690-7e12-8dba-f268635263b7
+driver_id: 019f8219-3739-7283-8c74-f87fe7502d2c
+driver_observation: multi_agent_v1.wait_agent:019f8219-3739-7283-8c74-f87fe7502d2c
 driver_reviewer_capability: confirmed
+previous_driver_id: 019f7ee1-d690-7e12-8dba-f268635263b7
+previous_driver_resolution: "not_found via multi_agent_v1.wait_agent on 2026-07-21; reset for redispatch"
 execution_confirmation_id: goal-execution-2026-07-20-windows-rmux-native-backend
 acceptance_authorization: approved
 acceptance_authorization_ref: approval-report.md#goal-acceptance
 commit_authorization: approved
 commit_authorization_ref: approval-report.md#goal-commits
-current_feature_index: 2
+current_feature_index: 3
 features:
   - slug: rmux-capability-gate
     roadmap_item: rmux-capability-gate
@@ -39,7 +44,7 @@ features:
     review: .codestable/features/2026-07-20-accelerator-transport-windows-guard/accelerator-transport-windows-guard-review.md
     qa: .codestable/features/2026-07-20-accelerator-transport-windows-guard/accelerator-transport-windows-guard-qa.md
     acceptance: .codestable/features/2026-07-20-accelerator-transport-windows-guard/accelerator-transport-windows-guard-acceptance.md
-    status: pending
+    status: accepted
   - slug: ccbd-windows-process-liveness
     roadmap_item: ccbd-windows-process-liveness
     feature_dir: .codestable/features/2026-07-20-ccbd-windows-process-liveness

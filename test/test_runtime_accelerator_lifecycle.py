@@ -12,6 +12,7 @@ from runtime_accelerator.lifecycle import (
     stop_runtime_accelerator,
 )
 from runtime_accelerator.ownership import RuntimeAcceleratorOwnershipError, owner_manifest_path
+from runtime_accelerator.platform import UNSUPPORTED_ACCELERATOR_TRANSPORT_REASON
 
 
 class FakeProcess:
@@ -34,6 +35,11 @@ class FakeProcess:
 
     def wait(self, timeout=None):
         return self.returncode
+
+
+@pytest.fixture(autouse=True)
+def _assume_accelerator_transport_available(monkeypatch):
+    monkeypatch.setattr("runtime_accelerator.lifecycle.accelerator_transport_available", lambda: True)
 
 
 def test_runtime_accelerator_lifecycle_can_be_disabled(monkeypatch, tmp_path: Path) -> None:
@@ -71,6 +77,39 @@ def test_runtime_accelerator_missing_binary_keeps_fallback(monkeypatch, tmp_path
     assert handle.process is None
     assert handle.error == "missing_binary"
     assert socket_path.exists()
+
+
+def test_runtime_accelerator_unsupported_transport_returns_fallback_before_startup(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    socket_path = tmp_path / ".ccb" / "runtime-accelerator" / "accelerator.sock"
+    monkeypatch.setenv("CCB_RUNTIME_ACCELERATOR_CODEX", "1")
+    monkeypatch.setenv("CCB_RUNTIME_ACCELERATOR_SOCKET", str(socket_path))
+    monkeypatch.setattr("runtime_accelerator.lifecycle.accelerator_transport_available", lambda: False)
+    monkeypatch.setattr("runtime_accelerator.platform.accelerator_transport_available", lambda: False)
+    monkeypatch.setattr(
+        "runtime_accelerator.lifecycle.accelerator_binary",
+        lambda: (_ for _ in ()).throw(AssertionError("binary lookup")),
+    )
+    monkeypatch.setattr(
+        "runtime_accelerator.lifecycle.reclaim_runtime_accelerator",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("reclaim")),
+    )
+    monkeypatch.setattr(
+        "runtime_accelerator.lifecycle.subprocess.Popen",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("popen")),
+    )
+
+    handle = maybe_start_runtime_accelerator(tmp_path)
+
+    assert handle.enabled is True
+    assert handle.process is None
+    assert handle.socket_path == socket_path
+    assert handle.error == UNSUPPORTED_ACCELERATOR_TRANSPORT_REASON
+    assert _runtime_accelerator_startup_actions(SimpleNamespace(runtime_accelerator=handle)) == [
+        f"runtime_accelerator_fallback:{UNSUPPORTED_ACCELERATOR_TRANSPORT_REASON}"
+    ]
 
 
 def test_runtime_accelerator_start_and_stop_are_owned_by_handle(monkeypatch, tmp_path: Path) -> None:

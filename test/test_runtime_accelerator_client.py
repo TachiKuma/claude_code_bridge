@@ -17,12 +17,28 @@ from runtime_accelerator.client import (
     default_socket_path,
     socket_path_is_short_enough,
 )
+from runtime_accelerator.platform import UNSUPPORTED_ACCELERATOR_TRANSPORT_REASON
 
 
 def test_default_socket_path_uses_project_ccb_for_short_paths() -> None:
-    project_root = Path("/repo")
+    project_root = Path("/repo").resolve()
 
     assert default_socket_path(project_root) == project_root / ".ccb" / "runtime-accelerator" / "accelerator.sock"
+
+
+def test_call_reports_unsupported_transport_without_af_unix(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delattr(socket, "AF_UNIX", raising=False)
+
+    with pytest.raises(AcceleratorError, match=UNSUPPORTED_ACCELERATOR_TRANSPORT_REASON):
+        call(tmp_path / "accelerator.sock", "ping", {})
+
+
+def test_call_or_fallback_uses_fallback_without_af_unix(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delattr(socket, "AF_UNIX", raising=False)
+
+    result = call_or_fallback(tmp_path / "accelerator.sock", "ping", {}, lambda: {"status": "fallback"})
+
+    assert result == {"status": "fallback"}
 
 
 def test_default_socket_path_falls_back_when_project_path_is_too_long(monkeypatch) -> None:

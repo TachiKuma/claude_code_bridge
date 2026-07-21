@@ -8,6 +8,8 @@ from typing import Any, Callable, TypeVar
 
 from storage.path_helpers import choose_socket_placement
 
+from .platform import accelerator_transport_available, accelerator_unsupported_reason
+
 T = TypeVar("T")
 
 
@@ -45,6 +47,8 @@ def call(
     *,
     timeout_s: float = 0.2,
 ) -> dict[str, Any]:
+    if not accelerator_transport_available():
+        raise AcceleratorError(accelerator_unsupported_reason())
     request = (
         json.dumps({"method": method, "params": params or {}}, ensure_ascii=False).encode("utf-8")
         + b"\n"

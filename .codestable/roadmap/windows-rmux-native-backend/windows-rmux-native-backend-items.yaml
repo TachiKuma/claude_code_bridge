@@ -152,7 +152,7 @@ items:
   - slug: accelerator-transport-windows-guard
     description: 修复 lib/runtime_accelerator 控制面在 native Windows 的 AF_UNIX AttributeError（client.py:53 / ownership.py:534 无 guard），使 ccb ask 的 codex accelerator caller 不崩
     depends_on: []
-    status: in-progress
+    status: done
     feature: 2026-07-20-accelerator-transport-windows-guard
     minimal_loop: false
     notes: AF_UNIX 属性访问在 except OSError 之外抛 AttributeError；codex_accelerator_enabled() 默认 True，poll_with_accelerator 在默认 codex ask/poll 路径调用，故默认路径下即 ask 必经，列 milestone-内。design 决定深度：给 Windows transport 还是 guard+clean fallback

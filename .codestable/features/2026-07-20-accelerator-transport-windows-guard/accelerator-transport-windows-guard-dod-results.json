@@ -1,0 +1,66 @@
+{
+  "gate_id": "dod-runner",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [
+    "CMD-006: non-core command failed with exit 2"
+  ],
+  "evidence": [
+    {
+      "command": "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-20-accelerator-transport-windows-guard/accelerator-transport-windows-guard-checklist.yaml\" --yaml-only",
+      "exit_code": 0,
+      "stdout": "Validated 1 file(s): 1 passed, 0 failed.\n\n  ✓ .codestable\\features\\2026-07-20-accelerator-transport-windows-guard\\accelerator-transport-windows-guard-checklist.yaml\n\nAll files valid.\n",
+      "stderr": "",
+      "id": "CMD-001",
+      "core": true,
+      "failure_handling": "fix-or-block"
+    },
+    {
+      "command": "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml\"",
+      "exit_code": 0,
+      "stdout": "Validated 1 file(s): 1 passed, 0 failed.\n\n  ✓ .codestable\\roadmap\\windows-rmux-native-backend\\windows-rmux-native-backend-items.yaml\n\nAll files valid.\n",
+      "stderr": "",
+      "id": "CMD-002",
+      "core": true,
+      "failure_handling": "fix-or-block"
+    },
+    {
+      "command": "python -m pytest -q test/test_runtime_accelerator_client.py test/test_runtime_accelerator_lifecycle.py test/test_runtime_accelerator_ownership.py test/test_codex_runtime_accelerator_polling.py",
+      "exit_code": 0,
+      "stdout": "....sss..........................................                        [100%]\n46 passed, 3 skipped in 4.14s\n",
+      "stderr": "",
+      "id": "CMD-003",
+      "core": true,
+      "failure_handling": "fix-or-block"
+    },
+    {
+      "command": "python -m pytest -q test/test_codex_runtime_accelerator_polling.py -k \"accelerator\"",
+      "exit_code": 0,
+      "stdout": "......                                                                   [100%]\n6 passed in 1.00s\n",
+      "stderr": "",
+      "id": "CMD-004",
+      "core": true,
+      "failure_handling": "fix-or-block"
+    },
+    {
+      "command": "git diff --name-only -- lib/runtime_accelerator lib/provider_backends/codex/execution_runtime test",
+      "exit_code": 0,
+      "stdout": "lib/runtime_accelerator/client.py\nlib/runtime_accelerator/lifecycle.py\nlib/runtime_accelerator/ownership.py\ntest/test_codex_runtime_accelerator_polling.py\ntest/test_runtime_accelerator_client.py\ntest/test_runtime_accelerator_lifecycle.py\ntest/test_runtime_accelerator_ownership.py\n",
+      "stderr": "",
+      "id": "CMD-005",
+      "core": true,
+      "failure_handling": "inspect-output"
+    },
+    {
+      "command": "rg -n \"socket\\.AF_UNIX\" lib/runtime_accelerator test/test_runtime_accelerator_*.py test/test_codex_runtime_accelerator_polling.py",
+      "exit_code": 2,
+      "stdout": "lib/runtime_accelerator\\ownership.py:548:        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:\nlib/runtime_accelerator\\client.py:57:        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:\n",
+      "stderr": "rg: test/test_runtime_accelerator_*.py: 文件名、目录名或卷标语法不正确。 (os error 123)\n",
+      "id": "CMD-006",
+      "core": false,
+      "failure_handling": "inspect-output"
+    }
+  ],
+  "providers": {}
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -19,6 +20,15 @@ from runtime_accelerator.ownership import (
     recover_corrupt_runtime_accelerator_owner,
     runtime_accelerator_pid_matches_owner,
 )
+from runtime_accelerator.platform import UNSUPPORTED_ACCELERATOR_TRANSPORT_REASON
+
+_ACCELERATOR_EXE = Path("/opt/ccb/bin/ccb-runtime-accelerator").resolve()
+_SHELL_EXE = Path("/bin/sh").resolve()
+
+
+@pytest.fixture(autouse=True)
+def _assume_accelerator_transport_available(monkeypatch):
+    monkeypatch.setattr("runtime_accelerator.ownership.accelerator_transport_available", lambda: True)
 
 
 def _identity(
@@ -27,7 +37,7 @@ def _identity(
     *,
     pid: int = 321,
     start_token: str = "proc:100",
-    executable: Path = Path("/opt/ccb/bin/ccb-runtime-accelerator"),
+    executable: Path = _ACCELERATOR_EXE,
     argv: tuple[str, ...] | None = None,
     cwd: Path | None = None,
 ) -> ProcessIdentity:
@@ -35,7 +45,7 @@ def _identity(
         pid=pid,
         argv=argv
         or (
-            "/opt/ccb/bin/ccb-runtime-accelerator",
+            _ACCELERATOR_EXE.as_posix(),
             "serve",
             "--socket",
             str(socket_path),
@@ -58,7 +68,7 @@ def _write_owner(project_root: Path, socket_path: Path, *, pid: int = 321, start
                 "project_root": str(project_root.resolve()),
                 "pid": pid,
                 "socket_path": str(socket_path.resolve()),
-                "executable": "/opt/ccb/bin/ccb-runtime-accelerator",
+                "executable": str(_ACCELERATOR_EXE),
                 "process_start_token": start_token,
             }
         )
@@ -126,16 +136,14 @@ def test_lsof_executable_reader_ignores_non_accelerator_text_mappings(monkeypatc
                 "ftxt\n"
                 "n/usr/lib/dyld\n"
                 "ftxt\n"
-                "n/opt/ccb/bin/ccb-runtime-accelerator\n"
+                f"n{_ACCELERATOR_EXE}\n"
             ),
         ),
     )
 
     from runtime_accelerator import ownership
 
-    assert ownership._read_process_executable_via_lsof(321) == Path(
-        "/opt/ccb/bin/ccb-runtime-accelerator"
-    )
+    assert ownership._read_process_executable_via_lsof(321) == _ACCELERATOR_EXE
 
 
 def test_recorded_owner_waits_through_pre_exec_identity(monkeypatch, tmp_path: Path) -> None:
@@ -160,7 +168,7 @@ def test_recorded_owner_waits_through_pre_exec_identity(monkeypatch, tmp_path: P
     owner = record_runtime_accelerator_owner(project_root, socket_path=socket_path, pid=321)
 
     assert owner == load_runtime_accelerator_owner(project_root)
-    assert owner.executable == Path("/opt/ccb/bin/ccb-runtime-accelerator")
+    assert owner.executable == _ACCELERATOR_EXE
 
 
 def test_recorded_owner_accepts_canonical_socket_alias_in_process_argv(monkeypatch, tmp_path: Path) -> None:
@@ -296,12 +304,12 @@ def test_pid_reuse_with_active_socket_blocks_and_preserves_owner_evidence(monkey
         lambda root, socket: _identity(
             root,
             socket,
-            executable=Path("/bin/sh"),
+            executable=_SHELL_EXE,
         ),
         lambda root, socket: _identity(
             root,
             socket,
-            argv=("/opt/ccb/bin/ccb-runtime-accelerator", "serve", "--socket", str(socket) + ".other"),
+            argv=(_ACCELERATOR_EXE.as_posix(), "serve", "--socket", str(socket) + ".other"),
         ),
     ),
 )
@@ -427,10 +435,10 @@ def test_legacy_scan_requires_exact_accelerator_argv_executable_and_cwd(monkeypa
     project_root.mkdir()
     other_root.mkdir()
     socket_path = (tmp_path / "accelerator.sock").resolve()
-    cmdline = f"/opt/ccb/bin/ccb-runtime-accelerator serve --socket {socket_path}"
+    cmdline = _accelerator_cmdline(socket_path)
     identities = {
         101: _identity(project_root, socket_path, pid=101),
-        202: _identity(project_root, socket_path, pid=202, executable=Path("/bin/sh")),
+        202: _identity(project_root, socket_path, pid=202, executable=_SHELL_EXE),
         303: _identity(other_root, socket_path, pid=303),
     }
     monkeypatch.setattr("runtime_accelerator.ownership.inspect_process_identity", identities.get)
@@ -449,7 +457,7 @@ def test_takeover_does_not_touch_other_project_accelerator(monkeypatch, tmp_path
     other_root.mkdir()
     socket_path = (tmp_path / "project.sock").resolve()
     other_socket = (tmp_path / "other.sock").resolve()
-    other_cmdline = f"/opt/ccb/bin/ccb-runtime-accelerator serve --socket {other_socket}"
+    other_cmdline = _accelerator_cmdline(other_socket)
     monkeypatch.setattr(
         "runtime_accelerator.ownership.list_process_cmdlines",
         lambda: {707: other_cmdline},
@@ -470,7 +478,7 @@ def test_takeover_reaps_all_legacy_accelerators_for_project_socket(monkeypatch, 
     project_root = (tmp_path / "project").resolve()
     project_root.mkdir()
     socket_path = (tmp_path / "accelerator.sock").resolve()
-    cmdline = f"/opt/ccb/bin/ccb-runtime-accelerator serve --socket {socket_path}"
+    cmdline = _accelerator_cmdline(socket_path)
     monkeypatch.setattr(
         "runtime_accelerator.ownership.list_process_cmdlines",
         lambda: {808: cmdline, 909: cmdline},
@@ -508,6 +516,57 @@ def test_normal_recovery_preserves_corrupt_owner_with_warning(tmp_path: Path) ->
     assert manifest_path.exists()
 
 
+def test_socket_connectability_without_af_unix_returns_false(monkeypatch, tmp_path: Path) -> None:
+    from runtime_accelerator import ownership
+
+    monkeypatch.setattr("runtime_accelerator.ownership.accelerator_transport_available", lambda: False)
+
+    assert ownership.runtime_accelerator_socket_is_connectable(tmp_path / "accelerator.sock") is False
+
+
+def test_reclaim_without_af_unix_preserves_owner_and_socket(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    socket_path = tmp_path / "accelerator.sock"
+    socket_path.write_text("preserve", encoding="utf-8")
+    owner_path = _write_owner(project_root, socket_path)
+    monkeypatch.setattr("runtime_accelerator.ownership.accelerator_transport_available", lambda: False)
+    monkeypatch.setattr(
+        "runtime_accelerator.ownership.terminate_pid_tree",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("terminate")),
+    )
+
+    assert reclaim_runtime_accelerator(project_root, socket_path=socket_path) == ()
+    assert owner_path.exists()
+    assert socket_path.exists()
+
+
+def test_force_recovery_without_af_unix_preserves_corrupt_owner(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    socket_path = tmp_path / "accelerator.sock"
+    socket_path.write_text("preserve", encoding="utf-8")
+    manifest_path = owner_manifest_path(project_root)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text("{invalid\n", encoding="utf-8")
+    monkeypatch.setattr("runtime_accelerator.ownership.accelerator_transport_available", lambda: False)
+    monkeypatch.setattr(
+        "runtime_accelerator.ownership.legacy_runtime_accelerator_pids",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("legacy scan")),
+    )
+
+    result = recover_corrupt_runtime_accelerator_owner(
+        project_root,
+        socket_path=socket_path,
+        force=True,
+    )
+
+    assert result.status == "blocked"
+    assert UNSUPPORTED_ACCELERATOR_TRANSPORT_REASON in result.warning
+    assert manifest_path.exists()
+    assert socket_path.exists()
+
+
 def test_force_recovery_removes_corrupt_owner_only_after_exact_legacy_reap(monkeypatch, tmp_path: Path) -> None:
     project_root = tmp_path / "project"
     project_root.mkdir()
@@ -542,6 +601,17 @@ def test_force_recovery_removes_corrupt_owner_only_after_exact_legacy_reap(monke
     assert events == ["terminate:321", "socket-check"]
     assert not manifest_path.exists()
     assert not socket_path.exists()
+
+
+def _accelerator_cmdline(socket_path: Path) -> str:
+    return " ".join(
+        (
+            shlex.quote(_ACCELERATOR_EXE.as_posix()),
+            "serve",
+            "--socket",
+            shlex.quote(socket_path.as_posix()),
+        )
+    )
 
 
 def test_force_recovery_without_exact_legacy_identity_preserves_corrupt_owner(monkeypatch, tmp_path: Path) -> None:

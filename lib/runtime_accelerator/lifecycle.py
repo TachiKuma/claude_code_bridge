@@ -19,6 +19,7 @@ from .ownership import (
     remove_runtime_accelerator_owner,
     runtime_accelerator_socket_is_connectable,
 )
+from .platform import accelerator_transport_available, accelerator_unsupported_reason
 
 
 @dataclass
@@ -45,6 +46,13 @@ def maybe_start_runtime_accelerator(project_root: str | Path) -> RuntimeAccelera
             enabled=True,
             socket_path=None,
             error="missing_socket_path",
+            project_root=project_root,
+        )
+    if not accelerator_transport_available():
+        return RuntimeAcceleratorHandle(
+            enabled=True,
+            socket_path=socket_path,
+            error=accelerator_unsupported_reason(),
             project_root=project_root,
         )
     binary = accelerator_binary()

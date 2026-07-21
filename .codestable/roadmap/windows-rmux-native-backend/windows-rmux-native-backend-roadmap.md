@@ -899,8 +899,9 @@ class RpcTransportAuthError(Exception):
 19. **accelerator-transport-windows-guard** — 修复 runtime_accelerator 控制面 Windows AF_UNIX AttributeError，使 `ccb ask` 的 codex accelerator caller 不崩。
    - 所属模块：Accelerator Transport Guard
    - 依赖：无
-   - 状态：planned
-   - 备注：`codex_accelerator_enabled()` 默认 True，`poll_with_accelerator` 在默认 codex ask/poll 路径调用，故默认路径下即 ask 必经（列 milestone-内）；depth 由 design 定（Windows transport vs guard+fallback）。
+   - 状态：accepted
+   - 对应 feature：`2026-07-20-accelerator-transport-windows-guard`
+   - 备注：2026-07-21 accepted：采用 guard + clean fallback，不实现 Windows accelerator transport；no-AF_UNIX 下 client/lifecycle/ownership/codex polling 均回落并保留 Unix regression。真实 full-chain smoke 仍由 `ccbd-windows-full-chain-smoke` 证明。
 
 20. **ccbd-windows-process-liveness** — 抽出跨平台进程存活判定，替换 `system.py:43 process_exists` 的 `os.kill(pid,0)`（Windows signal 0 == `CTRL_C_EVENT`，误判 + 副作用）。
    - 所属模块：CCBD Control Plane Transport（控制面 liveness）

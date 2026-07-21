@@ -8,6 +8,7 @@ from provider_backends.codex.execution_runtime.accelerator import codex_job_desc
 from provider_backends.codex.execution_runtime.polling import poll_submission
 from provider_execution.base import ProviderSubmission
 from runtime_accelerator.client import AcceleratorError
+from runtime_accelerator.platform import UNSUPPORTED_ACCELERATOR_TRANSPORT_REASON
 
 
 def _submission(tmp_path: Path) -> ProviderSubmission:
@@ -60,6 +61,19 @@ def test_codex_accelerator_failure_falls_back_to_python(monkeypatch, tmp_path: P
     monkeypatch.setattr(
         "provider_backends.codex.execution_runtime.accelerator.accelerator_client.call",
         lambda *args, **kwargs: (_ for _ in ()).throw(AcceleratorError("sidecar down")),
+    )
+
+    assert poll_with_accelerator(_submission(tmp_path), now="2026-04-06T00:01:00Z") is None
+
+
+def test_codex_accelerator_without_af_unix_falls_back_to_python(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("CCB_RUNTIME_ACCELERATOR_CODEX", "1")
+    monkeypatch.setenv("CCB_RUNTIME_ACCELERATOR_SOCKET", str(tmp_path / "accelerator.sock"))
+    monkeypatch.setattr(
+        "provider_backends.codex.execution_runtime.accelerator.accelerator_client.call",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AcceleratorError(UNSUPPORTED_ACCELERATOR_TRANSPORT_REASON)
+        ),
     )
 
     assert poll_with_accelerator(_submission(tmp_path), now="2026-04-06T00:01:00Z") is None

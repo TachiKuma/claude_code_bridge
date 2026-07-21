@@ -1,0 +1,23 @@
+{
+  "gate_id": "scope-gate",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "changed_files": [],
+      "ignored_machine_artifacts": [],
+      "allowed_prefixes": [
+        ".codestable/features/2026-07-20-accelerator-transport-windows-guard",
+        ".codestable/roadmap/windows-rmux-native-backend",
+        "lib/runtime_accelerator",
+        "test/test_runtime_accelerator_client.py",
+        "test/test_runtime_accelerator_lifecycle.py",
+        "test/test_runtime_accelerator_ownership.py",
+        "test/test_codex_runtime_accelerator_polling.py"
+      ]
+    }
+  ],
+  "providers": {}
+}

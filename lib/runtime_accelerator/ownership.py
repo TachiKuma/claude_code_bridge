@@ -14,6 +14,8 @@ from runtime_pid_cleanup.procfs import list_process_cmdlines, read_proc_cmdline,
 from storage.atomic import atomic_write_json
 from storage.paths import PathLayout
 
+from .platform import accelerator_transport_available, accelerator_unsupported_reason
+
 _OWNER_SCHEMA_VERSION = 1
 _OWNER_RECORD_TYPE = "ccb_runtime_accelerator_owner"
 _OWNER_FILE_NAME = "runtime-accelerator.json"
@@ -150,6 +152,8 @@ def record_runtime_accelerator_owner(
 def reclaim_runtime_accelerator(project_root: str | Path, *, socket_path: str | Path) -> tuple[int, ...]:
     root = _resolved_path(project_root)
     socket = _resolved_path(socket_path)
+    if not accelerator_transport_available():
+        return ()
     reclaimed: list[int] = []
     excluded_legacy_pids: set[int] = set()
     owner = load_runtime_accelerator_owner(root)
@@ -214,6 +218,14 @@ def recover_corrupt_runtime_accelerator_owner(
         return CorruptOwnerRecovery(
             status="blocked",
             warning=f"runtime_accelerator_corrupt_owner_preserved:force_required:{invalid_reason}",
+        )
+    if not accelerator_transport_available():
+        return CorruptOwnerRecovery(
+            status="blocked",
+            warning=(
+                "runtime_accelerator_corrupt_owner_preserved:"
+                f"{accelerator_unsupported_reason()}:{invalid_reason}"
+            ),
         )
 
     verified_pids = legacy_runtime_accelerator_pids(root, socket_path=socket)
@@ -530,6 +542,8 @@ def _split_cmdline(value: str) -> tuple[str, ...]:
 def _socket_is_connectable(path: Path) -> bool:
     import socket
 
+    if not accelerator_transport_available():
+        return False
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
             client.settimeout(0.1)
