@@ -17,6 +17,7 @@ from ccbd.services.project_namespace_runtime.backend import (
     wait_for_root_pane,
 )
 from terminal_runtime.tmux_readiness import TmuxTransientServerUnavailable
+from terminal_runtime.placeholders import pane_placeholder_argv
 
 _TMUX_UPDATE_ENVIRONMENT_FOR_TEST = (
     'TERM TERM_PROGRAM TERM_PROGRAM_VERSION DISPLAY WAYLAND_DISPLAY XDG_RUNTIME_DIR '
@@ -121,9 +122,7 @@ def test_prepare_server_then_create_session_and_server_policy_retry_transient_tm
         'cmd',
         '-c',
         str(tmp_path),
-        'sh',
-        '-lc',
-        'while :; do sleep 3600; done',
+        *pane_placeholder_argv(),
     )
 
     prepare_server(backend)
@@ -165,9 +164,7 @@ def test_prepare_server_then_create_session_and_server_policy_retry_transient_tm
             'cmd',
             '-c',
             str(tmp_path),
-            'sh',
-            '-lc',
-            'while :; do sleep 3600; done',
+            *pane_placeholder_argv(),
         )
     ) == 2
 
@@ -412,10 +409,9 @@ def test_create_session_uses_terminal_size_hint_when_provided(monkeypatch, tmp_p
             'cmd',
             '-c',
             str(tmp_path),
-            'sh',
-            '-lc',
-            'while :; do sleep 3600; done',
-        )
+            *pane_placeholder_argv(),
+        ),
+        ('has-session', '-t', 'ccb-proj'),
     ]
 
 
@@ -445,10 +441,9 @@ def test_create_session_falls_back_to_default_size_when_terminal_size_too_small(
             'cmd',
             '-c',
             str(tmp_path),
-            'sh',
-            '-lc',
-            'while :; do sleep 3600; done',
-        )
+            *pane_placeholder_argv(),
+        ),
+        ('has-session', '-t', 'ccb-proj'),
     ]
 
 

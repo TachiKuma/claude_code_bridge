@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from storage.paths import PathLayout
-from terminal_runtime import TmuxBackend
+from terminal_runtime import TmuxBackend, get_backend_for_session
+import os
 
 from ccbd.system import utc_now
 
@@ -39,7 +40,7 @@ class ProjectNamespaceController(ProjectNamespaceControllerStateMixin):
             layout=layout,
             project_id=resolved_project_id,
             clock=clock,
-            backend_factory=backend_factory or TmuxBackend,
+            backend_factory=backend_factory or default_project_namespace_backend,
             state_store=state_store or ProjectNamespaceStateStore(layout),
             event_store=event_store or ProjectNamespaceEventStore(layout),
             layout_version=resolved_layout_version,
@@ -130,7 +131,11 @@ class ProjectNamespaceController(ProjectNamespaceControllerStateMixin):
         current = namespace or self.load()
         if current is None:
             raise RuntimeError('project namespace is not available')
-        backend = build_backend(self._backend_factory, socket_path=current.tmux_socket_path)
+        backend = build_backend(
+            self._backend_factory,
+            socket_path=current.tmux_socket_path,
+            namespace=current.tmux_session_name,
+        )
         workspace_window_name = str(current.workspace_window_name or '').strip()
         pane_records = snapshot_project_namespace_panes(backend)
         if pane_records is not None:
@@ -158,6 +163,24 @@ class ProjectNamespaceController(ProjectNamespaceControllerStateMixin):
                 timeout_s=timeout_s,
             )
         return session_root_pane(backend, current.tmux_session_name, timeout_s=timeout_s)
+
+
+def default_project_namespace_backend(*, namespace: str | None = None, socket_path: str | None = None):
+    terminal_backend = (
+        os.environ.get('CCB_TERMINAL_BACKEND')
+        or os.environ.get('CCB_MUX_BACKEND')
+        or ''
+    ).strip() or None
+    return get_backend_for_session(
+        {
+            'terminal_backend': terminal_backend,
+            'tmux_socket_path': socket_path,
+            'tmux_socket_name': namespace,
+            'namespace_id': namespace,
+            'rmux_namespace': namespace,
+            'psmux_namespace': namespace,
+        }
+    )
 
 
 __all__ = ['ProjectNamespaceController']

@@ -594,3 +594,55 @@ def test_start_foreground_skips_refresh_when_client_tty_is_unavailable(tmp_path:
     attach_started_project_namespace(context)
 
     assert not any('refresh-client' in call for call in run_calls)
+
+
+def test_start_foreground_attaches_rmux_namespace_with_inherited_stdio(tmp_path: Path, monkeypatch) -> None:
+    project_root = tmp_path / 'repo-rmux-attach'
+    (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
+    (project_root / '.ccb' / 'ccb.config').write_text('demo:codex\n', encoding='utf-8')
+    bootstrap_project(project_root)
+    context = _context(project_root)
+
+    class _FakeClient:
+        def __init__(self, socket_path, *, timeout_s=None):
+            self.socket_path = socket_path
+            self.timeout_s = timeout_s
+
+        def ping(self, target: str) -> dict[str, object]:
+            assert target == 'ccbd'
+            return {
+                'namespace_backend_impl': 'rmux',
+                'namespace_id': 'ccb-rmux-demo',
+                'namespace_session_name': 'ccb-rmux-demo',
+                'namespace_ipc_kind': 'named_pipe',
+                'namespace_ipc_ref': r'\\.\pipe\rmux-ccb-rmux-demo',
+                'namespace_workspace_window_name': 'main',
+                'namespace_ui_attachable': True,
+            }
+
+    attach_calls: list[tuple[list[str], dict[str, object]]] = []
+    attach_process = _FakeAttachProcess(pid=8282, returncode=0)
+
+    def _popen(args, **kwargs):
+        attach_calls.append((list(args), dict(kwargs)))
+        return attach_process
+
+    monkeypatch.setenv('CCB_RMUX_BIN', 'rmux-custom')
+    monkeypatch.setattr('cli.services.start_foreground.CcbdClient', _FakeClient)
+    monkeypatch.setattr('cli.services.start_foreground.subprocess.Popen', _popen)
+
+    summary = attach_started_project_namespace(context)
+
+    assert summary.backend_impl == 'rmux'
+    assert summary.namespace_id == 'ccb-rmux-demo'
+    assert summary.session_name == 'ccb-rmux-demo'
+    assert summary.ipc_kind == 'named_pipe'
+    assert summary.ipc_ref == r'\\.\pipe\rmux-ccb-rmux-demo'
+    assert attach_calls == [
+        (
+            ['rmux-custom', '-L', 'ccb-rmux-demo', 'attach-session', '-t', 'ccb-rmux-demo'],
+            {'env': start_foreground_service._attach_env()},
+        )
+    ]
+    assert 'stdout' not in attach_calls[0][1]
+    assert 'stderr' not in attach_calls[0][1]

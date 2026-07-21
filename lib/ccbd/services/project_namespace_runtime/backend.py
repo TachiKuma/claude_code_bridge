@@ -63,7 +63,13 @@ class TmuxWindowRecord:
     active: bool = False
 
 
-def build_backend(backend_factory, *, socket_path: str):
+def build_backend(backend_factory, *, socket_path: str, namespace: str | None = None):
+    namespace_text = str(namespace or '').strip() or None
+    if namespace_text is not None:
+        try:
+            return backend_factory(namespace=namespace_text, socket_path=socket_path)
+        except TypeError:
+            pass
     try:
         return backend_factory(socket_path=socket_path)
     except TypeError:
@@ -219,6 +225,8 @@ def create_session(
         failure_message=f'failed to create tmux session {session_name!r}',
         timeout_s=timeout_s,
     )
+    if not session_alive(backend, session_name, timeout_s=timeout_s):
+        raise RuntimeError(f'failed to observe tmux session {session_name!r} after creation')
 
 
 def _resolved_session_size(terminal_size: tuple[int, int] | None) -> tuple[int, int]:

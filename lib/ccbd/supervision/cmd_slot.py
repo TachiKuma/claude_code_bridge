@@ -229,6 +229,7 @@ def _build_namespace_backend(namespace_controller: ProjectNamespaceController, n
         return build_backend(
             namespace_controller._backend_factory,
             socket_path=str(getattr(namespace, 'tmux_socket_path', None) or '').strip(),
+            namespace=str(getattr(namespace, 'tmux_session_name', None) or '').strip(),
         )
     except Exception:
         return None

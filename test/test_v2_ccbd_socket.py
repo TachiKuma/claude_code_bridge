@@ -1073,6 +1073,11 @@ def test_ping_namespace_summary(tmp_path: Path) -> None:
     ping = client.ping('ccbd')
 
     assert ping['namespace_epoch'] == 4
+    assert ping['namespace_backend_impl'] == 'tmux'
+    assert ping['namespace_id'] == app.paths.ccbd_tmux_session_name
+    assert ping['namespace_session_name'] == app.paths.ccbd_tmux_session_name
+    assert ping['namespace_ipc_kind'] == 'unix_socket'
+    assert ping['namespace_ipc_ref'] == str(app.paths.ccbd_tmux_socket_path)
     assert ping['namespace_tmux_socket_path'] == str(app.paths.ccbd_tmux_socket_path)
     assert ping['namespace_tmux_session_name'] == app.paths.ccbd_tmux_session_name
     assert ping['namespace_last_event_kind'] == 'namespace_created'

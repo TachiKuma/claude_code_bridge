@@ -196,6 +196,36 @@ def test_build_ccbd_payload_prefers_lifecycle_phase_over_lease_mount_state() -> 
     assert payload['diagnostics']['startup_deadline_at'] == '2026-04-21T00:00:20Z'
 
 
+def test_build_ccbd_payload_passes_rmux_namespace_attach_metadata() -> None:
+    payload = build_ccbd_payload(
+        project_id='proj-rmux',
+        config=_config(),
+        paths=_paths(),
+        inspection=_inspection(phase='mounted', desired_state='running'),
+        execution_summary={},
+        restore_summary={},
+        namespace_summary={
+            'namespace_backend_impl': 'rmux',
+            'namespace_id': 'ccb-rmux-demo',
+            'namespace_session_name': 'ccb-rmux-demo',
+            'namespace_ipc_kind': 'named_pipe',
+            'namespace_ipc_ref': 'ccb-rmux-demo',
+            'namespace_ui_attachable': True,
+            'namespace_tmux_socket_path': '/legacy/tmux.sock',
+            'namespace_tmux_session_name': 'ccb-rmux-demo',
+        },
+        namespace_event_summary={},
+        start_policy_summary={},
+    )
+
+    assert payload['namespace_backend_impl'] == 'rmux'
+    assert payload['namespace_id'] == 'ccb-rmux-demo'
+    assert payload['namespace_session_name'] == 'ccb-rmux-demo'
+    assert payload['namespace_ipc_kind'] == 'named_pipe'
+    assert payload['namespace_ipc_ref'] == 'ccb-rmux-demo'
+    assert payload['namespace_ui_attachable'] is True
+
+
 def test_ping_handler_all_uses_lifecycle_phase_for_ccbd_state() -> None:
     config = _config()
 

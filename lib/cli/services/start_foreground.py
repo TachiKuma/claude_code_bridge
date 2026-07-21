@@ -25,8 +25,13 @@ _MIN_ATTACH_RPC_TIMEOUT_S = 0.1
 @dataclass(frozen=True)
 class ForegroundAttachSummary:
     project_id: str
-    tmux_socket_path: str
-    tmux_session_name: str
+    tmux_socket_path: str | None
+    tmux_session_name: str | None
+    backend_impl: str = 'tmux'
+    namespace_id: str | None = None
+    session_name: str | None = None
+    ipc_kind: str | None = None
+    ipc_ref: str | None = None
 
 
 class ForegroundAttachError(RuntimeError):
@@ -34,17 +39,24 @@ class ForegroundAttachError(RuntimeError):
 
 
 def attach_started_project_namespace(context: CliContext) -> ForegroundAttachSummary:
-    if shutil.which('tmux') is None:
-        raise ForegroundAttachError('tmux is required for interactive `ccb`')
     client = _foreground_attach_client(context)
     env = _attach_env()
     payload = _wait_for_attach_target(client, env=env)
+    if _payload_backend_impl(payload) == 'rmux':
+        return _attach_rmux_namespace(context, payload, env=env)
+    if shutil.which('tmux') is None:
+        raise ForegroundAttachError('tmux is required for interactive `ccb`')
     tmux_socket_path = str(payload.get('namespace_tmux_socket_path') or '').strip()
     tmux_session_name = str(payload.get('namespace_tmux_session_name') or '').strip()
     summary = ForegroundAttachSummary(
         project_id=context.project.project_id,
         tmux_socket_path=tmux_socket_path,
         tmux_session_name=tmux_session_name,
+        backend_impl='tmux',
+        namespace_id=tmux_session_name,
+        session_name=tmux_session_name,
+        ipc_kind='unix_socket',
+        ipc_ref=tmux_socket_path,
     )
     attach = subprocess.Popen(
         _tmux_cmd(tmux_socket_path, 'attach-session', '-t', tmux_session_name),
@@ -69,6 +81,42 @@ def attach_started_project_namespace(context: CliContext) -> ForegroundAttachSum
     if returncode != 0 and not _tmux_has_session(tmux_socket_path, tmux_session_name, env=env):
         raise ForegroundAttachError('project namespace session exited before foreground attach completed')
     raise ForegroundAttachError('failed to attach project namespace after successful `ccb` start')
+
+
+def _attach_rmux_namespace(
+    context: CliContext,
+    payload: dict[str, object],
+    *,
+    env: dict[str, str],
+) -> ForegroundAttachSummary:
+    namespace_id = str(payload.get('namespace_id') or payload.get('namespace_session_name') or '').strip()
+    session_name = str(payload.get('namespace_session_name') or namespace_id).strip()
+    ipc_kind = str(payload.get('namespace_ipc_kind') or 'named_pipe').strip()
+    ipc_ref = str(payload.get('namespace_ipc_ref') or '').strip()
+    if not namespace_id or not session_name:
+        raise ForegroundAttachError('rmux foreground attach failed: namespace_id/session_name missing')
+    if ipc_kind != 'named_pipe':
+        raise ForegroundAttachError(f'rmux foreground attach failed: unsupported ipc_kind={ipc_kind!r}')
+    attach = subprocess.Popen(
+        _rmux_cmd(namespace_id, 'attach-session', '-t', session_name),
+        env=env,
+    )
+    returncode = attach.wait()
+    if returncode != 0:
+        raise ForegroundAttachError(
+            'rmux foreground attach failed: '
+            f'namespace_id={namespace_id!r} session_name={session_name!r} returncode={returncode}'
+        )
+    return ForegroundAttachSummary(
+        project_id=context.project.project_id,
+        tmux_socket_path=None,
+        tmux_session_name=None,
+        backend_impl='rmux',
+        namespace_id=namespace_id,
+        session_name=session_name,
+        ipc_kind=ipc_kind,
+        ipc_ref=ipc_ref or namespace_id,
+    )
 
 
 def _wait_for_attach_established(
@@ -148,6 +196,16 @@ def _wait_for_attach_target(client, *, env: dict[str, str]) -> dict[str, object]
 
 
 def _attach_target_ready(payload: dict[str, object], *, env: dict[str, str]) -> tuple[bool, str]:
+    if _payload_backend_impl(payload) == 'rmux':
+        namespace_id = str(payload.get('namespace_id') or payload.get('namespace_session_name') or '').strip()
+        session_name = str(payload.get('namespace_session_name') or namespace_id).strip()
+        ipc_kind = str(payload.get('namespace_ipc_kind') or 'named_pipe').strip()
+        ui_attachable = bool(payload.get('namespace_ui_attachable'))
+        if not namespace_id or not session_name or not ui_attachable:
+            return False, 'project namespace is not attachable after successful `ccb` start'
+        if ipc_kind != 'named_pipe':
+            return False, f'rmux project namespace uses unsupported ipc_kind={ipc_kind!r}'
+        return True, ''
     tmux_socket_path = str(payload.get('namespace_tmux_socket_path') or '').strip()
     tmux_session_name = str(payload.get('namespace_tmux_session_name') or '').strip()
     workspace_window_name = str(payload.get('namespace_workspace_window_name') or '').strip()
@@ -318,6 +376,19 @@ def _attach_env() -> dict[str, str]:
 
 def _tmux_cmd(tmux_socket_path: str, *args: str) -> list[str]:
     return [*tmux_base(socket_path=tmux_socket_path), *args]
+
+
+def _rmux_cmd(namespace_id: str, *args: str) -> list[str]:
+    rmux_bin = str(os.environ.get('CCB_RMUX_BIN') or 'rmux').strip() or 'rmux'
+    namespace = str(namespace_id or '').strip()
+    base = [rmux_bin]
+    if namespace:
+        base.extend(['-L', namespace])
+    return [*base, *args]
+
+
+def _payload_backend_impl(payload: dict[str, object]) -> str:
+    return str(payload.get('namespace_backend_impl') or 'tmux').strip().lower() or 'tmux'
 
 
 def _tmux_has_session(tmux_socket_path: str, tmux_session_name: str, *, env: dict[str, str]) -> bool:
