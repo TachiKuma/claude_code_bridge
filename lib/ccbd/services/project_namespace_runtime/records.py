@@ -24,10 +24,15 @@ def build_active_state(
     workspace_epoch: int,
     ui_attachable: bool,
     last_started_at: str | None,
+    backend_impl: str | None = None,
+    namespace_id: str | None = None,
 ):
     return ProjectNamespaceState(
         project_id=project_id,
         namespace_epoch=namespace_epoch,
+        backend_impl=str(backend_impl or getattr(current, 'backend_impl', None) or 'tmux').strip() or 'tmux',
+        namespace_id=str(namespace_id or getattr(current, 'namespace_id', None) or tmux_session_name).strip() or None,
+        namespace_session_name=tmux_session_name,
         tmux_socket_path=tmux_socket_path,
         tmux_session_name=tmux_session_name,
         layout_version=layout_version,
@@ -76,12 +81,17 @@ def build_destroyed_state(
     layout_version: int,
     control_window_name: str | None,
     workspace_window_name: str | None,
+    backend_impl: str | None = None,
+    namespace_id: str | None = None,
 ):
     if current is not None:
         return current.with_destroyed(occurred_at=occurred_at, reason=reason)
     return ProjectNamespaceState(
         project_id=project_id,
         namespace_epoch=1,
+        backend_impl=str(backend_impl or 'tmux').strip() or 'tmux',
+        namespace_id=str(namespace_id or tmux_session_name).strip() or None,
+        namespace_session_name=tmux_session_name,
         tmux_socket_path=tmux_socket_path,
         tmux_session_name=tmux_session_name,
         layout_version=layout_version,

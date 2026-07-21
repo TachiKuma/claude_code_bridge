@@ -17,6 +17,11 @@ class ProjectNamespace:
     workspace_window_id: str | None
     workspace_epoch: int
     ui_attachable: bool
+    backend_impl: str = 'tmux'
+    namespace_id: str | None = None
+    namespace_session_name: str | None = None
+    namespace_ipc_kind: str | None = None
+    namespace_ipc_ref: str | None = None
     created_this_call: bool = False
     workspace_recreated_this_call: bool = False
 
@@ -27,6 +32,11 @@ class ProjectNamespace:
             namespace_epoch=state.namespace_epoch,
             tmux_socket_path=state.tmux_socket_path,
             tmux_session_name=state.tmux_session_name,
+            backend_impl=state.backend_impl,
+            namespace_id=state.resolved_namespace_id(),
+            namespace_session_name=state.resolved_namespace_session_name(),
+            namespace_ipc_kind=state.resolved_namespace_ipc_kind(),
+            namespace_ipc_ref=state.resolved_namespace_ipc_ref(),
             layout_version=state.layout_version,
             layout_signature=state.layout_signature,
             control_window_name=state.control_window_name,

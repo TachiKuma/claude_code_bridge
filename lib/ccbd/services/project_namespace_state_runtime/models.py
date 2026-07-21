@@ -20,6 +20,11 @@ class ProjectNamespaceState:
     namespace_epoch: int
     tmux_socket_path: str
     tmux_session_name: str
+    backend_impl: str = 'tmux'
+    namespace_id: str | None = None
+    namespace_session_name: str | None = None
+    namespace_ipc_kind: str | None = None
+    namespace_ipc_ref: str | None = None
     layout_version: int = 1
     layout_signature: str | None = None
     control_window_name: str | None = None
@@ -37,6 +42,15 @@ class ProjectNamespaceState:
         require_positive_int(self.namespace_epoch, field_name='namespace_epoch')
         require_non_empty_text(self.tmux_socket_path, field_name='tmux_socket_path')
         require_non_empty_text(self.tmux_session_name, field_name='tmux_session_name')
+        require_non_empty_text(self.backend_impl, field_name='backend_impl')
+        if self.namespace_id is not None:
+            require_non_empty_text(self.namespace_id, field_name='namespace_id')
+        if self.namespace_session_name is not None:
+            require_non_empty_text(self.namespace_session_name, field_name='namespace_session_name')
+        if self.namespace_ipc_kind is not None:
+            require_non_empty_text(self.namespace_ipc_kind, field_name='namespace_ipc_kind')
+        if self.namespace_ipc_ref is not None:
+            require_non_empty_text(self.namespace_ipc_ref, field_name='namespace_ipc_ref')
         require_positive_int(self.layout_version, field_name='layout_version')
         if self.layout_signature is not None:
             require_non_empty_text(self.layout_signature, field_name='layout_signature')
@@ -73,6 +87,11 @@ class ProjectNamespaceState:
             'namespace_epoch': self.namespace_epoch,
             'tmux_socket_path': self.tmux_socket_path,
             'tmux_session_name': self.tmux_session_name,
+            'backend_impl': self.backend_impl,
+            'namespace_id': self.namespace_id,
+            'namespace_session_name': self.namespace_session_name,
+            'namespace_ipc_kind': self.namespace_ipc_kind,
+            'namespace_ipc_ref': self.namespace_ipc_ref,
             'layout_version': self.layout_version,
             'layout_signature': self.layout_signature,
             'control_window_name': self.control_window_name,
@@ -95,6 +114,11 @@ class ProjectNamespaceState:
             namespace_epoch=int(payload['namespace_epoch']),
             tmux_socket_path=str(payload['tmux_socket_path']),
             tmux_session_name=str(payload['tmux_session_name']),
+            backend_impl=clean_text(payload.get('backend_impl')) or 'tmux',
+            namespace_id=clean_text(payload.get('namespace_id')),
+            namespace_session_name=clean_text(payload.get('namespace_session_name')),
+            namespace_ipc_kind=clean_text(payload.get('namespace_ipc_kind')),
+            namespace_ipc_ref=clean_text(payload.get('namespace_ipc_ref')),
             layout_version=int(payload.get('layout_version', 1)),
             layout_signature=clean_text(payload.get('layout_signature')),
             control_window_name=clean_text(payload.get('control_window_name')),
@@ -111,6 +135,11 @@ class ProjectNamespaceState:
     def summary_fields(self) -> dict[str, object]:
         return {
             'namespace_epoch': self.namespace_epoch,
+            'namespace_backend_impl': self.backend_impl,
+            'namespace_id': self.resolved_namespace_id(),
+            'namespace_session_name': self.resolved_namespace_session_name(),
+            'namespace_ipc_kind': self.resolved_namespace_ipc_kind(),
+            'namespace_ipc_ref': self.resolved_namespace_ipc_ref(),
             'namespace_tmux_socket_path': self.tmux_socket_path,
             'namespace_tmux_session_name': self.tmux_session_name,
             'namespace_layout_version': self.layout_version,
@@ -124,6 +153,26 @@ class ProjectNamespaceState:
             'namespace_last_destroyed_at': self.last_destroyed_at,
             'namespace_last_destroy_reason': self.last_destroy_reason,
         }
+
+    def resolved_namespace_id(self) -> str:
+        return str(self.namespace_id or self.tmux_session_name).strip()
+
+    def resolved_namespace_session_name(self) -> str:
+        return str(self.namespace_session_name or self.tmux_session_name).strip()
+
+    def resolved_namespace_ipc_kind(self) -> str:
+        kind = str(self.namespace_ipc_kind or '').strip()
+        if kind:
+            return kind
+        return 'named_pipe' if self.backend_impl in {'rmux', 'psmux'} else 'unix_socket'
+
+    def resolved_namespace_ipc_ref(self) -> str:
+        ref = str(self.namespace_ipc_ref or '').strip()
+        if ref:
+            return ref
+        if self.resolved_namespace_ipc_kind() == 'named_pipe':
+            return self.resolved_namespace_id()
+        return self.tmux_socket_path
 
 
 @dataclass(frozen=True)

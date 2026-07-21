@@ -16,6 +16,7 @@ from ccbd.services.project_namespace_state import (
 from storage.paths import PathLayout
 from agents.config_loader import load_project_config
 from agents.models import SidebarSpec
+from terminal_runtime.placeholders import pane_placeholder_argv
 
 
 def _clipboard_bind_call(key: str) -> tuple[list[str], bool]:
@@ -81,6 +82,29 @@ def test_project_namespace_state_store_round_trip(tmp_path: Path) -> None:
     assert loaded.summary_fields()['namespace_tmux_socket_path'] == str(layout.ccbd_tmux_socket_path)
     assert second_stat.st_ino == first_stat.st_ino
     assert second_stat.st_mtime_ns == first_stat.st_mtime_ns
+
+
+def test_project_namespace_state_summary_exposes_rmux_namespace_metadata(tmp_path: Path) -> None:
+    layout = PathLayout(tmp_path / 'repo-rmux-state')
+    state = ProjectNamespaceState(
+        project_id='proj-rmux',
+        namespace_epoch=1,
+        tmux_socket_path=str(layout.ccbd_tmux_socket_path),
+        tmux_session_name=layout.ccbd_tmux_session_name,
+        backend_impl='rmux',
+        namespace_id=layout.ccbd_tmux_session_name,
+        namespace_session_name=layout.ccbd_tmux_session_name,
+        layout_version=3,
+        ui_attachable=True,
+    )
+
+    summary = state.summary_fields()
+
+    assert summary['namespace_backend_impl'] == 'rmux'
+    assert summary['namespace_id'] == layout.ccbd_tmux_session_name
+    assert summary['namespace_session_name'] == layout.ccbd_tmux_session_name
+    assert summary['namespace_ipc_kind'] == 'named_pipe'
+    assert summary['namespace_ipc_ref'] == layout.ccbd_tmux_session_name
 
 
 def test_path_layout_normalizes_tmux_session_name_for_tmux_targets(tmp_path: Path) -> None:
@@ -458,6 +482,74 @@ def test_project_namespace_controller_creates_state_and_lifecycle_event(tmp_path
     assert latest_event.event_kind == 'namespace_created'
     assert latest_event.details['recreated'] is False
     assert latest_event.details['reason'] == 'initial_create'
+
+
+def test_project_namespace_controller_default_factory_uses_rmux_env_backend(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project_root = tmp_path / 'repo-rmux-controller'
+    layout = PathLayout(project_root)
+    backend = _FakeTmuxBackend()
+    backend.backend_impl = 'rmux'
+    calls: list[dict[str, object]] = []
+
+    def fake_get_backend_for_session(session_data: dict[str, object]):
+        calls.append(dict(session_data))
+        return backend
+
+    monkeypatch.setenv('CCB_TERMINAL_BACKEND', 'rmux')
+    monkeypatch.setattr(
+        'ccbd.services.project_namespace_runtime.controller.get_backend_for_session',
+        fake_get_backend_for_session,
+    )
+    controller = ProjectNamespaceController(
+        layout,
+        'proj-rmux-controller',
+        clock=lambda: '2026-04-03T02:00:00Z',
+    )
+
+    namespace = controller.ensure()
+    state = ProjectNamespaceStateStore(layout).load()
+
+    assert calls
+    assert calls[0]['terminal_backend'] == 'rmux'
+    assert calls[0]['namespace_id'] == layout.ccbd_tmux_session_name
+    assert namespace.backend_impl == 'rmux'
+    assert namespace.namespace_id == layout.ccbd_tmux_session_name
+    assert state is not None
+    assert state.summary_fields()['namespace_backend_impl'] == 'rmux'
+    assert state.summary_fields()['namespace_ipc_kind'] == 'named_pipe'
+
+
+def test_project_namespace_root_pane_id_passes_namespace_to_backend_factory(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-root-pane-rmux'
+    layout = PathLayout(project_root)
+    backend = _FakeTmuxBackend()
+    calls: list[dict[str, object]] = []
+
+    def backend_factory(*, namespace: str | None = None, socket_path: str | None = None):
+        calls.append({'namespace': namespace, 'socket_path': socket_path})
+        return backend
+
+    controller = ProjectNamespaceController(
+        layout,
+        'proj-root-pane-rmux',
+        clock=lambda: '2026-04-03T02:05:00Z',
+        backend_factory=backend_factory,
+    )
+    namespace = controller.ensure()
+    calls.clear()
+
+    pane_id = controller.root_pane_id(namespace)
+
+    assert pane_id.startswith('%')
+    assert calls == [
+        {
+            'namespace': layout.ccbd_tmux_session_name,
+            'socket_path': str(layout.ccbd_tmux_socket_path),
+        }
+    ]
 
 
 def test_project_namespace_controller_materializes_explicit_windows_and_sidebar(tmp_path: Path, monkeypatch) -> None:
@@ -1300,7 +1392,7 @@ def test_project_namespace_controller_bootstraps_with_silent_session_before_serv
 
     new_session_calls = [args for args, _capture in backend.tmux_calls if args[:2] == ['new-session', '-d']]
     assert len(new_session_calls) == 1
-    assert new_session_calls[0][-3:] == ['sh', '-lc', 'while :; do sleep 3600; done']
+    assert new_session_calls[0][-len(pane_placeholder_argv()):] == list(pane_placeholder_argv())
     assert (['start-server'], True) not in backend.tmux_calls
     new_session_index = next(index for index, (args, _capture) in enumerate(backend.tmux_calls) if args[:2] == ['new-session', '-d'])
     policy_index = next(
