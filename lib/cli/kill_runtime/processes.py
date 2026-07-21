@@ -5,7 +5,9 @@ import signal
 import subprocess
 import time
 from collections.abc import Callable
-from pathlib import Path
+
+from process_liveness import _proc_pid_state
+from process_liveness import process_exists as _shared_process_exists
 
 
 def kill_pid(pid: int, *, force: bool = False) -> bool:
@@ -28,13 +30,7 @@ def kill_pid(pid: int, *, force: bool = False) -> bool:
 def is_pid_alive(pid: int) -> bool:
     if pid <= 0:
         return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except OSError:
+    if not _shared_process_exists(pid):
         return False
     if _proc_pid_state(pid) == "Z":
         return False
@@ -129,27 +125,6 @@ def _safe_getpgrp() -> int | None:
         return os.getpgrp()
     except Exception:
         return None
-
-
-def _proc_pid_state(pid: int, *, proc_root: Path = Path("/proc")) -> str | None:
-    if os.name == "nt" or pid <= 0:
-        return None
-    try:
-        return _parse_proc_stat_state((proc_root / str(pid) / "stat").read_text(encoding="utf-8"))
-    except Exception:
-        return None
-
-
-def _parse_proc_stat_state(text: str) -> str | None:
-    try:
-        after_comm = text.rsplit(") ", 1)[1]
-    except Exception:
-        return None
-    fields = after_comm.split()
-    if not fields:
-        return None
-    state = fields[0].strip()
-    return state[:1] or None
 
 
 __all__ = ["is_pid_alive", "kill_pid", "terminate_pid_tree"]

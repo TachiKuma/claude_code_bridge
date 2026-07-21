@@ -5,14 +5,14 @@ import cli.kill_runtime.zombies as zombies
 
 
 def test_is_pid_alive_treats_procfs_zombie_as_dead(monkeypatch) -> None:
-    monkeypatch.setattr(processes.os, 'kill', lambda pid, sig: None)
+    monkeypatch.setattr(processes, '_shared_process_exists', lambda pid: True)
     monkeypatch.setattr(processes, '_proc_pid_state', lambda pid: 'Z')
 
     assert processes.is_pid_alive(123) is False
 
 
 def test_is_pid_alive_keeps_uninterruptible_process_alive(monkeypatch) -> None:
-    monkeypatch.setattr(processes.os, 'kill', lambda pid, sig: None)
+    monkeypatch.setattr(processes, '_shared_process_exists', lambda pid: True)
     monkeypatch.setattr(processes, '_proc_pid_state', lambda pid: 'D')
 
     assert processes.is_pid_alive(123) is True

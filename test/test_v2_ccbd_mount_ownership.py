@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+import socket
 import threading
 import time
 
@@ -9,7 +10,9 @@ import pytest
 
 from ccbd.api_models import DeliveryScope, MessageEnvelope
 from ccbd.app import CcbdApp
+from ccbd.control_plane_transport.fake import FakeControlPlaneTransport
 from ccbd.models import LeaseHealth, MountState
+from ccbd.socket_server import CcbdSocketServer
 from ccbd.services.health import HealthMonitor
 from ccbd.services.lifecycle import build_lifecycle
 from ccbd.services.mount import MountManager
@@ -186,6 +189,26 @@ def _provider_config(*providers: str) -> ProjectConfig:
             queue_policy=QueuePolicy.SERIAL_PER_AGENT,
         )
     return ProjectConfig(version=2, default_agents=tuple(providers), agents=agents)
+
+
+def _use_fake_control_plane_when_af_unix_unavailable(app: CcbdApp) -> None:
+    if hasattr(socket, 'AF_UNIX'):
+        return
+    current = app.socket_server
+    replacement = CcbdSocketServer(
+        app.paths.ccbd_socket_path,
+        control_plane_transport=FakeControlPlaneTransport(),
+    )
+    replacement._handlers = dict(current._handlers)
+    replacement._request_guard = current._request_guard
+    replacement._record_request_queue_wait = current._record_request_queue_wait
+    replacement._record_pending_maintenance_ticks = current._record_pending_maintenance_ticks
+    replacement._record_handler_latency = current._record_handler_latency
+    app.socket_server = replacement
+    app.ownership_guard._socket_probe = (
+        lambda _endpoint: replacement._control_plane_transport.is_connectable()
+    )
+    app.ownership_guard._socket_probe_uses_endpoint = True
 
 
 def test_mount_manager_roundtrip_and_unmount(tmp_path: Path) -> None:
@@ -1473,6 +1496,7 @@ def test_ccbd_heartbeat_keeps_backend_mounted_on_background_supervision_failure(
     config_path.write_text('codex:codex\n', encoding='utf-8')
     ctx = bootstrap_project(project_root)
     app = CcbdApp(project_root)
+    _use_fake_control_plane_when_af_unix_unavailable(app)
 
     app.start()
     thread_errors: list[BaseException] = []

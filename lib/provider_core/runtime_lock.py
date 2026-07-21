@@ -12,28 +12,15 @@ from typing import Optional
 
 from .platform_info import is_windows
 
+from process_liveness import process_exists as _shared_process_exists
 from project.runtime_paths import project_anchor_exists, project_lock_dir
 
 
 def _is_pid_alive(pid: int) -> bool:
-    if is_windows():
-        try:
-            import ctypes
-
-            kernel32 = ctypes.windll.kernel32
-            synchronize = 0x00100000
-            handle = kernel32.OpenProcess(synchronize, False, pid)
-            if handle:
-                kernel32.CloseHandle(handle)
-                return True
-            return False
-        except Exception:
-            return True
     try:
-        os.kill(pid, 0)
+        return _shared_process_exists(pid)
+    except Exception:
         return True
-    except OSError:
-        return False
 
 
 class ProviderLock:
