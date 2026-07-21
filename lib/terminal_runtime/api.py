@@ -23,6 +23,7 @@ from terminal_runtime.pane_logs import pane_log_path_for as _pane_log_path_for_i
 from terminal_runtime.pane_logs import pane_log_root as _pane_log_root_impl
 from terminal_runtime.tmux import default_detached_session_name as _default_detached_session_name_impl
 from terminal_runtime.psmux_backend import PsmuxBackend
+from terminal_runtime.rmux_backend import RmuxBackend
 from terminal_runtime.tmux_backend import TmuxBackend
 
 from .api_selection import (
@@ -127,6 +128,7 @@ def get_backend(terminal_type: Optional[str] = None) -> Optional[TerminalBackend
         detect_terminal_fn=detect_terminal,
         tmux_backend_factory=TmuxBackend,
         psmux_backend_factory=PsmuxBackend,
+        rmux_backend_factory=RmuxBackend,
     )
     return _backend_cache
 
@@ -137,6 +139,7 @@ def get_backend_for_session(session_data: dict) -> Optional[TerminalBackend]:
         detect_terminal_fn=detect_terminal,
         tmux_backend_factory=TmuxBackend,
         psmux_backend_factory=PsmuxBackend,
+        rmux_backend_factory=RmuxBackend,
     )
 
 
@@ -171,6 +174,7 @@ def create_auto_layout(
 __all__ = [
     "LayoutResult",
     "PsmuxBackend",
+    "RmuxBackend",
     "TerminalBackend",
     "TmuxBackend",
     "create_auto_layout",

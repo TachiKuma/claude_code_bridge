@@ -13,6 +13,7 @@ class TerminalBackendSelection:
     detect_terminal_fn: Callable[[], object | None]
     tmux_backend_factory: Callable[[], object]
     psmux_backend_factory: Callable[[], object] | None = None
+    rmux_backend_factory: Callable[[], object] | None = None
     cached_backend: object | None = None
 
     def get_backend(self, terminal_type: str | None = None) -> object | None:
@@ -21,8 +22,12 @@ class TerminalBackendSelection:
         selected = _normalize_backend_name(terminal_type or self.detect_terminal_fn())
         if selected == 'tmux':
             self.cached_backend = self.tmux_backend_factory()
-        elif selected in {'psmux', 'rmux'} and self.psmux_backend_factory is not None:
+        elif selected == 'psmux' and self.psmux_backend_factory is not None:
             self.cached_backend = self.psmux_backend_factory()
+        elif selected == 'rmux':
+            factory = self.rmux_backend_factory or self.psmux_backend_factory
+            if factory is not None:
+                self.cached_backend = factory()
         return self.cached_backend
 
     def get_backend_for_session(self, session_data: dict) -> object:
@@ -34,7 +39,20 @@ class TerminalBackendSelection:
             or session_data.get('backend_impl')
             or session_data.get('mux_backend')
         )
-        if selected in {'psmux', 'rmux'} and self.psmux_backend_factory is not None:
+        if selected == 'rmux':
+            factory = self.rmux_backend_factory or self.psmux_backend_factory
+            if factory is not None:
+                namespace = str(
+                    session_data.get('rmux_namespace')
+                    or session_data.get('namespace_id')
+                    or socket_name
+                    or ''
+                ).strip() or None
+                try:
+                    return factory(namespace=namespace, socket_path=socket_path)
+                except TypeError:
+                    return factory()
+        if selected == 'psmux' and self.psmux_backend_factory is not None:
             namespace = str(
                 session_data.get('rmux_namespace')
                 or session_data.get('psmux_namespace')
