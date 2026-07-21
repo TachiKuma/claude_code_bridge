@@ -13,7 +13,7 @@ items:
   - slug: rmux-route-approval
     description: 基于 capability report、blocking gaps、partial workaround 和用户或 owner 判断，明确 Rmux 路线继续、暂停或重新选型
     depends_on: [rmux-capability-gate]
-    status: in-progress
+    status: done
     feature: 2026-07-19-rmux-route-approval
     minimal_loop: false
     notes: 必须落盘 approval evidence；后续实现 item 只能依赖此 item，不直接依赖 probe completed

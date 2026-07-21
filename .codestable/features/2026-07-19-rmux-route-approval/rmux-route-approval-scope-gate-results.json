@@ -1,0 +1,41 @@
+{
+  "gate_id": "scope-gate",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "changed_files": [
+        ".codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-checklist.yaml",
+        ".codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-design.md",
+        ".codestable/roadmap/windows-rmux-native-backend/goal-state.yaml",
+        ".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml",
+        ".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-roadmap.md",
+        ".codestable/features/2026-07-19-rmux-route-approval/approval-report.md",
+        ".codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-acceptance.md",
+        ".codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-cmd003-results.json",
+        ".codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-evidence-pack.md",
+        ".codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-qa.md",
+        ".codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-review.md",
+        ".codestable/features/2026-07-19-rmux-route-approval/rmux-route-decision-summary.yaml"
+      ],
+      "ignored_machine_artifacts": [
+        ".codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-acceptance-dod-gate-results.json",
+        ".codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-dod-results.json",
+        ".codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-evidence-pack-results.json",
+        ".codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-scope-gate-results.json"
+      ],
+      "allowed_prefixes": [
+        ".codestable/features/2026-07-19-rmux-route-approval",
+        ".codestable/roadmap/windows-rmux-native-backend"
+      ]
+    }
+  ],
+  "providers": {},
+  "feature": "2026-07-19-rmux-route-approval",
+  "inputs": {
+    "feature_dir": ".codestable/features/2026-07-19-rmux-route-approval"
+  },
+  "input_digests": {}
+}

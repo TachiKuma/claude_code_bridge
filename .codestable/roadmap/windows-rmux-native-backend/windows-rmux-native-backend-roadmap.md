@@ -779,9 +779,9 @@ class RpcTransportAuthError(Exception):
 2. **rmux-route-approval** — 基于 capability report、blocking gaps、partial workaround 和用户/owner 判断，明确 Rmux 路线继续、暂停或重新选型。
    - 所属模块：Capability Gate
    - 依赖：`rmux-capability-gate`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：必须落盘 approval evidence；后续实现 item 只能依赖此 item，不直接依赖 probe completed。
+   - 状态：accepted
+   - 对应 feature：`2026-07-19-rmux-route-approval`
+   - 备注：route approval 已落盘；selected report 为 `.codestable/goals/2026-07-21-windows-rmux-full-backend/evidence/rmux-full-gate/run-20260721T144322Z-15036/capability-report.json`（`rmux 0.9.0`、Windows、`probe_status=completed`、`blocking_gaps=[]`）。旧 `rmux 0.8.0` canonical report 的 7 个 gaps 保留为 superseded facts；accepted workaround 风险继续传递给下游 validation。
 
 3. **backend-resolver-opt-in-contract** — 定义 Rmux opt-in 配置、平台默认、auto 探测、fallback/fail-fast 和 diagnostics selection result。
    - 所属模块：Backend Resolver & Opt-in

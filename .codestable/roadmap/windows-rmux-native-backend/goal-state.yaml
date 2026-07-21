@@ -1,23 +1,23 @@
 roadmap: windows-rmux-native-backend
-status: handoff
-handoff_reason: "OwnerStop: ccbd-windows-process-liveness acceptance passed, but local scoped commit was not executed because AGENTS.md forbids git commit unless the user actively requests it."
-handoff_next: "Owner must explicitly request/confirm the scoped commit for ccbd-windows-process-liveness, or explicitly allow continuing the roadmap with an uncommitted accepted feature."
-handoff_resolution: "Resolved 2026-07-21: owner requested reference to v8.0.16 Windows path/AF_UNIX handling; fixed Windows path text preservation, TMUX socket ref preservation, Windows legacy mobile command parsing, AF_UNIX-unavailable lifecycle test injection, and shared runtime_lock liveness owner. implementation.before_review scope-gate, dod-runner, evidence-pack, OCR, and independent code review now pass; redispatch goal driver to continue ccbd-windows-process-liveness QA."
+status: ready-to-dispatch
+handoff_reason: null
+handoff_next: null
+handoff_resolution: "Resolved 2026-07-22: rmux-route-approval QA and acceptance passed; owner explicitly authorized scoped commit and epic can continue from current_feature_index 5 after commit."
 resume_decision: "Owner requested cs-goal recovery on 2026-07-21: resume from IndependentReviewUnavailable handoff, continue accelerator-transport-windows-guard toward QA, then continue goal features toward ccbd-windows-full-chain-smoke."
 resume_note: "Handoff resolved 2026-07-20 (approval-report.md Decision History): owner split out-of-scope Windows import/locking/atomic compat into a separate feature (pending-split/windows-runtime-import-lock-compat) and separately accepted the mobile_gateway.terminal -> import fcntl collection gap as CMD-005 documented baseline. QA for ccbd-control-plane-transport-seam is runnable; record CMD-005 as documented baseline and real Unix AF_UNIX as compatibility residual, then continue to ccbd-windows-tcp-loopback-transport."
 baseline_ref: eb273de8e1c1839451f3ff6cc583672187bd75d9
-driver_kind: host-agent
-driver_id: 019f856b-fd01-7512-b729-d1642bc2f1f3
-driver_observation: multi_agent_v1.spawn_agent:019f856b-fd01-7512-b729-d1642bc2f1f3
+driver_kind: null
+driver_id: null
+driver_observation: "rmux-route-approval accepted; driver 019f85a0-5c91-7f92-a5d0-3daaa94a6e31 closed after handoff consumption"
 driver_reviewer_capability: confirmed
-previous_driver_id: 019f8219-3739-7283-8c74-f87fe7502d2c
+previous_driver_id: 019f85a0-5c91-7f92-a5d0-3daaa94a6e31
 previous_driver_resolution: "not_found via multi_agent_v1.wait_agent on 2026-07-21; reset for redispatch after code review passed"
 execution_confirmation_id: goal-execution-2026-07-20-windows-rmux-native-backend
 acceptance_authorization: approved
 acceptance_authorization_ref: approval-report.md#goal-acceptance
 commit_authorization: approved
 commit_authorization_ref: approval-report.md#goal-commits
-current_feature_index: 4
+current_feature_index: 5
 features:
   - slug: rmux-capability-gate
     roadmap_item: rmux-capability-gate
@@ -63,7 +63,7 @@ features:
     review: .codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-review.md
     qa: .codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-qa.md
     acceptance: .codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-acceptance.md
-    status: pending
+    status: accepted
   - slug: ccbd-windows-tcp-loopback-transport
     roadmap_item: ccbd-windows-tcp-loopback-transport
     feature_dir: .codestable/features/2026-07-20-ccbd-windows-tcp-loopback-transport

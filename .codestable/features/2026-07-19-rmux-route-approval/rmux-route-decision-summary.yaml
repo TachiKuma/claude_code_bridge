@@ -1,0 +1,97 @@
+decision_id: rmux-route
+status: approved
+decision_status: approved
+next_route: continue
+owner_confirmation_id: rmux-route-approval-2026-07-22-windows-rmux-native-backend
+owner_decision_ref: .codestable/features/2026-07-19-rmux-route-approval/approval-report.md#rmux-route
+capability_report: .codestable/goals/2026-07-21-windows-rmux-full-backend/evidence/rmux-full-gate/run-20260721T144322Z-15036/capability-report.json
+report_sha256: 6abb86655af5ac61d69f4e2e06cd6f22feae526d4af3fa9b6fc67dea9af9296d
+artifact_index_sha256: bf0fe9063efb6ba664eabcd3142826b21c0b5f4a0d4fbcc258d7d6be2b206cc6
+report_facts:
+  backend_impl: rmux
+  version: rmux 0.9.0
+  platform: windows
+  probe_status: completed
+  blocking_gaps_count: 0
+blocking_gaps: []
+workaround_risk_decision: accepted-via-full-backend-live-evidence
+accepted_workarounds:
+  - kind: command
+    name: attach-session
+    status: unsupported
+    workaround_id: live-foreground-attach-evidence
+    evidence: .codestable/goals/2026-07-21-windows-rmux-full-backend/evidence/live-foreground-attach/run-20260721T135851Z-13120/live-foreground-attach.json
+    downstream_risk: foreground attach must keep live evidence/runbook coverage until native backend acceptance
+  - kind: command
+    name: kill-server
+    status: partial
+    workaround_id: live-server-kill-evidence
+    evidence: .codestable/goals/2026-07-21-windows-rmux-full-backend/evidence/live-client-commands/run-20260721T140028Z-18276/live-client-commands.json
+    downstream_risk: server-level cleanup remains diagnostic evidence, not project runtime authority
+  - kind: command
+    name: refresh-client
+    status: partial
+    workaround_id: live-client-refresh-evidence
+    evidence: .codestable/goals/2026-07-21-windows-rmux-full-backend/evidence/live-client-commands/run-20260721T140028Z-18276/live-client-commands.json
+    downstream_risk: UI refresh is degradable but must stay visible in validation matrix
+  - kind: semantic
+    name: attach_reattach
+    status: unsupported
+    workaround_id: live-foreground-attach-evidence
+    evidence: .codestable/goals/2026-07-21-windows-rmux-full-backend/evidence/live-foreground-attach/run-20260721T135851Z-13120/live-foreground-attach.json
+    downstream_risk: foreground attach runner must consume live attach semantics before final smoke
+superseded_reports:
+  - capability_report: .codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T094438Z-4728/capability-report.json
+    report_sha256: 912675c22835a067f5a62d43537f3c0fc8ba80891be16e998d304d34b9da0b42
+    artifact_index_sha256: 60b74632a57167f7fa46869f4b8a89274912e124ca08fb1d92026c2c407c29f0
+    version: rmux 0.8.0
+    probe_status: completed
+    blocking_gaps_count: 7
+    disposition: superseded-by-windows-rmux-full-backend-functional-acceptance
+    gaps:
+      - kind: command
+        name: attach-session
+        status: partial
+        degrade_impact: core-lifecycle
+      - kind: command
+        name: refresh-client
+        status: partial
+        degrade_impact: degradable-ui
+      - kind: command
+        name: kill-server
+        status: partial
+        degrade_impact: diagnostic
+      - kind: semantic
+        name: attach_reattach
+        status: partial
+        degrade_impact: core-lifecycle
+      - kind: semantic
+        name: capture_last_n_lines
+        status: partial
+        degrade_impact: parser-fidelity
+      - kind: semantic
+        name: capture_format_fidelity_for_provider_completion
+        status: partial
+        degrade_impact: parser-fidelity
+      - kind: semantic
+        name: ctrl_c_ctrl_d
+        status: partial
+        degrade_impact: core-io
+functional_acceptance_ref: .codestable/goals/2026-07-21-windows-rmux-full-backend/functional-acceptance.md
+parent_handoff:
+  route_approved: true
+  downstream_unlocked: true
+  next_action: continue downstream implementation with accepted workaround risks carried into validation
+downstream_constraints:
+  - target_item: backend-resolver-opt-in-contract
+    constraint: explicit rmux selection must require this approval ref and fail fast when missing or rejected
+  - target_item: rmux-backend-core
+    constraint: consume this route decision and the selected capability report; required unsupported commands must not silently degrade
+  - target_item: rmux-send-capture-logging
+    constraint: preserve capture fidelity and Ctrl-C/Ctrl-D evidence from the full-backend gate
+  - target_item: ccbd-windows-full-chain-smoke
+    constraint: prove true ccb to ccbd to rmux path; capability report alone is not final smoke evidence
+knowledge_followup_candidates:
+  - Rmux replaces the earlier psmux fallback as the active route after full-backend evidence
+  - capability gate history should distinguish old 0.8.0 gaps from fresh 0.9.0 full-backend pass
+  - TCP loopback transport decision remains owned by ccbd-windows-tcp-loopback-transport

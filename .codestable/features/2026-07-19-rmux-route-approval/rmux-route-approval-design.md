@@ -228,7 +228,7 @@ Validation Commands:
 | CMD-002 | `python ".codestable/tools/validate-yaml.py" --file ".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml"` | roadmap items 回写合法性 | core | fix-or-block |
 | CMD-003 | 人工核对 capability report 与 artifacts | 确认 route decision 不是基于缺失或示例 evidence | core | fix-or-block |
 
-Required Artifacts：design、checklist、design-review、approval-report、route decision summary、acceptance report、items.yaml 回写。
+Required Artifacts: design、checklist、design-review、approval-report、route decision summary、acceptance report、items.yaml 回写。
 
 ### 3.5 自我批判结论
 

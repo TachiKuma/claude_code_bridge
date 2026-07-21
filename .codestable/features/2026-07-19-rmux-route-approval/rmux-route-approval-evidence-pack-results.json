@@ -1,0 +1,40 @@
+{
+  "gate_id": "evidence-pack",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "out": ".codestable\\features\\2026-07-19-rmux-route-approval\\rmux-route-approval-evidence-pack.md",
+      "providers": {
+        "archguard": {
+          "status": "skipped",
+          "reason": "archguard collection disabled",
+          "warnings": []
+        },
+        "meta_cc": {
+          "status": "skipped",
+          "reason": "meta-cc collection disabled",
+          "warnings": []
+        }
+      }
+    }
+  ],
+  "providers": {},
+  "feature": "2026-07-19-rmux-route-approval",
+  "inputs": {
+    "design": ".codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-design.md",
+    "checklist": ".codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-checklist.yaml",
+    "out": ".codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-evidence-pack.md",
+    "dod_results": ".codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-dod-results.json",
+    "gate_results": ".codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-scope-gate-results.json"
+  },
+  "input_digests": {
+    "design": "0f1e85a19342a076a30a422977cc5ee7cadd21a3166e1637c3e95041df618c8e",
+    "checklist": "d9a76c7bf147860a3a9914d350e41bea37f283cbd045ceb5a77ce67632d1800e",
+    "dod_results": "09daccb8d686b1112f82bcff47e9dc8d5433d37c038dd552dc3fd8f31adadf6a",
+    "gate_results": "bd9b2948cff0588a0e14ea2e14587b0867799398b38365bd76876bed5487a80c",
+    "out": "e7336c329d97e834291a6c8d461e8240ccd6f2af86d02947ac22771fd1fcaf6a"
+  }
+}

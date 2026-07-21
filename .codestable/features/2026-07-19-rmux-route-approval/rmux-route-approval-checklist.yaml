@@ -4,51 +4,51 @@ created: 2026-07-19
 steps:
   - action: "report discovery 与 schema gate：按 capability-gate acceptance canonical ref、owner 指定 ref、唯一 completed Windows report 的优先级定位 capability report，并校验 probe_status、commands、semantics、blocking_gaps、artifact_index"
     exit_signal: "缺 report、probe 未完成、字段缺失、artifact 反查失败、多个候选或只能找到示例/stale report 时，route status 只能为 paused"
-    status: pending
+    status: done
   - action: "gap summary 与 consequence table：汇总 required gaps、workaround.accepted、degrade_impact 和 consequence"
     exit_signal: "decision surface 能逐项解释 required unsupported / partial / workaround 的用户可见后果"
-    status: pending
+    status: done
   - action: "route decision surface：写 pending approval report，提供 continue、pause、reselect 三个互斥选项和 recommendation"
     exit_signal: "approval-report.md 包含 options、recommendation、tradeoffs、evidence、consequence 和 next action"
-    status: pending
+    status: done
   - action: "owner decision persistence：记录 rmux-route named approval；仅在存在 required partial/workaround gap 时记录 rmux-workaround-risk，并写 route summary"
     exit_signal: "approval ref、workaround not-applicable 状态或 risk approval 可从 feature unit 恢复，且不依赖聊天历史"
-    status: pending
+    status: done
   - action: "acceptance 回写：根据 approved / paused / reselect 写 parent_handoff、roadmap item 与 next action"
     exit_signal: "approved 时 item 可标 done 并解锁下游；paused/reselect 时 item 保持 in-progress，route summary 指向补证据或规划更新，不解锁后续 Rmux implementation item"
-    status: pending
+    status: done
 
 checks:
   - item: "缺 Windows 真机 capability report 或 probe_status != completed 时不得批准 Rmux route"
     source: 验收契约 AC-001
-    status: pending
+    status: passed
   - item: "capability report discovery 必须 fail-closed：多个候选、非 canonical ref、artifact_index 不可反查、示例或 stale report 都不得自动批准"
     source: capability report authority
-    status: pending
+    status: passed
   - item: "required unsupported gap 必须出现在 decision surface，且默认推荐 pause/reselect"
     source: 验收契约 AC-002
-    status: pending
+    status: passed
   - item: "partial/workaround 且 workaround.accepted != true 必须要求 owner 明确接受风险"
     source: 验收契约 AC-003
-    status: pending
+    status: passed
   - item: "route approved 后必须有 approval-report.md#rmux-route 可恢复；无 required workaround gap 时 rmux-workaround-risk 只能记录为 not-applicable 或不进入 approval group"
     source: 验收契约 AC-004
-    status: pending
+    status: passed
   - item: "paused/reselect 必须写 route summary parent_handoff，明确返回 capability-gate 补证据或 roadmap planning/update"
     source: 验收契约 AC-006
-    status: pending
+    status: passed
   - item: "approval surface 不复制敏感 artifact payload，只引用已脱敏 evidence 路径和摘要"
     source: 安全性约束
-    status: pending
+    status: passed
   - item: "不修改 backend_selection.py、不新增 RmuxBackend、不新增 production transport adapter"
     source: 明确不做
-    status: pending
+    status: passed
   - item: "RMR-001/RMR-002 被本 feature 记录为 downstream hard constraints，并映射到后续目标 item；实际消费留给对应 downstream feature design/review gate"
     source: roadmap review round 6
-    status: pending
+    status: passed
   - item: "route approval 后的 ADR/docs-neat/domain 候选被记录，但不在本 feature 提前改 authoritative docs"
     source: 架构关系
-    status: pending
+    status: passed
 
 dod:
   commands:
