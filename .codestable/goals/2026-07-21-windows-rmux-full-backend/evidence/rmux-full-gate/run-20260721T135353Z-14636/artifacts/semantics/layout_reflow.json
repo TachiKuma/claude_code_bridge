@@ -1,0 +1,37 @@
+{
+  "assertions": [
+    {
+      "kind": "prerequisite",
+      "name": "resize-pane succeeded",
+      "passed": true
+    },
+    {
+      "kind": "prerequisite",
+      "name": "select-layout succeeded",
+      "passed": true
+    },
+    {
+      "kind": "prerequisite",
+      "name": "swap-pane succeeded with distinct pane targets",
+      "passed": true
+    },
+    {
+      "kind": "prerequisite",
+      "name": "move-pane succeeded with distinct window target",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "pane identity remained discoverable after layout operations",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "resize-pane",
+    "select-layout",
+    "swap-pane",
+    "move-pane"
+  ],
+  "notes": "",
+  "status": "supported"
+}

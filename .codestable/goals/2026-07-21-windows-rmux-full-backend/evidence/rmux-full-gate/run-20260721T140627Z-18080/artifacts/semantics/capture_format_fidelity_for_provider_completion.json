@@ -1,0 +1,201 @@
+{
+  "cases": [
+    {
+      "absorbed": true,
+      "claude_raw": "✶ Thinking (1s, 1 token)   \n",
+      "codex_raw": "• Working (1s • esc to interrupt)   \n",
+      "consumer_strip": {
+        "claude_normalized": "✶ Thinking (1s, 1 token)",
+        "codex_normalized": "• Working (1s • esc to interrupt)"
+      },
+      "dimension": "trailing_whitespace",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      }
+    },
+    {
+      "absorbed": true,
+      "claude_raw": "\u001b[31m✶ Thinking (1s, 1 token)\u001b[0m\n",
+      "codex_raw": "\u001b[31m• Working (1s • esc to interrupt)\u001b[0m\n",
+      "consumer_strip": {
+        "claude_normalized": "✶ Thinking (1s, 1 token)",
+        "codex_normalized": "• Working (1s • esc to interrupt)"
+      },
+      "dimension": "csi",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      }
+    },
+    {
+      "absorbed": true,
+      "claude_raw": "\u001b]0;title\u0007✶ Thinking (1s, 1 token)\n",
+      "codex_raw": "\u001b]0;title\u0007• Working (1s • esc to interrupt)\n",
+      "consumer_strip": {
+        "claude_normalized": "✶ Thinking (1s, 1 token)",
+        "codex_normalized": "• Working (1s • esc to interrupt)"
+      },
+      "dimension": "osc",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      }
+    },
+    {
+      "absorbed": true,
+      "claude_raw": "✶ Thinking (1s, 1 token)\nwrapped-body-without-logical-line-rebuild\n",
+      "codex_raw": "• Working (1s • esc to interrupt)\nwrapped-body-without-logical-line-rebuild\n",
+      "consumer_strip": {
+        "claude_normalized": "✶ Thinking (1s, 1 token)\nwrapped-body-without-logical-line-rebuild",
+        "codex_normalized": "• Working (1s • esc to interrupt)\nwrapped-body-without-logical-line-rebuild"
+      },
+      "dimension": "wrapping",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      }
+    },
+    {
+      "absorbed": true,
+      "claude_raw": "✶ Thinking (1s, 1 token)\n宽字符列宽需要 Rmux/tmux 输出平价证明\n",
+      "codex_raw": "• Working (1s • esc to interrupt)\n宽字符列宽需要 Rmux/tmux 输出平价证明\n",
+      "consumer_strip": {
+        "claude_normalized": "✶ Thinking (1s, 1 token)\n宽字符列宽需要 Rmux/tmux 输出平价证明",
+        "codex_normalized": "• Working (1s • esc to interrupt)\n宽字符列宽需要 Rmux/tmux 输出平价证明"
+      },
+      "dimension": "wide_char",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      }
+    },
+    {
+      "absorbed": true,
+      "claude_raw": "old\n✶ Thinking (1s, 1 token)\n",
+      "codex_raw": "old\n• Working (1s • esc to interrupt)\n",
+      "consumer_strip": {
+        "claude_normalized": "old\n✶ Thinking (1s, 1 token)",
+        "codex_normalized": "old\n• Working (1s • esc to interrupt)"
+      },
+      "dimension": "last_n_tail",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      }
+    }
+  ],
+  "normalization_responsibility": {
+    "csi": "current strip_ansi handles CSI sequences",
+    "last_n_tail": "must be proven by rmux/tmux capture tail equivalence",
+    "osc": "shared terminal sequence stripping removes OSC/non-CSI title/control sequences before parsing",
+    "trailing_whitespace": "parser normalize_screen strips line tails",
+    "wide_char": "current parser does not correct display width",
+    "wrapping": "rmux exposes physical wrapped rows; provider parser only treats explicit status-shaped rows as authority"
+  },
+  "parser_paths": [
+    "consumer_strip",
+    "direct_stdout"
+  ],
+  "providers": [
+    "codex",
+    "claude"
+  ],
+  "real_dimension_checks": {
+    "last_n_tail": true,
+    "osc": true,
+    "trailing_whitespace": true,
+    "wide_char": true,
+    "wrapping": true
+  },
+  "real_dimension_observations": {
+    "osc_payload_visible_after_terminal_handling": true,
+    "osc_sequence_preserved": false,
+    "trailing_whitespace_marker_visible": true,
+    "trailing_whitespace_preserved": false,
+    "wrapped_marker_observed_as_physical_rows": true
+  },
+  "rmux_capture_fixture_observation": {
+    "available": true,
+    "consumer_strip": {
+      "claude_normalized": "D:\\Python\\GitHub\\claude_code_bridge>C:\\Users\\Administrator\\AppData\\Local\\Program\ns\\Python\\Python314\\python.exe D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\go\nals\\2026-07-21-windows-rmux-full-backend\\evidence\\rmux-full-gate\\run-20260721T14\n0627Z-18080\\work\\capture_fidelity_fixture.py\nCCB_RMUX_TRAILING\nCCB_RMUX_OSC_AFTER\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nD:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n",
+      "codex_normalized": "D:\\Python\\GitHub\\claude_code_bridge>C:\\Users\\Administrator\\AppData\\Local\\Program\ns\\Python\\Python314\\python.exe D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\go\nals\\2026-07-21-windows-rmux-full-backend\\evidence\\rmux-full-gate\\run-20260721T14\n0627Z-18080\\work\\capture_fidelity_fixture.py\nCCB_RMUX_TRAILING\nCCB_RMUX_OSC_AFTER\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nD:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n"
+    },
+    "decoded_text": "D:\\Python\\GitHub\\claude_code_bridge>C:\\Users\\Administrator\\AppData\\Local\\Program\ns\\Python\\Python314\\python.exe D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\go\nals\\2026-07-21-windows-rmux-full-backend\\evidence\\rmux-full-gate\\run-20260721T14\n0627Z-18080\\work\\capture_fidelity_fixture.py\nCCB_RMUX_TRAILING\nCCB_RMUX_OSC_AFTER\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nD:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n",
+    "direct_stdout": {
+      "claude_reason": "no_known_status_pattern",
+      "claude_state": "unknown",
+      "codex_reason": "no_known_status_pattern",
+      "codex_state": "unknown"
+    },
+    "observed_dimensions": {
+      "contains_csi": false,
+      "contains_osc": false,
+      "line_count": 23
+    },
+    "raw_bytes_sha256": "10f92556c81dc125c47ae96edb8c30a143f58b9a95b013acdcb0f79f242e333f",
+    "raw_bytes_size": 554,
+    "returncode": 0
+  },
+  "rmux_capture_observation": {
+    "available": true,
+    "consumer_strip": {
+      "claude_normalized": "D:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n",
+      "codex_normalized": "D:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n"
+    },
+    "decoded_text": "D:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n",
+    "direct_stdout": {
+      "claude_reason": "no_known_status_pattern",
+      "claude_state": "unknown",
+      "codex_reason": "no_known_status_pattern",
+      "codex_state": "unknown"
+    },
+    "observed_dimensions": {
+      "contains_csi": false,
+      "contains_osc": false,
+      "line_count": 11
+    },
+    "raw_bytes_sha256": "6288f274703e6bbebecfc4d236a0dd42e08b26d3260fe040441062afbb86f62d",
+    "raw_bytes_size": 47,
+    "returncode": 0
+  },
+  "rmux_client_tail_observation": {
+    "decoded_text": "CCB_RMUX_LASTN\nD:\\Python\\GitHub\\claude_code_bridge>",
+    "lines": 2,
+    "strategy": "backend client-side tail of non-empty capture lines"
+  },
+  "rmux_last_n_observation": {
+    "available": true,
+    "consumer_strip": {
+      "claude_normalized": "D:\\Python\\GitHub\\claude_code_bridge>C:\\Users\\Administrator\\AppData\\Local\\Program\ns\\Python\\Python314\\python.exe D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\go\nals\\2026-07-21-windows-rmux-full-backend\\evidence\\rmux-full-gate\\run-20260721T14\n0627Z-18080\\work\\capture_fidelity_fixture.py\nCCB_RMUX_TRAILING\nCCB_RMUX_OSC_AFTER\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nD:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n",
+      "codex_normalized": "D:\\Python\\GitHub\\claude_code_bridge>C:\\Users\\Administrator\\AppData\\Local\\Program\ns\\Python\\Python314\\python.exe D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\go\nals\\2026-07-21-windows-rmux-full-backend\\evidence\\rmux-full-gate\\run-20260721T14\n0627Z-18080\\work\\capture_fidelity_fixture.py\nCCB_RMUX_TRAILING\nCCB_RMUX_OSC_AFTER\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nD:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n"
+    },
+    "decoded_text": "D:\\Python\\GitHub\\claude_code_bridge>C:\\Users\\Administrator\\AppData\\Local\\Program\ns\\Python\\Python314\\python.exe D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\go\nals\\2026-07-21-windows-rmux-full-backend\\evidence\\rmux-full-gate\\run-20260721T14\n0627Z-18080\\work\\capture_fidelity_fixture.py\nCCB_RMUX_TRAILING\nCCB_RMUX_OSC_AFTER\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nD:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n",
+    "direct_stdout": {
+      "claude_reason": "no_known_status_pattern",
+      "claude_state": "unknown",
+      "codex_reason": "no_known_status_pattern",
+      "codex_state": "unknown"
+    },
+    "observed_dimensions": {
+      "contains_csi": false,
+      "contains_osc": false,
+      "line_count": 23
+    },
+    "raw_bytes_sha256": "10f92556c81dc125c47ae96edb8c30a143f58b9a95b013acdcb0f79f242e333f",
+    "raw_bytes_size": 554,
+    "returncode": 0
+  }
+}

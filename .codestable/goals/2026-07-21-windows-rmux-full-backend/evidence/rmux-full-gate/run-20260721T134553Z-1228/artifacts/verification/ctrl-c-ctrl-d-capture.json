@@ -1,0 +1,19 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-1228-20260721t134553z",
+    "capture-pane",
+    "-t",
+    "ccb-rmux-probe:0.0",
+    "-p",
+    "-S",
+    "-80"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "D:\\Python\\GitHub\\claude_code_bridge>echo CCB_RMUX_TRAILING   & echo CCB_RMUX_WRA\nP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcdefghijklmno\npqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 & echo CCB_RMUX_WIDE_宽字符 & ec\nho CCB_RMUX_LASTN\nCCB_RMUX_TRAILING\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nD:\\Python\\GitHub\\claude_code_bridge>echo CCB_RMUX_BUFFER_PASTE_OK\nCCB_RMUX_BUFFER_PASTE_OK\n\nD:\\Python\\GitHub\\claude_code_bridge>python -c \"import sys; print('CCB_RMUX_EOF_R\nEADY', flush=True); sys.stdin.read(); print('CCB_RMUX_EOF_DONE', flush=True)\"\nCCB_RMUX_EOF_READY\n^Z\nCCB_RMUX_EOF_DONE\n\nD:\\Python\\GitHub\\claude_code_bridge>python -c \"import time; print('CCB_RMUX_INTE\nRRUPT_READY', flush=True); time.sleep(30)\"\nCCB_RMUX_INTERRUPT_READY\nTraceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import time; print('CCB_RMUX_INTERRUPT_READY', flush=True); time.sleep(30)\n                                                                ~~~~~~~~~~^^^^\nKeyboardInterrupt\n^C\nD:\\Python\\GitHub\\claude_code_bridge>^Cecho CCB_RMUX_CONTROL_AFTER_INTERRUPT\n'echo' 不是内部或外部命令，也不是可运行的程序\n或批处理文件。\n\nD:\\Python\\GitHub\\claude_code_bridge>\n",
+  "stdout_raw_sha256": "060e15939d4ff63f6cc833b28d38f206562731acb84ea6e0783eb11a0a8b7355",
+  "stdout_raw_size": 1358,
+  "timeout": 5.0
+}

@@ -1,0 +1,25 @@
+{
+  "assertions": [
+    {
+      "kind": "semantic",
+      "name": "attach-session opened an interactive TUI",
+      "passed": false
+    },
+    {
+      "kind": "semantic",
+      "name": "attach-session can complete in this non-interactive probe",
+      "passed": false
+    }
+  ],
+  "dependencies": [
+    "attach-session"
+  ],
+  "notes": "scenario assertions failed",
+  "status": "unsupported",
+  "workaround": {
+    "accepted": true,
+    "description": "non-interactive probe cannot own a TTY; a separate live foreground attach run observed an attached client and clean detach",
+    "evidence": ".codestable\\goals\\2026-07-21-windows-rmux-full-backend\\evidence\\live-foreground-attach\\run-20260721T135851Z-13120\\live-foreground-attach.json",
+    "id": "live-foreground-attach-evidence"
+  }
+}

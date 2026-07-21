@@ -1,0 +1,48 @@
+{
+  "namespace": "ccb-rmux-livecmd-17072",
+  "session": "ccb-rmux-livecmd",
+  "lifecycle": [
+    {
+      "args": [
+        "rmux",
+        "-L",
+        "ccb-rmux-livecmd-17072",
+        "start-server"
+      ],
+      "returncode": 0
+    },
+    {
+      "args": [
+        "rmux",
+        "-L",
+        "ccb-rmux-livecmd-17072",
+        "new-session",
+        "-d",
+        "-s",
+        "ccb-rmux-livecmd"
+      ],
+      "returncode": 0
+    }
+  ],
+  "attach_process_id": 16992,
+  "list_clients_returncode": 0,
+  "list_clients_stdout": "",
+  "list_clients_stderr": "",
+  "client_id": null,
+  "refresh_client_args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-livecmd-17072",
+    "refresh-client",
+    "-S"
+  ],
+  "refresh_client_returncode": 1,
+  "refresh_client_stdout": "",
+  "refresh_client_stderr": "refresh-client requires an attached client\n",
+  "kill_server_returncode": 0,
+  "kill_server_stdout": "",
+  "kill_server_stderr": "",
+  "attach_exit_code_after_kill_server": "0",
+  "attach_process_returncode_after_cleanup": 0,
+  "verdict": "fail"
+}

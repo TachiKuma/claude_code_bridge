@@ -1,0 +1,24 @@
+{
+  "assertions": [
+    {
+      "kind": "prerequisite",
+      "name": "capture-pane succeeded",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "capture-pane produced stdout",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "backend client-tail contains the tail marker without the earlier marker",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "capture-pane"
+  ],
+  "notes": "",
+  "status": "supported"
+}

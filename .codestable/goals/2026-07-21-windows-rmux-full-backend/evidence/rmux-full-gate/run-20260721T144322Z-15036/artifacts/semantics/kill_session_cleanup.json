@@ -1,0 +1,15 @@
+{
+  "assertions": [
+    {
+      "kind": "semantic",
+      "name": "kill-session cleanup succeeded",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "kill-session"
+  ],
+  "notes": "",
+  "status": "supported",
+  "workaround": null
+}

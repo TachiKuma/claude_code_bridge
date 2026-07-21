@@ -1,0 +1,19 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-14636-20260721t135353z",
+    "capture-pane",
+    "-t",
+    "ccb-rmux-probe:0.0",
+    "-p",
+    "-S",
+    "-80"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "D:\\Python\\GitHub\\claude_code_bridge>C:\\Users\\Administrator\\AppData\\Local\\Program\ns\\Python\\Python314\\python.exe D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\go\nals\\2026-07-21-windows-rmux-full-backend\\evidence\\rmux-full-gate\\run-20260721T13\n5353Z-14636\\work\\capture_fidelity_fixture.py\nCCB_RMUX_TRAILING\nCCB_RMUX_OSC_AFTER\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nD:\\Python\\GitHub\\claude_code_bridge>echo CCB_RMUX_BUFFER_PASTE_OK\nCCB_RMUX_BUFFER_PASTE_OK\n\nD:\\Python\\GitHub\\claude_code_bridge>python -c \"import sys; print('CCB_RMUX_EOF_R\nEADY', flush=True); sys.stdin.read(); print('CCB_RMUX_EOF_DONE', flush=True)\"\nCCB_RMUX_EOF_READY\n^Z\nCCB_RMUX_EOF_DONE\n\nD:\\Python\\GitHub\\claude_code_bridge>python -c \"import time; print('CCB_RMUX_INTE\nRRUPT_READY', flush=True); time.sleep(30)\"\nCCB_RMUX_INTERRUPT_READY\nTraceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import time; print('CCB_RMUX_INTERRUPT_READY', flush=True); time.sleep(30)\n                                                                ~~~~~~~~~~^^^^\nKeyboardInterrupt\n^C\nD:\\Python\\GitHub\\claude_code_bridge>^Cecho CCB_RMUX_CONTROL_AFTER_INTERRUPT\n'echo' 不是内部或外部命令，也不是可运行的程序\n或批处理文件。\n\nD:\\Python\\GitHub\\claude_code_bridge>\n",
+  "stdout_raw_sha256": "bfbc352a8b4e60059124750ac7677499e140fd35fb0a4d28db90fd7b38b03a5a",
+  "stdout_raw_size": 1401,
+  "timeout": 5.0
+}

@@ -1,0 +1,1145 @@
+{
+  "artifact_index": [
+    {
+      "kind": "preflight",
+      "name": "daemon-pre-state",
+      "path": "artifacts/preflight/daemon-pre-state.json",
+      "probe": "daemon-pre-state",
+      "redacted": true,
+      "sha256": "246ff85708c99df63e2991a5ad1b12219ee9cb32e584a4b4c48c6ac8104b35c2",
+      "size_bytes": 213
+    },
+    {
+      "kind": "command",
+      "name": "start-server",
+      "path": "artifacts/commands/start-server.json",
+      "probe": "start-server",
+      "redacted": true,
+      "sha256": "56fd62df03bda299414928b0e8b2365c09fef76d8045bfdae50d6c079c769464",
+      "size_bytes": 354
+    },
+    {
+      "kind": "command",
+      "name": "new-session",
+      "path": "artifacts/commands/new-session.json",
+      "probe": "new-session",
+      "redacted": true,
+      "sha256": "cfa4e6fa00024711369c609563af5dfae3e211eef99908815349664d7bac0440",
+      "size_bytes": 398
+    },
+    {
+      "kind": "command",
+      "name": "has-session",
+      "path": "artifacts/commands/has-session.json",
+      "probe": "has-session",
+      "redacted": true,
+      "sha256": "bdf661ddb5be4d14bf74a03ea4fe8166fa26f08e47a08ed39f8ee71cdb9498e4",
+      "size_bytes": 387
+    },
+    {
+      "kind": "command",
+      "name": "list-windows",
+      "path": "artifacts/commands/list-windows.json",
+      "probe": "list-windows",
+      "redacted": true,
+      "sha256": "877a6f77312af366317114f8bb885a3cb0071560168bb7bd01599f8e1f3f29f4",
+      "size_bytes": 451
+    },
+    {
+      "kind": "command",
+      "name": "new-window",
+      "path": "artifacts/commands/new-window.json",
+      "probe": "new-window",
+      "redacted": true,
+      "sha256": "9946dfe2c873be6b35847ddfdb34adac36391a702322c7200299e06451645ccc",
+      "size_bytes": 428
+    },
+    {
+      "kind": "command",
+      "name": "rename-window",
+      "path": "artifacts/commands/rename-window.json",
+      "probe": "rename-window",
+      "redacted": true,
+      "sha256": "f151c43b0181954fa4bc59c7b844fd7c3df4c8b0d76e8c0a343f8848603a9786",
+      "size_bytes": 410
+    },
+    {
+      "kind": "command",
+      "name": "select-window",
+      "path": "artifacts/commands/select-window.json",
+      "probe": "select-window",
+      "redacted": true,
+      "sha256": "138ecbf7572c9df47e955bbc021dbe61c7734ba2737868b35bf3360f6d8de82c",
+      "size_bytes": 391
+    },
+    {
+      "kind": "command",
+      "name": "split-window",
+      "path": "artifacts/commands/split-window.json",
+      "probe": "split-window",
+      "redacted": true,
+      "sha256": "e6aeea1af0426e1fe548681e784d7b27bcf03e477ace86e30b0ab5c1bbb8dd20",
+      "size_bytes": 403
+    },
+    {
+      "kind": "command",
+      "name": "list-panes",
+      "path": "artifacts/commands/list-panes.json",
+      "probe": "list-panes",
+      "redacted": true,
+      "sha256": "486be2ac84601555c3c48a3de795abe9eb0eeae88bb47c283836ea47ebd5a730",
+      "size_bytes": 424
+    },
+    {
+      "kind": "command",
+      "name": "display-message",
+      "path": "artifacts/commands/display-message.json",
+      "probe": "display-message",
+      "redacted": true,
+      "sha256": "ca90331a2be3731ae660b730630729e04fb49e80f3817abff48914fd8af15f88",
+      "size_bytes": 443
+    },
+    {
+      "kind": "command",
+      "name": "set-option",
+      "path": "artifacts/commands/set-option.json",
+      "probe": "set-option",
+      "redacted": true,
+      "sha256": "a7e5a0ca8caffebc3535490589a7ebbea3d0443a6b6c97f7423a72fb0bb6df7a",
+      "size_bytes": 415
+    },
+    {
+      "kind": "command",
+      "name": "set-window-option",
+      "path": "artifacts/commands/set-window-option.json",
+      "probe": "set-window-option",
+      "redacted": true,
+      "sha256": "e9e1156a4426d35a9df7065836913fa7fabdecf887aff3019573b78d90df7216",
+      "size_bytes": 431
+    },
+    {
+      "kind": "command",
+      "name": "set-hook",
+      "path": "artifacts/commands/set-hook.json",
+      "probe": "set-hook",
+      "redacted": true,
+      "sha256": "e97009de7283ccc2e72d63069d338a5c75024344f066d8850594d24c682b1d3d",
+      "size_bytes": 436
+    },
+    {
+      "kind": "command",
+      "name": "bind-key",
+      "path": "artifacts/commands/bind-key.json",
+      "probe": "bind-key",
+      "redacted": true,
+      "sha256": "38837a248088d4a1c3ee56d8b5a7ccbd2c947472afa3ffdd42a5f3c329f31f79",
+      "size_bytes": 400
+    },
+    {
+      "kind": "command",
+      "name": "send-keys",
+      "path": "artifacts/commands/send-keys.json",
+      "probe": "send-keys",
+      "redacted": true,
+      "sha256": "0bc178e6f14d2a73065500c9bd1791a998fae0901206e69b86e5855256cd8b33",
+      "size_bytes": 431
+    },
+    {
+      "kind": "command",
+      "name": "load-buffer",
+      "path": "artifacts/commands/load-buffer.json",
+      "probe": "load-buffer",
+      "redacted": true,
+      "sha256": "ec0938733819919a7056c91787e1e6f81c0cdd49c899bfe51a8ff2fef10f8be7",
+      "size_bytes": 530
+    },
+    {
+      "kind": "command",
+      "name": "paste-buffer",
+      "path": "artifacts/commands/paste-buffer.json",
+      "probe": "paste-buffer",
+      "redacted": true,
+      "sha256": "eeaff885ff83edcd9f4ea96b9d77de3b3c9fe406db3949e2fcbd786ff543de15",
+      "size_bytes": 392
+    },
+    {
+      "kind": "command",
+      "name": "delete-buffer",
+      "path": "artifacts/commands/delete-buffer.json",
+      "probe": "delete-buffer",
+      "redacted": true,
+      "sha256": "b0a1adfc03afe6e7579a3bed7223f3a0409535ba5fe79b1a5907b38c559a7e8f",
+      "size_bytes": 355
+    },
+    {
+      "kind": "command",
+      "name": "capture-pane",
+      "path": "artifacts/commands/capture-pane.json",
+      "probe": "capture-pane",
+      "redacted": true,
+      "sha256": "bb627615793cd29b0cd744cb9c39a83241d471def74efc850ab49efdb7c85f2a",
+      "size_bytes": 488
+    },
+    {
+      "kind": "command",
+      "name": "pipe-pane",
+      "path": "artifacts/commands/pipe-pane.json",
+      "probe": "pipe-pane",
+      "redacted": true,
+      "sha256": "9349cbc30089369329ca89bf59c1f7871904374f2007c31112dcc659978a9086",
+      "size_bytes": 389
+    },
+    {
+      "kind": "command",
+      "name": "respawn-pane",
+      "path": "artifacts/commands/respawn-pane.json",
+      "probe": "respawn-pane",
+      "redacted": true,
+      "sha256": "59f2eb11933c7072e6e785eb49279189fc6e633d20c1a5e194e92272a5fd0390",
+      "size_bytes": 403
+    },
+    {
+      "kind": "command",
+      "name": "resize-pane",
+      "path": "artifacts/commands/resize-pane.json",
+      "probe": "resize-pane",
+      "redacted": true,
+      "sha256": "7a4569f8f449618ec3093930c1d33d9fd12de24b94760823164c34029920ab83",
+      "size_bytes": 402
+    },
+    {
+      "kind": "command",
+      "name": "select-layout",
+      "path": "artifacts/commands/select-layout.json",
+      "probe": "select-layout",
+      "redacted": true,
+      "sha256": "c9e32ebf3e83b0ad8180fde79e300b75627bd3ac7daa57523035e12d922fda79",
+      "size_bytes": 413
+    },
+    {
+      "kind": "command",
+      "name": "swap-pane",
+      "path": "artifacts/commands/swap-pane.json",
+      "probe": "swap-pane",
+      "redacted": true,
+      "sha256": "ed5fcef4c902377e7538a92a96dc312fb7b7dc68b467d1c10315d143eee88b3b",
+      "size_bytes": 427
+    },
+    {
+      "kind": "command",
+      "name": "move-pane",
+      "path": "artifacts/commands/move-pane.json",
+      "probe": "move-pane",
+      "redacted": true,
+      "sha256": "0dc7050fa60926ab068bbc54335be200232156294d70cf907687f42d6779a477",
+      "size_bytes": 435
+    },
+    {
+      "kind": "command",
+      "name": "attach-session",
+      "path": "artifacts/commands/attach-session.json",
+      "probe": "attach-session",
+      "redacted": true,
+      "sha256": "dce5692774e0fef6e1c4cbb88146b4b3da3689ec59bf172ec58fae1042ccc82a",
+      "size_bytes": 414
+    },
+    {
+      "kind": "command",
+      "name": "refresh-client",
+      "path": "artifacts/commands/refresh-client.json",
+      "probe": "refresh-client",
+      "redacted": true,
+      "sha256": "e929cdfb95fda9ffa2e3bb031c6b8dff76dabef8fd8fb7dc184c1d6294c6703a",
+      "size_bytes": 554
+    },
+    {
+      "kind": "command",
+      "name": "list-clients",
+      "path": "artifacts/commands/list-clients.json",
+      "probe": "list-clients",
+      "redacted": true,
+      "sha256": "15135d4f9b0186cff4ee66d8a992541e82e3edfbda45d62f9b499fddaa5e518e",
+      "size_bytes": 388
+    },
+    {
+      "kind": "command",
+      "name": "kill-window",
+      "path": "artifacts/commands/kill-window.json",
+      "probe": "kill-window",
+      "redacted": true,
+      "sha256": "4e72a124a62cdc72c46496d6f23201ca35a0e2439eca2f575d5bbb56591dd9e4",
+      "size_bytes": 399
+    },
+    {
+      "kind": "verification",
+      "name": "namespace-default-has-session",
+      "path": "artifacts/verification/namespace-default-has-session.json",
+      "probe": "namespace-default-has-session",
+      "redacted": true,
+      "sha256": "4ecb1578a90c6099e8ff025eca209749500866252fada4bca53ccdff1a3d77b9",
+      "size_bytes": 381
+    },
+    {
+      "kind": "verification",
+      "name": "list-panes-after-layout",
+      "path": "artifacts/verification/list-panes-after-layout.json",
+      "probe": "list-panes-after-layout",
+      "redacted": true,
+      "sha256": "38aad0b9483b5d45de9c72fe87cc42992a24edfabf726b880a7b34f8b1d9b90b",
+      "size_bytes": 370
+    },
+    {
+      "kind": "verification",
+      "name": "list-windows-after-policy",
+      "path": "artifacts/verification/list-windows-after-policy.json",
+      "probe": "list-windows-after-policy",
+      "redacted": true,
+      "sha256": "d0bdd392b0ee75d6f14291f66950237cff1dc340dfa36d5d88e9a4a6309802f1",
+      "size_bytes": 411
+    },
+    {
+      "kind": "verification",
+      "name": "capture-fidelity-send",
+      "path": "artifacts/verification/capture-fidelity-send.json",
+      "probe": "capture-fidelity-send",
+      "redacted": true,
+      "sha256": "53967306f19d9ab9ecc6515f88eb67c5e91eaec5c34554337345addeebea3caa",
+      "size_bytes": 629
+    },
+    {
+      "kind": "verification",
+      "name": "capture-fidelity",
+      "path": "artifacts/verification/capture-fidelity.json",
+      "probe": "capture-fidelity",
+      "redacted": true,
+      "sha256": "a64218f154a93a29cec323c5db8cd3abb0f4429f8e2540260653837762a1c137",
+      "size_bytes": 980
+    },
+    {
+      "kind": "verification",
+      "name": "capture-last-n",
+      "path": "artifacts/verification/capture-last-n.json",
+      "probe": "capture-last-n",
+      "redacted": true,
+      "sha256": "1a32be23c4d026aee4e6a84a80b287e48351511b6044b1bd3db3eabe84a19f4c",
+      "size_bytes": 979
+    },
+    {
+      "kind": "verification",
+      "name": "buffer-paste-load",
+      "path": "artifacts/verification/buffer-paste-load.json",
+      "probe": "buffer-paste-load",
+      "redacted": true,
+      "sha256": "f77eec3562cebe0561d65f17dcd92842d0aebd0d12e2e27f8211305f58079d8c",
+      "size_bytes": 529
+    },
+    {
+      "kind": "verification",
+      "name": "buffer-paste-paste",
+      "path": "artifacts/verification/buffer-paste-paste.json",
+      "probe": "buffer-paste-paste",
+      "redacted": true,
+      "sha256": "df1c8af3a4f7f98e2482b7b57fd9c6e28a45530acda317d3457c8da65446b87b",
+      "size_bytes": 395
+    },
+    {
+      "kind": "verification",
+      "name": "buffer-paste-enter",
+      "path": "artifacts/verification/buffer-paste-enter.json",
+      "probe": "buffer-paste-enter",
+      "redacted": true,
+      "sha256": "7d41046fd39f49c5ad191b51d3d662e33a8f7e7e98fa4de8cbfacbb5b1921ab2",
+      "size_bytes": 353
+    },
+    {
+      "kind": "verification",
+      "name": "buffer-paste-delete",
+      "path": "artifacts/verification/buffer-paste-delete.json",
+      "probe": "buffer-paste-delete",
+      "redacted": true,
+      "sha256": "b69611257286293d8e450ba12c7fac7e348cc18249d5a3e4b4e2370a073a1c95",
+      "size_bytes": 347
+    },
+    {
+      "kind": "verification",
+      "name": "buffer-paste-capture",
+      "path": "artifacts/verification/buffer-paste-capture.json",
+      "probe": "buffer-paste-capture",
+      "redacted": true,
+      "sha256": "7198c9b38745be3f68de3b5697be2726a920bd0a953eeff442496d7687a9589e",
+      "size_bytes": 1072
+    },
+    {
+      "kind": "verification",
+      "name": "ctrl-d-send",
+      "path": "artifacts/verification/ctrl-d-send.json",
+      "probe": "ctrl-d-send",
+      "redacted": true,
+      "sha256": "9d9ddd83f18575eb6e0daa399498c16d885f5f3b5e480c2b70a724cda269ae72",
+      "size_bytes": 482
+    },
+    {
+      "kind": "verification",
+      "name": "ctrl-d-enter",
+      "path": "artifacts/verification/ctrl-d-enter.json",
+      "probe": "ctrl-d-enter",
+      "redacted": true,
+      "sha256": "7d41046fd39f49c5ad191b51d3d662e33a8f7e7e98fa4de8cbfacbb5b1921ab2",
+      "size_bytes": 353
+    },
+    {
+      "kind": "verification",
+      "name": "ctrl-d-key",
+      "path": "artifacts/verification/ctrl-d-key.json",
+      "probe": "ctrl-d-key",
+      "redacted": true,
+      "sha256": "adbc3b1595da9b0647015885b8fd4186b4f2669f3b30c37fc3bd523ec40fd58e",
+      "size_bytes": 365
+    },
+    {
+      "kind": "verification",
+      "name": "ctrl-c-send",
+      "path": "artifacts/verification/ctrl-c-send.json",
+      "probe": "ctrl-c-send",
+      "redacted": true,
+      "sha256": "19013e451233a2d2de868bfd6741013d2549acca17e8e2d34ca3312ea89247a7",
+      "size_bytes": 447
+    },
+    {
+      "kind": "verification",
+      "name": "ctrl-c-enter",
+      "path": "artifacts/verification/ctrl-c-enter.json",
+      "probe": "ctrl-c-enter",
+      "redacted": true,
+      "sha256": "7d41046fd39f49c5ad191b51d3d662e33a8f7e7e98fa4de8cbfacbb5b1921ab2",
+      "size_bytes": 353
+    },
+    {
+      "kind": "verification",
+      "name": "ctrl-c-key",
+      "path": "artifacts/verification/ctrl-c-key.json",
+      "probe": "ctrl-c-key",
+      "redacted": true,
+      "sha256": "5187b94a4ccda2796c0e2da7d3fb27e4f6135f064f66cc0530b232e8d379645d",
+      "size_bytes": 351
+    },
+    {
+      "kind": "verification",
+      "name": "ctrl-c-after-send",
+      "path": "artifacts/verification/ctrl-c-after-send.json",
+      "probe": "ctrl-c-after-send",
+      "redacted": true,
+      "sha256": "a9c904b1608a19912542d25be5f2f774c8638b8cd483499b29b6c1d4b15ed4f4",
+      "size_bytes": 396
+    },
+    {
+      "kind": "verification",
+      "name": "ctrl-c-after-enter",
+      "path": "artifacts/verification/ctrl-c-after-enter.json",
+      "probe": "ctrl-c-after-enter",
+      "redacted": true,
+      "sha256": "7d41046fd39f49c5ad191b51d3d662e33a8f7e7e98fa4de8cbfacbb5b1921ab2",
+      "size_bytes": 353
+    },
+    {
+      "kind": "verification",
+      "name": "ctrl-c-ctrl-d-capture",
+      "path": "artifacts/verification/ctrl-c-ctrl-d-capture.json",
+      "probe": "ctrl-c-ctrl-d-capture",
+      "redacted": true,
+      "sha256": "ed10b85b1a2ff032d8c7af0f2be67c687acabe10718155c37f6eb9de9b35a37d",
+      "size_bytes": 1857
+    },
+    {
+      "kind": "cleanup",
+      "name": "kill-session",
+      "path": "artifacts/cleanup/kill-session.json",
+      "probe": "kill-session",
+      "redacted": true,
+      "sha256": "3b26e0182aaeb1b686ff810f831c83c12368106fc275fb9491e08cd58d40f7b5",
+      "size_bytes": 319
+    },
+    {
+      "kind": "command",
+      "name": "kill-server",
+      "path": "artifacts/commands/kill-server.json",
+      "probe": "kill-server",
+      "redacted": true,
+      "sha256": "bd04226ccebeb39f9169f67c9a26b601687270266fa131f4b00533f013871668",
+      "size_bytes": 629
+    },
+    {
+      "kind": "semantic",
+      "name": "session_survival",
+      "path": "artifacts/semantics/session_survival.json",
+      "probe": "session_survival",
+      "redacted": true,
+      "sha256": "3860d0f2a8646a17460aad998e8bc5512c89d587998c11b59300e59548ad28cc",
+      "size_bytes": 506
+    },
+    {
+      "kind": "semantic",
+      "name": "namespace_isolation",
+      "path": "artifacts/semantics/namespace_isolation.json",
+      "probe": "namespace_isolation",
+      "redacted": true,
+      "sha256": "baeb615aee49af4071a15990e50771c229d1aaaf1ccf3c6fec83fd8daa16fdc9",
+      "size_bytes": 427
+    },
+    {
+      "kind": "semantic",
+      "name": "attach_reattach",
+      "path": "artifacts/semantics/attach_reattach.json",
+      "probe": "attach_reattach",
+      "redacted": true,
+      "sha256": "53acddbf0c4530b5af510cb9382cefc541a834a31ce640c2d15149d00a5a2500",
+      "size_bytes": 413
+    },
+    {
+      "kind": "semantic",
+      "name": "window_policy",
+      "path": "artifacts/semantics/window_policy.json",
+      "probe": "window_policy",
+      "redacted": true,
+      "sha256": "1a9ac091cc109afa0880042c1ecd4045cf87af46028dd999289a23ed31109893",
+      "size_bytes": 765
+    },
+    {
+      "kind": "semantic",
+      "name": "layout_reflow",
+      "path": "artifacts/semantics/layout_reflow.json",
+      "probe": "layout_reflow",
+      "redacted": true,
+      "sha256": "0647665e043de29de5ec11b9c3fbfb4784793d009cd01e09fb527d369dcbf1b8",
+      "size_bytes": 802
+    },
+    {
+      "kind": "semantic",
+      "name": "pane_id_stability",
+      "path": "artifacts/semantics/pane_id_stability.json",
+      "probe": "pane_id_stability",
+      "redacted": true,
+      "sha256": "ce2e8c9c3249f882e27ac72f58bdca67fbc254290208f2729c71feab575709a9",
+      "size_bytes": 487
+    },
+    {
+      "kind": "semantic",
+      "name": "user_options_title",
+      "path": "artifacts/semantics/user_options_title.json",
+      "probe": "user_options_title",
+      "redacted": true,
+      "sha256": "fa070883c6a5bcbf9400ea50d5004570f7cc6632bacd4c770b5384c2bd5fc559",
+      "size_bytes": 619
+    },
+    {
+      "kind": "semantic",
+      "name": "capture_last_n_lines",
+      "path": "artifacts/semantics/capture_last_n_lines.json",
+      "probe": "capture_last_n_lines",
+      "redacted": true,
+      "sha256": "b4afc273e019c18834ad5d58c5860bbcb4546986b2686d68f9c2e5ab0fc6bd07",
+      "size_bytes": 492
+    },
+    {
+      "kind": "semantic",
+      "name": "capture_format_fidelity_for_provider_completion",
+      "path": "artifacts/semantics/capture_format_fidelity_for_provider_completion.json",
+      "probe": "capture_format_fidelity_for_provider_completion",
+      "redacted": true,
+      "sha256": "d2dc644d72e1633942ac8baf3e60b3ac9a263b1b3b309fb006824e53061e7e0d",
+      "size_bytes": 10697
+    },
+    {
+      "kind": "semantic",
+      "name": "buffer_paste",
+      "path": "artifacts/semantics/buffer_paste.json",
+      "probe": "buffer_paste",
+      "redacted": true,
+      "sha256": "09f8a2599a8f3c6aa024e9fe4b0eefe645afb0d37f075ee978801a06ddf04ec6",
+      "size_bytes": 610
+    },
+    {
+      "kind": "semantic",
+      "name": "ctrl_c_ctrl_d",
+      "path": "artifacts/semantics/ctrl_c_ctrl_d.json",
+      "probe": "ctrl_c_ctrl_d",
+      "redacted": true,
+      "sha256": "5ce5c21f2859e2a8af44de5323a418d25447b2731cf8a8eb940e4feceb78c277",
+      "size_bytes": 609
+    },
+    {
+      "kind": "semantic",
+      "name": "pane_death",
+      "path": "artifacts/semantics/pane_death.json",
+      "probe": "pane_death",
+      "redacted": true,
+      "sha256": "67659d42b11f94119b6a50be74e246814c32e217dadfbee9526eb193efa2f19b",
+      "size_bytes": 513
+    },
+    {
+      "kind": "semantic",
+      "name": "kill_session_cleanup",
+      "path": "artifacts/semantics/kill_session_cleanup.json",
+      "probe": "kill_session_cleanup",
+      "redacted": true,
+      "sha256": "c0812b0713d61cff870231ee053169fea06adb67ee453d8eea1fe59766261d59",
+      "size_bytes": 231
+    },
+    {
+      "kind": "semantic",
+      "name": "daemon_crash_cleanup_evidence",
+      "path": "artifacts/semantics/daemon_crash_cleanup_evidence.json",
+      "probe": "daemon_crash_cleanup_evidence",
+      "redacted": true,
+      "sha256": "1fadb1d6287944a06e9e3516f9cf19fb71844d9740622da8342d480cc6359282",
+      "size_bytes": 450
+    },
+    {
+      "kind": "semantic",
+      "name": "provider_process_distinction_workaround_evidence",
+      "path": "artifacts/semantics/provider_process_distinction_workaround_evidence.json",
+      "probe": "provider_process_distinction_workaround_evidence",
+      "redacted": true,
+      "sha256": "3ab497da31e003fc7a83e90dba003ae776e7dd5b37ff126b1fd902d7975e3e88",
+      "size_bytes": 367
+    }
+  ],
+  "backend_impl": "rmux",
+  "blocking_gaps": [
+    {
+      "consequence": "无法重新附着 UI",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/commands/attach-session.json",
+      "kind": "command",
+      "name": "attach-session",
+      "reason": "required unsupported without accepted workaround",
+      "required": true,
+      "status": "unsupported"
+    },
+    {
+      "consequence": "UI refresh 能力不可用",
+      "degrade_impact": "degradable-ui",
+      "evidence": "artifacts/commands/refresh-client.json",
+      "kind": "command",
+      "name": "refresh-client",
+      "reason": "required partial without accepted workaround",
+      "required": true,
+      "status": "partial"
+    },
+    {
+      "consequence": "无法验证 server 级清理",
+      "degrade_impact": "diagnostic",
+      "evidence": "artifacts/commands/kill-server.json",
+      "kind": "command",
+      "name": "kill-server",
+      "reason": "required partial without accepted workaround",
+      "required": true,
+      "status": "partial"
+    },
+    {
+      "consequence": "用户无法恢复 UI",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/semantics/attach_reattach.json",
+      "kind": "semantic",
+      "name": "attach_reattach",
+      "reason": "required unsupported without accepted workaround",
+      "required": true,
+      "status": "unsupported"
+    },
+    {
+      "consequence": "provider pane status 可能静默误判",
+      "degrade_impact": "parser-fidelity",
+      "evidence": "artifacts/semantics/capture_format_fidelity_for_provider_completion.json",
+      "kind": "semantic",
+      "name": "capture_format_fidelity_for_provider_completion",
+      "reason": "required partial without accepted workaround",
+      "required": true,
+      "status": "partial"
+    }
+  ],
+  "commands": {
+    "attach-session": {
+      "consequence": "无法重新附着 UI",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/commands/attach-session.json",
+      "notes": "",
+      "required": true,
+      "returncode": 1,
+      "status": "unsupported",
+      "workaround": null
+    },
+    "bind-key": {
+      "consequence": "UI key binding 可能不可用",
+      "degrade_impact": "degradable-ui",
+      "evidence": "artifacts/commands/bind-key.json",
+      "notes": "",
+      "required": false,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "capture-pane": {
+      "consequence": "pane 状态与 ask completion evidence 会漂移",
+      "degrade_impact": "parser-fidelity",
+      "evidence": "artifacts/commands/capture-pane.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "delete-buffer": {
+      "consequence": "buffer cleanup 不可用",
+      "degrade_impact": "core-io",
+      "evidence": "artifacts/commands/delete-buffer.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "display-message": {
+      "consequence": "无法读取格式化诊断",
+      "degrade_impact": "diagnostic",
+      "evidence": "artifacts/commands/display-message.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "has-session": {
+      "consequence": "无法判断 namespace 是否存在",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/commands/has-session.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "kill-server": {
+      "consequence": "无法验证 server 级清理",
+      "degrade_impact": "diagnostic",
+      "evidence": "artifacts/commands/kill-server.json",
+      "notes": "scenario-invalid: command requires live client/server or distinct pane/window context; not classified as command missing",
+      "required": true,
+      "returncode": 1,
+      "status": "partial",
+      "workaround": null
+    },
+    "kill-session": {
+      "cleanup_evidence": "artifacts/cleanup/kill-session.json",
+      "consequence": "无法清理项目 namespace",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/cleanup/kill-session.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "kill-window": {
+      "consequence": "无法清理 window",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/commands/kill-window.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "list-clients": {
+      "consequence": "无法诊断 attach client",
+      "degrade_impact": "diagnostic",
+      "evidence": "artifacts/commands/list-clients.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "list-panes": {
+      "consequence": "无法发现 pane identity",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/commands/list-panes.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "list-windows": {
+      "consequence": "无法投影窗口布局",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/commands/list-windows.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "load-buffer": {
+      "consequence": "大文本 paste 无可靠输入路径",
+      "degrade_impact": "core-io",
+      "evidence": "artifacts/commands/load-buffer.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "move-pane": {
+      "consequence": "无法移动 patch agent pane",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/commands/move-pane.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "new-session": {
+      "consequence": "无法创建项目 namespace",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/commands/new-session.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "new-window": {
+      "consequence": "无法创建 agent window",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/commands/new-window.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "paste-buffer": {
+      "consequence": "buffer paste 不可用",
+      "degrade_impact": "core-io",
+      "evidence": "artifacts/commands/paste-buffer.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "pipe-pane": {
+      "consequence": "pane 日志绑定不可用",
+      "degrade_impact": "core-io",
+      "evidence": "artifacts/commands/pipe-pane.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "refresh-client": {
+      "consequence": "UI refresh 能力不可用",
+      "degrade_impact": "degradable-ui",
+      "evidence": "artifacts/commands/refresh-client.json",
+      "notes": "scenario-invalid: command requires live client/server or distinct pane/window context; not classified as command missing",
+      "required": true,
+      "returncode": 1,
+      "status": "partial",
+      "workaround": null
+    },
+    "rename-window": {
+      "consequence": "无法维护 window identity",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/commands/rename-window.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "resize-pane": {
+      "consequence": "无法重排 pane geometry",
+      "degrade_impact": "degradable-ui",
+      "evidence": "artifacts/commands/resize-pane.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "respawn-pane": {
+      "consequence": "pane recovery 不可用",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/commands/respawn-pane.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "select-layout": {
+      "consequence": "无法应用 layout policy",
+      "degrade_impact": "degradable-ui",
+      "evidence": "artifacts/commands/select-layout.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "select-window": {
+      "consequence": "无法选择目标 window",
+      "degrade_impact": "degradable-ui",
+      "evidence": "artifacts/commands/select-window.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "send-keys": {
+      "consequence": "无法向 provider pane 发送输入",
+      "degrade_impact": "core-io",
+      "evidence": "artifacts/commands/send-keys.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "set-hook": {
+      "consequence": "无法安装 lifecycle hook",
+      "degrade_impact": "diagnostic",
+      "evidence": "artifacts/commands/set-hook.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "set-option": {
+      "consequence": "无法写 session option evidence",
+      "degrade_impact": "diagnostic",
+      "evidence": "artifacts/commands/set-option.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "set-window-option": {
+      "consequence": "无法写 window option evidence",
+      "degrade_impact": "diagnostic",
+      "evidence": "artifacts/commands/set-window-option.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "split-window": {
+      "consequence": "无法创建 pane",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/commands/split-window.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "start-server": {
+      "consequence": "无法建立 mux server",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/commands/start-server.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    },
+    "swap-pane": {
+      "consequence": "无法重排 agent pane",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/commands/swap-pane.json",
+      "notes": "",
+      "required": true,
+      "returncode": 0,
+      "status": "supported",
+      "workaround": null
+    }
+  },
+  "generated_at": "2026-07-21T13:53:58.241302Z",
+  "platform": "windows",
+  "preflight": {
+    "daemon_pre_state": {
+      "detected": false,
+      "evidence": "artifacts/preflight/daemon-pre-state.json",
+      "returncode": 1
+    },
+    "failure_reason": null,
+    "platform": "windows",
+    "probe_status": "completed",
+    "rmux_executable": "C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.EXE",
+    "rmux_executable_found": true,
+    "run_id": "run-20260721T135353Z-14636",
+    "shell": "C:\\Windows\\system32\\cmd.exe",
+    "version": "rmux 0.9.0",
+    "version_returncode": 0,
+    "windows_release": "10"
+  },
+  "probe_status": "completed",
+  "run_dir": "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-rmux-full-backend\\evidence\\rmux-full-gate\\run-20260721T135353Z-14636",
+  "semantics": {
+    "attach_reattach": {
+      "consequence": "用户无法恢复 UI",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/semantics/attach_reattach.json",
+      "notes": "scenario assertions failed",
+      "required": true,
+      "status": "unsupported",
+      "workaround": null
+    },
+    "buffer_paste": {
+      "consequence": "大文本输入不可用",
+      "degrade_impact": "core-io",
+      "evidence": "artifacts/semantics/buffer_paste.json",
+      "notes": "",
+      "required": true,
+      "status": "supported",
+      "workaround": null
+    },
+    "capture_format_fidelity_for_provider_completion": {
+      "consequence": "provider pane status 可能静默误判",
+      "degrade_impact": "parser-fidelity",
+      "evidence": "artifacts/semantics/capture_format_fidelity_for_provider_completion.json",
+      "notes": "real Rmux capture succeeded but one or more parser fidelity dimensions lack real evidence",
+      "required": true,
+      "status": "partial",
+      "workaround": {
+        "accepted": false,
+        "description": "real Rmux capture evidence is incomplete for parser fidelity dimensions",
+        "evidence": "artifacts/semantics/capture_format_fidelity_for_provider_completion.json",
+        "id": "parser-normalization-boundary",
+        "missing_real_dimensions": [
+          "trailing_whitespace"
+        ]
+      }
+    },
+    "capture_last_n_lines": {
+      "consequence": "recent tail 证据可能漂移",
+      "degrade_impact": "parser-fidelity",
+      "evidence": "artifacts/semantics/capture_last_n_lines.json",
+      "notes": "",
+      "required": true,
+      "status": "supported",
+      "workaround": null
+    },
+    "ctrl_c_ctrl_d": {
+      "consequence": "interrupt / EOF 语义不可控",
+      "degrade_impact": "core-io",
+      "evidence": "artifacts/semantics/ctrl_c_ctrl_d.json",
+      "notes": "",
+      "required": true,
+      "status": "supported",
+      "workaround": null
+    },
+    "daemon_crash_cleanup_evidence": {
+      "consequence": "daemon ownership 后续决策证据不足",
+      "degrade_impact": "diagnostic",
+      "evidence": "artifacts/semantics/daemon_crash_cleanup_evidence.json",
+      "notes": "one or more scenario assertions failed despite at least one prerequisite passing",
+      "required": false,
+      "status": "partial",
+      "workaround": {
+        "accepted": false,
+        "description": "required command prerequisites did not prove the full CCB semantic scenario",
+        "evidence": "artifacts/semantics/daemon_crash_cleanup_evidence.json",
+        "id": "daemon_crash_cleanup_evidence-scenario-gap"
+      }
+    },
+    "kill_session_cleanup": {
+      "consequence": "ccb kill 清理不完整",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/semantics/kill_session_cleanup.json",
+      "notes": "",
+      "required": true,
+      "status": "supported",
+      "workaround": null
+    },
+    "layout_reflow": {
+      "consequence": "layout/reflow/reload 不可靠",
+      "degrade_impact": "degradable-ui",
+      "evidence": "artifacts/semantics/layout_reflow.json",
+      "notes": "",
+      "required": true,
+      "status": "supported",
+      "workaround": null
+    },
+    "namespace_isolation": {
+      "consequence": "多项目可能互相污染",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/semantics/namespace_isolation.json",
+      "notes": "",
+      "required": true,
+      "status": "supported",
+      "workaround": null
+    },
+    "pane_death": {
+      "consequence": "pane death 无法诊断",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/semantics/pane_death.json",
+      "notes": "",
+      "required": true,
+      "status": "supported",
+      "workaround": null
+    },
+    "pane_id_stability": {
+      "consequence": "runtime authority 无法稳定定位 pane",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/semantics/pane_id_stability.json",
+      "notes": "",
+      "required": true,
+      "status": "supported",
+      "workaround": null
+    },
+    "provider_process_distinction_workaround_evidence": {
+      "consequence": "pane alive 与 provider healthy 可能混淆",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/semantics/provider_process_distinction_workaround_evidence.json",
+      "notes": "",
+      "required": true,
+      "status": "supported",
+      "workaround": null
+    },
+    "session_survival": {
+      "consequence": "关闭终端后 namespace 可能丢失",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/semantics/session_survival.json",
+      "notes": "",
+      "required": true,
+      "status": "supported",
+      "workaround": null
+    },
+    "user_options_title": {
+      "consequence": "pane identity marker 不可靠",
+      "degrade_impact": "diagnostic",
+      "evidence": "artifacts/semantics/user_options_title.json",
+      "notes": "",
+      "required": true,
+      "status": "supported",
+      "workaround": null
+    },
+    "window_policy": {
+      "consequence": "agent window policy 不可靠",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/semantics/window_policy.json",
+      "notes": "",
+      "required": true,
+      "status": "supported",
+      "workaround": null
+    }
+  },
+  "version": "rmux 0.9.0"
+}

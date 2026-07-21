@@ -1,0 +1,19 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-15036-20260721t144322z",
+    "capture-pane",
+    "-t",
+    "ccb-rmux-probe:0.0",
+    "-p",
+    "-S",
+    "-20"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "D:\\Python\\GitHub\\claude_code_bridge>C:\\Users\\Administrator\\AppData\\Local\\Program\ns\\Python\\Python314\\python.exe D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\go\nals\\2026-07-21-windows-rmux-full-backend\\evidence\\rmux-full-gate\\run-20260721T14\n4322Z-15036\\work\\capture_fidelity_fixture.py\nCCB_RMUX_TRAILING\nCCB_RMUX_OSC_AFTER\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nD:\\Python\\GitHub\\claude_code_bridge>echo CCB_RMUX_BUFFER_PASTE_OK\nCCB_RMUX_BUFFER_PASTE_OK\n\nD:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n",
+  "stdout_raw_sha256": "53dca6d684a2dd9229e810982dd045ae9e53221cdc356ec2b56ebf8849a1c13b",
+  "stdout_raw_size": 643,
+  "timeout": 5.0
+}

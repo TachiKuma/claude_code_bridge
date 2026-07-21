@@ -1,0 +1,21 @@
+{
+  "assertions": [
+    {
+      "kind": "prerequisite",
+      "name": "probe namespace session exists inside the explicit rmux namespace",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "same session is not visible from rmux default namespace",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "new-session",
+    "has-session"
+  ],
+  "notes": "",
+  "status": "supported",
+  "workaround": null
+}

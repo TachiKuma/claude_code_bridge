@@ -1,0 +1,21 @@
+{
+  "assertions": [
+    {
+      "kind": "semantic",
+      "name": "list-panes returned pane identity",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "capture-pane produced pane text",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "list-panes",
+    "capture-pane"
+  ],
+  "notes": "",
+  "status": "supported",
+  "workaround": null
+}

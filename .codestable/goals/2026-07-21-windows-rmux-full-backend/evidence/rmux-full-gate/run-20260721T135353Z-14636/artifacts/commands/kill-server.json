@@ -1,0 +1,16 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-14636-20260721t135353z",
+    "kill-server"
+  ],
+  "classification": "partial",
+  "notes": "scenario-invalid: command requires live client/server or distinct pane/window context; not classified as command missing",
+  "returncode": 1,
+  "stderr": "error connecting to \\\\.\\pipe\\rmux-S-1-5-21-1509734132-243468015-1433946896-500-il-high-ccb-rmux-probe-14636-20260721t135353z (No such file or directory)\n",
+  "stdout": "",
+  "stdout_raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_raw_size": 0,
+  "timeout": 5.0
+}

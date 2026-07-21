@@ -1,0 +1,18 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-4996-20260721t145225z",
+    "list-panes",
+    "-t",
+    "ccb-rmux-probe",
+    "-F",
+    "#{pane_id}"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "%0\n",
+  "stdout_raw_sha256": "707e65b4fc81a4bc9a3bf0f7c9c15442974a8741b5052fab751ff9bc0e65dcd1",
+  "stdout_raw_size": 3,
+  "timeout": 5.0
+}

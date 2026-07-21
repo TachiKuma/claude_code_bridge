@@ -1,0 +1,26 @@
+{
+  "assertions": [
+    {
+      "kind": "prerequisite",
+      "name": "respawn-pane succeeded",
+      "passed": true
+    },
+    {
+      "kind": "prerequisite",
+      "name": "kill-window cleanup command succeeded",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "pane identity remains observable after respawn/cleanup path",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "respawn-pane",
+    "kill-window"
+  ],
+  "notes": "",
+  "status": "supported",
+  "workaround": null
+}
