@@ -44,6 +44,17 @@ def test_codex_parser_direct_module_exposes_worked_for_as_observation_only() -> 
     }
 
 
+def test_codex_parser_strips_osc_sequences_before_status_matching() -> None:
+    status = parse_codex_pane_status(
+        "\x1b]0;codex title\x07"
+        "\x1b[32m• Working (1s • esc to interrupt)\x1b[0m\n"
+        "\x1b]133;A\x1b\\"
+    )
+
+    assert status.state == "working"
+    assert status.reason == "codex_working_status_line"
+
+
 def test_provider_signal_separates_capture_error_from_parse_unknown() -> None:
     parsed_unknown = ProviderPaneStatusSignal(
         provider="codex",

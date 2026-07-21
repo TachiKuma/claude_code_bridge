@@ -4,10 +4,10 @@ import re
 from dataclasses import dataclass
 
 from .models import PaneCompletionEvidence
+from .terminal_text import strip_terminal_sequences
 
 
 ACTIVE_STATES = frozenset({"working", "tool_running", "reconnecting"})
-ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 STATUS_MARKER_RE = r"[•◦]"
 WORKED_FOR_RE = re.compile(
     r"^[•✔✓]\s*worked\s+for\s+(?:\d+\s*h\s*)?(?:\d+\s*m\s*)?\d+\s*s\b",
@@ -137,7 +137,7 @@ class PaneStatus:
 
 
 def strip_ansi(text: str) -> str:
-    return ANSI_RE.sub("", text or "")
+    return strip_terminal_sequences(text)
 
 
 def normalize_screen(text: str) -> str:

@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
+from .terminal_text import strip_terminal_sequences
+
 
 ACTIVE_STATES = frozenset({"working", "tool_running"})
-ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 CLAUDE_TOOL_RUNNING_RE = re.compile(
     r"^\s*●\s*thinking\s+for\s+(?:\d+\s*h\s*)?(?:\d+\s*m\s*)?\d+\s*s,\s+running\s+\d+\s+shell\s+commands?\b",
     re.IGNORECASE,
@@ -81,7 +82,7 @@ class ClaudePaneStatus:
 
 
 def strip_ansi(text: str) -> str:
-    return ANSI_RE.sub("", text or "")
+    return strip_terminal_sequences(text)
 
 
 def normalize_screen(text: str) -> str:

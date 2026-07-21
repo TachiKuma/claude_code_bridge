@@ -28,6 +28,17 @@ def test_claude_pane_reports_spinner_as_working() -> None:
     assert status.reason == "claude_pane_spinner_active"
 
 
+def test_claude_pane_strips_osc_sequences_before_status_matching() -> None:
+    status = parse_claude_pane_status(
+        "\x1b]0;claude title\x07"
+        "\x1b[36m✢ Billowing… (10s · ↓ 89 tokens · thought for 8s)\x1b[0m\n"
+        "\x1b]133;A\x1b\\"
+    )
+
+    assert status.state == "working"
+    assert status.reason == "claude_pane_spinner_active"
+
+
 def test_claude_pane_reports_terminal_summary_without_completion_authority() -> None:
     status = parse_claude_pane_status(
         """
