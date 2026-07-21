@@ -1,0 +1,20 @@
+{
+  "args": [
+    "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+    "-L",
+    "ccb-rmux-probe-6984-20260721t124326z",
+    "attach-session",
+    "-t",
+    "ccb-rmux-probe",
+    "-d",
+    "-E"
+  ],
+  "classification": "supported",
+  "notes": "",
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "tmux 3.3.7\npsmux 3.3.7 (05cc5d4 2026-07-20)\n",
+  "stdout_raw_sha256": "c951d995d59b6f3c721326b1ae731f89d10f7f8b7cb4b6695d93e07ff6e4d445",
+  "stdout_raw_size": 44,
+  "timeout": 8.0
+}

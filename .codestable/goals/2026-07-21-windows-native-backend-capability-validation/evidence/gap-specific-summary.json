@@ -1,0 +1,52 @@
+{
+  "generated_at": "2026-07-21",
+  "backend": "psmux",
+  "installed_version": "psmux 3.3.3",
+  "latest_known_version": "v3.3.7",
+  "fresh_capability_report": "evidence/psmux-current/run-20260721T122234Z-14668/capability-report.json",
+  "gap_observations": [
+    {
+      "gap": "set-window-option",
+      "fresh_status": "unsupported",
+      "extra_observation": "psmux list-commands does not expose set-window-option; set-option -w returns 0 but show-window-options reads an empty custom option value.",
+      "candidate_workaround": "Do not depend on set-window-option; use product-relevant pane title plus sidecar registry, or require a psmux fix that preserves custom option values.",
+      "ccb_impact": "diagnostics and identity evidence cannot be treated as tmux-equivalent."
+    },
+    {
+      "gap": "attach_reattach",
+      "fresh_status": "partial",
+      "extra_observation": "Non-interactive probe cannot prove an interactive TUI restore path.",
+      "candidate_workaround": "Needs an interactive ConPTY/terminal black-box acceptance test before full lifecycle can pass.",
+      "ccb_impact": "core lifecycle remains unproven because ccb foreground attach is user-visible."
+    },
+    {
+      "gap": "user_options_title",
+      "fresh_status": "partial",
+      "extra_observation": "select-pane -T is readable through list-panes, but set-option -p custom pane options return success while #{extra} formats read empty.",
+      "candidate_workaround": "Use pane title as visible identity and store authoritative slot mapping in ccbd sidecar state.",
+      "ccb_impact": "Current tmux user-option identity strategy cannot be reused unchanged."
+    },
+    {
+      "gap": "capture_format_fidelity_for_provider_completion",
+      "fresh_status": "partial",
+      "extra_observation": "Full probe still lacks real evidence for OSC, wrapping and wide-char fidelity dimensions.",
+      "candidate_workaround": "Keep provider completion on provider-native/session evidence; use capture-pane only for diagnostics unless parser normalization is strengthened and verified.",
+      "ccb_impact": "Screen scrape cannot be a sole completion authority."
+    },
+    {
+      "gap": "buffer_paste",
+      "fresh_status": "partial",
+      "extra_observation": "Manual probe showed load-buffer/paste-buffer can place text into cmd.exe when followed by an explicit Enter; the original probe looked for the marker before the pasted command executed.",
+      "candidate_workaround": "Model paste as paste-buffer plus explicit submit key or use file/stdin/chunked send for large prompts.",
+      "ccb_impact": "Large text input appears workable with stricter send semantics, but not yet proven for provider panes."
+    },
+    {
+      "gap": "ctrl_c_ctrl_d",
+      "fresh_status": "partial",
+      "extra_observation": "Manual probe showed C-c interrupts a long-running Python command under PowerShell with KeyboardInterrupt; C-d is rendered as ^D and does not act as EOF.",
+      "candidate_workaround": "Treat interrupt as supported; do not promise Unix EOF. Use provider-specific quit/submit semantics or Windows EOF alternatives if required.",
+      "ccb_impact": "Interrupt can be supported; EOF remains non-tmux-equivalent on Windows shells."
+    }
+  ],
+  "overall_current_psmux_conclusion": "psmux 3.3.3 is the best current candidate but does not yet pass the full ccb Windows native backend gate without accepted workaround design and an interactive attach test."
+}

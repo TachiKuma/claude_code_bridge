@@ -1,0 +1,16 @@
+{
+  "attempts": 2,
+  "hold_s": 0.5,
+  "namespace_id": "ccb-rmux-attach-survival-20260721T125003976734Z-17352",
+  "version": {
+    "command": [
+      "rmux",
+      "-V"
+    ],
+    "returncode": 0,
+    "stderr": "",
+    "stderr_digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout": "rmux 0.9.0\n",
+    "stdout_digest": "7b486314b8361470a7ad238a4a274d0c9078ecea707e2bf179e386865b12dcbf"
+  }
+}

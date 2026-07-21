@@ -1,0 +1,56 @@
+{
+  "tag_name": "v3.3.7",
+  "name": "v3.3.7",
+  "published_at": "2026-07-20T07:56:43Z",
+  "html_url": "https://github.com/psmux/psmux/releases/tag/v3.3.7",
+  "assets": [
+    {
+      "name": "psmux-v3.3.7-arm64-setup.exe",
+      "size": 1849373,
+      "browser_download_url": "https://github.com/psmux/psmux/releases/download/v3.3.7/psmux-v3.3.7-arm64-setup.exe",
+      "content_type": "application/x-msdos-program",
+      "state": "uploaded",
+      "updated_at": "2026-07-20T07:56:43Z"
+    },
+    {
+      "name": "psmux-v3.3.7-windows-arm64.zip",
+      "size": 7080246,
+      "browser_download_url": "https://github.com/psmux/psmux/releases/download/v3.3.7/psmux-v3.3.7-windows-arm64.zip",
+      "content_type": "application/zip",
+      "state": "uploaded",
+      "updated_at": "2026-07-20T07:56:43Z"
+    },
+    {
+      "name": "psmux-v3.3.7-windows-x64.zip",
+      "size": 7540094,
+      "browser_download_url": "https://github.com/psmux/psmux/releases/download/v3.3.7/psmux-v3.3.7-windows-x64.zip",
+      "content_type": "application/zip",
+      "state": "uploaded",
+      "updated_at": "2026-07-20T07:56:43Z"
+    },
+    {
+      "name": "psmux-v3.3.7-windows-x86.zip",
+      "size": 6755336,
+      "browser_download_url": "https://github.com/psmux/psmux/releases/download/v3.3.7/psmux-v3.3.7-windows-x86.zip",
+      "content_type": "application/zip",
+      "state": "uploaded",
+      "updated_at": "2026-07-20T07:56:43Z"
+    },
+    {
+      "name": "psmux-v3.3.7-x64-setup.exe",
+      "size": 2295429,
+      "browser_download_url": "https://github.com/psmux/psmux/releases/download/v3.3.7/psmux-v3.3.7-x64-setup.exe",
+      "content_type": "application/x-msdos-program",
+      "state": "uploaded",
+      "updated_at": "2026-07-20T07:56:43Z"
+    },
+    {
+      "name": "psmux-v3.3.7-x86-setup.exe",
+      "size": 2022258,
+      "browser_download_url": "https://github.com/psmux/psmux/releases/download/v3.3.7/psmux-v3.3.7-x86-setup.exe",
+      "content_type": "application/x-msdos-program",
+      "state": "uploaded",
+      "updated_at": "2026-07-20T07:56:43Z"
+    }
+  ]
+}

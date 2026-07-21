@@ -1,0 +1,31 @@
+已找到 psmux [marlocarlo.psmux]
+版本: 3.3.7
+发布者: Josh
+发布服务器 URL: https://github.com/psmux
+发布服务器支持 URL: https://github.com/psmux/psmux/issues
+绰号： psmux
+描述:
+  psmux is a terminal multiplexer for Windows, bringing tmux-style split panes,
+  multiple windows, sessions, copy mode, mouse support, and a familiar keybinding
+  model to PowerShell and Windows Terminal. Ships with psmux, pmux, and tmux
+  aliases for drop-in tmux compatibility. No WSL, no Cygwin — pure Windows.
+主页: https://github.com/psmux/psmux
+许可证: MIT
+许可证 URL: https://github.com/psmux/psmux/blob/master/LICENSE
+版权所有: Copyright (c) Josh
+发行说明 URL: https://github.com/psmux/psmux/releases/tag/v3.3.7
+标记：
+  terminal
+  multiplexer
+  tmux
+  powershell
+  windows
+  cli
+  pane
+  session
+  pmux
+安装：
+  安装程序类型： portable (zip)
+  安装程序 URL： https://github.com/psmux/psmux/releases/download/v3.3.7/psmux-v3.3.7-windows-x64.zip
+  安装程序 SHA256： 60ff7b236f64184921cef3c1ff2611aa5a36fcc7ed8e2a58e968b8ded57f6028
+  支持脱机分发: true

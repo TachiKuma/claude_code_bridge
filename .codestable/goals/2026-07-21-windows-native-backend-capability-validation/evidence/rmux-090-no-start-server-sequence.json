@@ -1,0 +1,192 @@
+{
+  "namespace": "ccb-rmux090-nostart-16216-1784637953",
+  "session": "ccb-rmux090-nostart-16216-1784637953",
+  "results": [
+    {
+      "name": "version",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-nostart-16216-1784637953",
+        "-V"
+      ],
+      "capture": true,
+      "returncode": 0,
+      "elapsed_s": 0.003,
+      "stdout": "rmux 0.9.0\n",
+      "stderr": ""
+    },
+    {
+      "name": "new-session",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-nostart-16216-1784637953",
+        "new-session",
+        "-d",
+        "-s",
+        "ccb-rmux090-nostart-16216-1784637953",
+        "-n",
+        "main",
+        "cmd.exe"
+      ],
+      "capture": true,
+      "returncode": 124,
+      "elapsed_s": 109.358,
+      "stdout": "",
+      "stderr": "timeout"
+    },
+    {
+      "name": "has-session",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-nostart-16216-1784637953",
+        "has-session",
+        "-t",
+        "ccb-rmux090-nostart-16216-1784637953"
+      ],
+      "capture": true,
+      "returncode": 1,
+      "elapsed_s": 0.004,
+      "stdout": "",
+      "stderr": "error connecting to \\\\.\\pipe\\rmux-S-1-5-21-1509734132-243468015-1433946896-500-il-high-ccb-rmux090-nostart-16216-1784637953 (No such file or directory)\n"
+    },
+    {
+      "name": "list-windows",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-nostart-16216-1784637953",
+        "list-windows",
+        "-t",
+        "ccb-rmux090-nostart-16216-1784637953"
+      ],
+      "capture": true,
+      "returncode": 1,
+      "elapsed_s": 0.003,
+      "stdout": "",
+      "stderr": "error connecting to \\\\.\\pipe\\rmux-S-1-5-21-1509734132-243468015-1433946896-500-il-high-ccb-rmux090-nostart-16216-1784637953 (No such file or directory)\n"
+    },
+    {
+      "name": "list-panes",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-nostart-16216-1784637953",
+        "list-panes",
+        "-t",
+        "ccb-rmux090-nostart-16216-1784637953",
+        "-F",
+        "#{pane_id}|#{pane_title}|#{window_name}"
+      ],
+      "capture": true,
+      "returncode": 1,
+      "elapsed_s": 0.007,
+      "stdout": "",
+      "stderr": "error connecting to \\\\.\\pipe\\rmux-S-1-5-21-1509734132-243468015-1433946896-500-il-high-ccb-rmux090-nostart-16216-1784637953 (No such file or directory)\n"
+    },
+    {
+      "name": "send-keys",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-nostart-16216-1784637953",
+        "send-keys",
+        "-t",
+        "ccb-rmux090-nostart-16216-1784637953:0.0",
+        "echo CCB_RMUX090_SEND",
+        "Enter"
+      ],
+      "capture": true,
+      "returncode": 1,
+      "elapsed_s": 0.003,
+      "stdout": "",
+      "stderr": "error connecting to \\\\.\\pipe\\rmux-S-1-5-21-1509734132-243468015-1433946896-500-il-high-ccb-rmux090-nostart-16216-1784637953 (No such file or directory)\n"
+    },
+    {
+      "name": "capture-pane",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-nostart-16216-1784637953",
+        "capture-pane",
+        "-p",
+        "-t",
+        "ccb-rmux090-nostart-16216-1784637953:0.0",
+        "-S",
+        "-20"
+      ],
+      "capture": true,
+      "returncode": 1,
+      "elapsed_s": 0.003,
+      "stdout": "",
+      "stderr": "error connecting to \\\\.\\pipe\\rmux-S-1-5-21-1509734132-243468015-1433946896-500-il-high-ccb-rmux090-nostart-16216-1784637953 (No such file or directory)\n"
+    },
+    {
+      "name": "set-window-option",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-nostart-16216-1784637953",
+        "set-window-option",
+        "-t",
+        "ccb-rmux090-nostart-16216-1784637953:0",
+        "@ccb_probe_window",
+        "1"
+      ],
+      "capture": true,
+      "returncode": 1,
+      "elapsed_s": 0.006,
+      "stdout": "",
+      "stderr": "error connecting to \\\\.\\pipe\\rmux-S-1-5-21-1509734132-243468015-1433946896-500-il-high-ccb-rmux090-nostart-16216-1784637953 (No such file or directory)\n"
+    },
+    {
+      "name": "show-window-options",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-nostart-16216-1784637953",
+        "show-window-options",
+        "-t",
+        "ccb-rmux090-nostart-16216-1784637953:0",
+        "@ccb_probe_window"
+      ],
+      "capture": true,
+      "returncode": 1,
+      "elapsed_s": 0.006,
+      "stdout": "",
+      "stderr": "error connecting to \\\\.\\pipe\\rmux-S-1-5-21-1509734132-243468015-1433946896-500-il-high-ccb-rmux090-nostart-16216-1784637953 (No such file or directory)\n"
+    },
+    {
+      "name": "kill-session",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-nostart-16216-1784637953",
+        "kill-session",
+        "-t",
+        "ccb-rmux090-nostart-16216-1784637953"
+      ],
+      "capture": true,
+      "returncode": 1,
+      "elapsed_s": 0.002,
+      "stdout": "",
+      "stderr": "error connecting to \\\\.\\pipe\\rmux-S-1-5-21-1509734132-243468015-1433946896-500-il-high-ccb-rmux090-nostart-16216-1784637953 (No such file or directory)\n"
+    },
+    {
+      "name": "kill-server",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-nostart-16216-1784637953",
+        "kill-server"
+      ],
+      "capture": false,
+      "returncode": 1,
+      "elapsed_s": 0.002,
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}

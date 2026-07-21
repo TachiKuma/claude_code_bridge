@@ -1,0 +1,397 @@
+{
+  "backend_impl": "psmux",
+  "version": "tmux 3.3.7\npsmux 3.3.7 (05cc5d4 2026-07-20)",
+  "namespace": "ccb-psmux337-attach-17716-1784638341",
+  "session": "attachsurvival",
+  "setup": {
+    "command": [
+      "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+      "-L",
+      "ccb-psmux337-attach-17716-1784638341",
+      "new-session",
+      "-d",
+      "-s",
+      "attachsurvival",
+      "-n",
+      "main",
+      "cmd.exe"
+    ],
+    "returncode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "has_after_setup": {
+    "command": [
+      "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+      "-L",
+      "ccb-psmux337-attach-17716-1784638341",
+      "has-session",
+      "-t",
+      "attachsurvival"
+    ],
+    "returncode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "attach_command": [
+        "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+        "-L",
+        "ccb-psmux337-attach-17716-1784638341",
+        "attach-session",
+        "-t",
+        "attachsurvival"
+      ],
+      "attach_pid": 16944,
+      "attach_still_running_after_hold": false,
+      "attach_returncode_after_stop": 0,
+      "attach_stdout": "tmux 3.3.7\npsmux 3.3.7 (05cc5d4 2026-07-20)\n",
+      "attach_stderr": "",
+      "attach_killed_by_probe": false,
+      "list_clients": {
+        "command": [
+          "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+          "-L",
+          "ccb-psmux337-attach-17716-1784638341",
+          "list-clients",
+          "-t",
+          "attachsurvival",
+          "-F",
+          "#{client_pid}\t#{client_session}"
+        ],
+        "returncode": 0,
+        "stdout": "/dev/pts/0: attachsurvival: main [120x30] (utf8)\n\n",
+        "stderr": ""
+      },
+      "client_observed": true,
+      "has_session_after_attach_stop": {
+        "command": [
+          "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+          "-L",
+          "ccb-psmux337-attach-17716-1784638341",
+          "has-session",
+          "-t",
+          "attachsurvival"
+        ],
+        "returncode": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "session_survived_attach_stop": true,
+      "send_marker_after_attach_stop": {
+        "command": [
+          "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+          "-L",
+          "ccb-psmux337-attach-17716-1784638341",
+          "send-keys",
+          "-t",
+          "attachsurvival:0.0",
+          "echo CCB_PSMUX337_ATTACH_1",
+          "Enter"
+        ],
+        "returncode": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "capture_after_attach_stop": {
+        "command": [
+          "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+          "-L",
+          "ccb-psmux337-attach-17716-1784638341",
+          "capture-pane",
+          "-p",
+          "-t",
+          "attachsurvival:0.0",
+          "-S",
+          "-20"
+        ],
+        "returncode": 0,
+        "stdout": "Microsoft Windows [版本 10.0.19045.6159]\n(c) Microsoft Corporation。保留所有权利。\n\nD:\\Python\\GitHub\\claude_code_bridge>echo CCB_PSMUX337_ATTACH_1\nCCB_PSMUX337_ATTACH_1\n\nD:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+        "stderr": ""
+      },
+      "marker_seen_after_attach_stop": true
+    },
+    {
+      "attempt": 2,
+      "attach_command": [
+        "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+        "-L",
+        "ccb-psmux337-attach-17716-1784638341",
+        "attach-session",
+        "-t",
+        "attachsurvival"
+      ],
+      "attach_pid": 2312,
+      "attach_still_running_after_hold": false,
+      "attach_returncode_after_stop": 0,
+      "attach_stdout": "tmux 3.3.7\npsmux 3.3.7 (05cc5d4 2026-07-20)\n",
+      "attach_stderr": "",
+      "attach_killed_by_probe": false,
+      "list_clients": {
+        "command": [
+          "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+          "-L",
+          "ccb-psmux337-attach-17716-1784638341",
+          "list-clients",
+          "-t",
+          "attachsurvival",
+          "-F",
+          "#{client_pid}\t#{client_session}"
+        ],
+        "returncode": 0,
+        "stdout": "/dev/pts/0: attachsurvival: main [120x30] (utf8)\n\n",
+        "stderr": ""
+      },
+      "client_observed": true,
+      "has_session_after_attach_stop": {
+        "command": [
+          "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+          "-L",
+          "ccb-psmux337-attach-17716-1784638341",
+          "has-session",
+          "-t",
+          "attachsurvival"
+        ],
+        "returncode": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "session_survived_attach_stop": true,
+      "send_marker_after_attach_stop": {
+        "command": [
+          "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+          "-L",
+          "ccb-psmux337-attach-17716-1784638341",
+          "send-keys",
+          "-t",
+          "attachsurvival:0.0",
+          "echo CCB_PSMUX337_ATTACH_2",
+          "Enter"
+        ],
+        "returncode": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "capture_after_attach_stop": {
+        "command": [
+          "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+          "-L",
+          "ccb-psmux337-attach-17716-1784638341",
+          "capture-pane",
+          "-p",
+          "-t",
+          "attachsurvival:0.0",
+          "-S",
+          "-20"
+        ],
+        "returncode": 0,
+        "stdout": "Microsoft Windows [版本 10.0.19045.6159]\n(c) Microsoft Corporation。保留所有权利。\n\nD:\\Python\\GitHub\\claude_code_bridge>echo CCB_PSMUX337_ATTACH_1\nCCB_PSMUX337_ATTACH_1\n\nD:\\Python\\GitHub\\claude_code_bridge>echo CCB_PSMUX337_ATTACH_2\nCCB_PSMUX337_ATTACH_2\n\nD:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+        "stderr": ""
+      },
+      "marker_seen_after_attach_stop": true
+    }
+  ],
+  "cleanup": {
+    "command": [
+      "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+      "-L",
+      "ccb-psmux337-attach-17716-1784638341",
+      "kill-session",
+      "-t",
+      "attachsurvival"
+    ],
+    "returncode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "kill_server": {
+    "command": [
+      "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+      "-L",
+      "ccb-psmux337-attach-17716-1784638341",
+      "kill-server"
+    ],
+    "returncode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "attach_session_supported": false,
+  "session_survival_supported": true,
+  "attach_reattach_supported": false,
+  "commands": [
+    {
+      "command": [
+        "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+        "-L",
+        "ccb-psmux337-attach-17716-1784638341",
+        "new-session",
+        "-d",
+        "-s",
+        "attachsurvival",
+        "-n",
+        "main",
+        "cmd.exe"
+      ],
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+        "-L",
+        "ccb-psmux337-attach-17716-1784638341",
+        "has-session",
+        "-t",
+        "attachsurvival"
+      ],
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+        "-L",
+        "ccb-psmux337-attach-17716-1784638341",
+        "list-clients",
+        "-t",
+        "attachsurvival",
+        "-F",
+        "#{client_pid}\t#{client_session}"
+      ],
+      "returncode": 0,
+      "stdout": "/dev/pts/0: attachsurvival: main [120x30] (utf8)\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+        "-L",
+        "ccb-psmux337-attach-17716-1784638341",
+        "has-session",
+        "-t",
+        "attachsurvival"
+      ],
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+        "-L",
+        "ccb-psmux337-attach-17716-1784638341",
+        "send-keys",
+        "-t",
+        "attachsurvival:0.0",
+        "echo CCB_PSMUX337_ATTACH_1",
+        "Enter"
+      ],
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+        "-L",
+        "ccb-psmux337-attach-17716-1784638341",
+        "capture-pane",
+        "-p",
+        "-t",
+        "attachsurvival:0.0",
+        "-S",
+        "-20"
+      ],
+      "returncode": 0,
+      "stdout": "Microsoft Windows [版本 10.0.19045.6159]\n(c) Microsoft Corporation。保留所有权利。\n\nD:\\Python\\GitHub\\claude_code_bridge>echo CCB_PSMUX337_ATTACH_1\nCCB_PSMUX337_ATTACH_1\n\nD:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+        "-L",
+        "ccb-psmux337-attach-17716-1784638341",
+        "list-clients",
+        "-t",
+        "attachsurvival",
+        "-F",
+        "#{client_pid}\t#{client_session}"
+      ],
+      "returncode": 0,
+      "stdout": "/dev/pts/0: attachsurvival: main [120x30] (utf8)\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+        "-L",
+        "ccb-psmux337-attach-17716-1784638341",
+        "has-session",
+        "-t",
+        "attachsurvival"
+      ],
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+        "-L",
+        "ccb-psmux337-attach-17716-1784638341",
+        "send-keys",
+        "-t",
+        "attachsurvival:0.0",
+        "echo CCB_PSMUX337_ATTACH_2",
+        "Enter"
+      ],
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+        "-L",
+        "ccb-psmux337-attach-17716-1784638341",
+        "capture-pane",
+        "-p",
+        "-t",
+        "attachsurvival:0.0",
+        "-S",
+        "-20"
+      ],
+      "returncode": 0,
+      "stdout": "Microsoft Windows [版本 10.0.19045.6159]\n(c) Microsoft Corporation。保留所有权利。\n\nD:\\Python\\GitHub\\claude_code_bridge>echo CCB_PSMUX337_ATTACH_1\nCCB_PSMUX337_ATTACH_1\n\nD:\\Python\\GitHub\\claude_code_bridge>echo CCB_PSMUX337_ATTACH_2\nCCB_PSMUX337_ATTACH_2\n\nD:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+        "-L",
+        "ccb-psmux337-attach-17716-1784638341",
+        "kill-session",
+        "-t",
+        "attachsurvival"
+      ],
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+        "-L",
+        "ccb-psmux337-attach-17716-1784638341",
+        "kill-server"
+      ],
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "args": [
+    "psmux",
+    "list-sessions"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": ""
+}

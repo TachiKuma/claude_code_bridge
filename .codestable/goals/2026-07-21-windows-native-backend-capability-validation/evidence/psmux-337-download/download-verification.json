@@ -1,0 +1,8 @@
+{
+  "zip": ".codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\psmux-v3.3.7-windows-x64.zip",
+  "url": "https://github.com/psmux/psmux/releases/download/v3.3.7/psmux-v3.3.7-windows-x64.zip",
+  "sha256": "60ff7b236f64184921cef3c1ff2611aa5a36fcc7ed8e2a58e968b8ded57f6028",
+  "expected_sha256": "60ff7b236f64184921cef3c1ff2611aa5a36fcc7ed8e2a58e968b8ded57f6028",
+  "sha256_matches": true,
+  "size": 7540094
+}

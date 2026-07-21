@@ -1,0 +1,230 @@
+{
+  "psmux_path": "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+  "version": "tmux 3.3.7\npsmux 3.3.7 (05cc5d4 2026-07-20)",
+  "namespace": "ccb-psmux337-gap-17012-20260721204428",
+  "commands": [
+    {
+      "name": "new-session",
+      "args": [
+        "-L",
+        "ccb-psmux337-gap-17012-20260721204428",
+        "new-session",
+        "-d",
+        "-s",
+        "validate",
+        "-n",
+        "main",
+        "powershell.exe",
+        "-NoLogo",
+        "-NoProfile"
+      ],
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "name": "set-window-option",
+      "args": [
+        "-L",
+        "ccb-psmux337-gap-17012-20260721204428",
+        "set-window-option",
+        "-t",
+        "validate:0",
+        "@ccb_probe_window",
+        "1"
+      ],
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "name": "show-window-options",
+      "args": [
+        "-L",
+        "ccb-psmux337-gap-17012-20260721204428",
+        "show-window-options",
+        "-t",
+        "validate:0",
+        "@ccb_probe_window"
+      ],
+      "exit": 0,
+      "output": "@ccb_probe_window "
+    },
+    {
+      "name": "set-pane-user-option",
+      "args": [
+        "-L",
+        "ccb-psmux337-gap-17012-20260721204428",
+        "set-option",
+        "-p",
+        "-t",
+        "validate:0.0",
+        "@ccb_slot",
+        "codex"
+      ],
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "name": "select-pane-title",
+      "args": [
+        "-L",
+        "ccb-psmux337-gap-17012-20260721204428",
+        "select-pane",
+        "-T",
+        "codex",
+        "-t",
+        "validate:0.0"
+      ],
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "name": "list-panes-identity",
+      "args": [
+        "-L",
+        "ccb-psmux337-gap-17012-20260721204428",
+        "list-panes",
+        "-t",
+        "validate:0",
+        "-F",
+        "#{pane_id}|#{pane_title}|#{@ccb_slot}|#{@ccb_probe_window}"
+      ],
+      "exit": 0,
+      "output": "%1|codex||1"
+    },
+    {
+      "name": "load-buffer",
+      "args": [
+        "-L",
+        "ccb-psmux337-gap-17012-20260721204428",
+        "load-buffer",
+        "C:\\Users\\Administrator\\AppData\\Local\\Temp\\ccb-psmux337-paste-17012.txt"
+      ],
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "name": "paste-buffer",
+      "args": [
+        "-L",
+        "ccb-psmux337-gap-17012-20260721204428",
+        "paste-buffer",
+        "-t",
+        "validate:0.0"
+      ],
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "name": "send-enter-after-paste",
+      "args": [
+        "-L",
+        "ccb-psmux337-gap-17012-20260721204428",
+        "send-keys",
+        "-t",
+        "validate:0.0",
+        "Enter"
+      ],
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "name": "capture-after-paste",
+      "args": [
+        "-L",
+        "ccb-psmux337-gap-17012-20260721204428",
+        "capture-pane",
+        "-p",
+        "-t",
+        "validate:0.0",
+        "-S",
+        "-30"
+      ],
+      "exit": 0,
+      "output": "PS D:\\Python\\GitHub\\claude_code_bridge> Write-Output CCB_337_PASTE\nCCB_337_PASTE\nPS D:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+    },
+    {
+      "name": "send-python-sleep",
+      "args": [
+        "-L",
+        "ccb-psmux337-gap-17012-20260721204428",
+        "send-keys",
+        "-t",
+        "validate:0.0",
+        "python -c \"import time; print('CCB_337_CTRL_START'); time.sleep(30); print('CCB_337_CTRL_END')\"",
+        "Enter"
+      ],
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "name": "send-ctrl-c",
+      "args": [
+        "-L",
+        "ccb-psmux337-gap-17012-20260721204428",
+        "send-keys",
+        "-t",
+        "validate:0.0",
+        "C-c"
+      ],
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "name": "capture-after-ctrl-c",
+      "args": [
+        "-L",
+        "ccb-psmux337-gap-17012-20260721204428",
+        "capture-pane",
+        "-p",
+        "-t",
+        "validate:0.0",
+        "-S",
+        "-40"
+      ],
+      "exit": 0,
+      "output": "PS D:\\Python\\GitHub\\claude_code_bridge> Write-Output CCB_337_PASTE\nCCB_337_PASTE\nPS D:\\Python\\GitHub\\claude_code_bridge> python -c \"import time; print('CCB_337_CTRL_START'); time.sleep(30); print('CCB_\n337_CTRL_END')\"\nCCB_337_CTRL_START\nTraceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nKeyboardInterrupt\nPS D:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+    },
+    {
+      "name": "send-python-stdin",
+      "args": [
+        "-L",
+        "ccb-psmux337-gap-17012-20260721204428",
+        "send-keys",
+        "-t",
+        "validate:0.0",
+        "python -c \"import sys; print('CCB_337_STDIN_START'); data=sys.stdin.read(); print('CCB_337_EOF_MARK:' + data)\"",
+        "Enter"
+      ],
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "name": "send-ctrl-d",
+      "args": [
+        "-L",
+        "ccb-psmux337-gap-17012-20260721204428",
+        "send-keys",
+        "-t",
+        "validate:0.0",
+        "C-d"
+      ],
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "name": "capture-after-ctrl-d",
+      "args": [
+        "-L",
+        "ccb-psmux337-gap-17012-20260721204428",
+        "capture-pane",
+        "-p",
+        "-t",
+        "validate:0.0",
+        "-S",
+        "-50"
+      ],
+      "exit": 0,
+      "output": "PS D:\\Python\\GitHub\\claude_code_bridge> Write-Output CCB_337_PASTE\nCCB_337_PASTE\nPS D:\\Python\\GitHub\\claude_code_bridge> python -c \"import time; print('CCB_337_CTRL_START'); time.sleep(30); print('CCB_\n337_CTRL_END')\"\nCCB_337_CTRL_START\nTraceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nKeyboardInterrupt\nPS D:\\Python\\GitHub\\claude_code_bridge> python -c \"import sys; print('CCB_337_STDIN_START'); data=sys.stdin.read(); prin\nt('CCB_337_EOF_MARK:' + data)\"\nCCB_337_STDIN_START\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+    }
+  ]
+}

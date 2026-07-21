@@ -1,0 +1,20 @@
+{
+  "args": [
+    "psmux",
+    "-L",
+    "ccb-rmux-probe-14668-20260721t122234z",
+    "set-window-option",
+    "-t",
+    "ccb-rmux-probe:0",
+    "@ccb_probe_window",
+    "1"
+  ],
+  "classification": "unsupported",
+  "notes": "",
+  "returncode": 1,
+  "stderr": "psmux: unknown command: set-window-option\nRun 'psmux --help' for usage information.\npsmux: unknown command: set-window-option\n",
+  "stdout": "",
+  "stdout_raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_raw_size": 0,
+  "timeout": 8.0
+}

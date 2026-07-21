@@ -1,0 +1,32 @@
+{
+  "extract_dir": ".codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319",
+  "psmux_path": "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+  "version": "tmux 3.3.7\npsmux 3.3.7 (05cc5d4 2026-07-20)",
+  "files": [
+    {
+      "FullName": "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\LICENSE",
+      "Length": 1082,
+      "LastWriteTime": "2026-07-20T07:50:30+08:00"
+    },
+    {
+      "FullName": "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\pmux.exe",
+      "Length": 6883328,
+      "LastWriteTime": "2026-07-20T07:55:48+08:00"
+    },
+    {
+      "FullName": "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+      "Length": 6883328,
+      "LastWriteTime": "2026-07-20T07:55:48+08:00"
+    },
+    {
+      "FullName": "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\README.md",
+      "Length": 8736,
+      "LastWriteTime": "2026-07-20T07:50:30+08:00"
+    },
+    {
+      "FullName": "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\tmux.exe",
+      "Length": 6883328,
+      "LastWriteTime": "2026-07-20T07:55:48+08:00"
+    }
+  ]
+}

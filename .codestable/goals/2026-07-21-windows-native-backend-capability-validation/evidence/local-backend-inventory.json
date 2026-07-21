@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-07-21T20:33:01",
+  "where_rmux": [
+    "C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+  ],
+  "where_psmux": [
+    "C:\\Users\\Administrator\\AppData\\Local\\psmux\\psmux.exe"
+  ],
+  "rmux_version": "rmux 0.9.0",
+  "psmux_version": "psmux 3.3.3",
+  "psmux_local_dir": [
+    {
+      "Name": "pmux.exe",
+      "Length": 5835264,
+      "LastWriteTime": "2026-04-19T17:58:04+08:00"
+    },
+    {
+      "Name": "psmux.exe",
+      "Length": 5835264,
+      "LastWriteTime": "2026-04-19T17:58:04+08:00"
+    },
+    {
+      "Name": "tmux.exe",
+      "Length": 5835264,
+      "LastWriteTime": "2026-04-19T17:58:04+08:00"
+    }
+  ],
+  "rmux_processes": []
+}
