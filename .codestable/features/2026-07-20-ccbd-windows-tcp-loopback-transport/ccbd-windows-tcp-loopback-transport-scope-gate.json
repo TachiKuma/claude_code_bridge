@@ -1,0 +1,23 @@
+{
+  "gate_id": "scope-gate",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "changed_files": [],
+      "ignored_machine_artifacts": [],
+      "allowed_prefixes": [
+        ".codestable/features/2026-07-20-ccbd-windows-tcp-loopback-transport",
+        ".codestable/features/2026-07-20-ccbd-windows-tcp-loopback-transport",
+        "lib/ccbd",
+        "test/test_ccbd_windows_tcp_loopback_transport.py",
+        "test/test_ccbd_windows_tcp_loopback_import_guard.py",
+        ".codestable/roadmap/windows-rmux-native-backend/goal-state.yaml",
+        ".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml"
+      ]
+    }
+  ],
+  "providers": {}
+}

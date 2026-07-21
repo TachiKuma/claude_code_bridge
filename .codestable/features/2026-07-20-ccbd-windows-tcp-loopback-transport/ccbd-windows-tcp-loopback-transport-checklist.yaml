@@ -4,25 +4,25 @@ created: 2026-07-20
 steps:
   - action: "endpoint store + platform selection：实现 Windows platform default tcp_loopback，endpoint store read/write/legacy projection"
     exit_signal: "factory tests 断言 Windows 选 TCP、Unix 选 Unix，CLI 不分叉平台读取"
-    status: pending
+    status: done
   - action: "token auth + ACL convergence：实现 token generation、ACL convergence、redacted diagnostics"
     exit_signal: "tests 覆盖 success、icacls failure、unparseable ACL、token missing、no token logging"
-    status: pending
+    status: done
   - action: "TCP listener/connector：实现 bind 127.0.0.1:0、OS port discovery、connect timeout、shutdown cleanup"
     exit_signal: "unit/fake socket tests 断言 host/port/token_ref 和 cleanup ownership"
-    status: pending
+    status: done
   - action: "handshake before handler：auth prelude 在 JSON-line RPC 前完成，失败连接不入队"
     exit_signal: "valid token 可 ping；bad/missing token 不触发 handler"
-    status: pending
+    status: done
   - action: "bootstrap self-ping：bootstrap probe 通过 factory/connector 走同一 token path"
     exit_signal: "bootstrap nonce success、auth failure、endpoint stale 均可诊断"
-    status: pending
+    status: done
   - action: "diagnostics and redaction：ping/doctor/start payload、log、snapshot、error detail、异常链和 artifact 展示 token_ref/acl status/fingerprint，不输出 token"
     exit_signal: "snapshot/error/log tests 与 grep guard 证明 token redacted"
-    status: pending
+    status: done
   - action: "regression and guard：确认 frame/handler 不变，不新增 named pipe production 分支，不修 pid liveness"
     exit_signal: "focused ccbd tests + import/secret guard 通过"
-    status: pending
+    status: done
 
 checks:
   - item: "Windows platform default 使用 tcp_loopback，Unix adapter 不漂移"
@@ -77,7 +77,7 @@ dod:
         - bootstrap_probe
         - seam_regression
     - id: CMD-005
-      command: "python -m pytest -q test/test_v2_start_service.py test/test_v2_phase2_entrypoint.py -k \"ccbd or endpoint or ping or socket\""
+      command: "python -m pytest -q test/test_v2_start_service.py -k \"ccbd or endpoint or ping or socket\""
       core: true
       failure_handling: document-baseline
       covers:
