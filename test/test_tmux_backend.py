@@ -42,6 +42,29 @@ def test_tmux_backend_run_strips_outer_tmux_environment(monkeypatch: pytest.Monk
     assert seen['args'][4] == '/tmp/project.sock'
 
 
+def test_psmux_backend_uses_rmux_namespace_without_tmux_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+    monkeypatch.setenv('CCB_TMUX_CONFIG', '/tmp/should-not-leak.conf')
+    monkeypatch.setenv('CCB_RMUX_BIN', 'rmux-test')
+
+    def fake_run(args, **kwargs):
+        seen['args'] = args
+        seen['env'] = kwargs.get('env')
+        return _cp()
+
+    monkeypatch.setattr(tmux_backend_runtime, '_run', fake_run)
+
+    backend = terminal.PsmuxBackend(namespace='ccb-demo', socket_path=r'\\.\pipe\ignored')
+    backend._tmux_run(['display-message', '-p', 'ok'])
+
+    assert seen['args'] == ['rmux-test', '-L', 'ccb-demo', 'display-message', '-p', 'ok']
+    assert isinstance(seen['env'], dict)
+    assert 'CCB_TMUX_CONFIG' not in seen['env']
+    assert backend._declared_socket_path == r'\\.\pipe\ignored'
+    assert backend.backend_family == 'tmux'
+    assert backend.backend_impl == 'psmux'
+
+
 def test_tmux_split_pane_builds_command_and_parses_pane_id(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, Any]] = []
 

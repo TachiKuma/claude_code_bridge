@@ -12,7 +12,22 @@ def tmux_base(
     *,
     socket_path: str | None = None,
 ) -> list[str]:
-    cmd = ["tmux", *config_base_args()]
+    return tmux_family_base(
+        "tmux",
+        socket_name=socket_name,
+        socket_path=socket_path,
+        config_args=config_base_args(),
+    )
+
+
+def tmux_family_base(
+    executable: str,
+    *,
+    socket_name: str | None = None,
+    socket_path: str | None = None,
+    config_args: list[str] | None = None,
+) -> list[str]:
+    cmd = [str(executable or "tmux"), *(config_args or [])]
     cmd.extend(socket_base_args(socket_name=socket_name, socket_path=socket_path))
     return cmd
 
@@ -21,15 +36,24 @@ def config_base_args() -> list[str]:
     config_path = str(os.environ.get("CCB_TMUX_CONFIG") or _DEFAULT_CCB_TMUX_CONFIG).strip()
     if not config_path:
         return []
-    return ["-f", str(Path(config_path).expanduser())]
+    if config_path == _DEFAULT_CCB_TMUX_CONFIG:
+        return ["-f", config_path]
+    return ["-f", expand_backend_path(config_path)]
 
 
 def socket_base_args(*, socket_name: str | None, socket_path: str | None) -> list[str]:
     if socket_path:
-        return ["-S", str(Path(socket_path).expanduser())]
+        return ["-S", expand_backend_path(socket_path)]
     if socket_name:
         return ["-L", socket_name]
     return []
+
+
+def expand_backend_path(value: str) -> str:
+    text = str(value or "").strip()
+    if text.startswith("~"):
+        return str(Path(text).expanduser())
+    return text
 
 
 def normalize_socket_name(value: str | None) -> str | None:

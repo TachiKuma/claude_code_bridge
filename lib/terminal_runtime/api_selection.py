@@ -9,10 +9,12 @@ def resolve_backend(
     terminal_type,
     detect_terminal_fn,
     tmux_backend_factory,
+    psmux_backend_factory=None,
 ):
     return TerminalBackendSelection(
         detect_terminal_fn=detect_terminal_fn,
         tmux_backend_factory=tmux_backend_factory,
+        psmux_backend_factory=psmux_backend_factory,
         cached_backend=cached_backend,
     ).get_backend(terminal_type)
 
@@ -22,10 +24,12 @@ def resolve_backend_for_session(
     session_data: dict,
     detect_terminal_fn,
     tmux_backend_factory,
+    psmux_backend_factory=None,
 ):
     return TerminalBackendSelection(
         detect_terminal_fn=detect_terminal_fn,
         tmux_backend_factory=tmux_backend_factory,
+        psmux_backend_factory=psmux_backend_factory,
     ).get_backend_for_session(session_data)
 
 

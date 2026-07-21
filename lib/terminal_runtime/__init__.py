@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .api import (
     LayoutResult,
+    PsmuxBackend,
     TerminalBackend,
     TmuxBackend,
     create_auto_layout,
@@ -16,6 +17,7 @@ from .api import (
 
 __all__ = [
     "LayoutResult",
+    "PsmuxBackend",
     "TerminalBackend",
     "TmuxBackend",
     "create_auto_layout",

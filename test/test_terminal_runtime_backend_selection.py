@@ -49,6 +49,69 @@ def test_backend_selection_uses_session_terminal_field() -> None:
     assert selection.get_pane_id_from_session({'tmux_session': '%old'}) == '%old'
 
 
+def test_backend_selection_uses_psmux_session_backend() -> None:
+    captured: dict[str, object] = {}
+
+    def _psmux_backend_factory(namespace=None, socket_path=None):
+        captured['namespace'] = namespace
+        captured['socket_path'] = socket_path
+        return _FakeBackend('psmux')
+
+    selection = TerminalBackendSelection(
+        detect_terminal_fn=lambda: None,
+        tmux_backend_factory=lambda **kwargs: _FakeBackend('tmux'),
+        psmux_backend_factory=_psmux_backend_factory,
+    )
+
+    backend = selection.get_backend_for_session(
+        {
+            'terminal_backend': 'rmux',
+            'rmux_namespace': 'ccb-demo',
+            'tmux_socket_path': r'\\.\pipe\ccb-demo',
+        }
+    )
+
+    assert isinstance(backend, _FakeBackend)
+    assert backend.name == 'psmux'
+    assert captured == {'namespace': 'ccb-demo', 'socket_path': r'\\.\pipe\ccb-demo'}
+
+
+def test_backend_selection_uses_backend_impl_and_mux_backend_fields() -> None:
+    selected: list[dict[str, object]] = []
+
+    def _psmux_backend_factory(namespace=None, socket_path=None):
+        selected.append({'namespace': namespace, 'socket_path': socket_path})
+        return _FakeBackend('psmux')
+
+    selection = TerminalBackendSelection(
+        detect_terminal_fn=lambda: None,
+        tmux_backend_factory=lambda **kwargs: _FakeBackend('tmux'),
+        psmux_backend_factory=_psmux_backend_factory,
+    )
+
+    assert selection.get_backend_for_session({'backend_impl': 'psmux', 'psmux_namespace': 'impl-ns'}).name == 'psmux'
+    assert selected[-1] == {'namespace': 'impl-ns', 'socket_path': None}
+    assert selection.get_backend_for_session({'mux_backend': 'rmux', 'tmux_socket_name': 'fallback-ns'}).name == 'psmux'
+    assert selected[-1] == {'namespace': 'fallback-ns', 'socket_path': None}
+
+
+def test_backend_selection_can_cache_explicit_psmux_backend() -> None:
+    calls: list[str] = []
+    selection = TerminalBackendSelection(
+        detect_terminal_fn=lambda: 'tmux',
+        tmux_backend_factory=lambda: _FakeBackend('tmux'),
+        psmux_backend_factory=lambda: calls.append('psmux') or _FakeBackend('psmux'),
+    )
+
+    first = selection.get_backend('psmux')
+    second = selection.get_backend('rmux')
+
+    assert first is second
+    assert isinstance(first, _FakeBackend)
+    assert first.name == 'psmux'
+    assert calls == ['psmux']
+
+
 def test_terminal_layout_service_delegates_to_runtime_layout() -> None:
     backend = _FakeBackend('tmux')
     captured: dict[str, object] = {}

@@ -12,19 +12,39 @@ from terminal_runtime.layouts import LayoutResult, create_tmux_auto_layout
 class TerminalBackendSelection:
     detect_terminal_fn: Callable[[], object | None]
     tmux_backend_factory: Callable[[], object]
+    psmux_backend_factory: Callable[[], object] | None = None
     cached_backend: object | None = None
 
     def get_backend(self, terminal_type: str | None = None) -> object | None:
         if self.cached_backend is not None:
             return self.cached_backend
-        selected = terminal_type or self.detect_terminal_fn()
+        selected = _normalize_backend_name(terminal_type or self.detect_terminal_fn())
         if selected == 'tmux':
             self.cached_backend = self.tmux_backend_factory()
+        elif selected in {'psmux', 'rmux'} and self.psmux_backend_factory is not None:
+            self.cached_backend = self.psmux_backend_factory()
         return self.cached_backend
 
     def get_backend_for_session(self, session_data: dict) -> object:
         socket_name = str(session_data.get('tmux_socket_name') or '').strip() or None
         socket_path = str(session_data.get('tmux_socket_path') or '').strip() or None
+        selected = _normalize_backend_name(
+            session_data.get('terminal_backend')
+            or session_data.get('terminal')
+            or session_data.get('backend_impl')
+            or session_data.get('mux_backend')
+        )
+        if selected in {'psmux', 'rmux'} and self.psmux_backend_factory is not None:
+            namespace = str(
+                session_data.get('rmux_namespace')
+                or session_data.get('psmux_namespace')
+                or socket_name
+                or ''
+            ).strip() or None
+            try:
+                return self.psmux_backend_factory(namespace=namespace, socket_path=socket_path)
+            except TypeError:
+                return self.psmux_backend_factory()
         try:
             return self.tmux_backend_factory(socket_name=socket_name, socket_path=socket_path)
         except TypeError:
@@ -71,3 +91,8 @@ class TerminalLayoutService:
             ),
             inside_tmux=bool((env.get('TMUX') or '').strip()),
         )
+
+
+def _normalize_backend_name(value: object | None) -> str | None:
+    text = str(value or '').strip().lower()
+    return text or None

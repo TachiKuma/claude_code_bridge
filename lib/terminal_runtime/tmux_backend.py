@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import re
 import subprocess
 
 from terminal_runtime.backend_types import TerminalBackend
 from terminal_runtime.env import isolated_tmux_env as _isolated_tmux_env_impl
 from terminal_runtime.env import subprocess_kwargs as _subprocess_kwargs_impl
+from terminal_runtime.tmux import expand_backend_path
 from terminal_runtime.tmux import tmux_base as _tmux_base_impl
 from terminal_runtime.tmux_backend_control import TmuxBackendControlMixin
 from terminal_runtime.tmux_backend_logs import TmuxBackendLogsMixin
@@ -44,6 +44,9 @@ class TmuxBackend(
     TmuxBackendControlMixin,
     TerminalBackend,
 ):
+    backend_family = 'tmux'
+    backend_impl = 'tmux'
+
     _ANSI_RE = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
 
     def __init__(self, *, socket_name: str | None = None, socket_path: str | None = None):
@@ -51,7 +54,7 @@ class TmuxBackend(
             socket_path or os.environ.get('CCB_TMUX_SOCKET_PATH') or ''
         ).strip() or None
         if self._socket_path:
-            self._socket_path = str(Path(self._socket_path).expanduser())
+            self._socket_path = expand_backend_path(self._socket_path)
         self._socket_name = (
             socket_name or os.environ.get('CCB_TMUX_SOCKET') or ''
         ).strip() or None
@@ -84,7 +87,7 @@ class TmuxBackend(
             kwargs['input'] = input_bytes
         if timeout is not None:
             kwargs['timeout'] = timeout
-        kwargs['env'] = _isolated_tmux_env()
+        kwargs['env'] = self._command_env()
         record_startup_operations(
             {
                 'tmux_backend_command_attempt_count': 1,
@@ -105,6 +108,9 @@ class TmuxBackend(
     @staticmethod
     def _env_tmux_pane() -> str:
         return os.environ.get('TMUX_PANE', '')
+
+    def _command_env(self) -> dict[str, str]:
+        return _isolated_tmux_env()
 
 
 def _record_tmux_subprocess_started() -> None:
