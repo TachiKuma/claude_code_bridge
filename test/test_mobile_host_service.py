@@ -491,6 +491,45 @@ def test_mobile_host_service_replaces_legacy_foreground_gateway(tmp_path: Path) 
     assert result.replaced_pid == 333
 
 
+def test_mobile_host_service_recognizes_quoted_windows_legacy_gateway(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / 'source with space'
+    monkeypatch.setattr(mobile_host, '_legacy_cmdline_shlex_posix', lambda: False)
+
+    command = (
+        f'"C:\\Program Files\\Python\\python.exe" "{source_root / "ccb.py"}" '
+        'install mobile --listen=127.0.0.1:8787 --route-provider lan'
+    )
+
+    assert mobile_host._legacy_mobile_gateway_process(
+        command,
+        script_root=source_root,
+        listen='127.0.0.1:8787',
+    )
+
+
+def test_mobile_host_service_rejects_quoted_windows_legacy_gateway_from_other_source(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / 'source with space'
+    other_root = tmp_path / 'other source'
+    monkeypatch.setattr(mobile_host, '_legacy_cmdline_shlex_posix', lambda: False)
+
+    command = (
+        f'"C:\\Program Files\\Python\\python.exe" "{other_root / "ccb.py"}" '
+        'install mobile --listen=127.0.0.1:8787 --route-provider lan'
+    )
+
+    assert not mobile_host._legacy_mobile_gateway_process(
+        command,
+        script_root=source_root,
+        listen='127.0.0.1:8787',
+    )
+
+
 def test_mobile_host_service_refuses_legacy_gateway_from_other_source(tmp_path: Path) -> None:
     source_root = tmp_path / 'source'
     external_command = (

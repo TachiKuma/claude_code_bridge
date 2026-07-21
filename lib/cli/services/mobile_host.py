@@ -609,7 +609,7 @@ def _legacy_mobile_gateway_process(
 ) -> bool:
     """Recognize the pre-service foreground mobile gateway for safe takeover."""
     try:
-        tokens = shlex.split(cmdline)
+        tokens = shlex.split(cmdline, posix=_legacy_cmdline_shlex_posix())
     except ValueError:
         return False
     expected_script = str((Path(script_root) / 'ccb.py').expanduser().resolve())
@@ -617,7 +617,7 @@ def _legacy_mobile_gateway_process(
         (
             index
             for index, token in enumerate(tokens)
-            if token.endswith('ccb.py') and str(Path(token).expanduser().resolve()) == expected_script
+            if _same_script_token(token, expected_script=expected_script)
         ),
         None,
     )
@@ -632,6 +632,20 @@ def _legacy_mobile_gateway_process(
         if token.startswith('--listen='):
             return token.split('=', 1)[1] == listen
     return False
+
+
+def _legacy_cmdline_shlex_posix() -> bool:
+    return os.name != 'nt'
+
+
+def _same_script_token(token: str, *, expected_script: str) -> bool:
+    text = str(token or '').strip().strip('"\'')
+    if not text.endswith('ccb.py'):
+        return False
+    try:
+        return str(Path(text).expanduser().resolve()) == expected_script
+    except OSError:
+        return False
 
 
 def _process_cmdline(pid: int) -> str:

@@ -11,6 +11,7 @@ from terminal_runtime.tmux import normalize_socket_name
 from terminal_runtime.tmux import normalize_split_direction
 from terminal_runtime.tmux import pane_id_by_title_marker_output
 from terminal_runtime.tmux import socket_name_from_tmux_env
+from terminal_runtime.tmux import socket_ref_from_tmux_env
 from terminal_runtime.tmux import tmux_base
 
 
@@ -57,6 +58,12 @@ def test_tmux_socket_name_helpers() -> None:
     assert socket_name_from_tmux_env("") is None
     assert socket_name_from_tmux_env("/tmp/tmux-1000/default,123,0") is None
     assert socket_name_from_tmux_env("/tmp/tmux-1000/ccb,123,0") == "ccb"
+
+
+def test_tmux_socket_ref_preserves_external_path_text() -> None:
+    assert socket_ref_from_tmux_env('/tmp/tmux-1000/ccb,123,0') == '/tmp/tmux-1000/ccb'
+    assert socket_ref_from_tmux_env('C:\\tmp\\tmux.sock,123,0') == 'C:\\tmp\\tmux.sock'
+    assert socket_ref_from_tmux_env('~/.tmux/demo.sock,123,0') == str(Path('~/.tmux/demo.sock').expanduser())
 
 
 def test_normalize_split_direction() -> None:

@@ -81,7 +81,7 @@ def socket_ref_from_tmux_env(value: str | None) -> str | None:
     if not socket_path:
         return None
     if "/" in socket_path or "\\" in socket_path:
-        return str(Path(socket_path).expanduser())
+        return expand_backend_path(socket_path)
     return normalize_socket_name(socket_path)
 
 

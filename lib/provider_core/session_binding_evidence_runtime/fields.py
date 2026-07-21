@@ -19,7 +19,7 @@ def session_ref(session, *, session_id_attr: str, session_path_attr: str) -> str
         return session_token
     session_log = str(getattr(session, session_path_attr, '') or '').strip()
     if session_log:
-        return str(Path(session_log).expanduser())
+        return _expanded_path_text(session_log)
     bound_session_file = session_file(session)
     if bound_session_file:
         return bound_session_file
@@ -127,7 +127,12 @@ def _backend_text(session, attr_name: str) -> str | None:
 def _expanded_path_text(text: str | None) -> str | None:
     if not text:
         return None
-    return str(Path(text).expanduser())
+    value = str(text).strip()
+    if not value:
+        return None
+    if value.startswith('~'):
+        return str(Path(value).expanduser())
+    return value
 
 
 def _session_data_pid(session) -> int | None:
