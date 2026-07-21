@@ -1,0 +1,18 @@
+{
+  "args": [
+    "psmux",
+    "-L",
+    "ccb-rmux-probe-13484-20260721t113657z",
+    "list-clients",
+    "-t",
+    "ccb-rmux-probe"
+  ],
+  "classification": "supported",
+  "notes": "",
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "/dev/pts/0: ccb-rmux-probe: probe-main [120x30] (utf8)\n\n",
+  "stdout_raw_sha256": "501b86d9f3a55902b2ab80c506d0501418c9757a8133d219f484d7620ed18561",
+  "stdout_raw_size": 56,
+  "timeout": 8.0
+}

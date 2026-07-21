@@ -1,0 +1,12 @@
+{
+  "args": [
+    "powershell",
+    "-NoProfile",
+    "-Command",
+    "cleanup rmux/psmux daemon by probe namespace"
+  ],
+  "namespace": "ccb-rmux-probe-2856-20260721t113441z",
+  "returncode": 4294967295,
+  "stderr": "Cannot overwrite variable PID because it is read-only or constant.\nAt line:1 char:182\n+ ... UX_PROBE_NAMESPACE*\" } | ForEach-Object { $pid = $_.ProcessId; Stop-P ...\n+                                               ~~~~~~~~~~~~~~~~~~~\n    + CategoryInfo          : WriteError: (PID:String) [], SessionStateUnauthorizedAccessException\n    + FullyQualifiedErrorId : VariableNotWritable\n \n",
+  "stdout": ""
+}

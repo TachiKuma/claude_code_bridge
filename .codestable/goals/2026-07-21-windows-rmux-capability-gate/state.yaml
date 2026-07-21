@@ -1,0 +1,31 @@
+schema_version: 2
+goal: "windows-rmux-capability-gate"
+status: complete
+objective: "在当前 Windows 环境执行 rmux/psmux capability gate，落盘 capability report，分析 blocking gaps，并决定 windows-rmux-native-backend 是否可进入后续 namespace lifecycle 实装。"
+start_point: "上一阶段 windows-rmux-native-backend 首个仓库内实现切片已 complete；后续阶段要求先运行 Windows 真机 psmux capability gate。"
+acceptance:
+  - "执行 scripts/probe_rmux_capability.py 并将 capability report 落盘到本 goal 目录。"
+  - "汇总 probe_status、rmux 版本、命令面结果、语义面结果和 blocking gaps。"
+  - "若 required 能力全部 supported 或有可接受 workaround，则记录 gate pass。"
+  - "若 rmux 缺失或 required gap 存在，则记录 blocked/pass 不成立的证据和下一步，不伪造通过。"
+  - "Task agent 对 capability gate 产物做功能验收。"
+non_goals:
+  - "不安装或升级全局 rmux/psmux。"
+  - "不在 capability gate 未通过时接入完整 ccbd namespace lifecycle。"
+  - "不实现 named pipe、Job Object 或 provider 进程树治理。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 2
+next_action: "Capability gate complete but not passed; 后续需先解决 psmux required gaps 或更换 backend 基座，再进入完整 ccbd namespace lifecycle 实装。"
+acceptance_report: "functional-acceptance.md"
+acceptance_final_iteration: "iterations/002.md"
+final_iteration_report: "iterations/002.md"
+final_acceptance_report: "functional-acceptance.md"
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-21"
