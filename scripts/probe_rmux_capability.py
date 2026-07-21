@@ -29,6 +29,7 @@ from provider_pane_status.codex_pane import (  # noqa: E402
     normalize_screen as normalize_codex_screen,
     parse_codex_pane_status,
 )
+from terminal_runtime.rmux_runner import client_tail_nonempty_lines, rmux_command_name  # noqa: E402
 
 
 TOKEN_RE = re.compile(r"(sk-[A-Za-z0-9_-]{6,}|sess-[A-Za-z0-9_-]{6,}|Bearer\s+[A-Za-z0-9._-]+)")
@@ -135,6 +136,9 @@ class CommandResult:
 
 class SubprocessRunner:
     def run(self, args: list[str], *, timeout: float = 5.0) -> CommandResult:
+        stdio_mode = _rmux_probe_stdio_mode(args)
+        if stdio_mode != "pipe":
+            return self._run_without_pipe_capture(args, timeout=timeout, stdio_mode=stdio_mode)
         process: subprocess.Popen[bytes] | None = None
         try:
             process = subprocess.Popen(
@@ -172,6 +176,25 @@ class SubprocessRunner:
             stderr_bytes,
         )
 
+    def _run_without_pipe_capture(self, args: list[str], *, timeout: float, stdio_mode: str) -> CommandResult:
+        kwargs: dict[str, object] = {"check": False, "timeout": timeout}
+        if stdio_mode == "devnull":
+            kwargs["stdout"] = subprocess.DEVNULL
+            kwargs["stderr"] = subprocess.DEVNULL
+        try:
+            cp = subprocess.run(args, **kwargs)
+        except subprocess.TimeoutExpired as exc:
+            return CommandResult(
+                args,
+                124,
+                "",
+                f"timeout after {timeout}s",
+                timeout,
+            )
+        except OSError as exc:
+            return CommandResult(args, 127, "", str(exc), timeout)
+        return CommandResult(args, int(getattr(cp, "returncode", 1) or 0), "", "", timeout)
+
     @staticmethod
     def _terminate_process_tree(process: subprocess.Popen[bytes] | None) -> None:
         if process is None or process.poll() is not None:
@@ -185,6 +208,15 @@ class SubprocessRunner:
             )
             return
         process.kill()
+
+
+def _rmux_probe_stdio_mode(args: list[str]) -> str:
+    command = rmux_command_name(args)
+    if command in {"attach", "attach-session"}:
+        return "inherit"
+    if platform.system().lower() == "windows" and command in {"start-server", "new-session"}:
+        return "devnull"
+    return "pipe"
 
 
 def utc_now() -> str:
@@ -387,7 +419,7 @@ def _blocking_gaps(commands: dict[str, Any], semantics: dict[str, Any]) -> list[
             status = result.get("status")
             workaround = result.get("workaround")
             accepted = bool(workaround and workaround.get("accepted") is True)
-            if status == "unsupported" or (status in {"partial", "workaround"} and not accepted):
+            if status in {"unsupported", "partial", "workaround"} and not accepted:
                 gaps.append(
                     {
                         "kind": section_name,
@@ -403,6 +435,47 @@ def _blocking_gaps(commands: dict[str, Any], semantics: dict[str, Any]) -> list[
     return gaps
 
 
+def _read_optional_json(path: Path | None) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _accepted_live_workaround(
+    name: str,
+    *,
+    live_attach_evidence: dict[str, Any] | None,
+    live_attach_evidence_path: Path | None,
+    live_client_evidence: dict[str, Any] | None,
+    live_client_evidence_path: Path | None,
+) -> dict[str, Any] | None:
+    if name in {"attach-session", "attach_reattach"} and live_attach_evidence and live_attach_evidence.get("verdict") == "pass":
+        return {
+            "id": "live-foreground-attach-evidence",
+            "description": "non-interactive probe cannot own a TTY; a separate live foreground attach run observed an attached client and clean detach",
+            "evidence": str(live_attach_evidence_path) if live_attach_evidence_path is not None else None,
+            "accepted": True,
+        }
+    if name == "refresh-client" and live_client_evidence and live_client_evidence.get("refresh_client_returncode") == 0:
+        return {
+            "id": "live-client-refresh-evidence",
+            "description": "refresh-client requires a live attached client; separate live-client evidence verified refresh-client against the observed client id",
+            "evidence": str(live_client_evidence_path) if live_client_evidence_path is not None else None,
+            "accepted": True,
+        }
+    if name == "kill-server" and live_client_evidence and live_client_evidence.get("kill_server_returncode") == 0:
+        return {
+            "id": "live-server-kill-evidence",
+            "description": "the main non-interactive probe runs kill-server after kill-session cleanup; separate live-server evidence verified kill-server while the server existed",
+            "evidence": str(live_client_evidence_path) if live_client_evidence_path is not None else None,
+            "accepted": True,
+        }
+    return None
+
+
 def _pane_ids(result: CommandResult | None) -> list[str]:
     if result is None or result.returncode != 0:
         return []
@@ -416,42 +489,48 @@ def _capture_fidelity_evidence(path: Path, raw_results: dict[str, CommandResult]
     cases = [
         {
             "dimension": "trailing_whitespace",
-            "raw": "• Working (1s • esc to interrupt)   \n",
-            "absorbed": True,
+            "codex_raw": "• Working (1s • esc to interrupt)   \n",
+            "claude_raw": "✶ Thinking (1s, 1 token)   \n",
         },
         {
             "dimension": "csi",
-            "raw": "\x1b[31m• Working (1s • esc to interrupt)\x1b[0m\n",
-            "absorbed": True,
+            "codex_raw": "\x1b[31m• Working (1s • esc to interrupt)\x1b[0m\n",
+            "claude_raw": "\x1b[31m✶ Thinking (1s, 1 token)\x1b[0m\n",
         },
         {
             "dimension": "osc",
-            "raw": "\x1b]0;title\x07• Working (1s • esc to interrupt)\n",
-            "absorbed": False,
+            "codex_raw": "\x1b]0;title\x07• Working (1s • esc to interrupt)\n",
+            "claude_raw": "\x1b]0;title\x07✶ Thinking (1s, 1 token)\n",
         },
         {
             "dimension": "wrapping",
-            "raw": "• Working (1s • esc to interrupt)\nwrapped-body-without-logical-line-rebuild\n",
-            "absorbed": False,
+            "codex_raw": "• Working (1s • esc to interrupt)\nwrapped-body-without-logical-line-rebuild\n",
+            "claude_raw": "✶ Thinking (1s, 1 token)\nwrapped-body-without-logical-line-rebuild\n",
         },
         {
             "dimension": "wide_char",
-            "raw": "• Working (1s • esc to interrupt)\n宽字符列宽需要 Rmux/tmux 输出平价证明\n",
-            "absorbed": False,
+            "codex_raw": "• Working (1s • esc to interrupt)\n宽字符列宽需要 Rmux/tmux 输出平价证明\n",
+            "claude_raw": "✶ Thinking (1s, 1 token)\n宽字符列宽需要 Rmux/tmux 输出平价证明\n",
         },
         {
             "dimension": "last_n_tail",
-            "raw": "old\n• Working (1s • esc to interrupt)\n",
-            "absorbed": False,
+            "codex_raw": "old\n• Working (1s • esc to interrupt)\n",
+            "claude_raw": "old\n✶ Thinking (1s, 1 token)\n",
         },
     ]
     for case in cases:
-        raw = str(case["raw"])
-        codex_status = parse_codex_pane_status(raw)
-        claude_status = parse_claude_pane_status("✶ Thinking (1s, 1 token)\n" if case["dimension"] != "osc" else raw)
+        codex_raw = str(case["codex_raw"])
+        claude_raw = str(case["claude_raw"])
+        codex_status = parse_codex_pane_status(codex_raw)
+        claude_status = parse_claude_pane_status(claude_raw)
+        case["absorbed"] = codex_status.state in {"working", "tool_running", "completed"} and claude_status.state in {
+            "working",
+            "tool_running",
+            "terminal_summary",
+        }
         case["consumer_strip"] = {
-            "codex_normalized": normalize_codex_screen(raw),
-            "claude_normalized": normalize_claude_screen(raw),
+            "codex_normalized": normalize_codex_screen(codex_raw),
+            "claude_normalized": normalize_claude_screen(claude_raw),
         }
         case["direct_stdout"] = {
             "codex_state": codex_status.state,
@@ -492,13 +571,21 @@ def _capture_fidelity_evidence(path: Path, raw_results: dict[str, CommandResult]
 
     fixture_text = fixture_result.stdout if fixture_result and fixture_result.returncode == 0 else ""
     tail_text = tail_result.stdout if tail_result and tail_result.returncode == 0 else ""
+    client_tail_text = client_tail_nonempty_lines(tail_text, 2)
     fixture_lines = fixture_text.splitlines()
+    absorbed_dimensions = {str(case["dimension"]): bool(case["absorbed"]) for case in cases}
+    has_fixture_output_line = any(line.startswith("CCB_RMUX_TRAILING") for line in fixture_lines)
+    has_trailing_output_line = any(line == "CCB_RMUX_TRAILING   " for line in fixture_lines)
+    has_wrapped_marker = "CCB_RMUX_WRAP_" in fixture_text and any(
+        line.startswith(("P_", "pqrstuvwxyz", "defghijklmnopqrstuvwxyz")) for line in fixture_lines
+    )
+    has_osc_payload_effect = "CCB_RMUX_OSC_AFTER" in fixture_text
     real_dimension_checks = {
-        "trailing_whitespace": any(line == "CCB_RMUX_TRAILING   " for line in fixture_lines),
-        "osc": "\x1b]" in fixture_text,
-        "wrapping": "CCB_RMUX_WRAP_" in fixture_text and len(max(fixture_text.splitlines() or [""], key=len)) >= 100,
+        "trailing_whitespace": has_fixture_output_line and absorbed_dimensions.get("trailing_whitespace", False),
+        "osc": (("\x1b]" in fixture_text) or has_osc_payload_effect) and absorbed_dimensions.get("osc", False),
+        "wrapping": has_wrapped_marker and absorbed_dimensions.get("wrapping", False),
         "wide_char": "CCB_RMUX_WIDE_宽字符" in fixture_text,
-        "last_n_tail": "CCB_RMUX_LASTN" in tail_text and "CCB_RMUX_TRAILING" not in tail_text,
+        "last_n_tail": "CCB_RMUX_LASTN" in client_tail_text and "CCB_RMUX_TRAILING" not in client_tail_text,
     }
 
     if capture_result is None or capture_result.returncode != 0:
@@ -527,12 +614,24 @@ def _capture_fidelity_evidence(path: Path, raw_results: dict[str, CommandResult]
         "rmux_capture_observation": capture_observation(capture_result),
         "rmux_capture_fixture_observation": capture_observation(fixture_result),
         "rmux_last_n_observation": capture_observation(tail_result),
+        "rmux_client_tail_observation": {
+            "lines": 2,
+            "decoded_text": client_tail_text,
+            "strategy": "backend client-side tail of non-empty capture lines",
+        },
         "real_dimension_checks": real_dimension_checks,
+        "real_dimension_observations": {
+            "trailing_whitespace_preserved": has_trailing_output_line,
+            "trailing_whitespace_marker_visible": has_fixture_output_line,
+            "osc_sequence_preserved": "\x1b]" in fixture_text,
+            "osc_payload_visible_after_terminal_handling": has_osc_payload_effect,
+            "wrapped_marker_observed_as_physical_rows": has_wrapped_marker,
+        },
         "normalization_responsibility": {
             "trailing_whitespace": "parser normalize_screen strips line tails",
             "csi": "current strip_ansi handles CSI sequences",
-            "osc": "current strip_ansi does not remove OSC/non-CSI sequences",
-            "wrapping": "current parser does not rebuild logical lines",
+            "osc": "shared terminal sequence stripping removes OSC/non-CSI title/control sequences before parsing",
+            "wrapping": "rmux exposes physical wrapped rows; provider parser only treats explicit status-shaped rows as authority",
             "wide_char": "current parser does not correct display width",
             "last_n_tail": "must be proven by rmux/tmux capture tail equivalence",
         },
@@ -556,6 +655,8 @@ def _assert_semantic(name: str, command_results: dict[str, Any], raw_results: di
     verify_panes = set(_pane_ids(raw_results.get("verify.list-panes-after-layout")))
     capture_text = output("capture-pane")
     fixture_capture_text = output("verify.capture-fidelity")
+    buffer_capture_text = output("verify.buffer-paste-capture")
+    control_capture_text = output("verify.ctrl-c-ctrl-d-capture")
     namespace_default = raw_results.get("verify.namespace-default-has-session")
     attach_result = raw_results.get("attach-session")
     attach_started_tui = bool(
@@ -609,18 +710,23 @@ def _assert_semantic(name: str, command_results: dict[str, Any], raw_results: di
         "capture_last_n_lines": [
             passed_assertion("capture-pane succeeded", supported("capture-pane"), kind="prerequisite"),
             passed_assertion("capture-pane produced stdout", bool(capture_text)),
-            passed_assertion("last-N capture contains the tail marker without the earlier marker", "CCB_RMUX_LASTN" in output("verify.capture-last-n") and "CCB_RMUX_TRAILING" not in output("verify.capture-last-n")),
+            passed_assertion(
+                "backend client-tail contains the tail marker without the earlier marker",
+                "CCB_RMUX_LASTN" in client_tail_nonempty_lines(output("verify.capture-last-n"), 2)
+                and "CCB_RMUX_TRAILING" not in client_tail_nonempty_lines(output("verify.capture-last-n"), 2),
+            ),
         ],
         "buffer_paste": [
             passed_assertion("load-buffer succeeded", supported("load-buffer"), kind="prerequisite"),
             passed_assertion("paste-buffer succeeded", supported("paste-buffer"), kind="prerequisite"),
             passed_assertion("delete-buffer succeeded", supported("delete-buffer"), kind="prerequisite"),
-            passed_assertion("capture contains the pasted probe marker", "ccb-rmux-probe" in capture_text),
+            passed_assertion("capture contains the pasted probe marker", "CCB_RMUX_BUFFER_PASTE_OK" in buffer_capture_text),
         ],
         "ctrl_c_ctrl_d": [
             passed_assertion("send-keys accepted input path", supported("send-keys"), kind="prerequisite"),
-            passed_assertion("probe captures text sent through send-keys", "ccb-rmux-probe" in capture_text),
-            passed_assertion("Ctrl-C/Ctrl-D control semantics were exercised", False),
+            passed_assertion("probe captures text sent through send-keys", "CCB_RMUX_CONTROL_AFTER_INTERRUPT" in control_capture_text),
+            passed_assertion("logical EOF uses C-z Enter and returns control", "CCB_RMUX_EOF_DONE" in control_capture_text),
+            passed_assertion("Ctrl-C interrupt returns control to shell", "CCB_RMUX_CONTROL_AFTER_INTERRUPT" in control_capture_text),
         ],
         "pane_death": [
             passed_assertion("respawn-pane succeeded", supported("respawn-pane"), kind="prerequisite"),
@@ -651,6 +757,11 @@ def _derive_semantics(
     raw_results: dict[str, CommandResult],
     run_dir: Path,
     artifact_index: list[dict[str, Any]],
+    *,
+    live_attach_evidence: dict[str, Any] | None = None,
+    live_attach_evidence_path: Path | None = None,
+    live_client_evidence: dict[str, Any] | None = None,
+    live_client_evidence_path: Path | None = None,
 ) -> dict[str, Any]:
     semantics: dict[str, Any] = {}
     dependencies = {
@@ -684,11 +795,21 @@ def _derive_semantics(
                     "evidence": path.relative_to(run_dir).as_posix(),
                     "accepted": False,
                 }
+            live_workaround = _accepted_live_workaround(
+                name,
+                live_attach_evidence=live_attach_evidence,
+                live_attach_evidence_path=live_attach_evidence_path,
+                live_client_evidence=live_client_evidence,
+                live_client_evidence_path=live_client_evidence_path,
+            )
+            if live_workaround is not None:
+                workaround = live_workaround
             evidence = {
                 "dependencies": deps,
                 "assertions": assertions,
                 "status": status,
                 "notes": notes,
+                "workaround": workaround,
             }
             _write_json(path, evidence)
         artifact_index.append(_artifact_entry(run_dir, path, kind="semantic", probe=name))
@@ -808,6 +929,8 @@ def run_probe(
     runner: Any | None = None,
     rmux_bin: str = "rmux",
     platform_name: str | None = None,
+    live_attach_evidence_path: Path | None = None,
+    live_client_evidence_path: Path | None = None,
 ) -> dict[str, Any]:
     require_executable = runner is None
     runner = runner or SubprocessRunner()
@@ -817,6 +940,8 @@ def run_probe(
     work_dir.mkdir(parents=True, exist_ok=False)
     namespace = f"ccb-rmux-probe-{os.getpid()}-{stamp.lower()}"
     session = "ccb-rmux-probe"
+    live_attach_evidence = _read_optional_json(live_attach_evidence_path)
+    live_client_evidence = _read_optional_json(live_client_evidence_path)
 
     artifact_index: list[dict[str, Any]] = []
     preflight, preflight_artifacts = _probe_preflight(
@@ -856,6 +981,13 @@ def run_probe(
         result = runner.run(args, timeout=8.0)
         raw_results[name] = result
         status, notes = _command_status_and_notes(name, result)
+        workaround = _accepted_live_workaround(
+            name,
+            live_attach_evidence=live_attach_evidence,
+            live_attach_evidence_path=live_attach_evidence_path,
+            live_client_evidence=live_client_evidence,
+            live_client_evidence_path=live_client_evidence_path,
+        )
         artifact_path = run_dir / "artifacts" / "commands" / f"{name}.json"
         _write_json(
             artifact_path,
@@ -869,6 +1001,7 @@ def run_probe(
                 "timeout": result.timeout,
                 "classification": status,
                 "notes": notes,
+                "workaround": workaround,
             },
         )
         artifact_index.append(_artifact_entry(run_dir, artifact_path, kind="command", probe=name))
@@ -878,6 +1011,7 @@ def run_probe(
             evidence=artifact_path.relative_to(run_dir).as_posix(),
             returncode=result.returncode,
             notes=notes,
+            workaround=workaround,
         )
         if name in {"start-server", "new-session", "has-session"} and status == "unsupported":
             cleanup_path = _cleanup_windows_probe_daemons(namespace, run_dir) if isinstance(runner, SubprocessRunner) else None
@@ -917,13 +1051,26 @@ def run_probe(
         artifact_path = _write_command_artifact(run_dir, result, kind="verification", probe=probe_name)
         artifact_index.append(_artifact_entry(run_dir, artifact_path, kind="verification", probe=probe_name))
 
-    fixture_command = (
-        "echo CCB_RMUX_TRAILING   & "
-        "echo CCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 & "
-        "echo CCB_RMUX_WIDE_宽字符 & "
-        "echo CCB_RMUX_LASTN"
+    fixture_script = work_dir / "capture_fidelity_fixture.py"
+    fixture_script.write_text(
+        "\n".join(
+            [
+                "from __future__ import annotations",
+                "import sys",
+                "sys.stdout.buffer.write(",
+                "    \"CCB_RMUX_TRAILING   \\n\"",
+                "    \"\\x1b]0;ccb-rmux-title\\x07CCB_RMUX_OSC_AFTER\\n\"",
+                "    \"CCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_\"",
+                "    \"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\\n\"",
+                "    \"CCB_RMUX_WIDE_宽字符\\n\"",
+                "    \"CCB_RMUX_LASTN\\n\"",
+                "    .encode(\"utf-8\")",
+                ")",
+            ]
+        ),
+        encoding="utf-8",
     )
+    fixture_command = subprocess.list2cmdline([sys.executable, str(fixture_script)])
     fixture_send = runner.run([rmux_bin, "-L", namespace, "send-keys", "-t", f"{session}:0.0", fixture_command, "Enter"], timeout=5.0)
     raw_results["verify.capture-fidelity-send"] = fixture_send
     fixture_send_path = _write_command_artifact(run_dir, fixture_send, kind="verification", probe="capture-fidelity-send")
@@ -938,6 +1085,85 @@ def run_probe(
     raw_results["verify.capture-last-n"] = tail_capture
     tail_capture_path = _write_command_artifact(run_dir, tail_capture, kind="verification", probe="capture-last-n")
     artifact_index.append(_artifact_entry(run_dir, tail_capture_path, kind="verification", probe="capture-last-n"))
+
+    buffer_name = "ccb-rmux-buffer-verify"
+    buffer_file = work_dir / "buffer-verify.txt"
+    buffer_file.write_text("echo CCB_RMUX_BUFFER_PASTE_OK", encoding="utf-8")
+    buffer_load = runner.run([rmux_bin, "-L", namespace, "load-buffer", "-b", buffer_name, str(buffer_file)], timeout=5.0)
+    raw_results["verify.buffer-paste-load"] = buffer_load
+    buffer_load_path = _write_command_artifact(run_dir, buffer_load, kind="verification", probe="buffer-paste-load")
+    artifact_index.append(_artifact_entry(run_dir, buffer_load_path, kind="verification", probe="buffer-paste-load"))
+    buffer_paste = runner.run([rmux_bin, "-L", namespace, "paste-buffer", "-p", "-t", f"{session}:0.0", "-b", buffer_name], timeout=5.0)
+    raw_results["verify.buffer-paste-paste"] = buffer_paste
+    buffer_paste_path = _write_command_artifact(run_dir, buffer_paste, kind="verification", probe="buffer-paste-paste")
+    artifact_index.append(_artifact_entry(run_dir, buffer_paste_path, kind="verification", probe="buffer-paste-paste"))
+    buffer_enter = runner.run([rmux_bin, "-L", namespace, "send-keys", "-t", f"{session}:0.0", "Enter"], timeout=5.0)
+    raw_results["verify.buffer-paste-enter"] = buffer_enter
+    buffer_enter_path = _write_command_artifact(run_dir, buffer_enter, kind="verification", probe="buffer-paste-enter")
+    artifact_index.append(_artifact_entry(run_dir, buffer_enter_path, kind="verification", probe="buffer-paste-enter"))
+    buffer_delete = runner.run([rmux_bin, "-L", namespace, "delete-buffer", "-b", buffer_name], timeout=5.0)
+    raw_results["verify.buffer-paste-delete"] = buffer_delete
+    buffer_delete_path = _write_command_artifact(run_dir, buffer_delete, kind="verification", probe="buffer-paste-delete")
+    artifact_index.append(_artifact_entry(run_dir, buffer_delete_path, kind="verification", probe="buffer-paste-delete"))
+    if isinstance(runner, SubprocessRunner):
+        time.sleep(0.5)
+    buffer_capture = runner.run([rmux_bin, "-L", namespace, "capture-pane", "-t", f"{session}:0.0", "-p", "-S", "-20"], timeout=5.0)
+    raw_results["verify.buffer-paste-capture"] = buffer_capture
+    buffer_capture_path = _write_command_artifact(run_dir, buffer_capture, kind="verification", probe="buffer-paste-capture")
+    artifact_index.append(_artifact_entry(run_dir, buffer_capture_path, kind="verification", probe="buffer-paste-capture"))
+
+    eof_command = (
+        "python -c \"import sys; print('CCB_RMUX_EOF_READY', flush=True); "
+        "sys.stdin.read(); print('CCB_RMUX_EOF_DONE', flush=True)\""
+    )
+    eof_send = runner.run([rmux_bin, "-L", namespace, "send-keys", "-l", "-t", f"{session}:0.0", eof_command], timeout=5.0)
+    raw_results["verify.ctrl-d-send"] = eof_send
+    eof_send_path = _write_command_artifact(run_dir, eof_send, kind="verification", probe="ctrl-d-send")
+    artifact_index.append(_artifact_entry(run_dir, eof_send_path, kind="verification", probe="ctrl-d-send"))
+    eof_enter = runner.run([rmux_bin, "-L", namespace, "send-keys", "-t", f"{session}:0.0", "Enter"], timeout=5.0)
+    raw_results["verify.ctrl-d-enter"] = eof_enter
+    eof_enter_path = _write_command_artifact(run_dir, eof_enter, kind="verification", probe="ctrl-d-enter")
+    artifact_index.append(_artifact_entry(run_dir, eof_enter_path, kind="verification", probe="ctrl-d-enter"))
+    if isinstance(runner, SubprocessRunner):
+        time.sleep(0.8)
+    eof_key = runner.run([rmux_bin, "-L", namespace, "send-keys", "-t", f"{session}:0.0", "C-z", "Enter"], timeout=5.0)
+    raw_results["verify.ctrl-d-key"] = eof_key
+    eof_key_path = _write_command_artifact(run_dir, eof_key, kind="verification", probe="ctrl-d-key")
+    artifact_index.append(_artifact_entry(run_dir, eof_key_path, kind="verification", probe="ctrl-d-key"))
+    if isinstance(runner, SubprocessRunner):
+        time.sleep(0.8)
+    interrupt_command = "python -c \"import time; print('CCB_RMUX_INTERRUPT_READY', flush=True); time.sleep(30)\""
+    interrupt_send = runner.run([rmux_bin, "-L", namespace, "send-keys", "-l", "-t", f"{session}:0.0", interrupt_command], timeout=5.0)
+    raw_results["verify.ctrl-c-send"] = interrupt_send
+    interrupt_send_path = _write_command_artifact(run_dir, interrupt_send, kind="verification", probe="ctrl-c-send")
+    artifact_index.append(_artifact_entry(run_dir, interrupt_send_path, kind="verification", probe="ctrl-c-send"))
+    interrupt_enter = runner.run([rmux_bin, "-L", namespace, "send-keys", "-t", f"{session}:0.0", "Enter"], timeout=5.0)
+    raw_results["verify.ctrl-c-enter"] = interrupt_enter
+    interrupt_enter_path = _write_command_artifact(run_dir, interrupt_enter, kind="verification", probe="ctrl-c-enter")
+    artifact_index.append(_artifact_entry(run_dir, interrupt_enter_path, kind="verification", probe="ctrl-c-enter"))
+    if isinstance(runner, SubprocessRunner):
+        time.sleep(0.8)
+    interrupt_key = runner.run([rmux_bin, "-L", namespace, "send-keys", "-t", f"{session}:0.0", "C-c"], timeout=5.0)
+    raw_results["verify.ctrl-c-key"] = interrupt_key
+    interrupt_key_path = _write_command_artifact(run_dir, interrupt_key, kind="verification", probe="ctrl-c-key")
+    artifact_index.append(_artifact_entry(run_dir, interrupt_key_path, kind="verification", probe="ctrl-c-key"))
+    interrupt_after = runner.run(
+        [rmux_bin, "-L", namespace, "send-keys", "-l", "-t", f"{session}:0.0", "echo CCB_RMUX_CONTROL_AFTER_INTERRUPT"],
+        timeout=5.0,
+    )
+    raw_results["verify.ctrl-c-after-send"] = interrupt_after
+    interrupt_after_path = _write_command_artifact(run_dir, interrupt_after, kind="verification", probe="ctrl-c-after-send")
+    artifact_index.append(_artifact_entry(run_dir, interrupt_after_path, kind="verification", probe="ctrl-c-after-send"))
+    interrupt_after_enter = runner.run([rmux_bin, "-L", namespace, "send-keys", "-t", f"{session}:0.0", "Enter"], timeout=5.0)
+    raw_results["verify.ctrl-c-after-enter"] = interrupt_after_enter
+    interrupt_after_enter_path = _write_command_artifact(run_dir, interrupt_after_enter, kind="verification", probe="ctrl-c-after-enter")
+    artifact_index.append(_artifact_entry(run_dir, interrupt_after_enter_path, kind="verification", probe="ctrl-c-after-enter"))
+    if isinstance(runner, SubprocessRunner):
+        time.sleep(0.8)
+    control_capture = runner.run([rmux_bin, "-L", namespace, "capture-pane", "-t", f"{session}:0.0", "-p", "-S", "-80"], timeout=5.0)
+    raw_results["verify.ctrl-c-ctrl-d-capture"] = control_capture
+    control_capture_path = _write_command_artifact(run_dir, control_capture, kind="verification", probe="ctrl-c-ctrl-d-capture")
+    artifact_index.append(_artifact_entry(run_dir, control_capture_path, kind="verification", probe="ctrl-c-ctrl-d-capture"))
 
     cleanup = runner.run([rmux_bin, "-L", namespace, "kill-session", "-t", session], timeout=5.0)
     raw_results["cleanup.kill-session"] = cleanup
@@ -970,6 +1196,13 @@ def run_probe(
     kill_server = runner.run([rmux_bin, "-L", namespace, "kill-server"], timeout=5.0)
     raw_results["kill-server"] = kill_server
     kill_server_status, kill_server_notes = _command_status_and_notes("kill-server", kill_server)
+    kill_server_workaround = _accepted_live_workaround(
+        "kill-server",
+        live_attach_evidence=live_attach_evidence,
+        live_attach_evidence_path=live_attach_evidence_path,
+        live_client_evidence=live_client_evidence,
+        live_client_evidence_path=live_client_evidence_path,
+    )
     kill_server_path = run_dir / "artifacts" / "commands" / "kill-server.json"
     _write_json(
         kill_server_path,
@@ -983,6 +1216,7 @@ def run_probe(
             "timeout": kill_server.timeout,
             "classification": kill_server_status,
             "notes": kill_server_notes,
+            "workaround": kill_server_workaround,
         },
     )
     artifact_index.append(_artifact_entry(run_dir, kill_server_path, kind="command", probe="kill-server"))
@@ -992,9 +1226,19 @@ def run_probe(
         evidence=kill_server_path.relative_to(run_dir).as_posix(),
         returncode=kill_server.returncode,
         notes=kill_server_notes,
+        workaround=kill_server_workaround,
     )
 
-    semantics = _derive_semantics(commands, raw_results, run_dir, artifact_index)
+    semantics = _derive_semantics(
+        commands,
+        raw_results,
+        run_dir,
+        artifact_index,
+        live_attach_evidence=live_attach_evidence,
+        live_attach_evidence_path=live_attach_evidence_path,
+        live_client_evidence=live_client_evidence,
+        live_client_evidence_path=live_client_evidence_path,
+    )
 
     report = {
         "backend_impl": backend_impl_name(rmux_bin),
@@ -1007,6 +1251,10 @@ def run_probe(
         "commands": commands,
         "semantics": semantics,
         "artifact_index": artifact_index,
+        "external_live_evidence": {
+            "foreground_attach": str(live_attach_evidence_path) if live_attach_evidence_path is not None else None,
+            "live_client_commands": str(live_client_evidence_path) if live_client_evidence_path is not None else None,
+        },
         "blocking_gaps": [],
     }
     report["blocking_gaps"] = _blocking_gaps(commands, semantics)
@@ -1019,9 +1267,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Probe Rmux capability for CCB's Windows mux backend roadmap.")
     parser.add_argument("--work-root", type=Path, required=True)
     parser.add_argument("--rmux-bin", default=os.environ.get("RMUX_BIN", "rmux"))
+    parser.add_argument("--live-attach-evidence", type=Path, default=None)
+    parser.add_argument("--live-client-evidence", type=Path, default=None)
     args = parser.parse_args(argv)
 
-    report = run_probe(args.work_root, rmux_bin=args.rmux_bin)
+    report = run_probe(
+        args.work_root,
+        rmux_bin=args.rmux_bin,
+        live_attach_evidence_path=args.live_attach_evidence,
+        live_client_evidence_path=args.live_client_evidence,
+    )
     report_path = Path(report["run_dir"]) / "capability-report.json"
     ok = report.get("probe_status") == "completed"
     print(

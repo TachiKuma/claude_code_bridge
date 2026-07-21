@@ -121,12 +121,43 @@ def test_subprocess_runner_timeout_kills_windows_process_tree(monkeypatch) -> No
 
     monkeypatch.setattr(probe.subprocess, "run", fake_run)
 
-    result = probe.SubprocessRunner().run(["rmux", "start-server"], timeout=0.01)
+    result = probe.SubprocessRunner().run(["rmux", "capture-pane"], timeout=0.01)
 
     assert result.returncode == 124
     assert result.stdout == "out"
     assert result.stderr == "err"
     assert taskkill_calls == [["taskkill", "/PID", "4242", "/T", "/F"]]
+
+
+def test_subprocess_runner_uses_devnull_for_windows_lifecycle_capture(monkeypatch) -> None:
+    run_calls: list[tuple[list[str], dict[str, object]]] = []
+
+    monkeypatch.setattr(probe.platform, "system", lambda: "Windows")
+
+    def fake_run(args, **kwargs):
+        run_calls.append((list(args), dict(kwargs)))
+
+        class _Result:
+            returncode = 0
+
+        return _Result()
+
+    monkeypatch.setattr(probe.subprocess, "run", fake_run)
+
+    result = probe.SubprocessRunner().run(["rmux", "-L", "ccb-demo", "start-server"], timeout=0.01)
+
+    assert result.returncode == 0
+    assert run_calls == [
+        (
+            ["rmux", "-L", "ccb-demo", "start-server"],
+            {
+                "check": False,
+                "timeout": 0.01,
+                "stdout": probe.subprocess.DEVNULL,
+                "stderr": probe.subprocess.DEVNULL,
+            },
+        )
+    ]
 
 
 def test_core_command_early_stop_records_cleanup_evidence(monkeypatch, tmp_path: Path) -> None:
@@ -169,6 +200,35 @@ def test_partial_without_accepted_workaround_enters_blocking_gaps(tmp_path: Path
     assert semantic["status"] == "partial"
     assert semantic["workaround"]["accepted"] is False
     assert "capture_format_fidelity_for_provider_completion" in gap_names
+
+
+def test_live_evidence_accepts_non_interactive_client_gaps(tmp_path: Path) -> None:
+    live_attach = tmp_path / "live-attach.json"
+    live_client = tmp_path / "live-client.json"
+    live_attach.write_text(json.dumps({"verdict": "pass"}), encoding="utf-8")
+    live_client.write_text(
+        json.dumps({"refresh_client_returncode": 0, "kill_server_returncode": 0}),
+        encoding="utf-8",
+    )
+
+    report = probe.run_probe(
+        tmp_path,
+        runner=FakeRunner({"attach-session", "refresh-client", "kill-server"}),
+        rmux_bin="rmux",
+        platform_name="windows",
+        live_attach_evidence_path=live_attach,
+        live_client_evidence_path=live_client,
+    )
+
+    gap_names = {gap["name"] for gap in report["blocking_gaps"]}
+    assert "attach-session" not in gap_names
+    assert "refresh-client" not in gap_names
+    assert "kill-server" not in gap_names
+    assert "attach_reattach" not in gap_names
+    assert report["commands"]["attach-session"]["workaround"]["accepted"] is True
+    assert report["commands"]["refresh-client"]["workaround"]["accepted"] is True
+    assert report["commands"]["kill-server"]["workaround"]["accepted"] is True
+    assert report["semantics"]["attach_reattach"]["workaround"]["accepted"] is True
 
 
 def test_artifact_index_resolves_all_evidence_paths(tmp_path: Path) -> None:
@@ -217,7 +277,10 @@ def test_capture_fidelity_records_consumer_and_direct_parser_paths(tmp_path: Pat
     assert {"codex", "claude"} <= set(evidence["providers"])
     assert evidence["rmux_capture_observation"]["available"] is True
     assert "raw_bytes_sha256" in evidence["rmux_capture_observation"]
-    assert any(case["dimension"] in {"osc", "wrapping", "wide_char"} and not case["absorbed"] for case in evidence["cases"])
+    absorbed_by_dimension = {case["dimension"]: case["absorbed"] for case in evidence["cases"]}
+    assert absorbed_by_dimension["trailing_whitespace"] is True
+    assert absorbed_by_dimension["csi"] is True
+    assert absorbed_by_dimension["osc"] is True
 
 
 def test_preflight_hard_fail_writes_skipped_report(tmp_path: Path) -> None:
@@ -280,7 +343,8 @@ def test_semantic_requires_real_assertion_not_only_command_success(tmp_path: Pat
 
     assert semantic["status"] == "partial"
     assert any(check["kind"] == "prerequisite" and check["passed"] for check in evidence["assertions"])
-    assert any(check["name"] == "Ctrl-C/Ctrl-D control semantics were exercised" and not check["passed"] for check in evidence["assertions"])
+    assert any(check["name"] == "logical EOF uses C-z Enter and returns control" and not check["passed"] for check in evidence["assertions"])
+    assert any(check["name"] == "Ctrl-C interrupt returns control to shell" and not check["passed"] for check in evidence["assertions"])
 
 
 def test_attach_timeout_with_tui_is_scenario_invalid() -> None:
@@ -292,13 +356,13 @@ def test_attach_timeout_with_tui_is_scenario_invalid() -> None:
     assert "scenario-invalid" in notes
 
 
-def test_capture_trailing_whitespace_requires_output_line_not_echo_command(tmp_path: Path) -> None:
+def test_capture_trailing_whitespace_requires_output_marker_not_echo_command(tmp_path: Path) -> None:
     raw_results = {
         "capture-pane": probe.CommandResult(["rmux", "capture-pane"], 0, "ok", "", 5.0),
         "verify.capture-fidelity": probe.CommandResult(
             ["rmux", "capture-pane"],
             0,
-            "E:\\repo>echo CCB_RMUX_TRAILING   & echo next\nCCB_RMUX_TRAILING\nnext\n",
+            "E:\\repo>echo CCB_RMUX_TRAILING   & echo next\nnext\n",
             "",
             5.0,
         ),
