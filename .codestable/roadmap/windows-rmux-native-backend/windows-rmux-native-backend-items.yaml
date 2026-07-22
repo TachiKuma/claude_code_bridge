@@ -21,7 +21,7 @@ items:
   - slug: backend-resolver-opt-in-contract
     description: 定义 Rmux opt-in 配置、平台默认、auto 探测、fallback 和 fail-fast 语义，以及 diagnostics selection result
     depends_on: [rmux-route-approval]
-    status: in-progress
+    status: done
     feature: 2026-07-19-backend-resolver-opt-in-contract
     minimal_loop: false
     notes: 覆盖 backend_selection.py 当前 tmux-only 分支；显式 rmux 缺失或未批准时必须 fail fast，不能静默 fallback

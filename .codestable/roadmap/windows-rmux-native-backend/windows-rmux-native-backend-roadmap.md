@@ -893,8 +893,8 @@ class RpcTransportAuthError(Exception):
 18. **ccbd-windows-tcp-loopback-transport** — 实现 Windows TCP loopback adapter（127.0.0.1 + OS 端口 + same-user token 握手，token 文件 icacls 收敛、无法收敛 fail-fast），替换 Unix peer-path 鉴权与 inode stale 判定。
    - 所属模块：CCBD Control Plane Transport
    - 依赖：`ccbd-control-plane-transport-seam`
-   - 状态：planned
-   - 备注：v8.0.16 另一 checkout 的 TCP 方案仅作蓝本，v8.2.1 重验；备选 named pipe。
+   - 状态：accepted
+   - 备注：2026-07-22 accepted：Windows TCP loopback adapter 已落地，factory 默认选择、endpoint descriptor、same-user token ACL fail-fast、pre-handler handshake、bootstrap self-ping、redaction guard 与 Unix fallback 回归均通过 QA；真实多用户 ACL / 防火墙策略保留为 residual risk，备选 named pipe 仍只作为 documented fallback / ADR 候选。
 
 19. **accelerator-transport-windows-guard** — 修复 runtime_accelerator 控制面 Windows AF_UNIX AttributeError，使 `ccb ask` 的 codex accelerator caller 不崩。
    - 所属模块：Accelerator Transport Guard

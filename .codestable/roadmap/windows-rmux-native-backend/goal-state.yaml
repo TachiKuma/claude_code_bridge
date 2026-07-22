@@ -1,14 +1,14 @@
 roadmap: windows-rmux-native-backend
-status: handoff
-handoff_reason: "ReviewBlocked: ccbd-windows-tcp-loopback-transport independent review completed with blocking findings; OCR lane failed after timeout."
-handoff_next: "Run implementation review-fix for ccbd-windows-tcp-loopback-transport: fix Windows no-endpoint default TCP selection and prove token ACL convergence; address endpoint cleanup ownership before rerunning cs-code-review."
-handoff_resolution: "Resolved 2026-07-22: visible Task agent review ran as 019f86c0-3226-7162-ad09-b0b4c3bb2b0f; prior IndependentReviewUnavailable handoff is superseded by review findings in ccbd-windows-tcp-loopback-transport-review.md."
+status: running
+handoff_reason: null
+handoff_next: null
+handoff_resolution: "Resolved 2026-07-22: ccbd-windows-tcp-loopback-transport code review passed in round 5 via Task agent 019f8758-4201-7ff2-bbcf-96f7919c6bb1; REV-009/REV-010 and follow-up review-fix findings are closed. Restored to ready-to-dispatch so the goal driver can resume the feature loop at QA."
 resume_decision: "Owner requested cs-goal recovery on 2026-07-21: resume from IndependentReviewUnavailable handoff, continue accelerator-transport-windows-guard toward QA, then continue goal features toward ccbd-windows-full-chain-smoke."
 resume_note: "Handoff resolved 2026-07-20 (approval-report.md Decision History): owner split out-of-scope Windows import/locking/atomic compat into a separate feature (pending-split/windows-runtime-import-lock-compat) and separately accepted the mobile_gateway.terminal -> import fcntl collection gap as CMD-005 documented baseline. QA for ccbd-control-plane-transport-seam is runnable; record CMD-005 as documented baseline and real Unix AF_UNIX as compatibility residual, then continue to ccbd-windows-tcp-loopback-transport."
 baseline_ref: eb273de8e1c1839451f3ff6cc583672187bd75d9
-driver_kind: null
-driver_id: null
-driver_observation: "ccbd-windows-tcp-loopback-transport review completed with blocking findings; waiting for review-fix"
+driver_kind: host-agent
+driver_id: 019f877b-bfcf-7d60-ae5e-31df56f2f621
+driver_observation: "multi_agent_v1.wait_agent:019f877b-bfcf-7d60-ae5e-31df56f2f621"
 driver_reviewer_capability: confirmed
 previous_driver_id: 019f85a0-5c91-7f92-a5d0-3daaa94a6e31
 previous_driver_resolution: "not_found via multi_agent_v1.wait_agent on 2026-07-21; reset for redispatch after code review passed"
@@ -17,7 +17,7 @@ acceptance_authorization: approved
 acceptance_authorization_ref: approval-report.md#goal-acceptance
 commit_authorization: approved
 commit_authorization_ref: approval-report.md#goal-commits
-current_feature_index: 5
+current_feature_index: 6
 features:
   - slug: rmux-capability-gate
     roadmap_item: rmux-capability-gate
@@ -72,7 +72,7 @@ features:
     review: .codestable/features/2026-07-20-ccbd-windows-tcp-loopback-transport/ccbd-windows-tcp-loopback-transport-review.md
     qa: .codestable/features/2026-07-20-ccbd-windows-tcp-loopback-transport/ccbd-windows-tcp-loopback-transport-qa.md
     acceptance: .codestable/features/2026-07-20-ccbd-windows-tcp-loopback-transport/ccbd-windows-tcp-loopback-transport-acceptance.md
-    status: implementing
+    status: accepted
   - slug: backend-resolver-opt-in-contract
     roadmap_item: backend-resolver-opt-in-contract
     feature_dir: .codestable/features/2026-07-19-backend-resolver-opt-in-contract

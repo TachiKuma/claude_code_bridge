@@ -27,28 +27,28 @@ steps:
 checks:
   - item: "Windows platform default 使用 tcp_loopback，Unix adapter 不漂移"
     source: design §1 / AC-001 / DOD-IMPL-001
-    status: pending
+    status: passed
   - item: "server listen 绑定 127.0.0.1:0，endpoint descriptor 含 host/port/token_ref"
     source: design §2.2 / AC-002
-    status: pending
+    status: passed
   - item: "token ACL 可证明收敛；无法收敛 fail-fast 且不 publish endpoint"
     source: design §1 / AC-003 / DOD-IMPL-002
-    status: pending
+    status: passed
   - item: "client/server token handshake 在 handler 前完成，bad/missing token 不入队"
     source: design §2.4 / AC-004 / AC-005 / DOD-IMPL-003
-    status: pending
+    status: passed
   - item: "bootstrap self-ping 走同一 auth path，nonce 校验保持"
     source: design §2.4 / AC-006 / DOD-IMPL-004
-    status: pending
+    status: passed
   - item: "endpoint store canonical-first；Windows legacy socket_path/socket_path 投影为 null，不写 placeholder，不作为 connect/liveness/stale authority"
     source: design §1 / DOD-IMPL-005
-    status: pending
+    status: passed
   - item: "diagnostics/log/snapshot/error/artifact redacts token，只输出 token_ref/acl_status/fingerprint"
     source: design §2.2 / AC-007 / DOD-IMPL-006
-    status: pending
+    status: passed
   - item: "不改 RpcRequest/RpcResponse、handler dispatch、named pipe、pid liveness、mux/backend/provider"
     source: 明确不做 / AC-008 / DOD-IMPL-007
-    status: pending
+    status: passed
 
 dod:
   commands:
