@@ -6,7 +6,12 @@ import sys
 from pathlib import Path
 
 from storage.paths import PathLayout
-from storage.path_helpers import runtime_project_anchor_from_path, runtime_state_root_from_anchor_ref
+from storage.path_helpers import (
+    SocketPlacement,
+    runtime_project_anchor_from_path,
+    runtime_state_root_from_anchor_ref,
+    socket_placement_payload,
+)
 
 
 def test_path_layout_uses_project_scoped_locations(tmp_path: Path) -> None:
@@ -46,6 +51,19 @@ def test_path_layout_uses_project_scoped_locations(tmp_path: Path) -> None:
     assert layout.support_bundle_path('bundle-1') == layout.ccb_dir / 'ccbd' / 'support' / 'bundle-1.tar.gz'
     assert layout.workspace_path('Agent1') == layout.ccb_dir / 'workspaces' / 'agent1'
     assert layout.provider_profiles_dir == layout.ccb_dir / 'provider-profiles'
+
+
+def test_socket_placement_payload_uses_posix_path_text() -> None:
+    placement = SocketPlacement(
+        preferred_path=Path('/home/demo/.local/state/ccb/projects/proj-1/ccbd/ccbd.sock'),
+        effective_path=Path('/home/demo/.local/state/ccb/projects/proj-1/ccbd/tmux.sock'),
+        root_kind='runtime',
+    )
+
+    payload = socket_placement_payload(placement)
+
+    assert payload['preferred_socket_path'] == '/home/demo/.local/state/ccb/projects/proj-1/ccbd/ccbd.sock'
+    assert payload['effective_socket_path'] == '/home/demo/.local/state/ccb/projects/proj-1/ccbd/tmux.sock'
 
 
 def test_path_layout_supports_external_workspace_root(tmp_path: Path) -> None:

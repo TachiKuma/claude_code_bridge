@@ -25,7 +25,8 @@ def build_project_reload_config_handler(app, current_graph_fn):
                 config_path = project_config_path(app.project_root)
                 if not config_path.is_file():
                     raise FileNotFoundError(f'project config not found: {config_path}')
-                new_config = load_project_config(app.project_root).config
+                loaded_config = load_project_config(app.project_root)
+                new_config = loaded_config.config
             except Exception as exc:
                 plan = build_invalid_reload_dry_run_plan(
                     graph.config,
@@ -44,7 +45,14 @@ def build_project_reload_config_handler(app, current_graph_fn):
                         current_namespace=_current_namespace(app),
                     )
                 else:
-                    plan = apply_reload_payload(run_additive_reload_apply(app, new_config), app=app)
+                    plan = apply_reload_payload(
+                        run_additive_reload_apply(
+                            app,
+                            new_config,
+                            new_config_source_kind=loaded_config.source_kind,
+                        ),
+                        app=app,
+                    )
             payload = _with_reload_drains(app, plan)
             plan_class, error_text = metrics_fields(payload, fallback_plan_class=plan_class)
             return payload

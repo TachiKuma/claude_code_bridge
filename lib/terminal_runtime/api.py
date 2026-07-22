@@ -5,6 +5,7 @@ import shutil
 from typing import Optional
 
 from terminal_runtime.backend_types import TerminalBackend
+from terminal_runtime.backend_resolver import MuxBackendSelectionError
 from terminal_runtime.detect import current_tty as _current_tty_impl
 from terminal_runtime.detect import detect_terminal as _detect_terminal_impl
 from terminal_runtime.detect import inside_tmux as _inside_tmux_impl
@@ -29,6 +30,7 @@ from terminal_runtime.tmux_backend import TmuxBackend
 from .api_selection import (
     create_layout as _create_layout,
     resolve_backend as _resolve_backend,
+    resolve_backend_selection as _resolve_backend_selection,
     resolve_backend_for_session as _resolve_backend_for_session,
     resolve_pane_id_from_session as _resolve_pane_id_from_session,
 )
@@ -121,7 +123,7 @@ def detect_terminal() -> Optional[str]:
 
 def get_backend(terminal_type: Optional[str] = None) -> Optional[TerminalBackend]:
     global _backend_cache
-    selected_type = terminal_type or os.environ.get("CCB_TERMINAL_BACKEND") or os.environ.get("CCB_MUX_BACKEND")
+    selected_type = terminal_type or os.environ.get("CCB_TERMINAL_BACKEND")
     _backend_cache = _resolve_backend(
         cached_backend=_backend_cache,
         terminal_type=selected_type,
@@ -131,6 +133,27 @@ def get_backend(terminal_type: Optional[str] = None) -> Optional[TerminalBackend
         rmux_backend_factory=RmuxBackend,
     )
     return _backend_cache
+
+
+def get_backend_selection_diagnostics(
+    *,
+    terminal_type: Optional[str] = None,
+    project_config_backend: str | None = None,
+    user_config_backend: str | None = None,
+    project_root: str | None = None,
+) -> dict[str, object]:
+    selected_type = terminal_type or os.environ.get("CCB_TERMINAL_BACKEND")
+    try:
+        return _resolve_backend_selection(
+            terminal_type=selected_type,
+            detect_terminal_fn=detect_terminal,
+            project_config_backend=project_config_backend,
+            user_config_backend=user_config_backend,
+            project_root=project_root,
+            env=os.environ,
+        )
+    except MuxBackendSelectionError as exc:
+        return exc.to_diagnostics()
 
 
 def get_backend_for_session(session_data: dict) -> Optional[TerminalBackend]:
@@ -180,6 +203,7 @@ __all__ = [
     "create_auto_layout",
     "detect_terminal",
     "get_backend",
+    "get_backend_selection_diagnostics",
     "get_backend_for_session",
     "get_pane_id_from_session",
     "get_shell_type",

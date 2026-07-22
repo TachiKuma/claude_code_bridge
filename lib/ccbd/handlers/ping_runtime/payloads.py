@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from agents.models import AgentState
+from agents.config_loader import CONFIG_SOURCE_PROJECT, CONFIG_SOURCE_USER
 from agents.config_identity import project_config_identity_payload
 from ccbd.control_plane_transport.endpoint import endpoint_from_legacy_socket_path, endpoint_from_record, endpoint_to_record
 from provider_execution.capabilities import execution_restore_capability
 from storage.path_helpers import socket_placement_payload
+from terminal_runtime.backend_resolver import selection_diagnostics
 
 
 def build_agent_payload(*, project_id: str, agent_name: str, registry, inspection, execution_registry) -> dict:
@@ -45,6 +47,7 @@ def build_ccbd_payload(
     start_policy_summary: dict,
     control_plane_metrics=None,
     serving_identity: dict[str, object] | None = None,
+    config_source_kind: str | None = None,
 ) -> dict:
     identity = project_config_identity_payload(config)
     socket_path = inspection.socket_path if hasattr(inspection, 'socket_path') else None
@@ -59,6 +62,11 @@ def build_ccbd_payload(
         control_plane_endpoint = endpoint_to_record(endpoint_from_legacy_socket_path(socket_path))
     process_metrics = _process_metrics(control_plane_metrics)
     serving = dict(serving_identity or {})
+    backend_selection = _backend_selection_from_config(
+        config,
+        source_kind=config_source_kind,
+        project_root=getattr(paths, 'project_root', None),
+    )
     return {
         'project_id': project_id,
         'mount_state': _inspection_phase(inspection),
@@ -67,7 +75,7 @@ def build_ccbd_payload(
         'generation': inspection.generation,
         'socket_path': socket_path,
         'control_plane_endpoint': control_plane_endpoint,
-        'tmux_socket_path': str(paths.ccbd_tmux_socket_placement.effective_path),
+        'tmux_socket_path': paths.ccbd_tmux_socket_placement.effective_path.as_posix(),
         **(paths.runtime_state_payload() if hasattr(paths, 'runtime_state_payload') else {}),
         **socket_placement_payload(paths.ccbd_socket_placement),
         **socket_placement_payload(paths.ccbd_tmux_socket_placement, prefix='tmux'),
@@ -78,6 +86,7 @@ def build_ccbd_payload(
         'serving_lease_generation': serving.get('serving_lease_generation'),
         'serving_startup_generation': serving.get('serving_startup_generation'),
         'accepted_startup_id': serving.get('accepted_startup_id'),
+        'backend_selection': backend_selection,
         **namespace_summary,
         **namespace_event_summary,
         **start_policy_summary,
@@ -161,6 +170,28 @@ def build_ccbd_payload(
             **restore_summary,
         },
     }
+
+
+def _backend_selection_from_config(
+    config,
+    *,
+    source_kind: str | None = None,
+    project_root=None,
+) -> dict[str, object]:
+    runtime_mux = getattr(config, 'runtime_mux', None)
+    backend = (
+        getattr(runtime_mux, 'backend', None)
+        if bool(getattr(runtime_mux, 'explicit_backend', False))
+        else None
+    )
+    source = str(source_kind or CONFIG_SOURCE_PROJECT).strip()
+    return dict(
+        selection_diagnostics(
+            project_config_backend=backend if source == CONFIG_SOURCE_PROJECT else None,
+            user_config_backend=backend if source == CONFIG_SOURCE_USER else None,
+            project_root=project_root,
+        )
+    )
 
 
 def _process_metrics(control_plane_metrics) -> dict[str, int | None]:

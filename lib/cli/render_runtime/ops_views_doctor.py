@@ -10,6 +10,7 @@ def render_doctor(payload: Mapping[str, object]) -> tuple[str, ...]:
     entrypoint = payload.get('entrypoint') or {}
     runtime = payload.get('runtime') or {}
     requirements = payload.get('requirements') or {}
+    backend_selection = payload.get('backend_selection') or {}
     ccbd = payload['ccbd']
     lines = [
         f'project: {payload["project"]}',
@@ -73,6 +74,14 @@ def render_doctor(payload: Mapping[str, object]) -> tuple[str, ...]:
         f'ccbd_tmux_socket_root_kind: {ccbd.get("tmux_socket_root_kind")}',
         f'ccbd_tmux_socket_fallback_reason: {ccbd.get("tmux_socket_fallback_reason")}',
         f'ccbd_tmux_socket_filesystem_hint: {ccbd.get("tmux_socket_filesystem_hint")}',
+        f'backend_selection_backend_impl: {backend_selection.get("backend_impl")}',
+        f'backend_selection_requested: {backend_selection.get("requested_backend")}',
+        f'backend_selection_effective: {backend_selection.get("effective_backend")}',
+        f'backend_selection_source: {backend_selection.get("source")}',
+        f'backend_selection_fallback_used: {backend_selection.get("fallback_used")}',
+        f'backend_selection_fallback_reason: {backend_selection.get("fallback_reason")}',
+        f'backend_selection_failure_reason: {backend_selection.get("failure_reason")}',
+        f'backend_selection_diagnostic: {backend_selection.get("diagnostic")}',
         f'ccbd_health: {ccbd["health"]}',
         f'ccbd_generation: {ccbd["generation"]}',
         f'ccbd_last_heartbeat_at: {ccbd["last_heartbeat_at"]}',

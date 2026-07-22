@@ -242,7 +242,7 @@ Validation Commands:
 | CMD-003 | `python -m pytest -q test/test_terminal_backend_selection.py` | resolver matrix 与旧 session 兼容 | core | fix-or-block |
 | CMD-004 | `python -m pytest -q test/test_config_loader.py test/test_v2_phase2_entrypoint.py -k "config or doctor or ping or start or foreground"` | config、startup/foreground attach、diagnostics 回归抽样 | core | fix-or-block |
 
-Required Artifacts：design、checklist、design-review、config parser/model diff、resolver unit tests、doctor/ping diagnostics tests、items.yaml 回写。
+Required Artifacts: design、checklist、design-review、config parser/model diff、resolver unit tests、doctor/ping diagnostics tests、items.yaml 回写。
 
 ### 3.5 自我批判结论
 

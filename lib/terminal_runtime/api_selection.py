@@ -11,14 +11,57 @@ def resolve_backend(
     tmux_backend_factory,
     psmux_backend_factory=None,
     rmux_backend_factory=None,
+    project_config_backend=None,
+    user_config_backend=None,
+    env=None,
+    platform=None,
+    project_root=None,
+    route_approval_reader=None,
+    rmux_availability_reader=None,
+    capability_reader=None,
 ):
     return TerminalBackendSelection(
         detect_terminal_fn=detect_terminal_fn,
         tmux_backend_factory=tmux_backend_factory,
         psmux_backend_factory=psmux_backend_factory,
         rmux_backend_factory=rmux_backend_factory,
+        project_config_backend=project_config_backend,
+        user_config_backend=user_config_backend,
+        env=env,
+        platform=platform,
+        project_root=project_root,
+        route_approval_reader=route_approval_reader,
+        rmux_availability_reader=rmux_availability_reader,
+        capability_reader=capability_reader,
         cached_backend=cached_backend,
     ).get_backend(terminal_type)
+
+
+def resolve_backend_selection(
+    *,
+    terminal_type,
+    detect_terminal_fn,
+    project_config_backend=None,
+    user_config_backend=None,
+    env=None,
+    platform=None,
+    project_root=None,
+    route_approval_reader=None,
+    rmux_availability_reader=None,
+    capability_reader=None,
+):
+    return TerminalBackendSelection(
+        detect_terminal_fn=detect_terminal_fn,
+        tmux_backend_factory=lambda: object(),
+        project_config_backend=project_config_backend,
+        user_config_backend=user_config_backend,
+        env=env,
+        platform=platform,
+        project_root=project_root,
+        route_approval_reader=route_approval_reader,
+        rmux_availability_reader=rmux_availability_reader,
+        capability_reader=capability_reader,
+    ).select_backend(terminal_type)
 
 
 def resolve_backend_for_session(

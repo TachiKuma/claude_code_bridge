@@ -36,6 +36,7 @@ def run_additive_reload_apply(
     run_start_flow_fn=None,
     publish_transaction_fn=None,
     publish_graph_fn=None,
+    new_config_source_kind: str | None = None,
     update_lease_config_signature_fn=None,
     update_lifecycle_config_signature_fn=None,
 ):
@@ -49,6 +50,7 @@ def run_additive_reload_apply(
             run_start_flow_fn=run_start_flow_fn,
             publish_transaction_fn=publish_transaction_fn,
             publish_graph_fn=publish_graph_fn,
+            new_config_source_kind=new_config_source_kind,
             update_lease_config_signature_fn=update_lease_config_signature_fn,
             update_lifecycle_config_signature_fn=update_lifecycle_config_signature_fn,
         )
@@ -63,6 +65,7 @@ def run_additive_reload_apply(
             run_start_flow_fn=run_start_flow_fn,
             publish_transaction_fn=publish_transaction_fn,
             publish_graph_fn=publish_graph_fn,
+            new_config_source_kind=new_config_source_kind,
             update_lease_config_signature_fn=update_lease_config_signature_fn,
             update_lifecycle_config_signature_fn=update_lifecycle_config_signature_fn,
         )
@@ -76,6 +79,7 @@ def run_additive_reload_apply(
             run_start_flow_fn=run_start_flow_fn,
             publish_transaction_fn=publish_transaction_fn,
             publish_graph_fn=publish_graph_fn,
+            new_config_source_kind=new_config_source_kind,
             update_lease_config_signature_fn=update_lease_config_signature_fn,
             update_lifecycle_config_signature_fn=update_lifecycle_config_signature_fn,
         )
@@ -91,6 +95,7 @@ def _run_locked(
     run_start_flow_fn,
     publish_transaction_fn,
     publish_graph_fn,
+    new_config_source_kind,
     update_lease_config_signature_fn,
     update_lifecycle_config_signature_fn,
 ):
@@ -152,7 +157,11 @@ def _run_locked(
             namespace_patch=namespace_patch,
             runtime_mount=runtime_mount,
             publish_transaction_fn=publish_transaction_fn,
-            publish_graph_fn=publish_graph_fn,
+            publish_graph_fn=_source_kind_publish_graph_fn(
+                app,
+                publish_graph_fn,
+                new_config_source_kind,
+            ),
             update_lease_config_signature_fn=update_lease_config_signature_fn,
             update_lifecycle_config_signature_fn=update_lifecycle_config_signature_fn,
         )
@@ -185,6 +194,24 @@ def _namespace_patch_stage(app, old_graph, new_config, plan, apply_namespace_pat
         new_topology=topology_for(app, new_config),
         apply_namespace_patch_fn=apply_namespace_patch_fn,
     )
+
+
+def _source_kind_publish_graph_fn(app, publish_graph_fn, source_kind):
+    if source_kind is None:
+        return publish_graph_fn
+
+    def _publish(graph):
+        previous = getattr(app, 'config_source_kind', None)
+        app.config_source_kind = source_kind
+        try:
+            if publish_graph_fn is not None:
+                return publish_graph_fn(graph)
+            return app.publish_service_graph(graph)
+        except Exception:
+            app.config_source_kind = previous
+            raise
+
+    return _publish
 
 
 __all__ = ['current_namespace_for_apply', 'run_additive_reload_apply']

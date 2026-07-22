@@ -8,6 +8,7 @@ from provider_execution.registry import build_default_execution_registry
 from .daemon import ping_local_state
 from .daemon_runtime.policy import CONTROL_PLANE_RPC_TIMEOUT_S
 from .config_validate import validate_config_context
+from .backend_selection_diagnostics import backend_selection_summary
 from .doctor_runtime import (
     agent_summaries,
     ccbd_summary,
@@ -51,6 +52,7 @@ def doctor_summary(context) -> dict:
         ),
         'requirements': requirements_summary(),
         'config': config_validation.to_record(),
+        'backend_selection': backend_selection_summary(context),
         'ccbd': ccbd_summary(local=local, stores=stores, errors=errors, remote=remote_ccbd),
         'agents': agents,
     }

@@ -25,6 +25,24 @@ from .topology import (
 from .validation import normalize_agent_specs, normalize_default_agents, resolve_layout_spec
 
 
+MUX_BACKEND_VALUES = {'tmux', 'rmux', 'auto'}
+
+
+@dataclass(frozen=True)
+class RuntimeMuxConfig:
+    backend: str = 'tmux'
+    explicit_backend: bool = False
+
+    def __post_init__(self) -> None:
+        backend = str(self.backend or '').strip().lower()
+        if backend not in MUX_BACKEND_VALUES:
+            raise AgentValidationError('runtime.mux.backend must be tmux, rmux, or auto')
+        object.__setattr__(self, 'backend', backend)
+
+    def to_record(self) -> dict[str, str]:
+        return {'backend': self.backend}
+
+
 @dataclass(frozen=True)
 class ProjectConfig:
     version: int
@@ -42,6 +60,7 @@ class ProjectConfig:
     maintenance_heartbeat: MaintenanceHeartbeatConfig | None = None
     loop_capacity: LoopCapacityConfig | None = None
     workflow: WorkflowConfig | None = None
+    runtime_mux: RuntimeMuxConfig | None = None
 
     def __post_init__(self) -> None:
         if self.version not in {CONFIG_SCHEMA_V2, CONFIG_SCHEMA_V3}:
@@ -71,6 +90,7 @@ class ProjectConfig:
         sidebar_view = self.sidebar_view if self.sidebar_view is not None else default_sidebar_view_spec()
         maintenance_heartbeat = self.maintenance_heartbeat or MaintenanceHeartbeatConfig()
         loop_capacity = self.loop_capacity or LoopCapacityConfig()
+        runtime_mux = self.runtime_mux or RuntimeMuxConfig()
         windows = normalize_windows(
             self.windows,
             layout_spec=rendered_layout,
@@ -98,6 +118,7 @@ class ProjectConfig:
         object.__setattr__(self, 'windows_explicit', explicit_windows)
         object.__setattr__(self, 'maintenance_heartbeat', maintenance_heartbeat)
         object.__setattr__(self, 'loop_capacity', loop_capacity)
+        object.__setattr__(self, 'runtime_mux', runtime_mux)
         object.__setattr__(self, 'topology_signature_payload', signature_payload)
         object.__setattr__(self, 'topology_signature', topology_signature(signature_payload))
 
@@ -134,9 +155,13 @@ class ProjectConfig:
             'topology_signature': self.topology_signature,
             'source_path': self.source_path,
         }
+        if self.runtime_mux.explicit_backend:
+            payload['runtime'] = {
+                'mux': self.runtime_mux.to_record(),
+            }
         if self.workflow is not None:
             payload['workflow'] = self.workflow.to_record()
         return payload
 
 
-__all__ = ['ProjectConfig']
+__all__ = ['ProjectConfig', 'RuntimeMuxConfig']

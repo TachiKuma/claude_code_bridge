@@ -4,22 +4,22 @@ created: 2026-07-19
 steps:
   - action: "config schema 与模型：新增 runtime.mux.backend，v2/v3 validator 接受 tmux/rmux/auto 并拒绝未知 runtime 字段"
     exit_signal: "ProjectConfig 可恢复 runtime_mux，to_record 输出 runtime.mux；非法 backend 或未知 runtime 字段会 fail-closed"
-    status: pending
+    status: done
   - action: "selection result 与 resolver policy：定义与 roadmap §4.0 同构的 success schema（含 backend_impl、requested/effective/source/fallback/route ref）和独立 failure diagnostics，并替换裸字符串选择"
     exit_signal: "resolver matrix 能证明 tmux 默认、project/user/env 优先级、explicit rmux fail-fast、auto fallback 和 approved rmux 选择"
-    status: pending
+    status: done
   - action: "route approval / capability gate 输入：加入可注入 reader，判断 rmux route approved、capability satisfied、rmux available"
     exit_signal: "resolver 不读取 drafts 示例、不运行 probe，缺 approval 时 explicit rmux 报错、auto fallback"
-    status: pending
+    status: done
   - action: "API 与 startup 接入：terminal_runtime.api 保持 tmux 默认并暴露 selection diagnostics，旧 get_backend_for_session 兼容 tmux session 字段，foreground attach 错误包含 selection summary"
     exit_signal: "旧 tmux session payload 仍能恢复 backend，调用方可读取 selection result，foreground attach 不只报 tmux session missing"
-    status: pending
+    status: done
   - action: "diagnostics surface：startup summary、foreground attach error、ping、doctor、diagnostic bundle 展示 backend selection 摘要且保留旧 tmux 字段"
     exit_signal: "CLI render tests 能看到 backend_impl、requested/effective/source/fallback/failure，旧 tmux socket 输出不消失"
-    status: pending
+    status: done
   - action: "regression matrix：补 resolver、config、diagnostics 与旧 session 兼容测试"
     exit_signal: "CMD-003 与 CMD-004 覆盖核心场景并通过"
-    status: pending
+    status: done
 
 checks:
   - item: "无配置、无 env 时 effective backend 必须为 tmux，fallback_used=false"
@@ -62,19 +62,19 @@ checks:
 dod:
   commands:
     - id: CMD-001
-      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-checklist.yaml\" --yaml-only"
+      command: "python \"C:/Users/Administrator/.codex/plugins/cache/codestable/codestable/1.0.4/skills/cs-onboard/tools/validate-yaml.py\" --file \".codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-checklist.yaml\" --yaml-only"
       core: true
       failure_handling: fix-or-block
     - id: CMD-002
-      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml\""
+      command: "python \"C:/Users/Administrator/.codex/plugins/cache/codestable/codestable/1.0.4/skills/cs-onboard/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml\""
       core: true
       failure_handling: fix-or-block
     - id: CMD-003
-      command: "python -m pytest -q test/test_terminal_backend_selection.py"
+      command: "python -m pytest -q test/test_terminal_runtime_backend_selection.py"
       core: true
       failure_handling: fix-or-block
     - id: CMD-004
-      command: "python -m pytest -q test/test_config_loader.py test/test_v2_phase2_entrypoint.py -k \"config or doctor or ping or start or foreground\""
+      command: "python -m pytest -q test/test_v2_config_loader.py test/test_v3_config_loader.py test/test_v2_start_foreground.py test/test_backend_selection_diagnostics.py -k \"runtime_mux or foreground or backend_selection\""
       core: true
       failure_handling: fix-or-block
   evidence_required:

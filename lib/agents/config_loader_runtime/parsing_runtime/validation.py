@@ -24,6 +24,7 @@ from ..common import (
 from .agent_specs import parse_agents
 from .expectations import expect_bool, expect_mapping, expect_string, expect_string_list
 from .loop_capacity import parse_loop_capacity
+from .runtime_mux import parse_runtime_mux
 from .topology import agents_from_topology_windows, parse_sidebar, parse_sidebar_view, parse_tool_windows, parse_topology_windows
 
 _MAINTENANCE_TOP_LEVEL_KEYS = {'heartbeat'}
@@ -88,6 +89,7 @@ def validate_project_config(
     sidebar_view = parse_sidebar_view(document.get('ui'))
     maintenance_heartbeat = _parse_maintenance_heartbeat(document)
     loop_capacity = parse_loop_capacity(document.get('loop'), project_root=resolved_project_root)
+    runtime_mux = parse_runtime_mux(document.get('runtime'))
     entry_window = _parse_entry_window(document)
     _validate_legacy_and_windows_fields(document, windows=windows, tool_windows=tool_windows)
     return _build_project_config(
@@ -102,6 +104,7 @@ def validate_project_config(
         sidebar_view=sidebar_view,
         maintenance_heartbeat=maintenance_heartbeat,
         loop_capacity=loop_capacity,
+        runtime_mux=runtime_mux,
         source_path=source_path,
     )
 
@@ -251,6 +254,7 @@ def _build_project_config(
     sidebar_view,
     maintenance_heartbeat: MaintenanceHeartbeatConfig,
     loop_capacity,
+    runtime_mux,
     source_path: Path | None,
 ) -> ProjectConfig:
     try:
@@ -267,6 +271,7 @@ def _build_project_config(
             sidebar_view=sidebar_view,
             maintenance_heartbeat=maintenance_heartbeat,
             loop_capacity=loop_capacity,
+            runtime_mux=runtime_mux,
             source_path=str(source_path) if source_path else None,
             windows_explicit=windows is not None,
         )

@@ -26,6 +26,7 @@ def build_ping_handler(
     start_policy_store=None,
     metrics=None,
     serving_identity_getter=None,
+    config_source_kind_getter=None,
 ):
     def handle(payload: dict) -> dict:
         started = monotonic()
@@ -56,6 +57,11 @@ def build_ping_handler(
                     start_policy_summary=start_policy_summary,
                     control_plane_metrics=metrics,
                     serving_identity=serving_identity,
+                    config_source_kind=(
+                        config_source_kind_getter()
+                        if callable(config_source_kind_getter)
+                        else None
+                    ),
                 )
                 bootstrap_nonce = _bootstrap_probe_nonce(payload)
                 if bootstrap_nonce is not None:

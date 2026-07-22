@@ -11,6 +11,7 @@ from agents.models import (
     ProjectConfig,
     QueuePolicy,
     RestoreMode,
+    RuntimeMuxConfig,
     RuntimeMode,
     WorkspaceMode,
 )
@@ -224,6 +225,70 @@ def test_build_ccbd_payload_passes_rmux_namespace_attach_metadata() -> None:
     assert payload['namespace_ipc_kind'] == 'named_pipe'
     assert payload['namespace_ipc_ref'] == 'ccb-rmux-demo'
     assert payload['namespace_ui_attachable'] is True
+
+
+def test_build_ccbd_payload_includes_backend_selection_diagnostics(monkeypatch) -> None:
+    monkeypatch.delenv('CCB_MUX_BACKEND', raising=False)
+    monkeypatch.setattr(
+        'ccbd.handlers.ping_runtime.payloads.selection_diagnostics',
+        lambda **kwargs: {
+            'requested_backend': 'rmux',
+            'source': 'project_config' if kwargs.get('project_config_backend') == 'rmux' else 'user_config',
+            'failure_reason': 'route-not-approved',
+            'diagnostic': 'rmux backend requested but route approval is missing',
+        },
+    )
+    payload = build_ccbd_payload(
+        project_id='proj-rmux',
+        config=ProjectConfig(
+            version=2,
+            default_agents=_config().default_agents,
+            agents=_config().agents,
+            runtime_mux=RuntimeMuxConfig(backend='rmux', explicit_backend=True),
+        ),
+        paths=_paths(),
+        inspection=_inspection(phase='mounted', desired_state='running'),
+        execution_summary={},
+        restore_summary={},
+        namespace_summary={'namespace_backend_impl': 'tmux'},
+        namespace_event_summary={},
+        start_policy_summary={},
+    )
+
+    assert payload['backend_selection']['requested_backend'] == 'rmux'
+    assert payload['backend_selection']['source'] == 'project_config'
+    assert payload['backend_selection']['failure_reason'] == 'route-not-approved'
+
+
+def test_build_ccbd_payload_preserves_user_config_backend_selection_source(monkeypatch) -> None:
+    monkeypatch.setattr(
+        'ccbd.handlers.ping_runtime.payloads.selection_diagnostics',
+        lambda **kwargs: {
+            'requested_backend': kwargs.get('user_config_backend'),
+            'source': 'user_config',
+            'effective_backend': 'tmux',
+        },
+    )
+    payload = build_ccbd_payload(
+        project_id='proj-rmux',
+        config=ProjectConfig(
+            version=2,
+            default_agents=_config().default_agents,
+            agents=_config().agents,
+            runtime_mux=RuntimeMuxConfig(backend='auto', explicit_backend=True),
+        ),
+        paths=_paths(),
+        inspection=_inspection(phase='mounted', desired_state='running'),
+        execution_summary={},
+        restore_summary={},
+        namespace_summary={'namespace_backend_impl': 'tmux'},
+        namespace_event_summary={},
+        start_policy_summary={},
+        config_source_kind='user_config',
+    )
+
+    assert payload['backend_selection']['requested_backend'] == 'auto'
+    assert payload['backend_selection']['source'] == 'user_config'
 
 
 def test_ping_handler_all_uses_lifecycle_phase_for_ccbd_state() -> None:
@@ -466,6 +531,79 @@ def test_ping_target_unmounted_ccbd_includes_timing_fields(monkeypatch, tmp_path
     assert payload['last_maintenance_duration_s'] is None
     assert payload['last_heartbeat_duration_s'] is None
     assert payload['pending_maintenance_ticks'] is None
+
+
+def test_ping_target_mounted_ccbd_adds_backend_selection_when_daemon_payload_is_legacy(
+    monkeypatch,
+) -> None:
+    context = SimpleNamespace()
+    monkeypatch.setattr(
+        'cli.services.ping.ping_local_state',
+        lambda _context: SimpleNamespace(
+            mount_state='mounted',
+            project_id='proj-1',
+            health='healthy',
+            generation=1,
+            project_anchor_path='/tmp/repo/.ccb',
+            runtime_state_root='/tmp/repo/.ccb',
+            runtime_root_kind='project',
+            runtime_relocation_reason=None,
+            runtime_filesystem_hint=None,
+            runtime_marker_status='not_required',
+            socket_path='/tmp/repo/.ccb/ccbd/ccbd.sock',
+            preferred_socket_path='/tmp/repo/.ccb/ccbd/ccbd.sock',
+            effective_socket_path='/tmp/repo/.ccb/ccbd/ccbd.sock',
+            socket_root_kind='project',
+            socket_fallback_reason=None,
+            socket_filesystem_hint=None,
+            tmux_socket_path='/tmp/repo/.ccb/ccbd/tmux.sock',
+            tmux_preferred_socket_path='/tmp/repo/.ccb/ccbd/tmux.sock',
+            tmux_effective_socket_path='/tmp/repo/.ccb/ccbd/tmux.sock',
+            tmux_socket_root_kind='project',
+            tmux_socket_fallback_reason=None,
+            tmux_socket_filesystem_hint=None,
+            last_heartbeat_at='2026-05-08T00:00:00Z',
+            pid_alive=True,
+            socket_connectable=True,
+            heartbeat_fresh=True,
+            takeover_allowed=False,
+            reason='healthy',
+            startup_id=None,
+            startup_stage=None,
+            last_progress_at=None,
+            startup_deadline_at=None,
+            last_failure_reason=None,
+            shutdown_intent=None,
+        ),
+    )
+
+    class _Client:
+        def ping(self, target: str) -> dict:
+            assert target == 'ccbd'
+            return {
+                'project_id': 'proj-1',
+                'mount_state': 'mounted',
+                'diagnostics': {'reason': 'healthy'},
+            }
+
+    monkeypatch.setattr(
+        'cli.services.ping.connect_mounted_daemon',
+        lambda _context, *, allow_restart_stale: SimpleNamespace(client=_Client()),
+    )
+    monkeypatch.setattr(
+        'cli.services.ping.backend_selection_summary',
+        lambda _context: {
+            'backend_impl': 'tmux',
+            'requested_backend': 'auto',
+            'effective_backend': 'tmux',
+            'source': 'env',
+        },
+    )
+
+    payload = ping_target(context, ParsedPingCommand(project=None, target='ccbd'))
+
+    assert payload['reason'] == 'healthy'
+    assert payload['backend_selection']['requested_backend'] == 'auto'
 
 
 def test_ping_target_all_uses_non_mutating_probe(monkeypatch) -> None:

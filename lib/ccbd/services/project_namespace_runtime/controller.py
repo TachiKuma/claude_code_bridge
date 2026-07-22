@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from storage.paths import PathLayout
-from terminal_runtime import TmuxBackend, get_backend_for_session
-import os
+from terminal_runtime import PsmuxBackend, RmuxBackend, TmuxBackend
+from terminal_runtime.backend_selection import TerminalBackendSelection
+from terminal_runtime.backend_resolver import RmuxAvailability, RmuxCapabilityStatus, RmuxRouteApproval
+from typing import Callable
 
 from ccbd.system import utc_now
 
@@ -18,6 +21,13 @@ from ..project_namespace_state import ProjectNamespaceEventStore, ProjectNamespa
 from ..project_namespace_pane import snapshot_project_namespace_panes
 
 
+@dataclass
+class ProjectNamespaceBackendSelectionConfig:
+    project_config_backend: str | None = None
+    user_config_backend: str | None = None
+    project_root: str | None = None
+
+
 class ProjectNamespaceController(ProjectNamespaceControllerStateMixin):
     def __init__(
         self,
@@ -26,6 +36,9 @@ class ProjectNamespaceController(ProjectNamespaceControllerStateMixin):
         *,
         clock=utc_now,
         backend_factory=None,
+        project_config_backend: str | None = None,
+        user_config_backend: str | None = None,
+        project_root: str | None = None,
         state_store: ProjectNamespaceStateStore | None = None,
         event_store: ProjectNamespaceEventStore | None = None,
         layout_version: int = 3,
@@ -36,15 +49,41 @@ class ProjectNamespaceController(ProjectNamespaceControllerStateMixin):
         resolved_layout_version = int(layout_version)
         if resolved_layout_version <= 0:
             raise ValueError('layout_version must be positive')
+        self._backend_selection_config = ProjectNamespaceBackendSelectionConfig(
+            project_config_backend=project_config_backend,
+            user_config_backend=user_config_backend,
+            project_root=project_root,
+        )
         self._runtime_state = ProjectNamespaceControllerState(
             layout=layout,
             project_id=resolved_project_id,
             clock=clock,
-            backend_factory=backend_factory or default_project_namespace_backend,
+            backend_factory=backend_factory
+            or (
+                lambda namespace=None, socket_path=None: default_project_namespace_backend(
+                    namespace=namespace,
+                    socket_path=socket_path,
+                    project_config_backend=self._backend_selection_config.project_config_backend,
+                    user_config_backend=self._backend_selection_config.user_config_backend,
+                    project_root=self._backend_selection_config.project_root,
+                )
+            ),
             state_store=state_store or ProjectNamespaceStateStore(layout),
             event_store=event_store or ProjectNamespaceEventStore(layout),
             layout_version=resolved_layout_version,
         )
+
+    def configure_backend_selection(
+        self,
+        *,
+        project_config_backend: str | None = None,
+        user_config_backend: str | None = None,
+        project_root: str | None = None,
+    ) -> None:
+        self._backend_selection_config.project_config_backend = project_config_backend
+        self._backend_selection_config.user_config_backend = user_config_backend
+        if project_root is not None:
+            self._backend_selection_config.project_root = str(project_root)
 
     def load(self) -> ProjectNamespace | None:
         state = self._state_store.load()
@@ -165,22 +204,29 @@ class ProjectNamespaceController(ProjectNamespaceControllerStateMixin):
         return session_root_pane(backend, current.tmux_session_name, timeout_s=timeout_s)
 
 
-def default_project_namespace_backend(*, namespace: str | None = None, socket_path: str | None = None):
-    terminal_backend = (
-        os.environ.get('CCB_TERMINAL_BACKEND')
-        or os.environ.get('CCB_MUX_BACKEND')
-        or ''
-    ).strip() or None
-    return get_backend_for_session(
-        {
-            'terminal_backend': terminal_backend,
-            'tmux_socket_path': socket_path,
-            'tmux_socket_name': namespace,
-            'namespace_id': namespace,
-            'rmux_namespace': namespace,
-            'psmux_namespace': namespace,
-        }
-    )
+def default_project_namespace_backend(
+    *,
+    namespace: str | None = None,
+    socket_path: str | None = None,
+    project_config_backend: str | None = None,
+    user_config_backend: str | None = None,
+    project_root: str | None = None,
+    route_approval_reader: Callable[[], RmuxRouteApproval] | None = None,
+    rmux_availability_reader: Callable[[], RmuxAvailability] | None = None,
+    capability_reader: Callable[[], RmuxCapabilityStatus] | None = None,
+):
+    return TerminalBackendSelection(
+        detect_terminal_fn=lambda: None,
+        tmux_backend_factory=lambda: TmuxBackend(socket_name=namespace, socket_path=socket_path),
+        psmux_backend_factory=lambda: PsmuxBackend(namespace=namespace, socket_path=socket_path),
+        rmux_backend_factory=lambda: RmuxBackend(namespace=namespace, socket_path=socket_path),
+        project_config_backend=project_config_backend,
+        user_config_backend=user_config_backend,
+        project_root=project_root,
+        route_approval_reader=route_approval_reader,
+        rmux_availability_reader=rmux_availability_reader,
+        capability_reader=capability_reader,
+    ).get_backend()
 
 
 __all__ = ['ProjectNamespaceController']

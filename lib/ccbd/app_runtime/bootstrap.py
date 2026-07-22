@@ -5,7 +5,7 @@ import os
 import threading
 import uuid
 
-from agents.config_loader import load_project_config
+from agents.config_loader import CONFIG_SOURCE_PROJECT, CONFIG_SOURCE_USER, load_project_config
 from agents.store import AgentRestoreStore
 from ccbd.lifecycle_report_store import CcbdShutdownReportStore, CcbdStartupReportStore
 from ccbd.metrics import ControlPlaneMetrics
@@ -60,7 +60,9 @@ def initialize_app(
     sweep_expired_text_artifacts(app.paths)
     app.clock = clock
     app.pid = pid or os.getpid()
-    config = load_project_config(app.project_root).config
+    loaded_config = load_project_config(app.project_root)
+    config = loaded_config.config
+    app.config_source_kind = loaded_config.source_kind
     keeper_pid = str(os.environ.get('CCB_KEEPER_PID') or '').strip()
     app.keeper_pid = int(keeper_pid) if keeper_pid.isdigit() and int(keeper_pid) > 0 else None
     app.daemon_instance_id = uuid.uuid4().hex
@@ -81,7 +83,15 @@ def initialize_app(
     app.reload_drain_store = DrainQueueStore(app.paths)
     app.ownership_guard = OwnershipGuard(app.paths, app.mount_manager, clock=app.clock)
     app.restore_store = AgentRestoreStore(app.paths)
-    app.project_namespace = ProjectNamespaceController(app.paths, app.project_id, clock=app.clock)
+    mux_backend = config.runtime_mux.backend if config.runtime_mux.explicit_backend else None
+    app.project_namespace = ProjectNamespaceController(
+        app.paths,
+        app.project_id,
+        clock=app.clock,
+        project_root=str(app.project_root),
+        project_config_backend=mux_backend if loaded_config.source_kind == CONFIG_SOURCE_PROJECT else None,
+        user_config_backend=mux_backend if loaded_config.source_kind == CONFIG_SOURCE_USER else None,
+    )
     app.snapshot_writer = SnapshotWriter(app.paths, clock=app.clock)
     app.execution_registry = build_default_execution_registry()
     app.fault_injection = FaultInjectionService(app.paths, clock=app.clock)

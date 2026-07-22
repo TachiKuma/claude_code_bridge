@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from agents.config_loader import load_project_config
+from agents.models import RuntimeMuxConfig
 from agents.store import AgentRestoreStore
+from terminal_runtime.backend_resolver import MuxBackendSelectionError
 from ccbd.api_models import AcceptedJobReceipt, JobStatus, SubmitReceipt, TargetKind
 from ccbd.app import CcbdApp
 from ccbd.app_runtime.service_graph import (
@@ -139,6 +144,24 @@ def test_ccbd_app_bootstrap_publishes_startup_graph_fields(tmp_path: Path) -> No
     assert {'submit', 'project_view', 'project_focus_agent', 'project_sidebar_click', 'ping'} <= set(
         app.socket_server._handlers
     )
+
+
+def test_publish_service_graph_updates_namespace_backend_selection(tmp_path: Path) -> None:
+    project_root = _project(tmp_path / 'repo-runtime-mux-reload')
+    app = CcbdApp(project_root, clock=lambda: NOW, pid=4242)
+    replacement = _routing_graph(app.service_graph, version=2)
+    replacement.config = replace(
+        app.config,
+        runtime_mux=RuntimeMuxConfig(backend='rmux', explicit_backend=True),
+    )
+    app.config_source_kind = 'project_config'
+
+    app.publish_service_graph(replacement)
+
+    with pytest.raises(MuxBackendSelectionError) as exc_info:
+        app.project_namespace._backend_factory(namespace='ccb-demo', socket_path=r'\\.\pipe\ccb-demo')
+    assert exc_info.value.to_diagnostics()['source'] == 'project_config'
+    assert exc_info.value.to_diagnostics()['failure_reason'] == 'route-not-approved'
 
 
 def test_handlers_route_graph_bound_services_through_current_graph(tmp_path: Path) -> None:

@@ -128,6 +128,56 @@ max_instances = 1
 '''
 
 
+def test_v3_load_project_config_supports_top_level_runtime_mux(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_roles(tmp_path, monkeypatch)
+    project_root = tmp_path / 'repo-v3-runtime-mux'
+    config_path = project_root / '.ccb' / 'ccb.config'
+    text = _valid_v3_text() + '\n[runtime.mux]\nbackend = "rmux"\n'
+    _write(config_path, text)
+
+    result = load_project_config(project_root)
+
+    assert result.config.runtime_mux.backend == 'rmux'
+    assert result.config.to_record()['runtime']['mux']['backend'] == 'rmux'
+
+
+def test_v3_load_project_config_rejects_unknown_top_level_runtime_field(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_roles(tmp_path, monkeypatch)
+    project_root = tmp_path / 'repo-v3-runtime-mux-invalid'
+    config_path = project_root / '.ccb' / 'ccb.config'
+    text = _valid_v3_text() + '\n[runtime]\nunknown = true\n'
+    _write(config_path, text)
+
+    with pytest.raises(StructuredConfigValidationError) as exc_info:
+        load_project_config(project_root)
+
+    assert exc_info.value.code == 'v3_runtime_invalid'
+    assert exc_info.value.path == 'runtime'
+
+
+def test_v3_load_project_config_rejects_invalid_runtime_mux_backend_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_roles(tmp_path, monkeypatch)
+    project_root = tmp_path / 'repo-v3-runtime-mux-bad-backend'
+    config_path = project_root / '.ccb' / 'ccb.config'
+    text = _valid_v3_text() + '\n[runtime.mux]\nbackend = "screen"\n'
+    _write(config_path, text)
+
+    with pytest.raises(StructuredConfigValidationError) as exc_info:
+        load_project_config(project_root)
+
+    assert exc_info.value.code == 'v3_runtime_invalid'
+    assert exc_info.value.path == 'runtime.mux.backend'
+
+
 def _replace_defaults_with_false(text: str) -> str:
     start = text.index('[workflow.defaults]')
     end = text.index('[workflow.runtime]')

@@ -5,6 +5,7 @@ from cli.context import CliContext
 from cli.models import ParsedPingCommand
 
 from .daemon import connect_mounted_daemon, ping_local_state
+from .backend_selection_diagnostics import backend_selection_summary
 
 
 def ping_target(context: CliContext, command: ParsedPingCommand) -> dict:
@@ -12,6 +13,7 @@ def ping_target(context: CliContext, command: ParsedPingCommand) -> dict:
     target = command.target
     if local.mount_state == 'unmounted':
         if target == 'ccbd':
+            backend_selection = backend_selection_summary(context)
             return {
                 'project_id': local.project_id,
                 'mount_state': local.mount_state,
@@ -57,6 +59,7 @@ def ping_target(context: CliContext, command: ParsedPingCommand) -> dict:
                 'service_graph_created_at': None,
                 'service_graph_retained_count': None,
                 'service_graph_retained_count_scope': None,
+                'backend_selection': backend_selection,
             }
         return {
             'project_id': local.project_id,
@@ -73,4 +76,5 @@ def ping_target(context: CliContext, command: ParsedPingCommand) -> dict:
     if target == 'ccbd':
         diagnostics = dict(payload.pop('diagnostics', {}) or {})
         payload.update(diagnostics)
+        payload.setdefault('backend_selection', backend_selection_summary(context))
     return payload

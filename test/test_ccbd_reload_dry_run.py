@@ -35,6 +35,11 @@ width = "15%"
 bottom_height = 20
 """
 
+RUNTIME_MUX_CONFIG = BASE_CONFIG + """
+[runtime.mux]
+backend = "rmux"
+"""
+
 
 def test_reload_dry_run_no_change_updates_metrics_without_mutation(tmp_path: Path, monkeypatch) -> None:
     project_root = _project(tmp_path / 'repo-no-change', BASE_CONFIG)
@@ -70,6 +75,22 @@ def test_reload_dry_run_no_change_updates_metrics_without_mutation(tmp_path: Pat
     assert app.control_plane_metrics.last_reload_duration_s is not None
     assert app.control_plane_metrics.last_reload_plan_class == 'no_change'
     assert app.control_plane_metrics.last_reload_error is None
+
+
+def test_reload_dry_run_does_not_mutate_config_source_kind(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project_root = _project(tmp_path / 'repo-source-kind-dry-run', BASE_CONFIG)
+    app = CcbdApp(project_root, clock=lambda: '2026-05-29T00:00:00Z', pid=4242)
+    app.config_source_kind = 'user_config'
+    (project_root / '.ccb' / 'ccb.config').write_text(RUNTIME_MUX_CONFIG, encoding='utf-8')
+    _block_mutation_paths(app, monkeypatch)
+
+    payload = app.socket_server._handlers['project_reload_config']({'dry_run': True})
+
+    assert payload['mutation_enabled'] is False
+    assert app.config_source_kind == 'user_config'
 
 
 @pytest.mark.parametrize(

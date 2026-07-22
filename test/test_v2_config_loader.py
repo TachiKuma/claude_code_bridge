@@ -93,6 +93,84 @@ dispatch_disabled = true
     assert 'dispatch_disabled = true' in rendered
 
 
+def test_load_project_config_supports_runtime_mux_backend(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-runtime-mux'
+    config_path = project_root / '.ccb' / 'ccb.config'
+    _write(
+        config_path,
+        """version = 2
+default_agents = ["agent1"]
+layout = "agent1:codex"
+
+[runtime.mux]
+backend = "auto"
+
+[agents.agent1]
+provider = "codex"
+target = "."
+workspace_mode = "inplace"
+restore = "auto"
+permission = "manual"
+""",
+    )
+
+    result = load_project_config(project_root)
+
+    assert result.config.runtime_mux.backend == 'auto'
+    assert result.config.to_record()['runtime']['mux']['backend'] == 'auto'
+
+
+def test_load_project_config_does_not_serialize_implicit_runtime_mux(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-runtime-mux-implicit'
+    config_path = project_root / '.ccb' / 'ccb.config'
+    _write(
+        config_path,
+        """version = 2
+default_agents = ["agent1"]
+layout = "agent1:codex"
+
+[agents.agent1]
+provider = "codex"
+target = "."
+workspace_mode = "inplace"
+restore = "auto"
+permission = "manual"
+""",
+    )
+
+    result = load_project_config(project_root)
+
+    assert result.config.runtime_mux.backend == 'tmux'
+    assert result.config.runtime_mux.explicit_backend is False
+    assert 'runtime' not in result.config.to_record()
+
+
+def test_load_project_config_rejects_unknown_runtime_mux_field(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-runtime-mux-invalid'
+    config_path = project_root / '.ccb' / 'ccb.config'
+    _write(
+        config_path,
+        """version = 2
+default_agents = ["agent1"]
+layout = "agent1:codex"
+
+[runtime.mux]
+backend = "tmux"
+probe = true
+
+[agents.agent1]
+provider = "codex"
+target = "."
+workspace_mode = "inplace"
+restore = "auto"
+permission = "manual"
+""",
+    )
+
+    with pytest.raises(ConfigValidationError, match='runtime\\.mux contains unknown fields: probe'):
+        load_project_config(project_root)
+
+
 def test_load_project_config_resolves_role_store_from_account_home_inside_provider_home(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

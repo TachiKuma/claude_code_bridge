@@ -144,6 +144,7 @@ def register_handlers(app) -> None:
                         else None
                     ),
                 },
+                config_source_kind_getter=lambda: getattr(app, 'config_source_kind', None),
             ),
         ),
     )

@@ -218,8 +218,8 @@ def choose_socket_placement(
 def socket_placement_payload(placement: SocketPlacement, *, prefix: str = '') -> dict[str, Any]:
     field_prefix = f'{prefix}_' if prefix else ''
     return {
-        f'{field_prefix}preferred_socket_path': str(placement.preferred_path),
-        f'{field_prefix}effective_socket_path': str(placement.effective_path),
+        f'{field_prefix}preferred_socket_path': placement.preferred_path.as_posix(),
+        f'{field_prefix}effective_socket_path': placement.effective_path.as_posix(),
         f'{field_prefix}socket_root_kind': placement.root_kind,
         f'{field_prefix}socket_fallback_reason': placement.fallback_reason,
         f'{field_prefix}socket_filesystem_hint': placement.filesystem_hint,

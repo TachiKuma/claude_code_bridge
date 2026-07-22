@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
 from agents.models import AgentState
+from agents.models import RuntimeMuxConfig
 from agents.config_loader import load_project_config
 from ccbd.app import CcbdApp
 from ccbd.models import CcbdStartupAgentResult
@@ -136,6 +138,30 @@ def test_additive_reload_apply_view_only_publishes_without_namespace_or_runtime_
     assert result.diagnostics['graph_published'] is True
     assert result.diagnostics['config_watch_started'] is False
     assert result.diagnostics['unload_or_replace_executed'] is False
+
+
+def test_additive_reload_apply_publish_failure_keeps_config_source_kind(
+    tmp_path: Path,
+) -> None:
+    app = _started_app(tmp_path / 'repo-source-kind-publish-fail', BASE_CONFIG)
+    app.config_source_kind = 'user_config'
+    new_config = replace(
+        app.config,
+        runtime_mux=RuntimeMuxConfig(backend='rmux', explicit_backend=True),
+    )
+
+    def _fail_publish(_graph):
+        raise RuntimeError('publish failed')
+
+    result = run_additive_reload_apply(
+        app,
+        new_config,
+        publish_graph_fn=_fail_publish,
+        new_config_source_kind='project_config',
+    )
+
+    assert result.status != 'published'
+    assert app.config_source_kind == 'user_config'
 
 
 def test_additive_reload_apply_maintenance_change_publishes_without_namespace_or_runtime_mutation(

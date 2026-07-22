@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from agents.config_loader import CONFIG_SOURCE_PROJECT, CONFIG_SOURCE_USER
 from agents.config_identity import project_config_identity_payload
 from ccbd.project_focus import ProjectFocusDependencies, ProjectFocusService
 from ccbd.project_view import ProjectViewDependencies, ProjectViewService
@@ -214,10 +215,29 @@ def _publish_service_graph_fields(app, graph: CcbdServiceGraph) -> None:
     app.project_focus_service = graph.project_focus_service
     app.health_monitor = graph.health_monitor
     app.service_graph = graph
+    _configure_namespace_backend_selection(app, graph)
     app.control_plane_metrics.service_graph_version = graph.version
     app.control_plane_metrics.service_graph_created_at = graph.created_at
     app.control_plane_metrics.service_graph_retained_count = 1
     app.control_plane_metrics.service_graph_retained_count_scope = SERVICE_GRAPH_RETAINED_COUNT_SCOPE
+
+
+def _configure_namespace_backend_selection(app, graph: CcbdServiceGraph) -> None:
+    configure = getattr(getattr(app, 'project_namespace', None), 'configure_backend_selection', None)
+    if not callable(configure):
+        return
+    runtime_mux = getattr(graph.config, 'runtime_mux', None)
+    backend = (
+        getattr(runtime_mux, 'backend', None)
+        if bool(getattr(runtime_mux, 'explicit_backend', False))
+        else None
+    )
+    source_kind = str(getattr(app, 'config_source_kind', '') or '').strip()
+    configure(
+        project_root=str(getattr(app, 'project_root', '') or '') or None,
+        project_config_backend=backend if source_kind == CONFIG_SOURCE_PROJECT else None,
+        user_config_backend=backend if source_kind == CONFIG_SOURCE_USER else None,
+    )
 
 
 __all__ = [

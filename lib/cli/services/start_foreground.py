@@ -202,25 +202,79 @@ def _attach_target_ready(payload: dict[str, object], *, env: dict[str, str]) -> 
         ipc_kind = str(payload.get('namespace_ipc_kind') or 'named_pipe').strip()
         ui_attachable = bool(payload.get('namespace_ui_attachable'))
         if not namespace_id or not session_name or not ui_attachable:
-            return False, 'project namespace is not attachable after successful `ccb` start'
+            return False, _attach_error_with_selection(
+                'project namespace is not attachable after successful `ccb` start',
+                payload,
+            )
         if ipc_kind != 'named_pipe':
-            return False, f'rmux project namespace uses unsupported ipc_kind={ipc_kind!r}'
+            return False, _attach_error_with_selection(
+                f'rmux project namespace uses unsupported ipc_kind={ipc_kind!r}',
+                payload,
+            )
         return True, ''
     tmux_socket_path = str(payload.get('namespace_tmux_socket_path') or '').strip()
     tmux_session_name = str(payload.get('namespace_tmux_session_name') or '').strip()
     workspace_window_name = str(payload.get('namespace_workspace_window_name') or '').strip()
     ui_attachable = bool(payload.get('namespace_ui_attachable'))
     if not tmux_socket_path or not tmux_session_name or not ui_attachable:
-        return False, 'project namespace is not attachable after successful `ccb` start'
+        return False, _attach_error_with_selection(
+            'project namespace is not attachable after successful `ccb` start',
+            payload,
+        )
     if not _tmux_has_session(tmux_socket_path, tmux_session_name, env=env):
-        return False, 'project namespace session is missing after successful `ccb` start'
+        return False, _attach_error_with_selection(
+            'project namespace session is missing after successful `ccb` start',
+            payload,
+        )
     if workspace_window_name and not _tmux_select_window(
         tmux_socket_path,
         f'{tmux_session_name}:{workspace_window_name}',
         env=env,
     ):
-        return False, 'project namespace workspace window is missing after successful `ccb` start'
+        return False, _attach_error_with_selection(
+            'project namespace workspace window is missing after successful `ccb` start',
+            payload,
+        )
     return True, ''
+
+
+def _attach_error_with_selection(message: str, payload: dict[str, object]) -> str:
+    summary = _selection_summary_from_payload(payload)
+    return f'{message}; {summary}' if summary else message
+
+
+def _selection_summary_from_payload(payload: dict[str, object]) -> str:
+    selection = payload.get('backend_selection')
+    if isinstance(selection, dict):
+        requested = selection.get('requested_backend')
+        effective = selection.get('effective_backend') or selection.get('backend_impl')
+        source = selection.get('source')
+        fallback = selection.get('fallback_used')
+        failure = selection.get('failure_reason')
+        diagnostic = selection.get('diagnostic')
+    else:
+        requested = payload.get('backend_selection_requested')
+        effective = payload.get('backend_selection_effective')
+        source = payload.get('backend_selection_source')
+        fallback = payload.get('backend_selection_fallback_used')
+        failure = payload.get('backend_selection_failure_reason')
+        diagnostic = payload.get('backend_selection_diagnostic')
+    if all(value is None for value in (requested, effective, source, fallback, failure, diagnostic)):
+        return ''
+    parts = []
+    if requested is not None:
+        parts.append(f'backend_requested={requested}')
+    if effective is not None:
+        parts.append(f'backend_effective={effective}')
+    if source is not None:
+        parts.append(f'backend_source={source}')
+    if fallback is not None:
+        parts.append(f'backend_fallback={fallback}')
+    if failure is not None:
+        parts.append(f'backend_failure={failure}')
+    if diagnostic is not None:
+        parts.append(f'backend_diagnostic={diagnostic}')
+    return 'selection: ' + ' '.join(parts)
 
 
 def _client_for_attach_attempt(client, *, timeout_s: float):
