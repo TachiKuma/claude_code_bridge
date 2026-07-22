@@ -3,7 +3,7 @@ doc_type: roadmap-goal-feature
 roadmap: windows-rmux-native-backend
 roadmap_item: windows-namespace-ipc-schema
 feature: 2026-07-19-windows-namespace-ipc-schema
-status: pending
+status: accepted
 ---
 
 # windows-namespace-ipc-schema Goal Feature Spec

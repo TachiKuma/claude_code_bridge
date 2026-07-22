@@ -215,7 +215,7 @@ def default_project_namespace_backend(
     rmux_availability_reader: Callable[[], RmuxAvailability] | None = None,
     capability_reader: Callable[[], RmuxCapabilityStatus] | None = None,
 ):
-    return TerminalBackendSelection(
+    selection = TerminalBackendSelection(
         detect_terminal_fn=lambda: None,
         tmux_backend_factory=lambda: TmuxMuxBackendAdapter(TmuxBackend(socket_name=namespace, socket_path=socket_path)),
         psmux_backend_factory=lambda: PsmuxBackend(namespace=namespace, socket_path=socket_path),
@@ -226,7 +226,8 @@ def default_project_namespace_backend(
         route_approval_reader=route_approval_reader,
         rmux_availability_reader=rmux_availability_reader,
         capability_reader=capability_reader,
-    ).get_backend()
+    )
+    return selection.get_backend()
 
 
 __all__ = ['ProjectNamespaceController']

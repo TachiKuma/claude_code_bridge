@@ -559,6 +559,11 @@ def test_doctor_summary_includes_namespace_state_and_latest_event(tmp_path: Path
             project_id=context.project.project_id,
             occurred_at='2026-04-03T00:05:00Z',
             namespace_epoch=4,
+            backend_impl='rmux',
+            namespace_id='event-project',
+            namespace_session_name='event-session',
+            namespace_ipc_kind='named_pipe',
+            namespace_ipc_ref='event-pipe',
             tmux_socket_path=str(context.paths.ccbd_tmux_socket_path),
             tmux_session_name=context.paths.ccbd_tmux_session_name,
             details={'recreated': False},
@@ -568,6 +573,12 @@ def test_doctor_summary_includes_namespace_state_and_latest_event(tmp_path: Path
     payload = doctor_summary(context)
 
     assert payload['ccbd']['namespace_epoch'] == 4
+    assert payload['ccbd']['namespace_backend_family'] == 'tmux-family'
+    assert payload['ccbd']['namespace_backend_impl'] == 'tmux'
+    assert payload['ccbd']['namespace_id'] == context.project.project_id
+    assert payload['ccbd']['namespace_session_name'] == context.paths.ccbd_tmux_session_name
+    assert payload['ccbd']['namespace_ipc_kind'] == 'unix_socket'
+    assert payload['ccbd']['namespace_ipc_ref'] == str(context.paths.ccbd_tmux_socket_path)
     assert payload['ccbd']['namespace_tmux_socket_path'] == str(context.paths.ccbd_tmux_socket_path)
     assert payload['ccbd']['namespace_tmux_session_name'] == context.paths.ccbd_tmux_session_name
     assert payload['ccbd']['namespace_last_event_kind'] == 'namespace_created'

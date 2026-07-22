@@ -45,7 +45,7 @@ items:
   - slug: windows-namespace-ipc-schema
     description: 增加 mux-agnostic namespace state、named pipe IPC 字段、ping/doctor payload 和旧 namespace_tmux 字段兼容别名策略
     depends_on: [mux-backend-contract]
-    status: in-progress
+    status: done
     feature: 2026-07-19-windows-namespace-ipc-schema
     minimal_loop: false
     notes: 不直接启动 Rmux；先让 namespace schema、foreground attach 输入和 diagnostics 字段可测

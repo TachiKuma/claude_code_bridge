@@ -18,6 +18,7 @@ class ProjectNamespace:
     workspace_epoch: int
     ui_attachable: bool
     backend_impl: str = 'tmux'
+    namespace_backend_family: str | None = None
     namespace_id: str | None = None
     namespace_session_name: str | None = None
     namespace_ipc_kind: str | None = None
@@ -33,6 +34,7 @@ class ProjectNamespace:
             tmux_socket_path=state.tmux_socket_path,
             tmux_session_name=state.tmux_session_name,
             backend_impl=state.backend_impl,
+            namespace_backend_family=state.resolved_namespace_backend_family(),
             namespace_id=state.resolved_namespace_id(),
             namespace_session_name=state.resolved_namespace_session_name(),
             namespace_ipc_kind=state.resolved_namespace_ipc_kind(),

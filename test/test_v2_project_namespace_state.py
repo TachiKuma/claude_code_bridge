@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from ccbd.services.project_namespace import ProjectNamespaceController
+from ccbd.services.project_namespace_runtime.controller import default_project_namespace_backend
 from ccbd.services.project_namespace_runtime import build_namespace_topology_plan
 from ccbd.services.project_namespace_runtime.backend import prepare_server
 from ccbd.services.project_namespace_state import (
@@ -79,6 +80,8 @@ def test_project_namespace_state_store_round_trip(tmp_path: Path) -> None:
 
     assert loaded == state
     assert loaded is not None
+    assert loaded.summary_fields()['namespace_backend_family'] == 'tmux-family'
+    assert loaded.summary_fields()['namespace_id'] == 'proj-1'
     assert loaded.summary_fields()['namespace_tmux_socket_path'] == str(layout.ccbd_tmux_socket_path)
     assert second_stat.st_ino == first_stat.st_ino
     assert second_stat.st_mtime_ns == first_stat.st_mtime_ns
@@ -100,11 +103,104 @@ def test_project_namespace_state_summary_exposes_rmux_namespace_metadata(tmp_pat
 
     summary = state.summary_fields()
 
+    assert summary['namespace_backend_family'] == 'tmux-family'
     assert summary['namespace_backend_impl'] == 'rmux'
-    assert summary['namespace_id'] == layout.ccbd_tmux_session_name
+    assert summary['namespace_id'] == 'proj-rmux'
     assert summary['namespace_session_name'] == layout.ccbd_tmux_session_name
     assert summary['namespace_ipc_kind'] == 'named_pipe'
-    assert summary['namespace_ipc_ref'] == layout.ccbd_tmux_session_name
+    assert summary['namespace_ipc_ref'] == 'proj-rmux'
+
+
+def test_project_namespace_state_forces_backend_family_to_tmux_family(tmp_path: Path) -> None:
+    layout = PathLayout(tmp_path / 'repo-family-state')
+    state = ProjectNamespaceState(
+        project_id='proj-family',
+        namespace_epoch=1,
+        tmux_socket_path=str(layout.ccbd_tmux_socket_path),
+        tmux_session_name=layout.ccbd_tmux_session_name,
+        namespace_backend_family='unexpected-family',
+        layout_version=1,
+    )
+
+    assert state.namespace_backend_family == 'tmux-family'
+    assert state.to_record()['namespace_backend_family'] == 'tmux-family'
+    assert state.summary_fields()['namespace_backend_family'] == 'tmux-family'
+
+
+def test_project_namespace_state_from_legacy_record_projects_canonical_fields(tmp_path: Path) -> None:
+    layout = PathLayout(tmp_path / 'repo-legacy-state')
+    record = {
+        'schema_version': 2,
+        'record_type': 'ccbd_project_namespace_state',
+        'project_id': 'proj-legacy',
+        'namespace_epoch': 2,
+        'tmux_socket_path': str(layout.ccbd_tmux_socket_path),
+        'tmux_session_name': layout.ccbd_tmux_session_name,
+        'layout_version': 3,
+        'workspace_epoch': 1,
+    }
+
+    state = ProjectNamespaceState.from_record(record)
+    summary = state.summary_fields()
+
+    assert summary['namespace_backend_family'] == 'tmux-family'
+    assert summary['namespace_backend_impl'] == 'tmux'
+    assert summary['namespace_id'] == 'proj-legacy'
+    assert summary['namespace_session_name'] == layout.ccbd_tmux_session_name
+    assert summary['namespace_ipc_kind'] == 'unix_socket'
+    assert summary['namespace_ipc_ref'] == str(layout.ccbd_tmux_socket_path)
+    serialized = state.to_record()
+    assert serialized['namespace_id'] == 'proj-legacy'
+    assert serialized['namespace_backend_family'] == 'tmux-family'
+    assert serialized['tmux_socket_path'] == str(layout.ccbd_tmux_socket_path)
+
+
+def test_project_namespace_event_from_legacy_record_projects_canonical_fields(tmp_path: Path) -> None:
+    layout = PathLayout(tmp_path / 'repo-legacy-event')
+    record = {
+        'schema_version': 2,
+        'record_type': 'ccbd_project_namespace_event',
+        'event_kind': 'namespace_created',
+        'project_id': 'proj-event',
+        'occurred_at': '2026-04-03T00:05:00Z',
+        'namespace_epoch': 3,
+        'tmux_socket_path': str(layout.ccbd_tmux_socket_path),
+        'tmux_session_name': layout.ccbd_tmux_session_name,
+        'details': {},
+    }
+
+    event = ProjectNamespaceEvent.from_record(record)
+    summary = event.summary_fields()
+
+    assert summary['namespace_backend_family'] == 'tmux-family'
+    assert summary['namespace_backend_impl'] == 'tmux'
+    assert summary['namespace_id'] == 'proj-event'
+    assert summary['namespace_session_name'] == layout.ccbd_tmux_session_name
+    assert summary['namespace_ipc_kind'] == 'unix_socket'
+    assert summary['namespace_ipc_ref'] == str(layout.ccbd_tmux_socket_path)
+    assert summary['namespace_last_event_socket_path'] == str(layout.ccbd_tmux_socket_path)
+    serialized = event.to_record()
+    assert serialized['namespace_id'] == 'proj-event'
+    assert serialized['namespace_backend_family'] == 'tmux-family'
+    assert serialized['tmux_session_name'] == layout.ccbd_tmux_session_name
+
+
+def test_project_namespace_event_forces_backend_family_to_tmux_family(tmp_path: Path) -> None:
+    layout = PathLayout(tmp_path / 'repo-family-event')
+    event = ProjectNamespaceEvent(
+        event_kind='namespace_created',
+        project_id='proj-family-event',
+        occurred_at='2026-04-03T00:05:00Z',
+        namespace_epoch=1,
+        namespace_backend_family='unexpected-family',
+        tmux_socket_path=str(layout.ccbd_tmux_socket_path),
+        tmux_session_name=layout.ccbd_tmux_session_name,
+        details={},
+    )
+
+    assert event.namespace_backend_family == 'tmux-family'
+    assert event.to_record()['namespace_backend_family'] == 'tmux-family'
+    assert event.summary_fields()['namespace_backend_family'] == 'tmux-family'
 
 
 def test_path_layout_normalizes_tmux_session_name_for_tmux_targets(tmp_path: Path) -> None:
@@ -484,42 +580,21 @@ def test_project_namespace_controller_creates_state_and_lifecycle_event(tmp_path
     assert latest_event.details['reason'] == 'initial_create'
 
 
-def test_project_namespace_controller_default_factory_uses_rmux_env_backend(
+def test_project_namespace_controller_default_factory_ignores_terminal_backend_env(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    project_root = tmp_path / 'repo-rmux-controller'
+    project_root = tmp_path / 'repo-terminal-env-controller'
     layout = PathLayout(project_root)
-    backend = _FakeTmuxBackend()
-    backend.backend_impl = 'rmux'
-    calls: list[dict[str, object]] = []
-
-    def fake_get_backend_for_session(session_data: dict[str, object]):
-        calls.append(dict(session_data))
-        return backend
-
     monkeypatch.setenv('CCB_TERMINAL_BACKEND', 'rmux')
-    monkeypatch.setattr(
-        'ccbd.services.project_namespace_runtime.controller.get_backend_for_session',
-        fake_get_backend_for_session,
-    )
-    controller = ProjectNamespaceController(
-        layout,
-        'proj-rmux-controller',
-        clock=lambda: '2026-04-03T02:00:00Z',
+
+    backend = default_project_namespace_backend(
+        namespace=layout.ccbd_tmux_session_name,
+        socket_path=str(layout.ccbd_tmux_socket_path),
+        project_root=str(project_root),
     )
 
-    namespace = controller.ensure()
-    state = ProjectNamespaceStateStore(layout).load()
-
-    assert calls
-    assert calls[0]['terminal_backend'] == 'rmux'
-    assert calls[0]['namespace_id'] == layout.ccbd_tmux_session_name
-    assert namespace.backend_impl == 'rmux'
-    assert namespace.namespace_id == layout.ccbd_tmux_session_name
-    assert state is not None
-    assert state.summary_fields()['namespace_backend_impl'] == 'rmux'
-    assert state.summary_fields()['namespace_ipc_kind'] == 'named_pipe'
+    assert backend.backend_impl == 'tmux'
 
 
 def test_project_namespace_root_pane_id_passes_namespace_to_backend_factory(tmp_path: Path) -> None:

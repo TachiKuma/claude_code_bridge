@@ -110,7 +110,7 @@ def tmux_command_failure_message(
         parts.append(f'tmux_socket_path_bytes={len(os.fsencode(socket_text))}')
     command_text = _tmux_command_text(args=args, socket_path=socket_text or None, command=command)
     if command_text:
-        parts.append(f'tmux_command={command_text!r}')
+        parts.append(f"tmux_command='{command_text}'")
     detail_text = _single_line_detail(detail)
     if detail_text and detail_text not in base:
         parts.append(f'tmux_detail={detail_text!r}')

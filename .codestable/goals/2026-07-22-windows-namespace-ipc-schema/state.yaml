@@ -1,0 +1,29 @@
+schema_version: 2
+goal: "windows-namespace-ipc-schema"
+status: complete
+objective: "继续 windows-rmux-native-backend epic 中的 windows-namespace-ipc-schema，交付 ccbd namespace state、ping/doctor payload 和 foreground attach 输入的 mux-neutral canonical schema，并保留旧 tmux alias 兼容。"
+start_point: "mux-backend-contract 与 tmux-backend-contract-adapter 已验收通过；现有 ProjectNamespaceState / ProjectNamespaceEvent、build_ccbd_payload、doctor_summary 和 attach_started_project_namespace 仍以旧 tmux 字段为主。"
+acceptance:
+  - "ProjectNamespaceState 和 ProjectNamespaceEvent 可读写 canonical namespace fields，并能从旧 tmux 记录无损恢复。"
+  - "canonical payload 可机械投影为完整 MuxNamespaceRef，namespace_id == project_id 且 namespace_backend_family 固定为 tmux-family。"
+  - "ping('ccbd') 和 doctor payload 同时包含 canonical 字段与旧 alias，且顶层 tmux_socket_path 不被 namespace alias 覆盖。"
+  - "attach_started_project_namespace() 优先读取 canonical payload，再回退 legacy alias，attach 行为不变。"
+  - "旧 state/event fixtures、ccbd / doctor / start / foreground 相关回归通过，并完成 roadmap/items 写回。"
+non_goals:
+  - "不实现 RmuxBackend，不启动 Rmux daemon。"
+  - "不把 foreground attach 改成 MuxBackend.attach_namespace()。"
+  - "不引入 named pipe 真连接、ACL、Job Object 或 process liveness 逻辑。"
+  - "不修改 ccbd control-plane transport 或 provider session contract。"
+  - "不执行 git commit、git push、merge、release、deploy 或生产变更。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 1
+next_action: "Handoff to windows-shell-log-builder."
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-22"

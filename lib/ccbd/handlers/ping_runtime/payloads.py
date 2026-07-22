@@ -87,8 +87,8 @@ def build_ccbd_payload(
         'serving_startup_generation': serving.get('serving_startup_generation'),
         'accepted_startup_id': serving.get('accepted_startup_id'),
         'backend_selection': backend_selection,
-        **namespace_summary,
-        **namespace_event_summary,
+        **_namespace_payload(namespace_event_summary),
+        **_namespace_payload(namespace_summary),
         **start_policy_summary,
         'diagnostics': {
             'pid_alive': inspection.pid_alive,
@@ -170,6 +170,13 @@ def build_ccbd_payload(
             **restore_summary,
         },
     }
+
+
+def _namespace_payload(summary: dict[str, object]) -> dict[str, object]:
+    payload = dict(summary or {})
+    payload.pop('tmux_socket_path', None)
+    payload.pop('tmux_session_name', None)
+    return payload
 
 
 def _backend_selection_from_config(

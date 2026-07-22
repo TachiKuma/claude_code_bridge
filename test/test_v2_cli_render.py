@@ -996,6 +996,12 @@ def test_render_ps_and_doctor_keep_expected_line_shapes() -> None:
             'last_restore_already_active_count': 0,
             'last_restore_results_text': '',
             'namespace_epoch': 4,
+            'namespace_backend_family': 'tmux-family',
+            'namespace_backend_impl': 'tmux',
+            'namespace_id': 'proj-1',
+            'namespace_session_name': 'ccb-repo',
+            'namespace_ipc_kind': 'unix_socket',
+            'namespace_ipc_ref': '/tmp/repo/.ccb/ccbd/tmux.sock',
             'namespace_tmux_socket_path': '/tmp/repo/.ccb/ccbd/tmux.sock',
             'namespace_tmux_session_name': 'ccb-repo',
             'namespace_layout_version': 1,
@@ -1114,6 +1120,12 @@ def test_render_ps_and_doctor_keep_expected_line_shapes() -> None:
     assert 'ccbd_tmux_effective_socket_path: /home/demo/.local/state/ccb/projects/proj-1/ccbd/tmux.sock' in doctor_lines
     assert 'ccbd_tmux_effective_socket_path_bytes: 58' in doctor_lines
     assert 'ccbd_tmux_start_server_command: tmux -f /dev/null -S /home/demo/.local/state/ccb/projects/proj-1/ccbd/tmux.sock start-server' in doctor_lines
+    assert 'ccbd_namespace_backend_family: tmux-family' in doctor_lines
+    assert 'ccbd_namespace_backend_impl: tmux' in doctor_lines
+    assert 'ccbd_namespace_id: proj-1' in doctor_lines
+    assert 'ccbd_namespace_session_name: ccb-repo' in doctor_lines
+    assert 'ccbd_namespace_ipc_kind: unix_socket' in doctor_lines
+    assert 'ccbd_namespace_ipc_ref: /tmp/repo/.ccb/ccbd/tmux.sock' in doctor_lines
     assert 'ccbd_namespace_tmux_session_name: ccb-repo' in doctor_lines
     assert 'agent: name=codex health=healthy provider=codex completion=protocol_turn' in doctor_lines
     assert (

@@ -206,6 +206,7 @@ def test_build_ccbd_payload_passes_rmux_namespace_attach_metadata() -> None:
         execution_summary={},
         restore_summary={},
         namespace_summary={
+            'namespace_backend_family': 'tmux-family',
             'namespace_backend_impl': 'rmux',
             'namespace_id': 'ccb-rmux-demo',
             'namespace_session_name': 'ccb-rmux-demo',
@@ -219,12 +220,58 @@ def test_build_ccbd_payload_passes_rmux_namespace_attach_metadata() -> None:
         start_policy_summary={},
     )
 
+    assert payload['namespace_backend_family'] == 'tmux-family'
     assert payload['namespace_backend_impl'] == 'rmux'
     assert payload['namespace_id'] == 'ccb-rmux-demo'
     assert payload['namespace_session_name'] == 'ccb-rmux-demo'
     assert payload['namespace_ipc_kind'] == 'named_pipe'
     assert payload['namespace_ipc_ref'] == 'ccb-rmux-demo'
     assert payload['namespace_ui_attachable'] is True
+
+
+def test_build_ccbd_payload_filters_plain_namespace_tmux_aliases_before_merge() -> None:
+    payload = build_ccbd_payload(
+        project_id='proj-no-clobber',
+        config=_config(),
+        paths=_paths(),
+        inspection=_inspection(phase='mounted', desired_state='running'),
+        execution_summary={},
+        restore_summary={},
+        namespace_summary={
+            'tmux_socket_path': '/namespace/plain/tmux.sock',
+            'tmux_session_name': 'namespace-plain-session',
+            'namespace_backend_family': 'tmux-family',
+            'namespace_backend_impl': 'tmux',
+            'namespace_id': 'proj-no-clobber',
+            'namespace_session_name': 'ccb-namespace',
+            'namespace_ipc_kind': 'unix_socket',
+            'namespace_ipc_ref': '/namespace/canonical/tmux.sock',
+            'namespace_tmux_socket_path': '/namespace/alias/tmux.sock',
+            'namespace_tmux_session_name': 'ccb-namespace',
+        },
+        namespace_event_summary={
+            'tmux_socket_path': '/event/plain/tmux.sock',
+            'tmux_session_name': 'event-plain-session',
+            'namespace_backend_family': 'unexpected-family',
+            'namespace_backend_impl': 'rmux',
+            'namespace_id': 'event-project',
+            'namespace_session_name': 'event-session',
+            'namespace_ipc_kind': 'named_pipe',
+            'namespace_ipc_ref': 'event-pipe',
+            'namespace_last_event_kind': 'namespace_created',
+        },
+        start_policy_summary={},
+    )
+
+    assert payload['tmux_socket_path'] == '/home/demo/.local/state/ccb/projects/proj-1/ccbd/tmux.sock'
+    assert payload['namespace_backend_family'] == 'tmux-family'
+    assert payload['namespace_backend_impl'] == 'tmux'
+    assert payload['namespace_id'] == 'proj-no-clobber'
+    assert payload['namespace_session_name'] == 'ccb-namespace'
+    assert payload['namespace_ipc_kind'] == 'unix_socket'
+    assert payload['namespace_ipc_ref'] == '/namespace/canonical/tmux.sock'
+    assert payload['namespace_tmux_socket_path'] == '/namespace/alias/tmux.sock'
+    assert payload['namespace_last_event_kind'] == 'namespace_created'
 
 
 def test_build_ccbd_payload_includes_backend_selection_diagnostics(monkeypatch) -> None:

@@ -119,6 +119,66 @@ def test_start_foreground_attaches_to_namespace_tmux_session(tmp_path: Path, mon
     ) == 1
 
 
+def test_start_foreground_attaches_with_canonical_namespace_payload(tmp_path: Path, monkeypatch) -> None:
+    project_root = tmp_path / 'repo-attach-canonical'
+    (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
+    (project_root / '.ccb' / 'ccb.config').write_text('demo:codex\n', encoding='utf-8')
+    bootstrap_project(project_root)
+    context = _context(project_root)
+
+    class _FakeClient:
+        def __init__(self, socket_path, *, timeout_s=None):
+            del socket_path, timeout_s
+
+        def ping(self, target: str) -> dict[str, object]:
+            assert target == 'ccbd'
+            return {
+                'project_id': context.project.project_id,
+                'namespace_backend_family': 'tmux-family',
+                'namespace_backend_impl': 'tmux',
+                'namespace_id': context.project.project_id,
+                'namespace_session_name': context.paths.ccbd_tmux_session_name,
+                'namespace_ipc_kind': 'unix_socket',
+                'namespace_ipc_ref': str(context.paths.ccbd_tmux_socket_path),
+                'namespace_workspace_window_name': context.paths.ccbd_tmux_workspace_window_name,
+                'namespace_ui_attachable': True,
+            }
+
+    run_calls: list[list[str]] = []
+    attach_calls: list[list[str]] = []
+    attach_process = _FakeAttachProcess(pid=4243, returncode=0)
+
+    def _run(args, **kwargs):
+        del kwargs
+        call = list(args)
+        run_calls.append(call)
+        if 'list-clients' in call:
+            if call[-1] == '#{client_pid}\t#{client_tty}':
+                return subprocess.CompletedProcess(args=args, returncode=0, stdout='4243\t/dev/pts/55\n')
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout='4243\n')
+        return subprocess.CompletedProcess(args=args, returncode=0)
+
+    def _popen(args, **kwargs):
+        del kwargs
+        attach_calls.append(list(args))
+        return attach_process
+
+    monkeypatch.setattr('cli.services.start_foreground.shutil.which', lambda name: f'/usr/bin/{name}')
+    monkeypatch.setattr('cli.services.start_foreground.CcbdClient', _FakeClient)
+    monkeypatch.setattr('cli.services.start_foreground.subprocess.run', _run)
+    monkeypatch.setattr('cli.services.start_foreground.subprocess.Popen', _popen)
+
+    summary = attach_started_project_namespace(context)
+
+    assert summary.namespace_id == context.project.project_id
+    assert summary.session_name == context.paths.ccbd_tmux_session_name
+    assert summary.tmux_socket_path == str(context.paths.ccbd_tmux_socket_path)
+    assert summary.ipc_kind == 'unix_socket'
+    assert summary.ipc_ref == str(context.paths.ccbd_tmux_socket_path)
+    assert _tmux_cmd(context, 'attach-session', '-t', context.paths.ccbd_tmux_session_name) in attach_calls
+    assert any('select-window' in call for call in run_calls)
+
+
 def test_start_foreground_normalizes_ghostty_term_for_tmux(monkeypatch) -> None:
     monkeypatch.setenv('TERM', 'xterm-ghostty')
     monkeypatch.setenv('TMUX', '/tmp/tmux-1000/default,123,0')
