@@ -93,7 +93,7 @@ items:
   - slug: rmux-send-capture-logging
     description: 实现 Rmux send-text、send-key、capture-pane、pipe-pane、logging，并覆盖 Ctrl-C、Ctrl-D 与大文本输入
     depends_on: [rmux-backend-core]
-    status: in-progress
+    status: done
     feature: 2026-07-20-rmux-send-capture-logging
     minimal_loop: false
     notes: 重点替换 load-buffer/paste-buffer/tee -a 的 Windows 语义；必须用 provider completion parser golden fixtures 验证 capture 格式保真

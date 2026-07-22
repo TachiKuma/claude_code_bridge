@@ -20,6 +20,14 @@ from terminal_runtime.rmux_backend_runtime.client import (
     RmuxCommandClient,
     RmuxSubprocessCommandClient,
 )
+from terminal_runtime.rmux_backend_runtime.io import (
+    RmuxCaptureResult,
+    capture_pane,
+    ensure_pane_log,
+    pane_log_path,
+    send_key,
+    send_text,
+)
 from terminal_runtime.rmux_backend_runtime.namespace import (
     attach_namespace_unsupported,
     create_session,
@@ -55,6 +63,7 @@ from terminal_runtime.rmux_backend_runtime.presentation import (
     set_pane_title,
     set_pane_user_option,
 )
+from terminal_runtime.windows_shell_log_builder import WindowsCommandBuilder
 
 
 class RmuxBackend:
@@ -75,6 +84,7 @@ class RmuxBackend:
         capability_report_ref: str | None = None,
         daemon_evidence: Mapping[str, object] | None = None,
         project_root: str | Path | None = None,
+        log_command_builder: WindowsCommandBuilder | None = None,
     ) -> None:
         resolved_namespace = (
             namespace
@@ -95,6 +105,7 @@ class RmuxBackend:
         self.socket_path = resolved_socket_path
         self.executable = str(resolved_executable or "rmux")
         self.daemon_evidence = dict(daemon_evidence or {})
+        self._log_command_builder = log_command_builder
         self._capability_gate = (
             RmuxCapabilityGate(
                 command_status=command_status,
@@ -305,6 +316,68 @@ class RmuxBackend:
     def kill_pane(self, pane: MuxPaneRef) -> None:
         kill_pane(self, pane)
 
+    def send_text(
+        self,
+        pane: MuxPaneRef,
+        text: str,
+        *,
+        submit: bool = True,
+        timeout_s: float | None = None,
+    ) -> None:
+        send_text(self, pane, text, submit=submit, timeout_s=timeout_s)
+
+    def send_key(
+        self,
+        pane: MuxPaneRef,
+        key: str,
+        *,
+        timeout_s: float | None = None,
+    ) -> bool:
+        return send_key(self, pane, key, timeout_s=timeout_s)
+
+    def capture_pane(
+        self,
+        pane: MuxPaneRef,
+        *,
+        lines: int | None = None,
+        start: int | None = None,
+        end: int | None = None,
+        ansi: bool = False,
+        timeout_s: float | None = None,
+    ) -> RmuxCaptureResult:
+        return capture_pane(
+            self,
+            pane,
+            lines=lines,
+            start=start,
+            end=end,
+            ansi=ansi,
+            timeout_s=timeout_s,
+        )
+
+    def get_text(self, pane: MuxPaneRef, *, lines: int = 20) -> str | None:
+        return self.capture_pane(pane, lines=lines)["text"]
+
+    def pane_log_path(self, pane: MuxPaneRef) -> str | None:
+        path = pane_log_path(self, pane)
+        return str(path) if path is not None else None
+
+    def ensure_pane_log(
+        self,
+        pane: MuxPaneRef,
+        *,
+        log_path: str | Path | None = None,
+        timeout_s: float | None = None,
+    ) -> str | None:
+        path = ensure_pane_log(
+            self,
+            pane,
+            log_path=log_path,
+            command_builder=self._log_command_builder,
+            timeout_s=timeout_s,
+        )
+        return str(path) if path is not None else None
+
     def set_pane_title(self, pane: MuxPaneRef, title: str) -> None:
         set_pane_title(self, pane, title)
 
@@ -394,4 +467,4 @@ def _require_text(value: str | None, field_name: str) -> str:
     return text
 
 
-__all__ = ["RmuxBackend"]
+__all__ = ["RmuxBackend", "RmuxCaptureResult"]

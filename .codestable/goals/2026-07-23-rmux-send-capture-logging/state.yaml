@@ -1,0 +1,28 @@
+schema_version: 2
+goal: "rmux-send-capture-logging"
+status: complete
+objective: "在 RmuxBackend core 上实现 send_text、send_key、capture_pane 与 pane logging 契约，并用 provider completion capture fixtures 证明格式保真。"
+start_point: "rmux-backend-core 已验收通过；rmux-send-capture-logging design/review/checklist 已存在，roadmap item 为 in-progress，代码尚未实现 Rmux pane IO。"
+acceptance:
+  - "RmuxBackend 暴露并测试 send_text、send_key、capture_pane、ensure_pane_log 和 pane_log_path。"
+  - "unsupported required capability fail-fast 为 MuxCommandError(category=unsupported)，且不 fallback tmux。"
+  - "send/key/capture/logging 单测、completion golden fixture、scope guard 和聚焦 tmux 回归通过或记录设计允许的 baseline。"
+  - "独立 Task agent code review passed，独立 Task agent 功能验收 passed。"
+  - "feature checklist、review、QA、acceptance、roadmap item 与 goal final iteration 全部回写完成。"
+non_goals:
+  - "不实现 namespace/window/pane core 或 daemon lifecycle。"
+  - "不接入 ccb start、ccbd lifecycle、foreground attach 或 mobile gateway production path。"
+  - "不修改 provider completion parser 逻辑或 provider session payload/env。"
+  - "不 fallback 到 tmux，不在 Rmux IO 中拼 tee -a、sh -lc、PowerShell/cmd 字符串。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 1
+next_action: "Goal complete; continue ccbd-rmux-namespace-lifecycle when owner requests."
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-23"

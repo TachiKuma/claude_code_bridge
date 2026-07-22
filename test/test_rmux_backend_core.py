@@ -287,5 +287,8 @@ def test_attach_and_send_capture_logging_are_not_core_behaviors() -> None:
 
     assert attach.value.category == "unsupported"
     assert attach.value.operation == "attach_namespace"
-    for method_name in ("send_text", "send_key", "capture_pane", "ensure_pane_log", "pane_log_path"):
-        assert not hasattr(backend, method_name)
+    assert hasattr(backend, "send_text")
+    assert hasattr(backend, "send_key")
+    assert hasattr(backend, "capture_pane")
+    assert hasattr(backend, "ensure_pane_log")
+    assert hasattr(backend, "pane_log_path")

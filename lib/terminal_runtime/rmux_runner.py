@@ -16,6 +16,8 @@ class RmuxCommandResult:
     returncode: int
     stdout: str
     stderr: str
+    stdout_bytes: bytes | None = None
+    stderr_bytes: bytes | None = None
 
 
 class RmuxRunner:
