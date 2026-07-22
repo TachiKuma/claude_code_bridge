@@ -17,6 +17,7 @@ from agents.models import (
     RuntimeMode,
     WorkspaceMode,
 )
+from provider_runtime.process_ref import process_ref_from_record
 from storage.json_store import JsonStore
 from storage.paths import PathLayout
 
@@ -165,6 +166,7 @@ def _agent_runtime_from_record(record: dict) -> AgentRuntime:
         last_reconcile_at=record.get('last_reconcile_at'),
         last_failure_reason=record.get('last_failure_reason'),
         mount_attempt_id=record.get('mount_attempt_id'),
+        process_ref=process_ref_from_record(record.get('process_ref')),
     )
 
 

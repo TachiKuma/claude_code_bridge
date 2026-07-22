@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import time
 from typing import Any, Callable, Generic, Mapping, Sequence, TypeVar
 
@@ -217,6 +218,7 @@ def _run_helper(
     run: Callable[..., subprocess.CompletedProcess[str]],
 ) -> _HelperRunResult:
     helper_name = Path(command[0]).name if command else RUST_HELPER_BINARY
+    command = _helper_command(command)
     started = time.monotonic()
     try:
         completed = run(
@@ -264,6 +266,13 @@ def _run_helper(
     if not isinstance(payload, dict):
         return _HelperRunResult(diagnostic=_diagnostic(helper_name=helper_name, failure_kind='invalid_json', started=started))
     return _HelperRunResult(payload=payload)
+
+
+def _helper_command(command: Sequence[str]) -> list[str]:
+    args = list(command)
+    if args and os.name == 'nt' and Path(args[0]).suffix.lower() == '.py':
+        return [sys.executable, *args]
+    return args
 
 
 def _cached_capabilities(path: str) -> dict[str, Any] | None:

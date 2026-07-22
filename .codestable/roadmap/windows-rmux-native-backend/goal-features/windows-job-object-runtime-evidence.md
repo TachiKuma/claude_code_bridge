@@ -3,7 +3,7 @@ doc_type: roadmap-goal-feature
 roadmap: windows-rmux-native-backend
 roadmap_item: windows-job-object-runtime-evidence
 feature: 2026-07-20-windows-job-object-runtime-evidence
-status: pending
+status: accepted
 ---
 
 # windows-job-object-runtime-evidence Goal Feature Spec

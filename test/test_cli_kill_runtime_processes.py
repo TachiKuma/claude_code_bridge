@@ -12,6 +12,7 @@ from runtime_pid_cleanup import (
     list_process_cmdlines,
     remove_pid_files,
 )
+from runtime_pid_cleanup.matching import pid_matches_project
 
 
 def test_kill_pid_tree_once_uses_taskkill_on_windows(monkeypatch) -> None:
@@ -35,7 +36,7 @@ def test_kill_pid_tree_once_prefers_process_group_on_posix(monkeypatch) -> None:
     monkeypatch.setattr(processes.os, 'name', 'posix')
     monkeypatch.setattr(processes, '_safe_getpgid', lambda pid: 900)
     monkeypatch.setattr(processes, '_safe_getpgrp', lambda: 901)
-    monkeypatch.setattr(processes.os, 'killpg', lambda pgid, sig: killed.append((pgid, sig)))
+    monkeypatch.setattr(processes.os, 'killpg', lambda pgid, sig: killed.append((pgid, sig)), raising=False)
     monkeypatch.setattr(processes, 'kill_pid', lambda pid, force=False: kill_pid_calls.append((pid, force)) or True)
 
     assert processes._kill_pid_tree_once(123, force=False) is True
@@ -129,8 +130,8 @@ def test_collect_project_process_candidates_finds_legacy_accelerator_by_exact_cw
     project_root.mkdir()
     bootstrap_project(project_root)
     socket_path = (tmp_path / 'accelerator.sock').resolve()
-    executable = Path('/opt/ccb/bin/ccb-runtime-accelerator')
-    cmdline = f'{executable} serve --socket {socket_path}'
+    executable = Path('C:/opt/ccb/bin/ccb-runtime-accelerator.exe')
+    cmdline = f"'{executable}' serve --socket '{socket_path}'"
     monkeypatch.setenv('CCB_RUNTIME_ACCELERATOR_SOCKET', str(socket_path))
     monkeypatch.setattr(
         'runtime_accelerator.ownership.inspect_process_identity',
@@ -194,3 +195,97 @@ def test_remove_pid_files_removes_only_pid_and_accelerator_authority(tmp_path: P
     assert not pid_path.exists()
     assert not owner_path.exists()
     assert unrelated_path.exists()
+
+
+def test_windows_pid_matching_requires_process_ref_evidence(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo'
+    project_root.mkdir()
+    runtime_path = project_root / '.ccb' / 'agents' / 'agent1' / 'runtime.json'
+    runtime_path.parent.mkdir(parents=True)
+    runtime_path.write_text(
+        (
+            '{"schema_version":2,"record_type":"agent_runtime","process_ref":{'
+            '"kind":"process_tree","evidence_state":"degraded","job_id":null,'
+            '"owner_pid":4321,"root_pid":4321,"runtime_pid":4321,"runtime_generation":2,'
+            f'"runtime_root":"{project_root.as_posix()}/.ccb/agents/agent1/provider-runtime/codex",'
+            '"source":"kill","observed_at":"2026-07-22T00:00:00Z"}}\n'
+        ),
+        encoding='utf-8',
+    )
+    pid_path = project_root / 'runtime.pid'
+    pid_path.write_text('4321\n', encoding='utf-8')
+
+    assert pid_matches_project(
+        4321,
+        project_root=project_root,
+        hint_paths=(pid_path,),
+        read_proc_path_fn=lambda pid, entry: None,
+        read_proc_cmdline_fn=lambda pid: '',
+        path_within_fn=lambda path, root: False,
+        os_name='nt',
+    ) is False
+    assert pid_matches_project(
+        4321,
+        project_root=project_root,
+        hint_paths=(runtime_path,),
+        read_proc_path_fn=lambda pid, entry: None,
+        read_proc_cmdline_fn=lambda pid: '',
+        path_within_fn=lambda path, root: False,
+        os_name='nt',
+    ) is True
+
+
+def test_windows_pid_matching_rejects_process_ref_without_runtime_generation(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-missing-generation'
+    project_root.mkdir()
+    runtime_path = project_root / '.ccb' / 'agents' / 'agent1' / 'runtime.json'
+    runtime_path.parent.mkdir(parents=True)
+    runtime_path.write_text(
+        (
+            '{"schema_version":2,"record_type":"agent_runtime","process_ref":{'
+            '"kind":"process_tree","evidence_state":"degraded","job_id":null,'
+            '"owner_pid":4321,"root_pid":4321,"runtime_pid":4321,"runtime_generation":null,'
+            f'"runtime_root":"{project_root.as_posix()}/.ccb/agents/agent1/provider-runtime/codex",'
+            '"source":"kill","observed_at":"2026-07-22T00:00:00Z"}}\n'
+        ),
+        encoding='utf-8',
+    )
+
+    assert pid_matches_project(
+        4321,
+        project_root=project_root,
+        hint_paths=(runtime_path,),
+        read_proc_path_fn=lambda pid, entry: None,
+        read_proc_cmdline_fn=lambda pid: '',
+        path_within_fn=lambda path, root: False,
+        os_name='nt',
+    ) is False
+
+
+def test_windows_pid_matching_allows_ccbd_authority_record_without_procfs(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-authority-record'
+    project_root.mkdir()
+    lease_path = project_root / '.ccb' / 'ccbd' / 'lease.json'
+    random_pid_path = project_root / 'runtime.pid'
+    lease_path.parent.mkdir(parents=True)
+    lease_path.write_text('{"record_type":"ccbd_lease","ccbd_pid":321,"keeper_pid":654}\n', encoding='utf-8')
+    random_pid_path.write_text('321\n', encoding='utf-8')
+
+    assert pid_matches_project(
+        321,
+        project_root=project_root,
+        hint_paths=(lease_path,),
+        read_proc_path_fn=lambda pid, entry: None,
+        read_proc_cmdline_fn=lambda pid: '',
+        path_within_fn=lambda path, root: False,
+        os_name='nt',
+    ) is True
+    assert pid_matches_project(
+        321,
+        project_root=project_root,
+        hint_paths=(random_pid_path,),
+        read_proc_path_fn=lambda pid, entry: None,
+        read_proc_cmdline_fn=lambda pid: '',
+        path_within_fn=lambda path, root: False,
+        os_name='nt',
+    ) is False

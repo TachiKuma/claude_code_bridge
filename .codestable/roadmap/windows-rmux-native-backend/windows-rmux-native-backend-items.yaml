@@ -61,7 +61,7 @@ items:
   - slug: windows-job-object-runtime-evidence
     description: 增加 Windows Job Object 进程树 evidence、runtime authority 字段和 kill/recovery 判定输入
     depends_on: [windows-namespace-ipc-schema]
-    status: in-progress
+    status: done
     feature: 2026-07-20-windows-job-object-runtime-evidence
     minimal_loop: false
     notes: pane alive 不等于 provider healthy；job evidence 是第二生命信号

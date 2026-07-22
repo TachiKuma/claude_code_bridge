@@ -18,6 +18,8 @@ def provider_runtime_facts(monitor, runtime, session, binding, *, pane_id_overri
             binding=binding,
             provider=provider,
             pane_id_override=pane_id_override,
+            runtime=runtime,
+            clock=monitor._clock,
         )
     except Exception:
         return None

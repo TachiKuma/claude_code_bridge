@@ -75,7 +75,14 @@ def _spec(name: str, provider: str) -> AgentSpec:
     )
 
 
-def _runtime(agent_name: str, *, project_id: str, state: AgentState = AgentState.IDLE, health: str = 'healthy') -> AgentRuntime:
+def _runtime(
+    agent_name: str,
+    *,
+    project_id: str,
+    state: AgentState = AgentState.IDLE,
+    health: str = 'healthy',
+    process_ref: dict | None = None,
+) -> AgentRuntime:
     return AgentRuntime(
         agent_name=agent_name,
         state=state,
@@ -94,6 +101,7 @@ def _runtime(agent_name: str, *, project_id: str, state: AgentState = AgentState
         pane_id=f'%{agent_name[-1]}',
         pane_state='alive',
         reconcile_state='steady',
+        process_ref=process_ref,
     )
 
 
@@ -389,6 +397,45 @@ def test_project_view_exposes_active_reload_drains(tmp_path: Path) -> None:
     assert agent2['reload_drain']['intent_kind'] == 'unload'
     assert agent2['reload_drain']['phase'] == 'draining'
     assert agent2['reload_drain']['status'] == 'waiting'
+
+
+def test_project_view_exposes_process_ref_diagnostics(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-process-ref-view'
+    project_root.mkdir()
+    layout = PathLayout(project_root)
+    project_id = compute_project_id(project_root)
+    config = _config()
+    process_ref = {
+        'kind': 'process_tree',
+        'evidence_state': 'degraded',
+        'job_id': None,
+        'owner_pid': 456,
+        'root_pid': 456,
+        'runtime_pid': 456,
+        'runtime_generation': 2,
+        'runtime_root': str(layout.agent_provider_runtime_dir('agent1', 'codex')),
+        'source': 'diagnostic',
+        'observed_at': NOW,
+    }
+    registry = AgentRegistry(layout, config)
+    registry.upsert(_runtime('agent1', project_id=project_id, process_ref=process_ref))
+    for agent_name in ('agent2', 'agent3'):
+        registry.upsert(_runtime(agent_name, project_id=project_id))
+    dispatcher = JobDispatcher(layout, config, registry, clock=lambda: NOW)
+
+    response = _project_view_service(
+        project_root=project_root,
+        project_id=project_id,
+        layout=layout,
+        config=config,
+        registry=registry,
+        dispatcher=dispatcher,
+    ).build_response()
+
+    agent1 = next(agent for agent in response['view']['agents'] if agent['name'] == 'agent1')
+    assert agent1['pane_id'] == '%1'
+    assert agent1['process_ref']['evidence_state'] == 'degraded'
+    assert agent1['process_ref']['owner_pid'] == 456
 
 
 def test_project_view_cache_invalidates_when_reload_drain_file_changes(tmp_path: Path) -> None:

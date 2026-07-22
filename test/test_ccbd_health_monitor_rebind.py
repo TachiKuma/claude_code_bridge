@@ -53,6 +53,18 @@ def test_rebind_runtime_uses_provider_facts_and_clears_degraded_state() -> None:
         session_file='/tmp/session.json',
         session_id='sid-9',
         ccb_session_id='ccb-sid-9',
+        process_ref={
+            'kind': 'process_tree',
+            'evidence_state': 'degraded',
+            'job_id': None,
+            'owner_pid': 33,
+            'root_pid': 33,
+            'runtime_pid': 33,
+            'runtime_generation': 4,
+            'runtime_root': '/new/runtime',
+            'source': 'health',
+            'observed_at': '2026-04-06T00:00:00Z',
+        },
     )
     captured = {}
     monitor = SimpleNamespace(
@@ -89,6 +101,7 @@ def test_rebind_runtime_uses_provider_facts_and_clears_degraded_state() -> None:
     assert updated.session_file == '/tmp/session.json'
     assert updated.session_id == 'sid-9'
     assert updated.pane_state == 'alive'
+    assert updated.process_ref == facts.process_ref
 
 
 def test_rebind_runtime_falls_back_to_session_binding_when_facts_missing(monkeypatch) -> None:
@@ -135,3 +148,32 @@ def test_runtime_health_preserves_terminal_provider_recovery_block() -> None:
     )
 
     assert runtime_health(monitor, runtime) == 'provider-auth-revoked'
+
+
+def test_runtime_health_checks_process_ref_before_pane_success() -> None:
+    runtime = _runtime(
+        process_ref={
+            'kind': 'process_tree',
+            'evidence_state': 'missing',
+            'job_id': None,
+            'owner_pid': 22,
+            'root_pid': 22,
+            'runtime_pid': 22,
+            'runtime_generation': 1,
+            'runtime_root': '/tmp/runtime',
+            'source': 'health',
+            'observed_at': '2026-04-06T00:00:00Z',
+        },
+    )
+    captured = {}
+    monitor = SimpleNamespace(
+        _pane_health=lambda runtime: (_ for _ in ()).throw(
+            AssertionError('pane health must not short-circuit missing process evidence')
+        ),
+        _clock=lambda: '2026-04-06T00:00:01Z',
+        _runtime_service=None,
+        _registry=SimpleNamespace(upsert=lambda updated: captured.setdefault('runtime', updated)),
+    )
+
+    assert runtime_health(monitor, runtime) == 'process-evidence-missing'
+    assert captured['runtime'].state is AgentState.DEGRADED

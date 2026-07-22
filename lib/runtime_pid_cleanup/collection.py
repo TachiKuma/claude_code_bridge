@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 from provider_runtime.helper_manifest import load_helper_manifest
+from provider_runtime.process_ref import process_ref_from_record
 from storage.paths import PathLayout
 
 from .procfs import list_process_cmdlines, read_pid_file, read_proc_cmdline
@@ -17,6 +18,12 @@ def collect_pid_candidates(agent_dir: Path, *, runtime, fallback_to_agent_dir: b
         runtime_pid = coerce_pid(getattr(runtime, 'runtime_pid', None) or getattr(runtime, 'pid', None))
         if runtime_pid is not None:
             candidates.setdefault(runtime_pid, []).append(agent_dir / 'runtime.json')
+        process_ref = process_ref_from_record(getattr(runtime, 'process_ref', None))
+        if process_ref is not None:
+            for pid in (process_ref.get('owner_pid'), process_ref.get('root_pid'), process_ref.get('runtime_pid')):
+                pid = coerce_pid(pid)
+                if pid is not None:
+                    candidates.setdefault(pid, []).append(agent_dir / 'runtime.json')
     for root in resolved_runtime_roots(agent_dir, runtime=runtime, fallback_to_agent_dir=fallback_to_agent_dir):
         for pid_path in sorted(root.rglob('*.pid')):
             pid = read_pid_file(pid_path)

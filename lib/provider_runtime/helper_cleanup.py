@@ -8,6 +8,7 @@ from agents.models import AgentState
 from cli.kill_runtime.processes import is_pid_alive as _shared_is_pid_alive
 
 from .helper_manifest import clear_helper_manifest, load_helper_manifest
+from .process_ref import process_ref_allows_destructive_cleanup
 
 _ACTIVE_STATES = {
     AgentState.STARTING,
@@ -31,6 +32,11 @@ def terminate_helper_manifest_path(path) -> bool:
     manifest = _load_helper_manifest_best_effort(path)
     if manifest is None:
         return False
+    if os.name == 'nt' and not process_ref_allows_destructive_cleanup(
+        getattr(manifest, 'process_ref', None),
+        pid=getattr(manifest, 'leader_pid', None),
+    ):
+        return False
     if _terminate_helper_manifest(manifest):
         clear_helper_manifest(path)
         return True
@@ -49,10 +55,21 @@ def _runtime_owns_helper(runtime, manifest) -> bool:
     current_generation = _canonical_runtime_generation(runtime)
     if current_generation <= 0:
         return False
-    return (
+    if not (
         str(getattr(runtime, 'agent_name', '') or '').strip() == manifest.agent_name
         and current_generation == int(manifest.runtime_generation)
-    )
+    ):
+        return False
+    if os.name == 'nt':
+        process_ref = getattr(manifest, 'process_ref', None)
+        if process_ref is None:
+            return True
+        return process_ref_allows_destructive_cleanup(
+            getattr(manifest, 'process_ref', None),
+            runtime=runtime,
+            pid=getattr(manifest, 'leader_pid', None),
+        )
+    return True
 
 
 def _terminate_helper_manifest(manifest) -> bool:

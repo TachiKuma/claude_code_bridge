@@ -189,7 +189,11 @@ def test_terminate_runtime_pids_reaps_helper_group_from_manifest(tmp_path: Path,
         (
             '{"schema_version":1,"record_type":"provider_helper_manifest","agent_name":"agent1",'
             '"runtime_generation":2,"helper_kind":"codex_bridge","leader_pid":777,"pgid":888,'
-            '"started_at":"2026-04-21T00:00:00Z","owner_daemon_generation":5,"state":"running"}\n'
+            '"started_at":"2026-04-21T00:00:00Z","owner_daemon_generation":5,"state":"running",'
+            '"process_ref":{"kind":"process_tree","evidence_state":"degraded","job_id":null,'
+            '"owner_pid":777,"root_pid":777,"runtime_pid":777,"runtime_generation":2,'
+            f'"runtime_root":"{(project_root / ".ccb" / "agents" / "agent1" / "provider-runtime" / "codex").as_posix()}",'
+            '"source":"kill","observed_at":"2026-04-21T00:00:00Z"}}\n'
         ),
         encoding='utf-8',
     )
@@ -199,8 +203,12 @@ def test_terminate_runtime_pids_reaps_helper_group_from_manifest(tmp_path: Path,
     removed: list[tuple[Path, ...]] = []
 
     monkeypatch.setattr('provider_runtime.helper_cleanup._kill_helper_group', lambda pgid, sig: killed.append((pgid, int(sig))) or True)
-    monkeypatch.setattr('provider_runtime.helper_cleanup.os.killpg', lambda pgid, sig: killed.append((pgid, int(sig))) or None)
-    monkeypatch.setattr('provider_runtime.helper_cleanup.os.getpgrp', lambda: 999)
+    monkeypatch.setattr(
+        'provider_runtime.helper_cleanup.os.killpg',
+        lambda pgid, sig: killed.append((pgid, int(sig))) or None,
+        raising=False,
+    )
+    monkeypatch.setattr('provider_runtime.helper_cleanup.os.getpgrp', lambda: 999, raising=False)
     monkeypatch.setattr(
         'provider_runtime.helper_cleanup.os.kill',
         lambda pid, sig: (_ for _ in ()).throw(ProcessLookupError()) if sig == 0 else None,

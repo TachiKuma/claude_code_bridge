@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from agents.models import (
@@ -60,6 +61,18 @@ def test_agent_stores_roundtrip(tmp_path: Path) -> None:
         restart_count=2,
         last_reconcile_at='2026-03-18T00:00:02Z',
         last_failure_reason='pane-dead',
+        process_ref={
+            'kind': 'process_tree',
+            'evidence_state': 'degraded',
+            'job_id': None,
+            'owner_pid': 123,
+            'root_pid': 123,
+            'runtime_pid': 123,
+            'runtime_generation': 7,
+            'runtime_root': str(layout.workspace_path('agent1')),
+            'source': 'launch',
+            'observed_at': '2026-03-18T00:00:02Z',
+        },
     )
     restore = AgentRestoreState(
         restore_mode=RestoreMode.AUTO,
@@ -82,3 +95,45 @@ def test_agent_stores_roundtrip(tmp_path: Path) -> None:
     assert loaded_restore is not None
     assert loaded_restore.last_restore_status is RestoreStatus.PROVIDER
     assert loaded_restore.files_touched == ['a.py']
+
+
+def test_agent_runtime_store_normalizes_process_ref_record(tmp_path: Path) -> None:
+    layout = PathLayout(tmp_path / 'repo-process-ref-normalize')
+    runtime = AgentRuntime(
+        agent_name='agent1',
+        state=AgentState.IDLE,
+        pid=123,
+        started_at='2026-03-18T00:00:00Z',
+        last_seen_at='2026-03-18T00:00:01Z',
+        runtime_ref='runtime-1',
+        session_ref='session-1',
+        workspace_path=str(layout.workspace_path('agent1')),
+        project_id='proj-1',
+        backend_type='tmux',
+        queue_depth=0,
+        socket_path=str(layout.ccbd_socket_path),
+        health='healthy',
+        process_ref={
+            'kind': 'process_tree',
+            'evidence_state': 'degraded',
+            'job_id': None,
+            'owner_pid': 123,
+            'root_pid': 123,
+            'runtime_pid': 123,
+            'runtime_generation': 7,
+            'runtime_root': str(layout.workspace_path('agent1')),
+            'source': 'launch',
+            'observed_at': '2026-03-18T00:00:02Z',
+            'handle': 'must-not-persist',
+        },
+    )
+
+    store = AgentRuntimeStore(layout)
+    path = store.save(runtime)
+    payload = json.loads(path.read_text(encoding='utf-8'))
+    loaded = store.load('agent1')
+
+    assert payload['process_ref']['owner_pid'] == 123
+    assert 'handle' not in payload['process_ref']
+    assert loaded is not None
+    assert loaded.process_ref == payload['process_ref']

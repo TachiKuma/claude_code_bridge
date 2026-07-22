@@ -5,6 +5,12 @@ from pathlib import Path
 from typing import Any
 
 from agents.models import normalize_agent_name
+from provider_runtime.process_ref import (
+    build_process_ref,
+    process_ref_allows_destructive_cleanup,
+    process_ref_from_record,
+    process_ref_to_record,
+)
 from storage.json_store import JsonStore
 
 SCHEMA_VERSION = 1
@@ -20,6 +26,7 @@ class ProviderHelperManifest:
     started_at: str | None
     owner_daemon_generation: int | None
     state: str = 'running'
+    process_ref: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, 'agent_name', normalize_agent_name(self.agent_name))
@@ -45,6 +52,7 @@ class ProviderHelperManifest:
             'started_at': self.started_at,
             'owner_daemon_generation': self.owner_daemon_generation,
             'state': self.state,
+            'process_ref': process_ref_to_record(self.process_ref),
         }
 
     @classmethod
@@ -61,6 +69,7 @@ class ProviderHelperManifest:
                 int(record['owner_daemon_generation']) if record.get('owner_daemon_generation') is not None else None
             ),
             state=str(record.get('state') or 'running'),
+            process_ref=process_ref_from_record(record.get('process_ref')),
         )
 
 
@@ -107,6 +116,7 @@ def build_runtime_helper_manifest(runtime) -> ProviderHelperManifest | None:
     runtime_generation = _canonical_runtime_generation(runtime)
     if runtime_generation is None:
         return None
+    process_ref = _helper_process_ref(runtime, leader_pid=leader_pid)
     return ProviderHelperManifest(
         agent_name=str(getattr(runtime, 'agent_name')),
         runtime_generation=runtime_generation,
@@ -118,6 +128,7 @@ def build_runtime_helper_manifest(runtime) -> ProviderHelperManifest | None:
             int(getattr(runtime, 'daemon_generation')) if getattr(runtime, 'daemon_generation', None) is not None else None
         ),
         state='running',
+        process_ref=process_ref,
     )
 
 
@@ -127,6 +138,21 @@ def _canonical_runtime_generation(runtime) -> int | None:
     except Exception:
         return None
     return generation if generation > 0 else None
+
+
+def _helper_process_ref(runtime, *, leader_pid: int) -> dict[str, Any] | None:
+    existing = process_ref_from_record(getattr(runtime, 'process_ref', None))
+    if process_ref_allows_destructive_cleanup(existing, runtime=runtime, pid=leader_pid):
+        return existing
+    return build_process_ref(
+        runtime=runtime,
+        source='launch',
+        clock=lambda: str(getattr(runtime, 'started_at', '') or getattr(runtime, 'last_seen_at', '') or '').strip()
+        or None,
+        owner_pid=leader_pid,
+        root_pid=leader_pid,
+        runtime_pid=(getattr(runtime, 'runtime_pid', None) or leader_pid),
+    )
 
 
 def _read_pid(path: Path) -> int | None:

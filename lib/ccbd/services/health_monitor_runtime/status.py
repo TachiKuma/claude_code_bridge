@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from agents.models import AgentState, RuntimeBindingSource, normalize_runtime_binding_source
+from provider_runtime.process_ref import process_ref_health
 from ccbd.services.runtime_recovery_policy import (
     PROVIDER_RECOVERY_BLOCKED_RUNTIME_HEALTHS,
     normalized_runtime_health,
@@ -50,6 +51,16 @@ def runtime_health(monitor, runtime) -> str:
         and normalized_runtime_health(runtime) in PROVIDER_RECOVERY_BLOCKED_RUNTIME_HEALTHS
     ):
         return runtime.health
+    process_health = process_ref_health(getattr(runtime, 'process_ref', None))
+    if process_health is not None:
+        updated = _patch_runtime_state(
+            monitor,
+            runtime,
+            state=AgentState.DEGRADED,
+            health=process_health,
+            last_seen_at=monitor._clock(),
+        )
+        return updated.health
     pane_status = monitor._pane_health(runtime)
     if pane_status is not None:
         return pane_status

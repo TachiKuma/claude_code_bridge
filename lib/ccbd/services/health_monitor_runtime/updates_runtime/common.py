@@ -20,6 +20,7 @@ def runtime_fields_from_facts(runtime, facts) -> dict[str, object]:
         'tmux_socket_path': facts.tmux_socket_path or runtime.tmux_socket_path,
         'session_file': facts.session_file or runtime.session_file,
         'session_id': facts.session_id or runtime.session_id,
+        'process_ref': facts.process_ref or getattr(runtime, 'process_ref', None),
     }
 
 
@@ -42,6 +43,7 @@ def runtime_fields_from_session(runtime, session, binding=None) -> dict[str, obj
         'tmux_socket_path': runtime.tmux_socket_path,
         'session_file': runtime.session_file,
         'session_id': runtime.session_id,
+        'process_ref': getattr(runtime, 'process_ref', None),
     }
 
 

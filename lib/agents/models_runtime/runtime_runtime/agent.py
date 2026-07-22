@@ -5,7 +5,6 @@ from typing import Any
 
 from agents.models_runtime.enums import AgentState, RuntimeBindingSource
 from agents.models_runtime.names import SCHEMA_VERSION, normalize_agent_name
-
 from .helpers import normalize_runtime_defaults, validate_runtime_fields
 
 
@@ -53,6 +52,7 @@ class AgentRuntime:
     last_reconcile_at: str | None = None
     last_failure_reason: str | None = None
     mount_attempt_id: str | None = None
+    process_ref: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         self.agent_name = normalize_agent_name(self.agent_name)
@@ -60,6 +60,8 @@ class AgentRuntime:
         normalize_runtime_defaults(self)
 
     def to_record(self) -> dict[str, Any]:
+        from provider_runtime.process_ref import process_ref_to_record
+
         return {
             'schema_version': SCHEMA_VERSION,
             'record_type': 'agent_runtime',
@@ -105,6 +107,7 @@ class AgentRuntime:
             'last_reconcile_at': self.last_reconcile_at,
             'last_failure_reason': self.last_failure_reason,
             'mount_attempt_id': self.mount_attempt_id,
+            'process_ref': process_ref_to_record(self.process_ref),
         }
 
 

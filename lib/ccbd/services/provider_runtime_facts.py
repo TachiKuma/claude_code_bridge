@@ -17,6 +17,7 @@ from provider_core.session_binding_evidence import (
     session_tmux_socket_name,
     session_tmux_socket_path,
 )
+from provider_runtime.process_ref import build_process_ref, process_ref_from_record
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,7 @@ class ProviderRuntimeFacts:
     session_file: str | None
     session_id: str | None
     ccb_session_id: str | None
+    process_ref: dict | None = None
 
 
 def load_provider_session(binding, workspace_path: Path, agent_name: str):
@@ -60,8 +62,21 @@ def build_provider_runtime_facts(
     binding,
     provider: str,
     pane_id_override: str | None = None,
+    runtime=None,
+    clock=lambda: None,
 ) -> ProviderRuntimeFacts:
     pane_id = str(pane_id_override or getattr(session, 'pane_id', '') or '').strip() or None
+    runtime_pid = session_runtime_pid(session, provider=provider)
+    runtime_root = session_runtime_root(session)
+    existing_process_ref = process_ref_from_record(getattr(runtime, 'process_ref', None))
+    process_ref = existing_process_ref or build_process_ref(
+        runtime=runtime,
+        session=session,
+        source='health',
+        clock=clock,
+        runtime_pid=runtime_pid,
+        runtime_root=runtime_root,
+    )
     return ProviderRuntimeFacts(
         runtime_ref=session_runtime_ref(session, pane_id_override=pane_id),
         session_ref=session_ref(
@@ -69,8 +84,8 @@ def build_provider_runtime_facts(
             session_id_attr=binding.session_id_attr,
             session_path_attr=binding.session_path_attr,
         ),
-        runtime_root=session_runtime_root(session),
-        runtime_pid=session_runtime_pid(session, provider=provider),
+        runtime_root=runtime_root,
+        runtime_pid=runtime_pid,
         terminal_backend=session_terminal(session),
         pane_id=pane_id,
         pane_title_marker=session_pane_title_marker(session),
@@ -80,6 +95,7 @@ def build_provider_runtime_facts(
         session_file=session_file(session),
         session_id=session_id(session, session_id_attr=binding.session_id_attr),
         ccb_session_id=session_ccb_session_id(session),
+        process_ref=process_ref,
     )
 
 

@@ -779,6 +779,9 @@ def _agent_view(
         'chain_waiting_state': callback_wait.state.value if callback_wait is not None else None,
         'runtime_state': _runtime_state(runtime),
         'runtime_health': getattr(runtime, 'health', None) if runtime is not None else None,
+        'process_ref': dict(getattr(runtime, 'process_ref', None))
+        if isinstance(getattr(runtime, 'process_ref', None), dict)
+        else None,
         'reconcile_state': getattr(runtime, 'reconcile_state', None) if runtime is not None else None,
         'runtime_failure_reason': getattr(runtime, 'last_failure_reason', None) if runtime is not None else None,
         'workspace_path': getattr(runtime, 'workspace_path', None) if runtime is not None else None,
