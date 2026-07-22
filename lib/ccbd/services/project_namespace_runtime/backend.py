@@ -17,44 +17,9 @@ from terminal_runtime.tmux_readiness import (
     tmux_failure_detail,
 )
 from terminal_runtime.tmux_compat import is_tmux_compat_subset
+from terminal_runtime.tmux_server_policy import CLIPBOARD_PIPE_COMMAND, TMUX_ENVIRONMENT_KEYS
 from terminal_runtime.placeholders import pane_placeholder_argv, pane_placeholder_cmd
 
-_TMUX_ENVIRONMENT_KEYS = (
-    'TERM',
-    'TERM_PROGRAM',
-    'TERM_PROGRAM_VERSION',
-    'DISPLAY',
-    'WAYLAND_DISPLAY',
-    'XDG_RUNTIME_DIR',
-    'WSL_DISTRO_NAME',
-    'WSL_INTEROP',
-    'SSH_AUTH_SOCK',
-    'SSH_CONNECTION',
-    'KITTY_WINDOW_ID',
-    'WEZTERM_EXECUTABLE',
-    'WEZTERM_PANE',
-    'WEZTERM_UNIX_SOCKET',
-    'CCB_WORKBENCH_PROFILE',
-    'CCB_WORKBENCH_FORCE_RICH',
-    'CCB_WORKBENCH_ROOT',
-    'CCB_WORKBENCH_TERMINAL_PROGRAM',
-    'CCB_WORKBENCH_TERMINAL_PROGRAM_VERSION',
-    'CCB_WORKBENCH_YAZI_SAFE_CONFIG',
-    'CCB_WORKBENCH_YAZI_RICH_CONFIG',
-    'AGENT_ROLES_STORE',
-)
-_CLIPBOARD_PIPE_COMMAND = (
-    "sh -lc '"
-    "tmp=$(mktemp \"${TMPDIR:-/tmp}/ccb-clipboard.XXXXXX\") || exit 0; "
-    "cat >\"$tmp\"; "
-    "if command -v wl-copy >/dev/null 2>&1 && [ -n \"${WAYLAND_DISPLAY:-}\" ]; then (wl-copy <\"$tmp\"; rm -f \"$tmp\") >/dev/null 2>&1 & "
-    "elif command -v xclip >/dev/null 2>&1 && [ -n \"${DISPLAY:-}\" ]; then (xclip -selection clipboard <\"$tmp\"; rm -f \"$tmp\") >/dev/null 2>&1 & "
-    "elif command -v xsel >/dev/null 2>&1 && [ -n \"${DISPLAY:-}\" ]; then (xsel --clipboard --input <\"$tmp\"; rm -f \"$tmp\") >/dev/null 2>&1 & "
-    "elif command -v pbcopy >/dev/null 2>&1; then pbcopy <\"$tmp\"; rm -f \"$tmp\"; "
-    "elif command -v powershell.exe >/dev/null 2>&1; then powershell.exe -NoProfile -Command \"[Console]::InputEncoding=[System.Text.UTF8Encoding]::new(); Set-Clipboard -Value ([Console]::In.ReadToEnd())\" <\"$tmp\"; rm -f \"$tmp\"; "
-    "elif command -v pwsh >/dev/null 2>&1; then pwsh -NoLogo -NoProfile -Command \"[Console]::InputEncoding=[System.Text.UTF8Encoding]::new(); Set-Clipboard -Value ([Console]::In.ReadToEnd())\" <\"$tmp\"; rm -f \"$tmp\"; "
-    "else rm -f \"$tmp\"; fi'"
-)
 
 
 @dataclass(frozen=True)
@@ -78,6 +43,9 @@ def build_backend(backend_factory, *, socket_path: str, namespace: str | None = 
 
 
 def prepare_server(backend, *, timeout_s: float | None = None) -> None:
+    if _is_mux_backend(backend):
+        backend.prepare_server(timeout_s=timeout_s)
+        return
     _tmux_run_ready(
         backend,
         ['start-server'],
@@ -87,6 +55,9 @@ def prepare_server(backend, *, timeout_s: float | None = None) -> None:
 
 
 def ensure_server_policy(backend, *, timeout_s: float | None = None) -> None:
+    if _is_mux_backend(backend):
+        backend.ensure_server_policy(timeout_s=timeout_s)
+        return
     _tmux_run_ready(
         backend,
         ['set-option', '-g', 'destroy-unattached', 'off'],
@@ -119,7 +90,7 @@ def ensure_server_policy(backend, *, timeout_s: float | None = None) -> None:
     for key in ('y', 'Enter', 'MouseDragEnd1Pane'):
         _apply_optional_tmux_policy(
             backend,
-            ['bind-key', '-T', 'copy-mode-vi', key, 'send-keys', '-X', 'copy-pipe-and-cancel', _CLIPBOARD_PIPE_COMMAND],
+            ['bind-key', '-T', 'copy-mode-vi', key, 'send-keys', '-X', 'copy-pipe-and-cancel', CLIPBOARD_PIPE_COMMAND],
             description=f'tmux copy-mode-vi clipboard binding {key}',
             timeout_s=timeout_s,
         )
@@ -140,14 +111,14 @@ def ensure_server_policy(backend, *, timeout_s: float | None = None) -> None:
 
 
 def _apply_tmux_environment_policy(backend, *, timeout_s: float | None = None) -> None:
-    update_environment = ' '.join(_TMUX_ENVIRONMENT_KEYS)
+    update_environment = ' '.join(TMUX_ENVIRONMENT_KEYS)
     _apply_optional_tmux_policy(
         backend,
         ['set-option', '-g', 'update-environment', update_environment],
         description='tmux update-environment policy',
         timeout_s=timeout_s,
     )
-    for key in _TMUX_ENVIRONMENT_KEYS:
+    for key in TMUX_ENVIRONMENT_KEYS:
         value = os.environ.get(key)
         if value:
             _apply_optional_tmux_policy(
@@ -204,6 +175,14 @@ def create_session(
     terminal_size: tuple[int, int] | None = None,
     timeout_s: float | None = None,
 ) -> None:
+    if _is_mux_backend(backend):
+        backend.create_session(
+            session_name=session_name,
+            project_root=str(project_root),
+            window_name=window_name,
+            terminal_size=terminal_size,
+        )
+        return
     width, height = _resolved_session_size(terminal_size)
     args = [
         'new-session',
@@ -262,6 +241,16 @@ def session_window_target(session_name: str, window_name: str | None = None) -> 
 
 
 def list_windows(backend, session_name: str, *, timeout_s: float | None = None) -> tuple[TmuxWindowRecord, ...]:
+    if _is_mux_backend(backend):
+        namespace = backend.namespace_ref(session_name=session_name)
+        return tuple(
+            TmuxWindowRecord(
+                window_id=None,
+                window_name=window['window_name'],
+                active=window['active'],
+            )
+            for window in backend.list_windows(namespace)
+        )
     result = _tmux_run_ready(
         backend,
         ['list-windows', '-t', session_name, '-F', '#{window_id}\t#{window_name}\t#{window_active}'],
@@ -303,6 +292,15 @@ def find_window(backend, *, session_name: str, window_name: str, timeout_s: floa
 
 
 def create_window(backend, *, session_name: str, window_name: str, project_root, select: bool = False, timeout_s: float | None = None) -> TmuxWindowRecord:
+    if _is_mux_backend(backend):
+        namespace = backend.namespace_ref(session_name=session_name)
+        record = backend.ensure_window(
+            namespace,
+            window_name=window_name,
+            project_root=str(project_root),
+            select=select,
+        )
+        return TmuxWindowRecord(window_id=None, window_name=record['window_name'], active=record['active'])
     _tmux_run_ready(
         backend,
         [
@@ -363,6 +361,11 @@ def rename_window(backend, *, target: str, new_name: str, timeout_s: float | Non
 
 
 def kill_window(backend, *, target: str, timeout_s: float | None = None) -> None:
+    if _is_mux_backend(backend):
+        session_name, _sep, _window = str(target).partition(':')
+        namespace = backend.namespace_ref(session_name=session_name)
+        backend.kill_window(namespace, target=target)
+        return
     _tmux_run_ready(
         backend,
         ['kill-window', '-t', target],
@@ -372,6 +375,9 @@ def kill_window(backend, *, target: str, timeout_s: float | None = None) -> None
 
 
 def session_alive(backend, session_name: str, *, timeout_s: float | None = None) -> bool:
+    if _is_mux_backend(backend):
+        namespace = backend.namespace_ref(session_name=session_name)
+        return bool(backend.session_alive(namespace, timeout_s=timeout_s))
     runner = getattr(backend, '_tmux_run', None)
     if not callable(runner):
         checker = getattr(backend, 'is_alive', None)
@@ -391,10 +397,23 @@ def session_alive(backend, session_name: str, *, timeout_s: float | None = None)
 
 
 def session_root_pane(backend, session_name: str, *, timeout_s: float | None = None) -> str:
+    if _is_mux_backend(backend):
+        namespace = backend.namespace_ref(session_name=session_name)
+        pane = backend.session_root_pane(namespace, timeout_s=timeout_s)
+        return pane['pane_id']
     return window_root_pane(backend, target_window=session_name, timeout_s=timeout_s)
 
 
 def window_root_pane(backend, *, target_window: str, timeout_s: float | None = None) -> str:
+    if _is_mux_backend(backend):
+        session_name, _sep, window_name = str(target_window).partition(':')
+        namespace = backend.namespace_ref(session_name=session_name)
+        pane = backend.window_root_pane(
+            namespace,
+            window_name=window_name or session_name,
+            timeout_s=timeout_s,
+        )
+        return pane['pane_id']
     pane_id = wait_for_root_pane(backend, target_window=target_window, timeout_s=timeout_s)
     if not pane_id.startswith('%'):
         raise RuntimeError(f'failed to resolve root pane for tmux target {target_window!r}')
@@ -433,6 +452,8 @@ def split_pane(
 
 
 def kill_server(backend) -> bool:
+    if _is_mux_backend(backend):
+        return bool(backend.kill_server())
     try:
         backend._tmux_run(['kill-server'], check=False, capture=True)  # type: ignore[attr-defined]
         import os
@@ -468,6 +489,11 @@ def wait_for_window(
 
 
 def select_window(backend, *, target: str) -> None:
+    if _is_mux_backend(backend):
+        session_name, _sep, _window = str(target).partition(':')
+        namespace = backend.namespace_ref(session_name=session_name)
+        backend.select_window(namespace, target=target)
+        return
     _wait_until_ready(
         lambda: _tmux_run_ready(
             backend,
@@ -480,6 +506,8 @@ def select_window(backend, *, target: str) -> None:
 
 
 def wait_for_root_pane(backend, *, target_window: str, timeout_s: float | None = None) -> str:
+    if _is_mux_backend(backend):
+        return window_root_pane(backend, target_window=target_window, timeout_s=timeout_s)
     pane_id = _wait_until(
         lambda: _root_pane_once(backend, target_window=target_window),
         timeout_s=timeout_s,
@@ -628,6 +656,10 @@ def _session_alive_once(backend, session_name: str) -> bool:
     if not detail or is_tmux_missing_session_text(detail):
         return False
     raise RuntimeError(detail)
+
+
+def _is_mux_backend(backend) -> bool:
+    return getattr(backend, 'backend_family', None) == 'tmux-family' and callable(getattr(backend, 'namespace_ref', None))
 
 
 def _tmux_object_ready_timeout_s(timeout_s: float | None = None) -> float:

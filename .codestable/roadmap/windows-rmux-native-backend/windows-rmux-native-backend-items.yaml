@@ -37,7 +37,7 @@ items:
   - slug: tmux-backend-contract-adapter
     description: 将现有 TmuxBackend 适配到 MuxBackend，保持 Linux、macOS、WSL 行为不变
     depends_on: [mux-backend-contract]
-    status: in-progress
+    status: done
     feature: 2026-07-19-tmux-backend-contract-adapter
     minimal_loop: false
     notes: 回归重点是当前 tmux lifecycle 与 provider path 不漂移

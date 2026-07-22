@@ -3,7 +3,7 @@ doc_type: roadmap-goal-feature
 roadmap: windows-rmux-native-backend
 roadmap_item: tmux-backend-contract-adapter
 feature: 2026-07-19-tmux-backend-contract-adapter
-status: pending
+status: accepted
 ---
 
 # tmux-backend-contract-adapter Goal Feature Spec

@@ -5,44 +5,9 @@ import time
 from pathlib import Path
 
 from terminal_runtime.placeholders import pane_placeholder_argv
+from terminal_runtime.tmux_server_policy import CLIPBOARD_PIPE_COMMAND, TMUX_ENVIRONMENT_KEYS
 
-_TMUX_ENVIRONMENT_KEYS = (
-    'TERM',
-    'TERM_PROGRAM',
-    'TERM_PROGRAM_VERSION',
-    'DISPLAY',
-    'WAYLAND_DISPLAY',
-    'XDG_RUNTIME_DIR',
-    'WSL_DISTRO_NAME',
-    'WSL_INTEROP',
-    'SSH_AUTH_SOCK',
-    'SSH_CONNECTION',
-    'KITTY_WINDOW_ID',
-    'WEZTERM_EXECUTABLE',
-    'WEZTERM_PANE',
-    'WEZTERM_UNIX_SOCKET',
-    'CCB_WORKBENCH_PROFILE',
-    'CCB_WORKBENCH_FORCE_RICH',
-    'CCB_WORKBENCH_ROOT',
-    'CCB_WORKBENCH_TERMINAL_PROGRAM',
-    'CCB_WORKBENCH_TERMINAL_PROGRAM_VERSION',
-    'CCB_WORKBENCH_YAZI_SAFE_CONFIG',
-    'CCB_WORKBENCH_YAZI_RICH_CONFIG',
-    'AGENT_ROLES_STORE',
-)
 _PREPARED_DETACHED_TMUX_SERVER_KEYS: set[tuple[object, ...]] = set()
-_CLIPBOARD_PIPE_COMMAND = (
-    "sh -lc '"
-    "tmp=$(mktemp \"${TMPDIR:-/tmp}/ccb-clipboard.XXXXXX\") || exit 0; "
-    "cat >\"$tmp\"; "
-    "if command -v wl-copy >/dev/null 2>&1 && [ -n \"${WAYLAND_DISPLAY:-}\" ]; then (wl-copy <\"$tmp\"; rm -f \"$tmp\") >/dev/null 2>&1 & "
-    "elif command -v xclip >/dev/null 2>&1 && [ -n \"${DISPLAY:-}\" ]; then (xclip -selection clipboard <\"$tmp\"; rm -f \"$tmp\") >/dev/null 2>&1 & "
-    "elif command -v xsel >/dev/null 2>&1 && [ -n \"${DISPLAY:-}\" ]; then (xsel --clipboard --input <\"$tmp\"; rm -f \"$tmp\") >/dev/null 2>&1 & "
-    "elif command -v pbcopy >/dev/null 2>&1; then pbcopy <\"$tmp\"; rm -f \"$tmp\"; "
-    "elif command -v powershell.exe >/dev/null 2>&1; then powershell.exe -NoProfile -Command \"[Console]::InputEncoding=[System.Text.UTF8Encoding]::new(); Set-Clipboard -Value ([Console]::In.ReadToEnd())\" <\"$tmp\"; rm -f \"$tmp\"; "
-    "elif command -v pwsh >/dev/null 2>&1; then pwsh -NoLogo -NoProfile -Command \"[Console]::InputEncoding=[System.Text.UTF8Encoding]::new(); Set-Clipboard -Value ([Console]::In.ReadToEnd())\" <\"$tmp\"; rm -f \"$tmp\"; "
-    "else rm -f \"$tmp\"; fi'"
-)
 
 
 def launch_pane(
@@ -138,6 +103,12 @@ def detached_pane(
 
 
 def prepare_detached_tmux_server(backend) -> None:
+    if _is_mux_backend(backend):
+        try:
+            backend.ensure_server_policy()
+        except Exception:
+            pass
+        return
     cache_key = _detached_tmux_server_prepare_key(backend)
     if cache_key in _PREPARED_DETACHED_TMUX_SERVER_KEYS:
         return
@@ -157,7 +128,7 @@ def prepare_detached_tmux_server(backend) -> None:
     for key in ('y', 'Enter', 'MouseDragEnd1Pane'):
         prepared = best_effort_tmux_run(
             backend,
-            ['bind-key', '-T', 'copy-mode-vi', key, 'send-keys', '-X', 'copy-pipe-and-cancel', _CLIPBOARD_PIPE_COMMAND],
+            ['bind-key', '-T', 'copy-mode-vi', key, 'send-keys', '-X', 'copy-pipe-and-cancel', CLIPBOARD_PIPE_COMMAND],
         ) and prepared
     for key, direction in (('h', '-L'), ('j', '-D'), ('k', '-U'), ('l', '-R')):
         prepared = best_effort_tmux_run(backend, ['bind-key', key, 'select-pane', direction]) and prepared
@@ -173,7 +144,7 @@ def _detached_tmux_server_prepare_key(backend) -> tuple[object, ...]:
     socket_path = str(getattr(backend, 'socket_path', '') or '').strip()
     socket_name = str(getattr(backend, 'socket_name', '') or '').strip()
     socket_key = ('path', socket_path) if socket_path else ('name', socket_name or '<default>')
-    env_key = tuple((key, os.environ.get(key) or '') for key in _TMUX_ENVIRONMENT_KEYS)
+    env_key = tuple((key, os.environ.get(key) or '') for key in TMUX_ENVIRONMENT_KEYS)
     return (*socket_key, env_key)
 
 
@@ -186,8 +157,8 @@ def best_effort_tmux_run(backend, argv: list[str]) -> bool:
 
 
 def _best_effort_tmux_environment_policy(backend) -> bool:
-    prepared = best_effort_tmux_run(backend, ['set-option', '-g', 'update-environment', ' '.join(_TMUX_ENVIRONMENT_KEYS)])
-    for key in _TMUX_ENVIRONMENT_KEYS:
+    prepared = best_effort_tmux_run(backend, ['set-option', '-g', 'update-environment', ' '.join(TMUX_ENVIRONMENT_KEYS)])
+    for key in TMUX_ENVIRONMENT_KEYS:
         value = os.environ.get(key)
         if value:
             prepared = best_effort_tmux_run(backend, ['set-environment', '-g', key, value]) and prepared
@@ -196,6 +167,16 @@ def _best_effort_tmux_environment_policy(backend) -> bool:
 
 def create_detached_tmux_pane(backend, *, cmd: str, cwd: Path, session_name: str) -> str:
     target_session = f'{session_name}-{int(time.time() * 1000)}-{os.getpid()}'
+    if _is_mux_backend(backend):
+        namespace = backend.create_session(
+            session_name=target_session,
+            project_root=str(cwd),
+            terminal_size=(160, 48),
+        )
+        prepare_detached_tmux_server(backend)
+        pane = backend.session_root_pane(namespace)
+        backend.respawn_pane(pane, cmd=cmd, cwd=str(cwd), remain_on_exit=True)
+        return pane['pane_id']
     backend._tmux_run(  # type: ignore[attr-defined]
         ['new-session', '-d', '-x', '160', '-y', '48', '-s', target_session, '-c', str(cwd), *pane_placeholder_argv()],
         check=True,
@@ -263,6 +244,10 @@ def best_effort_kill_tmux_pane(backend, pane_id: str) -> None:
 def should_fallback_to_detached_session(exc: Exception) -> bool:
     text = str(exc).strip().lower()
     return 'split-window failed' in text or 'no space for new pane' in text
+
+
+def _is_mux_backend(backend) -> bool:
+    return getattr(backend, 'backend_family', None) == 'tmux-family' and callable(getattr(backend, 'create_session', None))
 
 
 __all__ = [

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from storage.paths import PathLayout
-from terminal_runtime import PsmuxBackend, RmuxBackend, TmuxBackend
+from terminal_runtime import PsmuxBackend, RmuxBackend, TmuxBackend, TmuxMuxBackendAdapter
 from terminal_runtime.backend_selection import TerminalBackendSelection
 from terminal_runtime.backend_resolver import RmuxAvailability, RmuxCapabilityStatus, RmuxRouteApproval
 from typing import Callable
@@ -217,7 +217,7 @@ def default_project_namespace_backend(
 ):
     return TerminalBackendSelection(
         detect_terminal_fn=lambda: None,
-        tmux_backend_factory=lambda: TmuxBackend(socket_name=namespace, socket_path=socket_path),
+        tmux_backend_factory=lambda: TmuxMuxBackendAdapter(TmuxBackend(socket_name=namespace, socket_path=socket_path)),
         psmux_backend_factory=lambda: PsmuxBackend(namespace=namespace, socket_path=socket_path),
         rmux_backend_factory=lambda: RmuxBackend(namespace=namespace, socket_path=socket_path),
         project_config_backend=project_config_backend,

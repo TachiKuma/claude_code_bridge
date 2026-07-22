@@ -24,15 +24,6 @@ class TmuxLayoutBackend(Protocol):
         cwd: str | None = None,
     ) -> str: ...
     def set_pane_title(self, pane_id: str, title: str) -> None: ...
-    def _tmux_run(
-        self,
-        args: list[str],
-        *,
-        check: bool = False,
-        capture: bool = False,
-        input_bytes: bytes | None = None,
-        timeout: float | None = None,
-    ): ...
 
 
 @dataclass(frozen=True)

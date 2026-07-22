@@ -26,6 +26,7 @@ from terminal_runtime.tmux import default_detached_session_name as _default_deta
 from terminal_runtime.psmux_backend import PsmuxBackend
 from terminal_runtime.rmux_backend import RmuxBackend
 from terminal_runtime.tmux_backend import TmuxBackend
+from terminal_runtime.tmux_mux_backend import TmuxMuxBackendAdapter
 
 from .api_selection import (
     create_layout as _create_layout,
@@ -128,7 +129,7 @@ def get_backend(terminal_type: Optional[str] = None) -> Optional[TerminalBackend
         cached_backend=_backend_cache,
         terminal_type=selected_type,
         detect_terminal_fn=detect_terminal,
-        tmux_backend_factory=TmuxBackend,
+        tmux_backend_factory=_tmux_mux_backend_factory,
         psmux_backend_factory=PsmuxBackend,
         rmux_backend_factory=RmuxBackend,
     )
@@ -160,7 +161,7 @@ def get_backend_for_session(session_data: dict) -> Optional[TerminalBackend]:
     return _resolve_backend_for_session(
         session_data=session_data,
         detect_terminal_fn=detect_terminal,
-        tmux_backend_factory=TmuxBackend,
+        tmux_backend_factory=_tmux_mux_backend_factory,
         psmux_backend_factory=PsmuxBackend,
         rmux_backend_factory=RmuxBackend,
     )
@@ -194,12 +195,17 @@ def create_auto_layout(
     )
 
 
+def _tmux_mux_backend_factory(*, socket_name: str | None = None, socket_path: str | None = None) -> TmuxMuxBackendAdapter:
+    return TmuxMuxBackendAdapter(TmuxBackend(socket_name=socket_name, socket_path=socket_path))
+
+
 __all__ = [
     "LayoutResult",
     "PsmuxBackend",
     "RmuxBackend",
     "TerminalBackend",
     "TmuxBackend",
+    "TmuxMuxBackendAdapter",
     "create_auto_layout",
     "detect_terminal",
     "get_backend",

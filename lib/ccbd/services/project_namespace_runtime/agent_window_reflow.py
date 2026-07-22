@@ -56,15 +56,20 @@ def reflow_agent_window_fixed(
     timeout_s: float | None,
     prefer_topology_layout: bool = False,
 ) -> tuple[bool, str | None]:
-    runner = getattr(backend, '_tmux_run', None)
-    if not callable(runner):
+    if not _supports_reflow_ops(backend):
         return False, 'tmux backend does not support fixed-layout reflow'
     topology_window = _topology_window(topology_plan, window_name)
     agent_names = window_agent_names(topology_window) if topology_window is not None else ()
     user_layout = str(getattr(topology_window, 'user_layout', '') or '').strip()
     if not agent_names or (not user_layout and len(agent_names) > 6):
         return False, None
-    panes, error = _observed_panes(runner, window_target=window_target, timeout_s=timeout_s)
+    panes, error = _observed_panes(
+        backend,
+        session_name=session_name,
+        window_name=window_name,
+        window_target=window_target,
+        timeout_s=timeout_s,
+    )
     if error is not None:
         return False, error
     if not panes:
@@ -103,12 +108,20 @@ def reflow_agent_window_fixed(
         return False, None
     body = _render_layout(layout_root)
     layout = f'{_layout_checksum(body):04x},{body}'
-    completed = runner(['select-layout', '-t', window_target, layout], check=False, capture=True, timeout=timeout_s)
-    if int(getattr(completed, 'returncode', 1) or 0) != 0:
-        detail = str(getattr(completed, 'stderr', '') or getattr(completed, 'stdout', '') or '').strip()
-        return False, detail or 'fixed select-layout failed'
+    select_error = _select_layout(
+        backend,
+        session_name=session_name,
+        window_name=window_name,
+        window_target=window_target,
+        layout=layout,
+        timeout_s=timeout_s,
+    )
+    if select_error is not None:
+        return False, select_error
     swap_error = _apply_visual_order(
-        runner,
+        backend,
+        session_name=session_name,
+        window_name=window_name,
         current_order=[pane.pane_id for pane in panes],
         desired_order=desired_order,
         timeout_s=timeout_s,
@@ -123,7 +136,73 @@ def _topology_window(topology_plan, window_name: str):
     return windows.get(str(window_name))
 
 
-def _observed_panes(runner, *, window_target: str, timeout_s: float | None) -> tuple[tuple[_ObservedPane, ...], str | None]:
+def _observed_panes(
+    backend,
+    *,
+    session_name: str,
+    window_name: str,
+    window_target: str,
+    timeout_s: float | None,
+) -> tuple[tuple[_ObservedPane, ...], str | None]:
+    records, error = _raw_pane_records(
+        backend,
+        session_name=session_name,
+        window_name=window_name,
+        window_target=window_target,
+        timeout_s=timeout_s,
+    )
+    if error is not None:
+        return (), error
+    panes: list[_ObservedPane] = []
+    for record in records:
+        try:
+            panes.append(
+                _ObservedPane(
+                    pane_id=record['pane_id'],
+                    pane_index=int(record['pane_index']),
+                    pane_left=int(record['pane_left']),
+                    pane_top=int(record['pane_top']),
+                    pane_width=int(record['pane_width']),
+                    pane_height=int(record['pane_height']),
+                    role=record['@ccb_role'],
+                    slot=record['@ccb_slot'],
+                    window_name=record['@ccb_window'],
+                    sidebar_instance=record['@ccb_sidebar_instance'],
+                )
+            )
+        except (KeyError, ValueError):
+            return (), None
+    return tuple(sorted(panes, key=lambda pane: pane.pane_index)), None
+
+
+def _raw_pane_records(
+    backend,
+    *,
+    session_name: str,
+    window_name: str,
+    window_target: str,
+    timeout_s: float | None,
+) -> tuple[tuple[dict[str, str], ...], str | None]:
+    describe = getattr(backend, 'describe_window_panes', None)
+    namespace_ref = getattr(backend, 'namespace_ref', None)
+    if callable(describe) and callable(namespace_ref):
+        try:
+            return (
+                tuple(
+                    dict(record)
+                    for record in describe(
+                        namespace_ref(session_name=session_name),
+                        window_name=window_name,
+                        user_options=('@ccb_role', '@ccb_slot', '@ccb_window', '@ccb_sidebar_instance'),
+                    )
+                ),
+                None,
+            )
+        except Exception as exc:
+            return (), str(exc).strip() or 'list-panes failed'
+    runner = getattr(backend, '_tmux_run', None)
+    if not callable(runner):
+        return (), 'tmux backend does not support fixed-layout reflow'
     completed = runner(
         [
             'list-panes',
@@ -139,29 +218,26 @@ def _observed_panes(runner, *, window_target: str, timeout_s: float | None) -> t
     if int(getattr(completed, 'returncode', 1) or 0) != 0:
         detail = str(getattr(completed, 'stderr', '') or getattr(completed, 'stdout', '') or '').strip()
         return (), detail or 'list-panes failed'
-    panes: list[_ObservedPane] = []
+    records: list[dict[str, str]] = []
     for line in str(getattr(completed, 'stdout', '') or '').splitlines():
         parts = line.split('\t')
         if len(parts) < 10:
             return (), None
-        try:
-            panes.append(
-                _ObservedPane(
-                    pane_id=parts[0],
-                    pane_index=int(parts[1]),
-                    pane_left=int(parts[2]),
-                    pane_top=int(parts[3]),
-                    pane_width=int(parts[4]),
-                    pane_height=int(parts[5]),
-                    role=parts[6],
-                    slot=parts[7],
-                    window_name=parts[8],
-                    sidebar_instance=parts[9],
-                )
-            )
-        except ValueError:
-            return (), None
-    return tuple(sorted(panes, key=lambda pane: pane.pane_index)), None
+        records.append(
+            {
+                'pane_id': parts[0],
+                'pane_index': parts[1],
+                'pane_left': parts[2],
+                'pane_top': parts[3],
+                'pane_width': parts[4],
+                'pane_height': parts[5],
+                '@ccb_role': parts[6],
+                '@ccb_slot': parts[7],
+                '@ccb_window': parts[8],
+                '@ccb_sidebar_instance': parts[9],
+            }
+        )
+    return tuple(records), None
 
 
 def _classify_panes(
@@ -461,21 +537,76 @@ def _layout_checksum(body: str) -> int:
     return checksum
 
 
-def _apply_visual_order(runner, *, current_order: list[str], desired_order: list[str], timeout_s: float | None) -> str | None:
+def _select_layout(
+    backend,
+    *,
+    session_name: str,
+    window_name: str,
+    window_target: str,
+    layout: str,
+    timeout_s: float | None,
+) -> str | None:
+    reflow_window = getattr(backend, 'reflow_window', None)
+    namespace_ref = getattr(backend, 'namespace_ref', None)
+    if callable(reflow_window) and callable(namespace_ref):
+        try:
+            reflow_window(namespace_ref(session_name=session_name), window_name=window_name, layout=layout)
+            return None
+        except Exception as exc:
+            return str(exc).strip() or 'fixed select-layout failed'
+    runner = getattr(backend, '_tmux_run', None)
+    if not callable(runner):
+        return 'tmux backend does not support fixed-layout reflow'
+    completed = runner(['select-layout', '-t', window_target, layout], check=False, capture=True, timeout=timeout_s)
+    if int(getattr(completed, 'returncode', 1) or 0) != 0:
+        detail = str(getattr(completed, 'stderr', '') or getattr(completed, 'stdout', '') or '').strip()
+        return detail or 'fixed select-layout failed'
+    return None
+
+
+def _apply_visual_order(
+    backend,
+    *,
+    session_name: str,
+    window_name: str,
+    current_order: list[str],
+    desired_order: list[str],
+    timeout_s: float | None,
+) -> str | None:
     if sorted(current_order) != sorted(desired_order):
         return 'fixed layout pane order mismatch'
+    swap_pane = getattr(backend, 'swap_pane', None)
+    pane_ref = getattr(backend, 'pane_ref', None)
+    runner = getattr(backend, '_tmux_run', None)
     order = list(current_order)
     for index, desired in enumerate(desired_order):
         if order[index] == desired:
             continue
         swap_index = order.index(desired)
         source = order[index]
-        completed = runner(['swap-pane', '-s', source, '-t', desired], check=False, capture=True, timeout=timeout_s)
-        if int(getattr(completed, 'returncode', 1) or 0) != 0:
-            detail = str(getattr(completed, 'stderr', '') or getattr(completed, 'stdout', '') or '').strip()
-            return detail or 'swap-pane failed'
+        if callable(swap_pane) and callable(pane_ref):
+            try:
+                swap_pane(
+                    pane_ref(source, session_name=session_name, window_name=window_name),
+                    target=pane_ref(desired, session_name=session_name, window_name=window_name),
+                )
+            except Exception as exc:
+                return str(exc).strip() or 'swap-pane failed'
+        elif callable(runner):
+            completed = runner(['swap-pane', '-s', source, '-t', desired], check=False, capture=True, timeout=timeout_s)
+            if int(getattr(completed, 'returncode', 1) or 0) != 0:
+                detail = str(getattr(completed, 'stderr', '') or getattr(completed, 'stdout', '') or '').strip()
+                return detail or 'swap-pane failed'
+        else:
+            return 'tmux backend does not support fixed-layout reflow'
         order[index], order[swap_index] = order[swap_index], order[index]
     return None
+
+
+def _supports_reflow_ops(backend) -> bool:
+    if callable(getattr(backend, 'describe_window_panes', None)) and callable(getattr(backend, 'reflow_window', None)):
+        return True
+    return callable(getattr(backend, '_tmux_run', None))
 
 
 __all__ = ['reflow_agent_window_fixed']

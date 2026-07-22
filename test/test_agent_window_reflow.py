@@ -49,6 +49,48 @@ class _FakeBackend:
         raise AssertionError(f'unexpected tmux command: {args}')
 
 
+@dataclass
+class _FakeMuxReflowBackend:
+    pane_rows: tuple[str, ...]
+    reflowed: list[tuple[str, str]] = field(default_factory=list)
+    swaps: list[tuple[str, str]] = field(default_factory=list)
+    backend_family: str = 'tmux-family'
+
+    def namespace_ref(self, *, session_name: str):
+        return {'session_name': session_name}
+
+    def pane_ref(self, pane_id: str, *, session_name: str, window_name: str | None = None):
+        return {'pane_id': pane_id, 'session_name': session_name, 'window_name': window_name}
+
+    def describe_window_panes(self, namespace, *, window_name: str, user_options: tuple[str, ...]):
+        del namespace, window_name, user_options
+        records = []
+        for row in self.pane_rows:
+            parts = row.split('\t')
+            records.append(
+                {
+                    'pane_id': parts[0],
+                    'pane_index': parts[1],
+                    'pane_left': parts[2],
+                    'pane_top': parts[3],
+                    'pane_width': parts[4],
+                    'pane_height': parts[5],
+                    '@ccb_role': parts[6],
+                    '@ccb_slot': parts[7],
+                    '@ccb_window': parts[8],
+                    '@ccb_sidebar_instance': parts[9],
+                }
+            )
+        return tuple(records)
+
+    def reflow_window(self, namespace, *, window_name: str, layout: str, expected_panes=()):
+        del namespace, expected_panes
+        self.reflowed.append((window_name, layout))
+
+    def swap_pane(self, source, *, target):
+        self.swaps.append((source['pane_id'], target['pane_id']))
+
+
 def test_reflow_agent_window_fixed_builds_column_layout_and_swaps_visual_order() -> None:
     backend = _FakeBackend()
     topology = _Topology(windows=(_Window('main', ('main', 'helper1', 'helper2', 'helper3', 'helper4', 'helper5')),))
@@ -76,6 +118,39 @@ def test_reflow_agent_window_fixed_builds_column_layout_and_swaps_visual_order()
         ('swap-pane', '-s', '%3', '-t', '%6'),
         ('swap-pane', '-s', '%5', '-t', '%3'),
     ]
+
+
+def test_reflow_agent_window_fixed_uses_mux_reflow_ops_without_private_runner() -> None:
+    backend = _FakeMuxReflowBackend(
+        pane_rows=(
+            '%1\t0\t0\t0\t24\t29\tsidebar\tsidebar:main\t\tmain',
+            '%2\t1\t25\t0\t95\t29\tagent\tmain\tmain\t',
+            '%3\t2\t72\t0\t48\t9\tagent\thelper1\tmain\t',
+            '%4\t3\t25\t10\t47\t9\tagent\thelper2\tmain\t',
+            '%5\t4\t72\t10\t48\t9\tagent\thelper3\tmain\t',
+            '%6\t5\t25\t20\t47\t9\tagent\thelper4\tmain\t',
+            '%7\t6\t72\t20\t48\t9\tagent\thelper5\tmain\t',
+        )
+    )
+    topology = _Topology(windows=(_Window('main', ('main', 'helper1', 'helper2', 'helper3', 'helper4', 'helper5')),))
+
+    applied, error = reflow_agent_window_fixed(
+        backend,
+        session_name='ccb-test',
+        window_target='ccb-test:main',
+        topology_plan=topology,
+        window_name='main',
+        timeout_s=0.0,
+    )
+
+    assert applied is True
+    assert error is None
+    assert len(backend.reflowed) == 1
+    assert backend.reflowed[0][1].endswith(
+        '120x29,0,0{24x29,0,0,0,95x29,25,0{47x29,25,0[47x9,25,0,1,47x9,25,10,2,47x9,25,20,3],47x29,73,0[47x9,73,0,4,47x9,73,10,5,47x9,73,20,6]}}'
+    )
+    assert backend.swaps == [('%3', '%4'), ('%3', '%6'), ('%5', '%3')]
+    assert not hasattr(backend, '_tmux_run')
 
 
 def test_reflow_agent_window_fixed_skips_unmanaged_extra_panes() -> None:
