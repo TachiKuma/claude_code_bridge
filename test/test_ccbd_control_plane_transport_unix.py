@@ -35,11 +35,13 @@ def test_endpoint_record_normalizes_unix_socket_path_like_legacy_path() -> None:
     assert endpoint == endpoint_from_legacy_socket_path('C:/tmp/ccbd.sock')
 
 
-def test_transport_factory_accepts_legacy_socket_path_record(tmp_path: Path) -> None:
+def test_transport_factory_accepts_legacy_socket_path_record(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr('ccbd.control_plane_transport.factory.os.name', 'posix')
+
     transport = transport_for_endpoint({'socket_path': str(tmp_path / 'ccbd.sock')})
 
     assert transport.endpoint['kind'] == 'unix_socket'
-    assert transport.socket_path == tmp_path / 'ccbd.sock'
+    assert str(transport.socket_path) == str(tmp_path / 'ccbd.sock')
 
 
 def test_unix_listener_exposes_selectable_file_descriptor() -> None:

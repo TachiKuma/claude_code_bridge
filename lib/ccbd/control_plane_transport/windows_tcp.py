@@ -5,6 +5,7 @@ import errno
 from pathlib import Path
 import select
 import socket
+import threading
 import time
 import uuid
 
@@ -38,6 +39,8 @@ _CONNECT_RETRY_ERRNOS = frozenset({
 })
 _MAX_RESPONSE_BYTES = 1024 * 1024
 _MAX_DEFERRED_CONNECTIONS = 128
+_BOOTSTRAP_ACCEPT_POLL_TIMEOUT_S = 0.1
+_AUTH_HANDSHAKE_TIMEOUT_S = 0.2
 
 
 class WindowsTcpControlPlaneTransport:
@@ -47,22 +50,27 @@ class WindowsTcpControlPlaneTransport:
         *,
         legacy_socket_path: str | Path,
         command_runner=None,
+        endpoint_error: BaseException | None = None,
     ) -> None:
         self.endpoint = endpoint
         self.legacy_socket_path = Path(legacy_socket_path)
         self._command_runner = command_runner
+        self._endpoint_error = endpoint_error
 
     @classmethod
     def from_legacy_socket_path(cls, socket_path: str | Path) -> 'WindowsTcpControlPlaneTransport':
-        return cls(read_endpoint(socket_path), legacy_socket_path=socket_path)
+        try:
+            endpoint = read_endpoint(socket_path)
+        except (OSError, ValueError) as exc:
+            return cls(None, legacy_socket_path=socket_path, endpoint_error=exc)
+        return cls(endpoint, legacy_socket_path=socket_path)
 
     def connect(self, *, timeout_s: float):
-        endpoint = self.endpoint or read_endpoint(self.legacy_socket_path)
+        endpoint = self._read_endpoint_for_connect()
         if endpoint is None:
             raise RpcTransportAuthError('endpoint-missing', 'ccbd TCP endpoint descriptor is missing')
-        host, port = _endpoint_host_port(endpoint)
-        token_ref = endpoint.get('token_ref') or endpoint.get('auth_ref')
-        token_file = load_token_file(str(token_ref or ''))
+        host, port, token_ref = _endpoint_connect_parts(endpoint)
+        token_file = load_token_file(token_ref)
         deadline = time.monotonic() + max(0.0, float(timeout_s))
         last_error: OSError | None = None
         for attempt in range(_CONNECT_MAX_RETRIES + 1):
@@ -139,6 +147,7 @@ class WindowsTcpControlPlaneTransport:
                         unlink_legacy_socket_marker(self.legacy_socket_path)
             raise
         self.endpoint = bound_endpoint
+        self._endpoint_error = None
         return WindowsTcpControlPlaneListener(
             endpoint=bound_endpoint,
             socket=runtime_socket,
@@ -162,6 +171,16 @@ class WindowsTcpControlPlaneTransport:
 
     def bootstrap_readiness_probe(self, server, *, timeout_s: float):
         return tcp_bootstrap_readiness_probe(server, timeout_s=timeout_s)
+
+    def _read_endpoint_for_connect(self) -> EndpointRef | None:
+        if self.endpoint is not None:
+            return self.endpoint
+        if self._endpoint_error is not None:
+            raise RpcTransportAuthError('endpoint-invalid', str(self._endpoint_error)) from self._endpoint_error
+        try:
+            return read_endpoint(self.legacy_socket_path)
+        except (OSError, ValueError) as exc:
+            raise RpcTransportAuthError('endpoint-invalid', str(exc)) from exc
 
 
 class WindowsTcpControlPlaneListener:
@@ -198,14 +217,23 @@ class WindowsTcpControlPlaneListener:
                 self._socket.settimeout(remaining)
             conn, peer = self._socket.accept()
             try:
-                conn.settimeout(remaining if deadline is not None else timeout)
-                remainder = server_authenticate(conn, self._token)
+                auth_timeout = _AUTH_HANDSHAKE_TIMEOUT_S
+                if deadline is not None:
+                    auth_timeout = min(auth_timeout, max(0.0, deadline - time.monotonic()))
+                conn.settimeout(auth_timeout)
+                remainder = server_authenticate(conn, self._token, timeout_s=auth_timeout)
                 return _BufferedConnection(conn, remainder), {
                     'kind': 'tcp_loopback_token',
                     'same_user': True,
                     'detail': f'{peer[0]}:{peer[1]}',
                 }
             except RpcTransportAuthError:
+                try:
+                    conn.close()
+                except OSError:
+                    pass
+                continue
+            except OSError:
                 try:
                     conn.close()
                 except OSError:
@@ -252,15 +280,38 @@ def _is_transient_connect_error(exc: OSError) -> bool:
 
 
 def _endpoint_host_port(endpoint: EndpointRef) -> tuple[str, int]:
-    host = str(endpoint.get('host') or '127.0.0.1')
+    host = str(endpoint.get('host') or '').strip()
+    address = str(endpoint.get('address') or '').strip()
     port = endpoint.get('port')
     if port is None:
-        _, _, raw_port = str(endpoint.get('address') or '').rpartition(':')
+        address_host, _, raw_port = address.rpartition(':')
+        address_host = address_host.strip()
+        if address_host:
+            if host and address_host != host:
+                raise ValueError('ccbd TCP endpoint address host does not match host')
+            host = address_host
         port = raw_port
+    if not host:
+        host = '127.0.0.1'
     clean_port = int(port)
     if host != '127.0.0.1':
         raise ValueError('ccbd TCP endpoint must use 127.0.0.1')
+    if clean_port <= 0 or clean_port > 65535:
+        raise ValueError(f'invalid ccbd TCP endpoint port: {port!r}')
     return host, clean_port
+
+
+def _endpoint_connect_parts(endpoint: EndpointRef) -> tuple[str, int, str]:
+    if endpoint.get('kind') != 'tcp_loopback':
+        raise RpcTransportAuthError('endpoint-invalid', 'ccbd TCP endpoint descriptor must use tcp_loopback')
+    try:
+        host, port = _endpoint_host_port(endpoint)
+    except (TypeError, ValueError) as exc:
+        raise RpcTransportAuthError('endpoint-invalid', str(exc)) from exc
+    token_ref = str(endpoint.get('token_ref') or endpoint.get('auth_ref') or '').strip()
+    if not token_ref:
+        raise RpcTransportAuthError('endpoint-invalid', 'ccbd TCP endpoint descriptor is missing token_ref')
+    return host, port, token_ref
 
 
 def _bound_identity_parts(bound_identity) -> tuple[str | None, str | None, bool]:
@@ -283,11 +334,27 @@ def tcp_bootstrap_readiness_probe(server, *, timeout_s: float):
     deadline = time.monotonic() + max(0.1, float(timeout_s))
     nonce = uuid.uuid4().hex
     client = None
+    accepted = None
     server._bootstrap_probe_active = True
     completed = False
     try:
         start_worker(server, interval=0.0, on_tick=None)
-        client = server._control_plane_transport.connect(timeout_s=max(0.1, deadline - time.monotonic()))
+        accept_thread, accept_errors, accepted_connections, stop_accept = _start_bootstrap_accept(
+            runtime_socket=runtime_socket,
+            deadline=deadline,
+        )
+        try:
+            client = server._control_plane_transport.connect(timeout_s=max(0.1, deadline - time.monotonic()))
+            accepted = _finish_bootstrap_accept(
+                accept_thread,
+                accept_errors=accept_errors,
+                accepted_connections=accepted_connections,
+                stop_accept=stop_accept,
+                deadline=deadline,
+            )
+        except BaseException:
+            _stop_bootstrap_accept(accept_thread, stop_accept=stop_accept)
+            raise
         send_request(
             client,
             RpcRequest(
@@ -298,6 +365,8 @@ def tcp_bootstrap_readiness_probe(server, *, timeout_s: float):
                 },
             ),
         )
+        enqueue_connection(server, accepted)
+        accepted = None
         payload = _pump_until_probe_response(
             server,
             runtime_socket=runtime_socket,
@@ -311,6 +380,8 @@ def tcp_bootstrap_readiness_probe(server, *, timeout_s: float):
         yield payload
         completed = True
     except BaseException:
+        if accepted is not None:
+            close_connection(accepted)
         server._stop_event.set()
         raise
     finally:
@@ -321,6 +392,61 @@ def tcp_bootstrap_readiness_probe(server, *, timeout_s: float):
                 client.close()
             except OSError:
                 pass
+
+
+def _start_bootstrap_accept(
+    *,
+    runtime_socket,
+    deadline: float,
+):
+    errors: list[BaseException] = []
+    accepted: list[object] = []
+    stop_accept = threading.Event()
+
+    def _accept_loop() -> None:
+        while not stop_accept.is_set():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                errors.append(TimeoutError('timed out waiting for ccbd bootstrap auth accept'))
+                return
+            try:
+                runtime_socket.settimeout(min(_BOOTSTRAP_ACCEPT_POLL_TIMEOUT_S, remaining))
+                conn, _ = runtime_socket.accept()
+                accepted.append(conn)
+                return
+            except (socket.timeout, TimeoutError):
+                continue
+            except BaseException as exc:
+                errors.append(exc)
+                return
+
+    thread = threading.Thread(target=_accept_loop, name='ccbd-bootstrap-auth-accept', daemon=True)
+    thread.start()
+    return thread, errors, accepted, stop_accept
+
+
+def _finish_bootstrap_accept(
+    thread,
+    *,
+    accept_errors: list[BaseException],
+    accepted_connections: list,
+    stop_accept,
+    deadline: float,
+):
+    thread.join(timeout=max(0.0, deadline - time.monotonic()))
+    if thread.is_alive():
+        stop_accept.set()
+        raise TimeoutError('timed out waiting for ccbd bootstrap auth accept')
+    if accept_errors:
+        raise accept_errors[0]
+    if accepted_connections:
+        return accepted_connections[0]
+    raise TimeoutError('ccbd bootstrap auth accept did not return a connection')
+
+
+def _stop_bootstrap_accept(thread, *, stop_accept) -> None:
+    stop_accept.set()
+    thread.join(timeout=_BOOTSTRAP_ACCEPT_POLL_TIMEOUT_S * 2)
 
 
 def _pump_until_probe_response(

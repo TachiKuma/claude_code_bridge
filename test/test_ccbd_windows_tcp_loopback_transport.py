@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import json
 import socket
+import threading
 import time
 
 import pytest
@@ -11,7 +12,7 @@ import pytest
 from ccbd.api_models import RpcRequest
 from ccbd.control_plane_transport.endpoint import endpoint_from_record, endpoint_to_record
 from ccbd.control_plane_transport.endpoint_store import endpoint_store_path, read_endpoint, unlink_endpoint, write_endpoint
-from ccbd.control_plane_transport.factory import transport_for_legacy_socket_path
+from ccbd.control_plane_transport.factory import connect_endpoint, transport_for_legacy_socket_path
 from ccbd.control_plane_transport.token_auth import RpcTransportAuthError, create_token_file, _current_windows_user
 from ccbd.control_plane_transport.windows_tcp import WindowsTcpControlPlaneTransport
 from ccbd.socket_client_runtime import decode_response, recv_response_line, send_request
@@ -212,9 +213,18 @@ def test_tcp_listener_publishes_endpoint_and_roundtrips_ping(tmp_path: Path) -> 
         assert endpoint['fingerprint']
         assert server.control_plane_endpoint['fingerprint'] == endpoint['fingerprint']
 
+        accepted_result = {}
+        accept_thread = threading.Thread(
+            target=lambda: accepted_result.update(zip(('conn', 'peer'), server._server.accept())),
+            daemon=True,
+        )
+        accept_thread.start()
         client = transport.connect(timeout_s=1.0)
+        accept_thread.join(timeout=1.0)
+        assert 'conn' in accepted_result
         send_request(client, RpcRequest(op='ping', request={'target': 'ccbd'}))
-        accepted, peer = server._server.accept()
+        accepted = accepted_result['conn']
+        peer = accepted_result['peer']
         assert peer['kind'] == 'tcp_loopback_token'
         start_worker(server, interval=0.0, on_tick=None)
         enqueue_connection(server, accepted)
@@ -261,6 +271,102 @@ def test_bad_tcp_token_is_not_accepted_by_listener(tmp_path: Path) -> None:
         transport.unlink_bound_endpoint(bound_identity=listener.bound_socket_stat)
 
 
+def test_bad_tcp_token_fails_during_client_connect(tmp_path: Path) -> None:
+    transport = WindowsTcpControlPlaneTransport(
+        None,
+        legacy_socket_path=tmp_path / 'ccbd.sock',
+        command_runner=_ok_runner,
+    )
+    listener = transport.listen()
+    listener.settimeout(0.2)
+    token_path = Path(listener.bound_socket_stat[1])
+    payload = json.loads(token_path.read_text(encoding='utf-8'))
+    payload['token'] = 'wrong-token'
+    token_path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True) + '\n', encoding='utf-8')
+    accept_errors: list[BaseException] = []
+    accept_thread = threading.Thread(
+        target=lambda: accept_errors.append(_accept_until_timeout(listener)),
+        daemon=True,
+    )
+    try:
+        accept_thread.start()
+        with pytest.raises(RpcTransportAuthError) as error:
+            transport.connect(timeout_s=1.0)
+
+        assert error.value.category == 'not-same-user'
+        accept_thread.join(timeout=1.0)
+        assert accept_errors and isinstance(accept_errors[0], TimeoutError)
+    finally:
+        listener.close()
+        transport.unlink_bound_endpoint(bound_identity=listener.bound_socket_stat)
+
+
+def test_windows_legacy_socket_path_rejects_non_tcp_endpoint_descriptor(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr('ccbd.control_plane_transport.factory.os.name', 'nt')
+    endpoint_store_path(tmp_path / 'ccbd.sock').write_text(
+        json.dumps(
+            {
+                'kind': 'unix_socket',
+                'address': str(tmp_path / 'ccbd.sock'),
+            },
+            ensure_ascii=False,
+        )
+        + '\n',
+        encoding='utf-8',
+    )
+
+    transport = transport_for_legacy_socket_path(tmp_path / 'ccbd.sock')
+
+    with pytest.raises(RpcTransportAuthError) as error:
+        transport.connect(timeout_s=0.1)
+
+    assert error.value.category == 'endpoint-invalid'
+
+
+@pytest.mark.parametrize(
+    'descriptor',
+    [
+        {'kind': 'tcp_loopback', 'host': '127.0.0.1', 'port': 32123},
+        {'kind': 'tcp_loopback', 'host': '127.0.0.1', 'port': 'bad', 'token_ref': 'token.json'},
+        {'kind': 'tcp_loopback', 'host': '127.0.0.2', 'port': 32123, 'token_ref': 'token.json'},
+        {'kind': 'tcp_loopback', 'address': '127.0.0.2:32123', 'token_ref': 'token.json'},
+        {'kind': 'tcp_loopback', 'address': '127.0.0.1:70000', 'token_ref': 'token.json'},
+    ],
+)
+def test_windows_legacy_socket_path_rejects_invalid_tcp_endpoint_descriptor(
+    monkeypatch,
+    tmp_path: Path,
+    descriptor: dict,
+) -> None:
+    monkeypatch.setattr('ccbd.control_plane_transport.factory.os.name', 'nt')
+    endpoint_store_path(tmp_path / 'ccbd.sock').write_text(
+        json.dumps(descriptor, ensure_ascii=False) + '\n',
+        encoding='utf-8',
+    )
+
+    transport = transport_for_legacy_socket_path(tmp_path / 'ccbd.sock')
+
+    with pytest.raises(RpcTransportAuthError) as error:
+        transport.connect(timeout_s=0.1)
+
+    assert error.value.category == 'endpoint-invalid'
+
+
+def test_windows_legacy_socket_path_rejects_malformed_endpoint_descriptor(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr('ccbd.control_plane_transport.factory.os.name', 'nt')
+    endpoint_store_path(tmp_path / 'ccbd.sock').write_text(
+        '{not-json',
+        encoding='utf-8',
+    )
+
+    transport = transport_for_legacy_socket_path(tmp_path / 'ccbd.sock')
+
+    with pytest.raises(RpcTransportAuthError) as error:
+        transport.connect(timeout_s=0.1)
+
+    assert error.value.category == 'endpoint-invalid'
+
+
 def test_tcp_bootstrap_probe_uses_authenticated_loopback_path(tmp_path: Path) -> None:
     transport = WindowsTcpControlPlaneTransport(
         None,
@@ -287,6 +393,169 @@ def test_tcp_bootstrap_probe_uses_authenticated_loopback_path(tmp_path: Path) ->
         assert server._stop_event.is_set() is False
     finally:
         server.shutdown()
+
+
+def test_tcp_bootstrap_probe_ignores_slow_preauth_connection(tmp_path: Path) -> None:
+    transport = WindowsTcpControlPlaneTransport(
+        None,
+        legacy_socket_path=tmp_path / 'ccbd.sock',
+        command_runner=_ok_runner,
+    )
+    server = CcbdSocketServer(tmp_path / 'ccbd.sock', control_plane_transport=transport)
+    seen: list[str] = []
+
+    def _handle_ping(payload):
+        nonce = str(payload.get('bootstrap_probe_nonce') or '')
+        seen.append(nonce)
+        return {'bootstrap_probe_nonce': nonce, 'identity': 'tcp-loopback'}
+
+    server.register_handler('ping', _handle_ping)
+    server.listen()
+    slow_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        slow_client.connect(('127.0.0.1', int(server.control_plane_endpoint['port'])))
+
+        started = time.monotonic()
+        with server.bootstrap_readiness_probe(timeout_s=1.0) as payload:
+            assert payload['identity'] == 'tcp-loopback'
+            assert payload['bootstrap_probe_nonce'] == seen[0]
+        assert time.monotonic() - started < 0.8
+    finally:
+        slow_client.close()
+        server.shutdown()
+
+
+def test_tcp_bootstrap_probe_sends_request_before_enqueueing_worker_connection(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    import ccbd.socket_client_runtime as socket_client_runtime
+
+    original_send_request = socket_client_runtime.send_request
+    transport = WindowsTcpControlPlaneTransport(
+        None,
+        legacy_socket_path=tmp_path / 'ccbd.sock',
+        command_runner=_ok_runner,
+    )
+    server = CcbdSocketServer(tmp_path / 'ccbd.sock', control_plane_transport=transport)
+
+    def _handle_ping(payload):
+        nonce = str(payload.get('bootstrap_probe_nonce') or '')
+        return {'bootstrap_probe_nonce': nonce, 'identity': 'tcp-loopback'}
+
+    def _delayed_send_request(sock, request):
+        time.sleep(0.6)
+        original_send_request(sock, request)
+
+    monkeypatch.setattr(socket_client_runtime, 'send_request', _delayed_send_request)
+    server.register_handler('ping', _handle_ping)
+    server.listen()
+    try:
+        with server.bootstrap_readiness_probe(timeout_s=2.0) as payload:
+            assert payload['identity'] == 'tcp-loopback'
+    finally:
+        server.shutdown()
+
+
+def test_tcp_bootstrap_probe_recovers_after_bad_existing_endpoint_descriptor(tmp_path: Path) -> None:
+    legacy_socket_path = tmp_path / 'ccbd.sock'
+    endpoint_store_path(legacy_socket_path).write_text('{not-json', encoding='utf-8')
+    transport = WindowsTcpControlPlaneTransport.from_legacy_socket_path(legacy_socket_path)
+    transport._command_runner = _ok_runner
+    server = CcbdSocketServer(legacy_socket_path, control_plane_transport=transport)
+
+    def _handle_ping(payload):
+        nonce = str(payload.get('bootstrap_probe_nonce') or '')
+        return {'bootstrap_probe_nonce': nonce, 'identity': 'tcp-loopback'}
+
+    server.register_handler('ping', _handle_ping)
+    server.listen()
+    try:
+        with server.bootstrap_readiness_probe(timeout_s=1.0) as payload:
+            assert payload['identity'] == 'tcp-loopback'
+    finally:
+        server.shutdown()
+
+
+def test_tcp_bootstrap_probe_ignores_slow_drip_preauth_connection(tmp_path: Path) -> None:
+    transport = WindowsTcpControlPlaneTransport(
+        None,
+        legacy_socket_path=tmp_path / 'ccbd.sock',
+        command_runner=_ok_runner,
+    )
+    server = CcbdSocketServer(tmp_path / 'ccbd.sock', control_plane_transport=transport)
+
+    def _handle_ping(payload):
+        nonce = str(payload.get('bootstrap_probe_nonce') or '')
+        return {'bootstrap_probe_nonce': nonce, 'identity': 'tcp-loopback'}
+
+    server.register_handler('ping', _handle_ping)
+    server.listen()
+    slow_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    drip_errors: list[BaseException] = []
+
+    def _drip_auth_bytes() -> None:
+        try:
+            for _ in range(8):
+                slow_client.sendall(b'{')
+                time.sleep(0.05)
+        except BaseException as exc:
+            drip_errors.append(exc)
+
+    try:
+        slow_client.connect(('127.0.0.1', int(server.control_plane_endpoint['port'])))
+        drip_thread = threading.Thread(target=_drip_auth_bytes, daemon=True)
+        drip_thread.start()
+
+        started = time.monotonic()
+        with server.bootstrap_readiness_probe(timeout_s=1.5) as payload:
+            assert payload['identity'] == 'tcp-loopback'
+        assert time.monotonic() - started < 1.2
+        drip_thread.join(timeout=1.0)
+    finally:
+        slow_client.close()
+        server.shutdown()
+
+
+@pytest.mark.parametrize(
+    'descriptor',
+    [
+        {'kind': 'tcp_loopback', 'host': '127.0.0.1', 'port': 'bad', 'token_ref': 'token.json'},
+        {'kind': 'tcp_loopback', 'host': '127.0.0.1', 'port': 70000, 'token_ref': 'token.json'},
+        {'kind': 'tcp_loopback', 'address': '127.0.0.1:70000', 'token_ref': 'token.json'},
+    ],
+)
+def test_direct_tcp_endpoint_rejects_invalid_descriptor(monkeypatch, descriptor: dict) -> None:
+    monkeypatch.setattr('ccbd.control_plane_transport.factory.os.name', 'nt')
+    with pytest.raises(RpcTransportAuthError) as error:
+        connect_endpoint(descriptor, timeout_s=0.1)
+
+    assert error.value.category == 'endpoint-invalid'
+
+
+@pytest.mark.parametrize(
+    'descriptor',
+    [
+        {'kind': 'unix_socket', 'address': 'ccbd.sock'},
+        {'kind': 'named_pipe', 'address': r'\\.\pipe\ccbd'},
+    ],
+)
+def test_direct_windows_endpoint_rejects_non_tcp_descriptor(monkeypatch, descriptor: dict) -> None:
+    monkeypatch.setattr('ccbd.control_plane_transport.factory.os.name', 'nt')
+
+    with pytest.raises(RpcTransportAuthError) as error:
+        connect_endpoint(descriptor, timeout_s=0.1)
+
+    assert error.value.category == 'endpoint-invalid'
+
+
+def test_direct_windows_endpoint_rejects_legacy_socket_path_descriptor(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr('ccbd.control_plane_transport.factory.os.name', 'nt')
+
+    with pytest.raises(RpcTransportAuthError) as error:
+        connect_endpoint({'socket_path': str(tmp_path / 'ccbd.sock')}, timeout_s=0.1)
+
+    assert error.value.category == 'endpoint-invalid'
 
 
 def test_shutdown_removes_only_current_endpoint_generation(tmp_path: Path) -> None:
@@ -447,3 +716,11 @@ def _wait_for_response(client):
             time.sleep(0.01)
     assert raw
     return decode_response(raw)
+
+
+def _accept_until_timeout(listener) -> BaseException:
+    try:
+        listener.accept()
+    except BaseException as exc:
+        return exc
+    raise AssertionError('listener unexpectedly accepted a bad token')

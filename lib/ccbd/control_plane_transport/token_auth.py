@@ -10,8 +10,10 @@ from pathlib import Path
 import re
 import secrets
 import subprocess
+import time
 
 _AUTH_MARKER = 'ccbd-control-plane-token-v1'
+_AUTH_ACK_MARKER = 'ccbd-control-plane-token-ack-v1'
 _MAX_AUTH_LINE_BYTES = 4096
 
 
@@ -122,14 +124,16 @@ def converge_token_acl(
 
 def client_authenticate(sock, token: str) -> None:
     _send_auth_line(sock, token)
+    _recv_auth_ack(sock)
 
 
-def server_authenticate(sock, expected_token: str) -> bytes:
-    line, remainder = _recv_line(sock)
+def server_authenticate(sock, expected_token: str, *, timeout_s: float | None = None) -> bytes:
+    line, remainder = _recv_line(sock, timeout_s=timeout_s)
     payload = _decode_auth_payload(line)
     token = str(payload.get('token') or '')
     if payload.get('schema') != _AUTH_MARKER or not hmac.compare_digest(token, expected_token):
         raise RpcTransportAuthError('not-same-user')
+    _send_auth_ack(sock)
     return remainder
 
 
@@ -149,9 +153,33 @@ def _send_auth_line(sock, token: str) -> None:
     sock.sendall(json.dumps(payload, ensure_ascii=False).encode('utf-8') + b'\n')
 
 
-def _recv_line(sock) -> tuple[bytes, bytes]:
+def _send_auth_ack(sock) -> None:
+    sock.sendall(json.dumps({'schema': _AUTH_ACK_MARKER, 'ok': True}, ensure_ascii=False).encode('utf-8') + b'\n')
+
+
+def _recv_auth_ack(sock) -> None:
+    try:
+        line, remainder = _recv_line(sock)
+    except (OSError, RpcTransportAuthError) as exc:
+        raise RpcTransportAuthError('not-same-user', 'ccbd auth handshake was rejected') from exc
+    payload = _decode_auth_payload(line)
+    if payload.get('schema') != _AUTH_ACK_MARKER or payload.get('ok') is not True:
+        raise RpcTransportAuthError('handshake-failed', 'ccbd auth ack is invalid')
+    if remainder:
+        raise RpcTransportAuthError('handshake-failed', 'ccbd auth ack contains unexpected data')
+
+
+def _recv_line(sock, *, timeout_s: float | None = None) -> tuple[bytes, bytes]:
     raw = b''
+    deadline = None
+    if timeout_s is not None:
+        deadline = time.monotonic() + max(0.0, float(timeout_s))
     while b'\n' not in raw:
+        if deadline is not None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise RpcTransportAuthError('handshake-failed', 'auth handshake timed out')
+            sock.settimeout(remaining)
         chunk = sock.recv(1024)
         if not chunk:
             raise RpcTransportAuthError('handshake-failed', 'empty auth handshake')

@@ -4,12 +4,20 @@ import os
 from pathlib import Path
 
 from .endpoint import EndpointRef, endpoint_from_legacy_socket_path, endpoint_from_record
+from .token_auth import RpcTransportAuthError
 from .unix import UnixControlPlaneTransport
 from .windows_tcp import WindowsTcpControlPlaneTransport
 
 
 def transport_for_endpoint(endpoint: EndpointRef | dict | str | Path):
-    resolved = endpoint_from_record(endpoint)
+    try:
+        resolved = endpoint_from_record(endpoint)
+    except ValueError as exc:
+        if os.name == 'nt' and isinstance(endpoint, dict):
+            raise RpcTransportAuthError('endpoint-invalid', str(exc)) from exc
+        raise
+    if os.name == 'nt' and isinstance(endpoint, dict) and resolved['kind'] != 'tcp_loopback':
+        raise RpcTransportAuthError('endpoint-invalid', 'ccbd Windows control-plane endpoint must use tcp_loopback')
     if resolved['kind'] == 'unix_socket':
         return UnixControlPlaneTransport(resolved)
     if resolved['kind'] == 'tcp_loopback':
@@ -33,6 +41,8 @@ def endpoint_connectable(endpoint: EndpointRef | dict | str | Path, *, timeout_s
 def transport_for_legacy_socket_path(socket_path: str | Path, *, prefer_windows: bool = False):
     if os.name == 'nt':
         transport = WindowsTcpControlPlaneTransport.from_legacy_socket_path(socket_path)
+        if getattr(transport, '_endpoint_error', None) is not None:
+            return transport
         if prefer_windows:
             endpoint = getattr(transport, 'endpoint', None)
             if endpoint is None or endpoint.get('kind') == 'tcp_loopback':
@@ -40,4 +50,4 @@ def transport_for_legacy_socket_path(socket_path: str | Path, *, prefer_windows:
             return WindowsTcpControlPlaneTransport(None, legacy_socket_path=socket_path)
         if transport.endpoint is not None:
             return transport
-    return transport_for_endpoint(endpoint_from_legacy_socket_path(socket_path))
+    return UnixControlPlaneTransport(endpoint_from_legacy_socket_path(socket_path))
