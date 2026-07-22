@@ -24,40 +24,40 @@ steps:
 checks:
   - item: "无配置、无 env 时 effective backend 必须为 tmux，fallback_used=false"
     source: 验收契约 AC-001
-    status: pending
+    status: passed
   - item: "project config runtime.mux.backend=rmux 且 route approval 缺失时必须 typed selection error，不得 fallback"
     source: 验收契约 AC-002
-    status: pending
+    status: passed
   - item: "env CCB_MUX_BACKEND=auto 且 route 未批准或 Rmux unavailable 时必须 fallback 到 tmux 并记录 fallback_reason"
     source: 验收契约 AC-003
-    status: pending
+    status: passed
   - item: "优先级必须是 CLI > project config > user config > env CCB_MUX_BACKEND > platform default，env 不得压过已落盘配置"
     source: roadmap §4.0
-    status: pending
+    status: passed
   - item: "route approved 且 Rmux available 时 requested=rmux 必须选择 rmux 且不实例化 tmux backend"
     source: 验收契约 AC-004
-    status: pending
+    status: passed
   - item: "successful selection result 必须包含 backend_impl 且 effective_backend 非空；失败路径使用 typed diagnostics，不返回 nullable success schema"
     source: roadmap §4.0
-    status: pending
+    status: passed
   - item: "v2/v3 config runtime.mux.backend 解析一致；未知 runtime 字段 fail-closed"
     source: 验收契约 AC-005
-    status: pending
+    status: passed
   - item: "startup/foreground attach、doctor/ping 输出 backend selection diagnostics，同时保留旧 tmux socket 字段"
     source: 验收契约 AC-006
-    status: pending
+    status: passed
   - item: "foreground attach 在 selection 失败或 tmux attach payload 缺失时必须包含 selection summary"
     source: 验收契约 AC-008
-    status: pending
+    status: passed
   - item: "get_backend_for_session 继续兼容 tmux_socket_name/path 与 pane_id/tmux_session"
     source: 验收契约 AC-007
-    status: pending
+    status: passed
   - item: "本 feature 不新增 RmuxBackend、不修改 provider session canonical payload、不运行 Rmux probe"
     source: 明确不做
-    status: pending
+    status: passed
   - item: "显式 rmux 缺 route approval 或 required capability gap 时 fail-fast；auto fallback 不掩盖原因"
     source: roadmap §4.0
-    status: pending
+    status: passed
 
 dod:
   commands:

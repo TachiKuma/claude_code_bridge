@@ -786,9 +786,9 @@ class RpcTransportAuthError(Exception):
 3. **backend-resolver-opt-in-contract** — 定义 Rmux opt-in 配置、平台默认、auto 探测、fallback/fail-fast 和 diagnostics selection result。
    - 所属模块：Backend Resolver & Opt-in
    - 依赖：`rmux-route-approval`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：覆盖 `backend_selection.py` 当前 tmux-only 分支；显式 rmux 缺失或未批准时必须 fail fast，不能静默 fallback。
+   - 状态：accepted
+   - 对应 feature：`2026-07-19-backend-resolver-opt-in-contract`
+   - 备注：2026-07-22 accepted：`runtime.mux.backend` config、backend resolver selection/failure schema、explicit rmux fail-fast、auto fallback diagnostics、doctor/ping/foreground attach selection summary 与旧 tmux session 兼容均通过 acceptance；live rmux full-chain smoke 留给 `ccbd-windows-full-chain-smoke`。
 
 4. **mux-backend-contract** — 定义 `MuxBackend` 组合能力 / `ProjectNamespaceBackend` higher-level policy / namespace 与 pane 引用 / capability / error 契约和 fake backend 测试替身。
    - 所属模块：MuxBackend Contract
