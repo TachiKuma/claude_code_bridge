@@ -1,0 +1,29 @@
+schema_version: 2
+goal: "rmux-daemon-ownership-boundary"
+status: complete
+objective: "继续 windows-rmux-native-backend epic 中的 rmux-daemon-ownership-boundary，定义并实现 Rmux daemon discovery、start、health、crash、cleanup 的 ownership 和 diagnostics evidence，推进到可见 Task agent review 与功能验收完成。"
+start_point: "provider-runtime-backend-session-contract 已提交；roadmap item rmux-daemon-ownership-boundary 为 in-progress；feature design、design-review、checklist 已存在且 design-review passed，代码尚未实现 rmux daemon evidence contract、cleanup plan、diagnostics projection 和 focused tests。"
+acceptance:
+  - "新增 Rmux daemon evidence contract，覆盖 discovery_source、daemon_ref、endpoint、health、crash_reason、cleanup_scope、diagnostics。"
+  - "start_result 成功/失败 evidence 覆盖 endpoint、version、capability_status、unreachable/crashed 映射，且不改变 ccbd owner / lease generation。"
+  - "Rmux daemon pid / endpoint 不得成为 ccbd lease holder 或 lifecycle owner；backend_daemon_* diagnostics 不覆盖 ccbd daemon_*、namespace_* 或 tmux_socket_path 字段。"
+  - "cleanup plan 默认 namespace/project scope 且 daemon_action=leave_running；daemon-wide cleanup 只有 explicit force 才允许，并记录 force reason diagnostics。"
+  - "Rmux daemon crashed/unreachable 只降级 backend diagnostics，不自动标记 ccbd unhealthy；provider health diagnostics 可携带 daemon health/crash/version/capability evidence。"
+  - "CMD-001 到 CMD-005 验证通过或记录可接受基线，并通过可见 Task agent review 与功能验收。"
+non_goals:
+  - "不实现 RmuxBackend core、send/capture/logging、layout、foreground attach、Rmux IPC 或 named pipe ACL。"
+  - "不启动真实 Rmux daemon，不调用 Rmux CLI/SDK。"
+  - "不改 ccbd control-plane transport，不把 Rmux daemon 作为 ccbd lease holder、keeper 或 runtime registry owner。"
+  - "不删除或改写现有 tmux cleanup history。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 1
+next_action: "Goal complete; continue next roadmap item when owner requests."
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-23"

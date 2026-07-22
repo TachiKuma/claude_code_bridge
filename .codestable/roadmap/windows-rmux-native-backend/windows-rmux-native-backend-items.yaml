@@ -77,7 +77,7 @@ items:
   - slug: rmux-daemon-ownership-boundary
     description: 定义 Rmux daemon discovery、start、health、crash、cleanup 的 ownership 和 diagnostics evidence
     depends_on: [mux-backend-contract, windows-namespace-ipc-schema]
-    status: in-progress
+    status: done
     feature: 2026-07-20-rmux-daemon-ownership-boundary
     minimal_loop: false
     notes: Rmux daemon 只能是 backend evidence，不能成为 project authority；共享 daemon 与 per-project cleanup 必须可诊断

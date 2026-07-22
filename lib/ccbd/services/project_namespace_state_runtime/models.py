@@ -4,6 +4,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from ccbd.models import SCHEMA_VERSION
+from terminal_runtime.rmux_daemon_contract import backend_daemon_diagnostics
 
 from .common import (
     NAMESPACE_EVENT_RECORD_TYPE,
@@ -39,6 +40,7 @@ class ProjectNamespaceState:
     last_started_at: str | None = None
     last_destroyed_at: str | None = None
     last_destroy_reason: str | None = None
+    backend_daemon_evidence: dict[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         backend_impl = clean_text(self.backend_impl) or 'tmux'
@@ -115,6 +117,7 @@ class ProjectNamespaceState:
             'last_started_at': self.last_started_at,
             'last_destroyed_at': self.last_destroyed_at,
             'last_destroy_reason': self.last_destroy_reason,
+            'backend_daemon_evidence': dict(self.backend_daemon_evidence or {}),
         }
 
     @classmethod
@@ -143,6 +146,7 @@ class ProjectNamespaceState:
             last_started_at=clean_text(payload.get('last_started_at')),
             last_destroyed_at=clean_text(payload.get('last_destroyed_at')),
             last_destroy_reason=clean_text(payload.get('last_destroy_reason')),
+            backend_daemon_evidence=record_backend_daemon_evidence(payload),
         )
 
     def summary_fields(self) -> dict[str, object]:
@@ -166,6 +170,7 @@ class ProjectNamespaceState:
             'namespace_last_started_at': self.last_started_at,
             'namespace_last_destroyed_at': self.last_destroyed_at,
             'namespace_last_destroy_reason': self.last_destroy_reason,
+            **backend_daemon_diagnostics(self.backend_daemon_evidence),
         }
 
     def resolved_namespace_id(self) -> str:
@@ -303,6 +308,13 @@ def record_details(payload: dict[str, Any]) -> dict[str, object]:
     if not isinstance(details, dict):
         raise ValueError('details must be an object')
     return dict(details)
+
+
+def record_backend_daemon_evidence(payload: dict[str, Any]) -> dict[str, object]:
+    evidence = payload.get('backend_daemon_evidence') or {}
+    if not isinstance(evidence, dict):
+        raise ValueError('backend_daemon_evidence must be an object')
+    return dict(evidence)
 
 
 __all__ = ['ProjectNamespaceEvent', 'ProjectNamespaceState']

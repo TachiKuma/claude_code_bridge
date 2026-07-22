@@ -4,54 +4,54 @@ created: 2026-07-20
 steps:
   - action: "daemon evidence contract：新增 RmuxDaemonRef、RmuxDaemonEvidence、RmuxCleanupPlan 和 health/cleanup 枚举"
     exit_signal: "contract tests 可构造 shared/project daemon、healthy/unreachable/crashed/stale evidence，并区分 daemon_process_evidence 与 provider ProcessRef"
-    status: pending
+    status: done
   - action: "start_result evidence：成功 / 失败 start_result 记录 endpoint、version、capability status 和 unreachable/crashed 映射"
     exit_signal: "start_result tests 证明启动成功和失败都不改变 owner_daemon_instance_id / lease generation"
-    status: pending
+    status: done
   - action: "authority boundary projection：backend_daemon_* evidence 可投影到 namespace/ping/doctor/provider health，但不写入 ccbd lease owner"
     exit_signal: "tests 断言 Rmux daemon fields 不改变 owner_daemon_instance_id / lease generation"
-    status: pending
+    status: done
   - action: "cleanup scope contract：默认 namespace/project cleanup，daemon-wide cleanup 只能 explicit force"
     exit_signal: "fake cleanup tests 证明 shared daemon 下只清本项目 namespace，daemon_action=leave_running，force 才允许 daemon scope"
-    status: pending
+    status: done
   - action: "health/crash diagnostics：backend health 和 provider health diagnostics 携带 daemon health、crash reason、discovery source"
     exit_signal: "doctor / health fixture 可区分 ccbd healthy + rmux daemon crashed，并包含 version/capability status"
-    status: pending
+    status: done
   - action: "tmux compatibility guard：现有 tmux cleanup、ccbd keeper、provider pane health 路径不因新增 contract 漂移"
     exit_signal: "tmux cleanup / ccbd keeper / provider health 抽样回归通过"
-    status: pending
+    status: done
 
 checks:
   - item: "Rmux daemon evidence 覆盖 discovery_source、daemon_ref、endpoint、health、crash_reason、cleanup_scope、diagnostics"
     source: design §2.1 / AC-001 / DOD-IMPL-001
-    status: pending
+    status: done
   - item: "Rmux daemon start_result 覆盖 endpoint、version、capability_status、unreachable/crashed 映射，且不改变 ccbd owner"
     source: design §2.4 / AC-002 / DOD-IMPL-002
-    status: pending
+    status: done
   - item: "Rmux daemon pid / endpoint 不得成为 ccbd lease holder 或 lifecycle owner"
     source: design §1 / AC-003 / DOD-IMPL-003
-    status: pending
+    status: done
   - item: "shared daemon 下默认 cleanup_scope 为 namespace 或 project，不杀 daemon"
     source: design §2.2 / AC-004 / DOD-IMPL-004
-    status: pending
+    status: done
   - item: "daemon-wide cleanup 只有 explicit force 才允许，并必须记录 force reason diagnostics"
     source: design §3.1 / AC-005
-    status: pending
+    status: done
   - item: "cleanup plan 形状包含 cleanup_scope、targets、daemon_action、force_daemon、force_reason、ordered_steps、status、diagnostics"
     source: design §2.1 / AC-004 / DOD-IMPL-004
-    status: pending
+    status: done
   - item: "backend_daemon_* diagnostics 不覆盖 ccbd daemon_*、namespace_* 或 tmux_socket_path 字段"
     source: design §2.2 / AC-008 / DOD-IMPL-005
-    status: pending
+    status: done
   - item: "Rmux daemon crashed/unreachable 只降级 backend diagnostics，不自动标记 ccbd unhealthy"
     source: design §2.2 / AC-006
-    status: pending
+    status: done
   - item: "不实现 RmuxBackend core、Rmux IPC、foreground attach 或 named pipe ACL"
     source: 明确不做
-    status: pending
+    status: done
   - item: "现有 tmux cleanup history、keeper lifecycle、provider pane health 行为保持"
     source: design §3.1 / AC-007 / DOD-IMPL-006
-    status: pending
+    status: done
 
 dod:
   commands:
