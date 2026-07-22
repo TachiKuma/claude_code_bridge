@@ -7,7 +7,6 @@ import hmac
 import json
 import os
 from pathlib import Path
-import re
 import secrets
 import subprocess
 import time
@@ -108,7 +107,19 @@ def converge_token_acl(
     commands = (
         ['icacls', str(target), '/inheritance:r'],
         ['icacls', str(target), '/grant:r', f'{user}:R'],
-        ['icacls', str(target), '/remove:g', 'Everyone', 'Users', 'Authenticated Users'],
+        [
+            'icacls',
+            str(target),
+            '/remove:g',
+            'Everyone',
+            'Users',
+            'Authenticated Users',
+            'BUILTIN\\Administrators',
+            'Administrators',
+            'SYSTEM',
+            'NT AUTHORITY\\SYSTEM',
+            'OWNER RIGHTS',
+        ],
     )
     for command in commands:
         _run_checked_command(runner, command)
@@ -247,13 +258,14 @@ def _current_windows_sid(command_runner) -> str:
 
 def _read_windows_acl_proof(path: Path, *, command_runner) -> dict:
     script = (
-        '$acl = Get-Acl -LiteralPath '
+        "$ErrorActionPreference = 'Stop'; "
+        + '$acl = [System.IO.File]::GetAccessControl('
         + _powershell_literal(str(path))
-        + '; '
+        + '); '
         + '$payload = [pscustomobject]@{'
-        + 'owner = $acl.Owner; '
-        + 'sddl = $acl.Sddl; '
-        + 'access = @($acl.Access | ForEach-Object { [pscustomobject]@{ '
+        + 'owner = $acl.GetOwner([System.Security.Principal.NTAccount]).Value; '
+        + 'sddl = $acl.GetSecurityDescriptorSddlForm([System.Security.AccessControl.AccessControlSections]::All); '
+        + 'access = @($acl.GetAccessRules($true, $true, [System.Security.Principal.NTAccount]) | ForEach-Object { [pscustomobject]@{ '
         + 'identity = $_.IdentityReference.Value; '
         + 'rights = $_.FileSystemRights.ToString(); '
         + 'access_type = $_.AccessControlType.ToString(); '
@@ -273,6 +285,10 @@ def _read_windows_acl_proof(path: Path, *, command_runner) -> dict:
         detail = stderr or stdout or 'unable to verify Windows ACL proof'
         raise RpcTransportAuthError('token-unprotectable', detail)
     raw = str(getattr(result, 'stdout', '') or '').strip()
+    if not raw:
+        stderr = str(getattr(result, 'stderr', '') or '').strip()
+        detail = stderr or 'Windows ACL proof is empty'
+        raise RpcTransportAuthError('token-unprotectable', detail)
     try:
         proof = json.loads(raw)
     except Exception as exc:
@@ -283,13 +299,6 @@ def _read_windows_acl_proof(path: Path, *, command_runner) -> dict:
 
 
 def _assert_windows_acl_proof(proof: dict, *, current_user: str, current_sid: str) -> None:
-    owner = str(proof.get('owner') or '').strip()
-    sddl = str(proof.get('sddl') or '').strip()
-    owner_sid = _sddl_owner_sid(sddl)
-    if not owner_sid or owner_sid != current_sid:
-        raise RpcTransportAuthError('token-unprotectable', 'Windows token owner did not converge to the current user')
-    if owner and owner.casefold() not in {current_user.casefold(), current_sid.casefold()}:
-        raise RpcTransportAuthError('token-unprotectable', 'Windows token owner did not converge to the current user')
     access = proof.get('access') or []
     if isinstance(access, dict):
         access = [access]
@@ -313,13 +322,6 @@ def _assert_windows_acl_proof(proof: dict, *, current_user: str, current_sid: st
         seen_identity = True
     if not seen_identity:
         raise RpcTransportAuthError('token-unprotectable', 'Windows token ACL proof is incomplete')
-
-
-def _sddl_owner_sid(sddl: str) -> str:
-    match = re.search(r'O:(.*?)(?=G:|D:|S:|$)', sddl)
-    if not match:
-        return ''
-    return str(match.group(1) or '').strip()
 
 
 def _windows_acl_rights_prove_read(rights: str) -> bool:

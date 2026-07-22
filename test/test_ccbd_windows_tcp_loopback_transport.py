@@ -27,7 +27,7 @@ def _ok_runner(command, **kwargs):
         owner_sid = 'S-1-5-21-1'
         if 'WindowsIdentity' in command[3]:
             return SimpleNamespace(returncode=0, stdout=owner_sid, stderr='')
-        if 'Get-Acl' in command[3]:
+        if _is_acl_proof_command(command[3]):
             payload = {
                 'owner': owner,
                 'sddl': f'O:{owner_sid}G:{owner_sid}D:',
@@ -54,7 +54,7 @@ def _windows_acl_runner(*, owner: str, owner_sid: str, access: list[dict]):
         del kwargs
         if command[:3] == ['powershell', '-NoProfile', '-Command'] and 'WindowsIdentity' in command[3]:
             return SimpleNamespace(returncode=0, stdout=owner_sid, stderr='')
-        if command[:3] == ['powershell', '-NoProfile', '-Command'] and 'Get-Acl' in command[3]:
+        if command[:3] == ['powershell', '-NoProfile', '-Command'] and _is_acl_proof_command(command[3]):
             payload = {
                 'owner': owner,
                 'sddl': f'O:{owner_sid}G:{owner_sid}D:',
@@ -143,6 +143,32 @@ def test_create_token_file_proves_acl_convergence(tmp_path: Path, monkeypatch) -
             {
                 'identity': 'DESKTOP\\User',
                 'rights': 'Read',
+                'access_type': 'Allow',
+                'inherited': False,
+            }
+        ],
+    )
+    monkeypatch.setattr('ccbd.control_plane_transport.token_auth._current_windows_user', lambda: 'DESKTOP\\User')
+
+    token_file = create_token_file(
+        token_path,
+        command_runner=runner,
+        os_name='nt',
+    )
+
+    assert token_file.acl_status == 'windows-icacls-user-read'
+    assert token_path.exists()
+
+
+def test_create_token_file_accepts_admin_owner_when_acl_is_current_user_only(tmp_path: Path, monkeypatch) -> None:
+    token_path = tmp_path / 'token.json'
+    runner = _windows_acl_runner(
+        owner='BUILTIN\\Administrators',
+        owner_sid='S-1-5-32-544',
+        access=[
+            {
+                'identity': 'DESKTOP\\User',
+                'rights': 'Read, Synchronize',
                 'access_type': 'Allow',
                 'inherited': False,
             }
@@ -724,3 +750,7 @@ def _accept_until_timeout(listener) -> BaseException:
     except BaseException as exc:
         return exc
     raise AssertionError('listener unexpectedly accepted a bad token')
+
+
+def _is_acl_proof_command(command: str) -> bool:
+    return 'Get-Acl' in command or 'GetAccessControl' in command

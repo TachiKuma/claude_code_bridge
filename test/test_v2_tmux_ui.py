@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import cli.services.tmux_ui as tmux_ui
 import cli.services.tmux_ui_runtime.helpers as tmux_helpers
+import terminal_runtime.tmux_compat as tmux_compat
 
 
 def test_keeper_import_does_not_cycle_through_tmux_ui() -> None:
@@ -193,6 +194,38 @@ def test_apply_project_tmux_ui_sets_session_theme_and_hook_from_current_install_
     assert '--source-window "#{window_id}"' in sidebar_window_resize_hook
     assert '--from-stored-width' in sidebar_window_resize_hook
     assert ['set-option', '-p', '-t', '%9', 'pane-active-border-style', 'fg=#f7768e,bold'] in calls
+
+
+def test_apply_project_tmux_ui_skips_project_ui_for_psmux_compat_tmux_path(monkeypatch, tmp_path: Path) -> None:
+    config_dir = tmp_path / 'config'
+    config_dir.mkdir(parents=True)
+    for script_name in ('ccb-status.sh', 'ccb-border.sh', 'ccb-git.sh'):
+        (config_dir / script_name).write_text('#!/bin/sh\n', encoding='utf-8')
+    (tmp_path / 'VERSION').write_text('9.9.9\n', encoding='utf-8')
+
+    calls: list[list[str]] = []
+
+    class FakeBackend:
+        backend_impl = 'tmux'
+
+        def _tmux_base(self):
+            return ['tmux', '-S', '/tmp/ccb.sock']
+
+        def _tmux_run(self, args, *, check=False, capture=False):
+            del check, capture
+            calls.append(list(args))
+            raise AssertionError(f'project tmux UI command should be skipped: {args!r}')
+
+    monkeypatch.setattr(tmux_helpers, 'current_install_root', lambda: tmp_path)
+    monkeypatch.setattr(tmux_compat.shutil, 'which', lambda name: str(tmp_path / 'psmux' / 'tmux.EXE') if name == 'tmux' else None)
+
+    tmux_ui.apply_project_tmux_ui(
+        tmux_socket_path='/tmp/ccb.sock',
+        tmux_session_name='ccb-demo',
+        backend=FakeBackend(),
+    )
+
+    assert calls == []
 
 
 def test_apply_project_tmux_ui_applies_window_theme_for_contrast_profile(monkeypatch, tmp_path: Path) -> None:

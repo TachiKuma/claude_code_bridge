@@ -16,6 +16,7 @@ from terminal_runtime.tmux_readiness import (
     tmux_object_ready_timeout_s,
     tmux_failure_detail,
 )
+from terminal_runtime.tmux_compat import is_tmux_compat_subset
 from terminal_runtime.placeholders import pane_placeholder_argv, pane_placeholder_cmd
 
 _TMUX_ENVIRONMENT_KEYS = (
@@ -98,8 +99,11 @@ def ensure_server_policy(backend, *, timeout_s: float | None = None) -> None:
     _apply_optional_server_policy(backend, option='focus-events', value='on', timeout_s=timeout_s)
     _apply_optional_server_policy(backend, option='escape-time', value='10', timeout_s=timeout_s)
     _apply_optional_server_policy(backend, option='allow-passthrough', value='on', timeout_s=timeout_s)
+    if is_tmux_compat_subset(backend):
+        return
     _apply_tmux_environment_policy(backend, timeout_s=timeout_s)
-    _apply_optional_window_policy(backend, option='mode-keys', value='vi', timeout_s=timeout_s)
+    if not _apply_optional_window_policy(backend, option='mode-keys', value='vi', timeout_s=timeout_s):
+        return
     _apply_optional_tmux_policy(
         backend,
         ['bind-key', '-T', 'copy-mode-vi', 'v', 'send-keys', '-X', 'begin-selection'],
@@ -163,8 +167,8 @@ def _apply_optional_server_policy(backend, *, option: str, value: str, timeout_s
     )
 
 
-def _apply_optional_window_policy(backend, *, option: str, value: str, timeout_s: float | None = None) -> None:
-    _apply_optional_tmux_policy(
+def _apply_optional_window_policy(backend, *, option: str, value: str, timeout_s: float | None = None) -> bool:
+    return _apply_optional_tmux_policy(
         backend,
         ['set-window-option', '-g', option, value],
         description=f'tmux {option} window policy',
@@ -178,7 +182,7 @@ def _apply_optional_tmux_policy(
     *,
     description: str,
     timeout_s: float | None = None,
-) -> None:
+) -> bool:
     try:
         _tmux_run_ready(
             backend,
@@ -187,7 +191,8 @@ def _apply_optional_tmux_policy(
             timeout_s=timeout_s,
         )
     except Exception:
-        return
+        return False
+    return True
 
 
 def create_session(

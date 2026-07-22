@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shlex
 
+from terminal_runtime.tmux_compat import is_tmux_compat_subset
 from terminal_runtime.tmux_theme import render_tmux_session_theme
 
 from .helpers import build_tmux_backend, detect_ccb_version, script_path
@@ -21,6 +22,8 @@ def apply_project_tmux_ui(
         return
     resolved_backend = backend or build_tmux_backend(socket_path)
     if resolved_backend is None:
+        return
+    if is_tmux_compat_subset(resolved_backend):
         return
 
     status_script = script_path('ccb-status.sh')

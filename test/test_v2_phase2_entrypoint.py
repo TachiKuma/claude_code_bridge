@@ -44,6 +44,8 @@ def _run_ccb(args: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding='utf-8',
+        errors='replace',
     )
 
 

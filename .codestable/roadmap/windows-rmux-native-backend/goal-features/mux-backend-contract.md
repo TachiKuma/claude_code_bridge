@@ -3,7 +3,7 @@ doc_type: roadmap-goal-feature
 roadmap: windows-rmux-native-backend
 roadmap_item: mux-backend-contract
 feature: 2026-07-19-mux-backend-contract
-status: pending
+status: accepted
 ---
 
 # mux-backend-contract Goal Feature Spec

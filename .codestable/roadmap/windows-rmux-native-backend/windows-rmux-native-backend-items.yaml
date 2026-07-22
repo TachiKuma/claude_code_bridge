@@ -29,7 +29,7 @@ items:
   - slug: mux-backend-contract
     description: 定义 MuxBackend 组合能力、ProjectNamespaceBackend higher-level policy、namespace 与 pane 引用、capability、error 契约和 fake backend 测试替身
     depends_on: [backend-resolver-opt-in-contract]
-    status: in-progress
+    status: done
     feature: 2026-07-19-mux-backend-contract
     minimal_loop: false
     notes: 先建 seam 和测试替身，避免实现直接耦合 Rmux

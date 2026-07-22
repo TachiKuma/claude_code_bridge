@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import terminal_runtime.tmux_compat as tmux_compat
 from ccbd.services.project_namespace_runtime.backend import (
     create_window,
     create_session,
@@ -504,6 +505,44 @@ def test_ensure_server_policy_accepts_fast_probe_timeout(monkeypatch) -> None:
         ('bind-key', '-r', 'K', 'resize-pane', '-U', '5'),
         ('bind-key', '-r', 'L', 'resize-pane', '-R', '5'),
     ]
+
+
+def test_ensure_server_policy_retries_transient_optional_window_policy(monkeypatch) -> None:
+    monkeypatch.setenv('CCB_TMUX_OBJECT_READY_POLL_INTERVAL_S', '0')
+    backend = _FlakyBackend()
+    backend.fail_once('set-window-option', '-g', 'mode-keys', 'vi')
+
+    ensure_server_policy(backend)
+
+    assert backend.calls.count(('set-window-option', '-g', 'mode-keys', 'vi')) == 2
+    assert ('bind-key', '-T', 'copy-mode-vi', 'v', 'send-keys', '-X', 'begin-selection') in backend.calls
+
+
+def test_ensure_server_policy_skips_window_and_keybinding_policy_for_psmux_compat(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv('CCB_TMUX_OBJECT_READY_POLL_INTERVAL_S', '0')
+    monkeypatch.setattr(tmux_compat.shutil, 'which', lambda name: str(tmp_path / 'psmux' / 'tmux.EXE') if name == 'tmux' else None)
+    backend = _FlakyBackend()
+    backend._tmux_base = lambda: ['tmux', '-S', '/tmp/ccb-runtime/test.sock']  # type: ignore[attr-defined]
+
+    ensure_server_policy(backend, timeout_s=0.0)
+
+    assert ('set-option', '-g', 'destroy-unattached', 'off') in backend.calls
+    assert ('set-option', '-g', 'update-environment', _TMUX_UPDATE_ENVIRONMENT_FOR_TEST) not in backend.calls
+    assert not any(call[:1] == ('set-environment',) for call in backend.calls)
+    assert not any(call[:1] == ('set-window-option',) for call in backend.calls)
+    assert not any(call[:1] == ('bind-key',) for call in backend.calls)
+
+
+def test_tmux_compat_subset_ignores_socket_paths_containing_psmux(monkeypatch) -> None:
+    monkeypatch.setattr(tmux_compat.shutil, 'which', lambda name: 'C:/bin/tmux.exe' if name == 'tmux' else None)
+
+    class Backend:
+        backend_impl = 'tmux'
+
+        def _tmux_base(self):
+            return ['tmux', '-S', 'D:/tmp/psmux/socket.sock']
+
+    assert tmux_compat.is_tmux_compat_subset(Backend()) is False
 
 
 def test_kill_window_accepts_fast_probe_timeout(monkeypatch) -> None:

@@ -132,8 +132,9 @@ def materialize_topology(
     _rename_legacy_workspace_if_needed(controller, context, first_window_name=first_window.name, timeout_s=timeout_s)
 
     agent_panes: dict[str, str] = {}
+    window_refs: dict[str, str] = {}
     for index, window in enumerate(windows):
-        ensure_window(
+        record = ensure_window(
             context.backend,
             session_name=context.desired_session_name,
             window_name=window.name,
@@ -141,7 +142,9 @@ def materialize_topology(
             select=index == 0,
             timeout_s=timeout_s,
         )
-        target = session_window_target(context.desired_session_name, window.name)
+        window_ref = record.window_id or window.name
+        window_refs[str(window.name)] = window_ref
+        target = session_window_target(context.desired_session_name, window_ref)
         root_pane = window_root_pane(context.backend, target_window=target, timeout_s=timeout_s)
         user_root = _materialize_sidebar(
             controller,
@@ -179,7 +182,10 @@ def materialize_topology(
     )
     select_window(
         context.backend,
-        target=session_window_target(context.desired_session_name, topology_plan.entry_window),
+        target=session_window_target(
+            context.desired_session_name,
+            window_refs.get(str(topology_plan.entry_window), topology_plan.entry_window),
+        ),
     )
     return agent_panes
 
