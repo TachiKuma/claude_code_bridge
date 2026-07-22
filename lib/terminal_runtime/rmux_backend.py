@@ -1,19 +1,64 @@
 from __future__ import annotations
 
 import os
-import subprocess
+from pathlib import Path
+from typing import Mapping
 
-from runtime_observability import record_startup_operations
-from terminal_runtime.psmux_backend import PsmuxBackend
-from terminal_runtime.rmux_runner import (
-    client_tail_nonempty_lines,
-    logical_key_sequence_for_rmux,
-    run_rmux_subprocess,
+from terminal_runtime.mux_backend_contract import (
+    MuxCapabilities,
+    MuxCommandError,
+    MuxNamespaceRef,
+    MuxPaneRef,
+    MuxWindowInfo,
+    SplitDirection,
+)
+from terminal_runtime.rmux_backend_runtime.capabilities import (
+    RmuxCapabilityGate,
+    default_rmux_capability_gate,
+)
+from terminal_runtime.rmux_backend_runtime.client import (
+    RmuxCommandClient,
+    RmuxSubprocessCommandClient,
+)
+from terminal_runtime.rmux_backend_runtime.namespace import (
+    attach_namespace_unsupported,
+    create_session,
+    destroy_namespace,
+    ensure_server_policy,
+    ensure_window,
+    kill_server,
+    kill_window,
+    list_windows,
+    namespace_exists,
+    namespace_ref,
+    prepare_server,
+    select_window,
+    session_alive,
+    session_root_pane,
+    window_root_pane,
+)
+from terminal_runtime.rmux_backend_runtime.panes import (
+    describe_pane,
+    describe_window_panes,
+    kill_pane,
+    list_panes,
+    move_pane,
+    reflow_window,
+    respawn_pane,
+    select_layout,
+    split_pane,
+    swap_pane,
+)
+from terminal_runtime.rmux_backend_runtime.presentation import (
+    set_pane_identity,
+    set_pane_style,
+    set_pane_title,
+    set_pane_user_option,
 )
 
 
-class RmuxBackend(PsmuxBackend):
-    backend_family = "tmux"
+class RmuxBackend:
+    backend_family = "tmux-family"
     backend_impl = "rmux"
 
     def __init__(
@@ -23,84 +68,330 @@ class RmuxBackend(PsmuxBackend):
         socket_name: str | None = None,
         socket_path: str | None = None,
         executable: str | None = None,
-    ):
-        super().__init__(
-            namespace=namespace,
-            socket_name=socket_name,
-            socket_path=socket_path,
-            executable=executable or os.environ.get("CCB_RMUX_BIN") or "rmux",
+        command_client: RmuxCommandClient | None = None,
+        command_status: Mapping[str, str] | None = None,
+        semantic_status: Mapping[str, str] | None = None,
+        blocking_gaps: list[str] | tuple[str, ...] | None = None,
+        capability_report_ref: str | None = None,
+        daemon_evidence: Mapping[str, object] | None = None,
+        project_root: str | Path | None = None,
+    ) -> None:
+        resolved_namespace = (
+            namespace
+            or socket_name
+            or os.environ.get("CCB_RMUX_NAMESPACE")
+            or os.environ.get("CCB_PSMUX_NAMESPACE")
+            or os.environ.get("CCB_TMUX_SOCKET")
+            or ""
+        ).strip() or None
+        resolved_socket_path = str(socket_path or "").strip() or None
+        resolved_executable = (
+            executable
+            or os.environ.get("CCB_RMUX_BIN")
+            or os.environ.get("CCB_PSMUX_BIN")
+            or "rmux"
         )
-
-    def _tmux_run(
-        self,
-        args: list[str],
-        *,
-        check: bool = False,
-        capture: bool = False,
-        input_bytes: bytes | None = None,
-        timeout: float | None = None,
-    ) -> subprocess.CompletedProcess:
-        record_startup_operations(
-            {
-                "tmux_backend_command_attempt_count": 1,
-                "tracked_startup_subprocess_spawn_attempt_count": 1,
-            }
-        )
-        try:
-            result = run_rmux_subprocess(
-                [*self._tmux_base(), *args],
-                check=check,
-                capture=capture,
-                input=input_bytes,
-                timeout=timeout,
-                env=self._command_env(),
-                text=True,
-                encoding="utf-8",
-                errors="replace",
+        self.namespace = resolved_namespace
+        self.socket_path = resolved_socket_path
+        self.executable = str(resolved_executable or "rmux")
+        self.daemon_evidence = dict(daemon_evidence or {})
+        self._capability_gate = (
+            RmuxCapabilityGate(
+                command_status=command_status,
+                semantic_status=semantic_status,
+                blocking_gaps=blocking_gaps,
+                source_ref=capability_report_ref,
             )
-        except subprocess.SubprocessError:
-            _record_rmux_subprocess_started()
-            raise
-        _record_rmux_subprocess_started()
-        return result
+            if command_status is not None or semantic_status is not None or blocking_gaps is not None
+            else default_rmux_capability_gate(project_root)
+        )
+        self._client = command_client or RmuxSubprocessCommandClient(
+            executable=self.executable,
+            namespace=self.namespace,
+            socket_path=self.socket_path,
+        )
+        self._capability_gate.require(
+            "RmuxBackend.__init__",
+            ("start-server", "new-session", "has-session", "list-windows", "list-panes"),
+            backend_impl=self.backend_impl,
+            ipc_ref=self._ipc_ref(),
+            daemon_evidence=self.daemon_evidence,
+        )
 
-    def send_key(self, pane_id: str, key: str) -> bool:
-        sequence = logical_key_sequence_for_rmux(key)
-        if not pane_id or not sequence or not sequence[0]:
-            return False
-        try:
-            cp = self._tmux_run(["send-keys", "-t", pane_id, *sequence], capture=True, timeout=2.0)
-            return cp.returncode == 0
-        except Exception:
-            return False
+    def capabilities(self) -> MuxCapabilities:
+        return self._capability_gate.capabilities()
 
-    def get_pane_content(self, pane_id: str, lines: int = 20) -> str | None:
-        if not pane_id:
-            return None
-        try:
-            cp = self._tmux_run(["capture-pane", "-t", pane_id, "-p"], capture=True)
-        except Exception:
-            return None
-        if int(getattr(cp, "returncode", 1) or 0) != 0:
-            return None
-        text = self._ANSI_RE.sub("", str(getattr(cp, "stdout", "") or ""))
-        return client_tail_nonempty_lines(text, lines)
+    def namespace_ref(
+        self,
+        *,
+        session_name: str,
+        namespace_id: str | None = None,
+    ) -> MuxNamespaceRef:
+        return namespace_ref(
+            session_name=session_name,
+            namespace_id=namespace_id,
+            socket_path=self.socket_path,
+            namespace=self.namespace,
+        )
 
-    def attach_session_foreground(self, session_name: str) -> int:
-        session = str(session_name or "").strip()
-        if not session:
-            return 1
-        return int(self._tmux_run(["attach-session", "-t", session], check=False, capture=False).returncode or 0)
-
-
-def _record_rmux_subprocess_started() -> None:
-    record_startup_operations(
-        {
-            "tmux_backend_command_count": 1,
-            "tmux_backend_subprocess_spawn_count": 1,
-            "tracked_startup_subprocess_spawn_count": 1,
+    def pane_ref(
+        self,
+        pane_id: str,
+        *,
+        session_name: str,
+        window_name: str | None = None,
+    ) -> MuxPaneRef:
+        pane = _require_text(pane_id, "pane_id")
+        return {
+            "backend_impl": "rmux",
+            "pane_id": pane,
+            "session_name": _require_text(session_name, "session_name"),
+            "window_name": str(window_name).strip() if window_name is not None else None,
         }
-    )
+
+    def prepare_server(self, *, timeout_s: float | None = None) -> None:
+        prepare_server(self, timeout_s=timeout_s)
+
+    def ensure_server_policy(
+        self,
+        namespace: MuxNamespaceRef | None = None,
+        *,
+        timeout_s: float | None = None,
+    ) -> None:
+        ensure_server_policy(self, namespace=namespace, timeout_s=timeout_s)
+
+    def create_session(
+        self,
+        *,
+        session_name: str,
+        project_root: str,
+        window_name: str | None = None,
+        terminal_size: tuple[int, int] | None = None,
+    ) -> MuxNamespaceRef:
+        return create_session(
+            self,
+            session_name=session_name,
+            project_root=project_root,
+            window_name=window_name,
+            terminal_size=terminal_size,
+        )
+
+    def attach_namespace(
+        self,
+        namespace: MuxNamespaceRef,
+        *,
+        window_name: str | None = None,
+    ) -> int:
+        return attach_namespace_unsupported(self, namespace=namespace, window_name=window_name)
+
+    def destroy_namespace(self, namespace: MuxNamespaceRef) -> None:
+        destroy_namespace(self, namespace)
+
+    def namespace_exists(
+        self,
+        namespace: MuxNamespaceRef,
+        *,
+        timeout_s: float | None = None,
+    ) -> bool:
+        return namespace_exists(self, namespace, timeout_s=timeout_s)
+
+    def session_alive(
+        self,
+        namespace: MuxNamespaceRef,
+        *,
+        timeout_s: float | None = None,
+    ) -> bool:
+        return session_alive(self, namespace, timeout_s=timeout_s)
+
+    def session_root_pane(
+        self,
+        namespace: MuxNamespaceRef,
+        *,
+        timeout_s: float | None = None,
+    ) -> MuxPaneRef:
+        return session_root_pane(self, namespace, timeout_s=timeout_s)
+
+    def kill_server(self, namespace: MuxNamespaceRef | None = None) -> bool:
+        return kill_server(self, namespace)
+
+    def list_windows(self, namespace: MuxNamespaceRef) -> tuple[MuxWindowInfo, ...]:
+        return list_windows(self, namespace)
+
+    def ensure_window(
+        self,
+        namespace: MuxNamespaceRef,
+        *,
+        window_name: str,
+        project_root: str,
+        select: bool = False,
+    ) -> MuxWindowInfo:
+        return ensure_window(
+            self,
+            namespace,
+            window_name=window_name,
+            project_root=project_root,
+            select=select,
+        )
+
+    def kill_window(self, namespace: MuxNamespaceRef, *, target: str) -> None:
+        kill_window(self, namespace, target=target)
+
+    def list_panes(
+        self,
+        namespace: MuxNamespaceRef,
+        *,
+        window_name: str | None = None,
+    ) -> tuple[MuxPaneRef, ...]:
+        return list_panes(self, namespace, window_name=window_name)
+
+    def window_root_pane(
+        self,
+        namespace: MuxNamespaceRef,
+        *,
+        window_name: str,
+        timeout_s: float | None = None,
+    ) -> MuxPaneRef:
+        return window_root_pane(self, namespace, window_name=window_name, timeout_s=timeout_s)
+
+    def select_window(self, namespace: MuxNamespaceRef, *, target: str) -> None:
+        select_window(self, namespace, target=target)
+
+    def split_pane(
+        self,
+        parent: MuxPaneRef,
+        *,
+        direction: SplitDirection,
+        percent: int,
+        cmd: str | None = None,
+        cwd: str | None = None,
+    ) -> MuxPaneRef:
+        return split_pane(self, parent, direction=direction, percent=percent, cmd=cmd, cwd=cwd)
+
+    def reflow_window(
+        self,
+        namespace: MuxNamespaceRef,
+        *,
+        window_name: str,
+        layout: str,
+        expected_panes: tuple[MuxPaneRef, ...] = (),
+    ) -> None:
+        reflow_window(self, namespace, window_name=window_name, layout=layout, expected_panes=expected_panes)
+
+    def select_layout(
+        self,
+        namespace: MuxNamespaceRef,
+        *,
+        window_name: str,
+        layout: str,
+    ) -> None:
+        select_layout(self, namespace, window_name=window_name, layout=layout)
+
+    def move_pane(self, pane: MuxPaneRef, *, target: str) -> None:
+        move_pane(self, pane, target=target)
+
+    def swap_pane(self, source: MuxPaneRef, *, target: MuxPaneRef) -> None:
+        swap_pane(self, source, target=target)
+
+    def respawn_pane(
+        self,
+        pane: MuxPaneRef,
+        *,
+        cmd: str,
+        cwd: str | None = None,
+        remain_on_exit: bool = True,
+    ) -> None:
+        respawn_pane(self, pane, cmd=cmd, cwd=cwd, remain_on_exit=remain_on_exit)
+
+    def kill_pane(self, pane: MuxPaneRef) -> None:
+        kill_pane(self, pane)
+
+    def set_pane_title(self, pane: MuxPaneRef, title: str) -> None:
+        set_pane_title(self, pane, title)
+
+    def set_pane_user_option(self, pane: MuxPaneRef, name: str, value: str) -> None:
+        set_pane_user_option(self, pane, name, value)
+
+    def set_pane_style(
+        self,
+        pane: MuxPaneRef,
+        *,
+        border_style: str | None = None,
+        active_border_style: str | None = None,
+    ) -> None:
+        set_pane_style(
+            self,
+            pane,
+            border_style=border_style,
+            active_border_style=active_border_style,
+        )
+
+    def set_pane_identity(
+        self,
+        pane: MuxPaneRef,
+        *,
+        title: str,
+        user_options: dict[str, str],
+        border_style: str | None = None,
+        active_border_style: str | None = None,
+    ) -> None:
+        set_pane_identity(
+            self,
+            pane,
+            title=title,
+            user_options=user_options,
+            border_style=border_style,
+            active_border_style=active_border_style,
+        )
+
+    def describe_pane(
+        self,
+        pane: MuxPaneRef,
+        *,
+        user_options: tuple[str, ...] = (),
+    ) -> dict[str, str] | None:
+        return describe_pane(self, pane, user_options=user_options)
+
+    def describe_window_panes(
+        self,
+        namespace: MuxNamespaceRef,
+        *,
+        window_name: str,
+        user_options: tuple[str, ...] = (),
+    ) -> tuple[dict[str, str], ...]:
+        return describe_window_panes(self, namespace, window_name=window_name, user_options=user_options)
+
+    def _run_checked(self, args: list[str], *, operation: str, timeout_s: float | None = None):
+        return self._client.run_checked(
+            args,
+            operation=operation,
+            timeout_s=timeout_s,
+            ipc_ref=self._ipc_ref(),
+            daemon_evidence=self.daemon_evidence,
+        )
+
+    def _run_unchecked(self, args: list[str], *, timeout_s: float | None = None):
+        return self._client.run(args, timeout_s=timeout_s)
+
+    def _require_capability(self, operation: str, commands: tuple[str, ...] | list[str]) -> None:
+        self._capability_gate.require(
+            operation,
+            tuple(commands),
+            backend_impl=self.backend_impl,
+            ipc_ref=self._ipc_ref(),
+            daemon_evidence=self.daemon_evidence,
+        )
+
+    def _ipc_ref(self) -> str:
+        if self.socket_path:
+            return self.socket_path
+        return self.namespace or "<default>"
+
+
+def _require_text(value: str | None, field_name: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError(f"{field_name} is required")
+    return text
 
 
 __all__ = ["RmuxBackend"]

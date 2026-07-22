@@ -1,7 +1,7 @@
 roadmap: windows-rmux-native-backend
 status: handoff
 handoff_reason: FeatureAccepted
-handoff_next: "Continue rmux-backend-core. rmux-daemon-ownership-boundary implementation, review, QA, Task agent functional acceptance, checklist and feature acceptance writeback are complete."
+handoff_next: "Continue rmux-send-capture-logging. rmux-backend-core implementation, review, QA, Task agent functional acceptance, checklist and feature acceptance writeback are complete."
 handoff_resolution: "Resolved 2026-07-22: backend-resolver-opt-in-contract independent code review passed via Task agent 019f88b7-7e5e-7b40-86f4-96f41b3bd281 after Task agent 019f88ad-0ce2-7451-843d-9057b5175e24 reported two blocking findings; QA passed with refreshed evidence pack and targeted runtime/diagnostics tests. Narrow QA-fix review by Task agent 019f88bf-7a8c-75f3-8310-f4ceb459acb6 was closed with helper/startup report tests. Restored to ready-to-dispatch so the goal loop can continue at acceptance."
 resume_decision: "Owner requested cs-goal recovery on 2026-07-21: resume from IndependentReviewUnavailable handoff, continue accelerator-transport-windows-guard toward QA, then continue goal features toward ccbd-windows-full-chain-smoke."
 resume_note: "Handoff resolved 2026-07-20 (approval-report.md Decision History): owner split out-of-scope Windows import/locking/atomic compat into a separate feature (pending-split/windows-runtime-import-lock-compat) and separately accepted the mobile_gateway.terminal -> import fcntl collection gap as CMD-005 documented baseline. QA for ccbd-control-plane-transport-seam is runnable; record CMD-005 as documented baseline and real Unix AF_UNIX as compatibility residual, then continue to ccbd-windows-tcp-loopback-transport."
@@ -20,7 +20,7 @@ acceptance_authorization: approved
 acceptance_authorization_ref: approval-report.md#goal-acceptance
 commit_authorization: approved
 commit_authorization_ref: approval-report.md#goal-commits
-current_feature_index: 14
+current_feature_index: 15
 features:
   - slug: rmux-capability-gate
     roadmap_item: rmux-capability-gate
@@ -156,7 +156,7 @@ features:
     review: .codestable/features/2026-07-20-rmux-backend-core/rmux-backend-core-review.md
     qa: .codestable/features/2026-07-20-rmux-backend-core/rmux-backend-core-qa.md
     acceptance: .codestable/features/2026-07-20-rmux-backend-core/rmux-backend-core-acceptance.md
-    status: pending
+    status: accepted
   - slug: rmux-send-capture-logging
     roadmap_item: rmux-send-capture-logging
     feature_dir: .codestable/features/2026-07-20-rmux-send-capture-logging

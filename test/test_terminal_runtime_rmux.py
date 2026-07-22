@@ -4,8 +4,12 @@ import subprocess
 
 import pytest
 
-from terminal_runtime.rmux_backend import RmuxBackend
-from terminal_runtime.rmux_runner import RmuxRunner, logical_key_sequence_for_rmux, run_rmux_subprocess
+from terminal_runtime.rmux_runner import (
+    RmuxRunner,
+    client_tail_nonempty_lines,
+    logical_key_sequence_for_rmux,
+    run_rmux_subprocess,
+)
 
 
 def test_rmux_lifecycle_capture_uses_devnull_stdio_on_windows(monkeypatch) -> None:
@@ -75,33 +79,11 @@ def test_logical_key_sequence_for_rmux(key: str, expected: tuple[str, ...]) -> N
     assert logical_key_sequence_for_rmux(key) == expected
 
 
-def test_rmux_backend_maps_ctrl_d_to_windows_logical_eof(monkeypatch) -> None:
-    calls: list[list[str]] = []
-    backend = RmuxBackend(namespace='ccb-demo')
-
-    def fake_tmux_run(args, **kwargs):
-        calls.append(args)
-        return subprocess.CompletedProcess(args=args, returncode=0, stdout='', stderr='')
-
-    monkeypatch.setattr(backend, '_tmux_run', fake_tmux_run)
-
-    assert backend.send_key('%1', 'C-d') is True
-    assert calls == [['send-keys', '-t', '%1', 'C-z', 'Enter']]
-
-
-def test_rmux_backend_tails_nonempty_capture_lines(monkeypatch) -> None:
-    backend = RmuxBackend(namespace='ccb-demo')
-
-    def fake_tmux_run(args, **kwargs):
-        assert args == ['capture-pane', '-t', '%1', '-p']
-        assert kwargs['capture'] is True
-        return subprocess.CompletedProcess(
-            args=args,
-            returncode=0,
-            stdout='old\nCCB_RMUX_TRAILING\nCCB_RMUX_LASTN\n\n\n',
-            stderr='',
+def test_rmux_runner_tails_nonempty_capture_lines() -> None:
+    assert (
+        client_tail_nonempty_lines(
+            'old\nCCB_RMUX_TRAILING\nCCB_RMUX_LASTN\n\n\n',
+            1,
         )
-
-    monkeypatch.setattr(backend, '_tmux_run', fake_tmux_run)
-
-    assert backend.get_pane_content('%1', lines=1) == 'CCB_RMUX_LASTN'
+        == 'CCB_RMUX_LASTN'
+    )

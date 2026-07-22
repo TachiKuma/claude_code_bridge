@@ -85,7 +85,7 @@ items:
   - slug: rmux-backend-core
     description: 实现 Rmux namespace、session、window、pane、list、split、respawn、kill、title、user-option、style 的 backend core
     depends_on: [tmux-backend-contract-adapter, windows-namespace-ipc-schema, windows-shell-log-builder, provider-runtime-backend-session-contract, rmux-daemon-ownership-boundary]
-    status: in-progress
+    status: done
     feature: 2026-07-20-rmux-backend-core
     minimal_loop: false
     notes: 必须消费 capability report，unsupported required command 不能静默降级

@@ -276,7 +276,7 @@ Validation Commands:
 | CMD-001 | `python ".codestable/tools/validate-yaml.py" --file ".codestable/features/2026-07-20-rmux-backend-core/rmux-backend-core-checklist.yaml" --yaml-only` | checklist YAML 合法性 | core | fix-or-block |
 | CMD-002 | `python ".codestable/tools/validate-yaml.py" --file ".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml"` | roadmap items 回写合法性 | core | fix-or-block |
 | CMD-003 | `python -m pytest -q test/test_rmux_backend_core.py` | Rmux core capability / namespace / pane / presentation / error tests | core | fix-or-block |
-| CMD-004 | `python -m pytest -q test/test_terminal_backend_selection.py test/test_v2_project_namespace_backend.py test/test_cli_runtime_launch_tmux_panes.py -k "tmux or backend or pane or namespace"` | tmux compatibility 抽样回归 | core | fix-or-block |
+| CMD-004 | `python -m pytest -q test/test_terminal_runtime_backend_selection.py test/test_v2_project_namespace_backend.py test/test_cli_runtime_launch_tmux_panes.py -k "tmux or backend or pane or namespace"` | tmux compatibility 抽样回归 | core | fix-or-block |
 | CMD-005 | `python -m pytest -q test/test_rmux_backend_core_import_guard.py` | Rmux/tmux import boundary、scope guard | core | fix-or-block |
 
 Required Artifacts：design、checklist、design-review、RmuxBackend core、fake command client tests、capability guard tests、namespace/window tests、pane tests、presentation tests、error mapping tests、import guard、items.yaml 回写。

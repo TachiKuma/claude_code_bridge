@@ -1,0 +1,29 @@
+schema_version: 2
+goal: "rmux-backend-core"
+status: complete
+objective: "继续 windows-rmux-native-backend epic 中的 rmux-backend-core，完成 RmuxBackend core adapter：capability guard、Rmux command client seam、namespace/window、pane、presentation/title/user-option/style core operation、error evidence 和 tmux/Rmux import boundary，推进到可见 Task agent review 与功能验收完成。"
+start_point: "rmux-daemon-ownership-boundary 已提交；roadmap item rmux-backend-core 为 in-progress；feature design、design-review、checklist 已存在且 design approved，但现有 lib/terminal_runtime/rmux_backend.py 仍是 PsmuxBackend/TmuxBackend 兼容层并包含 send/capture/foreground attach 行为，尚未实现独立 RmuxBackend core adapter。"
+acceptance:
+  - "新增或替换 RmuxBackend production core adapter，覆盖 capability guard、Rmux command client seam、namespace/window、pane、presentation/title/user-option/style core operations。"
+  - "required command unsupported 在 construction 或 operation 前 fail-fast，抛 MuxCommandError(category=unsupported)，不得 fallback 到 tmux。"
+  - "namespace/window/pane operation 返回 backend-neutral MuxNamespaceRef、MuxPaneRef、MuxWindowInfo，不把 Rmux pane id 伪装成 tmux %N。"
+  - "command nonzero、malformed output、not-found、unreachable、permission 等错误映射为 MuxCommandError，并保留 daemon/endpoint/command evidence。"
+  - "不实现 send_text/send_key/capture_pane/pipe-pane/logging/provider completion parser，不接 ccbd production lifecycle 或 foreground attach。"
+  - "CMD-001 到 CMD-005 验证通过，并通过可见 Task agent review 与功能验收。"
+non_goals:
+  - "不实现 rmux-send-capture-logging；不提供 provider input/output、capture、pipe/logging 或大文本 paste。"
+  - "不接入 ccbd-rmux-namespace-lifecycle、foreground attach、full-chain smoke 或 supervision recovery。"
+  - "不修改 ccbd control-plane transport，不把 Rmux daemon 作为 ccbd authority。"
+  - "不复制 tmux argv parser，不让 Rmux core 导入 TmuxBackend 或 PsmuxBackend。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 1
+next_action: "Goal complete; continue rmux-send-capture-logging when owner requests."
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-23"
