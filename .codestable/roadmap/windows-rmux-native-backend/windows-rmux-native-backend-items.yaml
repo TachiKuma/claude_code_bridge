@@ -53,7 +53,7 @@ items:
   - slug: windows-shell-log-builder
     description: 增加 Windows shell command builder、pipe/log command builder、stderr redirection 和默认 shell 诊断
     depends_on: [mux-backend-contract]
-    status: in-progress
+    status: done
     feature: 2026-07-20-windows-shell-log-builder
     minimal_loop: false
     notes: 替代 sh -lc、tee -a 等 Unix-only 命令构造

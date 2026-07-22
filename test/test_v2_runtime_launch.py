@@ -39,6 +39,7 @@ from provider_backends.opencode import launcher as opencode_launcher
 from provider_backends.agy import launcher as agy_launcher
 from provider_backends.runtime_restore import ProviderRestoreTarget
 from provider_backends.codex.launcher_runtime.command import prepare_codex_home_overrides as prepare_codex_home_overrides_for_test
+from provider_backends.codex.runtime_artifacts import ensure_runtime_artifact_layout
 from provider_core.registry import build_default_runtime_launcher_map
 import provider_profiles.codex_home_config as codex_home_config
 from provider_profiles import load_resolved_provider_profile
@@ -47,6 +48,7 @@ from project.ids import compute_project_id
 from project.resolver import ProjectContext
 from storage.paths import PathLayout
 from terminal_runtime.tmux_identity import pane_visual
+from terminal_runtime.windows_shell_log_builder import clipboard_pipe_command
 from workspace.planner import WorkspacePlanner
 
 
@@ -139,18 +141,13 @@ def _clipboard_bind_call(key: str) -> tuple[str, tuple[str, ...]]:
 
 
 def _clipboard_pipe_command_for_test() -> str:
-    return (
-        "sh -lc '"
-        "tmp=$(mktemp \"${TMPDIR:-/tmp}/ccb-clipboard.XXXXXX\") || exit 0; "
-        "cat >\"$tmp\"; "
-        "if command -v wl-copy >/dev/null 2>&1 && [ -n \"${WAYLAND_DISPLAY:-}\" ]; then (wl-copy <\"$tmp\"; rm -f \"$tmp\") >/dev/null 2>&1 & "
-        "elif command -v xclip >/dev/null 2>&1 && [ -n \"${DISPLAY:-}\" ]; then (xclip -selection clipboard <\"$tmp\"; rm -f \"$tmp\") >/dev/null 2>&1 & "
-        "elif command -v xsel >/dev/null 2>&1 && [ -n \"${DISPLAY:-}\" ]; then (xsel --clipboard --input <\"$tmp\"; rm -f \"$tmp\") >/dev/null 2>&1 & "
-        "elif command -v pbcopy >/dev/null 2>&1; then pbcopy <\"$tmp\"; rm -f \"$tmp\"; "
-        "elif command -v powershell.exe >/dev/null 2>&1; then powershell.exe -NoProfile -Command \"[Console]::InputEncoding=[System.Text.UTF8Encoding]::new(); Set-Clipboard -Value ([Console]::In.ReadToEnd())\" <\"$tmp\"; rm -f \"$tmp\"; "
-        "elif command -v pwsh >/dev/null 2>&1; then pwsh -NoLogo -NoProfile -Command \"[Console]::InputEncoding=[System.Text.UTF8Encoding]::new(); Set-Clipboard -Value ([Console]::In.ReadToEnd())\" <\"$tmp\"; rm -f \"$tmp\"; "
-        "else rm -f \"$tmp\"; fi'"
-    )
+    return clipboard_pipe_command()
+
+
+def _prepare_codex_bridge_artifacts(runtime_dir: Path) -> None:
+    artifacts = ensure_runtime_artifact_layout(runtime_dir)
+    artifacts.input_fifo.write_text('', encoding='utf-8')
+    artifacts.output_fifo.write_text('', encoding='utf-8')
 
 
 def _claude_prepared_state(runtime_dir: Path) -> dict[str, object]:
@@ -1341,7 +1338,7 @@ def test_ensure_agent_runtime_launches_named_droid_session(monkeypatch, tmp_path
     assert payload['ccb_session_id'].startswith('ccb-mobile-')
 
 
-def test_ensure_agent_runtime_falls_back_to_detached_tmux_session(monkeypatch, tmp_path: Path) -> None:
+def test_ensure_agent_runtime_falls_back_to_detached_tmux_session_with_clipboard_binding(monkeypatch, tmp_path: Path) -> None:
     project_root = tmp_path / 'repo'
     (project_root / '.ccb').mkdir(parents=True)
     ctx = _context(project_root, ParsedStartCommand(project=None, agent_names=('agent1',), restore=False, auto_permission=False))
@@ -1395,6 +1392,7 @@ def test_ensure_agent_runtime_falls_back_to_detached_tmux_session(monkeypatch, t
     monkeypatch.setattr('cli.services.runtime_launch.TmuxBackend', FakeTmuxBackend)
     monkeypatch.setattr('cli.services.runtime_launch.subprocess.Popen', FakePopen)
     monkeypatch.setattr('cli.services.runtime_launch._pane_meets_minimum_size', lambda backend, pane_id: True)
+    _prepare_codex_bridge_artifacts(ctx.paths.agent_dir('agent1') / 'provider-runtime' / 'codex')
 
     result = ensure_agent_runtime(ctx, ctx.command, spec, plan, None)
 
@@ -1420,7 +1418,9 @@ def test_ensure_agent_runtime_falls_back_to_detached_tmux_session(monkeypatch, t
     assert any(name == 'respawn' for name, _ in calls)
 
 
-def test_ensure_agent_runtime_refuses_detached_fallback_inside_project_namespace(monkeypatch, tmp_path: Path) -> None:
+def test_ensure_agent_runtime_refuses_detached_fallback_inside_project_namespace_with_clipboard_binding(
+    monkeypatch, tmp_path: Path
+) -> None:
     project_root = tmp_path / 'repo-namespace-no-detached'
     (project_root / '.ccb').mkdir(parents=True)
     ctx = _context(project_root, ParsedStartCommand(project=None, agent_names=('agent1',), restore=False, auto_permission=False))
@@ -1448,7 +1448,9 @@ def test_ensure_agent_runtime_refuses_detached_fallback_inside_project_namespace
         )
 
 
-def test_ensure_agent_runtime_relaunches_when_existing_binding_pane_is_dead(monkeypatch, tmp_path: Path) -> None:
+def test_ensure_agent_runtime_relaunches_when_existing_binding_pane_is_dead_with_clipboard_binding(
+    monkeypatch, tmp_path: Path
+) -> None:
     project_root = tmp_path / 'repo-dead-binding'
     (project_root / '.ccb').mkdir(parents=True)
     ctx = _context(project_root, ParsedStartCommand(project=None, agent_names=('reviewer',), restore=False, auto_permission=False))
@@ -1503,7 +1505,9 @@ def test_ensure_agent_runtime_relaunches_when_existing_binding_pane_is_dead(monk
     assert tmux_state['killed'] == [('sock-dead', '%44')]
 
 
-def test_ensure_agent_runtime_outside_tmux_relaunches_stale_binding_via_detached_session(monkeypatch, tmp_path: Path) -> None:
+def test_ensure_agent_runtime_outside_tmux_relaunches_stale_binding_via_detached_session_with_clipboard_binding(
+    monkeypatch, tmp_path: Path
+) -> None:
     project_root = tmp_path / 'repo-outside-tmux-stale'
     (project_root / '.ccb').mkdir(parents=True)
     ctx = _context(project_root, ParsedStartCommand(project=None, agent_names=('agent1',), restore=False, auto_permission=False))
@@ -1567,6 +1571,7 @@ def test_ensure_agent_runtime_outside_tmux_relaunches_stale_binding_via_detached
     monkeypatch.setattr('cli.services.runtime_launch.TmuxBackend', FakeTmuxBackend)
     monkeypatch.setattr('cli.services.runtime_launch.subprocess.Popen', FakePopen)
     monkeypatch.setattr('cli.services.runtime_launch._pane_meets_minimum_size', lambda backend, pane_id: True)
+    _prepare_codex_bridge_artifacts(ctx.paths.agent_dir('agent1') / 'provider-runtime' / 'codex')
 
     result = ensure_agent_runtime(
         ctx,
@@ -1605,7 +1610,9 @@ def test_ensure_agent_runtime_outside_tmux_relaunches_stale_binding_via_detached
     assert any(name == 'respawn' for name, _ in calls)
 
 
-def test_ensure_agent_runtime_relaunches_live_foreign_binding_without_killing_foreign_pane(monkeypatch, tmp_path: Path) -> None:
+def test_ensure_agent_runtime_relaunches_live_foreign_binding_without_killing_foreign_pane_with_clipboard_binding(
+    monkeypatch, tmp_path: Path
+) -> None:
     project_root = tmp_path / 'repo-foreign-binding'
     (project_root / '.ccb').mkdir(parents=True)
     ctx = _context(project_root, ParsedStartCommand(project=None, agent_names=('agent1',), restore=False, auto_permission=False))
@@ -1644,6 +1651,7 @@ def test_ensure_agent_runtime_relaunches_live_foreign_binding_without_killing_fo
     monkeypatch.setattr('cli.services.runtime_launch.shutil.which', lambda name: f'/usr/bin/{name}')
     monkeypatch.setattr('cli.services.runtime_launch.TmuxBackend', FakeTmuxBackend)
     monkeypatch.setattr('cli.services.runtime_launch.subprocess.Popen', FakePopen)
+    _prepare_codex_bridge_artifacts(ctx.paths.agent_dir('agent1') / 'provider-runtime' / 'codex')
 
     result = ensure_agent_runtime(
         ctx,

@@ -18,6 +18,7 @@ from storage.paths import PathLayout
 from agents.config_loader import load_project_config
 from agents.models import SidebarSpec
 from terminal_runtime.placeholders import pane_placeholder_argv
+from terminal_runtime.windows_shell_log_builder import clipboard_pipe_command
 
 
 def _clipboard_bind_call(key: str) -> tuple[list[str], bool]:
@@ -37,18 +38,7 @@ def _clipboard_bind_call(key: str) -> tuple[list[str], bool]:
 
 
 def _clipboard_pipe_command_for_test() -> str:
-    return (
-        "sh -lc '"
-        "tmp=$(mktemp \"${TMPDIR:-/tmp}/ccb-clipboard.XXXXXX\") || exit 0; "
-        "cat >\"$tmp\"; "
-        "if command -v wl-copy >/dev/null 2>&1 && [ -n \"${WAYLAND_DISPLAY:-}\" ]; then (wl-copy <\"$tmp\"; rm -f \"$tmp\") >/dev/null 2>&1 & "
-        "elif command -v xclip >/dev/null 2>&1 && [ -n \"${DISPLAY:-}\" ]; then (xclip -selection clipboard <\"$tmp\"; rm -f \"$tmp\") >/dev/null 2>&1 & "
-        "elif command -v xsel >/dev/null 2>&1 && [ -n \"${DISPLAY:-}\" ]; then (xsel --clipboard --input <\"$tmp\"; rm -f \"$tmp\") >/dev/null 2>&1 & "
-        "elif command -v pbcopy >/dev/null 2>&1; then pbcopy <\"$tmp\"; rm -f \"$tmp\"; "
-        "elif command -v powershell.exe >/dev/null 2>&1; then powershell.exe -NoProfile -Command \"[Console]::InputEncoding=[System.Text.UTF8Encoding]::new(); Set-Clipboard -Value ([Console]::In.ReadToEnd())\" <\"$tmp\"; rm -f \"$tmp\"; "
-        "elif command -v pwsh >/dev/null 2>&1; then pwsh -NoLogo -NoProfile -Command \"[Console]::InputEncoding=[System.Text.UTF8Encoding]::new(); Set-Clipboard -Value ([Console]::In.ReadToEnd())\" <\"$tmp\"; rm -f \"$tmp\"; "
-        "else rm -f \"$tmp\"; fi'"
-    )
+    return clipboard_pipe_command()
 
 
 def test_project_namespace_state_store_round_trip(tmp_path: Path) -> None:
@@ -1081,7 +1071,7 @@ work = "agent2:codex"
     assert controller._last_topology_active_panes == ()
 
 
-def test_project_namespace_controller_applies_server_policy_when_reusing_session(tmp_path: Path) -> None:
+def test_project_namespace_controller_applies_clipboard_server_policy_when_reusing_session(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-reuse-policy'
     layout = PathLayout(project_root)
     backend = _FakeTmuxBackend()
@@ -1451,7 +1441,7 @@ def test_project_namespace_reflow_targets_transient_window_by_id(tmp_path: Path)
         assert target.startswith(f'{layout.ccbd_tmux_session_name}:@')
 
 
-def test_project_namespace_controller_bootstraps_with_silent_session_before_server_policy(tmp_path: Path) -> None:
+def test_project_namespace_controller_bootstraps_with_silent_session_before_clipboard_policy(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-silent'
     layout = PathLayout(project_root)
     backend = _FakeTmuxBackend()

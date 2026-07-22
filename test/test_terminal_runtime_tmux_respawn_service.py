@@ -40,6 +40,38 @@ def test_tmux_respawn_service_builds_respawn_and_remain_calls() -> None:
     assert ['respawn-pane', '-k', '-t', '%9', '/bin/bash -lc "echo hi"'] in calls
 
 
+def test_tmux_respawn_service_uses_injected_provider_wrapper_after_stderr() -> None:
+    calls: list[list[str]] = []
+    wrapped: list[tuple[str, str | None]] = []
+
+    service = TmuxRespawnService(
+        tmux_run_fn=lambda args, **kwargs: calls.append(args) or _cp(),
+        ensure_pane_log_fn=lambda pane_id: None,
+        normalize_start_dir_fn=lambda cwd: '/resolved/work',
+        append_stderr_redirection_fn=lambda cmd, path: (cmd + ' STDERR_APPENDED', path),
+        resolve_shell_fn=lambda **kwargs: pytest.fail('resolve_shell_fn should not be called when wrapper is injected'),
+        resolve_shell_flags_fn=lambda **kwargs: pytest.fail('resolve_shell_flags_fn should not be called when wrapper is injected'),
+        build_shell_command_fn=lambda **kwargs: pytest.fail('build_shell_command_fn should not be called when wrapper is injected'),
+        build_respawn_tmux_args_fn=lambda **kwargs: [
+            'respawn-pane',
+            '-k',
+            '-t',
+            kwargs['pane_id'],
+            '-c',
+            kwargs['start_dir'],
+            kwargs['full_command'],
+        ],
+        default_shell_fn=lambda: ('bash', '-c'),
+        env={'SHELL': '/bin/bash'},
+        wrap_provider_command_fn=lambda cmd, *, cwd: wrapped.append((cmd, cwd)) or f'WRAPPED[{cmd}]@{cwd}',
+    )
+
+    service.respawn_pane('%9', cmd='echo hi', cwd='/work', stderr_log_path='/tmp/err.log', remain_on_exit=False)
+
+    assert wrapped == [('echo hi STDERR_APPENDED', '/resolved/work')]
+    assert ['respawn-pane', '-k', '-t', '%9', '-c', '/resolved/work', 'WRAPPED[echo hi STDERR_APPENDED]@/resolved/work'] in calls
+
+
 def test_tmux_respawn_service_requires_pane_and_cmd() -> None:
     service = TmuxRespawnService(
         tmux_run_fn=lambda args, **kwargs: _cp(),

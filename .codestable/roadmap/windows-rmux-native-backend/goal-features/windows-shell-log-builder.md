@@ -3,7 +3,7 @@ doc_type: roadmap-goal-feature
 roadmap: windows-rmux-native-backend
 roadmap_item: windows-shell-log-builder
 feature: 2026-07-20-windows-shell-log-builder
-status: pending
+status: accepted
 ---
 
 # windows-shell-log-builder Goal Feature Spec

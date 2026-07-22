@@ -19,6 +19,7 @@ from ccbd.services.project_namespace_runtime.backend import (
 )
 from terminal_runtime.tmux_readiness import TmuxTransientServerUnavailable
 from terminal_runtime.placeholders import pane_placeholder_argv
+from terminal_runtime.windows_shell_log_builder import clipboard_pipe_command
 
 _TMUX_UPDATE_ENVIRONMENT_FOR_TEST = (
     'TERM TERM_PROGRAM TERM_PROGRAM_VERSION DISPLAY WAYLAND_DISPLAY XDG_RUNTIME_DIR '
@@ -31,18 +32,7 @@ _TMUX_UPDATE_ENVIRONMENT_FOR_TEST = (
 
 
 def _clipboard_pipe_command_for_test() -> str:
-    return (
-        "sh -lc '"
-        "tmp=$(mktemp \"${TMPDIR:-/tmp}/ccb-clipboard.XXXXXX\") || exit 0; "
-        "cat >\"$tmp\"; "
-        "if command -v wl-copy >/dev/null 2>&1 && [ -n \"${WAYLAND_DISPLAY:-}\" ]; then (wl-copy <\"$tmp\"; rm -f \"$tmp\") >/dev/null 2>&1 & "
-        "elif command -v xclip >/dev/null 2>&1 && [ -n \"${DISPLAY:-}\" ]; then (xclip -selection clipboard <\"$tmp\"; rm -f \"$tmp\") >/dev/null 2>&1 & "
-        "elif command -v xsel >/dev/null 2>&1 && [ -n \"${DISPLAY:-}\" ]; then (xsel --clipboard --input <\"$tmp\"; rm -f \"$tmp\") >/dev/null 2>&1 & "
-        "elif command -v pbcopy >/dev/null 2>&1; then pbcopy <\"$tmp\"; rm -f \"$tmp\"; "
-        "elif command -v powershell.exe >/dev/null 2>&1; then powershell.exe -NoProfile -Command \"[Console]::InputEncoding=[System.Text.UTF8Encoding]::new(); Set-Clipboard -Value ([Console]::In.ReadToEnd())\" <\"$tmp\"; rm -f \"$tmp\"; "
-        "elif command -v pwsh >/dev/null 2>&1; then pwsh -NoLogo -NoProfile -Command \"[Console]::InputEncoding=[System.Text.UTF8Encoding]::new(); Set-Clipboard -Value ([Console]::In.ReadToEnd())\" <\"$tmp\"; rm -f \"$tmp\"; "
-        "else rm -f \"$tmp\"; fi'"
-    )
+    return clipboard_pipe_command()
 
 
 class _FlakyBackend:
@@ -103,7 +93,9 @@ class _FlakyBackend:
         return subprocess.CompletedProcess(['tmux', *key], 0, stdout='', stderr='')
 
 
-def test_prepare_server_then_create_session_and_server_policy_retry_transient_tmux_failures(monkeypatch, tmp_path: Path) -> None:
+def test_prepare_server_then_create_session_and_clipboard_policy_retry_transient_tmux_failures(
+    monkeypatch, tmp_path: Path
+) -> None:
     monkeypatch.setenv('CCB_TMUX_OBJECT_READY_POLL_INTERVAL_S', '0')
     monkeypatch.setenv('DISPLAY', ':99')
     monkeypatch.setenv('AGENT_ROLES_STORE', '/home/demo/.roles')
@@ -179,7 +171,7 @@ def test_prepare_server_accepts_fast_probe_timeout(monkeypatch) -> None:
     assert backend.calls == [('start-server',)]
 
 
-def test_fresh_namespace_creates_session_before_server_policy(monkeypatch, tmp_path: Path) -> None:
+def test_fresh_namespace_creates_session_before_clipboard_policy(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv('CCB_TMUX_OBJECT_READY_POLL_INTERVAL_S', '0')
     monkeypatch.delenv('DISPLAY', raising=False)
     monkeypatch.delenv('WAYLAND_DISPLAY', raising=False)
@@ -463,7 +455,7 @@ def test_create_session_accepts_fast_probe_timeout(monkeypatch, tmp_path: Path) 
     assert backend.calls[0][:2] == ('new-session', '-d')
 
 
-def test_ensure_server_policy_accepts_fast_probe_timeout(monkeypatch) -> None:
+def test_ensure_clipboard_server_policy_accepts_fast_probe_timeout(monkeypatch) -> None:
     monkeypatch.setenv('CCB_TMUX_OBJECT_READY_POLL_INTERVAL_S', '0')
     backend = _FlakyBackend()
 

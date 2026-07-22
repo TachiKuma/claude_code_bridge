@@ -22,12 +22,13 @@ class TmuxRespawnService:
     ensure_pane_log_fn: Callable[[str], object]
     normalize_start_dir_fn: Callable[[str | None], str | None]
     append_stderr_redirection_fn: Callable[[str, str | None], tuple[str, str | None]]
-    resolve_shell_fn: Callable[..., str]
+    resolve_shell_fn: Callable[..., object]
     resolve_shell_flags_fn: Callable[..., list[str]]
     build_shell_command_fn: Callable[..., str]
     build_respawn_tmux_args_fn: Callable[..., list[str]]
     default_shell_fn: Callable[[], tuple[str, str]]
     env: dict[str, str]
+    wrap_provider_command_fn: Callable[..., str] | None = None
 
     def respawn_pane(
         self,
@@ -42,7 +43,7 @@ class TmuxRespawnService:
         _safe_ensure_pane_log(self, pane_id)
         start_dir = self.normalize_start_dir_fn(cwd)
         cmd_body, _ = self.append_stderr_redirection_fn(cmd_body, stderr_log_path)
-        full = _resolved_shell_command(self, cmd_body)
+        full = _resolved_shell_command(self, cmd_body, cwd=start_dir)
         if remain_on_exit:
             _set_remain_on_exit(self, pane_id)
         tmux_args = self.build_respawn_tmux_args_fn(
@@ -72,13 +73,18 @@ def _safe_ensure_pane_log(service: TmuxRespawnService, pane_id: str) -> None:
         pass
 
 
-def _resolved_shell_command(service: TmuxRespawnService, cmd_body: str) -> str:
-    shell = service.resolve_shell_fn(
+def _resolved_shell_command(service: TmuxRespawnService, cmd_body: str, *, cwd: str | None) -> str:
+    if service.wrap_provider_command_fn is not None:
+        return service.wrap_provider_command_fn(cmd_body, cwd=cwd)
+    fallback_shell, _ = service.default_shell_fn()
+    resolution = service.resolve_shell_fn(
         env_shell=service.env.get('CCB_TMUX_SHELL', ''),
         tmux_default_shell=_tmux_default_shell(service),
-        process_shell=service.env.get('SHELL', ''),
-        fallback_shell=service.default_shell_fn()[0],
+        process_shell=service.env.get('SHELL', '') or service.env.get('ComSpec', ''),
+        fallback_shell=fallback_shell,
+        flags_raw=service.env.get('CCB_TMUX_SHELL_FLAGS', ''),
     )
+    shell = str(getattr(resolution, 'shell', resolution)).strip()
     flags = service.resolve_shell_flags_fn(
         shell=shell,
         flags_raw=service.env.get('CCB_TMUX_SHELL_FLAGS', ''),

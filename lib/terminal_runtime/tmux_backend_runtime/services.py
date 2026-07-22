@@ -21,14 +21,13 @@ from terminal_runtime.tmux_input import sanitize_text as _sanitize_tmux_text_imp
 from terminal_runtime.tmux_input import should_use_inline_legacy_send as _should_use_inline_legacy_tmux_send_impl
 from terminal_runtime.tmux_logs import TmuxPaneLogManager
 from terminal_runtime.tmux_panes import TmuxPaneService
-from terminal_runtime.tmux_respawn import append_stderr_redirection as _append_tmux_stderr_redirection_impl
-from terminal_runtime.tmux_respawn import build_respawn_tmux_args as _build_tmux_respawn_tmux_args_impl
-from terminal_runtime.tmux_respawn import build_shell_command as _build_tmux_shell_command_impl
 from terminal_runtime.tmux_respawn import normalize_start_dir as _normalize_tmux_start_dir_impl
-from terminal_runtime.tmux_respawn import resolve_shell as _resolve_tmux_shell_impl
-from terminal_runtime.tmux_respawn import resolve_shell_flags as _resolve_tmux_shell_flags_impl
 from terminal_runtime.tmux_respawn_service import TmuxRespawnService
 from terminal_runtime.tmux_send import TmuxTextSender
+from terminal_runtime.windows_shell_log_builder import build_respawn_tmux_args as _build_respawn_tmux_args_impl
+from terminal_runtime.windows_shell_log_builder import build_shell_command as _build_shell_command_impl
+from terminal_runtime.windows_shell_log_builder import build_windows_shell_log_builder
+from terminal_runtime.windows_shell_log_builder import resolve_shell_flags as _resolve_shell_flags_impl
 
 
 @dataclass(frozen=True)
@@ -40,6 +39,7 @@ class TmuxBackendServices:
 
 
 def build_pane_log_manager(backend) -> TmuxPaneLogManager:
+    command_builder = build_command_builder()
     return TmuxPaneLogManager(
         socket_name=backend._socket_name,
         tmux_run_fn=lambda *args, **kwargs: backend._tmux_run(*args, **kwargs),
@@ -50,6 +50,7 @@ def build_pane_log_manager(backend) -> TmuxPaneLogManager:
         ),
         cleanup_pane_logs_fn=_cleanup_pane_logs_impl,
         maybe_trim_log_fn=_maybe_trim_log_impl,
+        build_pipe_log_command_fn=command_builder.build_pipe_log_command,
         pane_log_info=backend._pane_log_info,
     )
 
@@ -80,17 +81,19 @@ def build_pane_service(backend) -> TmuxPaneService:
 
 
 def build_respawn_service(backend) -> TmuxRespawnService:
+    command_builder = build_command_builder()
     return TmuxRespawnService(
         tmux_run_fn=lambda *args, **kwargs: backend._tmux_run(*args, **kwargs),
         ensure_pane_log_fn=backend.ensure_pane_log,
         normalize_start_dir_fn=_normalize_tmux_start_dir_impl,
-        append_stderr_redirection_fn=_append_tmux_stderr_redirection_impl,
-        resolve_shell_fn=_resolve_tmux_shell_impl,
-        resolve_shell_flags_fn=_resolve_tmux_shell_flags_impl,
-        build_shell_command_fn=_build_tmux_shell_command_impl,
-        build_respawn_tmux_args_fn=_build_tmux_respawn_tmux_args_impl,
+        append_stderr_redirection_fn=command_builder.append_stderr_redirection,
+        resolve_shell_fn=command_builder.resolve_shell,
+        resolve_shell_flags_fn=_resolve_shell_flags_impl,
+        build_shell_command_fn=_build_shell_command_impl,
+        build_respawn_tmux_args_fn=_build_respawn_tmux_args_impl,
         default_shell_fn=_default_shell,
         env=os.environ,
+        wrap_provider_command_fn=command_builder.wrap_provider_command,
     )
 
 
@@ -100,6 +103,10 @@ def _default_shell() -> tuple[str, str]:
 
 def _env_float(name: str, default: float) -> float:
     return _env_float_impl(name, default)
+
+
+def build_command_builder():
+    return build_windows_shell_log_builder(env=os.environ, default_shell_fn=_default_shell)
 
 
 def build_backend_services(backend) -> TmuxBackendServices:
@@ -119,6 +126,7 @@ __all__ = [
     "TmuxBackendServices",
     "build_backend_services",
     "build_pane_log_manager",
+    "build_command_builder",
     "build_pane_service",
     "build_respawn_service",
     "build_text_sender",

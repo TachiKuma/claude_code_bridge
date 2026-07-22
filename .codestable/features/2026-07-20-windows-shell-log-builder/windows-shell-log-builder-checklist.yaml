@@ -4,66 +4,66 @@ created: 2026-07-20
 steps:
   - action: "builder contract：新增 Windows shell/log command builder、ShellResolution、Windows shell family/flags/candidate 规则"
     exit_signal: "pwsh、powershell.exe/powershell、cmd、user override、tmux default-shell、process shell、fallback 的选择与 diagnostic 均可测试"
-    status: pending
+    status: done
   - action: "stderr redirection extraction：把 append_stderr_redirection 从 tmux-specific helper 收敛到 builder，并保留旧 import 兼容或薄 wrapper"
     exit_signal: "父目录创建、resolved path、shell-specific redirection syntax 均有单测；现有 tmux_respawn tests 继续通过"
-    status: pending
+    status: done
   - action: "provider wrapper wiring：让 TmuxRespawnService 注入 builder 方法，provider command 按 stderr → shell wrap → respawn args 的顺序构造"
     exit_signal: "respawn service tests 能断言顺序稳定、cwd 不拼未转义 cd &&、默认 shell diagnostic 可观测"
-    status: pending
+    status: done
   - action: "pipe log command wiring：让 TmuxPaneLogManager 通过 builder 构造 pipe-pane log command"
     exit_signal: "Windows builder 输出不含 tee -a；tmux log manager 只消费注入 command，refresh/trim/info 行为不变"
-    status: pending
+    status: done
   - action: "clipboard command de-dup：backend.py 与 runtime_launch_runtime/tmux_panes.py 的 copy-pipe command 从 builder/helper 获取"
     exit_signal: "两个调用点不再复制 _CLIPBOARD_PIPE_COMMAND = \"sh -lc ...\"；copy-mode binding 仍为 best-effort policy，且由 existing clipboard regression 入口验证"
-    status: pending
+    status: done
   - action: "regression and guard：补 focused pytest 与 rg guard，防止调用层新增 sh -lc、tee -a、PowerShell/cmd 拼接"
     exit_signal: "CMD-003 到 CMD-006 通过或记录既有基线红灯；剩余 Unix-only 字符串仅允许在 builder module/tests 内"
-    status: pending
+    status: done
 
 checks:
   - item: "builder 暴露 wrap_provider_command(cmd, cwd)、build_pipe_log_command(log_path)、append_stderr_redirection(cmd, stderr_log_path)"
     source: roadmap §4.4
-    status: pending
+    status: done
   - item: "Windows shell resolution 记录 shell、flags、source、candidate availability、fallback reason，并由 resolve_shell() helper 返回"
     source: 验收契约 AC-001
-    status: pending
+    status: done
   - item: "user override CCB_TMUX_SHELL / CCB_TMUX_SHELL_FLAGS 兼容保留，且诊断 source 标为 env-override"
     source: 现有 tmux_respawn_service 行为 + 验收契约 AC-001
-    status: pending
+    status: done
   - item: "Windows default candidates 至少覆盖 pwsh、powershell.exe/powershell、cmd"
     source: roadmap §4.4 默认 shell 诊断约束
-    status: pending
+    status: done
   - item: "provider command wrapper 不让调用方拼 PowerShell/cmd 字符串或未转义 cd &&"
     source: 验收契约 AC-002
-    status: pending
+    status: done
   - item: "stderr redirection 对非空 stderr_log_path 创建父目录并返回 resolved path"
     source: 验收契约 AC-003
-    status: pending
+    status: done
   - item: "stderr redirection syntax 按 shell family 选择，不假设 Windows shell 支持 POSIX 2>>"
     source: DoD DOD-IMPL-004
-    status: pending
+    status: done
   - item: "build_pipe_log_command 在 Windows 下不使用 tee -a、cat、mktemp 或 POSIX-only redirection"
     source: roadmap §4.4 + 验收契约 AC-004
-    status: pending
+    status: done
   - item: "TmuxPaneLogManager 使用 builder 注入的 pipe command，refresh/trim/pane_log_info 行为不变"
     source: 验收契约 AC-005
-    status: pending
+    status: done
   - item: "TmuxRespawnService 仍按 stderr redirection → shell wrap → respawn-pane args 顺序执行"
     source: 验收契约 AC-006
-    status: pending
+    status: done
   - item: "backend.py 与 runtime_launch_runtime/tmux_panes.py 不再复制 _CLIPBOARD_PIPE_COMMAND 的 sh -lc 常量，且通过 existing clipboard regression 验证"
     source: 验收契约 AC-007
-    status: pending
+    status: done
   - item: "调用层不新增 if is_windows() 自行选择 PowerShell/cmd"
     source: 明确不做 + AC-008
-    status: pending
+    status: done
   - item: "不改变 pane_placeholder_argv / pane_placeholder_cmd 语义"
     source: 明确不做
-    status: pending
+    status: done
   - item: "不新增 RmuxBackend、rmux_* production module、provider session schema、ccbd transport、job object 或 process liveness 变更"
     source: 明确不做
-    status: pending
+    status: done
 
 dod:
   commands:

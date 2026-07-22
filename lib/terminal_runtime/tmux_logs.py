@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from terminal_runtime.windows_shell_log_builder import build_pipe_log_command
+
 
 @dataclass
 class TmuxPaneLogManager:
@@ -15,6 +17,7 @@ class TmuxPaneLogManager:
     pane_log_path_for_fn: Callable[[str, str, str | None], Path]
     cleanup_pane_logs_fn: Callable[[Path], None]
     maybe_trim_log_fn: Callable[[Path], None]
+    build_pipe_log_command_fn: Callable[[Path], str] = build_pipe_log_command
     time_fn: Callable[[], float] = time.time
     pane_log_info: dict[str, float] | None = None
 
@@ -73,8 +76,9 @@ def prepare_log_path(
 
 def pipe_pane_output(manager: TmuxPaneLogManager, pane_id: str, log_path: Path) -> bool:
     try:
+        pipe_command = manager.build_pipe_log_command_fn(log_path)
         manager.tmux_run_fn(
-            ['pipe-pane', '-o', '-t', pane_id, f'tee -a {log_path}'],
+            ['pipe-pane', '-o', '-t', pane_id, pipe_command],
             check=False,
         )
     except Exception:

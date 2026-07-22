@@ -1,7 +1,12 @@
 from __future__ import annotations
 
-import shlex
-from pathlib import Path
+from terminal_runtime.windows_shell_log_builder import (
+    append_stderr_redirection as _append_stderr_redirection,
+    build_respawn_tmux_args as _build_respawn_tmux_args,
+    build_shell_command as _build_shell_command,
+    resolve_shell as _resolve_shell,
+    resolve_shell_flags as _resolve_shell_flags,
+)
 
 
 def normalize_start_dir(cwd: str | None) -> str:
@@ -12,46 +17,25 @@ def normalize_start_dir(cwd: str | None) -> str:
 
 
 def append_stderr_redirection(cmd_body: str, stderr_log_path: str | None) -> tuple[str, str | None]:
-    if not stderr_log_path:
-        return cmd_body, None
-    log_path = str(Path(stderr_log_path).expanduser().resolve())
-    Path(log_path).parent.mkdir(parents=True, exist_ok=True)
-    return f"{cmd_body} 2>> {shlex.quote(log_path)}", log_path
+    return _append_stderr_redirection(cmd_body, stderr_log_path)
 
 
 def resolve_shell(*, env_shell: str, tmux_default_shell: str, process_shell: str, fallback_shell: str) -> str:
-    shell = (env_shell or "").strip()
-    if shell:
-        return shell
-    shell = (tmux_default_shell or "").strip()
-    if shell:
-        return shell
-    shell = (process_shell or "").strip()
-    if shell:
-        return shell
-    return fallback_shell
+    return _resolve_shell(
+        env_shell=env_shell,
+        tmux_default_shell=tmux_default_shell,
+        process_shell=process_shell,
+        fallback_shell=fallback_shell,
+    ).shell
 
 
 def resolve_shell_flags(*, shell: str, flags_raw: str) -> list[str]:
-    raw = (flags_raw or "").strip()
-    if raw:
-        return shlex.split(raw)
-    shell_name = Path(shell).name.lower()
-    if shell_name in {"bash", "zsh", "ksh", "fish"}:
-        return ["-l", "-c"]
-    if shell_name in {"sh", "dash"}:
-        return ["-c"]
-    return ["-c"]
+    return _resolve_shell_flags(shell=shell, flags_raw=flags_raw)
 
 
 def build_shell_command(*, shell: str, flags: list[str], cmd_body: str) -> str:
-    argv = [shell, *flags, cmd_body]
-    return " ".join(shlex.quote(arg) for arg in argv)
+    return _build_shell_command(shell=shell, flags=flags, cmd_body=cmd_body)
 
 
 def build_respawn_tmux_args(*, pane_id: str, start_dir: str, full_command: str) -> list[str]:
-    args = ["respawn-pane", "-k", "-t", pane_id]
-    if start_dir:
-        args.extend(["-c", start_dir])
-    args.append(full_command)
-    return args
+    return _build_respawn_tmux_args(pane_id=pane_id, start_dir=start_dir, full_command=full_command)

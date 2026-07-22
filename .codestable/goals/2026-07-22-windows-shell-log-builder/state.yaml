@@ -1,0 +1,30 @@
+schema_version: 2
+goal: "windows-shell-log-builder"
+status: complete
+objective: "继续 windows-rmux-native-backend epic 中的 windows-shell-log-builder，建立 Windows shell command builder、pipe/log command builder、stderr redirection 和默认 shell 诊断，并保持现有 tmux 行为不漂移。"
+start_point: "feature design/checklist 已批准；现有 shell/log 语义仍分散在 tmux_respawn.py、tmux_logs.py、tmux_server_policy.py、backend.py 和 runtime_launch/tmux_panes.py。"
+acceptance:
+  - "builder 暴露 wrap_provider_command(cmd, cwd)、build_pipe_log_command(log_path)、append_stderr_redirection(cmd, stderr_log_path)。"
+  - "Windows shell resolution 记录 shell、flags、source、candidate availability、fallback reason，并由 resolve_shell() helper 返回。"
+  - "TmuxRespawnService 与 TmuxPaneLogManager 通过 builder/注入消费 command，不在业务层拼 shell/log 字符串。"
+  - "backend.py 与 runtime_launch_runtime/tmux_panes.py 不再复制 _CLIPBOARD_PIPE_COMMAND = \"sh -lc ...\"。"
+  - "Windows pipe-pane log command 不使用 tee -a，stderr redirection 不假设 POSIX 2>>。"
+  - "focused pytest、rg guard 与 roadmap/items 回写通过。"
+non_goals:
+  - "不实现 RmuxBackend、rmux_* production module、provider session schema、ccbd transport、job object 或 process liveness 变更。"
+  - "不改变 pane_placeholder_argv / pane_placeholder_cmd 语义。"
+  - "不把 provider completion 解析或 capture 语义改成日志构造逻辑。"
+  - "不新增 caller 级 if is_windows() shell branching。"
+  - "不执行 git push、merge、release、deploy 或生产变更。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 3
+next_action: "Goal complete; continue windows-rmux-native-backend at windows-job-object-runtime-evidence."
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-22"

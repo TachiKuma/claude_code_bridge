@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 from terminal_runtime.tmux_logs import TmuxPaneLogManager
+from terminal_runtime.windows_shell_log_builder import build_pipe_log_command
 
 
 def _cp(*, stdout: str = '', returncode: int = 0) -> subprocess.CompletedProcess[str]:
@@ -28,8 +29,26 @@ def test_tmux_pane_log_manager_ensures_log_and_tracks_info(tmp_path: Path) -> No
     log_path = manager.ensure_pane_log('%1')
 
     assert log_path == tmp_path / '%1.log'
-    assert calls == [['pipe-pane', '-o', '-t', '%1', f'tee -a {tmp_path / "%1.log"}']]
+    assert calls == [['pipe-pane', '-o', '-t', '%1', build_pipe_log_command(tmp_path / '%1.log')]]
     assert pane_log_info == {'%1': 12.5}
+
+
+def test_tmux_pane_log_manager_uses_injected_pipe_command_builder(tmp_path: Path) -> None:
+    calls: list[list[str]] = []
+    manager = TmuxPaneLogManager(
+        socket_name='sock',
+        tmux_run_fn=lambda args, **kwargs: calls.append(args) or _cp(),
+        is_alive_fn=lambda pane_id: True,
+        pane_pipe_enabled_fn=lambda output: False,
+        pane_log_path_for_fn=lambda pane_id, backend, socket_name: tmp_path / f'{pane_id}.log',
+        cleanup_pane_logs_fn=lambda path: None,
+        maybe_trim_log_fn=lambda path: None,
+        build_pipe_log_command_fn=lambda path: f'writer {path.name}',
+    )
+
+    manager.ensure_pane_log('%1')
+
+    assert calls == [['pipe-pane', '-o', '-t', '%1', 'writer %1.log']]
 
 
 def test_tmux_pane_log_manager_refreshes_only_when_pipe_missing(tmp_path: Path) -> None:
