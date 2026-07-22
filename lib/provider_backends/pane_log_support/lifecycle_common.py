@@ -8,6 +8,7 @@ from provider_core.tmux_ownership import (
     apply_session_tmux_identity,
     inspect_tmux_pane_ownership,
 )
+from provider_runtime.session_payload import update_mux_session_pane_binding
 
 # Substrings that mark a pane crash as an *unrecoverable* provider auth failure:
 # restarting the pane will not fix it, the provider must be re-authenticated.
@@ -151,9 +152,7 @@ def bind_session_to_pane(session, pane_id: str, *, now_str_fn: Callable[[], str]
     data = getattr(session, 'data', None)
     if not isinstance(data, dict):
         return
-    data['pane_id'] = str(pane_id)
-    if str(getattr(session, 'terminal', '') or '').strip().lower() == 'tmux':
-        data['tmux_session'] = str(pane_id)
+    update_mux_session_pane_binding(data, str(pane_id))
     data['updated_at'] = now_str_fn()
     writer = getattr(session, '_write_back', None)
     if callable(writer):

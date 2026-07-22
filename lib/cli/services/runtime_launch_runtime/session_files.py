@@ -8,6 +8,7 @@ from provider_backends.codex.session_authority import resume_authority_matches
 from provider_core.pathing import session_filename_for_agent
 from project.identity import normalize_work_dir
 from provider_core.runtime_shared import pane_title_marker as build_pane_title_marker
+from provider_runtime.session_payload import build_mux_session_payload, merge_provider_payload
 from provider_sessions.files import safe_write_session
 from rolepacks.runtime_lookup import load_installed_role, tree_digest
 from rolepacks.sources import installed_role_metadata
@@ -39,9 +40,6 @@ def write_session_file(
         "runtime_state_root": str(getattr(context.paths, "runtime_state_root", context.paths.ccb_dir)),
         "runtime_dir": str(runtime_dir),
         "completion_artifact_dir": str(runtime_dir / "completion"),
-        "terminal": "tmux",
-        "tmux_session": pane_id,
-        "pane_id": pane_id,
         "pane_title_marker": pane_title_marker,
         "workspace_path": str(plan.workspace_path),
         "work_dir": str(run_cwd),
@@ -52,11 +50,19 @@ def write_session_file(
         "started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "start_cmd": start_cmd,
     }
-    if tmux_socket_name:
-        payload["tmux_socket_name"] = str(tmux_socket_name)
-    if tmux_socket_path:
-        payload["tmux_socket_path"] = str(Path(tmux_socket_path).expanduser())
-    payload.update(provider_payload)
+    payload.update(
+        build_mux_session_payload(
+            backend_family='tmux-family',
+            backend_impl='tmux',
+            pane_id=pane_id,
+            session_name=_session_name(context),
+            window_name=_window_name(context),
+            namespace_id=_namespace_id(context),
+            tmux_socket_name=tmux_socket_name,
+            tmux_socket_path=tmux_socket_path,
+        )
+    )
+    payload = merge_provider_payload(payload, provider_payload)
     _merge_existing_session_binding(payload, existing_payload, provider=str(spec.provider or '').strip().lower())
     ok, error = safe_write_session(session_path, json.dumps(payload, ensure_ascii=False, indent=2))
     if not ok:
@@ -150,6 +156,24 @@ def _merge_keys(payload: dict[str, object], existing_payload: dict[str, object],
         if key in payload and str(payload.get(key) or '').strip():
             continue
         payload[key] = value
+
+
+def _session_name(context) -> str | None:
+    return _context_path_text(context, 'ccbd_tmux_session_name')
+
+
+def _window_name(context) -> str | None:
+    return _context_path_text(context, 'ccbd_tmux_workspace_window_name')
+
+
+def _namespace_id(context) -> str | None:
+    return _context_path_text(context, 'ccbd_namespace_id') or _session_name(context)
+
+
+def _context_path_text(context, attr_name: str) -> str | None:
+    value = getattr(getattr(context, 'paths', None), attr_name, None)
+    text = str(value or '').strip()
+    return text or None
 
 
 def _project_role_launch_evidence(spec) -> dict[str, str]:

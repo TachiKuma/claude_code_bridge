@@ -132,7 +132,9 @@ def _env_map(runtime_dir: Path, launch_session_id: str, *, spec, profile, codex_
         'CODEX_RUNTIME_DIR': str(runtime_dir),
         'CODEX_INPUT_FIFO': str(artifacts.input_fifo),
         'CODEX_OUTPUT_FIFO': str(artifacts.output_fifo),
-        'CODEX_TERMINAL': 'tmux',
+        'CODEX_TERMINAL': 'mux',
+        'CCB_MUX_BACKEND_FAMILY': 'tmux-family',
+        'CCB_MUX_BACKEND_IMPL': 'tmux',
         **codex_home_overrides,
         **caller_context_env(actor=spec.name, runtime_dir=runtime_dir, launch_session_id=launch_session_id),
     }

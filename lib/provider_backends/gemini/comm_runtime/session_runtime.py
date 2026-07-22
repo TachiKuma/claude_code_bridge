@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from provider_core.session_binding_runtime import find_bound_session_file
+from provider_runtime.session_payload import merge_missing_mux_session_fields
 
 from .project_hash import read_gemini_session_id
 
@@ -39,12 +40,22 @@ def load_gemini_session_info(*, session_finder: Callable[[], Optional[Path]]):
 
 
 def _env_session_result() -> dict[str, object]:
+    pane_id = os.environ.get("CCB_MUX_PANE_ID") or os.environ.get("GEMINI_TMUX_SESSION", "")
     return {
         "ccb_session_id": os.environ["CCB_SESSION_ID"],
         "runtime_dir": os.environ.get("GEMINI_RUNTIME_DIR", ""),
-        "terminal": os.environ.get("GEMINI_TERMINAL", "tmux"),
+        "terminal": os.environ.get("GEMINI_TERMINAL") or ("mux" if os.environ.get("CCB_MUX_BACKEND_IMPL") else "tmux"),
+        "backend_family": os.environ.get("CCB_MUX_BACKEND_FAMILY", ""),
+        "backend_impl": os.environ.get("CCB_MUX_BACKEND_IMPL", ""),
         "tmux_session": os.environ.get("GEMINI_TMUX_SESSION", ""),
-        "pane_id": os.environ.get("GEMINI_TMUX_SESSION", ""),
+        "pane_id": pane_id,
+        "pane_ref": {"pane_id": pane_id, "backend_impl": os.environ.get("CCB_MUX_BACKEND_IMPL", "")} if pane_id else {},
+        "namespace_ref": {
+            "backend_family": os.environ.get("CCB_MUX_BACKEND_FAMILY", ""),
+            "backend_impl": os.environ.get("CCB_MUX_BACKEND_IMPL", ""),
+            "ipc_kind": os.environ.get("CCB_MUX_NAMESPACE_IPC_KIND", ""),
+            "ipc_ref": os.environ.get("CCB_MUX_NAMESPACE_IPC_REF", ""),
+        },
         "_session_file": None,
     }
 
@@ -59,6 +70,7 @@ def _merge_session_file_data(result: dict[str, object], session_file: Path) -> N
         return
     result["gemini_session_path"] = file_data.get("gemini_session_path")
     result["_session_file"] = str(session_file)
+    merge_missing_mux_session_fields(result, file_data)
     if not result["pane_id"]:
         result["pane_id"] = file_data.get("pane_id", "")
     if not result["tmux_session"]:

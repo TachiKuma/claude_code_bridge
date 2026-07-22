@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 
 from provider_core.contracts import ProviderSessionBinding
 from provider_core.pathing import find_session_file_for_work_dir, session_filename_for_instance
+from provider_runtime.session_payload import project_session_payload
 from project.identity import compute_ccb_project_id, compute_worktree_scope_id
 from provider_sessions.files import safe_write_session
 
@@ -82,14 +83,27 @@ class PaneLogProjectSessionBase:
 
     @property
     def terminal(self) -> str:
-        return (self.data.get("terminal") or "tmux").strip() or "tmux"
+        return project_session_payload(self.data).terminal
 
     @property
     def pane_id(self) -> str:
-        value = self.data.get("pane_id")
-        if not value and self.terminal == "tmux":
-            value = self.data.get("tmux_session")
-        return str(value or "").strip()
+        return project_session_payload(self.data).pane_id or ""
+
+    @property
+    def backend_family(self) -> str:
+        return project_session_payload(self.data).backend_family or ""
+
+    @property
+    def backend_impl(self) -> str:
+        return project_session_payload(self.data).backend_impl or ""
+
+    @property
+    def pane_ref(self) -> dict[str, object]:
+        return dict(project_session_payload(self.data).pane_ref)
+
+    @property
+    def namespace_ref(self) -> dict[str, object]:
+        return dict(project_session_payload(self.data).namespace_ref)
 
     @property
     def pane_title_marker(self) -> str:

@@ -11,6 +11,7 @@ import time
 from provider_backends.codex.session_authority import (
     current_memory_projection_fingerprint,
     current_provider_authority_fingerprint,
+    has_resume_candidate,
     stored_provider_authority_fingerprint,
     stored_session_authority_fingerprint,
 )
@@ -70,6 +71,7 @@ def prepare_codex_home_overrides(
     layout.session_root.mkdir(parents=True, exist_ok=True)
     marker_ready = _session_namespace_marker_exists(layout.codex_home)
     if refresh_home:
+        _ensure_session_namespace_authority(runtime_dir, layout.codex_home, layout.session_root, profile=profile)
         _prepare_managed_home(
             _system_codex_home(),
             layout.codex_home,
@@ -81,7 +83,6 @@ def prepare_codex_home_overrides(
             memory_projection_event_path=memory_projection_event_path,
             memory_projection_marker_path=memory_projection_marker_path,
         )
-        _ensure_session_namespace_authority(runtime_dir, layout.codex_home, layout.session_root, profile=profile)
     elif not marker_ready and not any(layout.session_root.iterdir()):
         _write_session_namespace_marker(layout.codex_home / _SESSION_NAMESPACE_MARKER, current_provider_authority_fingerprint(profile))
     if not refresh_home:
@@ -328,7 +329,8 @@ def _session_namespace_requires_reset(
         return str(stored_marker.get('provider_authority_fingerprint') or '').strip() != current_fingerprint
     if current_fingerprint:
         return True
-    return bool(stored_session_fingerprint or stored_binding_fingerprint)
+    legacy_session_path = str(session_data.get('codex_session_path') or '').strip()
+    return bool(stored_session_fingerprint or stored_binding_fingerprint or (legacy_session_path and has_resume_candidate(session_data)))
 
 
 def _marker_label(stored_marker: dict[str, str] | None) -> str:
@@ -358,9 +360,17 @@ def _archive_session_root(codex_home: Path, session_root: Path, *, label: str) -
     archive_path = archive_parent / archive_name
     try:
         shutil.move(str(normalized_root), str(archive_path))
+        _wait_for_archive_visible(archive_path)
     except Exception:
         pass
     normalized_root.mkdir(parents=True, exist_ok=True)
+
+
+def _wait_for_archive_visible(archive_path: Path) -> None:
+    for _ in range(20):
+        if any(Path(archive_path).rglob('*')):
+            return
+        time.sleep(0.01)
 
 
 def _archive_label(label: str) -> str:

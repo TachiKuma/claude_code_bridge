@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from provider_core.session_binding_evidence import (
+    session_backend_family,
+    session_backend_impl,
+    session_namespace_ref,
+    session_pane_ref,
     session_pane_title_marker,
     session_ref,
     session_runtime_ref,
@@ -14,6 +18,10 @@ def runtime_fields_from_facts(runtime, facts) -> dict[str, object]:
         'runtime_root': facts.runtime_root or runtime.runtime_root,
         'runtime_pid': facts.runtime_pid if facts.runtime_pid is not None else runtime.runtime_pid,
         'terminal_backend': facts.terminal_backend or runtime.terminal_backend,
+        'backend_family': facts.backend_family or getattr(runtime, 'backend_family', None),
+        'backend_impl': facts.backend_impl or getattr(runtime, 'backend_impl', None),
+        'pane_ref': facts.pane_ref or getattr(runtime, 'pane_ref', None),
+        'namespace_ref': facts.namespace_ref or getattr(runtime, 'namespace_ref', None),
         'pane_id': facts.pane_id or runtime.pane_id,
         'pane_title_marker': facts.pane_title_marker or runtime.pane_title_marker,
         'tmux_socket_name': facts.tmux_socket_name or runtime.tmux_socket_name,
@@ -37,6 +45,10 @@ def runtime_fields_from_session(runtime, session, binding=None) -> dict[str, obj
         'runtime_root': runtime.runtime_root,
         'runtime_pid': runtime.runtime_pid,
         'terminal_backend': terminal,
+        'backend_family': session_backend_family(session) or getattr(runtime, 'backend_family', None),
+        'backend_impl': session_backend_impl(session) or getattr(runtime, 'backend_impl', None),
+        'pane_ref': session_pane_ref(session) or getattr(runtime, 'pane_ref', None),
+        'namespace_ref': session_namespace_ref(session) or getattr(runtime, 'namespace_ref', None),
         'pane_id': pane_id,
         'pane_title_marker': pane_title,
         'tmux_socket_name': runtime.tmux_socket_name,

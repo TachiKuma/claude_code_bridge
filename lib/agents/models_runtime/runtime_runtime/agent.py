@@ -27,6 +27,10 @@ class AgentRuntime:
     runtime_root: str | None = None
     runtime_pid: int | None = None
     terminal_backend: str | None = None
+    backend_family: str | None = None
+    backend_impl: str | None = None
+    pane_ref: dict[str, Any] | None = None
+    namespace_ref: dict[str, Any] | None = None
     pane_id: str | None = None
     active_pane_id: str | None = None
     pane_title_marker: str | None = None
@@ -82,6 +86,10 @@ class AgentRuntime:
             'runtime_root': self.runtime_root,
             'runtime_pid': self.runtime_pid,
             'terminal_backend': self.terminal_backend,
+            'backend_family': self.backend_family,
+            'backend_impl': self.backend_impl,
+            'pane_ref': dict(self.pane_ref) if isinstance(self.pane_ref, dict) else None,
+            'namespace_ref': dict(self.namespace_ref) if isinstance(self.namespace_ref, dict) else None,
             'pane_id': self.pane_id,
             'active_pane_id': self.active_pane_id,
             'pane_title_marker': self.pane_title_marker,

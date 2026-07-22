@@ -7,6 +7,7 @@ from provider_core.tmux_ownership import (
     inspect_tmux_pane_ownership,
     ownership_error_text,
 )
+from provider_runtime.session_payload import session_uses_tmux_compatible_pane
 
 from .lifecycle_common import attach_pane_log, live_owned_pane
 from .lifecycle_recovery import (
@@ -34,7 +35,7 @@ def ensure_pane(
         attach_pane_log_fn(session, backend, live_pane)
         return True, live_pane
 
-    if session.terminal == 'tmux':
+    if session_uses_tmux_compatible_pane(getattr(session, 'data', None)):
         rebound = tmux_rebound_pane(
             session,
             backend,

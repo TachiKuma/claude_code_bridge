@@ -497,6 +497,9 @@ def test_ensure_agent_runtime_launches_named_codex_session(monkeypatch, tmp_path
     assert payload['codex_start_cmd'].startswith('export ')
     assert 'disable_paste_burst=true' in payload['codex_start_cmd']
     assert spawned['kwargs']['env']['CCB_SESSION_FILE'] == str(expected_session)
+    assert spawned['kwargs']['env']['CCB_MUX_BACKEND_FAMILY'] == 'tmux-family'
+    assert spawned['kwargs']['env']['CCB_MUX_BACKEND_IMPL'] == 'tmux'
+    assert spawned['kwargs']['env']['CCB_MUX_PANE_ID'] == '%42'
     assert spawned['kwargs']['env']['CODEX_TMUX_LOG'] == payload['bridge_log']
     assert spawned['kwargs']['env']['CODEX_HOME'] == str(expected_codex_home)
     assert spawned['kwargs']['env']['CODEX_SESSION_ROOT'] == str(expected_session_root)
@@ -3337,7 +3340,7 @@ def test_codex_launcher_build_start_cmd_rotates_legacy_explicit_session_namespac
     assert not any(session_root.iterdir())
     archive_root = profile_home / 'archived-sessions'
     assert archive_root.is_dir()
-    assert any(archive_root.rglob('legacy-session.jsonl'))
+    assert any(path.name == 'legacy-session.jsonl' for path in archive_root.rglob('*'))
     marker = json.loads((profile_home / '.ccb-session-namespace.json').read_text(encoding='utf-8'))
     assert marker['provider_authority_fingerprint'] == fingerprint
     data = json.loads(session_file.read_text(encoding='utf-8'))

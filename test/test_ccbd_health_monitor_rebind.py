@@ -45,6 +45,10 @@ def test_rebind_runtime_uses_provider_facts_and_clears_degraded_state() -> None:
         runtime_root='/new/runtime',
         runtime_pid=33,
         terminal_backend='tmux',
+        backend_family='tmux-family',
+        backend_impl='tmux',
+        pane_ref={'backend_impl': 'tmux', 'pane_id': '%9'},
+        namespace_ref={'backend_family': 'tmux-family', 'backend_impl': 'tmux', 'ipc_kind': 'unix_socket', 'ipc_ref': '/tmp/tmux.sock'},
         pane_id='%9',
         pane_title_marker='agent1-new',
         pane_state='alive',
@@ -98,6 +102,10 @@ def test_rebind_runtime_uses_provider_facts_and_clears_degraded_state() -> None:
     assert updated.pane_id == '%9'
     assert updated.active_pane_id == '%9'
     assert updated.runtime_root == '/new/runtime'
+    assert updated.backend_family == 'tmux-family'
+    assert updated.backend_impl == 'tmux'
+    assert updated.pane_ref == {'backend_impl': 'tmux', 'pane_id': '%9'}
+    assert updated.namespace_ref['ipc_ref'] == '/tmp/tmux.sock'
     assert updated.session_file == '/tmp/session.json'
     assert updated.session_id == 'sid-9'
     assert updated.pane_state == 'alive'

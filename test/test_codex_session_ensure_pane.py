@@ -115,6 +115,46 @@ def test_codex_ensure_pane_respawns_dead_pane(tmp_path: Path, monkeypatch: pytes
     ]
 
 
+def test_codex_ensure_pane_respawns_canonical_mux_tmux_compatible_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session_path = tmp_path / ".codex-session"
+    session_path.write_text(
+        json.dumps({
+            "ccb_session_id": "test-session",
+            "terminal": "mux",
+            "backend_family": "tmux-family",
+            "backend_impl": "rmux",
+            "pane_ref": {"pane_id": "%1", "backend_impl": "rmux"},
+            "namespace_ref": {"backend_family": "tmux-family", "backend_impl": "rmux"},
+            "tmux_session": "%1",
+            "pane_title_marker": "CCB-codex-test",
+            "runtime_dir": str(tmp_path),
+            "work_dir": str(tmp_path),
+            "active": True,
+            "codex_start_cmd": "codex resume deadbeef",
+        }),
+        encoding="utf-8",
+    )
+
+    backend = FakeTmuxBackend()
+    backend.alive = {"%1": False}
+    monkeypatch.setattr(codex_session, "get_backend_for_session", lambda data: backend)
+    monkeypatch.setattr(codex_session, "find_project_session_file", lambda work_dir, instance=None: session_path)
+
+    sess = codex_session.load_project_session(tmp_path)
+    assert sess is not None
+
+    ok, pane = sess.ensure_pane()
+
+    assert (ok, pane) == (True, "%1")
+    assert backend.respawned == ["%1"]
+    data = json.loads(session_path.read_text(encoding="utf-8"))
+    assert data["pane_id"] == "%1"
+    assert data["tmux_session"] == "%1"
+    assert data["pane_ref"]["pane_id"] == "%1"
+
+
 def test_codex_ensure_pane_refreshes_rotated_inherited_auth_before_respawn(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -520,6 +560,49 @@ def test_codex_ensure_pane_creates_new_pane_when_respawn_target_is_gone(tmp_path
     data = json.loads(session_path.read_text(encoding="utf-8"))
     assert data["pane_id"] == "%99"
     assert data["tmux_session"] == "%99"
+
+
+def test_codex_ensure_pane_updates_canonical_pane_ref_when_replacement_created(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session_path = tmp_path / ".codex-session"
+    session_path.write_text(
+        json.dumps({
+            "ccb_session_id": "test-session",
+            "agent_name": "agent1",
+            "ccb_project_id": "12345678abcdef00",
+            "terminal": "mux",
+            "backend_family": "tmux-family",
+            "backend_impl": "rmux",
+            "pane_ref": {"pane_id": "%1", "backend_impl": "rmux"},
+            "namespace_ref": {"backend_family": "tmux-family", "backend_impl": "rmux"},
+            "tmux_session": "%1",
+            "pane_title_marker": "CCB-agent1-12345678",
+            "runtime_dir": str(tmp_path),
+            "work_dir": str(tmp_path),
+            "active": True,
+            "codex_start_cmd": "codex resume deadbeef",
+        }),
+        encoding="utf-8",
+    )
+
+    backend = FakeTmuxBackend()
+    backend.alive = {"%1": False}
+    backend.exists = {"%1": False}
+    monkeypatch.setattr(codex_session, "get_backend_for_session", lambda data: backend)
+    monkeypatch.setattr(codex_session, "find_project_session_file", lambda work_dir, instance=None: session_path)
+
+    sess = codex_session.load_project_session(tmp_path)
+    assert sess is not None
+
+    ok, pane = sess.ensure_pane()
+
+    assert (ok, pane) == (True, "%99")
+    data = json.loads(session_path.read_text(encoding="utf-8"))
+    assert data["pane_id"] == "%99"
+    assert data["tmux_session"] == "%99"
+    assert data["pane_ref"]["pane_id"] == "%99"
+    assert data["pane_ref"]["backend_impl"] == "rmux"
 
 
 def test_codex_ensure_pane_skips_respawn_for_missing_pane_and_creates_new_one(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

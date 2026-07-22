@@ -155,6 +155,10 @@ def test_load_codex_session_info_prefers_project_session_binding_over_registry(
     monkeypatch.setenv("CCB_SESSION_ID", "env-session")
     monkeypatch.setenv("CODEX_RUNTIME_DIR", str(runtime_dir))
     monkeypatch.setenv("CODEX_INPUT_FIFO", str(input_fifo))
+    monkeypatch.setenv("CCB_MUX_BACKEND_FAMILY", "tmux-family")
+    monkeypatch.setenv("CCB_MUX_BACKEND_IMPL", "rmux")
+    monkeypatch.setenv("CCB_MUX_PANE_ID", "%mux")
+    monkeypatch.setenv("CODEX_TMUX_SESSION", "%legacy")
 
     info = load_codex_session_info(session_finder=lambda: session_file)
 
@@ -163,7 +167,65 @@ def test_load_codex_session_info_prefers_project_session_binding_over_registry(
     assert info["codex_session_id"] == "project-session-id"
     assert info["codex_session_root"] == str(tmp_path / ".codex" / "sessions")
     assert info["codex_home"] == str(tmp_path / ".codex")
+    assert info["terminal"] == "mux"
+    assert info["backend_impl"] == "rmux"
+    assert info["pane_id"] == "%mux"
+    assert info["tmux_session"] == "%legacy"
     assert info["_session_file"] == str(session_file)
+
+
+def test_load_codex_session_info_merges_canonical_mux_session_file_without_env_mux(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session_file = tmp_path / ".ccb" / ".codex-session"
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    input_fifo = runtime_dir / "codex.pipe"
+    input_fifo.write_text("", encoding="utf-8")
+    session_file.write_text(
+        json.dumps(
+            {
+                "terminal": "mux",
+                "backend_family": "tmux-family",
+                "backend_impl": "rmux",
+                "pane_ref": {"pane_id": "%rmux", "backend_impl": "rmux"},
+                "namespace_ref": {
+                    "backend_family": "tmux-family",
+                    "backend_impl": "rmux",
+                    "ipc_kind": "named_pipe",
+                    "ipc_ref": r"\\.\pipe\ccb-rmux",
+                },
+                "tmux_session": "%legacy",
+                "codex_session_path": str(tmp_path / "logs" / "session.jsonl"),
+                "codex_session_id": "codex-session-id",
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("CCB_SESSION_ID", "env-session")
+    monkeypatch.setenv("CODEX_RUNTIME_DIR", str(runtime_dir))
+    monkeypatch.setenv("CODEX_INPUT_FIFO", str(input_fifo))
+    monkeypatch.delenv("CCB_MUX_BACKEND_FAMILY", raising=False)
+    monkeypatch.delenv("CCB_MUX_BACKEND_IMPL", raising=False)
+    monkeypatch.delenv("CCB_MUX_PANE_ID", raising=False)
+    monkeypatch.delenv("CODEX_TMUX_SESSION", raising=False)
+    monkeypatch.delenv("CODEX_TERMINAL", raising=False)
+
+    info = load_codex_session_info(session_finder=lambda: session_file)
+
+    assert info is not None
+    assert info["terminal"] == "mux"
+    assert info["backend_family"] == "tmux-family"
+    assert info["backend_impl"] == "rmux"
+    assert info["pane_id"] == "%rmux"
+    assert info["tmux_session"] == "%legacy"
+    assert info["pane_ref"] == {"pane_id": "%rmux", "backend_impl": "rmux"}
+    assert info["namespace_ref"]["ipc_kind"] == "named_pipe"
+    assert info["codex_session_id"] == "codex-session-id"
 
 
 def test_load_project_session_migrates_legacy_root_only_binding_to_private_home(tmp_path: Path) -> None:

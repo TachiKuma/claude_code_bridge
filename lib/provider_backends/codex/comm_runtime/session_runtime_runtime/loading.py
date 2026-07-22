@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 from typing import Callable
 
+from provider_runtime.session_payload import merge_missing_mux_session_fields
+
 
 def load_codex_session_info(*, session_finder: Callable[[], Path | None]):
     env_info = _load_env_session_info(session_finder=session_finder)
@@ -16,14 +18,24 @@ def load_codex_session_info(*, session_finder: Callable[[], Path | None]):
 def _load_env_session_info(*, session_finder: Callable[[], Path | None]):
     if "CCB_SESSION_ID" not in os.environ:
         return None
+    pane_id = os.environ.get("CCB_MUX_PANE_ID") or os.environ.get("CODEX_TMUX_SESSION", "")
     result = {
         "ccb_session_id": os.environ["CCB_SESSION_ID"],
         "runtime_dir": os.environ["CODEX_RUNTIME_DIR"],
         "input_fifo": os.environ["CODEX_INPUT_FIFO"],
         "output_fifo": os.environ.get("CODEX_OUTPUT_FIFO", ""),
-        "terminal": os.environ.get("CODEX_TERMINAL", "tmux"),
+        "terminal": os.environ.get("CODEX_TERMINAL") or ("mux" if os.environ.get("CCB_MUX_BACKEND_IMPL") else "tmux"),
+        "backend_family": os.environ.get("CCB_MUX_BACKEND_FAMILY", ""),
+        "backend_impl": os.environ.get("CCB_MUX_BACKEND_IMPL", ""),
         "tmux_session": os.environ.get("CODEX_TMUX_SESSION", ""),
-        "pane_id": os.environ.get("CODEX_TMUX_SESSION", ""),
+        "pane_id": pane_id,
+        "pane_ref": {"pane_id": pane_id, "backend_impl": os.environ.get("CCB_MUX_BACKEND_IMPL", "")} if pane_id else {},
+        "namespace_ref": {
+            "backend_family": os.environ.get("CCB_MUX_BACKEND_FAMILY", ""),
+            "backend_impl": os.environ.get("CCB_MUX_BACKEND_IMPL", ""),
+            "ipc_kind": os.environ.get("CCB_MUX_NAMESPACE_IPC_KIND", ""),
+            "ipc_ref": os.environ.get("CCB_MUX_NAMESPACE_IPC_REF", ""),
+        },
         "_session_file": None,
     }
     _merge_env_root_fields(result)
@@ -55,6 +67,7 @@ def _merge_project_binding(result: dict[str, object], *, session_file: Path | No
         return result
     result["codex_session_path"] = file_data.get("codex_session_path")
     result["codex_session_id"] = file_data.get("codex_session_id")
+    merge_missing_mux_session_fields(result, file_data)
     if file_data.get("codex_session_root"):
         result["codex_session_root"] = file_data.get("codex_session_root")
     if file_data.get("codex_home"):

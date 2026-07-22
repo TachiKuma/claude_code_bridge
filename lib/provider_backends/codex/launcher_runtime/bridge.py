@@ -7,6 +7,7 @@ import sys
 
 from provider_backends.codex.runtime_artifacts import codex_runtime_artifact_layout
 from provider_profiles import load_resolved_provider_profile
+from provider_runtime.session_payload import build_mux_session_payload, mux_session_env
 
 from .command import prepare_codex_home_overrides
 from .session_paths import session_file_for_runtime_dir
@@ -23,7 +24,9 @@ def post_launch(backend: object, pane_id: str, runtime_dir: Path, launch_session
 def spawn_codex_bridge(*, runtime_dir: Path, pane_id: str, prepared_state: dict[str, object] | None = None) -> None:
     artifacts = codex_runtime_artifact_layout(runtime_dir)
     env = os.environ.copy()
-    env['CODEX_TERMINAL'] = 'tmux'
+    mux_payload = build_mux_session_payload(pane_id=pane_id)
+    env.update(mux_session_env(mux_payload))
+    env['CODEX_TERMINAL'] = 'mux'
     env['CODEX_TMUX_SESSION'] = pane_id
     env['CODEX_RUNTIME_DIR'] = str(runtime_dir)
     env['CODEX_INPUT_FIFO'] = str(artifacts.input_fifo)
@@ -64,9 +67,9 @@ def bridge_runtime_env(runtime_dir: Path, *, prepared_state: dict[str, object] |
 def validate_bridge_bootstrap(runtime_dir: Path) -> None:
     artifacts = codex_runtime_artifact_layout(runtime_dir)
     missing: list[str] = []
-    if not artifacts.input_fifo.exists():
+    if not _runtime_input_available(artifacts.input_fifo):
         missing.append(str(artifacts.input_fifo.name))
-    if not artifacts.output_fifo.exists():
+    if not _runtime_input_available(artifacts.output_fifo):
         missing.append(str(artifacts.output_fifo.name))
     if not artifacts.completion_dir.is_dir():
         missing.append(str(artifacts.completion_dir.name))
@@ -77,6 +80,10 @@ def validate_bridge_bootstrap(runtime_dir: Path) -> None:
     if missing:
         joined = ', '.join(missing)
         raise RuntimeError(f'codex runtime bootstrap missing declared artifacts: {joined}')
+
+
+def _runtime_input_available(path: Path) -> bool:
+    return path.exists() or (path.parent / 'inbox').is_dir()
 
 
 def write_pane_pid(backend: object, pane_id: str, path: Path) -> None:

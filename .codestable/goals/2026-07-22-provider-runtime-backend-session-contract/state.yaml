@@ -1,0 +1,28 @@
+schema_version: 2
+goal: "provider-runtime-backend-session-contract"
+status: complete
+objective: "继续 windows-rmux-native-backend epic 中的 provider-runtime-backend-session-contract，将 provider launch、session payload、runtime health 和 provider env 迁移到 backend-neutral mux 字段，并保留旧 tmux 字段兼容别名，推进到功能验收完成。"
+start_point: "依赖 mux-backend-contract 和 windows-namespace-ipc-schema 已 accepted；feature design/design-review/checklist 已存在且 approved/pending，代码仍有 session writer/provider launcher/env loader 的 tmux canonical 写法。"
+acceptance:
+  - "共享 session writer 产生 terminal=mux、backend_family、backend_impl、pane_ref、namespace_ref、compat，并保留旧 tmux alias。"
+  - "provider-specific payload 不能覆盖 shared canonical keys；冲突记录 payload_diagnostics.protected_key_conflicts。"
+  - "session readers、session binding evidence 与 ProviderRuntimeFacts canonical-first、alias-fallback，旧 tmux session 仍可读。"
+  - "provider env 暴露 CCB_MUX_* canonical 字段，Codex/Gemini/OpenCode loaders canonical-first，旧 *_TMUX_* env 仅 compatibility fallback。"
+  - "runtime launch 不再把 direct TmuxBackend 作为唯一 production truth，保留 tmux adapter 兼容边界。"
+  - "CMD-001 到 CMD-007 验证通过或记录可接受基线，并通过可见 Task agent review 与功能验收。"
+non_goals:
+  - "不实现 RmuxBackend production core、send/capture/logging 或 daemon lifecycle。"
+  - "不删除旧 tmux_session、tmux_socket_path、tmux_socket_name compatibility alias。"
+  - "不修改 provider completion parser 或 provider JSONL session 内容。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 1
+next_action: "Goal complete; continue next roadmap item when owner requests."
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-22"

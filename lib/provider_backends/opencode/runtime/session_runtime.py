@@ -7,6 +7,7 @@ from typing import Callable, Optional
 
 from project.identity import compute_ccb_project_id
 from provider_core.session_binding_runtime import find_bound_session_file
+from provider_runtime.session_payload import merge_missing_mux_session_fields
 from provider_sessions.files import safe_write_session
 
 
@@ -82,12 +83,22 @@ def publish_opencode_registry(
 
 
 def env_session_info() -> dict[str, object]:
+    pane_id = os.environ.get("CCB_MUX_PANE_ID") or os.environ.get("OPENCODE_TMUX_SESSION", "")
     return {
         "ccb_session_id": os.environ["CCB_SESSION_ID"],
         "runtime_dir": os.environ["OPENCODE_RUNTIME_DIR"],
-        "terminal": os.environ.get("OPENCODE_TERMINAL", "tmux"),
+        "terminal": os.environ.get("OPENCODE_TERMINAL") or ("mux" if os.environ.get("CCB_MUX_BACKEND_IMPL") else "tmux"),
+        "backend_family": os.environ.get("CCB_MUX_BACKEND_FAMILY", ""),
+        "backend_impl": os.environ.get("CCB_MUX_BACKEND_IMPL", ""),
         "tmux_session": os.environ.get("OPENCODE_TMUX_SESSION", ""),
-        "pane_id": os.environ.get("OPENCODE_TMUX_SESSION", ""),
+        "pane_id": pane_id,
+        "pane_ref": {"pane_id": pane_id, "backend_impl": os.environ.get("CCB_MUX_BACKEND_IMPL", "")} if pane_id else {},
+        "namespace_ref": {
+            "backend_family": os.environ.get("CCB_MUX_BACKEND_FAMILY", ""),
+            "backend_impl": os.environ.get("CCB_MUX_BACKEND_IMPL", ""),
+            "ipc_kind": os.environ.get("CCB_MUX_NAMESPACE_IPC_KIND", ""),
+            "ipc_ref": os.environ.get("CCB_MUX_NAMESPACE_IPC_REF", ""),
+        },
         "_session_file": None,
     }
 
@@ -102,6 +113,7 @@ def merge_session_file_data(result: dict[str, object], session_file: Path) -> No
         return
     result["opencode_session_path"] = file_data.get("opencode_session_path")
     result["_session_file"] = str(session_file)
+    merge_missing_mux_session_fields(result, file_data)
     copy_missing_field(result, file_data, "pane_title_marker", default="")
     copy_missing_field(result, file_data, "opencode_session_id")
     copy_missing_field(result, file_data, "opencode_project_id")

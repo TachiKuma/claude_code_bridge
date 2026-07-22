@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from .binding import AgentBinding, binding_status
 from .fields import (
+    session_backend_family,
+    session_backend_impl,
     session_ccb_session_id,
     session_file,
     session_id,
+    session_namespace_ref,
+    session_pane_ref,
     session_pane_title_marker,
     session_ref,
     session_runtime_pid,
@@ -23,9 +27,13 @@ __all__ = [
     'default_binding_adapter',
     'inspect_session_pane',
     'resolve_agent_binding',
+    'session_backend_family',
+    'session_backend_impl',
     'session_ccb_session_id',
     'session_file',
     'session_id',
+    'session_namespace_ref',
+    'session_pane_ref',
     'session_pane_title_marker',
     'session_ref',
     'session_runtime_pid',

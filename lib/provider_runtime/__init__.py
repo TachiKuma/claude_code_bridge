@@ -16,9 +16,20 @@ from .process_ref import (
     process_ref_health,
     process_ref_to_record,
 )
+from .session_payload import (
+    MuxSessionPayload,
+    MuxSessionView,
+    PROTECTED_SHARED_KEYS,
+    build_mux_session_payload,
+    merge_provider_payload,
+    mux_session_env,
+    project_session_payload,
+)
 from .store import ProviderHealthSnapshotStore
 
 __all__ = [
+    'MuxSessionPayload',
+    'MuxSessionView',
     'ProviderHelperManifest',
     'ProgressState',
     'ProviderCompletionState',
@@ -26,14 +37,19 @@ __all__ = [
     'ProviderHealthSnapshotStore',
     'SCHEMA_VERSION',
     'ProcessRef',
+    'PROTECTED_SHARED_KEYS',
     'build_runtime_helper_manifest',
+    'build_mux_session_payload',
     'build_process_ref',
     'cleanup_stale_runtime_helper',
     'load_helper_manifest',
+    'merge_provider_payload',
+    'mux_session_env',
     'process_ref_allows_destructive_cleanup',
     'process_ref_from_record',
     'process_ref_health',
     'process_ref_to_record',
+    'project_session_payload',
     'sync_runtime_helper_manifest',
     'terminate_helper_manifest_path',
 ]

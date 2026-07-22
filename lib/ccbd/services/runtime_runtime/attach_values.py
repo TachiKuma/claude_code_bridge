@@ -29,6 +29,10 @@ def resolve_attach_runtime_values(
     runtime_root: str | None,
     runtime_pid: int | None,
     terminal_backend: str | None,
+    backend_family: str | None,
+    backend_impl: str | None,
+    pane_ref: dict | None,
+    namespace_ref: dict | None,
     pane_id: str | None,
     active_pane_id: str | None,
     pane_title_marker: str | None,
@@ -74,6 +78,10 @@ def resolve_attach_runtime_values(
     runtime_root_value = preferred_text(existing, 'runtime_root', runtime_root)
     runtime_pid_value = next_runtime_pid(existing, runtime_pid=runtime_pid, pid=pid)
     terminal_backend_value = preferred_terminal_backend(existing, terminal_backend=terminal_backend, runtime_ref_value=runtime_ref_value)
+    backend_family_value = preferred_text(existing, 'backend_family', backend_family)
+    backend_impl_value = preferred_text(existing, 'backend_impl', backend_impl)
+    pane_ref_value = preferred_dict(existing, 'pane_ref', pane_ref)
+    namespace_ref_value = preferred_dict(existing, 'namespace_ref', namespace_ref)
     active_pane_id_value = preferred_active_pane_id(existing, active_pane_id=active_pane_id, pane_id_value=pane_id_value)
     tmux_socket_name_value = preferred_text(existing, 'tmux_socket_name', tmux_socket_name)
     tmux_socket_path_value = preferred_text(existing, 'tmux_socket_path', tmux_socket_path)
@@ -92,6 +100,10 @@ def resolve_attach_runtime_values(
         tmux_socket_path=tmux_socket_path_value,
         tmux_window_name=tmux_window_name_value,
         tmux_window_id=tmux_window_id_value,
+        backend_family=backend_family_value,
+        backend_impl=backend_impl_value,
+        pane_ref=pane_ref_value,
+        namespace_ref=namespace_ref_value,
         daemon_generation=daemon_generation_value,
     )
     binding_generation, runtime_generation = next_authority_epoch_generations(
@@ -109,6 +121,10 @@ def resolve_attach_runtime_values(
         runtime_root=runtime_root_value,
         runtime_pid=runtime_pid_value,
         terminal_backend=terminal_backend_value,
+        backend_family=backend_family_value,
+        backend_impl=backend_impl_value,
+        pane_ref=pane_ref_value,
+        namespace_ref=namespace_ref_value,
         pane_id=pane_id_value,
         active_pane_id=active_pane_id_value,
         pane_title_marker=preferred_text(existing, 'pane_title_marker', pane_title_marker),
@@ -144,6 +160,14 @@ def preferred_text(existing, field_name: str, explicit_value: str | None, *, def
     if existing is not None:
         return getattr(existing, field_name)
     return default
+
+
+def preferred_dict(existing, field_name: str, explicit_value: dict | None) -> dict | None:
+    if isinstance(explicit_value, dict):
+        return dict(explicit_value)
+    if existing is not None and isinstance(getattr(existing, field_name, None), dict):
+        return dict(getattr(existing, field_name))
+    return None
 
 
 def preferred_terminal_backend(existing, *, terminal_backend: str | None, runtime_ref_value: str | None) -> str | None:
@@ -246,6 +270,10 @@ def runtime_authority_changed(
     tmux_socket_path: str | None,
     tmux_window_name: str | None,
     tmux_window_id: str | None,
+    backend_family: str | None,
+    backend_impl: str | None,
+    pane_ref: dict | None,
+    namespace_ref: dict | None,
     daemon_generation: int | None,
 ) -> bool:
     if existing is None:
@@ -262,6 +290,10 @@ def runtime_authority_changed(
             tmux_socket_path != getattr(existing, 'tmux_socket_path', None),
             tmux_window_name != getattr(existing, 'tmux_window_name', None),
             tmux_window_id != getattr(existing, 'tmux_window_id', None),
+            backend_family != getattr(existing, 'backend_family', None),
+            backend_impl != getattr(existing, 'backend_impl', None),
+            pane_ref != getattr(existing, 'pane_ref', None),
+            namespace_ref != getattr(existing, 'namespace_ref', None),
         )
     )
     current_daemon_generation = getattr(existing, 'daemon_generation', None)

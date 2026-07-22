@@ -17,6 +17,10 @@ class AttachRuntimeValues:
     runtime_root: str | None
     runtime_pid: int | None
     terminal_backend: str | None
+    backend_family: str | None
+    backend_impl: str | None
+    pane_ref: dict | None
+    namespace_ref: dict | None
     pane_id: str | None
     active_pane_id: str | None
     pane_title_marker: str | None

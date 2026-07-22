@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from agents.models import AgentRuntime, AgentState, RuntimeBindingSource
 from ccbd.services.project_namespace_runtime.slot_replacement import ProjectSlotRecoveryContext
+from ccbd.services.provider_runtime_facts import build_provider_runtime_facts
 from ccbd.services.runtime_runtime.refresh import refresh_provider_binding
 from provider_backends.pane_log_support.session import PaneLogProjectSessionBase
 from provider_core.contracts import ProviderSessionBinding
@@ -201,3 +202,72 @@ def test_refresh_provider_binding_replaces_missing_project_pane_inside_workspace
     assert ('%55', 'cmd') not in backend.titles
     assert ('%55', 'agent1') in backend.titles
     assert ('%55', '@ccb_session_id', 'ccb-session-new') in backend.options
+
+
+def test_provider_runtime_facts_uses_mux_payload_canonical_fields(tmp_path: Path) -> None:
+    session_file = tmp_path / 'session.json'
+    session = _Session(
+        session_file=session_file,
+        data={
+            'terminal': 'mux',
+            'backend_family': 'tmux-family',
+            'backend_impl': 'rmux',
+            'pane_ref': {'backend_impl': 'rmux', 'pane_id': '%9', 'session_name': 'ccb-demo'},
+            'namespace_ref': {
+                'backend_family': 'tmux-family',
+                'backend_impl': 'rmux',
+                'namespace_id': 'ns-1',
+                'ipc_kind': 'named_pipe',
+                'ipc_ref': r'\\.\pipe\ccb-demo',
+            },
+            'pane_id': '%legacy',
+            'tmux_session': '%legacy',
+            'fake_session_id': 'session-new',
+            'runtime_dir': str(tmp_path / 'runtime'),
+        },
+        _backend=_FakeBackend(),
+    )
+    binding = ProviderSessionBinding(
+        provider='codex',
+        load_session=lambda workspace_path, instance: session,
+        session_id_attr='fake_session_id',
+        session_path_attr='fake_session_path',
+    )
+
+    facts = build_provider_runtime_facts(session, binding=binding, provider='codex')
+
+    assert facts.runtime_ref == 'rmux:%9'
+    assert facts.terminal_backend == 'mux'
+    assert facts.backend_family == 'tmux-family'
+    assert facts.backend_impl == 'rmux'
+    assert facts.pane_id == '%9'
+    assert facts.pane_ref == {'backend_impl': 'rmux', 'pane_id': '%9', 'session_name': 'ccb-demo'}
+    assert facts.namespace_ref['ipc_kind'] == 'named_pipe'
+
+
+def test_provider_runtime_facts_falls_back_to_legacy_tmux_session(tmp_path: Path) -> None:
+    session = _Session(
+        session_file=tmp_path / 'session.json',
+        data={
+            'terminal': 'tmux',
+            'tmux_session': '%7',
+            'tmux_socket_path': '/tmp/project.sock',
+            'fake_session_id': 'session-new',
+            'runtime_dir': str(tmp_path / 'runtime'),
+        },
+        _backend=_FakeBackend(),
+    )
+    binding = ProviderSessionBinding(
+        provider='codex',
+        load_session=lambda workspace_path, instance: session,
+        session_id_attr='fake_session_id',
+        session_path_attr='fake_session_path',
+    )
+
+    facts = build_provider_runtime_facts(session, binding=binding, provider='codex')
+
+    assert facts.runtime_ref == 'tmux:%7'
+    assert facts.terminal_backend == 'tmux'
+    assert facts.backend_impl == 'tmux'
+    assert facts.pane_id == '%7'
+    assert facts.tmux_socket_path == '/tmp/project.sock'

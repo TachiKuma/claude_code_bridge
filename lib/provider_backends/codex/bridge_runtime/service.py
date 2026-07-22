@@ -18,9 +18,9 @@ class DualBridge:
     """Claude ↔ Codex bridge main process"""
 
     def __init__(self, runtime_dir: Path):
-        pane_id = os.environ.get('CODEX_TMUX_SESSION')
+        pane_id = os.environ.get('CCB_MUX_PANE_ID') or os.environ.get('CODEX_TMUX_SESSION')
         if not pane_id:
-            raise RuntimeError('Missing CODEX_TMUX_SESSION environment variable')
+            raise RuntimeError('Missing CCB_MUX_PANE_ID or CODEX_TMUX_SESSION environment variable')
 
         self._runtime = build_bridge_runtime_state(runtime_dir, pane_id=pane_id)
         self._diagnostic_log_filter = CodexDiagnosticLogFilterInstaller()

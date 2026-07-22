@@ -3,11 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from .backend import session_backend
+from provider_runtime.session_payload import project_session_payload
 
 
 def session_runtime_ref(session, *, pane_id_override: str | None = None) -> str | None:
-    pane_id = str(pane_id_override or getattr(session, 'pane_id', '') or '').strip()
-    terminal = str(getattr(session, 'terminal', '') or '').strip() or 'tmux'
+    view = session_mux_view(session)
+    pane_id = str(pane_id_override or view.pane_id or getattr(session, 'pane_id', '') or '').strip()
+    terminal = view.backend_impl or view.terminal or str(getattr(session, 'terminal', '') or '').strip() or 'tmux'
     if pane_id:
         return f'{terminal}:{pane_id}'
     return None
@@ -27,15 +29,13 @@ def session_ref(session, *, session_id_attr: str, session_path_attr: str) -> str
 
 
 def session_tmux_socket_name(session) -> str | None:
-    if not _session_uses_tmux(session):
-        return None
-    return _session_data_text(session, 'tmux_socket_name') or _backend_text(session, '_socket_name')
+    view = session_mux_view(session)
+    return view.tmux_socket_name or _backend_text(session, '_socket_name')
 
 
 def session_tmux_socket_path(session) -> str | None:
-    if not _session_uses_tmux(session):
-        return None
-    text = _session_data_text(session, 'tmux_socket_path') or _backend_text(session, '_socket_path')
+    view = session_mux_view(session)
+    text = view.tmux_socket_path or _backend_text(session, '_socket_path')
     return _expanded_path_text(text)
 
 
@@ -86,8 +86,30 @@ def session_runtime_pid(session, *, provider: str) -> int | None:
 
 
 def session_terminal(session) -> str | None:
-    text = str(getattr(session, 'terminal', '') or '').strip()
+    text = str(session_mux_view(session).terminal or getattr(session, 'terminal', '') or '').strip()
     return text or None
+
+
+def session_backend_family(session) -> str | None:
+    return session_mux_view(session).backend_family
+
+
+def session_backend_impl(session) -> str | None:
+    return session_mux_view(session).backend_impl
+
+
+def session_pane_ref(session) -> dict[str, object] | None:
+    ref = session_mux_view(session).pane_ref
+    return dict(ref) if ref else None
+
+
+def session_namespace_ref(session) -> dict[str, object] | None:
+    ref = session_mux_view(session).namespace_ref
+    return dict(ref) if ref else None
+
+
+def session_mux_view(session):
+    return project_session_payload(_session_data(session))
 
 
 def session_pane_title_marker(session) -> str | None:
@@ -178,8 +200,12 @@ def read_pid_file(path: Path) -> int | None:
 
 __all__ = [
     'session_ccb_session_id',
+    'session_backend_family',
+    'session_backend_impl',
     'session_file',
     'session_id',
+    'session_namespace_ref',
+    'session_pane_ref',
     'session_pane_title_marker',
     'session_ref',
     'session_runtime_pid',

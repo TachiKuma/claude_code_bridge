@@ -5,9 +5,13 @@ from pathlib import Path
 
 from provider_core.instance_resolution import named_agent_instance
 from provider_core.session_binding_evidence import (
+    session_backend_family,
+    session_backend_impl,
     session_ccb_session_id,
     session_file,
     session_id,
+    session_namespace_ref,
+    session_pane_ref,
     session_pane_title_marker,
     session_ref,
     session_runtime_pid,
@@ -27,6 +31,10 @@ class ProviderRuntimeFacts:
     runtime_root: str | None
     runtime_pid: int | None
     terminal_backend: str | None
+    backend_family: str | None
+    backend_impl: str | None
+    pane_ref: dict | None
+    namespace_ref: dict | None
     pane_id: str | None
     pane_title_marker: str | None
     pane_state: str | None
@@ -65,7 +73,8 @@ def build_provider_runtime_facts(
     runtime=None,
     clock=lambda: None,
 ) -> ProviderRuntimeFacts:
-    pane_id = str(pane_id_override or getattr(session, 'pane_id', '') or '').strip() or None
+    pane_ref = session_pane_ref(session)
+    pane_id = str(pane_id_override or (pane_ref or {}).get('pane_id') or getattr(session, 'pane_id', '') or '').strip() or None
     runtime_pid = session_runtime_pid(session, provider=provider)
     runtime_root = session_runtime_root(session)
     existing_process_ref = process_ref_from_record(getattr(runtime, 'process_ref', None))
@@ -87,6 +96,10 @@ def build_provider_runtime_facts(
         runtime_root=runtime_root,
         runtime_pid=runtime_pid,
         terminal_backend=session_terminal(session),
+        backend_family=session_backend_family(session),
+        backend_impl=session_backend_impl(session),
+        pane_ref=pane_ref,
+        namespace_ref=session_namespace_ref(session),
         pane_id=pane_id,
         pane_title_marker=session_pane_title_marker(session),
         pane_state='alive' if pane_id else None,

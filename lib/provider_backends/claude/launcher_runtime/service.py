@@ -167,9 +167,6 @@ def build_session_payload(
         'ccb_project_id': context.project.project_id,
         'runtime_dir': str(runtime_dir),
         'completion_artifact_dir': str(runtime_dir / 'completion'),
-        'terminal': 'tmux',
-        'tmux_session': pane_id,
-        'pane_id': pane_id,
         'pane_title_marker': pane_title_marker,
         'workspace_path': str(plan.workspace_path),
         'work_dir': str(run_cwd),
@@ -223,10 +220,19 @@ def _persistable_start_cmd(start_cmd: str, *, settings_path: Path) -> str:
             separator = f'{token} ' if token == ';' else f' {token} '
             rendered = rendered.rstrip() + separator
         else:
-            rendered += f'{shlex.quote(token)} '
+            rendered += f'{_quote_shell_token(token)} '
     command = rendered.strip()
     command = command.replace(' ; ; ', ' ; ')
     return command.strip(' ;')
+
+
+def _quote_shell_token(token: str) -> str:
+    if '=' not in token:
+        return shlex.quote(token)
+    key, value = token.split('=', 1)
+    if not key.replace('_', '').isalnum() or not key[0].isalpha():
+        return shlex.quote(token)
+    return f'{key}={shlex.quote(value)}'
 
 
 __all__ = ['build_runtime_launcher', 'build_session_payload', 'build_start_cmd', 'prepare_runtime', 'resolve_run_cwd']

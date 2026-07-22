@@ -69,7 +69,7 @@ items:
   - slug: provider-runtime-backend-session-contract
     description: 将 provider launch、session payload、runtime health 和 provider env 迁移到 backend-neutral mux 字段，并保留旧 tmux 字段兼容别名
     depends_on: [mux-backend-contract, windows-namespace-ipc-schema]
-    status: in-progress
+    status: done
     feature: 2026-07-20-provider-runtime-backend-session-contract
     minimal_loop: false
     notes: 覆盖共享 session writer、provider-specific launcher、pane_log_support session reader、provider env 和 TmuxBackend 直接导入；不改变 provider completion 解析

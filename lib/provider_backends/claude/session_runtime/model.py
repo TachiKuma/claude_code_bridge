@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from provider_backends.pane_log_support.session import session_tmux_identity_lookup
+from provider_runtime.session_payload import project_session_payload
 from terminal_runtime import get_backend_for_session
 
 from ..home_layout import claude_layout_from_session_data
@@ -19,14 +20,27 @@ class ClaudeProjectSession:
 
     @property
     def terminal(self) -> str:
-        return (self.data.get("terminal") or "tmux").strip() or "tmux"
+        return project_session_payload(self.data).terminal
 
     @property
     def pane_id(self) -> str:
-        value = self.data.get("pane_id")
-        if not value and self.terminal == "tmux":
-            value = self.data.get("tmux_session")
-        return str(value or "").strip()
+        return project_session_payload(self.data).pane_id or ""
+
+    @property
+    def backend_family(self) -> str:
+        return project_session_payload(self.data).backend_family or ""
+
+    @property
+    def backend_impl(self) -> str:
+        return project_session_payload(self.data).backend_impl or ""
+
+    @property
+    def pane_ref(self) -> dict[str, object]:
+        return dict(project_session_payload(self.data).pane_ref)
+
+    @property
+    def namespace_ref(self) -> dict[str, object]:
+        return dict(project_session_payload(self.data).namespace_ref)
 
     @property
     def pane_title_marker(self) -> str:
