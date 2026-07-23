@@ -18,6 +18,7 @@ from terminal_runtime.tmux_readiness import (
     tmux_object_ready_timeout_s,
     tmux_failure_detail,
 )
+from terminal_runtime.mux_backend_contract import MuxCommandError as MuxBackendCommandError
 from terminal_runtime.tmux_compat import is_tmux_compat_subset
 from terminal_runtime.tmux_server_policy import CLIPBOARD_PIPE_COMMAND, TMUX_ENVIRONMENT_KEYS
 from terminal_runtime.placeholders import pane_placeholder_argv, pane_placeholder_cmd
@@ -178,7 +179,7 @@ def _apply_optional_tmux_policy(
     *,
     description: str,
     timeout_s: float | None = None,
-) -> bool:
+) -> bool | str:
     try:
         _tmux_run_ready(
             backend,
@@ -402,7 +403,12 @@ def kill_window(backend, *, target: str, timeout_s: float | None = None) -> None
 def session_alive(backend, session_name: str, *, timeout_s: float | None = None) -> bool:
     if _is_mux_backend(backend):
         namespace = backend.namespace_ref(session_name=session_name)
-        return bool(backend.session_alive(namespace, timeout_s=timeout_s))
+        try:
+            return bool(backend.session_alive(namespace, timeout_s=timeout_s))
+        except MuxBackendCommandError as exc:
+            if exc.category in {'not-found', 'transient-unavailable'}:
+                return False
+            raise
     runner = getattr(backend, '_tmux_run', None)
     if not callable(runner):
         checker = getattr(backend, 'is_alive', None)
@@ -425,7 +431,12 @@ def session_root_pane(backend, session_name: str, *, timeout_s: float | None = N
     if _is_mux_backend(backend):
         namespace = backend.namespace_ref(session_name=session_name)
         pane = backend.session_root_pane(namespace, timeout_s=timeout_s)
-        return pane['pane_id']
+        return _canonical_mux_pane_id(
+            backend,
+            pane['pane_id'],
+            session_name=session_name,
+            window_name=None,
+        )
     return window_root_pane(backend, target_window=session_name, timeout_s=timeout_s)
 
 
@@ -438,7 +449,12 @@ def window_root_pane(backend, *, target_window: str, timeout_s: float | None = N
             window_name=window_name or session_name,
             timeout_s=timeout_s,
         )
-        return pane['pane_id']
+        return _canonical_mux_pane_id(
+            backend,
+            pane['pane_id'],
+            session_name=session_name,
+            window_name=window_name or session_name,
+        )
     pane_id = wait_for_root_pane(backend, target_window=target_window, timeout_s=timeout_s)
     if not pane_id.startswith('%'):
         raise RuntimeError(f'failed to resolve root pane for tmux target {target_window!r}')
@@ -452,10 +468,12 @@ def split_pane(
     direction: str,
     percent: int,
     project_root,
+    session_name: str | None = None,
+    window_name: str | None = None,
     timeout_s: float | None = None,
 ) -> str:
     if _is_mux_backend(backend):
-        parent = _mux_pane_ref(backend, target)
+        parent = _mux_pane_ref(backend, target, session_name=session_name, window_name=window_name)
         pane = backend.split_pane(
             parent,
             direction=direction,
@@ -496,11 +514,35 @@ def respawn_pane(
     cmd: str,
     cwd: str | None = None,
     remain_on_exit: bool = True,
+    session_name: str | None = None,
+    window_name: str | None = None,
 ) -> bool:
     respawn = getattr(backend, 'respawn_pane', None)
     if callable(respawn):
-        target = _mux_pane_ref(backend, pane_id) if _is_mux_backend(backend) else pane_id
-        respawn(target, cmd=cmd, cwd=cwd, remain_on_exit=remain_on_exit)
+        target = (
+            _mux_pane_ref(backend, pane_id, session_name=session_name, window_name=window_name)
+            if _is_mux_backend(backend)
+            else pane_id
+        )
+        replacement = respawn(target, cmd=cmd, cwd=cwd, remain_on_exit=remain_on_exit)
+        replacement_pane_id = str(replacement or '').strip()
+        if replacement_pane_id.startswith('%'):
+            if _is_mux_backend(backend):
+                return _canonical_mux_pane_id(
+                    backend,
+                    replacement_pane_id,
+                    session_name=session_name,
+                    window_name=window_name,
+                )
+            return replacement_pane_id
+        canonical = _canonical_mux_pane_id(
+            backend,
+            pane_id,
+            session_name=session_name,
+            window_name=window_name,
+        ) if _is_mux_backend(backend) else ''
+        if canonical.startswith('%') and canonical != pane_id:
+            return canonical
         return True
     runner = getattr(backend, '_tmux_run', None)
     if callable(runner):
@@ -509,14 +551,37 @@ def respawn_pane(
     return False
 
 
-def set_pane_user_option(backend, pane_id: str, name: str, value: str) -> None:
-    target = _mux_pane_ref(backend, pane_id) if _is_mux_backend(backend) else pane_id
+def set_pane_user_option(
+    backend,
+    pane_id: str,
+    name: str,
+    value: str,
+    *,
+    session_name: str | None = None,
+    window_name: str | None = None,
+) -> None:
+    target = (
+        _mux_pane_ref(backend, pane_id, session_name=session_name, window_name=window_name)
+        if _is_mux_backend(backend)
+        else pane_id
+    )
     backend.set_pane_user_option(target, name, value)
 
 
 def apply_pane_identity(backend, pane_id: str, **kwargs) -> None:
-    target = _mux_pane_ref(backend, pane_id) if _is_mux_backend(backend) else pane_id
-    apply_ccb_pane_identity(backend, target, **kwargs)
+    identity_kwargs = dict(kwargs)
+    target_session_name = identity_kwargs.pop('session_name', None)
+    target = (
+        _mux_pane_ref(
+            backend,
+            pane_id,
+            session_name=target_session_name,
+            window_name=identity_kwargs.get('window_name'),
+        )
+        if _is_mux_backend(backend)
+        else pane_id
+    )
+    apply_ccb_pane_identity(backend, target, **identity_kwargs)
 
 
 def kill_server(backend, *, session_name: str | None = None) -> bool:
@@ -597,8 +662,15 @@ def _root_pane_once(backend, *, target_window: str) -> str | None:
     )
     if result is None:
         return None
-    pane_id = ((result.stdout or '').splitlines() or [''])[0].strip()
-    return pane_id or None
+    pane_exists = getattr(backend, 'pane_exists', None)
+    for line in (result.stdout or '').splitlines():
+        pane_id = line.strip()
+        if not pane_id.startswith('%'):
+            continue
+        if callable(pane_exists) and not pane_exists(pane_id):
+            continue
+        return pane_id
+    return None
 
 
 def _tmux_run_ready(
@@ -734,23 +806,139 @@ def _is_mux_backend(backend) -> bool:
     return getattr(backend, 'backend_family', None) == 'tmux-family' and callable(getattr(backend, 'namespace_ref', None))
 
 
-def _mux_pane_ref(backend, target: str) -> dict[str, str | None]:
+def _mux_pane_ref(
+    backend,
+    target: str,
+    *,
+    session_name: str | None = None,
+    window_name: str | None = None,
+) -> dict[str, str | None]:
     pane_id = str(target or '').strip()
     if not pane_id:
         raise ValueError('target cannot be empty')
-    session_name = str(getattr(backend, 'namespace', '') or '').strip()
-    window_name = None
+    explicit_session_name = str(session_name or '').strip()
+    resolved_session_name = explicit_session_name
+    resolved_window_name = str(window_name or '').strip() or None
     if ':' in pane_id and not pane_id.startswith('%'):
         session, _sep, window = pane_id.partition(':')
         if session.strip():
-            session_name = session.strip()
-        window_name = window.strip() or None
-    if not session_name:
-        session_name = pane_id.split(':', 1)[0].strip()
+            resolved_session_name = session.strip()
+        resolved_window_name = window.strip() or resolved_window_name
+    is_index_alias = pane_id.startswith('%') and pane_id[1:].isdigit()
+    if not resolved_session_name:
+        resolved_session_name = str(getattr(backend, 'namespace', '') or '').strip()
+    if not resolved_session_name and not is_index_alias:
+        resolved_session_name = pane_id.split(':', 1)[0].strip()
+    canonical_session_name = '' if is_index_alias and not explicit_session_name and not resolved_window_name else resolved_session_name
+    pane_id = _canonical_mux_pane_id(
+        backend,
+        pane_id,
+        session_name=canonical_session_name,
+        window_name=resolved_window_name,
+    )
     projector = getattr(backend, 'pane_ref', None)
     if callable(projector):
-        return projector(pane_id, session_name=session_name, window_name=window_name)
-    return {'backend_impl': str(getattr(backend, 'backend_impl', '') or ''), 'pane_id': pane_id, 'session_name': session_name, 'window_name': window_name}
+        return projector(pane_id, session_name=resolved_session_name, window_name=resolved_window_name)
+    return {'backend_impl': str(getattr(backend, 'backend_impl', '') or ''), 'pane_id': pane_id, 'session_name': resolved_session_name, 'window_name': resolved_window_name}
+
+
+def _canonical_mux_pane_id(
+    backend,
+    pane_id: str,
+    *,
+    session_name: str | None,
+    window_name: str | None,
+) -> str:
+    pane_text = str(pane_id or '').strip()
+    if not pane_text.startswith('%') or getattr(backend, 'backend_impl', None) != 'rmux':
+        return pane_text
+    session = str(session_name or '').strip()
+    window = str(window_name or '').strip()
+    if not session:
+        return _canonical_mux_pane_id_from_global_index(backend, pane_text)
+    try:
+        args = (
+            [
+                'list-panes',
+                '-t',
+                f'{session}:{window}',
+                '-F',
+                '#{pane_id}\t#{pane_index}',
+            ]
+            if window
+            else [
+                'list-panes',
+                '-a',
+                '-F',
+                '#{session_name}\t#{pane_id}\t#{pane_index}',
+            ]
+        )
+        result = backend._run_checked(
+            args,
+            operation='canonicalize_pane',
+        )
+    except Exception:
+        result = None
+    if result is not None:
+        pane_index = pane_text[1:]
+        for line in str(getattr(result, 'stdout', '') or '').splitlines():
+            parts = [part.strip() for part in line.split('\t')]
+            if window:
+                observed_id = parts[0] if parts else ''
+                observed_index = parts[1] if len(parts) > 1 else ''
+            else:
+                observed_session = parts[0] if parts else ''
+                if observed_session != session:
+                    continue
+                observed_id = parts[1] if len(parts) > 1 else ''
+                observed_index = parts[2] if len(parts) > 2 else ''
+            if observed_id == pane_text:
+                return observed_id
+            if pane_index.isdigit() and observed_index == pane_index and observed_id.startswith('%'):
+                return observed_id
+    if not window:
+        return pane_text
+    try:
+        result = backend._run_checked(
+            [
+                'display-message',
+                '-p',
+                '-t',
+                f'{session}:{window}.{pane_text}',
+                '#{pane_id}',
+            ],
+            operation='canonicalize_pane',
+        )
+    except Exception:
+        return pane_text
+    resolved = ((str(getattr(result, 'stdout', '') or '').splitlines() or [''])[0]).strip()
+    return resolved if resolved.startswith('%') else pane_text
+
+
+def _canonical_mux_pane_id_from_global_index(backend, pane_text: str) -> str:
+    try:
+        result = backend._run_checked(
+            [
+                'list-panes',
+                '-a',
+                '-F',
+                '#{pane_id}\t#{pane_index}',
+            ],
+            operation='canonicalize_pane',
+        )
+    except Exception:
+        return pane_text
+    pane_index = pane_text[1:]
+    matches: list[str] = []
+    for line in str(getattr(result, 'stdout', '') or '').splitlines():
+        parts = [part.strip() for part in line.split('\t')]
+        observed_id = parts[0] if parts else ''
+        observed_index = parts[1] if len(parts) > 1 else ''
+        if observed_id == pane_text:
+            return observed_id
+        if pane_index.isdigit() and observed_index == pane_index and observed_id.startswith('%'):
+            matches.append(observed_id)
+    return matches[0] if len(matches) == 1 else pane_text
 
 
 def _pane_placeholder_shell_cmd() -> str:

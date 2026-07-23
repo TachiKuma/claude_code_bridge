@@ -69,6 +69,7 @@ def move_agent_panes(
             window_name=target_window,
             namespace_epoch=current.namespace_epoch,
             managed_by='ccbd',
+            session_name=current.tmux_session_name,
         )
         result.moved_agents[agent_name] = source_pane
         result.moved_agent_windows[agent_name] = target_window

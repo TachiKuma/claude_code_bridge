@@ -500,9 +500,18 @@ def _materialize_sidebar(
                 pane_width=_pane_width_cells(context.backend, root_pane),
             ),
             project_root=controller._layout.project_root,
+            session_name=context.desired_session_name,
+            window_name=window.name,
             timeout_s=timeout_s,
         )
-        _respawn_sidebar(context.backend, sidebar_pane, sidebar.launch_args, cwd=str(controller._layout.project_root))
+        sidebar_pane = _respawn_sidebar(
+            context.backend,
+            sidebar_pane,
+            sidebar.launch_args,
+            cwd=str(controller._layout.project_root),
+            session_name=context.desired_session_name,
+            window_name=window.name,
+        ) or sidebar_pane
         apply_pane_identity(
             context.backend,
             sidebar_pane,
@@ -515,8 +524,14 @@ def _materialize_sidebar(
             sidebar_instance=window.name,
             namespace_epoch=epoch,
             managed_by='ccbd',
+            session_name=context.desired_session_name,
         )
-        _record_sidebar_helper_identity(context.backend, sidebar_pane)
+        _record_sidebar_helper_identity(
+            context.backend,
+            sidebar_pane,
+            session_name=context.desired_session_name,
+            window_name=window.name,
+        )
         return root_pane
     user_root = split_pane(
         context.backend,
@@ -527,9 +542,18 @@ def _materialize_sidebar(
             pane_width=_pane_width_cells(context.backend, root_pane),
         ),
         project_root=controller._layout.project_root,
+        window_name=window.name,
+        session_name=context.desired_session_name,
         timeout_s=timeout_s,
     )
-    _respawn_sidebar(context.backend, root_pane, sidebar.launch_args, cwd=str(controller._layout.project_root))
+    root_pane = _respawn_sidebar(
+        context.backend,
+        root_pane,
+        sidebar.launch_args,
+        cwd=str(controller._layout.project_root),
+        session_name=context.desired_session_name,
+        window_name=window.name,
+    ) or root_pane
     apply_pane_identity(
         context.backend,
         root_pane,
@@ -542,8 +566,14 @@ def _materialize_sidebar(
         sidebar_instance=window.name,
         namespace_epoch=epoch,
         managed_by='ccbd',
+        session_name=context.desired_session_name,
     )
-    _record_sidebar_helper_identity(context.backend, root_pane)
+    _record_sidebar_helper_identity(
+        context.backend,
+        root_pane,
+        session_name=context.desired_session_name,
+        window_name=window.name,
+    )
     return user_root
 
 
@@ -589,22 +619,45 @@ def refresh_topology_sidebar_helpers(
         )
         if current_identity == desired_identity:
             continue
-        _respawn_sidebar(
+        window_name = str(getattr(window, 'name', '') or '') or None
+        pane_id = _respawn_sidebar(
             backend,
             pane_id,
             tuple(getattr(sidebar, 'launch_args', ()) or ()),
             cwd=str(controller._layout.project_root),
+            session_name=tmux_session_name,
+            window_name=window_name,
+        ) or pane_id
+        _record_sidebar_helper_identity(
+            backend,
+            pane_id,
+            identity=desired_identity,
+            session_name=tmux_session_name,
+            window_name=window_name,
         )
-        _record_sidebar_helper_identity(backend, pane_id, identity=desired_identity)
         refreshed.append(pane_id)
     return tuple(refreshed)
 
 
-def _record_sidebar_helper_identity(backend, pane_id: str, *, identity: str | None = None) -> None:
+def _record_sidebar_helper_identity(
+    backend,
+    pane_id: str,
+    *,
+    identity: str | None = None,
+    session_name: str | None = None,
+    window_name: str | None = None,
+) -> None:
     resolved = identity or sidebar_helper_fingerprint()
     if not resolved:
         return
-    set_pane_user_option(backend, pane_id, SIDEBAR_HELPER_ID_OPTION, resolved)
+    set_pane_user_option(
+        backend,
+        pane_id,
+        SIDEBAR_HELPER_ID_OPTION,
+        resolved,
+        session_name=session_name,
+        window_name=window_name,
+    )
 
 
 def _materialize_agent_layout(
@@ -636,6 +689,7 @@ def _materialize_agent_layout(
                 role='cmd',
                 slot_key='cmd',
                 window_name=window.name,
+                session_name=context.desired_session_name,
                 namespace_epoch=epoch,
                 managed_by='ccbd',
             )
@@ -665,6 +719,7 @@ def _materialize_agent_layout(
             role='agent',
             slot_key=item,
             window_name=window.name,
+            session_name=context.desired_session_name,
             namespace_epoch=epoch,
             managed_by='ccbd',
         )
@@ -675,6 +730,8 @@ def _materialize_agent_layout(
         parent_pane_id=user_root,
         node=layout,
         assign_leaf=assign_leaf,
+        session_name=context.desired_session_name,
+        window_name=window.name,
         timeout_s=timeout_s,
     )
     return agent_panes
@@ -717,13 +774,20 @@ def _materialize_tool_pane(
     epoch: int,
 ) -> None:
     command = str(command or '').strip() or pane_placeholder_cmd()
-    if not respawn_pane(
+    replacement = respawn_pane(
         context.backend,
         pane_id,
         cmd=command,
         cwd=str(controller._layout.project_root),
         remain_on_exit=True,
-    ):
+        session_name=context.desired_session_name,
+        window_name=window_name,
+    )
+    if replacement:
+        replacement_text = str(replacement or '').strip()
+        if replacement_text.startswith('%'):
+            pane_id = replacement_text
+    else:
         context.backend._tmux_run(['respawn-pane', '-k', '-t', pane_id, 'sh', '-lc', command], check=False)
     apply_pane_identity(
         context.backend,
@@ -735,6 +799,7 @@ def _materialize_tool_pane(
         role='tool',
         slot_key=f'tool:{tool_name}',
         window_name=window_name,
+        session_name=context.desired_session_name,
         namespace_epoch=epoch,
         managed_by='ccbd',
     )
@@ -782,8 +847,10 @@ def _materialize_layout(
     parent_pane_id: str,
     node: Any,
     assign_leaf,
+    session_name: str,
+    window_name: str,
     timeout_s: float | None,
-) -> None:
+) -> str | None:
     if node.kind == 'leaf':
         assert node.leaf is not None
         assign_leaf(node.leaf.name, parent_pane_id)
@@ -810,6 +877,8 @@ def _materialize_layout(
         direction=direction,
         percent=percent,
         project_root=controller._layout.project_root,
+        session_name=session_name,
+        window_name=window_name,
         timeout_s=timeout_s,
     )
     _materialize_layout(
@@ -818,6 +887,8 @@ def _materialize_layout(
         parent_pane_id=parent_pane_id,
         node=node.left,
         assign_leaf=assign_leaf,
+        session_name=session_name,
+        window_name=window_name,
         timeout_s=timeout_s,
     )
     _materialize_layout(
@@ -826,6 +897,8 @@ def _materialize_layout(
         parent_pane_id=new_pane_id,
         node=node.right,
         assign_leaf=assign_leaf,
+        session_name=session_name,
+        window_name=window_name,
         timeout_s=timeout_s,
     )
 
@@ -1241,12 +1314,31 @@ def _sidebar_pane_percent_for_sidebar(width: object, pane_width: int = 0) -> int
     return _sidebar_percent(width)
 
 
-def _respawn_sidebar(backend, pane_id: str, launch_args: tuple[str, ...], *, cwd: str) -> None:
+def _respawn_sidebar(
+    backend,
+    pane_id: str,
+    launch_args: tuple[str, ...],
+    *,
+    cwd: str,
+    session_name: str | None = None,
+    window_name: str | None = None,
+) -> None:
     args = sidebar_respawn_args(tuple(launch_args or ()))
     command = sidebar_respawn_command(args, theme_profile=tmux_theme_profile()) or pane_placeholder_cmd()
-    if respawn_pane(backend, pane_id, cmd=command, cwd=cwd, remain_on_exit=True):
-        return
+    replacement = respawn_pane(
+        backend,
+        pane_id,
+        cmd=command,
+        cwd=cwd,
+        remain_on_exit=True,
+        session_name=session_name,
+        window_name=window_name,
+    )
+    if replacement:
+        replacement_text = str(replacement or '').strip()
+        return replacement_text if replacement_text.startswith('%') else pane_id
     backend._tmux_run(['respawn-pane', '-k', '-t', pane_id, 'sh', '-lc', command], check=False)
+    return pane_id
 
 
 __all__ = [

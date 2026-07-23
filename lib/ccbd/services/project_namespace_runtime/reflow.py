@@ -77,6 +77,7 @@ def reflow_project_workspace(
         namespace_epoch=current.namespace_epoch,
         tmux_socket_path=context.desired_socket_path,
         tmux_session_name=context.desired_session_name,
+        window_name=temporary_workspace.window_name,
     )
     current_workspace_name = str(current.workspace_window_name or desired_workspace_name).strip() or desired_workspace_name
     current_workspace = find_window(

@@ -61,6 +61,7 @@ def prepare_namespace_root_pane(
         namespace_epoch=epoch,
         tmux_socket_path=context.desired_socket_path,
         tmux_session_name=context.desired_session_name,
+        window_name=context.desired_workspace_window_name,
     )
 
 
@@ -72,6 +73,7 @@ def apply_namespace_identity(
     namespace_epoch: int,
     tmux_socket_path: str,
     tmux_session_name: str,
+    window_name: str | None = None,
 ) -> None:
     apply_pane_identity(
         backend,
@@ -81,6 +83,8 @@ def apply_namespace_identity(
         project_id=controller._project_id,
         is_cmd=True,
         slot_key='cmd',
+        session_name=tmux_session_name,
+        window_name=window_name,
         namespace_epoch=namespace_epoch,
         managed_by='ccbd',
     )

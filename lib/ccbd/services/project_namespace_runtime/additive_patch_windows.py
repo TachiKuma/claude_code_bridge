@@ -95,6 +95,7 @@ def _create_single_window(
             backend,
             window=window,
             user_root=user_root,
+            session_name=current.tmux_session_name,
             namespace_epoch=current.namespace_epoch,
             created_panes=result.created_panes,
             result=result,
@@ -107,6 +108,7 @@ def _create_single_window(
         backend,
         window=window,
         user_root=user_root,
+        session_name=current.tmux_session_name,
         namespace_epoch=current.namespace_epoch,
         created_panes=result.created_panes,
         result=result,
@@ -133,10 +135,19 @@ def _maybe_create_sidebar(
         direction='right',
         percent=_user_pane_percent_for_sidebar(getattr(sidebar, 'width', '15%')),
         project_root=controller._layout.project_root,
+        session_name=current.tmux_session_name,
+        window_name=window_name,
         timeout_s=timeout_s,
     )
     _append_unique(result.created_panes, user_root)
-    _respawn_sidebar(backend, root_pane, getattr(sidebar, 'launch_args', ()), cwd=str(controller._layout.project_root))
+    _respawn_sidebar(
+        backend,
+        root_pane,
+        getattr(sidebar, 'launch_args', ()),
+        cwd=str(controller._layout.project_root),
+        session_name=current.tmux_session_name,
+        window_name=window_name,
+    )
     apply_pane_identity(
         backend,
         root_pane,
@@ -149,10 +160,18 @@ def _maybe_create_sidebar(
         sidebar_instance=window_name,
         namespace_epoch=current.namespace_epoch,
         managed_by='ccbd',
+        session_name=current.tmux_session_name,
     )
     helper_identity = sidebar_helper_fingerprint()
     if helper_identity:
-        set_pane_user_option(backend, root_pane, SIDEBAR_HELPER_ID_OPTION, helper_identity)
+        set_pane_user_option(
+            backend,
+            root_pane,
+            SIDEBAR_HELPER_ID_OPTION,
+            helper_identity,
+            session_name=current.tmux_session_name,
+            window_name=window_name,
+        )
     result.sidebar_panes[window_name] = root_pane
     return user_root
 
@@ -168,6 +187,7 @@ def _materialize_new_window_agents(
     *,
     window,
     user_root: str,
+    session_name: str,
     namespace_epoch: int,
     created_panes: list[str],
     result: WindowPatchResult,
@@ -199,6 +219,7 @@ def _materialize_new_window_agents(
                 tool_name=item_tool,
                 command=layout_tool_alias_command(item_tool),
                 label=layout_tool_alias_label(item_tool),
+                session_name=session_name,
                 window_name=str(window.name),
                 namespace_epoch=namespace_epoch,
                 order_index=int(getattr(window, 'order', 0) or 0),
@@ -220,6 +241,7 @@ def _materialize_new_window_agents(
             window_name=str(window.name),
             namespace_epoch=namespace_epoch,
             managed_by='ccbd',
+            session_name=session_name,
         )
 
     _materialize_layout(
@@ -229,6 +251,8 @@ def _materialize_new_window_agents(
         node=layout,
         assign_leaf=assign_leaf,
         created_panes=created_panes,
+        session_name=session_name,
+        window_name=str(window.name),
         timeout_s=timeout_s,
     )
     return agent_panes
@@ -240,6 +264,7 @@ def _materialize_new_tool_window(
     *,
     window,
     user_root: str,
+    session_name: str,
     namespace_epoch: int,
     created_panes: list[str],
     result: WindowPatchResult,
@@ -254,6 +279,7 @@ def _materialize_new_tool_window(
         tool_name=str(window.name),
         command=command,
         label=str(getattr(window, 'label', None) or window.name),
+        session_name=session_name,
         window_name=str(window.name),
         namespace_epoch=namespace_epoch,
         order_index=int(getattr(window, 'order', 0) or 0),
@@ -270,6 +296,7 @@ def _materialize_new_tool_pane(
     tool_name: str,
     command: str,
     label: str,
+    session_name: str,
     window_name: str,
     namespace_epoch: int,
     order_index: int,
@@ -283,6 +310,8 @@ def _materialize_new_tool_pane(
         cmd=command,
         cwd=str(controller._layout.project_root),
         remain_on_exit=True,
+        session_name=session_name,
+        window_name=window_name,
     ):
         runner = getattr(backend, '_tmux_run', None)
         if callable(runner):
@@ -300,6 +329,7 @@ def _materialize_new_tool_pane(
         window_name=window_name,
         namespace_epoch=namespace_epoch,
         managed_by='ccbd',
+        session_name=session_name,
     )
     if result is not None:
         result.tool_panes[str(tool_name)] = pane_id
@@ -313,6 +343,8 @@ def _materialize_layout(
     node: Any,
     assign_leaf,
     created_panes: list[str],
+    session_name: str,
+    window_name: str,
     timeout_s: float | None,
 ) -> None:
     if node.kind == 'leaf':
@@ -327,6 +359,8 @@ def _materialize_layout(
         direction='right' if node.kind == 'horizontal' else 'bottom',
         percent=_right_pane_percent(node),
         project_root=controller._layout.project_root,
+        session_name=session_name,
+        window_name=window_name,
         timeout_s=timeout_s,
     )
     _append_unique(created_panes, new_pane_id)
@@ -337,6 +371,8 @@ def _materialize_layout(
         node=node.left,
         assign_leaf=assign_leaf,
         created_panes=created_panes,
+        session_name=session_name,
+        window_name=window_name,
         timeout_s=timeout_s,
     )
     _materialize_layout(
@@ -346,6 +382,8 @@ def _materialize_layout(
         node=node.right,
         assign_leaf=assign_leaf,
         created_panes=created_panes,
+        session_name=session_name,
+        window_name=window_name,
         timeout_s=timeout_s,
     )
 
@@ -367,10 +405,26 @@ def _user_pane_percent_for_sidebar(width: object) -> int:
     return 85
 
 
-def _respawn_sidebar(backend, pane_id: str, launch_args: tuple[str, ...], *, cwd: str) -> None:
+def _respawn_sidebar(
+    backend,
+    pane_id: str,
+    launch_args: tuple[str, ...],
+    *,
+    cwd: str,
+    session_name: str | None = None,
+    window_name: str | None = None,
+) -> None:
     args = sidebar_respawn_args(tuple(launch_args or ()))
     command = sidebar_respawn_command(args, theme_profile=tmux_theme_profile()) or pane_placeholder_cmd()
-    if respawn_pane(backend, pane_id, cmd=command, cwd=cwd, remain_on_exit=True):
+    if respawn_pane(
+        backend,
+        pane_id,
+        cmd=command,
+        cwd=cwd,
+        remain_on_exit=True,
+        session_name=session_name,
+        window_name=window_name,
+    ):
         return
     runner = getattr(backend, '_tmux_run', None)
     if callable(runner):

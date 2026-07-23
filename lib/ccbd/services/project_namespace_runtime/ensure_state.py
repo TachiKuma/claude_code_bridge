@@ -97,6 +97,7 @@ def persist_refreshed_namespace(controller, context, *, timeout_s: float | None 
             namespace_epoch=current.namespace_epoch,
             tmux_socket_path=context.desired_socket_path,
             tmux_session_name=context.desired_session_name,
+            window_name=workspace_window_name,
         )
     namespace_ref = _backend_namespace_ref(context.backend, session_name=context.desired_session_name)
     state = build_active_state(

@@ -92,6 +92,7 @@ def _append_window_agent_panes(
             backend,
             appended=appended,
             target=target,
+            session_name=current.tmux_session_name,
             window_name=window_name,
             order_index=style_index_by_agent.get(appended.agent),
             namespace_epoch=namespace_epoch,
@@ -143,6 +144,7 @@ def _append_single_agent_pane(
     *,
     appended,
     target: str,
+    session_name: str,
     window_name: str,
     order_index: int | None,
     namespace_epoch: int,
@@ -155,6 +157,8 @@ def _append_single_agent_pane(
         direction=appended.direction,
         percent=50,
         project_root=controller._layout.project_root,
+        session_name=session_name,
+        window_name=window_name,
         timeout_s=timeout_s,
     )
     _append_unique(created_panes, pane_id)
@@ -170,6 +174,7 @@ def _append_single_agent_pane(
         window_name=window_name,
         namespace_epoch=namespace_epoch,
         managed_by='ccbd',
+        session_name=session_name,
     )
     return pane_id
 
