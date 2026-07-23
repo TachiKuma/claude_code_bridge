@@ -3,7 +3,14 @@ from __future__ import annotations
 from .common import build_rmux_backend, build_tmux_backend, mux_backend_from_runtime_ref, mux_target_pane_id
 
 
-def cleanup_stale_tmux_binding(binding, *, tmux_backend_cls, kill_tmux_pane_fn, rmux_backend_cls=None) -> None:
+def cleanup_stale_tmux_binding(
+    binding,
+    *,
+    tmux_backend_cls,
+    kill_tmux_pane_fn,
+    rmux_backend_cls=None,
+    protected_pane_id: str | None = None,
+) -> None:
     if binding is None:
         return
     runtime_ref = str(binding.runtime_ref or '').strip()
@@ -15,6 +22,8 @@ def cleanup_stale_tmux_binding(binding, *, tmux_backend_cls, kill_tmux_pane_fn, 
     if pane_state not in {'dead', 'missing'} and identity_state not in {'mismatch', 'unknown'}:
         return
     pane_id = mux_target_pane_id(binding, runtime_ref=runtime_ref)
+    if _same_pane_id(pane_id, protected_pane_id):
+        return
     if backend_impl == 'tmux' and not pane_id.startswith('%'):
         return
     try:
@@ -36,6 +45,12 @@ def cleanup_stale_tmux_binding(binding, *, tmux_backend_cls, kill_tmux_pane_fn, 
         backend.kill_pane(pane_ref)
     except Exception:
         return
+
+
+def _same_pane_id(left: object, right: object) -> bool:
+    left_text = str(left or '').strip()
+    right_text = str(right or '').strip()
+    return bool(left_text and right_text and left_text == right_text)
 
 
 __all__ = ['cleanup_stale_tmux_binding']

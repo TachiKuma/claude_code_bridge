@@ -48,7 +48,10 @@ def ensure_agent_runtime(
         spec.provider,
         provider_executable_fn=provider_executable_fn,
     )
-    cleanup_stale_tmux_binding_fn(binding)
+    try:
+        cleanup_stale_tmux_binding_fn(binding, protected_pane_id=assigned_pane_id)
+    except TypeError:
+        cleanup_stale_tmux_binding_fn(binding)
 
     timings_ms: dict[str, float] = {}
     launch_started_ns = monotonic_ns()

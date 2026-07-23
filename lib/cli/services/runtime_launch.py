@@ -285,8 +285,9 @@ class _StringPaneRmuxBackend:
         cwd: str | None = None,
         remain_on_exit: bool = True,
     ) -> str | None:
+        target = self._pane_ref(pane_id)
         replacement = self._backend.respawn_pane(
-            self._pane_ref(pane_id),
+            target,
             cmd=cmd,
             cwd=cwd,
             remain_on_exit=remain_on_exit,
@@ -294,7 +295,7 @@ class _StringPaneRmuxBackend:
         replacement_pane_id = str(replacement or '').strip()
         if replacement_pane_id.startswith('%'):
             return replacement_pane_id
-        return self._canonical_pane_id(pane_id)
+        return str(target.get('pane_id') or pane_id).strip()
 
     def set_pane_identity(
         self,
@@ -336,16 +337,21 @@ class _StringPaneRmuxBackend:
         pane_text = str(pane_id or '').strip()
         if canonicalize:
             pane_text = self._canonical_pane_id(pane_text)
+        window_name = self.window_name
+        if pane_text.startswith('%'):
+            window_name = None
         return {
             'backend_impl': 'rmux',
             'pane_id': pane_text,
             'session_name': self.namespace,
-            'window_name': self.window_name,
+            'window_name': window_name,
         }
 
     def _canonical_pane_id(self, pane_id: str) -> str:
         pane_text = str(pane_id or '').strip()
         if not pane_text.startswith('%') or not self.namespace:
+            return pane_text
+        if self.window_name:
             return pane_text
         pane_ref = self._pane_ref(pane_text, canonicalize=False)
         try:
@@ -397,12 +403,17 @@ def _binding_runtime_alive(binding: AgentBinding) -> bool:
     return _binding_runtime_alive_impl(binding, tmux_backend_cls=TmuxBackend, rmux_backend_cls=RmuxBackend)
 
 
-def _cleanup_stale_tmux_binding(binding: AgentBinding | None) -> None:
+def _cleanup_stale_tmux_binding(
+    binding: AgentBinding | None,
+    *,
+    protected_pane_id: str | None = None,
+) -> None:
     _cleanup_stale_tmux_binding_impl(
         binding,
         tmux_backend_cls=TmuxBackend,
         rmux_backend_cls=RmuxBackend,
         kill_tmux_pane_fn=_best_effort_kill_tmux_pane,
+        protected_pane_id=protected_pane_id,
     )
 
 
