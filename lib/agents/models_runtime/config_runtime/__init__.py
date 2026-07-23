@@ -3,7 +3,7 @@ from __future__ import annotations
 from .api import AgentApiSpec
 from .loop_capacity import LoopCapacityConfig, LoopRoleProfileSpec
 from .maintenance import MaintenanceHeartbeatConfig
-from .project import ProjectConfig, RuntimeMuxConfig
+from .project import ProjectConfig, RuntimeMuxConfig, RuntimeStartConfig
 from .spec import AgentSpec
 from .workflow import (
     CONFIG_SCHEMA_V2,
@@ -21,6 +21,7 @@ __all__ = [
     'MaintenanceHeartbeatConfig',
     'ProjectConfig',
     'RuntimeMuxConfig',
+    'RuntimeStartConfig',
     'CONFIG_SCHEMA_V2',
     'CONFIG_SCHEMA_V3',
     'WorkflowConfig',

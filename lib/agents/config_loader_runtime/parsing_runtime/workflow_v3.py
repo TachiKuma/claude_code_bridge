@@ -33,7 +33,7 @@ from rolepacks.manifest import RoleManifestError, role_manifest_from_mapping
 from ..common import StructuredConfigValidationError
 from .expectations import expect_mapping
 from .provider_profiles import parse_provider_profile
-from .runtime_mux import parse_v3_runtime_mux
+from .runtime_mux import parse_v3_runtime_mux, parse_v3_runtime_start
 from .topology import parse_sidebar, parse_sidebar_view, parse_tool_windows
 
 
@@ -134,6 +134,7 @@ def validate_v3_project_config(
     provider_defaults = _parse_provider_defaults(workflow_raw.get('provider_defaults'))
     runtime = _parse_runtime(workflow_raw.get('runtime'))
     runtime_mux = parse_v3_runtime_mux(document.get('runtime'))
+    runtime_start = parse_v3_runtime_start(document.get('runtime'))
     resident_raw = _mapping(workflow_raw.get('resident'), path='workflow.resident')
     dynamic_raw = _mapping(workflow_raw.get('dynamic'), path='workflow.dynamic')
     _validate_role_table_names(resident_raw, kind='resident')
@@ -217,6 +218,7 @@ def validate_v3_project_config(
             loop_capacity=loop_capacity,
             workflow=workflow,
             runtime_mux=runtime_mux,
+            runtime_start=runtime_start,
             source_path=str(source_path) if source_path else None,
             windows_explicit=True,
         )

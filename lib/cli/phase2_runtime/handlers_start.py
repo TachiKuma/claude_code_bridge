@@ -4,6 +4,7 @@ import json
 import os
 import sys
 
+from agents.config_loader import load_project_config
 from agents.config_loader import StructuredConfigValidationError
 
 from cli.services.start_foreground import attach_started_project_namespace
@@ -76,6 +77,7 @@ def handle_config_ui(context, command, out, services) -> int:
 def handle_start(context, command, out, services) -> int:
     interactive_attach = (
         not _env_truthy('CCB_NO_ATTACH')
+        and not _config_no_attach(context)
         and _stream_is_tty(sys.stdin)
         and _stream_is_tty(out)
     )
@@ -94,6 +96,12 @@ def handle_start(context, command, out, services) -> int:
 def _env_truthy(name: str) -> bool:
     value = str(os.environ.get(name) or '').strip().lower()
     return value in {'1', 'true', 'yes', 'on'}
+
+
+def _config_no_attach(context) -> bool:
+    config = load_project_config(context.project.project_root).config
+    runtime_start = getattr(config, 'runtime_start', None)
+    return bool(getattr(runtime_start, 'no_attach', False))
 
 
 def _terminal_size_for_streams(*streams: object) -> tuple[int, int] | None:

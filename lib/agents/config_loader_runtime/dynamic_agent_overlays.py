@@ -426,6 +426,7 @@ def _copy_config(
         loop_capacity=config.loop_capacity,
         workflow=config.workflow,
         runtime_mux=config.runtime_mux,
+        runtime_start=config.runtime_start,
     )
 
 

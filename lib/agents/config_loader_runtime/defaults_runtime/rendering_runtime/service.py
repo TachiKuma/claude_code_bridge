@@ -131,13 +131,16 @@ def _build_hybrid_overlay_payload(config) -> dict[str, object] | None:
         if overlay:
             overlay_agents[name] = overlay
     loop_payload = loop_capacity_to_config_dict(getattr(config, 'loop_capacity', None))
-    if not overlay_agents and not loop_payload:
+    runtime_payload = _runtime_payload(config)
+    if not overlay_agents and not loop_payload and not runtime_payload:
         return None
     payload: dict[str, object] = {}
     if overlay_agents:
         payload['agents'] = overlay_agents
     if loop_payload:
         payload['loop'] = loop_payload
+    if runtime_payload:
+        payload['runtime'] = runtime_payload
     return payload
 
 
@@ -170,7 +173,16 @@ def _build_windows_payload(config) -> dict[str, object]:
     loop_payload = loop_capacity_to_config_dict(getattr(config, 'loop_capacity', None))
     if loop_payload:
         payload['loop'] = loop_payload
+    runtime_payload = _runtime_payload(config)
+    if runtime_payload:
+        payload['runtime'] = runtime_payload
     return payload
+
+
+def _runtime_payload(config) -> dict[str, object]:
+    record = config.to_record()
+    runtime = record.get('runtime')
+    return dict(runtime) if isinstance(runtime, dict) else {}
 
 
 def _tool_window_payload(tool) -> dict[str, object]:

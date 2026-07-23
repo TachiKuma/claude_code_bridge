@@ -44,6 +44,15 @@ class RuntimeMuxConfig:
 
 
 @dataclass(frozen=True)
+class RuntimeStartConfig:
+    no_attach: bool = False
+    explicit_no_attach: bool = False
+
+    def to_record(self) -> dict[str, bool]:
+        return {'no_attach': bool(self.no_attach)}
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     version: int
     default_agents: tuple[str, ...]
@@ -61,6 +70,7 @@ class ProjectConfig:
     loop_capacity: LoopCapacityConfig | None = None
     workflow: WorkflowConfig | None = None
     runtime_mux: RuntimeMuxConfig | None = None
+    runtime_start: RuntimeStartConfig | None = None
 
     def __post_init__(self) -> None:
         if self.version not in {CONFIG_SCHEMA_V2, CONFIG_SCHEMA_V3}:
@@ -91,6 +101,7 @@ class ProjectConfig:
         maintenance_heartbeat = self.maintenance_heartbeat or MaintenanceHeartbeatConfig()
         loop_capacity = self.loop_capacity or LoopCapacityConfig()
         runtime_mux = self.runtime_mux or RuntimeMuxConfig()
+        runtime_start = self.runtime_start or RuntimeStartConfig()
         windows = normalize_windows(
             self.windows,
             layout_spec=rendered_layout,
@@ -119,6 +130,7 @@ class ProjectConfig:
         object.__setattr__(self, 'maintenance_heartbeat', maintenance_heartbeat)
         object.__setattr__(self, 'loop_capacity', loop_capacity)
         object.__setattr__(self, 'runtime_mux', runtime_mux)
+        object.__setattr__(self, 'runtime_start', runtime_start)
         object.__setattr__(self, 'topology_signature_payload', signature_payload)
         object.__setattr__(self, 'topology_signature', topology_signature(signature_payload))
 
@@ -155,13 +167,16 @@ class ProjectConfig:
             'topology_signature': self.topology_signature,
             'source_path': self.source_path,
         }
+        runtime_payload: dict[str, Any] = {}
         if self.runtime_mux.explicit_backend:
-            payload['runtime'] = {
-                'mux': self.runtime_mux.to_record(),
-            }
+            runtime_payload['mux'] = self.runtime_mux.to_record()
+        if self.runtime_start.explicit_no_attach:
+            runtime_payload['start'] = self.runtime_start.to_record()
+        if runtime_payload:
+            payload['runtime'] = runtime_payload
         if self.workflow is not None:
             payload['workflow'] = self.workflow.to_record()
         return payload
 
 
-__all__ = ['ProjectConfig', 'RuntimeMuxConfig']
+__all__ = ['ProjectConfig', 'RuntimeMuxConfig', 'RuntimeStartConfig']
