@@ -220,7 +220,14 @@ def _current_windows_user() -> str:
             username = ''
     if not username:
         try:
-            result = subprocess.run(['whoami'], capture_output=True, text=True, timeout=2.0)
+            result = subprocess.run(
+                ['whoami'],
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                timeout=2.0,
+            )
         except Exception:
             result = None
         if result is not None and int(getattr(result, 'returncode', 1) or 0) == 0:
@@ -243,6 +250,8 @@ def _current_windows_sid(command_runner) -> str:
         ],
         capture_output=True,
         text=True,
+        encoding='utf-8',
+        errors='replace',
     )
     if int(getattr(result, 'returncode', 1) or 0) != 0:
         stderr = str(getattr(result, 'stderr', '') or '').strip()
@@ -278,6 +287,8 @@ def _read_windows_acl_proof(path: Path, *, command_runner) -> dict:
         ['powershell', '-NoProfile', '-Command', script],
         capture_output=True,
         text=True,
+        encoding='utf-8',
+        errors='replace',
     )
     if int(getattr(result, 'returncode', 1) or 0) != 0:
         stderr = str(getattr(result, 'stderr', '') or '').strip()
@@ -330,7 +341,13 @@ def _windows_acl_rights_prove_read(rights: str) -> bool:
 
 
 def _run_checked_command(command_runner, command) -> None:
-    result = command_runner(command, capture_output=True, text=True)
+    result = command_runner(
+        command,
+        capture_output=True,
+        text=True,
+        encoding='utf-8',
+        errors='replace',
+    )
     if int(getattr(result, 'returncode', 1) or 0) != 0:
         stderr = str(getattr(result, 'stderr', '') or '').strip()
         stdout = str(getattr(result, 'stdout', '') or '').strip()
