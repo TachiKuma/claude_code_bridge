@@ -98,6 +98,14 @@ def binding_with_namespace_record(binding, record):
         return binding
 
 
+def namespace_record_matches_binding_session(binding, record) -> bool:
+    expected = str(getattr(binding, 'ccb_session_id', None) or '').strip()
+    if not expected:
+        return False
+    actual = str(getattr(record, 'ccb_session_id', None) or '').strip()
+    return actual == expected
+
+
 def binding_matches_project_socket(binding, *, context: BindingValidationContext) -> bool:
     return context.same_tmux_socket_path_fn(
         getattr(binding, 'tmux_socket_path', None),
@@ -151,4 +159,5 @@ __all__ = [
     'has_reusable_tmux_pane',
     'is_mux_binding',
     'is_live_tmux_binding',
+    'namespace_record_matches_binding_session',
 ]

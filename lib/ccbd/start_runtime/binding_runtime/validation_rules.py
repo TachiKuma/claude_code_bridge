@@ -13,6 +13,7 @@ from .validation_context import (
     has_reusable_tmux_pane,
     is_live_tmux_binding,
     matching_namespace_binding,
+    namespace_record_matches_binding_session,
 )
 
 
@@ -26,6 +27,8 @@ def usable_project_namespace_binding_for_context(binding, *, context: BindingVal
     record = matching_namespace_binding(binding=binding, context=context)
     if record is None:
         return None
+    if not namespace_record_matches_binding_session(binding, record):
+        return None
     return binding_with_namespace_record(binding, record)
 
 
@@ -35,9 +38,21 @@ def usable_agent_only_project_binding_for_context(binding, *, context: BindingVa
     if not has_no_provider_runtime_identity_mismatch(binding):
         return None
 
+    if has_project_tmux_session_name(context) and context.namespace_pane_records is not None:
+        record = matching_namespace_binding(binding=binding, context=context)
+        if record is None:
+            return None
+        if not namespace_record_matches_binding_session(binding, record):
+            return None
+        return binding_with_namespace_record(binding, record)
+
     pane_state = binding_pane_state(binding)
     binding_socket_declared, binding_socket_path = declared_binding_tmux_socket_path(binding)
     if not binding_socket_declared:
+        binding_socket_name = str(getattr(binding, 'tmux_socket_name', None) or '').strip()
+        context_session_name = str(context.tmux_session_name or '').strip()
+        if binding_socket_name and context_session_name and binding_socket_name == context_session_name:
+            return None
         return binding
 
     if binding_socket_path and not declares_current_project_socket(binding_socket_path, context=context):
@@ -48,6 +63,8 @@ def usable_agent_only_project_binding_for_context(binding, *, context: BindingVa
     if declares_current_project_socket(binding_socket_path, context=context):
         record = matching_namespace_binding(binding=binding, context=context)
         if record is not None:
+            if not namespace_record_matches_binding_session(binding, record):
+                return None
             return binding_with_namespace_record(binding, record)
         if has_project_tmux_session_name(context):
             return None

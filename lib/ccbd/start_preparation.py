@@ -18,6 +18,7 @@ from workspace.materializer import WorkspaceMaterializer
 from workspace.planner import WorkspacePlanner
 from workspace.validator import WorkspaceValidator
 from ccbd.start_runtime.binding_runtime.common import mux_backend_from_runtime_ref, mux_pane_id_from_runtime_ref
+from ccbd.start_runtime.binding_runtime.validation_context import namespace_record_matches_binding_session
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,7 @@ def prepare_start_agents(
     restore_state_builder,
     namespace_epoch: int | None = None,
     namespace_pane_records: dict[str, object] | None = None,
+    force_fresh_namespace: bool = False,
 ) -> tuple[PreparedStartAgent, ...]:
     spec_store = AgentSpecStore(paths)
     restore_store = AgentRestoreStore(paths)
@@ -129,6 +131,9 @@ def prepare_start_agents(
                 namespace_epoch=namespace_epoch,
                 namespace_pane_records=namespace_pane_records,
             )
+            if force_fresh_namespace and binding is not None:
+                binding = None
+                binding_reject_reason = 'fresh_namespace'
             if _binding_requires_fresh_launch(binding):
                 binding = None
 
@@ -255,6 +260,8 @@ def _binding_reject_reason(
             )
             if reason is not None:
                 return str(reason)
+            if not namespace_record_matches_binding_session(raw_binding, record):
+                return 'pane_session_mismatch'
     return 'project_namespace_mismatch'
 
 

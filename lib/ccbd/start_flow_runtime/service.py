@@ -100,6 +100,7 @@ def run_start_flow(
         workspace_window_id=workspace_window_id,
         namespace_epoch=namespace_epoch,
         namespace_pane_records=namespace_pane_records,
+        force_fresh_namespace=bool(fresh_namespace or fresh_workspace),
     )
     timings_ms['agent_prepare_and_classify'] = _elapsed_ms(stage_started_ns)
     prepared_by_agent = {item.agent_name: item for item in prepared_agents}

@@ -55,6 +55,7 @@ def resolve_runtime_binding_state(
             launch_binding_hint_fn=launch_binding_hint_fn,
             provider_prepared=provider_prepared,
             effective_command=effective_command,
+            reused_pane_identity_current=reused_pane_identity_current,
         )
     except Exception as exc:
         _merge_launch_timings(
@@ -132,9 +133,14 @@ def launch_or_reuse_binding(
     launch_binding_hint_fn,
     provider_prepared: bool = False,
     effective_command=None,
+    reused_pane_identity_current: bool = False,
 ):
     if binding is not None:
-        if not _binding_requires_relaunch(binding):
+        if not _binding_requires_relaunch(
+            binding,
+            assigned_pane_id=assigned_pane_id,
+            reused_pane_identity_current=reused_pane_identity_current,
+        ):
             return binding, 'attached', {}
         assigned_pane_id = assigned_pane_id or _binding_pane_id(binding)
         raw_binding = raw_binding or binding
@@ -178,9 +184,18 @@ def launch_or_reuse_binding(
     return binding, 'attached', launch_timings_ms
 
 
-def _binding_requires_relaunch(binding) -> bool:
+def _binding_requires_relaunch(
+    binding,
+    *,
+    assigned_pane_id: str | None,
+    reused_pane_identity_current: bool,
+) -> bool:
     pane_state = str(getattr(binding, 'pane_state', '') or '').strip().lower()
-    return pane_state in {'dead', 'missing', 'foreign'}
+    if pane_state in {'dead', 'missing', 'foreign'}:
+        return True
+    if str(assigned_pane_id or '').strip() and not reused_pane_identity_current:
+        return True
+    return False
 
 
 def _binding_pane_id(binding) -> str | None:
