@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass, field
+import json
 import os
 
 import pytest
@@ -11,6 +13,11 @@ from terminal_runtime.rmux_backend_runtime.capabilities import RmuxCapabilityGat
 from terminal_runtime.rmux_backend_runtime.errors import map_rmux_result_error
 from terminal_runtime.rmux_runner import RmuxCommandResult
 from ccbd.services.project_namespace_runtime import backend as namespace_backend
+
+
+def _decoded_powershell_command(command: str) -> str:
+    encoded = str(command).split()[-1]
+    return base64.b64decode(encoded).decode("utf-16le")
 
 
 def _supported_status(**overrides: str) -> dict[str, str]:
@@ -381,7 +388,7 @@ def test_pane_core_uses_backend_local_refs_without_tmux_percent_requirement() ->
     assert ("set-option", "-p", "-t", "pane-C", "remain-on-exit", "on") in client.calls
     respawn_call = next(call for call in client.calls if call[:4] == ("respawn-pane", "-k", "-t", "pane-C"))
     assert respawn_call[:6] == ("respawn-pane", "-k", "-t", "pane-C", "-c", "D:/repo")
-    assert "codex" in respawn_call[6]
+    assert "codex" in _decoded_powershell_command(respawn_call[6])
     assert ("kill-pane", "-t", "pane-C") in client.calls
 
 
@@ -540,6 +547,50 @@ def test_capability_gate_accepts_semantic_workaround_projection() -> None:
     )
 
     assert gate.capabilities()["command_status"]["select-pane"] == "workaround"
+
+
+def test_default_capability_gate_accepts_report_workaround(tmp_path) -> None:
+    feature_dir = tmp_path / ".codestable" / "features" / "2026-07-19-rmux-route-approval"
+    feature_dir.mkdir(parents=True)
+    (feature_dir / "rmux-route-decision-summary.yaml").write_text(
+        "\n".join(
+            [
+                "decision_status: approved",
+                "capability_report: .codestable/features/2026-07-19-rmux-route-approval/capability-report.json",
+                "report_facts:",
+                "  blocking_gaps_count: 0",
+                "parent_handoff:",
+                "  route_approved: true",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (feature_dir / "capability-report.json").write_text(
+        json.dumps(
+            {
+                "commands": {
+                    "attach-session": {
+                        "status": "unsupported",
+                        "workaround": {"accepted": True},
+                    }
+                },
+                "semantics": {},
+                "blocking_gaps": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    gate = default_rmux_capability_gate(tmp_path)
+
+    gate.require(
+        "attach_namespace",
+        ("attach-session",),
+        backend_impl="rmux",
+        ipc_ref="ccb-demo",
+    )
+
+    assert gate.capabilities()["command_status"]["attach-session"] == "workaround"
 
 
 def test_default_capability_gate_treats_malformed_report_as_unsupported(tmp_path) -> None:

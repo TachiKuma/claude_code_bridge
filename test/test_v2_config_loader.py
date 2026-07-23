@@ -120,6 +120,42 @@ permission = "manual"
     assert result.config.to_record()['runtime']['mux']['backend'] == 'auto'
 
 
+def test_load_project_config_supports_runtime_start_no_attach(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-runtime-start'
+    config_path = project_root / '.ccb' / 'ccb.config'
+    _write(
+        config_path,
+        """version = 2
+default_agents = ["agent1"]
+layout = "agent1:codex"
+
+[runtime.mux]
+backend = "rmux"
+
+[runtime.start]
+no_attach = true
+
+[agents.agent1]
+provider = "codex"
+target = "."
+workspace_mode = "inplace"
+restore = "auto"
+permission = "manual"
+""",
+    )
+
+    result = load_project_config(project_root)
+
+    assert result.config.runtime_mux.backend == 'rmux'
+    assert result.config.runtime_start.no_attach is True
+    assert result.config.to_record()['runtime']['start']['no_attach'] is True
+    rendered = render_project_config_text(result.config)
+    assert '[runtime.mux]' in rendered
+    assert 'backend = "rmux"' in rendered
+    assert '[runtime.start]' in rendered
+    assert 'no_attach = true' in rendered
+
+
 def test_load_project_config_does_not_serialize_implicit_runtime_mux(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-runtime-mux-implicit'
     config_path = project_root / '.ccb' / 'ccb.config'
@@ -168,6 +204,32 @@ permission = "manual"
     )
 
     with pytest.raises(ConfigValidationError, match='runtime\\.mux contains unknown fields: probe'):
+        load_project_config(project_root)
+
+
+def test_load_project_config_rejects_unknown_runtime_start_field(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-runtime-start-invalid'
+    config_path = project_root / '.ccb' / 'ccb.config'
+    _write(
+        config_path,
+        """version = 2
+default_agents = ["agent1"]
+layout = "agent1:codex"
+
+[runtime.start]
+no_attach = true
+attach = false
+
+[agents.agent1]
+provider = "codex"
+target = "."
+workspace_mode = "inplace"
+restore = "auto"
+permission = "manual"
+""",
+    )
+
+    with pytest.raises(ConfigValidationError, match='runtime\\.start contains unknown fields: attach'):
         load_project_config(project_root)
 
 

@@ -683,8 +683,17 @@ def test_start_foreground_attaches_rmux_namespace_via_backend_capability(tmp_pat
     attach_calls: list[tuple[dict[str, object], str | None]] = []
 
     class _FakeRmuxAttachBackend:
-        def __init__(self, *, namespace_id: str, ipc_ref: str | None) -> None:
+        def __init__(
+            self,
+            *,
+            namespace_id: str,
+            session_name: str | None = None,
+            ipc_kind: str = 'named_pipe',
+            ipc_ref: str | None,
+        ) -> None:
             self.namespace_id = namespace_id
+            self.session_name = session_name
+            self.ipc_kind = ipc_kind
             self.ipc_ref = ipc_ref
 
         def attach_namespace(self, namespace_ref, *, window_name: str | None = None) -> int:
@@ -694,7 +703,12 @@ def test_start_foreground_attaches_rmux_namespace_via_backend_capability(tmp_pat
     monkeypatch.setattr('cli.services.start_foreground.CcbdClient', _FakeClient)
     monkeypatch.setattr(
         'cli.services.start_foreground._build_rmux_attach_backend',
-        lambda *, namespace_id, ipc_ref: _FakeRmuxAttachBackend(namespace_id=namespace_id, ipc_ref=ipc_ref),
+        lambda *, namespace_id, session_name=None, ipc_kind='named_pipe', ipc_ref: _FakeRmuxAttachBackend(
+            namespace_id=namespace_id,
+            session_name=session_name,
+            ipc_kind=ipc_kind,
+            ipc_ref=ipc_ref,
+        ),
     )
 
     summary = attach_started_project_namespace(context)
@@ -713,6 +727,94 @@ def test_start_foreground_attaches_rmux_namespace_via_backend_capability(tmp_pat
                 'session_name': 'ccb-rmux-demo',
                 'ipc_kind': 'named_pipe',
                 'ipc_ref': r'\\.\pipe\rmux-ccb-rmux-demo',
+            },
+            'main',
+        )
+    ]
+
+
+def test_start_foreground_attaches_rmux_socket_name_namespace(tmp_path: Path, monkeypatch) -> None:
+    project_root = tmp_path / 'repo-rmux-socket-name-attach'
+    (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
+    (project_root / '.ccb' / 'ccb.config').write_text('demo:codex\n', encoding='utf-8')
+    bootstrap_project(project_root)
+    context = _context(project_root)
+
+    class _FakeClient:
+        def __init__(self, socket_path, *, timeout_s=None):
+            self.socket_path = socket_path
+            self.timeout_s = timeout_s
+
+        def ping(self, target: str) -> dict[str, object]:
+            assert target == 'ccbd'
+            return {
+                'namespace_backend_impl': 'rmux',
+                'namespace_id': 'project-hash',
+                'namespace_session_name': 'ccb-codestable-2b0019c5',
+                'namespace_ipc_kind': 'socket_name',
+                'namespace_ipc_ref': 'ccb-codestable-2b0019c5',
+                'namespace_workspace_window_name': 'main',
+                'namespace_ui_attachable': True,
+            }
+
+    captured_backend: dict[str, object] = {}
+    attach_calls: list[tuple[dict[str, object], str | None]] = []
+
+    class _FakeRmuxAttachBackend:
+        def __init__(
+            self,
+            *,
+            namespace_id: str,
+            session_name: str | None = None,
+            ipc_kind: str = 'named_pipe',
+            ipc_ref: str | None,
+        ) -> None:
+            captured_backend.update(
+                {
+                    'namespace_id': namespace_id,
+                    'session_name': session_name,
+                    'ipc_kind': ipc_kind,
+                    'ipc_ref': ipc_ref,
+                }
+            )
+
+        def attach_namespace(self, namespace_ref, *, window_name: str | None = None) -> int:
+            attach_calls.append((dict(namespace_ref), window_name))
+            return 0
+
+    monkeypatch.setattr('cli.services.start_foreground.CcbdClient', _FakeClient)
+    monkeypatch.setattr(
+        'cli.services.start_foreground._build_rmux_attach_backend',
+        lambda *, namespace_id, session_name=None, ipc_kind='named_pipe', ipc_ref: _FakeRmuxAttachBackend(
+            namespace_id=namespace_id,
+            session_name=session_name,
+            ipc_kind=ipc_kind,
+            ipc_ref=ipc_ref,
+        ),
+    )
+
+    summary = attach_started_project_namespace(context)
+
+    assert summary.backend_impl == 'rmux'
+    assert summary.namespace_id == 'project-hash'
+    assert summary.session_name == 'ccb-codestable-2b0019c5'
+    assert summary.ipc_kind == 'socket_name'
+    assert summary.ipc_ref == 'ccb-codestable-2b0019c5'
+    assert captured_backend == {
+        'namespace_id': 'project-hash',
+        'session_name': 'ccb-codestable-2b0019c5',
+        'ipc_kind': 'socket_name',
+        'ipc_ref': 'ccb-codestable-2b0019c5',
+    }
+    assert attach_calls == [
+        (
+            {
+                'backend_family': 'tmux-family',
+                'backend_impl': 'rmux',
+                'namespace_id': 'project-hash',
+                'session_name': 'ccb-codestable-2b0019c5',
+                'ipc_kind': 'socket_name',
+                'ipc_ref': 'ccb-codestable-2b0019c5',
             },
             'main',
         )

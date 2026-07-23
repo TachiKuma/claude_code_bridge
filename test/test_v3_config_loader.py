@@ -144,6 +144,22 @@ def test_v3_load_project_config_supports_top_level_runtime_mux(
     assert result.config.to_record()['runtime']['mux']['backend'] == 'rmux'
 
 
+def test_v3_load_project_config_supports_top_level_runtime_start(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_roles(tmp_path, monkeypatch)
+    project_root = tmp_path / 'repo-v3-runtime-start'
+    config_path = project_root / '.ccb' / 'ccb.config'
+    text = _valid_v3_text() + '\n[runtime.start]\nno_attach = true\n'
+    _write(config_path, text)
+
+    result = load_project_config(project_root)
+
+    assert result.config.runtime_start.no_attach is True
+    assert result.config.to_record()['runtime']['start']['no_attach'] is True
+
+
 def test_v3_load_project_config_rejects_unknown_top_level_runtime_field(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

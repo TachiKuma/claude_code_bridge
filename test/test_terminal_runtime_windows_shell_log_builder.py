@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import shlex
 from pathlib import Path
 
@@ -20,6 +21,11 @@ def _which(available: set[str]):
         return name if Path(name).name.lower() in available else None
 
     return _lookup
+
+
+def _decoded_encoded_command(command: str) -> str:
+    encoded = command.split()[-1]
+    return base64.b64decode(encoded).decode('utf-16le')
 
 
 def test_resolve_shell_returns_diagnostic_candidate_matrix() -> None:
@@ -79,8 +85,9 @@ def test_wrap_provider_command_does_not_embed_cwd_as_cd_prefix() -> None:
 
     command = builder.wrap_provider_command('python -m provider', cwd=r'C:\work dir')
 
-    assert command.startswith('pwsh -NoLogo -NoProfile -NoExit -Command ')
-    assert 'python -m provider' in command
+    assert command.startswith('pwsh -NoLogo -NoProfile -NoExit -EncodedCommand ')
+    decoded = _decoded_encoded_command(command)
+    assert 'python -m provider' in decoded
     assert 'cd ' not in command
     assert r'C:\work dir' not in command
 
@@ -96,11 +103,12 @@ def test_wrap_provider_command_translates_posix_exports_for_powershell() -> None
         "export CCB_HOME='C:\\work dir' MODE=fast; codex --dangerously-bypass-hook-trust",
         cwd=None,
     )
+    decoded = _decoded_encoded_command(command)
 
-    assert "$env:CCB_HOME" in command
-    assert "$env:MODE" in command
-    assert "export " not in command
-    assert "codex --dangerously-bypass-hook-trust" in command
+    assert "$env:CCB_HOME" in decoded
+    assert "$env:MODE" in decoded
+    assert "export " not in decoded
+    assert "codex --dangerously-bypass-hook-trust" in decoded
 
 
 def test_wrap_provider_command_translates_exports_for_pwsh_exe() -> None:
@@ -114,10 +122,11 @@ def test_wrap_provider_command_translates_exports_for_pwsh_exe() -> None:
         "export CODEX_HOME='C:\\work dir'; codex",
         cwd=None,
     )
+    decoded = _decoded_encoded_command(command)
 
-    assert command.startswith('pwsh.exe -NoLogo -NoProfile -NoExit -Command ')
-    assert "$env:CODEX_HOME" in command
-    assert "export " not in command
+    assert command.startswith('pwsh.exe -NoLogo -NoProfile -NoExit -EncodedCommand ')
+    assert "$env:CODEX_HOME" in decoded
+    assert "export " not in decoded
 
 
 def test_wrap_provider_command_translates_posix_unset_for_powershell() -> None:
@@ -131,13 +140,14 @@ def test_wrap_provider_command_translates_posix_unset_for_powershell() -> None:
         "unset ANTHROPIC_BASE_URL; export HOME='C:\\work dir'; claude --continue",
         cwd=None,
     )
+    decoded = _decoded_encoded_command(command)
 
-    assert "Remove-Item Env:\\ANTHROPIC_BASE_URL -ErrorAction SilentlyContinue" in command
-    assert "$env:HOME" in command
-    assert "C:\\work dir" in command
-    assert "unset " not in command
-    assert "export " not in command
-    assert "claude --continue" in command
+    assert "Remove-Item Env:\\ANTHROPIC_BASE_URL -ErrorAction SilentlyContinue" in decoded
+    assert "$env:HOME" in decoded
+    assert "C:\\work dir" in decoded
+    assert "unset " not in decoded
+    assert "export " not in decoded
+    assert "claude --continue" in decoded
 
 
 def test_append_stderr_redirection_translates_posix_exports_before_wrapping(tmp_path: Path) -> None:
@@ -194,15 +204,20 @@ def test_windows_pipe_log_command_avoids_posix_tee(shell: str, tmp_path: Path) -
     assert 'tee -a' not in command
     assert 'cat ' not in command
     assert 'mktemp' not in command
-    assert str((tmp_path / 'pane.log').resolve()) in command
+    expected_path = str((tmp_path / 'pane.log').resolve())
+    if shell == 'cmd':
+        assert expected_path in command
+    else:
+        assert expected_path in _decoded_encoded_command(command)
 
 
 def test_powershell_pipe_log_command_appends_stdin(tmp_path: Path) -> None:
     command = build_pipe_log_command(tmp_path / 'pane.log', shell='pwsh')
+    decoded = _decoded_encoded_command(command)
 
-    assert command.startswith('pwsh -NoLogo -NoProfile -Command ')
-    assert '[Console]::In.ReadToEnd()' in command
-    assert 'Add-Content' in command
+    assert command.startswith('pwsh -NoLogo -NoProfile -EncodedCommand ')
+    assert '[Console]::In.ReadToEnd()' in decoded
+    assert 'Add-Content' in decoded
 
 
 def test_clipboard_pipe_command_is_builder_owned() -> None:

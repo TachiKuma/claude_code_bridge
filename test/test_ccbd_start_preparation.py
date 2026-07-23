@@ -9,6 +9,7 @@ import pytest
 from agents.config_loader import load_project_config
 from agents.models import AgentRestoreState, RestoreMode, WorkspaceMode
 from ccbd.services.project_namespace_pane import ProjectNamespacePaneRecord
+from ccbd.start_runtime.binding import usable_project_binding
 from ccbd.start_preparation import _binding_pane_id, _binding_reject_reason, prepare_start_agents
 from cli.context import CliContextBuilder
 from cli.models import ParsedStartCommand
@@ -179,6 +180,52 @@ def test_prepare_start_agents_treats_dead_binding_as_stale_before_layout(monkeyp
     assert calls == ['agent1']
 
 
+def test_prepare_start_agents_forces_fresh_launch_for_new_namespace(monkeypatch, tmp_path: Path) -> None:
+    project_root, context, config, paths = _single_codex_project(tmp_path, 'repo-start-prep-fresh-namespace')
+    raw_binding = SimpleNamespace(
+        runtime_ref='rmux:%1',
+        session_ref='session-1',
+        pane_id='%1',
+        active_pane_id='%1',
+        pane_state='alive',
+        provider_identity_state='match',
+    )
+    calls: list[str] = []
+    monkeypatch.setattr(
+        'ccbd.start_preparation.prepare_provider_workspace',
+        lambda **kwargs: calls.append(kwargs['agent_name']),
+    )
+
+    prepared = prepare_start_agents(
+        targets=('agent1',),
+        config=config,
+        paths=paths,
+        context=context,
+        project_root=project_root,
+        project_id=context.project.project_id,
+        tmux_socket_path='D:/repo/.ccb/ccbd/tmux.sock',
+        tmux_session_name='ccb-demo',
+        workspace_window_id='@0',
+        namespace_epoch=1,
+        namespace_pane_records=None,
+        force_fresh_namespace=True,
+        resolve_agent_binding_fn=lambda **kwargs: raw_binding,
+        project_binding_filter_fn=lambda candidate, **kwargs: candidate,
+        restore_state_builder=lambda restore_mode: AgentRestoreState(
+            restore_mode=RestoreMode(restore_mode),
+            last_checkpoint=None,
+            conversation_summary='pending restore',
+        ),
+    )
+
+    assert prepared[0].raw_binding is raw_binding
+    assert prepared[0].binding is None
+    assert prepared[0].stale_binding is True
+    assert prepared[0].binding_reject_reason == 'fresh_namespace'
+    assert prepared[0].provider_prepared is True
+    assert calls == ['agent1']
+
+
 def test_prepare_start_agents_reports_logical_window_reject_reason(monkeypatch, tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-start-prep-window-mismatch'
     (project_root / '.ccb').mkdir(parents=True)
@@ -226,7 +273,15 @@ def test_prepare_start_agents_reports_logical_window_reject_reason(monkeypatch, 
         namespace_epoch=7,
         namespace_pane_records={'%41': record},
         resolve_agent_binding_fn=lambda **kwargs: raw_binding,
-        project_binding_filter_fn=lambda candidate, **kwargs: None,
+        project_binding_filter_fn=lambda candidate, **kwargs: usable_project_binding(
+            candidate,
+            **kwargs,
+            tmux_backend_factory=lambda socket_path=None: (_ for _ in ()).throw(
+                AssertionError('snapshot should avoid tmux inspection')
+            ),
+            inspect_project_namespace_pane_fn=lambda backend, pane_id: None,
+            same_tmux_socket_path_fn=lambda left, right: str(left or '') == str(right or ''),
+        ),
         restore_state_builder=lambda restore_mode: AgentRestoreState(
             restore_mode=RestoreMode(restore_mode),
             last_checkpoint=None,
@@ -235,6 +290,71 @@ def test_prepare_start_agents_reports_logical_window_reject_reason(monkeypatch, 
     )
 
     assert prepared[0].binding_reject_reason == 'logical_window_mismatch'
+
+
+def test_prepare_start_agents_reports_pane_session_mismatch(monkeypatch, tmp_path: Path) -> None:
+    project_root, context, config, paths = _single_codex_project(tmp_path, 'repo-start-prep-session-mismatch')
+    raw_binding = SimpleNamespace(
+        runtime_ref='tmux:%41',
+        pane_id='%41',
+        active_pane_id='%41',
+        pane_state='alive',
+        provider_identity_state='match',
+        ccb_session_id='ccb-agent-live-session',
+    )
+    record = ProjectNamespacePaneRecord(
+        pane_id='%41',
+        session_name='ccb-demo',
+        window_id='@0',
+        window_name='main',
+        role='agent',
+        slot_key='agent1',
+        project_id=context.project.project_id,
+        managed_by='ccbd',
+        namespace_epoch=7,
+        ccb_session_id='',
+        alive=True,
+    )
+    calls: list[str] = []
+    monkeypatch.setattr(
+        'ccbd.start_preparation.prepare_provider_workspace',
+        lambda **kwargs: calls.append(kwargs['agent_name']),
+    )
+
+    prepared = prepare_start_agents(
+        targets=('agent1',),
+        config=config,
+        paths=paths,
+        context=context,
+        project_root=project_root,
+        project_id=context.project.project_id,
+        tmux_socket_path='/tmp/ccb.sock',
+        tmux_session_name='ccb-demo',
+        workspace_window_id='@0',
+        namespace_epoch=7,
+        namespace_pane_records={'%41': record},
+        resolve_agent_binding_fn=lambda **kwargs: raw_binding,
+        project_binding_filter_fn=lambda candidate, **kwargs: usable_project_binding(
+            candidate,
+            **kwargs,
+            tmux_backend_factory=lambda socket_path=None: (_ for _ in ()).throw(
+                AssertionError('snapshot should avoid tmux inspection')
+            ),
+            inspect_project_namespace_pane_fn=lambda backend, pane_id: None,
+            same_tmux_socket_path_fn=lambda left, right: str(left or '') == str(right or ''),
+        ),
+        restore_state_builder=lambda restore_mode: AgentRestoreState(
+            restore_mode=RestoreMode(restore_mode),
+            last_checkpoint=None,
+            conversation_summary='pending restore',
+        ),
+    )
+
+    assert prepared[0].binding is None
+    assert prepared[0].stale_binding is True
+    assert prepared[0].binding_reject_reason == 'pane_session_mismatch'
+    assert prepared[0].provider_prepared is True
+    assert calls == ['agent1']
 
 
 def test_binding_reject_reason_accepts_rmux_runtime_ref() -> None:

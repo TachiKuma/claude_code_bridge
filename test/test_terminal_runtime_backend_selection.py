@@ -135,6 +135,33 @@ def test_backend_selection_uses_rmux_factory_for_rmux_backend() -> None:
     assert captured == {'namespace': 'ccb-demo', 'socket_path': r'\\.\pipe\ccb-demo'}
 
 
+def test_backend_selection_prefers_backend_impl_over_mux_terminal() -> None:
+    captured: dict[str, object] = {}
+
+    def _rmux_backend_factory(namespace=None, socket_path=None):
+        captured['namespace'] = namespace
+        captured['socket_path'] = socket_path
+        return _FakeBackend('rmux')
+
+    selection = TerminalBackendSelection(
+        detect_terminal_fn=lambda: None,
+        tmux_backend_factory=lambda **kwargs: _FakeBackend('tmux'),
+        psmux_backend_factory=lambda **kwargs: _FakeBackend('psmux'),
+        rmux_backend_factory=_rmux_backend_factory,
+    )
+
+    backend = selection.get_backend_for_session(
+        {
+            'terminal': 'mux',
+            'backend_impl': 'rmux',
+            'tmux_socket_name': 'ccb-demo',
+        }
+    )
+
+    assert backend.name == 'rmux'
+    assert captured == {'namespace': 'ccb-demo', 'socket_path': None}
+
+
 def test_backend_selection_uses_backend_impl_and_mux_backend_fields() -> None:
     selected: list[dict[str, object]] = []
 

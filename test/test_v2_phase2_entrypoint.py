@@ -588,6 +588,57 @@ def test_phase2_noninteractive_start_keeps_start_output(monkeypatch, tmp_path: P
     assert 'start_status: ok' in stdout.getvalue()
 
 
+def test_phase2_config_no_attach_disables_interactive_attach(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-config-no-attach'
+    _write(
+        project_root / '.ccb' / 'ccb.config',
+        """version = 2
+default_agents = ["agent1"]
+layout = "agent1:codex"
+
+[runtime.start]
+no_attach = true
+
+[agents.agent1]
+provider = "codex"
+target = "."
+workspace_mode = "inplace"
+restore = "auto"
+permission = "manual"
+""",
+    )
+    events: list[str] = []
+
+    def _fake_start(context, command):
+        del context, command
+        events.append('start')
+        return SimpleNamespace(
+            project_root=str(project_root),
+            project_id='proj-no-attach',
+            started=('agent1',),
+            daemon_started=True,
+            socket_path=str(project_root / '.ccb' / 'ccbd' / 'ccbd.sock'),
+        )
+
+    def _fake_attach(context):
+        del context
+        events.append('attach')
+        raise AssertionError('attach should not be called when runtime.start.no_attach is true')
+
+    monkeypatch.delenv('CCB_NO_ATTACH', raising=False)
+    monkeypatch.setattr(phase2_module, 'start_agents', _fake_start)
+    monkeypatch.setattr('cli.phase2_runtime.handlers_start.attach_started_project_namespace', _fake_attach)
+    monkeypatch.setattr(sys.stdin, 'isatty', lambda: True)
+
+    stdout = _TtyStringIO()
+    stderr = StringIO()
+    code = maybe_handle_phase2([], cwd=project_root, stdout=stdout, stderr=stderr)
+
+    assert code == 0, stderr.getvalue()
+    assert events == ['start']
+    assert 'start_status: ok' in stdout.getvalue()
+
+
 def test_phase2_start_with_new_context_requires_interactive_confirmation(monkeypatch, tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-reset-noninteractive'
     project_root.mkdir()

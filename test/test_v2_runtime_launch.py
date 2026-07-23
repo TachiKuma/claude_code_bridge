@@ -1060,7 +1060,7 @@ def test_ensure_agent_runtime_launches_named_claude_session(monkeypatch, tmp_pat
     settings_path = ctx.paths.agent_dir('reviewer') / 'provider-runtime' / 'claude' / 'claude-settings.json'
     assert _claude_settings_arg(payload['start_cmd']) == str(settings_path)
     assert payload['start_cmd'].endswith(
-        f'claude --setting-sources user,project,local --settings '
+        f"claude --setting-sources 'user,project,local' --settings "
         f'{shlex.quote(str(settings_path))} '
         '--permission-mode bypassPermissions --continue'
     )
@@ -1385,7 +1385,7 @@ def test_ensure_agent_runtime_uses_assigned_rmux_pane(monkeypatch, tmp_path: Pat
         'backend_impl': 'rmux',
         'pane_id': '%43',
         'session_name': 'ccb-demo',
-        'window_name': 'main',
+        'window_name': None,
     }
     assert rmux_state['respawn'][2] == str(plan.workspace_path)
     session_path = project_root / '.ccb' / '.codex-agent1-session'
@@ -1448,6 +1448,137 @@ def test_ensure_agent_runtime_canonicalizes_rmux_index_alias_without_window(monk
     assert result.binding is not None
     assert FakeRmuxBackend.respawn_pane_ref['pane_id'] == '%44'
     assert result.binding.runtime_ref == 'rmux:%44'
+
+
+def test_ensure_agent_runtime_keeps_window_scoped_rmux_respawn_target(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-rmux-window-target'
+    (project_root / '.ccb').mkdir(parents=True)
+    ctx = _context(project_root, ParsedStartCommand(project=None, agent_names=('agent1',), restore=False, auto_permission=False))
+    spec = _spec('agent1')
+    plan = WorkspacePlanner().plan(spec, ctx.project)
+    plan.workspace_path.mkdir(parents=True, exist_ok=True)
+    observed: dict[str, object] = {}
+
+    class FakeResult:
+        def __init__(self, stdout: str) -> None:
+            self.stdout = stdout
+
+    class FakeRmuxBackend:
+        backend_family = 'tmux-family'
+        backend_impl = 'rmux'
+
+        def __init__(self, *, namespace: str | None = None, socket_path: str | None = None) -> None:
+            self.namespace = namespace
+            self.socket_path = socket_path
+
+        def respawn_pane(self, pane, *, cmd: str, cwd: str | None = None, remain_on_exit: bool = True) -> str:
+            del cmd, cwd, remain_on_exit
+            observed['respawn_pane'] = pane
+            return ''
+
+        def _run_checked(self, args, *, operation: str, timeout_s=None):
+            del args, operation, timeout_s
+            return FakeResult('%2\t1\n')
+
+        def set_pane_identity(self, pane, **kwargs) -> None:
+            del kwargs
+            observed['identity_pane'] = pane
+
+    monkeypatch.setattr('cli.services.runtime_launch._inside_tmux', lambda: True)
+    monkeypatch.setattr('cli.services.runtime_launch.shutil.which', lambda name: f'/usr/bin/{name}')
+    monkeypatch.setattr('cli.services.runtime_launch.RmuxBackend', FakeRmuxBackend)
+
+    result = ensure_agent_runtime(
+        ctx,
+        ctx.command,
+        spec,
+        plan,
+        None,
+        assigned_pane_id='%1',
+        tmux_socket_path='D:/repo/.ccb/ccbd/tmux.sock',
+        namespace_backend_impl='rmux',
+        namespace_session_name='ccb-demo',
+        namespace_window_name='main',
+    )
+
+    assert observed['respawn_pane']['pane_id'] == '%1'
+    assert observed['respawn_pane']['window_name'] is None
+    assert observed['identity_pane']['pane_id'] == '%1'
+    assert observed['identity_pane']['window_name'] is None
+    assert result.binding is not None
+    assert result.binding.runtime_ref == 'rmux:%1'
+
+
+def test_ensure_agent_runtime_does_not_kill_assigned_stale_rmux_pane(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-rmux-assigned-stale'
+    (project_root / '.ccb').mkdir(parents=True)
+    ctx = _context(project_root, ParsedStartCommand(project=None, agent_names=('agent1',), restore=False, auto_permission=False))
+    spec = _spec('agent1')
+    plan = WorkspacePlanner().plan(spec, ctx.project)
+    plan.workspace_path.mkdir(parents=True, exist_ok=True)
+    observed: dict[str, object] = {'killed': []}
+
+    class FakeRmuxBackend:
+        backend_family = 'tmux-family'
+        backend_impl = 'rmux'
+
+        def __init__(self, *, namespace: str | None = None, socket_path: str | None = None) -> None:
+            self.namespace = namespace
+            self.socket_path = socket_path
+
+        def pane_ref(self, pane_id, *, session_name, window_name=None):
+            return {
+                'backend_impl': 'rmux',
+                'pane_id': pane_id,
+                'session_name': session_name,
+                'window_name': window_name,
+            }
+
+        def kill_pane(self, pane) -> None:
+            observed['killed'].append(pane)
+
+        def respawn_pane(self, pane, *, cmd: str, cwd: str | None = None, remain_on_exit: bool = True) -> str:
+            del cmd, cwd, remain_on_exit
+            observed['respawn_pane'] = pane
+            return ''
+
+        def set_pane_identity(self, pane, **kwargs) -> None:
+            del kwargs
+            observed['identity_pane'] = pane
+
+    stale_binding = AgentBinding(
+        runtime_ref='rmux:%2',
+        session_ref=str(project_root / '.ccb' / '.codex-agent1-session'),
+        provider='codex',
+        terminal='rmux',
+        pane_id='%2',
+        active_pane_id='%2',
+        pane_state='dead',
+        tmux_socket_name='ccb-demo',
+        tmux_window_name='main',
+    )
+
+    monkeypatch.setattr('cli.services.runtime_launch._inside_tmux', lambda: True)
+    monkeypatch.setattr('cli.services.runtime_launch.shutil.which', lambda name: f'/usr/bin/{name}')
+    monkeypatch.setattr('cli.services.runtime_launch.RmuxBackend', FakeRmuxBackend)
+
+    result = ensure_agent_runtime(
+        ctx,
+        ctx.command,
+        spec,
+        plan,
+        stale_binding,
+        assigned_pane_id='%2',
+        tmux_socket_path='D:/repo/.ccb/ccbd/tmux.sock',
+        namespace_backend_impl='rmux',
+        namespace_session_name='ccb-demo',
+        namespace_window_name='main',
+    )
+
+    assert observed['killed'] == []
+    assert observed['respawn_pane']['pane_id'] == '%2'
+    assert result.binding is not None
+    assert result.binding.runtime_ref == 'rmux:%2'
 
 
 def test_ensure_agent_runtime_reads_rmux_namespace_from_state(monkeypatch, tmp_path: Path) -> None:
@@ -2731,7 +2862,7 @@ def test_claude_launcher_build_start_cmd_uses_overlay_and_drops_dead_local_user_
     assert settings_payload['skipDangerousModePermissionPrompt'] is True
     assert json.loads(_claude_settings_arg(start_cmd)) == settings_payload
     assert start_cmd.endswith(
-        f'claude --setting-sources user,project,local --settings {shlex.quote(json.dumps(settings_payload, ensure_ascii=False))} '
+        f"claude --setting-sources 'user,project,local' --settings {shlex.quote(json.dumps(settings_payload, ensure_ascii=False))} "
         '--permission-mode bypassPermissions --continue'
     )
 
@@ -2774,7 +2905,7 @@ def test_claude_launcher_provider_command_template_wraps_command_after_env_prefi
 
     assert '{command}' not in start_cmd
     assert start_cmd.startswith('unset ANTHROPIC_BASE_URL; ')
-    assert '; sandbox=1 claude --setting-sources user,project,local --settings ' in start_cmd
+    assert "; sandbox=1 claude --setting-sources 'user,project,local' --settings " in start_cmd
     assert start_cmd.endswith(' --continue omx --madmax')
     assert 'sandbox=1 unset ANTHROPIC_BASE_URL' not in start_cmd
 
@@ -2847,7 +2978,7 @@ def test_claude_launcher_build_start_cmd_includes_agent_model_shortcut(monkeypat
 
     assert 'IS_SANDBOX=1' not in start_cmd
     assert '--dangerously-skip-permissions' not in start_cmd
-    assert start_cmd.endswith('claude --setting-sources user,project,local --model opus')
+    assert start_cmd.endswith("claude --setting-sources 'user,project,local' --model opus")
 
 
 def test_claude_launcher_build_start_cmd_adds_root_sandbox_compat(monkeypatch, tmp_path: Path) -> None:
@@ -2872,7 +3003,7 @@ def test_claude_launcher_build_start_cmd_adds_root_sandbox_compat(monkeypatch, t
     )
 
     assert 'IS_SANDBOX=1' in start_cmd
-    assert start_cmd.endswith('claude --dangerously-skip-permissions --setting-sources user,project,local')
+    assert start_cmd.endswith("claude --dangerously-skip-permissions --setting-sources 'user,project,local'")
 
 
 def test_claude_launcher_build_start_cmd_does_not_duplicate_root_skip_flag(monkeypatch, tmp_path: Path) -> None:
@@ -2899,7 +3030,7 @@ def test_claude_launcher_build_start_cmd_does_not_duplicate_root_skip_flag(monke
     assert 'IS_SANDBOX=1' in start_cmd
     assert start_cmd.count('--dangerously-skip-permissions') == 1
     assert start_cmd.endswith(
-        'claude --setting-sources user,project,local --dangerously-skip-permissions --debug'
+        "claude --setting-sources 'user,project,local' --dangerously-skip-permissions --debug"
     )
 
 
@@ -3873,7 +4004,7 @@ def test_claude_launcher_build_start_cmd_uses_agent_settings_overlay_when_presen
     assert settings_payload == {'model': 'opus'}
     assert json.loads(_claude_settings_arg(start_cmd)) == settings_payload
     assert start_cmd.endswith(
-        f'claude --setting-sources user,project,local --settings '
+        f"claude --setting-sources 'user,project,local' --settings "
         f'{shlex.quote(json.dumps(settings_payload, ensure_ascii=False))}'
     )
 

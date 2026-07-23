@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import base64
 from pathlib import Path
 from types import SimpleNamespace
 
 from ccbd.services.project_namespace_pane import ProjectNamespacePaneRecord
 from ccbd.services.project_namespace_runtime import materialize_topology
+from ccbd.services.project_namespace_runtime import sidebar_helper as sidebar_helper_module
 from ccbd.services.project_namespace_runtime.sidebar_helper import (
     SIDEBAR_ENV_PATH,
     missing_sidebar_respawn_args,
@@ -44,6 +46,28 @@ def test_resolve_sidebar_helper_finds_repository_bin(tmp_path: Path) -> None:
 
     assert resolution.path == str(helper)
     assert resolution.source == 'script_root_bin'
+
+
+def test_resolve_sidebar_helper_prefers_windows_exe_over_source_wrapper(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(sidebar_helper_module.os, 'name', 'nt')
+    root = tmp_path / 'repo'
+    wrapper = root / 'bin' / 'ccb-agent-sidebar'
+    helper = root / 'tools' / 'ccb-agent-sidebar' / 'target' / 'release' / 'ccb-agent-sidebar.exe'
+    wrapper.parent.mkdir(parents=True)
+    helper.parent.mkdir(parents=True)
+    wrapper.write_text('#!/usr/bin/env bash\n# CCB_AGENT_SIDEBAR_WRAPPER\n', encoding='utf-8')
+    helper.write_bytes(b'windows-sidebar')
+    wrapper.chmod(0o755)
+    helper.chmod(0o755)
+
+    resolution = resolve_sidebar_helper(
+        env={},
+        which=lambda name: None,
+        script_root=root,
+    )
+
+    assert resolution.path == str(helper)
+    assert resolution.source == 'script_root_target'
 
 
 def test_resolve_sidebar_helper_uses_path_as_last_discovery_source(tmp_path: Path) -> None:
@@ -105,8 +129,10 @@ def test_sidebar_respawn_command_uses_powershell_env_assignment_on_windows() -> 
         is_windows_platform=True,
     )
 
-    assert command.startswith('powershell.exe -NoLogo -NoProfile -Command ')
-    assert "$env:CCB_SIDEBAR_THEME_PROFILE = ''default''" in command
+    assert command.startswith('powershell.exe -NoLogo -NoProfile -EncodedCommand ')
+    decoded = base64.b64decode(command.split()[-1]).decode('utf-16le')
+    assert "$env:CCB_SIDEBAR_THEME_PROFILE = 'default'" in decoded
+    assert "& 'C:/Program Files/CCB/ccb-agent-sidebar.exe'" in decoded
     assert 'CCB_SIDEBAR_THEME_PROFILE=default' not in command
 
 
@@ -169,7 +195,7 @@ def test_changed_sidebar_helper_respawns_only_sidebar_pane(monkeypatch, tmp_path
     monkeypatch.setattr(
         materialize_topology,
         '_respawn_sidebar',
-        lambda _backend, pane_id, args, *, cwd: respawns.append((pane_id, args, cwd)),
+        lambda _backend, pane_id, args, *, cwd, **_kwargs: respawns.append((pane_id, args, cwd)),
     )
 
     materialize_topology.refresh_topology_sidebar_helpers(

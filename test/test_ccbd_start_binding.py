@@ -7,6 +7,7 @@ from ccbd.start_runtime.binding import (
     declared_binding_tmux_socket_path,
     relabel_project_namespace_pane,
     usable_agent_only_project_binding,
+    usable_project_binding,
     usable_project_namespace_binding,
 )
 from ccbd.start_runtime.binding_runtime.common import binding_pane_id
@@ -40,7 +41,10 @@ def test_declared_binding_tmux_socket_path_prefers_session_file_authority(tmp_pa
 
 def test_usable_project_namespace_binding_requires_matching_namespace_record() -> None:
     binding = _binding()
-    record = SimpleNamespace(matches=lambda **kwargs: kwargs['slot_key'] == 'agent1' and kwargs['project_id'] == 'proj-1')
+    record = SimpleNamespace(
+        ccb_session_id='ccb-session-1',
+        matches=lambda **kwargs: kwargs['slot_key'] == 'agent1' and kwargs['project_id'] == 'proj-1',
+    )
 
     usable = usable_project_namespace_binding(
         binding,
@@ -55,6 +59,28 @@ def test_usable_project_namespace_binding_requires_matching_namespace_record() -
     )
 
     assert usable is binding
+
+
+def test_usable_project_namespace_binding_rejects_session_identity_mismatch() -> None:
+    binding = _binding()
+    record = SimpleNamespace(
+        ccb_session_id='stale-session',
+        matches=lambda **kwargs: True,
+    )
+
+    usable = usable_project_namespace_binding(
+        binding,
+        tmux_socket_path='/tmp/ccb.sock',
+        tmux_session_name='ccb-demo',
+        workspace_window_id='@2',
+        agent_name='agent1',
+        project_id='proj-1',
+        tmux_backend_factory=lambda socket_path=None: SimpleNamespace(socket_path=socket_path),
+        inspect_project_namespace_pane_fn=lambda backend, pane_id: record,
+        same_tmux_socket_path_fn=lambda left, right: str(left or '') == str(right or ''),
+    )
+
+    assert usable is None
 
 
 def test_usable_agent_only_project_binding_accepts_undeclared_socket_binding() -> None:
@@ -108,6 +134,78 @@ def test_usable_agent_only_project_binding_accepts_rmux_local_pane() -> None:
     )
 
     assert usable is binding
+
+
+def test_usable_agent_only_project_binding_rejects_namespace_session_mismatch() -> None:
+    binding = _binding(
+        runtime_ref='rmux:%41',
+        active_pane_id='%41',
+        pane_id='%41',
+        tmux_socket_path='',
+        tmux_socket_name='ccb-demo',
+    )
+    record = ProjectNamespacePaneRecord(
+        pane_id='%41',
+        session_name='ccb-demo',
+        window_id='@0',
+        window_name='main',
+        role='agent',
+        slot_key='agent1',
+        ccb_window='main',
+        project_id='proj-1',
+        managed_by='ccbd',
+        namespace_epoch=7,
+        ccb_session_id='',
+        alive=True,
+    )
+
+    usable = usable_project_binding(
+        binding,
+        cmd_enabled=False,
+        tmux_socket_path='/tmp/ccb.sock',
+        tmux_session_name='ccb-demo',
+        workspace_window_id='@0',
+        agent_name='agent1',
+        project_id='proj-1',
+        window_name='main',
+        namespace_epoch=7,
+        namespace_pane_records={'%41': record},
+        tmux_backend_factory=lambda socket_path=None: (_ for _ in ()).throw(
+            AssertionError('snapshot should avoid tmux inspection')
+        ),
+        inspect_project_namespace_pane_fn=lambda backend, pane_id: None,
+        same_tmux_socket_path_fn=lambda left, right: str(left or '') == str(right or ''),
+    )
+
+    assert usable is None
+
+
+def test_usable_agent_only_project_binding_rejects_current_socket_name_without_namespace_snapshot() -> None:
+    binding = _binding(
+        runtime_ref='rmux:%41',
+        active_pane_id='%41',
+        pane_id='%41',
+        tmux_socket_path='',
+        tmux_socket_name='ccb-demo',
+    )
+
+    usable = usable_project_binding(
+        binding,
+        cmd_enabled=False,
+        tmux_socket_path='/tmp/ccb.sock',
+        tmux_session_name='ccb-demo',
+        workspace_window_id='@0',
+        agent_name='agent1',
+        project_id='proj-1',
+        window_name='main',
+        namespace_epoch=7,
+        namespace_pane_records=None,
+        tmux_backend_factory=lambda socket_path=None: object(),
+        inspect_project_namespace_pane_fn=lambda backend, pane_id: None,
+        same_tmux_socket_path_fn=lambda left, right: str(left or '') == str(right or ''),
+    )
+
+    assert usable is None
 
 
 def test_relabel_project_namespace_pane_applies_identity_for_project_socket() -> None:
@@ -180,6 +278,7 @@ def test_usable_project_namespace_binding_accepts_declared_secondary_window() ->
         pane_state='alive',
         tmux_socket_path='/tmp/ccb.sock',
         terminal='tmux',
+        ccb_session_id='ccb-session-1',
     )
     record = ProjectNamespacePaneRecord(
         pane_id='%41',
@@ -192,6 +291,7 @@ def test_usable_project_namespace_binding_accepts_declared_secondary_window() ->
         project_id='proj-1',
         managed_by='ccbd',
         namespace_epoch=7,
+        ccb_session_id='ccb-session-1',
         alive=True,
     )
 

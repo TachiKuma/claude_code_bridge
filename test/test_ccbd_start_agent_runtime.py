@@ -341,6 +341,63 @@ def test_start_agent_runtime_relaunches_dead_binding() -> None:
     assert runtime_service.restore_calls == ['agent1']
 
 
+def test_start_agent_runtime_relaunches_assigned_pane_without_session_identity() -> None:
+    runtime_service = _RuntimeService()
+    binding = _binding(ccb_session_id='ccb-session-live')
+    record = ProjectNamespacePaneRecord(
+        pane_id='%5',
+        session_name='ccb-demo',
+        window_id='@0',
+        window_name='main',
+        pane_title='agent1',
+        role='agent',
+        slot_key='agent1',
+        ccb_window='main',
+        agent_label='agent1',
+        project_id='proj-1',
+        managed_by='ccbd',
+        namespace_epoch=3,
+        alive=True,
+    )
+    relaunched = _binding(
+        runtime_ref='tmux:%5',
+        pane_id='%5',
+        active_pane_id='%5',
+        pane_state='alive',
+        ccb_session_id='ccb-session-new',
+    )
+    launch_kwargs: dict[str, object] = {}
+
+    execution = start_agent_runtime(
+        context=object(),
+        command=SimpleNamespace(restore=True),
+        runtime_service=runtime_service,
+        agent_name='agent1',
+        spec=SimpleNamespace(provider='codex', runtime_mode=SimpleNamespace(value='pane-backed')),
+        plan=SimpleNamespace(workspace_path='/tmp/ws'),
+        binding=binding,
+        raw_binding=binding,
+        stale_binding=False,
+        assigned_pane_id='%5',
+        style_index=1,
+        project_id='proj-1',
+        tmux_socket_path='/tmp/ccb.sock',
+        namespace_epoch=3,
+        namespace_pane_records={'%5': record},
+        ensure_agent_runtime_fn=lambda *args, **kwargs: launch_kwargs.update(kwargs) or RuntimeLaunchResult(launched=True, binding=relaunched),
+        launch_binding_hint_fn=lambda **kwargs: None,
+        relabel_project_namespace_pane_fn=lambda **kwargs: '%5',
+        same_tmux_socket_path_fn=lambda left, right: left == right,
+        window_name='main',
+    )
+
+    assert execution.agent_result.action == 'relaunched'
+    assert execution.agent_result.binding_reject_reason is None
+    assert launch_kwargs['assigned_pane_id'] == '%5'
+    assert 'relaunch_runtime:agent1' in execution.actions_taken
+    assert runtime_service.restore_calls == ['agent1']
+
+
 def test_start_agent_runtime_reuses_binding_without_restore_bookkeeping() -> None:
     runtime_service = _RuntimeService()
     binding = _binding()
