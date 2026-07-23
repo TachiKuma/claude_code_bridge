@@ -160,6 +160,37 @@ def test_create_token_file_proves_acl_convergence(tmp_path: Path, monkeypatch) -
     assert token_path.exists()
 
 
+def test_windows_token_acl_commands_use_utf8_replace(tmp_path: Path, monkeypatch) -> None:
+    token_path = tmp_path / 'token.json'
+    kwargs_seen: list[dict[str, object]] = []
+    base_runner = _windows_acl_runner(
+        owner='DESKTOP\\User',
+        owner_sid='S-1-5-21-1',
+        access=[
+            {
+                'identity': 'DESKTOP\\User',
+                'rights': 'Read',
+                'access_type': 'Allow',
+                'inherited': False,
+            }
+        ],
+    )
+
+    def runner(command, **kwargs):
+        kwargs_seen.append(dict(kwargs))
+        return base_runner(command, **kwargs)
+
+    monkeypatch.setattr('ccbd.control_plane_transport.token_auth._current_windows_user', lambda: 'DESKTOP\\User')
+
+    create_token_file(token_path, command_runner=runner, os_name='nt')
+
+    assert kwargs_seen
+    assert all(item.get('text') is True for item in kwargs_seen)
+    assert all(item.get('capture_output') is True for item in kwargs_seen)
+    assert all(item.get('encoding') == 'utf-8' for item in kwargs_seen)
+    assert all(item.get('errors') == 'replace' for item in kwargs_seen)
+
+
 def test_create_token_file_accepts_admin_owner_when_acl_is_current_user_only(tmp_path: Path, monkeypatch) -> None:
     token_path = tmp_path / 'token.json'
     runner = _windows_acl_runner(

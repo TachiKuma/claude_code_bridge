@@ -58,8 +58,16 @@ def test_resolve_shell_preserves_user_override_and_flags() -> None:
 
 def test_resolve_shell_flags_uses_windows_command_modes() -> None:
     assert resolve_shell_flags(shell='pwsh', flags_raw='') == ['-NoLogo', '-NoProfile', '-Command']
+    assert resolve_shell_flags(shell='pwsh.exe', flags_raw='') == ['-NoLogo', '-NoProfile', '-Command']
     assert resolve_shell_flags(shell='powershell.exe', flags_raw='') == ['-NoLogo', '-NoProfile', '-Command']
     assert resolve_shell_flags(shell='cmd', flags_raw='') == ['/d', '/s', '/c']
+
+
+def test_resolve_shell_flags_recognizes_windows_path_with_exe_suffix() -> None:
+    assert resolve_shell_flags(
+        shell=r'C:\Program Files\PowerShell\7\pwsh.exe',
+        flags_raw='',
+    ) == ['-NoLogo', '-NoProfile', '-Command']
 
 
 def test_wrap_provider_command_does_not_embed_cwd_as_cd_prefix() -> None:
@@ -71,10 +79,83 @@ def test_wrap_provider_command_does_not_embed_cwd_as_cd_prefix() -> None:
 
     command = builder.wrap_provider_command('python -m provider', cwd=r'C:\work dir')
 
-    assert command.startswith('pwsh -NoLogo -NoProfile -Command ')
+    assert command.startswith('pwsh -NoLogo -NoProfile -NoExit -Command ')
     assert 'python -m provider' in command
     assert 'cd ' not in command
     assert r'C:\work dir' not in command
+
+
+def test_wrap_provider_command_translates_posix_exports_for_powershell() -> None:
+    builder = build_windows_shell_log_builder(
+        env={'CCB_TMUX_SHELL': 'pwsh'},
+        default_shell_fn=lambda: ('powershell', '-Command'),
+        which_fn=_which({'pwsh'}),
+    )
+
+    command = builder.wrap_provider_command(
+        "export CCB_HOME='C:\\work dir' MODE=fast; codex --dangerously-bypass-hook-trust",
+        cwd=None,
+    )
+
+    assert "$env:CCB_HOME" in command
+    assert "$env:MODE" in command
+    assert "export " not in command
+    assert "codex --dangerously-bypass-hook-trust" in command
+
+
+def test_wrap_provider_command_translates_exports_for_pwsh_exe() -> None:
+    builder = build_windows_shell_log_builder(
+        env={'CCB_TMUX_SHELL': 'pwsh.exe'},
+        default_shell_fn=lambda: ('powershell.exe', '-Command'),
+        which_fn=_which({'pwsh.exe'}),
+    )
+
+    command = builder.wrap_provider_command(
+        "export CODEX_HOME='C:\\work dir'; codex",
+        cwd=None,
+    )
+
+    assert command.startswith('pwsh.exe -NoLogo -NoProfile -NoExit -Command ')
+    assert "$env:CODEX_HOME" in command
+    assert "export " not in command
+
+
+def test_wrap_provider_command_translates_posix_unset_for_powershell() -> None:
+    builder = build_windows_shell_log_builder(
+        env={'CCB_TMUX_SHELL': 'powershell.exe'},
+        default_shell_fn=lambda: ('powershell.exe', '-Command'),
+        which_fn=_which({'powershell.exe'}),
+    )
+
+    command = builder.wrap_provider_command(
+        "unset ANTHROPIC_BASE_URL; export HOME='C:\\work dir'; claude --continue",
+        cwd=None,
+    )
+
+    assert "Remove-Item Env:\\ANTHROPIC_BASE_URL -ErrorAction SilentlyContinue" in command
+    assert "$env:HOME" in command
+    assert "C:\\work dir" in command
+    assert "unset " not in command
+    assert "export " not in command
+    assert "claude --continue" in command
+
+
+def test_append_stderr_redirection_translates_posix_exports_before_wrapping(tmp_path: Path) -> None:
+    builder = build_windows_shell_log_builder(
+        env={'CCB_TMUX_SHELL': 'pwsh'},
+        default_shell_fn=lambda: ('powershell', '-Command'),
+        which_fn=_which({'pwsh'}),
+    )
+
+    command, resolved = builder.append_stderr_redirection(
+        "export CCB_HOME='C:\\work dir'; codex",
+        str(tmp_path / 'provider.err'),
+    )
+
+    assert resolved is not None
+    assert "$env:CCB_HOME" in command
+    assert "export " not in command
+    assert "2>>" in command
 
 
 def test_append_stderr_redirection_uses_shell_specific_path_quoting(tmp_path: Path) -> None:

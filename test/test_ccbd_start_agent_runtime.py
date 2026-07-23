@@ -298,6 +298,49 @@ def test_start_agent_runtime_records_rmux_namespace_local_pane_binding() -> None
     }
 
 
+def test_start_agent_runtime_relaunches_dead_binding() -> None:
+    runtime_service = _RuntimeService()
+    runtime_service._registry = _Registry(
+        _runtime(health='healthy', pane_state='alive')
+    )
+    binding = _binding(pane_state='dead')
+    relaunched = _binding(
+        runtime_ref='tmux:%8',
+        pane_id='%8',
+        active_pane_id='%8',
+        pane_state='alive',
+    )
+    launch_kwargs: dict[str, object] = {}
+
+    execution = start_agent_runtime(
+        context=object(),
+        command=SimpleNamespace(restore=True),
+        runtime_service=runtime_service,
+        agent_name='agent1',
+        spec=SimpleNamespace(provider='codex', runtime_mode=SimpleNamespace(value='pane-backed')),
+        plan=SimpleNamespace(workspace_path='/tmp/ws'),
+        binding=binding,
+        raw_binding=binding,
+        stale_binding=False,
+        assigned_pane_id=None,
+        style_index=1,
+        project_id='proj-1',
+        tmux_socket_path='/tmp/ccb.sock',
+        namespace_epoch=3,
+        ensure_agent_runtime_fn=lambda *args, **kwargs: launch_kwargs.update(kwargs) or RuntimeLaunchResult(launched=True, binding=relaunched),
+        launch_binding_hint_fn=lambda **kwargs: None,
+        relabel_project_namespace_pane_fn=lambda **kwargs: None,
+        same_tmux_socket_path_fn=lambda left, right: left == right,
+        window_name='main',
+    )
+
+    assert execution.agent_result.action == 'relaunched'
+    assert execution.agent_result.health == 'healthy'
+    assert launch_kwargs['assigned_pane_id'] == '%5'
+    assert runtime_service.attach_calls[-1]['health'] == 'healthy'
+    assert runtime_service.restore_calls == ['agent1']
+
+
 def test_start_agent_runtime_reuses_binding_without_restore_bookkeeping() -> None:
     runtime_service = _RuntimeService()
     binding = _binding()

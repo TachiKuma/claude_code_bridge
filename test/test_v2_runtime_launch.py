@@ -827,6 +827,42 @@ def test_binding_runtime_alive_rejects_title_based_runtime_ref(monkeypatch) -> N
     assert calls == []
 
 
+def test_binding_runtime_alive_checks_rmux_namespace_pane(monkeypatch) -> None:
+    calls: list[tuple[str | None, tuple[str, ...]]] = []
+
+    class FakeResult:
+        stdout = 'ccb-demo\tmain\t%44\t1\t0\n'
+
+    class FakeRmuxBackend:
+        def __init__(self, *, namespace: str | None = None, socket_path: str | None = None):
+            self.namespace = namespace
+            self.socket_path = socket_path
+
+        def _run_checked(self, args, *, operation: str, timeout_s=None):
+            del operation, timeout_s
+            calls.append((self.namespace, tuple(args)))
+            return FakeResult()
+
+        def is_tmux_pane_alive(self, pane_id: str) -> bool:
+            from terminal_runtime.rmux_backend_runtime.panes import is_pane_alive
+
+            return is_pane_alive(self, pane_id)
+
+    monkeypatch.setattr('cli.services.runtime_launch.RmuxBackend', FakeRmuxBackend)
+
+    binding = AgentBinding(
+        runtime_ref='rmux:%44',
+        session_ref='session-1',
+        tmux_socket_name='ccb-demo',
+        pane_id='%44',
+        active_pane_id='%44',
+        pane_state='alive',
+    )
+
+    assert runtime_launch._binding_runtime_alive(binding) is True
+    assert calls == [('ccb-demo', ('list-panes', '-a', '-F', '#{session_name}\t#{window_name}\t#{pane_id}\t#{pane_index}\t#{pane_dead}'))]
+
+
 def test_ensure_agent_runtime_resumes_named_codex_session_by_agent_name(monkeypatch, tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-codex-resume'
     ccb_dir = project_root / '.ccb'
@@ -1289,6 +1325,187 @@ def test_ensure_agent_runtime_uses_assigned_tmux_pane(monkeypatch, tmp_path: Pat
     session_option = next(value for pane, name, value in tmux_state['options'] if pane == '%43' and name == '@ccb_session_id')
     assert session_option.startswith('ccb-agent1-')
     assert ('%43', visual.border_style, visual.active_border_style) in tmux_state['styles']
+
+
+def test_ensure_agent_runtime_uses_assigned_rmux_pane(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-assigned-rmux'
+    (project_root / '.ccb').mkdir(parents=True)
+    ctx = _context(project_root, ParsedStartCommand(project=None, agent_names=('agent1',), restore=False, auto_permission=False))
+    spec = _spec('agent1')
+    plan = WorkspacePlanner().plan(spec, ctx.project)
+    plan.workspace_path.mkdir(parents=True, exist_ok=True)
+
+    rmux_state: dict[str, object] = {'options': []}
+
+    class FakeRmuxBackend:
+        backend_family = 'tmux-family'
+        backend_impl = 'rmux'
+
+        def __init__(self, *, namespace: str | None = None, socket_path: str | None = None) -> None:
+            self.namespace = namespace
+            self.socket_path = None if socket_path and not socket_path.startswith('\\\\.\\pipe\\') else socket_path
+
+        def respawn_pane(self, pane, *, cmd: str, cwd: str | None = None, remain_on_exit: bool = True) -> None:
+            rmux_state['respawn'] = (pane, cmd, cwd, remain_on_exit)
+            return '%44'
+
+        def set_pane_identity(
+            self,
+            pane,
+            *,
+            title: str,
+            user_options: dict[str, str],
+            border_style: str | None = None,
+            active_border_style: str | None = None,
+        ) -> None:
+            rmux_state['identity'] = (pane, title, user_options, border_style, active_border_style)
+
+    monkeypatch.setattr('cli.services.runtime_launch._inside_tmux', lambda: True)
+    monkeypatch.setattr('cli.services.runtime_launch.shutil.which', lambda name: f'/usr/bin/{name}')
+    monkeypatch.setattr('cli.services.runtime_launch.RmuxBackend', FakeRmuxBackend)
+
+    result = ensure_agent_runtime(
+        ctx,
+        ctx.command,
+        spec,
+        plan,
+        None,
+        assigned_pane_id='%43',
+        style_index=2,
+        tmux_socket_path='D:/repo/.ccb/ccbd/tmux.sock',
+        namespace_backend_impl='rmux',
+        namespace_session_name='ccb-demo',
+        namespace_window_name='main',
+    )
+
+    assert result.launched is True
+    assert result.binding is not None
+    assert result.binding.runtime_ref == 'rmux:%44'
+    assert rmux_state['respawn'][0] == {
+        'backend_impl': 'rmux',
+        'pane_id': '%43',
+        'session_name': 'ccb-demo',
+        'window_name': 'main',
+    }
+    assert rmux_state['respawn'][2] == str(plan.workspace_path)
+    session_path = project_root / '.ccb' / '.codex-agent1-session'
+    payload = json.loads(session_path.read_text(encoding='utf-8'))
+    assert payload['backend_impl'] == 'rmux'
+    assert payload['namespace_ref']['backend_impl'] == 'rmux'
+    assert payload['namespace_ref']['ipc_ref'] == 'ccb-demo'
+    assert payload['pane_ref']['window_name'] == 'main'
+    assert payload['pane_ref']['pane_id'] == '%44'
+
+
+def test_ensure_agent_runtime_canonicalizes_rmux_index_alias_without_window(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-assigned-rmux-index'
+    (project_root / '.ccb').mkdir(parents=True)
+    ctx = _context(project_root, ParsedStartCommand(project=None, agent_names=('agent1',), restore=False, auto_permission=False))
+    spec = _spec('agent1')
+    plan = WorkspacePlanner().plan(spec, ctx.project)
+    plan.workspace_path.mkdir(parents=True, exist_ok=True)
+
+    class FakeResult:
+        stdout = 'ccb-demo\t%44\t0\n'
+
+    class FakeRmuxBackend:
+        backend_family = 'tmux-family'
+        backend_impl = 'rmux'
+
+        def __init__(self, *, namespace: str | None = None, socket_path: str | None = None) -> None:
+            self.namespace = namespace
+            self.socket_path = socket_path
+
+        def respawn_pane(self, pane, *, cmd: str, cwd: str | None = None, remain_on_exit: bool = True) -> str:
+            del cmd, cwd, remain_on_exit
+            self.respawn_pane_ref = pane
+            FakeRmuxBackend.respawn_pane_ref = pane
+            return ''
+
+        def _run_checked(self, args, *, operation: str, timeout_s=None):
+            del args, operation, timeout_s
+            return FakeResult()
+
+        def set_pane_identity(self, pane, **kwargs) -> None:
+            assert pane['pane_id'] == '%44'
+
+    monkeypatch.setattr('cli.services.runtime_launch._inside_tmux', lambda: True)
+    monkeypatch.setattr('cli.services.runtime_launch.shutil.which', lambda name: f'/usr/bin/{name}')
+    monkeypatch.setattr('cli.services.runtime_launch.RmuxBackend', FakeRmuxBackend)
+
+    result = ensure_agent_runtime(
+        ctx,
+        ctx.command,
+        spec,
+        plan,
+        None,
+        assigned_pane_id='%0',
+        tmux_socket_path='D:/repo/.ccb/ccbd/tmux.sock',
+        namespace_backend_impl='rmux',
+        namespace_session_name='ccb-demo',
+    )
+
+    assert result.binding is not None
+    assert FakeRmuxBackend.respawn_pane_ref['pane_id'] == '%44'
+    assert result.binding.runtime_ref == 'rmux:%44'
+
+
+def test_ensure_agent_runtime_reads_rmux_namespace_from_state(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-rmux-state-namespace'
+    (project_root / '.ccb' / 'ccbd').mkdir(parents=True)
+    (project_root / '.ccb' / 'ccbd' / 'state.json').write_text(
+        json.dumps({'namespace_session_name': 'ccb-from-state'}, ensure_ascii=False),
+        encoding='utf-8',
+    )
+    ctx = _context(project_root, ParsedStartCommand(project=None, agent_names=('agent1',), restore=False, auto_permission=False))
+    spec = _spec('agent1')
+    plan = WorkspacePlanner().plan(spec, ctx.project)
+    plan.workspace_path.mkdir(parents=True, exist_ok=True)
+    observed: dict[str, object] = {}
+
+    class FakeResult:
+        stdout = 'ccb-from-state\t%44\t0\n'
+
+    class FakeRmuxBackend:
+        backend_family = 'tmux-family'
+        backend_impl = 'rmux'
+
+        def __init__(self, *, namespace: str | None = None, socket_path: str | None = None) -> None:
+            observed['namespace'] = namespace
+            self.namespace = namespace
+            self.socket_path = socket_path
+
+        def respawn_pane(self, pane, *, cmd: str, cwd: str | None = None, remain_on_exit: bool = True) -> str:
+            del pane, cmd, cwd, remain_on_exit
+            return ''
+
+        def _run_checked(self, args, *, operation: str, timeout_s=None):
+            del args, operation, timeout_s
+            return FakeResult()
+
+        def set_pane_identity(self, pane, **kwargs) -> None:
+            del kwargs
+            observed['identity_pane'] = pane
+
+    monkeypatch.setattr('cli.services.runtime_launch._inside_tmux', lambda: True)
+    monkeypatch.setattr('cli.services.runtime_launch.shutil.which', lambda name: f'/usr/bin/{name}')
+    monkeypatch.setattr('cli.services.runtime_launch.RmuxBackend', FakeRmuxBackend)
+
+    result = ensure_agent_runtime(
+        ctx,
+        ctx.command,
+        spec,
+        plan,
+        None,
+        assigned_pane_id='%0',
+        tmux_socket_path='D:/repo/.ccb/ccbd/tmux.sock',
+        namespace_backend_impl='rmux',
+    )
+
+    assert observed['namespace'] == 'ccb-from-state'
+    assert observed['identity_pane']['pane_id'] == '%44'
+    assert result.binding is not None
+    assert result.binding.runtime_ref == 'rmux:%44'
 
 
 def test_ensure_agent_runtime_launches_named_droid_session(monkeypatch, tmp_path: Path) -> None:
@@ -2697,6 +2914,29 @@ def test_claude_cli_capability_probe_does_not_reuse_prior_help_output(monkeypatc
 
     assert '--settings' in claude_launcher._claude_help_text(('claude',))
     assert '--permission-mode' in claude_launcher._claude_help_text(('claude',))
+
+
+def test_claude_cli_capability_probe_uses_utf8_replace_for_windows_output(monkeypatch) -> None:
+    seen: list[dict[str, object]] = []
+
+    def _run(args, **kwargs):
+        seen.append(dict(kwargs))
+        return subprocess.CompletedProcess(args, 0, '--settings\n', 'usage \ufffd\n')
+
+    monkeypatch.setattr(claude_launcher.subprocess, 'run', _run)
+
+    assert '--settings' in claude_launcher._claude_help_text(('claude',))
+    assert seen == [
+        {
+            'check': False,
+            'stdout': subprocess.PIPE,
+            'stderr': subprocess.PIPE,
+            'text': True,
+            'encoding': 'utf-8',
+            'errors': 'replace',
+            'timeout': 3,
+        }
+    ]
 
 
 def test_claude_launcher_skips_unsupported_optional_flags(monkeypatch, tmp_path: Path) -> None:

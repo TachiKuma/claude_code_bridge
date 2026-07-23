@@ -128,3 +128,42 @@ def test_apply_ccb_pane_identity_prefers_batch_setter() -> None:
     assert calls[0]['user_options']['@ccb_slot'] == 'agent1'
     assert calls[0]['user_options']['@ccb_window'] == 'review'
     assert calls[0]['user_options']['@ccb_namespace_epoch'] == '7'
+
+
+def test_apply_ccb_pane_identity_wraps_rmux_string_target_for_batch_setter() -> None:
+    calls: list[dict[str, object]] = []
+
+    class Backend:
+        backend_family = 'tmux-family'
+        backend_impl = 'rmux'
+        namespace = 'ccb-demo'
+
+        def pane_ref(self, pane_id: str, *, session_name: str, window_name: str | None = None):
+            return {
+                'backend_impl': 'rmux',
+                'pane_id': pane_id,
+                'session_name': session_name,
+                'window_name': window_name,
+            }
+
+        def set_pane_identity(self, pane, **kwargs) -> None:
+            calls.append({'pane': pane, **kwargs})
+
+    apply_ccb_pane_identity(
+        Backend(),
+        '%0',
+        title='cmd',
+        agent_label='cmd',
+        project_id='proj-1',
+        is_cmd=True,
+        slot_key='cmd',
+        window_name='main',
+    )
+
+    assert calls[0]['pane'] == {
+        'backend_impl': 'rmux',
+        'pane_id': '%0',
+        'session_name': 'ccb-demo',
+        'window_name': 'main',
+    }
+    assert calls[0]['user_options']['@ccb_role'] == 'cmd'

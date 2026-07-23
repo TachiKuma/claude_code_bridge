@@ -134,6 +134,51 @@ def test_prepare_start_agents_prepares_missing_binding_once(monkeypatch, tmp_pat
     assert prepared[0].binding_reject_reason == 'binding_missing'
 
 
+def test_prepare_start_agents_treats_dead_binding_as_stale_before_layout(monkeypatch, tmp_path: Path) -> None:
+    project_root, context, config, paths = _single_codex_project(tmp_path, 'repo-start-prep-dead-binding')
+    raw_binding = SimpleNamespace(
+        runtime_ref='rmux:%1',
+        session_ref='session-1',
+        pane_id='%1',
+        active_pane_id='%1',
+        pane_state='dead',
+        provider_identity_state='match',
+    )
+    calls: list[str] = []
+    monkeypatch.setattr(
+        'ccbd.start_preparation.prepare_provider_workspace',
+        lambda **kwargs: calls.append(kwargs['agent_name']),
+    )
+
+    prepared = prepare_start_agents(
+        targets=('agent1',),
+        config=config,
+        paths=paths,
+        context=context,
+        project_root=project_root,
+        project_id=context.project.project_id,
+        tmux_socket_path='D:/repo/.ccb/ccbd/tmux.sock',
+        tmux_session_name='ccb-demo',
+        workspace_window_id='@0',
+        namespace_epoch=1,
+        namespace_pane_records={},
+        resolve_agent_binding_fn=lambda **kwargs: raw_binding,
+        project_binding_filter_fn=lambda candidate, **kwargs: candidate,
+        restore_state_builder=lambda restore_mode: AgentRestoreState(
+            restore_mode=RestoreMode(restore_mode),
+            last_checkpoint=None,
+            conversation_summary='pending restore',
+        ),
+    )
+
+    assert prepared[0].raw_binding is raw_binding
+    assert prepared[0].binding is None
+    assert prepared[0].stale_binding is True
+    assert prepared[0].binding_reject_reason == 'pane_dead'
+    assert prepared[0].provider_prepared is True
+    assert calls == ['agent1']
+
+
 def test_prepare_start_agents_reports_logical_window_reject_reason(monkeypatch, tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-start-prep-window-mismatch'
     (project_root / '.ccb').mkdir(parents=True)

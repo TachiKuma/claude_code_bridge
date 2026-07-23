@@ -404,6 +404,34 @@ def test_reconcile_does_not_remove_group_worktree_still_referenced(tmp_path: Pat
     assert summary.retired[0].agent_name == 'agent1'
 
 
+def test_reconcile_start_skips_locked_removed_agent_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    project_root = tmp_path / 'repo'
+    project_root.mkdir()
+    bootstrap_project(project_root)
+    paths = PathLayout(project_root)
+    store = AgentSpecStore(paths)
+    old_spec = _spec(name='demo', workspace_mode=WorkspaceMode.INPLACE)
+    new_spec = _spec(name='codex', workspace_mode=WorkspaceMode.INPLACE)
+    store.save(old_spec)
+    agent_dir = paths.agent_dir('demo')
+    agent_dir.mkdir(parents=True, exist_ok=True)
+    (agent_dir / 'runtime.json').write_text('{}\n', encoding='utf-8')
+
+    def locked_rmtree(path: Path) -> None:
+        if Path(path) == agent_dir:
+            raise PermissionError('locked')
+        shutil.rmtree(path)
+
+    monkeypatch.setattr(shutil, 'rmtree', locked_rmtree)
+
+    summary = reconcile_start_workspaces(project_root, type('Config', (), {'agents': {'codex': new_spec}})())
+
+    assert agent_dir.exists() is True
+    assert len(summary.retired) == 1
+    assert summary.retired[0].agent_name == 'demo'
+    assert summary.retired[0].removed_agent_state is False
+
+
 def _init_git_repo(project_root: Path) -> None:
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / 'README.md').write_text('hello\n', encoding='utf-8')

@@ -7,6 +7,7 @@ import pytest
 
 import terminal_runtime.api as terminal
 import terminal_runtime.tmux_backend as tmux_backend_runtime
+import terminal_runtime.tmux_panes_runtime.actions as tmux_pane_actions
 
 
 def _cp(*, stdout: str = "", returncode: int = 0) -> subprocess.CompletedProcess[str]:
@@ -73,6 +74,8 @@ def test_tmux_split_pane_builds_command_and_parses_pane_id(monkeypatch: pytest.M
         calls.append(
             {"args": args, "check": check, "capture": capture, "input_bytes": input_bytes, "timeout": timeout}
         )
+        if args == ["list-panes", "-a", "-F", "#{pane_id}"]:
+            return _cp(stdout="%1\n")
         if args == ["display-message", "-p", "-t", "%1", "#{pane_dead}"]:
             return _cp(stdout="0\n")
         if args == ["display-message", "-p", "-t", "%1", "#{pane_width}x#{pane_height}"]:
@@ -98,12 +101,13 @@ def test_tmux_split_pane_builds_command_and_parses_pane_id(monkeypatch: pytest.M
 
 def test_tmux_split_pane_can_start_command_atomically(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[list[str]] = []
+    monkeypatch.setattr(tmux_pane_actions.os, "name", "posix")
 
     def fake_tmux_run(self: terminal.TmuxBackend, args: list[str], *, check: bool = False, capture: bool = False,
                       input_bytes: bytes | None = None, timeout: float | None = None) -> subprocess.CompletedProcess[str]:
         del self, check, capture, input_bytes, timeout
         calls.append(args)
-        if args == ["display-message", "-p", "-t", "%1", "#{pane_id}"]:
+        if args == ["list-panes", "-a", "-F", "#{pane_id}"]:
             return _cp(stdout="%1\n")
         if args == ["display-message", "-p", "-t", "%1", "#{pane_dead}"]:
             return _cp(stdout="0\n")
@@ -123,6 +127,45 @@ def test_tmux_split_pane_can_start_command_atomically(monkeypatch: pytest.Monkey
     assert argv[argv.index("-c") + 1] == "/tmp/demo"
 
 
+def test_tmux_split_pane_wraps_start_command_with_powershell_on_windows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(tmux_pane_actions.os, "name", "nt")
+
+    def fake_tmux_run(self: terminal.TmuxBackend, args: list[str], *, check: bool = False, capture: bool = False,
+                      input_bytes: bytes | None = None, timeout: float | None = None) -> subprocess.CompletedProcess[str]:
+        del self, check, capture, input_bytes, timeout
+        calls.append(args)
+        if args == ["display-message", "-p", "-t", "%1", "#{pane_width}x#{pane_height}"]:
+            return _cp(stdout="80x24\n")
+        if args == ["list-panes", "-a", "-F", "#{pane_id}"]:
+            return _cp(stdout="%1\n")
+        return _cp(stdout="%42\n")
+
+    backend = terminal.TmuxBackend()
+    monkeypatch.setattr(backend, "_tmux_run", fake_tmux_run.__get__(backend, terminal.TmuxBackend))
+
+    pane_id = backend.split_pane(
+        "%1",
+        "right",
+        50,
+        cmd="while ($true) { Start-Sleep -Seconds 3600 }",
+        cwd="D:/demo",
+    )
+
+    assert pane_id == "%42"
+    argv = calls[-1]
+    assert argv[-4:] == [
+        "powershell.exe",
+        "-NoProfile",
+        "-Command",
+        "while ($true) { Start-Sleep -Seconds 3600 }",
+    ]
+    assert "-c" in argv
+    assert argv[argv.index("-c") + 1] == "D:/demo"
+
+
 def test_tmux_create_pane_keeps_provider_start_on_respawn_path(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[list[str]] = []
 
@@ -130,7 +173,7 @@ def test_tmux_create_pane_keeps_provider_start_on_respawn_path(monkeypatch: pyte
                       input_bytes: bytes | None = None, timeout: float | None = None) -> subprocess.CompletedProcess[str]:
         del self, check, capture, input_bytes, timeout
         calls.append(args)
-        if args == ["display-message", "-p", "-t", "%1", "#{pane_id}"]:
+        if args == ["list-panes", "-a", "-F", "#{pane_id}"]:
             return _cp(stdout="%1\n")
         if args == ["display-message", "-p", "-t", "%1", "#{pane_dead}"]:
             return _cp(stdout="0\n")
@@ -154,6 +197,7 @@ def test_tmux_create_pane_keeps_provider_start_on_respawn_path(monkeypatch: pyte
 
 def test_tmux_create_detached_pane_starts_placeholder_before_respawn(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[list[str]] = []
+    monkeypatch.setattr(tmux_pane_actions.os, "name", "posix")
 
     def fake_tmux_run(self: terminal.TmuxBackend, args: list[str], *, check: bool = False, capture: bool = False,
                       input_bytes: bytes | None = None, timeout: float | None = None) -> subprocess.CompletedProcess[str]:
@@ -206,9 +250,9 @@ def test_tmux_find_pane_by_title_marker_rejects_ambiguous_prefix(monkeypatch: py
 def test_tmux_describe_pane_reads_title_and_user_options(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_tmux_run(self: terminal.TmuxBackend, args: list[str], *, check: bool = False, capture: bool = False,
                       input_bytes: bytes | None = None, timeout: float | None = None) -> subprocess.CompletedProcess[str]:
-        assert args == ["display-message", "-p", "-t", "%7", "#{pane_id}\t#{pane_title}\t#{pane_dead}\t#{@ccb_agent}\t#{@ccb_project_id}"]
+        assert args == ["list-panes", "-a", "-F", "#{pane_id}\t#{pane_title}\t#{pane_dead}\t#{@ccb_agent}\t#{@ccb_project_id}"]
         assert capture is True
-        return _cp(stdout="%7\tagent2\t0\tagent2\tproj-7\n")
+        return _cp(stdout="%1\tcurrent\t0\t\t\n%7\tagent2\t0\tagent2\tproj-7\n")
 
     backend = terminal.TmuxBackend()
     monkeypatch.setattr(backend, "_tmux_run", fake_tmux_run.__get__(backend, terminal.TmuxBackend))
@@ -222,24 +266,53 @@ def test_tmux_describe_pane_reads_title_and_user_options(monkeypatch: pytest.Mon
     }
 
 
+def test_tmux_describe_pane_rejects_target_fallback_to_current_pane(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_tmux_run(self: terminal.TmuxBackend, args: list[str], *, check: bool = False, capture: bool = False,
+                      input_bytes: bytes | None = None, timeout: float | None = None) -> subprocess.CompletedProcess[str]:
+        del self, check, input_bytes, timeout
+        assert args == ["list-panes", "-a", "-F", "#{pane_id}\t#{pane_title}\t#{pane_dead}"]
+        assert capture is True
+        return _cp(stdout="%1\tcurrent\t0\n")
+
+    backend = terminal.TmuxBackend()
+    monkeypatch.setattr(backend, "_tmux_run", fake_tmux_run.__get__(backend, terminal.TmuxBackend))
+
+    assert backend.describe_pane("%7") is None
+
+
 @pytest.mark.parametrize(
     ("stdout", "expected"),
     [
-        ("0\n", True),
-        ("1\n", False),
+        ("%9\t0\n", True),
+        ("%9\t1\n", False),
+        ("%1\t0\n", False),
         ("", False),
     ],
 )
 def test_tmux_is_pane_alive_uses_pane_dead(monkeypatch: pytest.MonkeyPatch, stdout: str, expected: bool) -> None:
     def fake_tmux_run(self: terminal.TmuxBackend, args: list[str], *, check: bool = False, capture: bool = False,
                       input_bytes: bytes | None = None, timeout: float | None = None) -> subprocess.CompletedProcess[str]:
-        assert args == ["display-message", "-p", "-t", "%9", "#{pane_dead}"]
+        assert args == ["list-panes", "-a", "-F", "#{pane_id}\t#{pane_dead}"]
         assert capture is True
         return _cp(stdout=stdout)
 
     backend = terminal.TmuxBackend()
     monkeypatch.setattr(backend, "_tmux_run", fake_tmux_run.__get__(backend, terminal.TmuxBackend))
     assert backend.is_pane_alive("%9") is expected
+
+
+def test_tmux_pane_exists_rejects_target_fallback_to_current_pane(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_tmux_run(self: terminal.TmuxBackend, args: list[str], *, check: bool = False, capture: bool = False,
+                      input_bytes: bytes | None = None, timeout: float | None = None) -> subprocess.CompletedProcess[str]:
+        del self, check, input_bytes, timeout
+        assert args == ["list-panes", "-a", "-F", "#{pane_id}"]
+        assert capture is True
+        return _cp(stdout="%1\n")
+
+    backend = terminal.TmuxBackend()
+    monkeypatch.setattr(backend, "_tmux_run", fake_tmux_run.__get__(backend, terminal.TmuxBackend))
+
+    assert backend.pane_exists("%7") is False
 
 
 def test_tmux_send_text_always_deletes_buffer(monkeypatch: pytest.MonkeyPatch) -> None:

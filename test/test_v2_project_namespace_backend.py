@@ -7,6 +7,7 @@ import pytest
 
 import terminal_runtime.tmux_compat as tmux_compat
 from ccbd.services.project_namespace_runtime.backend import (
+    apply_pane_identity,
     create_window,
     create_session,
     ensure_server_policy,
@@ -14,11 +15,15 @@ from ccbd.services.project_namespace_runtime.backend import (
     find_window,
     list_windows,
     prepare_server,
+    respawn_pane,
+    set_pane_user_option,
     session_alive,
+    split_pane,
     wait_for_root_pane,
 )
 from terminal_runtime.tmux_readiness import TmuxTransientServerUnavailable
 from terminal_runtime.placeholders import pane_placeholder_argv
+from terminal_runtime.mux_backend_contract import MuxCommandError
 from terminal_runtime.windows_shell_log_builder import clipboard_pipe_command
 
 _TMUX_UPDATE_ENVIRONMENT_FOR_TEST = (
@@ -91,6 +96,81 @@ class _FlakyBackend:
                 stderr='',
             )
         return subprocess.CompletedProcess(['tmux', *key], 0, stdout='', stderr='')
+
+
+class _UnavailableMuxBackend:
+    backend_family = 'tmux-family'
+
+    def namespace_ref(self, *, session_name):
+        return {
+            'backend_family': 'tmux-family',
+            'backend_impl': 'rmux',
+            'namespace_id': session_name,
+            'session_name': session_name,
+            'ipc_kind': 'named_pipe',
+            'ipc_ref': session_name,
+        }
+
+    def session_alive(self, namespace, *, timeout_s=None):
+        del namespace, timeout_s
+        raise MuxCommandError(
+            category='transient-unavailable',
+            backend_impl='rmux',
+            operation='session_alive',
+            detail=r'error connecting to \\.\pipe\rmux-demo (No such file or directory)',
+        )
+
+
+class _RecordingMuxBackend:
+    backend_family = 'tmux-family'
+    backend_impl = 'rmux'
+    namespace = 'project-namespace-id'
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict, dict]] = []
+
+    def namespace_ref(self, *, session_name):
+        return {
+            'backend_family': 'tmux-family',
+            'backend_impl': 'rmux',
+            'namespace_id': session_name,
+            'session_name': session_name,
+            'ipc_kind': 'named_pipe',
+            'ipc_ref': session_name,
+        }
+
+    def pane_ref(self, pane_id, *, session_name, window_name=None):
+        return {
+            'backend_impl': 'rmux',
+            'pane_id': pane_id,
+            'session_name': session_name,
+            'window_name': window_name,
+        }
+
+    def split_pane(self, parent, **kwargs):
+        self.calls.append(('split_pane', dict(parent), dict(kwargs)))
+        return self.pane_ref('%1', session_name=parent['session_name'], window_name=parent.get('window_name'))
+
+    def respawn_pane(self, pane, **kwargs):
+        self.calls.append(('respawn_pane', dict(pane), dict(kwargs)))
+
+    def set_pane_user_option(self, pane, name, value):
+        self.calls.append(('set_pane_user_option', dict(pane), {'name': name, 'value': value}))
+
+    def set_pane_identity(self, pane, **kwargs):
+        self.calls.append(('set_pane_identity', dict(pane), dict(kwargs)))
+
+
+class _CanonicalizingMuxBackend(_RecordingMuxBackend):
+    def _run_checked(self, args, *, operation, timeout_s=None):
+        self.calls.append(('_run_checked', {}, {'args': tuple(args), 'operation': operation, 'timeout_s': timeout_s}))
+        if tuple(args[:3]) == ('list-panes', '-t', 'ccb-session:workspace'):
+            return subprocess.CompletedProcess(['rmux', *args], 0, stdout='%1\t0\n%2\t1\n', stderr='')
+        if tuple(args) == ('list-panes', '-a', '-F', '#{pane_id}\t#{pane_index}'):
+            return subprocess.CompletedProcess(['rmux', *args], 0, stdout='%1\t0\n', stderr='')
+        if tuple(args[:3]) == ('list-panes', '-a', '-F'):
+            return subprocess.CompletedProcess(['rmux', *args], 0, stdout='other\t%9\t0\nccb-session\t%1\t0\n', stderr='')
+        return subprocess.CompletedProcess(['rmux', *args], 1, stdout='', stderr="can't find pane: %0\n")
 
 
 def test_prepare_server_then_create_session_and_clipboard_policy_retry_transient_tmux_failures(
@@ -323,6 +403,153 @@ def test_session_alive_treats_missing_project_socket_as_missing_namespace(monkey
 
     assert session_alive(backend, 'ccb-proj') is False
     assert backend.calls.count(('has-session', '-t', 'ccb-proj')) == 1
+
+
+def test_session_alive_treats_unavailable_mux_namespace_as_missing() -> None:
+    assert session_alive(_UnavailableMuxBackend(), 'ccb-proj') is False
+
+
+def test_mux_percent_pane_adapter_preserves_window_name(tmp_path: Path) -> None:
+    backend = _RecordingMuxBackend()
+
+    pane_id = split_pane(
+        backend,
+        target='%0',
+        direction='right',
+        percent=50,
+        project_root=tmp_path,
+        session_name='ccb-session',
+        window_name='workspace',
+    )
+    respawn_pane(
+        backend,
+        '%0',
+        cmd='python -c pass',
+        cwd=str(tmp_path),
+        session_name='ccb-session',
+        window_name='workspace',
+    )
+    set_pane_user_option(
+        backend,
+        '%0',
+        '@ccb_agent',
+        'demo',
+        session_name='ccb-session',
+        window_name='workspace',
+    )
+    apply_pane_identity(
+        backend,
+        '%0',
+        title='demo',
+        agent_label='demo',
+        project_id='project-1',
+        role='agent',
+        slot_key='demo',
+        session_name='ccb-session',
+        window_name='workspace',
+    )
+
+    assert pane_id == '%1'
+    assert [call[1]['window_name'] for call in backend.calls] == [
+        'workspace',
+        'workspace',
+        'workspace',
+        'workspace',
+    ]
+    assert [call[1]['session_name'] for call in backend.calls] == [
+        'ccb-session',
+        'ccb-session',
+        'ccb-session',
+        'ccb-session',
+    ]
+
+
+def test_mux_percent_pane_adapter_canonicalizes_rmux_index_alias() -> None:
+    backend = _CanonicalizingMuxBackend()
+
+    set_pane_user_option(
+        backend,
+        '%0',
+        '@ccb_agent',
+        'demo',
+        session_name='ccb-session',
+        window_name='workspace',
+    )
+    apply_pane_identity(
+        backend,
+        '%0',
+        title='demo',
+        agent_label='demo',
+        project_id='project-1',
+        role='agent',
+        slot_key='demo',
+        session_name='ccb-session',
+        window_name='workspace',
+    )
+
+    assert [call[1]['pane_id'] for call in backend.calls if call[0] in {'set_pane_user_option', 'set_pane_identity'}] == [
+        '%1',
+        '%1',
+    ]
+    assert any(call[0] == '_run_checked' and call[2]['args'][:3] == ('list-panes', '-t', 'ccb-session:workspace') for call in backend.calls)
+
+
+def test_mux_percent_pane_adapter_canonicalizes_rmux_index_alias_without_window_name() -> None:
+    backend = _CanonicalizingMuxBackend()
+
+    apply_pane_identity(
+        backend,
+        '%0',
+        title='demo',
+        agent_label='demo',
+        project_id='project-1',
+        role='agent',
+        slot_key='demo',
+        session_name='ccb-session',
+    )
+
+    identity_call = next(call for call in backend.calls if call[0] == 'set_pane_identity')
+    assert identity_call[1]['pane_id'] == '%1'
+    assert any(call[0] == '_run_checked' and call[2]['args'][:3] == ('list-panes', '-a', '-F') for call in backend.calls)
+
+
+def test_mux_percent_pane_adapter_canonicalizes_rmux_index_alias_without_session_name() -> None:
+    backend = _CanonicalizingMuxBackend()
+
+    apply_pane_identity(
+        backend,
+        '%0',
+        title='demo',
+        agent_label='demo',
+        project_id='project-1',
+        role='agent',
+        slot_key='demo',
+    )
+
+    identity_call = next(call for call in backend.calls if call[0] == 'set_pane_identity')
+    assert identity_call[1]['pane_id'] == '%1'
+    assert any(call[0] == '_run_checked' and call[2]['args'] == ('list-panes', '-a', '-F', '#{pane_id}\t#{pane_index}') for call in backend.calls)
+
+
+def test_mux_respawn_adapter_canonicalizes_replacement_index_alias() -> None:
+    class Backend(_CanonicalizingMuxBackend):
+        def respawn_pane(self, pane, **kwargs):
+            self.calls.append(('respawn_pane', dict(pane), dict(kwargs)))
+            return '%0'
+
+    backend = Backend()
+
+    replacement = respawn_pane(
+        backend,
+        '%0',
+        cmd='codex',
+        cwd='D:/repo',
+        session_name='ccb-session',
+        window_name='workspace',
+    )
+
+    assert replacement == '%1'
+    assert any(call[0] == '_run_checked' and call[2]['args'][:3] == ('list-panes', '-t', 'ccb-session:workspace') for call in backend.calls)
 
 
 def test_wait_for_root_pane_raises_transient_unavailable_for_fast_probe(monkeypatch) -> None:
