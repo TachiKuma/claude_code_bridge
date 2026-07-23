@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import os
 
 import pytest
 
@@ -9,6 +10,7 @@ from terminal_runtime.rmux_backend import RmuxBackend
 from terminal_runtime.rmux_backend_runtime.capabilities import RmuxCapabilityGate
 from terminal_runtime.rmux_backend_runtime.errors import map_rmux_result_error
 from terminal_runtime.rmux_runner import RmuxCommandResult
+from ccbd.services.project_namespace_runtime import backend as namespace_backend
 
 
 def _supported_status(**overrides: str) -> dict[str, str]:
@@ -170,6 +172,138 @@ def test_namespace_window_core_maps_refs_and_records() -> None:
     assert ("-x", "233", "-y", "61", "-s", "ccb-demo") == client.calls[0][2:8]
 
 
+def test_windows_rmux_ignores_non_pipe_socket_path(monkeypatch) -> None:
+    monkeypatch.setattr("terminal_runtime.rmux_backend.os.name", "nt")
+
+    backend = RmuxBackend(
+        namespace="ccb-demo",
+        socket_path="C:/tmp/ccb-demo/tmux.sock",
+        command_client=FakeRmuxCommandClient(),
+        command_status=_supported_status(),
+    )
+
+    assert backend.socket_path is None
+    assert backend.namespace == "ccb-demo"
+    assert backend.namespace_ref(session_name="ccb-demo")["ipc_kind"] == "socket_name"
+
+
+def test_namespace_split_pane_wraps_mux_parent_ref() -> None:
+    class FakeMuxBackend:
+        backend_family = "tmux-family"
+        backend_impl = "rmux"
+        namespace = "ccb-demo"
+
+        def __init__(self) -> None:
+            self.parent = None
+            self.split_kwargs = {}
+
+        def pane_ref(self, pane_id, *, session_name, window_name=None):
+            return {
+                "backend_impl": "rmux",
+                "pane_id": pane_id,
+                "session_name": session_name,
+                "window_name": window_name,
+            }
+
+        def namespace_ref(self, *, session_name):
+            return {
+                "backend_family": "tmux-family",
+                "backend_impl": "rmux",
+                "namespace_id": session_name,
+                "session_name": session_name,
+                "ipc_kind": "socket_name",
+                "ipc_ref": session_name,
+            }
+
+        def split_pane(self, parent, **kwargs):
+            self.parent = parent
+            self.split_kwargs = dict(kwargs)
+            return {
+                "backend_impl": "rmux",
+                "pane_id": "%2",
+                "session_name": parent["session_name"],
+                "window_name": parent.get("window_name"),
+            }
+
+    backend = FakeMuxBackend()
+
+    pane_id = namespace_backend.split_pane(
+        backend,
+        target="%1",
+        direction="right",
+        percent=50,
+        project_root="D:/repo",
+    )
+
+    assert pane_id == "%2"
+    assert backend.parent == {
+        "backend_impl": "rmux",
+        "pane_id": "%1",
+        "session_name": "ccb-demo",
+        "window_name": None,
+    }
+    assert "while" in backend.split_kwargs["cmd"]
+    if os.name == "nt":
+        assert "powershell.exe" in backend.split_kwargs["cmd"]
+
+
+def test_namespace_pane_mutation_helpers_wrap_mux_refs() -> None:
+    class FakeMuxBackend:
+        backend_family = "tmux-family"
+        backend_impl = "rmux"
+        namespace = "ccb-demo"
+
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, object]] = []
+
+        def namespace_ref(self, *, session_name):
+            return {"session_name": session_name}
+
+        def pane_ref(self, pane_id, *, session_name, window_name=None):
+            return {
+                "backend_impl": "rmux",
+                "pane_id": pane_id,
+                "session_name": session_name,
+                "window_name": window_name,
+            }
+
+        def set_pane_identity(self, pane, **kwargs):
+            self.calls.append(("set_pane_identity", pane, kwargs))
+
+        def set_pane_user_option(self, pane, name, value):
+            self.calls.append(("set_pane_user_option", pane, (name, value)))
+
+        def respawn_pane(self, pane, **kwargs):
+            self.calls.append(("respawn_pane", pane, kwargs))
+
+    backend = FakeMuxBackend()
+
+    namespace_backend.apply_pane_identity(
+        backend,
+        "%1",
+        title="cmd",
+        agent_label="cmd",
+        project_id="project-a",
+        is_cmd=True,
+    )
+    namespace_backend.set_pane_user_option(backend, "%1", "@ccb_sidebar_helper_id", "sha256:abc")
+    assert namespace_backend.respawn_pane(
+        backend,
+        "%1",
+        cmd="codex",
+        cwd="D:/repo",
+        remain_on_exit=True,
+    ) is True
+
+    for _name, pane, *_rest in backend.calls:
+        assert pane == {
+            "backend_impl": "rmux",
+            "pane_id": "%1",
+            "session_name": "ccb-demo",
+            "window_name": None,
+        }
+
+
 def test_session_alive_maps_unreachable_to_transient_error_with_evidence() -> None:
     client = FakeRmuxCommandClient()
     client.add("has-session", stderr=r"error connecting to \\.\pipe\rmux (No such file or directory)", returncode=1)
@@ -206,7 +340,7 @@ def test_pane_core_uses_backend_local_refs_without_tmux_percent_requirement() ->
         "window_name": "main",
     }
     assert ("split-window", "-v", "-p", "40", "-t", "pane-A", "-P", "-F", "#{pane_id}", "-c", "D:/repo", "python -q") in client.calls
-    assert ("respawn-pane", "-k", "-t", "pane-C", "-P", "-c", "D:/repo", "codex") in client.calls
+    assert ("respawn-pane", "-k", "-t", "pane-C", "-c", "D:/repo", "codex") in client.calls
     assert ("kill-pane", "-t", "pane-C") in client.calls
 
 

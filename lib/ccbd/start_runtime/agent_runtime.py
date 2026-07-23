@@ -29,13 +29,17 @@ def _namespace_assigned_pane_id(
     assigned_pane_id: str | None,
     stale_binding: bool,
     tmux_socket_path: str | None,
+    namespace_backend_impl: str | None = None,
 ) -> str | None:
     if stale_binding:
         return None
     pane_id = str(assigned_pane_id or '').strip()
-    if not pane_id or not pane_id.startswith('%'):
+    backend_impl = _namespace_backend_impl(namespace_backend_impl)
+    if not pane_id:
         return None
-    if not str(tmux_socket_path or '').strip():
+    if backend_impl == 'tmux' and not pane_id.startswith('%'):
+        return None
+    if backend_impl == 'tmux' and not str(tmux_socket_path or '').strip():
         return None
     return pane_id
 
@@ -60,6 +64,7 @@ def start_agent_runtime(
     project_id: str,
     tmux_socket_path: str | None,
     namespace_epoch: int | None,
+    namespace_backend_impl: str | None = None,
     ensure_agent_runtime_fn,
     launch_binding_hint_fn,
     relabel_project_namespace_pane_fn,
@@ -140,11 +145,21 @@ def start_agent_runtime(
             assigned_pane_id=assigned_pane_id,
             stale_binding=stale_binding,
             tmux_socket_path=tmux_socket_path,
+            namespace_backend_impl=namespace_backend_impl,
         )
-        namespace_runtime_ref = f'tmux:{namespace_pane_id}' if namespace_pane_id else None
+        namespace_backend = _namespace_backend_impl(namespace_backend_impl)
+        namespace_runtime_ref = f'{namespace_backend}:{namespace_pane_id}' if namespace_pane_id else None
         namespace_socket_path = str(tmux_socket_path or '').strip() or None
         binding_pane_id = _binding_attr(binding_state.binding, 'pane_id') or namespace_pane_id
         namespace_record = (namespace_pane_records or {}).get(str(binding_pane_id or ''))
+        attach_workspace_path = str(plan.workspace_path)
+        if (
+            preserve_existing_success_health
+            and not namespace_pane_id
+            and existing is not None
+            and str(getattr(existing, 'workspace_path', '') or '').strip()
+        ):
+            attach_workspace_path = existing.workspace_path
         tmux_window_id = (
             getattr(namespace_record, 'window_id', None)
             or _binding_attr(binding_state.binding, 'tmux_window_id')
@@ -157,17 +172,16 @@ def start_agent_runtime(
         )
         attach_kwargs = dict(
             agent_name=agent_name,
-            workspace_path=str(plan.workspace_path),
+            workspace_path=attach_workspace_path,
             backend_type=spec.runtime_mode.value,
-            runtime_ref=binding_state.runtime_ref or namespace_runtime_ref,
+            runtime_ref=namespace_runtime_ref or binding_state.runtime_ref,
             session_ref=binding_state.session_ref,
             health=None if preserve_existing_success_health else binding_state.health,
             provider=spec.provider,
             runtime_root=_binding_attr(binding_state.binding, 'runtime_root'),
             runtime_pid=_binding_attr(binding_state.binding, 'runtime_pid'),
             terminal_backend=(
-                _binding_attr(binding_state.binding, 'terminal')
-                or ('tmux' if namespace_pane_id else None)
+                namespace_backend if namespace_pane_id else _binding_attr(binding_state.binding, 'terminal')
             ),
             pane_id=_binding_attr(binding_state.binding, 'pane_id') or namespace_pane_id,
             active_pane_id=(
@@ -190,6 +204,11 @@ def start_agent_runtime(
             managed_by='ccbd',
             binding_source='provider-session',
         )
+        if namespace_pane_id:
+            attach_kwargs.update(
+                backend_impl=namespace_backend,
+                pane_ref=_namespace_pane_ref(namespace_backend, namespace_pane_id),
+            )
         attempt_id = str(getattr(existing, 'mount_attempt_id', '') or '').strip() or None
     except Exception as exc:
         _record_elapsed_ms(timings_ms, 'pane_and_runtime_facts', facts_started_ns)
@@ -368,6 +387,21 @@ def _pane_identity_is_current(
     if ccb_session_id and str(getattr(record, 'ccb_session_id', '') or '').strip() != ccb_session_id:
         return False
     return True
+
+
+def _namespace_backend_impl(value: str | None) -> str:
+    text = str(value or '').strip().lower()
+    return text if text in {'tmux', 'rmux', 'psmux'} else 'tmux'
+
+
+def _namespace_pane_ref(backend_impl: str, pane_id: str | None) -> dict[str, str] | None:
+    pane_text = str(pane_id or '').strip()
+    if not pane_text:
+        return None
+    return {
+        'backend_impl': backend_impl,
+        'pane_id': pane_text,
+    }
 
 
 def _record_elapsed_ms(timings_ms: dict[str, float], field_name: str, started_ns: int) -> None:

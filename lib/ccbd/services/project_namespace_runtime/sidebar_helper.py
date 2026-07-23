@@ -73,6 +73,28 @@ def sidebar_respawn_args(
     return missing_sidebar_respawn_args(resolution.reason)
 
 
+def sidebar_respawn_command(
+    launch_args: tuple[str, ...],
+    *,
+    theme_profile: str,
+    is_windows_platform: bool | None = None,
+) -> str:
+    args = tuple(str(part) for part in tuple(launch_args or ()) if str(part or '').strip())
+    if not args:
+        return ''
+    theme = str(theme_profile or '').strip() or 'default'
+    if bool(os.name == 'nt' if is_windows_platform is None else is_windows_platform):
+        body = (
+            f'$env:CCB_SIDEBAR_THEME_PROFILE = {_powershell_single_quote(theme)}; '
+            f'& {_powershell_single_quote(args[0])}'
+        )
+        if len(args) > 1:
+            body = f'{body} {" ".join(_powershell_single_quote(part) for part in args[1:])}'
+        return f'powershell.exe -NoLogo -NoProfile -Command {_powershell_single_quote(body)}'
+    command = ' '.join(_shell_quote(str(part)) for part in args)
+    return f'CCB_SIDEBAR_THEME_PROFILE={_shell_quote(theme)} {command}'
+
+
 def sidebar_helper_fingerprint(
     *,
     env: Mapping[str, str] | None = None,
@@ -141,6 +163,15 @@ def _shell_single_quote_text(value: object) -> str:
     return str(value).replace("'", "'\"'\"'")
 
 
+def _shell_quote(value: object) -> str:
+    text = str(value or '')
+    return "'" + _shell_single_quote_text(text) + "'"
+
+
+def _powershell_single_quote(value: object) -> str:
+    return "'" + str(value or '').replace("'", "''") + "'"
+
+
 __all__ = [
     'SIDEBAR_BINARY_NAME',
     'SIDEBAR_ENV_PATH',
@@ -149,5 +180,6 @@ __all__ = [
     'missing_sidebar_respawn_args',
     'resolve_sidebar_helper',
     'sidebar_helper_fingerprint',
+    'sidebar_respawn_command',
     'sidebar_respawn_args',
 ]

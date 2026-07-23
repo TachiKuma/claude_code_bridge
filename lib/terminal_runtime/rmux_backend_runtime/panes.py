@@ -91,10 +91,9 @@ def respawn_pane(
     cwd: str | None = None,
     remain_on_exit: bool = True,
 ) -> None:
+    del remain_on_exit
     backend._require_capability("respawn_pane", ("respawn-pane",))
     args = ["respawn-pane", "-k", "-t", _pane_id(pane)]
-    if remain_on_exit:
-        args.append("-P")
     if cwd:
         args.extend(["-c", str(cwd)])
     args.append(_require_text(cmd, "cmd"))

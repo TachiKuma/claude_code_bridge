@@ -1,11 +1,42 @@
 from __future__ import annotations
 
 
-def binding_pane_id(binding) -> str | None:
-    pane_id = str(getattr(binding, 'active_pane_id', None) or getattr(binding, 'pane_id', None) or '').strip()
-    if not pane_id.startswith('%'):
+MUX_RUNTIME_BACKENDS = {'tmux', 'rmux', 'psmux'}
+
+
+def mux_backend_from_runtime_ref(runtime_ref: str | None) -> str | None:
+    value = str(runtime_ref or '').strip()
+    if ':' not in value:
+        return None
+    backend, _pane = value.split(':', 1)
+    backend = backend.strip().lower()
+    return backend if backend in MUX_RUNTIME_BACKENDS else None
+
+
+def mux_pane_id_from_runtime_ref(runtime_ref: str | None) -> str | None:
+    value = str(runtime_ref or '').strip()
+    backend = mux_backend_from_runtime_ref(value)
+    if backend is None:
+        return None
+    pane_id = value.split(':', 1)[1].strip()
+    if not pane_id:
+        return None
+    if backend == 'tmux' and not pane_id.startswith('%'):
         return None
     return pane_id
+
+
+def binding_pane_id(binding) -> str | None:
+    backend = mux_backend_from_runtime_ref(getattr(binding, 'runtime_ref', None))
+    for attr in ('active_pane_id', 'pane_id'):
+        pane_id = str(getattr(binding, attr, None) or '').strip()
+        if not pane_id:
+            continue
+        if backend == 'tmux' and not pane_id.startswith('%'):
+            continue
+        if backend in {'rmux', 'psmux'} or pane_id.startswith('%'):
+            return pane_id
+    return mux_pane_id_from_runtime_ref(getattr(binding, 'runtime_ref', None))
 
 
 def tmux_backend_for_factory(tmux_backend_factory, *, socket_path: str):
@@ -61,5 +92,7 @@ def matching_project_namespace_record(
 __all__ = [
     'binding_pane_id',
     'matching_project_namespace_record',
+    'mux_backend_from_runtime_ref',
+    'mux_pane_id_from_runtime_ref',
     'tmux_backend_for_factory',
 ]

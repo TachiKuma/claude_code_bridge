@@ -6,6 +6,7 @@ import time
 
 from agents.models import AgentState
 from cli.kill_runtime.processes import is_pid_alive as _shared_is_pid_alive
+from cli.kill_runtime.processes import terminate_pid_tree as _shared_terminate_pid_tree
 
 from .helper_manifest import clear_helper_manifest, load_helper_manifest
 from .process_ref import process_ref_allows_destructive_cleanup
@@ -116,9 +117,15 @@ def _terminate_pid_tree(pid: int) -> bool:
         return False
     if not _is_pid_alive(pid):
         return True
+    if os.name == 'nt':
+        return _shared_terminate_pid_tree(
+            pid,
+            timeout_s=1.0,
+            is_pid_alive_fn=_is_pid_alive,
+        )
     if _kill_helper_group(pid, signal.SIGTERM) and _wait_for_helper_exit(pid, timeout_s=0.2):
         return True
-    for sig in (signal.SIGTERM, signal.SIGKILL):
+    for sig in (signal.SIGTERM, getattr(signal, 'SIGKILL', signal.SIGTERM)):
         try:
             os.kill(pid, sig)
         except ProcessLookupError:

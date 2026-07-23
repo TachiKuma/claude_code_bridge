@@ -94,7 +94,7 @@ class RmuxBackend:
             or os.environ.get("CCB_TMUX_SOCKET")
             or ""
         ).strip() or None
-        resolved_socket_path = str(socket_path or "").strip() or None
+        resolved_socket_path = _rmux_socket_path(str(socket_path or "").strip() or None)
         resolved_executable = (
             executable
             or os.environ.get("CCB_RMUX_BIN")
@@ -465,6 +465,16 @@ def _require_text(value: str | None, field_name: str) -> str:
     if not text:
         raise ValueError(f"{field_name} is required")
     return text
+
+
+def _rmux_socket_path(value: str | None) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if os.name != "nt":
+        return text
+    normalized = text.replace("/", "\\")
+    return text if normalized.startswith("\\\\.\\pipe\\") else None
 
 
 __all__ = ["RmuxBackend", "RmuxCaptureResult"]

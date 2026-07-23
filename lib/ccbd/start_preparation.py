@@ -17,6 +17,7 @@ from workspace.binding import WorkspaceBindingStore
 from workspace.materializer import WorkspaceMaterializer
 from workspace.planner import WorkspacePlanner
 from workspace.validator import WorkspaceValidator
+from ccbd.start_runtime.binding_runtime.common import mux_backend_from_runtime_ref, mux_pane_id_from_runtime_ref
 
 
 @dataclass(frozen=True)
@@ -208,8 +209,8 @@ def _binding_reject_reason(
     if raw_binding is None:
         return 'binding_missing'
     runtime_ref = str(getattr(raw_binding, 'runtime_ref', None) or '').strip()
-    if not runtime_ref.startswith('tmux:'):
-        return 'runtime_not_tmux'
+    if mux_backend_from_runtime_ref(runtime_ref) is None:
+        return 'runtime_not_mux'
     pane_state = str(getattr(raw_binding, 'pane_state', None) or '').strip().lower()
     if cmd_enabled and pane_state != 'alive':
         return f'pane_{pane_state or "state_missing"}'
@@ -249,12 +250,12 @@ def _binding_reject_reason(
 def _binding_pane_id(binding) -> str | None:
     for attr in ('active_pane_id', 'pane_id'):
         pane_id = str(getattr(binding, attr, None) or '').strip()
-        if pane_id.startswith('%'):
+        backend = mux_backend_from_runtime_ref(getattr(binding, 'runtime_ref', None))
+        if backend == 'tmux' and pane_id.startswith('%'):
             return pane_id
-    runtime_ref = str(getattr(binding, 'runtime_ref', None) or '').strip()
-    if runtime_ref.startswith('tmux:%'):
-        return runtime_ref.split(':', 1)[1]
-    return None
+        if backend in {'rmux', 'psmux'} and pane_id:
+            return pane_id
+    return mux_pane_id_from_runtime_ref(getattr(binding, 'runtime_ref', None))
 
 
 def _window_name_for_agent(config, agent_name: str) -> str | None:

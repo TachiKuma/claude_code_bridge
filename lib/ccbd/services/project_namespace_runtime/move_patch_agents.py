@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from ccbd.reload_additive_agents import append_agent_plan_for_window, window_agent_names, window_map
-from terminal_runtime.tmux_identity import apply_ccb_pane_identity
 
+from .backend import apply_pane_identity
 from .remove_patch_agents import reflow_window_after_agent_change
 
 
@@ -57,7 +57,7 @@ def move_agent_panes(
         if placeholder_pane:
             _kill_placeholder_pane(backend, placeholder_pane, result=result, timeout_s=timeout_s)
         order_index = _agent_order_index(new_target, agent_name)
-        apply_ccb_pane_identity(
+        apply_pane_identity(
             backend,
             source_pane,
             title=agent_name,

@@ -10,6 +10,7 @@ from ccbd.services.project_namespace_runtime.sidebar_helper import (
     missing_sidebar_respawn_args,
     resolve_sidebar_helper,
     sidebar_helper_fingerprint,
+    sidebar_respawn_command,
     sidebar_respawn_args,
 )
 
@@ -83,6 +84,30 @@ def test_sidebar_respawn_args_falls_back_to_visible_keepalive_message(tmp_path: 
     assert 'CCB sidebar helper unavailable' in args[2]
     assert 'while :; do sleep 3600; done' in args[2]
     assert missing_sidebar_respawn_args()[0] == 'sh'
+
+
+def test_sidebar_respawn_command_preserves_posix_theme_prefix() -> None:
+    command = sidebar_respawn_command(
+        ('/opt/ccb-agent-sidebar', '--pane-window', 'main'),
+        theme_profile='light',
+        is_windows_platform=False,
+    )
+
+    assert command.startswith("CCB_SIDEBAR_THEME_PROFILE='light' ")
+    assert "'/opt/ccb-agent-sidebar'" in command
+    assert "'--pane-window'" in command
+
+
+def test_sidebar_respawn_command_uses_powershell_env_assignment_on_windows() -> None:
+    command = sidebar_respawn_command(
+        ('C:/Program Files/CCB/ccb-agent-sidebar.exe', '--pane-window', 'main'),
+        theme_profile='default',
+        is_windows_platform=True,
+    )
+
+    assert command.startswith('powershell.exe -NoLogo -NoProfile -Command ')
+    assert "$env:CCB_SIDEBAR_THEME_PROFILE = ''default''" in command
+    assert 'CCB_SIDEBAR_THEME_PROFILE=default' not in command
 
 
 def test_sidebar_helper_fingerprint_tracks_runtime_binary_behind_source_wrapper(tmp_path: Path) -> None:

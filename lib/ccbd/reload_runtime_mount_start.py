@@ -31,6 +31,7 @@ def call_start_flow_for_additive_mount(
             getattr(namespace, 'workspace_window_name', None)
         ),
         namespace_epoch=int(getattr(namespace, 'namespace_epoch')),
+        namespace_backend_impl=clean_text(getattr(namespace, 'backend_impl', None)),
         workspace_window_id=clean_text(getattr(namespace, 'workspace_window_id', None)),
         workspace_epoch=optional_int(getattr(namespace, 'workspace_epoch', None)),
         namespace_agent_panes=dict(agent_panes),

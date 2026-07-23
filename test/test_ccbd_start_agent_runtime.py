@@ -213,6 +213,91 @@ def test_start_agent_runtime_records_namespace_pane_without_provider_binding() -
     assert 'restore_runtime:agent1' in execution.actions_taken
 
 
+def test_start_agent_runtime_records_rmux_namespace_pane_binding() -> None:
+    runtime_service = _RuntimeService()
+    binding = _binding(runtime_ref='tmux:%9', pane_id='%9', active_pane_id='%9', terminal='tmux')
+
+    execution = start_agent_runtime(
+        context=object(),
+        command=SimpleNamespace(restore=True),
+        runtime_service=runtime_service,
+        agent_name='agent1',
+        spec=SimpleNamespace(provider='fake-codex', runtime_mode=SimpleNamespace(value='pane-backed')),
+        plan=SimpleNamespace(workspace_path='/tmp/ws'),
+        binding=binding,
+        raw_binding=binding,
+        stale_binding=False,
+        assigned_pane_id='%9',
+        style_index=0,
+        project_id='proj-1',
+        tmux_socket_path='/tmp/ccb.sock',
+        namespace_epoch=2,
+        namespace_backend_impl='rmux',
+        ensure_agent_runtime_fn=lambda *args, **kwargs: RuntimeLaunchResult(launched=False, binding=binding),
+        launch_binding_hint_fn=lambda **kwargs: None,
+        relabel_project_namespace_pane_fn=lambda **kwargs: None,
+        same_tmux_socket_path_fn=lambda left, right: left == right,
+        window_name='main',
+    )
+
+    assert execution.agent_result.runtime_ref == 'rmux:%9'
+    assert execution.agent_result.terminal_backend == 'rmux'
+    assert runtime_service.attach_calls[-1]['runtime_ref'] == 'rmux:%9'
+    assert runtime_service.attach_calls[-1]['terminal_backend'] == 'rmux'
+    assert runtime_service.attach_calls[-1]['backend_impl'] == 'rmux'
+    assert runtime_service.attach_calls[-1]['pane_ref'] == {
+        'backend_impl': 'rmux',
+        'pane_id': '%9',
+    }
+
+
+def test_start_agent_runtime_records_rmux_namespace_local_pane_binding() -> None:
+    runtime_service = _RuntimeService()
+    binding = _binding(
+        runtime_ref='rmux:pane-C',
+        pane_id='pane-C',
+        active_pane_id='pane-C',
+        terminal='rmux',
+        tmux_socket_path='',
+        tmux_socket_name='',
+    )
+
+    execution = start_agent_runtime(
+        context=object(),
+        command=SimpleNamespace(restore=False),
+        runtime_service=runtime_service,
+        agent_name='agent1',
+        spec=SimpleNamespace(provider='fake-codex', runtime_mode=SimpleNamespace(value='pane-backed')),
+        plan=SimpleNamespace(workspace_path='/tmp/ws'),
+        binding=binding,
+        raw_binding=binding,
+        stale_binding=False,
+        assigned_pane_id='pane-C',
+        style_index=0,
+        project_id='proj-1',
+        tmux_socket_path=None,
+        namespace_epoch=2,
+        namespace_backend_impl='rmux',
+        ensure_agent_runtime_fn=lambda *args, **kwargs: RuntimeLaunchResult(launched=False, binding=binding),
+        launch_binding_hint_fn=lambda **kwargs: None,
+        relabel_project_namespace_pane_fn=lambda **kwargs: None,
+        same_tmux_socket_path_fn=lambda left, right: str(left or '') == str(right or ''),
+        window_name='main',
+    )
+
+    assert execution.agent_result.runtime_ref == 'rmux:pane-C'
+    assert execution.agent_result.terminal_backend == 'rmux'
+    assert execution.agent_result.pane_id == 'pane-C'
+    assert execution.agent_result.active_pane_id == 'pane-C'
+    assert execution.runtime_pane_id == 'pane-C'
+    assert runtime_service.attach_calls[-1]['runtime_ref'] == 'rmux:pane-C'
+    assert runtime_service.attach_calls[-1]['backend_impl'] == 'rmux'
+    assert runtime_service.attach_calls[-1]['pane_ref'] == {
+        'backend_impl': 'rmux',
+        'pane_id': 'pane-C',
+    }
+
+
 def test_start_agent_runtime_reuses_binding_without_restore_bookkeeping() -> None:
     runtime_service = _RuntimeService()
     binding = _binding()

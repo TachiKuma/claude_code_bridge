@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import provider_runtime.helper_cleanup as helper_cleanup
 from provider_runtime.helper_cleanup import cleanup_stale_runtime_helper, terminate_helper_manifest_path
 from provider_runtime.helper_manifest import build_runtime_helper_manifest
 from storage.paths import PathLayout
@@ -127,6 +128,26 @@ def test_terminate_helper_manifest_path_clears_file_when_leader_is_gone(tmp_path
     assert terminate_helper_manifest_path(helper_path) is True
     assert helper_path.exists() is False
     assert killed[0][0] == 601
+
+
+def test_terminate_helper_manifest_path_uses_windows_tree_cleanup_without_sigkill(tmp_path, monkeypatch) -> None:
+    layout = PathLayout(tmp_path / 'repo')
+    helper_path = layout.agent_helper_path('agent1')
+    _write_helper(helper_path, leader_pid=501, pgid=0, include_process_ref=True)
+    terminated: list[int] = []
+
+    monkeypatch.setattr(helper_cleanup.os, 'name', 'nt')
+    monkeypatch.delattr(helper_cleanup.signal, 'SIGKILL', raising=False)
+    monkeypatch.setattr(helper_cleanup, '_is_pid_alive', lambda pid: True)
+    monkeypatch.setattr(
+        helper_cleanup,
+        '_shared_terminate_pid_tree',
+        lambda pid, timeout_s, is_pid_alive_fn: terminated.append(pid) or True,
+    )
+
+    assert terminate_helper_manifest_path(helper_path) is True
+    assert terminated == [501]
+    assert helper_path.exists() is False
 
 
 def test_build_runtime_helper_manifest_includes_process_ref(tmp_path) -> None:

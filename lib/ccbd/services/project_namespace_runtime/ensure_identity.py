@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from cli.services.tmux_ui import apply_project_tmux_ui
-from terminal_runtime.tmux_identity import apply_ccb_pane_identity
 
 from .backend import (
+    apply_pane_identity,
     create_session,
     ensure_server_policy,
     ensure_window,
@@ -73,7 +73,7 @@ def apply_namespace_identity(
     tmux_socket_path: str,
     tmux_session_name: str,
 ) -> None:
-    apply_ccb_pane_identity(
+    apply_pane_identity(
         backend,
         pane_id,
         title='cmd',

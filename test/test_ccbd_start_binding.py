@@ -9,6 +9,7 @@ from ccbd.start_runtime.binding import (
     usable_agent_only_project_binding,
     usable_project_namespace_binding,
 )
+from ccbd.start_runtime.binding_runtime.common import binding_pane_id
 from ccbd.services.project_namespace_pane import ProjectNamespacePaneRecord
 from provider_core.session_binding_evidence import AgentBinding
 
@@ -58,6 +59,41 @@ def test_usable_project_namespace_binding_requires_matching_namespace_record() -
 
 def test_usable_agent_only_project_binding_accepts_undeclared_socket_binding() -> None:
     binding = _binding(session_file='', tmux_socket_path='', pane_state='unknown')
+
+    usable = usable_agent_only_project_binding(
+        binding,
+        tmux_socket_path='/tmp/current.sock',
+        tmux_session_name='ccb-demo',
+        workspace_window_id='@2',
+        agent_name='agent1',
+        project_id='proj-1',
+        tmux_backend_factory=lambda socket_path=None: SimpleNamespace(socket_path=socket_path),
+        inspect_project_namespace_pane_fn=lambda backend, pane_id: None,
+        same_tmux_socket_path_fn=lambda left, right: str(left or '') == str(right or ''),
+    )
+
+    assert usable is binding
+
+
+def test_binding_pane_id_accepts_rmux_local_runtime_ref() -> None:
+    binding = _binding(
+        runtime_ref='rmux:pane-C',
+        active_pane_id='',
+        pane_id='',
+        tmux_socket_path='',
+    )
+
+    assert binding_pane_id(binding) == 'pane-C'
+
+
+def test_usable_agent_only_project_binding_accepts_rmux_local_pane() -> None:
+    binding = _binding(
+        runtime_ref='rmux:pane-C',
+        active_pane_id='pane-C',
+        pane_id='pane-C',
+        tmux_socket_path='',
+        pane_state='unknown',
+    )
 
     usable = usable_agent_only_project_binding(
         binding,

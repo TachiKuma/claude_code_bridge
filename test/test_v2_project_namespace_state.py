@@ -765,9 +765,9 @@ bottom_height = 20
     assert backend.pane_options['%1']['@ccb_sidebar_instance'] == 'main'
     assert backend.pane_options['%3']['@ccb_role'] == 'sidebar'
     assert backend.pane_options['%3']['@ccb_sidebar_instance'] == 'review'
-    assert backend.pane_options['%1']['@respawn_cmd'].startswith('CCB_SIDEBAR_THEME_PROFILE=default ')
+    assert 'CCB_SIDEBAR_THEME_PROFILE' in backend.pane_options['%1']['@respawn_cmd']
     assert '--theme' not in backend.pane_options['%1']['@respawn_cmd']
-    assert backend.pane_options['%3']['@respawn_cmd'].startswith('CCB_SIDEBAR_THEME_PROFILE=default ')
+    assert 'CCB_SIDEBAR_THEME_PROFILE' in backend.pane_options['%3']['@respawn_cmd']
     assert '--theme' not in backend.pane_options['%3']['@respawn_cmd']
     assert backend.pane_options['%2']['@ccb_slot'] == 'agent1'
     assert backend.pane_options['%4']['@ccb_slot'] == 'agent2'

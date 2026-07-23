@@ -9,7 +9,7 @@ import pytest
 from agents.config_loader import load_project_config
 from agents.models import AgentRestoreState, RestoreMode, WorkspaceMode
 from ccbd.services.project_namespace_pane import ProjectNamespacePaneRecord
-from ccbd.start_preparation import prepare_start_agents
+from ccbd.start_preparation import _binding_pane_id, _binding_reject_reason, prepare_start_agents
 from cli.context import CliContextBuilder
 from cli.models import ParsedStartCommand
 from cli.services.role_command_policy import RoleCommandPolicy
@@ -192,6 +192,32 @@ def test_prepare_start_agents_reports_logical_window_reject_reason(monkeypatch, 
     assert prepared[0].binding_reject_reason == 'logical_window_mismatch'
 
 
+def test_binding_reject_reason_accepts_rmux_runtime_ref() -> None:
+    raw_binding = SimpleNamespace(
+        runtime_ref='rmux:pane-C',
+        pane_id='pane-C',
+        active_pane_id='pane-C',
+        pane_state='alive',
+        provider_identity_state='match',
+    )
+
+    reason = _binding_reject_reason(
+        raw_binding=raw_binding,
+        binding=None,
+        cmd_enabled=True,
+        tmux_session_name='ccb-demo',
+        workspace_window_id='@0',
+        agent_name='agent1',
+        project_id='proj-1',
+        window_name=None,
+        namespace_epoch=None,
+        namespace_pane_records={},
+    )
+
+    assert _binding_pane_id(raw_binding) == 'pane-C'
+    assert reason == 'namespace_pane_missing'
+
+
 def test_prepare_start_agents_honors_windows_overlay_inplace_for_non_git_project(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-start-prep-windows-overlay-inplace'
     (project_root / '.ccb').mkdir(parents=True)
@@ -240,6 +266,7 @@ workspace_mode = "inplace"
 def test_prepare_start_agents_rejects_duplicate_effective_provider_homes(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-start-prep-duplicate-provider-home'
     shared_home = tmp_path / 'shared-codex-home'
+    shared_home_text = shared_home.as_posix()
     (project_root / '.ccb').mkdir(parents=True)
     (project_root / '.ccb' / 'ccb.config').write_text(
         f"""version = 2
@@ -254,7 +281,7 @@ permission = "manual"
 
 [agents.agent1.provider_profile]
 mode = "isolated"
-home = "{shared_home}"
+home = "{shared_home_text}"
 
 [agents.agent2]
 provider = "codex"
@@ -265,7 +292,7 @@ permission = "manual"
 
 [agents.agent2.provider_profile]
 mode = "isolated"
-home = "{shared_home}"
+home = "{shared_home_text}"
 """,
         encoding='utf-8',
     )

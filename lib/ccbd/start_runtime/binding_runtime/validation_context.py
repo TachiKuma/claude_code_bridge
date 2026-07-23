@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from .common import binding_pane_id, matching_project_namespace_record
+from .common import binding_pane_id, matching_project_namespace_record, mux_backend_from_runtime_ref
 
 
 @dataclass(frozen=True)
@@ -30,6 +30,10 @@ def binding_pane_state(binding) -> str:
 
 def is_tmux_binding(binding) -> bool:
     return binding_runtime_ref(binding).startswith('tmux:')
+
+
+def is_mux_binding(binding) -> bool:
+    return mux_backend_from_runtime_ref(binding_runtime_ref(binding)) is not None
 
 
 def build_binding_validation_context(
@@ -106,11 +110,11 @@ def binding_has_live_namespace_record(binding, *, context: BindingValidationCont
 
 
 def is_live_tmux_binding(binding) -> bool:
-    return binding is not None and is_tmux_binding(binding) and binding_pane_state(binding) == 'alive'
+    return binding is not None and is_mux_binding(binding) and binding_pane_state(binding) == 'alive'
 
 
 def has_reusable_tmux_pane(binding) -> bool:
-    return binding is not None and is_tmux_binding(binding) and binding_pane_id(binding) is not None
+    return binding is not None and is_mux_binding(binding) and binding_pane_id(binding) is not None
 
 
 def has_acceptable_provider_runtime_identity(binding) -> bool:
@@ -145,5 +149,6 @@ __all__ = [
     'has_no_provider_runtime_identity_mismatch',
     'has_project_tmux_session_name',
     'has_reusable_tmux_pane',
+    'is_mux_binding',
     'is_live_tmux_binding',
 ]

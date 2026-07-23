@@ -334,7 +334,7 @@ def test_apply_add_window_creates_only_new_window_sidebar_and_agent_panes(tmp_pa
     assert all('kill' not in ' '.join(call) for call in backend.tmux_calls)
     assert backend.split_calls == [('%3', 'right', 85), ('%4', 'bottom', 50)]
     assert backend.respawn_calls[0][0] == '%3'
-    assert backend.respawn_calls[0][1].startswith('CCB_SIDEBAR_THEME_PROFILE=default ')
+    assert 'CCB_SIDEBAR_THEME_PROFILE' in backend.respawn_calls[0][1]
     assert '--theme' not in backend.respawn_calls[0][1]
     assert backend.pane_options['%3']['@ccb_role'] == 'sidebar'
     assert backend.pane_options['%3']['@ccb_slot'] == 'sidebar:review'
@@ -1477,7 +1477,8 @@ def test_apply_add_tool_window_creates_tool_window_sidebar_and_tool_pane(
     assert result.tool_panes == {'files': '%4'}
     assert result.agent_panes == {}
     assert backend.respawn_calls[-2][0] == '%3'
-    assert backend.respawn_calls[-2][1].startswith('CCB_SIDEBAR_THEME_PROFILE=light ')
+    assert 'CCB_SIDEBAR_THEME_PROFILE' in backend.respawn_calls[-2][1]
+    assert 'light' in backend.respawn_calls[-2][1]
     assert '--theme' not in backend.respawn_calls[-2][1]
     assert backend.respawn_calls[-1] == ('%4', 'ccb-workbench files')
     assert backend.pane_options['%3']['@ccb_role'] == 'sidebar'

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+import shlex
+import subprocess
 import time
 from typing import Callable
 
@@ -19,6 +21,7 @@ from terminal_runtime.tmux_readiness import (
 from terminal_runtime.tmux_compat import is_tmux_compat_subset
 from terminal_runtime.tmux_server_policy import CLIPBOARD_PIPE_COMMAND, TMUX_ENVIRONMENT_KEYS
 from terminal_runtime.placeholders import pane_placeholder_argv, pane_placeholder_cmd
+from terminal_runtime.tmux_identity import apply_ccb_pane_identity
 
 
 
@@ -451,6 +454,19 @@ def split_pane(
     project_root,
     timeout_s: float | None = None,
 ) -> str:
+    if _is_mux_backend(backend):
+        parent = _mux_pane_ref(backend, target)
+        pane = backend.split_pane(
+            parent,
+            direction=direction,
+            percent=max(1, min(99, int(percent))),
+            cmd=_pane_placeholder_shell_cmd(),
+            cwd=str(project_root),
+        )
+        pane_id = str((pane or {}).get('pane_id') or '').strip() if isinstance(pane, dict) else str(pane or '').strip()
+        if pane_id:
+            return pane_id
+        raise RuntimeError(f'failed to split mux pane from target {target!r}')
     try:
         pane_id = backend.split_pane(
             target,
@@ -471,6 +487,36 @@ def split_pane(
     if resolved.startswith('%'):
         return resolved
     raise RuntimeError(f'failed to split tmux pane from target {target!r}')
+
+
+def respawn_pane(
+    backend,
+    pane_id: str,
+    *,
+    cmd: str,
+    cwd: str | None = None,
+    remain_on_exit: bool = True,
+) -> bool:
+    respawn = getattr(backend, 'respawn_pane', None)
+    if callable(respawn):
+        target = _mux_pane_ref(backend, pane_id) if _is_mux_backend(backend) else pane_id
+        respawn(target, cmd=cmd, cwd=cwd, remain_on_exit=remain_on_exit)
+        return True
+    runner = getattr(backend, '_tmux_run', None)
+    if callable(runner):
+        runner(['respawn-pane', '-k', '-t', pane_id, 'sh', '-lc', cmd], check=False)
+        return True
+    return False
+
+
+def set_pane_user_option(backend, pane_id: str, name: str, value: str) -> None:
+    target = _mux_pane_ref(backend, pane_id) if _is_mux_backend(backend) else pane_id
+    backend.set_pane_user_option(target, name, value)
+
+
+def apply_pane_identity(backend, pane_id: str, **kwargs) -> None:
+    target = _mux_pane_ref(backend, pane_id) if _is_mux_backend(backend) else pane_id
+    apply_ccb_pane_identity(backend, target, **kwargs)
 
 
 def kill_server(backend, *, session_name: str | None = None) -> bool:
@@ -688,6 +734,32 @@ def _is_mux_backend(backend) -> bool:
     return getattr(backend, 'backend_family', None) == 'tmux-family' and callable(getattr(backend, 'namespace_ref', None))
 
 
+def _mux_pane_ref(backend, target: str) -> dict[str, str | None]:
+    pane_id = str(target or '').strip()
+    if not pane_id:
+        raise ValueError('target cannot be empty')
+    session_name = str(getattr(backend, 'namespace', '') or '').strip()
+    window_name = None
+    if ':' in pane_id and not pane_id.startswith('%'):
+        session, _sep, window = pane_id.partition(':')
+        if session.strip():
+            session_name = session.strip()
+        window_name = window.strip() or None
+    if not session_name:
+        session_name = pane_id.split(':', 1)[0].strip()
+    projector = getattr(backend, 'pane_ref', None)
+    if callable(projector):
+        return projector(pane_id, session_name=session_name, window_name=window_name)
+    return {'backend_impl': str(getattr(backend, 'backend_impl', '') or ''), 'pane_id': pane_id, 'session_name': session_name, 'window_name': window_name}
+
+
+def _pane_placeholder_shell_cmd() -> str:
+    argv = tuple(str(part) for part in pane_placeholder_argv())
+    if os.name == 'nt':
+        return subprocess.list2cmdline(argv)
+    return ' '.join(shlex.quote(part) for part in argv)
+
+
 def _looks_like_path_ref(value: str) -> bool:
     return '/' in value or '\\' in value
 
@@ -712,11 +784,14 @@ __all__ = [
     'list_windows',
     'prepare_server',
     'rename_window',
+    'respawn_pane',
     'session_alive',
     'session_root_pane',
     'session_window_target',
     'select_window',
+    'set_pane_user_option',
     'split_pane',
+    'apply_pane_identity',
     'TmuxCommandError',
     'TmuxTransientServerUnavailable',
     'TmuxWindowRecord',

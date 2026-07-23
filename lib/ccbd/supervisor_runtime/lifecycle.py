@@ -94,6 +94,7 @@ def start_supervisor(
             tmux_session_name=namespace.tmux_session_name if namespace is not None else None,
             tmux_workspace_window_name=getattr(namespace, 'workspace_window_name', None) if namespace is not None else None,
             namespace_epoch=namespace.namespace_epoch if namespace is not None else None,
+            namespace_backend_impl=getattr(namespace, 'backend_impl', None) if namespace is not None else None,
             workspace_window_id=getattr(namespace, 'workspace_window_id', None) if namespace is not None else None,
             workspace_epoch=getattr(namespace, 'workspace_epoch', None) if namespace is not None else None,
             namespace_agent_panes=getattr(supervisor._project_namespace, '_last_materialized_agent_panes', None),

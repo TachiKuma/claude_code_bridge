@@ -4,9 +4,8 @@ from types import SimpleNamespace
 
 from agents.models import LayoutNode, parse_layout_spec
 from ccbd.reload_additive_agents import append_agent_plan_for_window, append_agent_windows, window_agent_names, window_map
-from terminal_runtime.tmux_identity import apply_ccb_pane_identity
 
-from .backend import session_window_target, split_pane
+from .backend import apply_pane_identity, session_window_target, split_pane
 from .remove_patch_agents import reflow_window_after_agent_change
 
 
@@ -159,7 +158,7 @@ def _append_single_agent_pane(
         timeout_s=timeout_s,
     )
     _append_unique(created_panes, pane_id)
-    apply_ccb_pane_identity(
+    apply_pane_identity(
         backend,
         pane_id,
         title=appended.agent,

@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import shlex
 from types import SimpleNamespace
 from typing import Any
 
 from cli.services.tmux_ui import apply_project_tmux_ui
 from agents.models import layout_tool_alias_command, layout_tool_alias_label, parse_layout_spec
 from terminal_runtime.placeholders import pane_placeholder_cmd
-from terminal_runtime.tmux_identity import apply_ccb_pane_identity
 from terminal_runtime.tmux_theme import tmux_theme_profile
 from ccbd.services.project_namespace_pane import (
     ProjectNamespacePaneRecord,
@@ -15,16 +13,19 @@ from ccbd.services.project_namespace_pane import (
 )
 
 from .backend import (
+    apply_pane_identity,
     create_session,
     ensure_window,
     ensure_server_policy,
     rename_window,
+    respawn_pane,
     select_window,
+    set_pane_user_option,
     session_window_target,
     split_pane,
     window_root_pane,
 )
-from .sidebar_helper import SIDEBAR_HELPER_ID_OPTION, sidebar_helper_fingerprint, sidebar_respawn_args
+from .sidebar_helper import SIDEBAR_HELPER_ID_OPTION, sidebar_helper_fingerprint, sidebar_respawn_args, sidebar_respawn_command
 
 
 def refresh_topology_ui(context) -> None:
@@ -502,7 +503,7 @@ def _materialize_sidebar(
             timeout_s=timeout_s,
         )
         _respawn_sidebar(context.backend, sidebar_pane, sidebar.launch_args, cwd=str(controller._layout.project_root))
-        apply_ccb_pane_identity(
+        apply_pane_identity(
             context.backend,
             sidebar_pane,
             title='sidebar',
@@ -529,7 +530,7 @@ def _materialize_sidebar(
         timeout_s=timeout_s,
     )
     _respawn_sidebar(context.backend, root_pane, sidebar.launch_args, cwd=str(controller._layout.project_root))
-    apply_ccb_pane_identity(
+    apply_pane_identity(
         context.backend,
         root_pane,
         title='sidebar',
@@ -603,7 +604,7 @@ def _record_sidebar_helper_identity(backend, pane_id: str, *, identity: str | No
     resolved = identity or sidebar_helper_fingerprint()
     if not resolved:
         return
-    backend.set_pane_user_option(pane_id, SIDEBAR_HELPER_ID_OPTION, resolved)
+    set_pane_user_option(backend, pane_id, SIDEBAR_HELPER_ID_OPTION, resolved)
 
 
 def _materialize_agent_layout(
@@ -625,7 +626,7 @@ def _materialize_agent_layout(
 
     def assign_leaf(item: str, pane_id: str) -> None:
         if item == 'cmd':
-            apply_ccb_pane_identity(
+            apply_pane_identity(
                 context.backend,
                 pane_id,
                 title='cmd',
@@ -654,7 +655,7 @@ def _materialize_agent_layout(
             )
             return
         agent_panes[item] = pane_id
-        apply_ccb_pane_identity(
+        apply_pane_identity(
             context.backend,
             pane_id,
             title=item,
@@ -716,12 +717,15 @@ def _materialize_tool_pane(
     epoch: int,
 ) -> None:
     command = str(command or '').strip() or pane_placeholder_cmd()
-    respawn = getattr(context.backend, 'respawn_pane', None)
-    if callable(respawn):
-        respawn(pane_id, cmd=command, cwd=str(controller._layout.project_root), remain_on_exit=True)
-    else:
+    if not respawn_pane(
+        context.backend,
+        pane_id,
+        cmd=command,
+        cwd=str(controller._layout.project_root),
+        remain_on_exit=True,
+    ):
         context.backend._tmux_run(['respawn-pane', '-k', '-t', pane_id, 'sh', '-lc', command], check=False)
-    apply_ccb_pane_identity(
+    apply_pane_identity(
         context.backend,
         pane_id,
         title=label,
@@ -1239,11 +1243,8 @@ def _sidebar_pane_percent_for_sidebar(width: object, pane_width: int = 0) -> int
 
 def _respawn_sidebar(backend, pane_id: str, launch_args: tuple[str, ...], *, cwd: str) -> None:
     args = sidebar_respawn_args(tuple(launch_args or ()))
-    command = ' '.join(shlex.quote(str(part)) for part in args) if args else pane_placeholder_cmd()
-    command = f'CCB_SIDEBAR_THEME_PROFILE={shlex.quote(tmux_theme_profile())} {command}'
-    respawn = getattr(backend, 'respawn_pane', None)
-    if callable(respawn):
-        respawn(pane_id, cmd=command, cwd=cwd, remain_on_exit=True)
+    command = sidebar_respawn_command(args, theme_profile=tmux_theme_profile()) or pane_placeholder_cmd()
+    if respawn_pane(backend, pane_id, cmd=command, cwd=cwd, remain_on_exit=True):
         return
     backend._tmux_run(['respawn-pane', '-k', '-t', pane_id, 'sh', '-lc', command], check=False)
 
