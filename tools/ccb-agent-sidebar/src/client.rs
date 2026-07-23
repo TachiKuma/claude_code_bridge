@@ -2,6 +2,8 @@ use std::io::{Read, Write};
 #[cfg(unix)]
 use std::os::unix::net::UnixStream;
 use std::path::Path;
+#[cfg(not(unix))]
+use std::net::TcpStream;
 use std::time::Duration;
 
 use serde_json::json;
@@ -87,7 +89,7 @@ impl CcbdClient {
     }
 
     fn request(&self, op: &str, request: serde_json::Value) -> Result<serde_json::Value, String> {
-        request_unix_socket(&self.socket_path, self.timeout, op, request)
+        request_control_plane(&self.socket_path, self.timeout, op, request)
     }
 }
 
@@ -111,7 +113,7 @@ fn reload_is_no_change(payload: &serde_json::Value) -> bool {
 }
 
 #[cfg(unix)]
-fn request_unix_socket(
+fn request_control_plane(
     socket_path: &Path,
     timeout: Duration,
     op: &str,
@@ -138,8 +140,50 @@ fn request_unix_socket(
         .next()
         .filter(|line| !line.is_empty())
         .ok_or_else(|| "empty response from ccbd".to_string())?;
+    decode_response_line(first_line)
+}
+
+#[cfg(not(unix))]
+fn request_control_plane(
+    socket_path: &Path,
+    timeout: Duration,
+    op: &str,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let endpoint = load_tcp_endpoint(socket_path)?;
+    let token = load_token(&endpoint.token_ref)?;
+    let mut stream = TcpStream::connect((endpoint.host.as_str(), endpoint.port))
+        .map_err(|err| format!("connect {}:{}: {err}", endpoint.host, endpoint.port))?;
+    stream
+        .set_read_timeout(Some(timeout))
+        .map_err(|err| format!("set read timeout: {err}"))?;
+    stream
+        .set_write_timeout(Some(timeout))
+        .map_err(|err| format!("set write timeout: {err}"))?;
+    let auth = json!({"schema": "ccbd-control-plane-token-v1", "token": token});
+    stream
+        .write_all(format!("{auth}\n").as_bytes())
+        .map_err(|err| format!("write auth: {err}"))?;
+    let ack_line = read_line(&mut stream)?;
+    let ack: serde_json::Value =
+        serde_json::from_slice(&ack_line).map_err(|err| format!("decode auth ack: {err}"))?;
+    if ack.get("schema").and_then(|value| value.as_str())
+        != Some("ccbd-control-plane-token-ack-v1")
+        || ack.get("ok").and_then(|value| value.as_bool()) != Some(true)
+    {
+        return Err("ccbd auth ack is invalid".to_string());
+    }
+    let request = json!({"api_version": 2, "op": op, "request": request});
+    stream
+        .write_all(format!("{request}\n").as_bytes())
+        .map_err(|err| format!("write request: {err}"))?;
+    let response_line = read_line(&mut stream)?;
+    decode_response_line(&response_line)
+}
+
+fn decode_response_line(line: &[u8]) -> Result<serde_json::Value, String> {
     let response: serde_json::Value =
-        serde_json::from_slice(first_line).map_err(|err| format!("decode response: {err}"))?;
+        serde_json::from_slice(line).map_err(|err| format!("decode response: {err}"))?;
     if response.get("ok").and_then(|value| value.as_bool()) != Some(true) {
         let error = response
             .get("error")
@@ -156,14 +200,100 @@ fn request_unix_socket(
     Ok(serde_json::Value::Object(payload))
 }
 
+fn read_line(stream: &mut impl Read) -> Result<Vec<u8>, String> {
+    let mut raw = Vec::new();
+    let mut byte = [0_u8; 1];
+    while !raw.ends_with(b"\n") {
+        let count = stream
+            .read(&mut byte)
+            .map_err(|err| format!("read response: {err}"))?;
+        if count == 0 {
+            break;
+        }
+        raw.push(byte[0]);
+        if raw.len() > 1024 * 1024 {
+            return Err("ccbd response is too large".to_string());
+        }
+    }
+    let line = raw
+        .split(|byte| *byte == b'\n')
+        .next()
+        .filter(|line| !line.is_empty())
+        .ok_or_else(|| "empty response from ccbd".to_string())?;
+    Ok(line.to_vec())
+}
+
 #[cfg(not(unix))]
-fn request_unix_socket(
-    _socket_path: &Path,
-    _timeout: Duration,
-    _op: &str,
-    _request: serde_json::Value,
-) -> Result<serde_json::Value, String> {
-    Err("Unix sockets are not supported on this platform".to_string())
+#[derive(Debug)]
+struct TcpEndpoint {
+    host: String,
+    port: u16,
+    token_ref: std::path::PathBuf,
+}
+
+#[cfg(not(unix))]
+fn load_tcp_endpoint(socket_path: &Path) -> Result<TcpEndpoint, String> {
+    let endpoint_path = socket_path
+        .parent()
+        .ok_or_else(|| "ccbd socket path has no parent".to_string())?
+        .join("control-plane-endpoint.json");
+    let payload: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&endpoint_path)
+            .map_err(|err| format!("read {}: {err}", endpoint_path.display()))?,
+    )
+    .map_err(|err| format!("decode {}: {err}", endpoint_path.display()))?;
+    if payload.get("kind").and_then(|value| value.as_str()) != Some("tcp_loopback") {
+        return Err("ccbd endpoint descriptor must use tcp_loopback".to_string());
+    }
+    let host = payload
+        .get("host")
+        .and_then(|value| value.as_str())
+        .unwrap_or("127.0.0.1")
+        .trim()
+        .to_string();
+    if host != "127.0.0.1" {
+        return Err("ccbd TCP endpoint must use 127.0.0.1".to_string());
+    }
+    let port = payload
+        .get("port")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| "ccbd TCP endpoint is missing port".to_string())?;
+    let port = u16::try_from(port).map_err(|_| "ccbd TCP endpoint port is invalid".to_string())?;
+    if port == 0 {
+        return Err("ccbd TCP endpoint port is invalid".to_string());
+    }
+    let token_ref = payload
+        .get("token_ref")
+        .or_else(|| payload.get("auth_ref"))
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "ccbd TCP endpoint is missing token_ref".to_string())?;
+    Ok(TcpEndpoint {
+        host,
+        port,
+        token_ref: token_ref.into(),
+    })
+}
+
+#[cfg(not(unix))]
+fn load_token(path: &Path) -> Result<String, String> {
+    let payload: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(path).map_err(|err| format!("read {}: {err}", path.display()))?,
+    )
+    .map_err(|err| format!("decode {}: {err}", path.display()))?;
+    if payload.get("schema").and_then(|value| value.as_str())
+        != Some("ccbd-control-plane-token-v1")
+    {
+        return Err("ccbd control-plane token file is invalid".to_string());
+    }
+    payload
+        .get("token")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| "ccbd control-plane token file is incomplete".to_string())
 }
 
 #[cfg(all(test, unix))]
