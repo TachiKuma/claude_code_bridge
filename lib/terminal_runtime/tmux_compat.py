@@ -5,7 +5,7 @@ import shutil
 
 def is_tmux_compat_subset(backend) -> bool:
     backend_impl = str(getattr(backend, 'backend_impl', '') or '').strip().lower()
-    if backend_impl in {'psmux', 'rmux'}:
+    if backend_impl == 'psmux':
         return True
     tmux_base = getattr(backend, '_tmux_base', None)
     if not callable(tmux_base):

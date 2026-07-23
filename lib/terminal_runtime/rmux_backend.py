@@ -461,6 +461,27 @@ class RmuxBackend:
     def _run_unchecked(self, args: list[str], *, timeout_s: float | None = None):
         return self._client.run(args, timeout_s=timeout_s)
 
+    def _tmux_run(
+        self,
+        args: list[str],
+        *,
+        check: bool = False,
+        capture: bool = False,
+        timeout: float | None = None,
+        timeout_s: float | None = None,
+    ):
+        del capture
+        resolved_timeout = timeout_s if timeout_s is not None else timeout
+        if check:
+            return self._client.run_checked(
+                args,
+                operation="tmux_compat",
+                timeout_s=resolved_timeout,
+                ipc_ref=self._ipc_ref(),
+                daemon_evidence=self.daemon_evidence,
+            )
+        return self._client.run(args, timeout_s=resolved_timeout)
+
     def _require_capability(self, operation: str, commands: tuple[str, ...] | list[str]) -> None:
         self._capability_gate.require(
             operation,

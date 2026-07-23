@@ -8,7 +8,7 @@ from terminal_runtime.env import default_shell, is_windows, is_wsl
 from terminal_runtime.mux_backend_contract import MuxCommandError, MuxPaneRef
 from terminal_runtime.pane_logs import cleanup_pane_logs, maybe_trim_log, pane_log_path_for
 from terminal_runtime.rmux_backend_runtime.errors import malformed_output_error
-from terminal_runtime.rmux_backend_runtime.targets import pane_target
+from terminal_runtime.rmux_backend_runtime.targets import canonical_pane_target
 from terminal_runtime.rmux_runner import logical_key_sequence_for_rmux
 from terminal_runtime.windows_shell_log_builder import (
     WindowsCommandBuilder,
@@ -76,7 +76,7 @@ def send_text(
     if not normalized:
         return
     backend._require_capability("send_text", ("send-keys",))
-    pane_id = pane_target(pane)
+    pane_id = canonical_pane_target(backend, pane)
     for chunk in _chunks(normalized, _TEXT_CHUNK_SIZE):
         backend._run_checked(
             ["send-keys", "-t", pane_id, "-l", chunk],
@@ -98,7 +98,7 @@ def send_key(
     if not sequence:
         return False
     backend._require_capability("send_key", ("send-keys",))
-    pane_id = pane_target(pane)
+    pane_id = canonical_pane_target(backend, pane)
     for item in sequence:
         backend._run_checked(
             ["send-keys", "-t", pane_id, item],
@@ -119,7 +119,7 @@ def capture_pane(
     timeout_s: float | None = None,
 ) -> RmuxCaptureResult:
     backend._require_capability("capture_pane", ("capture-pane",))
-    pane_id = pane_target(pane)
+    pane_id = canonical_pane_target(backend, pane)
     start_line, end_line = _capture_range(lines=lines, start=start, end=end)
     args = ["capture-pane", "-p", "-t", pane_id]
     if ansi:
@@ -159,7 +159,7 @@ def capture_pane(
 
 
 def pane_log_path(backend, pane: MuxPaneRef) -> Path | None:
-    pane_id = pane_target(pane)
+    pane_id = canonical_pane_target(backend, pane)
     if not pane_id:
         return None
     return pane_log_path_for(pane_id, "rmux", getattr(backend, "namespace", None))
@@ -174,7 +174,7 @@ def ensure_pane_log(
     timeout_s: float | None = None,
 ) -> Path | None:
     backend._require_capability("ensure_pane_log", ("pipe-pane",))
-    pane_id = pane_target(pane)
+    pane_id = canonical_pane_target(backend, pane)
     resolved = Path(log_path).expanduser() if log_path is not None else pane_log_path(backend, pane)
     if resolved is None:
         return None
