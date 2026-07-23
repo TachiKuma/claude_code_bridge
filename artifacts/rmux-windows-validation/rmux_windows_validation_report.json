@@ -1,0 +1,623 @@
+{
+  "full_matrix_status": "pass",
+  "generated_at": "2026-07-23T12:34:32.799618Z",
+  "manifest": [
+    {
+      "backend_impl": "rmux",
+      "backend_selection_source": "env",
+      "case_id": "windows-true-host-start-ping",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        ".\\scripts\\rmux-windows-validation-runbook.ps1"
+      ],
+      "control_plane": "ccbd",
+      "failure_classes": [
+        "missing_evidence",
+        "provider_failure",
+        "system_failure",
+        "test_design_failure"
+      ],
+      "host_kind": "native_windows",
+      "lane": "windows_true_host",
+      "pass_checks": [
+        "native_windows",
+        "ccbd_control_plane",
+        "rmux_backend",
+        "not_probe"
+      ],
+      "probe_bypass": false,
+      "provider": "fake",
+      "required_artifacts": [
+        "transcript",
+        "ping",
+        "doctor"
+      ],
+      "scenario": "start_ping",
+      "selection_scope": "full",
+      "upstream_gate": "ready"
+    },
+    {
+      "backend_impl": "rmux",
+      "backend_selection_source": "env",
+      "case_id": "windows-true-host-ask",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        ".\\scripts\\rmux-windows-validation-runbook.ps1"
+      ],
+      "control_plane": "ccbd",
+      "failure_classes": [
+        "missing_evidence",
+        "provider_failure",
+        "system_failure",
+        "test_design_failure"
+      ],
+      "host_kind": "native_windows",
+      "lane": "windows_true_host",
+      "pass_checks": [
+        "ask_terminal_evidence",
+        "provider_failure_separated"
+      ],
+      "probe_bypass": false,
+      "provider": "fake",
+      "required_artifacts": [
+        "transcript",
+        "ask",
+        "runtime_session"
+      ],
+      "scenario": "ask",
+      "selection_scope": "full",
+      "upstream_gate": "ready"
+    },
+    {
+      "backend_impl": "rmux",
+      "backend_selection_source": "env",
+      "case_id": "windows-true-host-kill",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        ".\\scripts\\rmux-windows-validation-runbook.ps1"
+      ],
+      "control_plane": "ccbd",
+      "failure_classes": [
+        "missing_evidence",
+        "system_failure",
+        "test_design_failure",
+        "valid_non_success"
+      ],
+      "host_kind": "native_windows",
+      "lane": "windows_true_host",
+      "pass_checks": [
+        "endpoint_removed",
+        "token_removed",
+        "rmux_namespace_removed",
+        "owned_process_clean_or_bounded"
+      ],
+      "probe_bypass": false,
+      "provider": "fake",
+      "required_artifacts": [
+        "transcript",
+        "cleanup",
+        "residue"
+      ],
+      "scenario": "kill",
+      "selection_scope": "full",
+      "upstream_gate": "ready"
+    },
+    {
+      "backend_impl": "rmux",
+      "backend_selection_source": "env",
+      "case_id": "windows-true-host-restart",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        ".\\scripts\\rmux-windows-validation-runbook.ps1",
+        "-IncludeRestartReplay"
+      ],
+      "control_plane": "ccbd",
+      "failure_classes": [
+        "missing_evidence",
+        "system_failure",
+        "test_design_failure",
+        "valid_non_success"
+      ],
+      "host_kind": "native_windows",
+      "lane": "windows_true_host",
+      "pass_checks": [
+        "restart_replay_observed_or_degraded_with_reason"
+      ],
+      "probe_bypass": false,
+      "provider": "fake",
+      "required_artifacts": [
+        "transcript",
+        "restart_replay"
+      ],
+      "scenario": "restart_replay",
+      "selection_scope": "full",
+      "upstream_gate": "ready"
+    },
+    {
+      "backend_impl": "rmux",
+      "backend_selection_source": "env",
+      "case_id": "windows-true-host-multi-agent",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        ".\\scripts\\rmux-windows-validation-runbook.ps1",
+        "-IncludeMultiAgent"
+      ],
+      "control_plane": "ccbd",
+      "failure_classes": [
+        "missing_evidence",
+        "provider_failure",
+        "system_failure",
+        "test_design_failure"
+      ],
+      "host_kind": "native_windows",
+      "lane": "windows_true_host",
+      "pass_checks": [
+        "same_project_agents_do_not_cross_provider_env"
+      ],
+      "probe_bypass": false,
+      "provider": "mixed",
+      "required_artifacts": [
+        "transcript",
+        "multi_agent"
+      ],
+      "scenario": "multi_agent",
+      "selection_scope": "full",
+      "upstream_gate": "ready"
+    },
+    {
+      "backend_impl": "rmux",
+      "backend_selection_source": "env",
+      "case_id": "windows-true-host-multi-project",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        ".\\scripts\\rmux-windows-validation-runbook.ps1",
+        "-IncludeMultiProject"
+      ],
+      "control_plane": "ccbd",
+      "failure_classes": [
+        "missing_evidence",
+        "system_failure",
+        "test_design_failure"
+      ],
+      "host_kind": "native_windows",
+      "lane": "windows_true_host",
+      "pass_checks": [
+        "two_projects_do_not_share_namespace_or_endpoint"
+      ],
+      "probe_bypass": false,
+      "provider": "fake",
+      "required_artifacts": [
+        "transcript",
+        "multi_project"
+      ],
+      "scenario": "multi_project",
+      "selection_scope": "full",
+      "upstream_gate": "ready"
+    },
+    {
+      "backend_impl": "rmux",
+      "backend_selection_source": "env",
+      "case_id": "windows-true-host-supervision-recovery",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        ".\\scripts\\rmux-windows-validation-runbook.ps1",
+        "-IncludeRecovery"
+      ],
+      "control_plane": "ccbd",
+      "failure_classes": [
+        "missing_evidence",
+        "system_failure",
+        "test_design_failure",
+        "valid_non_success"
+      ],
+      "host_kind": "native_windows",
+      "lane": "windows_true_host",
+      "pass_checks": [
+        "pane_process_namespace_daemon_evidence_present"
+      ],
+      "probe_bypass": false,
+      "provider": "fake",
+      "required_artifacts": [
+        "transcript",
+        "supervision_recovery"
+      ],
+      "scenario": "supervision_recovery",
+      "selection_scope": "full",
+      "upstream_gate": "ready"
+    },
+    {
+      "backend_impl": "rmux",
+      "backend_selection_source": "env",
+      "case_id": "windows-true-host-diagnostics",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        ".\\scripts\\rmux-windows-validation-runbook.ps1"
+      ],
+      "control_plane": "ccbd",
+      "failure_classes": [
+        "missing_evidence",
+        "system_failure",
+        "test_design_failure"
+      ],
+      "host_kind": "native_windows",
+      "lane": "windows_true_host",
+      "pass_checks": [
+        "doctor_projects_backend_and_transport_evidence"
+      ],
+      "probe_bypass": false,
+      "provider": "fake",
+      "required_artifacts": [
+        "transcript",
+        "doctor",
+        "diagnostics_bundle"
+      ],
+      "scenario": "diagnostics",
+      "selection_scope": "full",
+      "upstream_gate": "ready"
+    }
+  ],
+  "report_paths": {
+    "report_json": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\rmux_windows_validation_report.json",
+    "rows_jsonl": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\rmux_windows_validation_rows.jsonl",
+    "summary_markdown": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\rmux_windows_validation_summary.md"
+  },
+  "rows": [
+    {
+      "backend_impl": "rmux",
+      "backend_selection_source": "env",
+      "case_id": "windows-true-host-start-ping",
+      "classification": "pass",
+      "control_plane": "ccbd",
+      "details": {
+        "classification": "pass",
+        "evidence": "commands/ccb-ping-ccbd.stdout.txt",
+        "observed": true
+      },
+      "evidence_source": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\manual-transcript.json",
+      "host_kind": "native_windows",
+      "lane": "windows_true_host",
+      "observed": true,
+      "pass_checks": [
+        "native_windows",
+        "ccbd_control_plane",
+        "rmux_backend",
+        "not_probe"
+      ],
+      "probe_bypass": false,
+      "provider": "fake",
+      "required_artifacts": [
+        "transcript",
+        "ping",
+        "doctor"
+      ],
+      "scenario": "start_ping",
+      "selection_scope": "full",
+      "transcript": {
+        "errors": [],
+        "failure_class": "system_failure",
+        "ok": false,
+        "path": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\manual-transcript.json",
+        "verdict": "system_failure",
+        "warnings": []
+      }
+    },
+    {
+      "backend_impl": "rmux",
+      "backend_selection_source": "env",
+      "case_id": "windows-true-host-ask",
+      "classification": "pass",
+      "control_plane": "ccbd",
+      "details": {
+        "classification": "pass",
+        "evidence": "commands/ccb-ask.stdout.txt",
+        "observed": true
+      },
+      "evidence_source": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\manual-transcript.json",
+      "host_kind": "native_windows",
+      "lane": "windows_true_host",
+      "observed": true,
+      "pass_checks": [
+        "ask_terminal_evidence",
+        "provider_failure_separated"
+      ],
+      "probe_bypass": false,
+      "provider": "fake",
+      "required_artifacts": [
+        "transcript",
+        "ask",
+        "runtime_session"
+      ],
+      "scenario": "ask",
+      "selection_scope": "full",
+      "transcript": {
+        "errors": [],
+        "failure_class": "system_failure",
+        "ok": false,
+        "path": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\manual-transcript.json",
+        "verdict": "system_failure",
+        "warnings": []
+      }
+    },
+    {
+      "backend_impl": "rmux",
+      "backend_selection_source": "env",
+      "case_id": "windows-true-host-kill",
+      "classification": "pass",
+      "control_plane": "ccbd",
+      "details": {
+        "classification": "pass",
+        "evidence": "commands/ccb-kill-force.stdout.txt",
+        "observed": true
+      },
+      "evidence_source": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\manual-transcript.json",
+      "host_kind": "native_windows",
+      "lane": "windows_true_host",
+      "observed": true,
+      "pass_checks": [
+        "endpoint_removed",
+        "token_removed",
+        "rmux_namespace_removed",
+        "owned_process_clean_or_bounded"
+      ],
+      "probe_bypass": false,
+      "provider": "fake",
+      "required_artifacts": [
+        "transcript",
+        "cleanup",
+        "residue"
+      ],
+      "scenario": "kill",
+      "selection_scope": "full",
+      "transcript": {
+        "errors": [],
+        "failure_class": "system_failure",
+        "ok": false,
+        "path": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\manual-transcript.json",
+        "verdict": "system_failure",
+        "warnings": []
+      }
+    },
+    {
+      "backend_impl": "rmux",
+      "backend_selection_source": "env",
+      "case_id": "windows-true-host-restart",
+      "classification": "valid_non_success",
+      "control_plane": "ccbd",
+      "details": {
+        "classification": "valid_non_success",
+        "evidence": "commands/ccb-ps-after-restart.stdout.txt",
+        "observed": true
+      },
+      "evidence_source": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\manual-transcript.json",
+      "host_kind": "native_windows",
+      "lane": "windows_true_host",
+      "observed": true,
+      "pass_checks": [
+        "restart_replay_observed_or_degraded_with_reason"
+      ],
+      "probe_bypass": false,
+      "provider": "fake",
+      "required_artifacts": [
+        "transcript",
+        "restart_replay"
+      ],
+      "scenario": "restart_replay",
+      "selection_scope": "full",
+      "transcript": {
+        "errors": [],
+        "failure_class": "system_failure",
+        "ok": false,
+        "path": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\manual-transcript.json",
+        "verdict": "system_failure",
+        "warnings": []
+      }
+    },
+    {
+      "backend_impl": "rmux",
+      "backend_selection_source": "env",
+      "case_id": "windows-true-host-multi-agent",
+      "classification": "pass",
+      "control_plane": "ccbd",
+      "details": {
+        "classification": "pass",
+        "evidence": "commands/ccb-ps-multi-agent.stdout.txt",
+        "observed": true
+      },
+      "evidence_source": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\manual-transcript.json",
+      "host_kind": "native_windows",
+      "lane": "windows_true_host",
+      "observed": true,
+      "pass_checks": [
+        "same_project_agents_do_not_cross_provider_env"
+      ],
+      "probe_bypass": false,
+      "provider": "mixed",
+      "required_artifacts": [
+        "transcript",
+        "multi_agent"
+      ],
+      "scenario": "multi_agent",
+      "selection_scope": "full",
+      "transcript": {
+        "errors": [],
+        "failure_class": "system_failure",
+        "ok": false,
+        "path": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\manual-transcript.json",
+        "verdict": "system_failure",
+        "warnings": []
+      }
+    },
+    {
+      "backend_impl": "rmux",
+      "backend_selection_source": "env",
+      "case_id": "windows-true-host-multi-project",
+      "classification": "pass",
+      "control_plane": "ccbd",
+      "details": {
+        "classification": "pass",
+        "evidence": "commands/ccb-ping-project-b.stdout.txt",
+        "observed": true
+      },
+      "evidence_source": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\manual-transcript.json",
+      "host_kind": "native_windows",
+      "lane": "windows_true_host",
+      "observed": true,
+      "pass_checks": [
+        "two_projects_do_not_share_namespace_or_endpoint"
+      ],
+      "probe_bypass": false,
+      "provider": "fake",
+      "required_artifacts": [
+        "transcript",
+        "multi_project"
+      ],
+      "scenario": "multi_project",
+      "selection_scope": "full",
+      "transcript": {
+        "errors": [],
+        "failure_class": "system_failure",
+        "ok": false,
+        "path": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\manual-transcript.json",
+        "verdict": "system_failure",
+        "warnings": []
+      }
+    },
+    {
+      "backend_impl": "rmux",
+      "backend_selection_source": "env",
+      "case_id": "windows-true-host-supervision-recovery",
+      "classification": "valid_non_success",
+      "control_plane": "ccbd",
+      "details": {
+        "classification": "valid_non_success",
+        "evidence": "commands/ccb-recovery-ping.stdout.txt",
+        "observed": true
+      },
+      "evidence_source": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\manual-transcript.json",
+      "host_kind": "native_windows",
+      "lane": "windows_true_host",
+      "observed": true,
+      "pass_checks": [
+        "pane_process_namespace_daemon_evidence_present"
+      ],
+      "probe_bypass": false,
+      "provider": "fake",
+      "required_artifacts": [
+        "transcript",
+        "supervision_recovery"
+      ],
+      "scenario": "supervision_recovery",
+      "selection_scope": "full",
+      "transcript": {
+        "errors": [],
+        "failure_class": "system_failure",
+        "ok": false,
+        "path": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\manual-transcript.json",
+        "verdict": "system_failure",
+        "warnings": []
+      }
+    },
+    {
+      "backend_impl": "rmux",
+      "backend_selection_source": "env",
+      "case_id": "windows-true-host-diagnostics",
+      "classification": "pass",
+      "control_plane": "ccbd",
+      "details": {
+        "classification": "pass",
+        "evidence": "commands/ccb-doctor.stdout.txt",
+        "observed": true
+      },
+      "evidence_source": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\manual-transcript.json",
+      "host_kind": "native_windows",
+      "lane": "windows_true_host",
+      "observed": true,
+      "pass_checks": [
+        "doctor_projects_backend_and_transport_evidence"
+      ],
+      "probe_bypass": false,
+      "provider": "fake",
+      "required_artifacts": [
+        "transcript",
+        "doctor",
+        "diagnostics_bundle"
+      ],
+      "scenario": "diagnostics",
+      "selection_scope": "full",
+      "transcript": {
+        "errors": [],
+        "failure_class": "system_failure",
+        "ok": false,
+        "path": "D:\\Python\\GitHub\\claude_code_bridge\\artifacts\\rmux-windows-validation\\manual-transcript.json",
+        "verdict": "system_failure",
+        "warnings": []
+      }
+    }
+  ],
+  "schema": "ccb.rmux_windows_validation_report.v1",
+  "selected_cases_status": "pass",
+  "selection": {
+    "case_ids": [
+      "windows-true-host-start-ping",
+      "windows-true-host-ask",
+      "windows-true-host-kill",
+      "windows-true-host-restart",
+      "windows-true-host-multi-agent",
+      "windows-true-host-multi-project",
+      "windows-true-host-supervision-recovery",
+      "windows-true-host-diagnostics"
+    ],
+    "lane": "windows_true_host",
+    "scope": "full"
+  },
+  "selection_scope": "full",
+  "summary": {
+    "classification_counts": {
+      "missing_evidence": 0,
+      "pass": 6,
+      "provider_failure": 0,
+      "system_failure": 0,
+      "test_design_failure": 0,
+      "valid_non_success": 2
+    },
+    "failing_case_ids": [],
+    "full_matrix_status": "pass",
+    "missing_case_ids": [],
+    "observed_case_count": 8,
+    "provider_failure_case_ids": [],
+    "selected_case_count": 8,
+    "selected_cases_status": "pass"
+  }
+}

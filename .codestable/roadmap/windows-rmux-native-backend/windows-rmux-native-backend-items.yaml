@@ -117,10 +117,10 @@ items:
   - slug: rmux-windows-validation-matrix
     description: 建立 Windows 原生真实平台验证矩阵和可重复 runbook，覆盖多 agent、ask、kill、restart、多项目
     depends_on: [rmux-supervision-recovery]
-    status: in-progress
+    status: done
     feature: 2026-07-20-rmux-windows-validation-matrix
     minimal_loop: false
-    notes: 包含 CI 可跑部分与手工真机证据部分
+    notes: 矩阵、report builder、subset CI、scope guard、PowerShell/Markdown runbook 已交付；2026-07-23 native Windows full runbook/manual transcript report 已通过，full_matrix_status=pass；runbook/manual lane 保留用于刷新证据。
 
   - slug: rmux-packaging-docs-contracts
     description: 更新 installer、package、docs、contracts，将 Rmux 后端从实验能力收口为受支持入口或明确 beta

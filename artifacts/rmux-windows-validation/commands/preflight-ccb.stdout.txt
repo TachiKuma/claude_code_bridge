@@ -1,0 +1,78 @@
+usage: ccb [-s] [-n]
+
+Primary workflow:
+  ccb                  Start project agents from `.ccb/ccb.config`.
+  ccb -s               Safe start. Disable CLI auto-permission override.
+  ccb -n               Rebuild runtime state while preserving config and managed agent history.
+  ccb clear [agent...]  Send provider-native /clear to managed agent panes.
+  ccb restart <agent> Restart one idle configured agent pane through ccbd.
+  ccb reload            Apply a safe additive config reload, or reject with diagnostics.
+  ccb reload --dry-run  Validate and plan config reload without mutation.
+  ccb config ui        Open the local project configuration panel.
+  ccb maintenance status Show maintenance heartbeat config and stored status.
+  ccb maintenance tick   Run one maintenance heartbeat diagnosis tick.
+  ccb mobile serve       Start the loopback CCB Mobile gateway for the current project.
+  ccb mobile devices     List paired mobile devices for the current project.
+  ccb mobile revoke <id> Revoke one paired mobile device locally.
+  ccb agent add NAME:PROVIDER --role ROLE [--window NAME|--window-class CLASS] --hidden --json
+                        Hot-load one runtime dynamic agent without rewriting ccb.config.
+  ccb agent remove NAME|--agents a,b --policy park|unload --json
+                        Park or unload runtime dynamic agents.
+  ccb agent park NAME|--agents a,b --json
+                        Disable dispatch for dynamic agents while preserving panes.
+  ccb agent resume NAME|--agents a,b --json
+                        Re-enable dispatch for parked dynamic agents.
+  ccb agent release NAME --idle-only --json
+                        Safely release one dynamic agent through role policy.
+  ccb loop capacity ensure --loop-id ID --profile worker=1 --profile code_reviewer=1 --json
+                        Plan dynamic loop workers from configured loop.role_profiles.
+  ccb loop topology propose|commit|reconcile|status|release --loop-id ID --json
+                        Manage runtime workflow graph desired/observed topology.
+  ccb loop run-once --loop-id ID --task TEXT --json
+                        Run one worker/reviewer/orchestrator/round-checker round and write loop artifacts.
+  ccb kill             Stop the current project's background runtime.
+  ccb kill -f          Force cleanup project-owned runtime residue.
+  ccb cleanup          Prune safe provider rebuildable caches after ccbd is stopped.
+  ccb theme [light|dark|+|-]
+                        Set or show the global CCB UI theme.
+
+Core commands:
+  ccb ask <agent> [from <sender>] <message>
+  ccb doctor
+
+Diagnostics-only control-plane status:
+  ccb ping <agent|ccbd>
+
+Diagnostics-only observer:
+  ccb pend <agent|job_id> [N]
+  ccb pend --watch <agent|job_id>
+  ccb pend --inbox [--detail] <agent>
+  ccb pend --queue [--detail] <agent|all>
+
+Advanced views:
+  ccb queue [--detail] <agent|all>
+  ccb trace <id>
+
+Advanced recovery:
+  ccb repair <ack|retry|resubmit> ...
+
+Management:
+  ccb install mobile    Start the server-wide CCB Mobile gateway and pairing QR.
+  ccb version | ccb update [rich|mobile|VERSION] | ccb uninstall [rich] | ccb reinstall
+
+Tools:
+  ccb rich
+  ccb rich uninstall
+  ccb update rich
+  ccb update mobile
+
+Roles:
+  ccb roles list
+  ccb roles install agentroles.ccb_self
+  ccb roles update agentroles.ccb_self
+  ccb roles add agentroles.ccb_self:codex
+  ccb roles install agentroles.archi
+  ccb roles update agentroles.archi
+  ccb roles sync [path]
+  ccb roles add agentroles.archi:codex
+  ccb roles doctor agentroles.archi

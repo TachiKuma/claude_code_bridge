@@ -1,0 +1,5 @@
+kill_status: ok
+project_id: 9466c484573b1313c8294bc2b1ee6cfb504edd88b60a411076aa6d0481777176
+state: unmounted
+socket_path: [USER_HOME]\AppData\Local\Temp\ccb-rmux-validation-c123fd80-b\.ccb\ccbd\ccbd.sock
+forced: true

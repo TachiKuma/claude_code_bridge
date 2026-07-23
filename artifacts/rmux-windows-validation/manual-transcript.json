@@ -1,0 +1,592 @@
+{
+    "schema_version":  1,
+    "host_kind":  "native_windows",
+    "control_plane":  "ccbd",
+    "backend_impl":  "rmux",
+    "probe_bypass":  false,
+    "backend_selection_source":  "env",
+    "ccbd_transport":  "tcp_loopback",
+    "commands":  [
+                     {
+                         "name":  "preflight-python",
+                         "scenario":  "preflight",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+                                      "--version"
+                                  ],
+                         "cwd":  "D:\\Python\\GitHub\\claude_code_bridge",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:15.7709170+00:00",
+                         "duration_ms":  20.422,
+                         "returncode":  0,
+                         "stdout_path":  "commands/preflight-python.stdout.txt",
+                         "stderr_path":  "commands/preflight-python.stderr.txt"
+                     },
+                     {
+                         "name":  "preflight-ccb",
+                         "scenario":  "preflight",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+                                      "D:\\Python\\GitHub\\claude_code_bridge\\ccb.py",
+                                      "--help"
+                                  ],
+                         "cwd":  "D:\\Python\\GitHub\\claude_code_bridge",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:15.8079176+00:00",
+                         "duration_ms":  389.662,
+                         "returncode":  0,
+                         "stdout_path":  "commands/preflight-ccb.stdout.txt",
+                         "stderr_path":  "commands/preflight-ccb.stderr.txt"
+                     },
+                     {
+                         "name":  "preflight-rmux-version",
+                         "scenario":  "preflight",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe",
+                                      "-V"
+                                  ],
+                         "cwd":  "D:\\Python\\GitHub\\claude_code_bridge",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:16.1986081+00:00",
+                         "duration_ms":  2.567,
+                         "returncode":  0,
+                         "stdout_path":  "commands/preflight-rmux-version.stdout.txt",
+                         "stderr_path":  "commands/preflight-rmux-version.stderr.txt"
+                     },
+                     {
+                         "name":  "ccb-start",
+                         "scenario":  "start_ping",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+                                      "D:\\Python\\GitHub\\claude_code_bridge\\ccb.py",
+                                      "--project",
+                                      "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80"
+                                  ],
+                         "cwd":  "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:16.2026070+00:00",
+                         "duration_ms":  7726.915,
+                         "returncode":  0,
+                         "stdout_path":  "commands/ccb-start.stdout.txt",
+                         "stderr_path":  "commands/ccb-start.stderr.txt"
+                     },
+                     {
+                         "name":  "ccb-ping-ccbd",
+                         "scenario":  "start_ping",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+                                      "D:\\Python\\GitHub\\claude_code_bridge\\ccb.py",
+                                      "--project",
+                                      "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                                      "ping",
+                                      "ccbd"
+                                  ],
+                         "cwd":  "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:23.9314337+00:00",
+                         "duration_ms":  428.946,
+                         "returncode":  0,
+                         "stdout_path":  "commands/ccb-ping-ccbd.stdout.txt",
+                         "stderr_path":  "commands/ccb-ping-ccbd.stderr.txt"
+                     },
+                     {
+                         "name":  "ccb-doctor",
+                         "scenario":  "diagnostics",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+                                      "D:\\Python\\GitHub\\claude_code_bridge\\ccb.py",
+                                      "--project",
+                                      "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                                      "doctor"
+                                  ],
+                         "cwd":  "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:24.3634330+00:00",
+                         "duration_ms":  620.952,
+                         "returncode":  0,
+                         "stdout_path":  "commands/ccb-doctor.stdout.txt",
+                         "stderr_path":  "commands/ccb-doctor.stderr.txt"
+                     },
+                     {
+                         "name":  "ccb-ask",
+                         "scenario":  "ask",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+                                      "D:\\Python\\GitHub\\claude_code_bridge\\ccb.py",
+                                      "--project",
+                                      "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                                      "ask",
+                                      "--artifact-reply",
+                                      "demo",
+                                      "--",
+                                      "CCB Windows Rmux validation: reply with RMUX_VALIDATION_OK only."
+                                  ],
+                         "cwd":  "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:24.9874551+00:00",
+                         "duration_ms":  410.94,
+                         "returncode":  0,
+                         "stdout_path":  "commands/ccb-ask.stdout.txt",
+                         "stderr_path":  "commands/ccb-ask.stderr.txt"
+                     },
+                     {
+                         "name":  "ccb-ps-after-ask",
+                         "scenario":  "ask",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+                                      "D:\\Python\\GitHub\\claude_code_bridge\\ccb.py",
+                                      "--project",
+                                      "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                                      "ps"
+                                  ],
+                         "cwd":  "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:25.4004505+00:00",
+                         "duration_ms":  392.124,
+                         "returncode":  0,
+                         "stdout_path":  "commands/ccb-ps-after-ask.stdout.txt",
+                         "stderr_path":  "commands/ccb-ps-after-ask.stderr.txt"
+                     },
+                     {
+                         "name":  "ccb-restart-agent",
+                         "scenario":  "restart_replay",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+                                      "D:\\Python\\GitHub\\claude_code_bridge\\ccb.py",
+                                      "--project",
+                                      "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                                      "restart",
+                                      "demo"
+                                  ],
+                         "cwd":  "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:25.7945949+00:00",
+                         "duration_ms":  411.98,
+                         "returncode":  1,
+                         "stdout_path":  "commands/ccb-restart-agent.stdout.txt",
+                         "stderr_path":  "commands/ccb-restart-agent.stderr.txt"
+                     },
+                     {
+                         "name":  "ccb-ps-after-restart",
+                         "scenario":  "restart_replay",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+                                      "D:\\Python\\GitHub\\claude_code_bridge\\ccb.py",
+                                      "--project",
+                                      "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                                      "ps"
+                                  ],
+                         "cwd":  "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:26.2077521+00:00",
+                         "duration_ms":  393.021,
+                         "returncode":  0,
+                         "stdout_path":  "commands/ccb-ps-after-restart.stdout.txt",
+                         "stderr_path":  "commands/ccb-ps-after-restart.stderr.txt"
+                     },
+                     {
+                         "name":  "ccb-ask-reviewer",
+                         "scenario":  "multi_agent",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+                                      "D:\\Python\\GitHub\\claude_code_bridge\\ccb.py",
+                                      "--project",
+                                      "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                                      "ask",
+                                      "--artifact-reply",
+                                      "reviewer",
+                                      "--",
+                                      "CCB Windows Rmux validation reviewer ping."
+                                  ],
+                         "cwd":  "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:26.6024955+00:00",
+                         "duration_ms":  417.332,
+                         "returncode":  0,
+                         "stdout_path":  "commands/ccb-ask-reviewer.stdout.txt",
+                         "stderr_path":  "commands/ccb-ask-reviewer.stderr.txt"
+                     },
+                     {
+                         "name":  "ccb-ps-multi-agent",
+                         "scenario":  "multi_agent",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+                                      "D:\\Python\\GitHub\\claude_code_bridge\\ccb.py",
+                                      "--project",
+                                      "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                                      "ps"
+                                  ],
+                         "cwd":  "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:27.0211645+00:00",
+                         "duration_ms":  392.59,
+                         "returncode":  0,
+                         "stdout_path":  "commands/ccb-ps-multi-agent.stdout.txt",
+                         "stderr_path":  "commands/ccb-ps-multi-agent.stderr.txt"
+                     },
+                     {
+                         "name":  "ccb-start-project-b",
+                         "scenario":  "multi_project",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+                                      "D:\\Python\\GitHub\\claude_code_bridge\\ccb.py",
+                                      "--project",
+                                      "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80-b"
+                                  ],
+                         "cwd":  "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80-b",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:27.4291936+00:00",
+                         "duration_ms":  1937.422,
+                         "returncode":  0,
+                         "stdout_path":  "commands/ccb-start-project-b.stdout.txt",
+                         "stderr_path":  "commands/ccb-start-project-b.stderr.txt"
+                     },
+                     {
+                         "name":  "ccb-ping-project-b",
+                         "scenario":  "multi_project",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+                                      "D:\\Python\\GitHub\\claude_code_bridge\\ccb.py",
+                                      "--project",
+                                      "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80-b",
+                                      "ping",
+                                      "ccbd"
+                                  ],
+                         "cwd":  "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80-b",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:29.3683301+00:00",
+                         "duration_ms":  431.021,
+                         "returncode":  0,
+                         "stdout_path":  "commands/ccb-ping-project-b.stdout.txt",
+                         "stderr_path":  "commands/ccb-ping-project-b.stderr.txt"
+                     },
+                     {
+                         "name":  "ccb-ask-project-b",
+                         "scenario":  "multi_project",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+                                      "D:\\Python\\GitHub\\claude_code_bridge\\ccb.py",
+                                      "--project",
+                                      "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80-b",
+                                      "ask",
+                                      "--artifact-reply",
+                                      "demo",
+                                      "--",
+                                      "CCB Windows Rmux validation second project ping."
+                                  ],
+                         "cwd":  "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80-b",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:29.8023182+00:00",
+                         "duration_ms":  425.418,
+                         "returncode":  0,
+                         "stdout_path":  "commands/ccb-ask-project-b.stdout.txt",
+                         "stderr_path":  "commands/ccb-ask-project-b.stderr.txt"
+                     },
+                     {
+                         "name":  "ccb-kill-project-b",
+                         "scenario":  "multi_project",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+                                      "D:\\Python\\GitHub\\claude_code_bridge\\ccb.py",
+                                      "--project",
+                                      "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80-b",
+                                      "kill",
+                                      "-f"
+                                  ],
+                         "cwd":  "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80-b",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:30.2290196+00:00",
+                         "duration_ms":  790.318,
+                         "returncode":  0,
+                         "stdout_path":  "commands/ccb-kill-project-b.stdout.txt",
+                         "stderr_path":  "commands/ccb-kill-project-b.stderr.txt"
+                     },
+                     {
+                         "name":  "ccb-recovery-restart-agent",
+                         "scenario":  "supervision_recovery",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+                                      "D:\\Python\\GitHub\\claude_code_bridge\\ccb.py",
+                                      "--project",
+                                      "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                                      "restart",
+                                      "demo"
+                                  ],
+                         "cwd":  "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:31.0206202+00:00",
+                         "duration_ms":  413.7,
+                         "returncode":  1,
+                         "stdout_path":  "commands/ccb-recovery-restart-agent.stdout.txt",
+                         "stderr_path":  "commands/ccb-recovery-restart-agent.stderr.txt"
+                     },
+                     {
+                         "name":  "ccb-recovery-ping",
+                         "scenario":  "supervision_recovery",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+                                      "D:\\Python\\GitHub\\claude_code_bridge\\ccb.py",
+                                      "--project",
+                                      "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                                      "ping",
+                                      "ccbd"
+                                  ],
+                         "cwd":  "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:31.4356161+00:00",
+                         "duration_ms":  412.478,
+                         "returncode":  0,
+                         "stdout_path":  "commands/ccb-recovery-ping.stdout.txt",
+                         "stderr_path":  "commands/ccb-recovery-ping.stderr.txt"
+                     },
+                     {
+                         "name":  "ccb-kill-force",
+                         "scenario":  "kill",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+                                      "D:\\Python\\GitHub\\claude_code_bridge\\ccb.py",
+                                      "--project",
+                                      "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                                      "kill",
+                                      "-f"
+                                  ],
+                         "cwd":  "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:31.8504889+00:00",
+                         "duration_ms":  726.95,
+                         "returncode":  0,
+                         "stdout_path":  "commands/ccb-kill-force.stdout.txt",
+                         "stderr_path":  "commands/ccb-kill-force.stderr.txt"
+                     },
+                     {
+                         "name":  "cleanup-rmux-list-sessions",
+                         "scenario":  "kill",
+                         "argv":  [
+                                      "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe",
+                                      "list-sessions"
+                                  ],
+                         "cwd":  "[USER_HOME]\\AppData\\Local\\Temp\\ccb-rmux-validation-c123fd80",
+                         "env_allowlist":  {
+                                               "CCB_TEST_ENTRYPOINT":  "1",
+                                               "CCB_MUX_BACKEND":  "rmux",
+                                               "CCB_SOURCE_RUNTIME_OK":  "1",
+                                               "PYTHONUTF8":  "1",
+                                               "CCB_RMUX_BIN":  "[USER_HOME]\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.exe"
+                                           },
+                         "started_at":  "2026-07-23T12:34:32.5785207+00:00",
+                         "duration_ms":  2.588,
+                         "returncode":  1,
+                         "stdout_path":  "commands/cleanup-rmux-list-sessions.stdout.txt",
+                         "stderr_path":  "commands/cleanup-rmux-list-sessions.stderr.txt"
+                     }
+                 ],
+    "artifacts":  {
+                      "ping":  "commands/ccb-ping-ccbd.stdout.txt",
+                      "doctor":  "commands/ccb-doctor.stdout.txt",
+                      "ask":  "commands/ccb-ask.stdout.txt",
+                      "runtime_session":  "commands/ccb-ps-after-ask.stdout.txt",
+                      "cleanup":  "commands/ccb-kill-force.stdout.txt",
+                      "residue":  "manual-transcript.json",
+                      "restart_replay":  "commands/ccb-ps-after-restart.stdout.txt",
+                      "multi_agent":  "commands/ccb-ps-multi-agent.stdout.txt",
+                      "multi_project":  "commands/ccb-ping-project-b.stdout.txt",
+                      "supervision_recovery":  "commands/ccb-recovery-ping.stdout.txt"
+                  },
+    "evidence":  {
+                     "cleanup":  {
+                                     "endpoint_removed":  true,
+                                     "token_removed":  true,
+                                     "rmux_namespace_removed":  true,
+                                     "session_removed":  true,
+                                     "endpoint_residue":  [
+
+                                                          ],
+                                     "token_residue":  [
+
+                                                       ],
+                                     "owned_process_residue":  [
+
+                                                               ]
+                                 }
+                 },
+    "redaction_summary":  {
+                              "redacted":  true,
+                              "raw_retention_policy":  "redacted_artifacts_only",
+                              "home_placeholder":  "[USER_HOME]"
+                          },
+    "cleanup":  {
+                    "status":  "cleaned",
+                    "ok":  true,
+                    "evidence":  {
+                                     "endpoint_removed":  true,
+                                     "token_removed":  true,
+                                     "rmux_namespace_removed":  true,
+                                     "session_removed":  true,
+                                     "endpoint_residue":  [
+
+                                                          ],
+                                     "token_residue":  [
+
+                                                       ],
+                                     "owned_process_residue":  [
+
+                                                               ]
+                                 }
+                },
+    "scenario_results":  {
+                             "start_ping":  {
+                                                "observed":  true,
+                                                "classification":  "pass",
+                                                "evidence":  "commands/ccb-ping-ccbd.stdout.txt"
+                                            },
+                             "ask":  {
+                                         "observed":  true,
+                                         "classification":  "pass",
+                                         "evidence":  "commands/ccb-ask.stdout.txt"
+                                     },
+                             "kill":  {
+                                          "observed":  true,
+                                          "classification":  "pass",
+                                          "evidence":  "commands/ccb-kill-force.stdout.txt"
+                                      },
+                             "diagnostics":  {
+                                                 "observed":  true,
+                                                 "classification":  "pass",
+                                                 "evidence":  "commands/ccb-doctor.stdout.txt"
+                                             },
+                             "restart_replay":  {
+                                                    "observed":  true,
+                                                    "classification":  "valid_non_success",
+                                                    "evidence":  "commands/ccb-ps-after-restart.stdout.txt"
+                                                },
+                             "multi_agent":  {
+                                                 "observed":  true,
+                                                 "classification":  "pass",
+                                                 "evidence":  "commands/ccb-ps-multi-agent.stdout.txt"
+                                             },
+                             "multi_project":  {
+                                                   "observed":  true,
+                                                   "classification":  "pass",
+                                                   "evidence":  "commands/ccb-ping-project-b.stdout.txt"
+                                               },
+                             "supervision_recovery":  {
+                                                          "observed":  true,
+                                                          "classification":  "valid_non_success",
+                                                          "evidence":  "commands/ccb-recovery-ping.stdout.txt"
+                                                      }
+                         }
+}

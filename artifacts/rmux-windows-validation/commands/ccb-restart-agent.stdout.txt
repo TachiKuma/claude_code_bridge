@@ -1,0 +1,9 @@
+restart_status: blocked
+agent_name: demo
+restartable_agents: demo, reviewer
+restart_busy_gate: passed=false runtime_state=busy runtime_queue_depth=1 queue_depth=1 pending_reply_count=0 active_job_id=job_6e8302c8d82a active_inbound_event_id=iev_bd4b54a4d34c pending_callback_count=0
+blocker: reason=runtime_active detail=state=busy
+blocker: reason=active_job detail=job_id=job_6e8302c8d82a
+blocker: reason=runtime_queue_depth detail=1
+blocker: reason=queue_depth detail=1
+blocker: reason=active_inbound_delivery detail=iev_bd4b54a4d34c

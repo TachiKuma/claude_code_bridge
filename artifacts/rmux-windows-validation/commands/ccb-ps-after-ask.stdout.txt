@@ -1,0 +1,6 @@
+project_id: 4f8196705d561d03bb9c3ecbc82062af6779a8f26a9cfadb924c6c2da330b130
+ccbd_state: mounted
+agent: name=demo state=busy provider=fake queue=1
+binding: status=partial runtime=rmux:%1 session=None source=provider-session workspace=[USER_HOME]\AppData\Local\Temp\ccb-rmux-validation-c123fd80 terminal=rmux socket=None socket_path=[USER_HOME]\AppData\Local\Temp\ccb-rmux-validation-c123fd80\.ccb\ccbd\tmux.sock window=main window_id=None pane=%1 active_pane=%1 pane_state=None marker=None
+agent: name=reviewer state=idle provider=fake queue=0
+binding: status=partial runtime=rmux:%2 session=None source=provider-session workspace=[USER_HOME]\AppData\Local\Temp\ccb-rmux-validation-c123fd80 terminal=rmux socket=None socket_path=[USER_HOME]\AppData\Local\Temp\ccb-rmux-validation-c123fd80\.ccb\ccbd\tmux.sock window=main window_id=None pane=%2 active_pane=%2 pane_state=None marker=None

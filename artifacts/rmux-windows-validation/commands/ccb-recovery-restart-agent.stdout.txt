@@ -1,0 +1,8 @@
+restart_status: failed
+agent_name: demo
+restartable_agents: demo, reviewer
+reason: unsupported_for_backend
+restart_busy_gate: passed=true runtime_state=idle runtime_queue_depth=0 queue_depth=0 pending_reply_count=0 active_job_id=None active_inbound_event_id=None pending_callback_count=0
+old_runtime: state=idle health=restored pane_id=%1 active_pane_id=%1 runtime_ref=rmux:%1 session_ref=None runtime_pid=None restart_count=0
+new_runtime: state=idle health=restored pane_id=%1 active_pane_id=%1 runtime_ref=rmux:%1 session_ref=None runtime_pid=None restart_count=0
+restart_result: agent=demo status=skipped reason=unsupported_for_backend backend_impl=rmux

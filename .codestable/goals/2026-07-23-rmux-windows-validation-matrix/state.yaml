@@ -1,0 +1,31 @@
+schema_version: 2
+goal: "rmux-windows-validation-matrix"
+status: complete
+objective: "继续 windows-rmux-native-backend epic 中的 rmux-windows-validation-matrix，建立 Windows Rmux 自动化与真机验证矩阵、证据 schema、报告聚合和可重复 runbook，覆盖多 agent、ask、kill、restart、多项目，并推进到功能验收完成。"
+start_point: "rmux-supervision-recovery 已验收通过；rmux-windows-validation-matrix design 已 approved、design-review passed，roadmap item 为 in-progress，checklist steps/checks 均为 pending；代码尚未实现专项 validation matrix 脚本、PowerShell runbook、markdown runbook、测试和 scope guard。"
+acceptance:
+  - "matrix manifest 覆盖 start/ping/ask/kill/restart/multi-agent/multi-project/recovery/diagnostics 核心 cases，且 windows_true_host 强制 true-host 防伪字段。"
+  - "report builder 输出 JSON、JSONL、markdown summary，fake/provider/windows/manual evidence 分类不混淆，缺证据 fail closed。"
+  - "PowerShell runbook 与 markdown runbook 共享 transcript sidecar schema，manual transcript 可解析、可脱敏并回填 report。"
+  - "subset CI / fake lane 只能断言 selected_cases_status，不得冒充 full_matrix_status；provider_failure 与 system_failure 分离。"
+  - "Windows cleanup/residue evidence 覆盖 ccbd endpoint、TCP token ref、Rmux namespace/session、owned process/job。"
+  - "scope guard 禁止 packaging/docs contract、backend implementation、provider parser 越界；feature checklist、QA、acceptance、roadmap item 与 goal iteration 回写完成。"
+  - "独立 Task agent code review passed，独立 Task agent 功能验收 passed。"
+non_goals:
+  - "不实现或修改 Rmux backend、supervision/recovery、Windows TCP transport 或 provider completion parser。"
+  - "不把 WSL、probe、fake lane 或 capability report 作为 native Windows true-host pass。"
+  - "不要求默认 CI 拥有真实 provider secrets。"
+  - "不更新 installer、npm os、README、用户手册、release contract 或 packaging/docs supported 收口。"
+  - "不执行 git commit、git push、merge、release、deploy 或生产变更。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 1
+next_action: "Goal complete; rerun the PowerShell runbook only when refreshing Windows full-matrix evidence."
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-23"

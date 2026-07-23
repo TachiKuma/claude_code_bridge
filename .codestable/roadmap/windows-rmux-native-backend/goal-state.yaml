@@ -201,7 +201,7 @@ features:
     review: .codestable/features/2026-07-20-rmux-windows-validation-matrix/rmux-windows-validation-matrix-review.md
     qa: .codestable/features/2026-07-20-rmux-windows-validation-matrix/rmux-windows-validation-matrix-qa.md
     acceptance: .codestable/features/2026-07-20-rmux-windows-validation-matrix/rmux-windows-validation-matrix-acceptance.md
-    status: pending
+    status: accepted
   - slug: rmux-packaging-docs-contracts
     roadmap_item: rmux-packaging-docs-contracts
     feature_dir: .codestable/features/2026-07-20-rmux-packaging-docs-contracts

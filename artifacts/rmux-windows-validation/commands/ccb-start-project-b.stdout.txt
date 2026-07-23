@@ -1,0 +1,13 @@
+start_status: ok
+project: [USER_HOME]\AppData\Local\Temp\ccb-rmux-validation-c123fd80-b
+project_id: 9466c484573b1313c8294bc2b1ee6cfb504edd88b60a411076aa6d0481777176
+ccbd_started: true
+socket_path: [USER_HOME]\AppData\Local\Temp\ccb-rmux-validation-c123fd80-b\.ccb\ccbd\ccbd.sock
+agents: demo, reviewer
+startup_run_id: start_ae64c30b36824b1eb54993d217f0914e
+startup_cli_timings_ms: {"cli_post_rpc":14.5589,"cli_pre_rpc":2.4661,"cli_total":1509.6569,"daemon_ensure":971.3073,"layout_status":1.9493,"maintenance_heartbeat":0.7709,"sidebar_helper_refresh":11.7949,"start_rpc":521.2916}
+layout_summary_status: ok
+layout: windows=1 panes=2 runtime_panes=0 dynamic=0 loop=0 runtime=2 explicit=false entry_window=main ccbd_state=mounted observe_status=skipped observe_reason=unsupported_for_backend
+layout_window: name=main index=- panes=2 runtime_panes=0 agents=demo,reviewer
+layout_agent: name=demo kind=static source=configured ownership=static_configured dispatch=enabled window=main pane=%1 pane_identity=runtime runtime_state=idle apply_status=- failed_apply=false
+layout_agent: name=reviewer kind=static source=configured ownership=static_configured dispatch=enabled window=main pane=%2 pane_identity=runtime runtime_state=idle apply_status=- failed_apply=false

@@ -3,7 +3,7 @@ doc_type: roadmap-goal-feature
 roadmap: windows-rmux-native-backend
 roadmap_item: rmux-windows-validation-matrix
 feature: 2026-07-20-rmux-windows-validation-matrix
-status: pending
+status: accepted
 ---
 
 # rmux-windows-validation-matrix Goal Feature Spec
@@ -44,9 +44,9 @@ Windows Rmux validation matrix、runner 与 report
 ## 5. Gates And Recovery
 
 - Implementation gate: checklist steps done, scope-gate, dod-runner and evidence-pack passed.
-- Review gate: independent cs-code-review passed with no unresolved blocking findings.
-- QA gate: cs-feat QA passed and covers design scenarios, DoD commands and review QA focus.
-- Acceptance gate: cs-feat acceptance passed via pproval-report.md#goal-acceptance, checklist checks passed and roadmap item writeback complete.
+- Review gate: independent Task agent review passed with no unresolved blocking findings.
+- QA gate: QA passed with matrix/report/transcript parser tests, fake subset report, fail-closed full scope, PowerShell AST parse and scope guard evidence.
+- Acceptance gate: Task agent functional acceptance passed; checklist checks passed and roadmap item writeback complete.
 - Recovery: implementation defects return to implementation then review/QA/acceptance; stage evidence defects repair the owning stage only.
 
 ## 6. Evidence And Cleanliness

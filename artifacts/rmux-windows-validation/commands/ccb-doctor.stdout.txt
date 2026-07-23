@@ -1,0 +1,208 @@
+project: [USER_HOME]\AppData\Local\Temp\ccb-rmux-validation-c123fd80
+project_id: 4f8196705d561d03bb9c3ecbc82062af6779a8f26a9cfadb924c6c2da330b130
+install_path: D:\Python\GitHub\claude_code_bridge
+install_mode: source
+install_source_kind: source
+install_version: 8.2.1
+install_channel: dev
+install_build_time: None
+install_platform: None
+install_arch: None
+entrypoint_status: degraded
+entrypoint_reason: bare_ccb_resolves_outside_current_install
+entrypoint_path: [USER_HOME]\AppData\Local\codex-dual\bin\ccb.BAT
+entrypoint_realpath: [USER_HOME]\AppData\Local\codex-dual\bin\ccb.bat
+entrypoint_expected_install_path: D:\Python\GitHub\claude_code_bridge
+entrypoint_matches_current_install: False
+user_id: -1
+user_name: Administrator
+home: [USER_HOME]
+root_runtime: False
+install_root_owned: True
+install_user_id: None
+install_user_name: None
+sudo_user: None
+project_owner: 0:Administrator
+ccb_dir_owner: 0:Administrator
+install_owner: 0:Administrator
+requirement_python_executable: [USER_HOME]\AppData\Local\Programs\Python\Python314\python.exe
+requirement_python_version: 3.14.2
+requirement_tmux_available: True
+requirement_tmux_path: [USER_HOME]\AppData\Local\psmux\tmux.EXE
+ccbd_state: mounted
+ccbd_pid: 2320
+ccbd_keeper_pid: 1836
+ccbd_implementation_root: None
+ccbd_implementation_status: unknown
+ccbd_implementation_reason: cmdline_unavailable
+ccbd_implementation_cmdline: None
+ccbd_socket_path: [USER_HOME]\AppData\Local\Temp\ccb-rmux-validation-c123fd80\.ccb\ccbd\ccbd.sock
+ccbd_project_anchor_path: [USER_HOME]\AppData\Local\Temp\ccb-rmux-validation-c123fd80\.ccb
+ccbd_runtime_state_root: [USER_HOME]\AppData\Local\Temp\ccb-rmux-validation-c123fd80\.ccb
+ccbd_runtime_root_kind: project
+ccbd_runtime_relocation_reason: None
+ccbd_runtime_filesystem_hint: None
+ccbd_runtime_marker_status: not_required
+ccbd_preferred_socket_path: [USER_HOME]/AppData/Local/Temp/ccb-rmux-validation-c123fd80/.ccb/ccbd/ccbd.sock
+ccbd_effective_socket_path: [USER_HOME]/AppData/Local/Temp/ccb-rmux-validation-c123fd80/.ccb/ccbd/ccbd.sock
+ccbd_preferred_socket_path_bytes: 90
+ccbd_effective_socket_path_bytes: 90
+ccbd_socket_root_kind: project
+ccbd_socket_fallback_reason: None
+ccbd_socket_filesystem_hint: None
+ccbd_tmux_socket_path: [USER_HOME]/AppData/Local/Temp/ccb-rmux-validation-c123fd80/.ccb/ccbd/tmux.sock
+ccbd_tmux_preferred_socket_path: [USER_HOME]/AppData/Local/Temp/ccb-rmux-validation-c123fd80/.ccb/ccbd/tmux.sock
+ccbd_tmux_effective_socket_path: [USER_HOME]/AppData/Local/Temp/ccb-rmux-validation-c123fd80/.ccb/ccbd/tmux.sock
+ccbd_tmux_preferred_socket_path_bytes: 90
+ccbd_tmux_effective_socket_path_bytes: 90
+ccbd_tmux_start_server_command: tmux -f /dev/null -S [USER_HOME]/AppData/Local/Temp/ccb-rmux-validation-c123fd80/.ccb/ccbd/tmux.sock start-server
+ccbd_tmux_socket_root_kind: project
+ccbd_tmux_socket_fallback_reason: None
+ccbd_tmux_socket_filesystem_hint: None
+backend_selection_backend_impl: rmux
+backend_selection_requested: rmux
+backend_selection_effective: rmux
+backend_selection_source: project_config
+backend_selection_fallback_used: False
+backend_selection_fallback_reason: None
+backend_selection_failure_reason: None
+backend_selection_diagnostic: mux backend selected: rmux
+ccbd_health: healthy
+ccbd_generation: 4
+ccbd_last_heartbeat_at: 2026-07-23T12:34:23.285071Z
+ccbd_pid_alive: True
+ccbd_socket_connectable: True
+ccbd_heartbeat_fresh: True
+ccbd_takeover_allowed: False
+ccbd_reason: healthy
+ccbd_last_request_queue_wait_s: 0.00010719999954744708
+ccbd_last_submit_duration_s: None
+ccbd_last_ping_duration_s: 0.0008070000003499445
+ccbd_last_handler_latency_s_by_op: ping=0.0008161000005202368,start=0.5007942000011099
+ccbd_last_maintenance_duration_s: 0.0010610999997879844
+ccbd_last_heartbeat_duration_s: 0.0010610999997879844
+ccbd_heartbeat_step_duration_s: dispatcher_poll_completions=1.5999999959603883e-05,dispatcher_runtime_views=7.609999920532573e-05,dispatcher_tick=0.00024160000066331122,health_monitor=2.6999998226528987e-05,job_heartbeat=2.990000029967632e-05,reload_drain_auto_retry=6.639999992330559e-05,runtime_supervision=0.0002077999997709412
+ccbd_last_heartbeat_agents_inspected: 2.0
+ccbd_last_heartbeat_runtime_store_writes: 0.0
+ccbd_pending_maintenance_ticks: 0.0
+ccbd_last_project_view_response_duration_s: None
+ccbd_last_project_view_build_duration_s: None
+ccbd_project_view_cache_hits: 0.0
+ccbd_project_view_cache_misses: 0.0
+ccbd_last_project_view_tmux_command_count: None
+ccbd_last_project_view_capture_pane_count: None
+ccbd_last_project_view_store_scan_count: None
+ccbd_rss_bytes: None
+ccbd_virtual_memory_bytes: None
+ccbd_fd_count: None
+ccbd_thread_count: 3.0
+ccbd_service_graph_version: 1
+ccbd_service_graph_created_at: 2026-07-23T12:34:23.087728Z
+ccbd_service_graph_retained_count: 1
+ccbd_service_graph_retained_count_scope: published_graph_count_not_inflight_retention
+ccbd_last_reload_duration_s: None
+ccbd_last_reload_plan_class: None
+ccbd_last_reload_error: None
+ccbd_active_execution_count: 0
+ccbd_recoverable_execution_count: 0
+ccbd_nonrecoverable_execution_count: 0
+ccbd_pending_items_count: 0
+ccbd_terminal_pending_count: 0
+ccbd_recoverable_execution_providers: []
+ccbd_nonrecoverable_execution_providers: []
+ccbd_last_restore_at: 2026-07-23T12:34:23.300302Z
+ccbd_last_restore_running_job_count: 0
+ccbd_last_restore_restored_execution_count: 0
+ccbd_last_restore_replay_pending_count: 0
+ccbd_last_restore_terminal_pending_count: 0
+ccbd_last_restore_abandoned_execution_count: 0
+ccbd_last_restore_already_active_count: 0
+ccbd_last_restore_results_text: none
+ccbd_startup_last_at: 2026-07-23T12:34:23.873099Z
+ccbd_startup_last_trigger: start_command
+ccbd_startup_last_status: ok
+ccbd_startup_last_generation: 4
+ccbd_startup_last_daemon_started: True
+ccbd_startup_last_run_id: start_034824a56a9f4fb39367cdef855cf315
+ccbd_startup_last_requested_agents: []
+ccbd_startup_last_desired_agents: ['demo', 'reviewer']
+ccbd_startup_last_actions: ['ensure_namespace:epoch=1,session=ccb-ccb-rmux-validation-c123fd80-4f819670', 'use_namespace_topology:demo,reviewer', 'reuse_binding:demo', 'restore_runtime:demo', 'reuse_binding:reviewer', 'restore_runtime:reviewer', 'cleanup_tmux_orphans:killed=0']
+ccbd_startup_last_cleanup_killed: 0
+ccbd_startup_last_failure_reason: None
+ccbd_startup_last_timings_ms: {'namespace_ensure': 445.2746, 'context_and_layout_plan': 0.0519, 'tmux_namespace_runtime': 0.0577, 'agent_prepare_and_classify': 14.5396, 'tmux_layout': 0.015, 'active_panes_and_cmd': 0.0026, 'agent_runtime_commit': 10.2073, 'agent_runtime_duration_sum': 10.1543, 'agent_runtime_prepare_launch_context': 0.0, 'agent_runtime_build_start_cmd': 0.0, 'agent_runtime_tmux_respawn': 0.0, 'agent_runtime_pane_identity': 0.0, 'agent_runtime_session_write': 0.0, 'agent_runtime_provider_post_launch': 0.0, 'agent_runtime_binding_resolve': 0.0, 'agent_runtime_pane_and_runtime_facts': 0.1124, 'agent_runtime_authority_commit': 3.1512000000000002, 'agent_runtime_restore_bookkeeping': 6.4990000000000006, 'agent_runtime_unattributed': 0.39170000000000016, 'agent_runtime_loop_overhead': 0.053000000000000824, 'tmux_cleanup': 24.6025, 'flow_total': 49.4944, 'supervisor_total': 494.8784}
+ccbd_startup_last_operation_counts: {'atomic_durable_write_attempt_count': 14, 'atomic_durable_write_byte_count': 13559, 'atomic_durable_write_count': 14, 'orphan_cleanup_pass_count': 1, 'orphan_cleanup_socket_scan_count': 2, 'provider_prepare_atomic_write_byte_count': 826, 'provider_prepare_atomic_write_count': 2, 'provider_prepare_attempt_count': 2, 'provider_prepare_count': 2, 'startup_report_write_attempt_count': 1, 'tmux_backend_command_attempt_count': 2, 'tmux_backend_command_count': 2, 'tmux_backend_subprocess_spawn_count': 2, 'tracked_startup_subprocess_spawn_attempt_count': 2, 'tracked_startup_subprocess_spawn_count': 2}
+ccbd_startup_last_provider_prepare_count: 2
+ccbd_startup_last_agent_timings_ms: {'demo': {'pane_and_runtime_facts': 0.0683, 'unattributed': 0.18900000000000006, 'authority_commit': 1.8085, 'restore_bookkeeping': 3.3542, 'prepare_launch_context': 0.0, 'build_start_cmd': 0.0, 'tmux_respawn': 0.0, 'pane_identity': 0.0, 'session_write': 0.0, 'provider_post_launch': 0.0, 'binding_resolve': 0.0}, 'reviewer': {'pane_and_runtime_facts': 0.0441, 'unattributed': 0.2027000000000001, 'authority_commit': 1.3427, 'restore_bookkeeping': 3.1448, 'prepare_launch_context': 0.0, 'build_start_cmd': 0.0, 'tmux_respawn': 0.0, 'pane_identity': 0.0, 'session_write': 0.0, 'provider_post_launch': 0.0, 'binding_resolve': 0.0}}
+ccbd_startup_last_agent_results_text: demo:attached/restored; reviewer:attached/restored
+ccbd_shutdown_last_at: None
+ccbd_shutdown_last_trigger: None
+ccbd_shutdown_last_status: None
+ccbd_shutdown_last_forced: None
+ccbd_shutdown_last_generation: None
+ccbd_shutdown_last_reason: None
+ccbd_shutdown_last_stopped_agents: None
+ccbd_shutdown_last_actions: None
+ccbd_shutdown_last_cleanup_killed: None
+ccbd_shutdown_last_failure_reason: None
+ccbd_shutdown_last_runtime_states_text: None
+ccbd_namespace_epoch: 1
+ccbd_namespace_backend_family: tmux-family
+ccbd_namespace_backend_impl: rmux
+ccbd_namespace_id: 4f8196705d561d03bb9c3ecbc82062af6779a8f26a9cfadb924c6c2da330b130
+ccbd_namespace_session_name: ccb-ccb-rmux-validation-c123fd80-4f819670
+ccbd_namespace_ipc_kind: socket_name
+ccbd_namespace_ipc_ref: ccb-ccb-rmux-validation-c123fd80-4f819670
+ccbd_namespace_tmux_socket_path: [USER_HOME]\AppData\Local\Temp\ccb-rmux-validation-c123fd80\.ccb\ccbd\tmux.sock
+ccbd_namespace_tmux_session_name: ccb-ccb-rmux-validation-c123fd80-4f819670
+ccbd_namespace_layout_version: 3
+ccbd_namespace_ui_attachable: True
+ccbd_namespace_last_started_at: 2026-07-23T12:34:23.806132Z
+ccbd_namespace_last_destroyed_at: None
+ccbd_namespace_last_destroy_reason: None
+ccbd_namespace_last_event_kind: namespace_created
+ccbd_namespace_last_event_at: 2026-07-23T12:34:23.806132Z
+ccbd_namespace_last_event_epoch: 1
+ccbd_namespace_last_event_socket_path: [USER_HOME]\AppData\Local\Temp\ccb-rmux-validation-c123fd80\.ccb\ccbd\tmux.sock
+ccbd_namespace_last_event_session_name: ccb-ccb-rmux-validation-c123fd80-4f819670
+ccbd_start_policy_auto_permission: True
+ccbd_start_policy_recovery_restore: True
+ccbd_start_policy_last_started_at: 2026-07-23T12:34:23.874402Z
+ccbd_start_policy_source: start_command
+ccbd_tmux_cleanup_last_kind: start
+ccbd_tmux_cleanup_last_at: 2026-07-23T12:34:23.870212Z
+ccbd_tmux_cleanup_socket_count: 0
+ccbd_tmux_cleanup_total_owned: 0
+ccbd_tmux_cleanup_total_active: 0
+ccbd_tmux_cleanup_total_orphaned: 0
+ccbd_tmux_cleanup_total_killed: 0
+ccbd_tmux_cleanup_sockets: []
+requirement_provider: name=codex executable=codex available=True path=[USER_HOME]\AppData\Roaming\npm\codex.CMD
+requirement_provider: name=claude executable=claude available=True path=[USER_HOME]\AppData\Roaming\npm\claude.CMD
+requirement_provider: name=gemini executable=gemini available=True path=[USER_HOME]\AppData\Roaming\npm\gemini.CMD
+requirement_provider: name=opencode executable=opencode available=True path=[USER_HOME]\AppData\Roaming\npm\opencode.CMD
+requirement_provider: name=droid executable=droid available=True path=[USER_HOME]\bin\droid.EXE
+requirement_provider: name=agy executable=agy available=False path=None
+requirement_provider: name=kimi executable=kimi available=False path=None
+requirement_provider: name=deepseek executable=deepcode available=False path=None
+requirement_provider: name=mimo executable=mimo available=False path=None
+requirement_provider: name=qwen executable=qwen available=False path=None
+requirement_provider: name=cursor executable=agent available=False path=None
+requirement_provider: name=copilot executable=copilot available=False path=None
+requirement_provider: name=crush executable=crush available=False path=None
+requirement_provider: name=grok executable=grok available=False path=None
+requirement_provider: name=kiro executable=kiro-cli available=False path=None
+requirement_provider: name=pi executable=pi available=False path=None
+requirement_provider: name=omp executable=omp available=False path=None
+requirement_provider: name=zai executable=zai available=False path=None
+agent: name=demo health=restored provider=fake completion=structured_result
+binding: status=partial runtime=rmux:%1 session=None source=provider-session workspace=[USER_HOME]\AppData\Local\Temp\ccb-rmux-validation-c123fd80 terminal=rmux socket=None socket_path=[USER_HOME]\AppData\Local\Temp\ccb-rmux-validation-c123fd80\.ccb\ccbd\tmux.sock window=None window_id=None pane=%1 active_pane=%1 pane_state=None marker=None
+restore: supported=True mode=provider_resume reason=None
+restore_detail: provider execution can be resumed after ccbd restart
+mailbox_summary: version=None source=None refreshed_at=None state=None queue=None pending_reply=None active=None head=None head_type=None head_status=None
+mailbox_consistency: status=ok mismatches=none projected_state=idle projected_queue=0 projected_pending_reply=0 projected_active=None projected_head=None projected_head_type=None projected_head_status=None
+agent: name=reviewer health=restored provider=fake completion=structured_result
+binding: status=partial runtime=rmux:%2 session=None source=provider-session workspace=[USER_HOME]\AppData\Local\Temp\ccb-rmux-validation-c123fd80 terminal=rmux socket=None socket_path=[USER_HOME]\AppData\Local\Temp\ccb-rmux-validation-c123fd80\.ccb\ccbd\tmux.sock window=None window_id=None pane=%2 active_pane=%2 pane_state=None marker=None
+restore: supported=True mode=provider_resume reason=None
+restore_detail: provider execution can be resumed after ccbd restart
+mailbox_summary: version=None source=None refreshed_at=None state=None queue=None pending_reply=None active=None head=None head_type=None head_status=None
+mailbox_consistency: status=ok mismatches=none projected_state=idle projected_queue=0 projected_pending_reply=0 projected_active=None projected_head=None projected_head_type=None projected_head_status=None
