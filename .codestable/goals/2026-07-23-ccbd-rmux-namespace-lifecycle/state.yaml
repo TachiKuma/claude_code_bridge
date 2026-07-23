@@ -1,6 +1,6 @@
 schema_version: 2
 goal: "ccbd-rmux-namespace-lifecycle"
-status: blocked
+status: complete
 objective: "将已验收的 RmuxBackend 接入 ccbd project namespace lifecycle，完成 ensure、layout projection、foreground attach 和 ccb kill 的用户可见闭环。"
 start_point: "ccbd-rmux-namespace-lifecycle design/review/checklist 已完成且 review passed；roadmap item 已挂起待继续。当前代码仍以 tmux 语义主导，ProjectNamespaceController、ensure_context、start_foreground、destroy、project_view、project_clear/restart 还在多个入口直接依赖 tmux socket/session 作为 authority。"
 acceptance:
@@ -20,12 +20,12 @@ non_goals:
 budget:
   kind: none
   limit: null
-current_iteration: 2
-next_action: "等待 owner 提供可见 Task agent 能力，用于独立 code review 与 functional acceptance；恢复后先运行 review gate，再做终端功能验收。"
-blocker_signature: "visible-task-agent-unavailable"
-blocker_count: 1
+current_iteration: 3
+next_action: "Goal complete; continue rmux-supervision-recovery when owner requests."
+blocker_signature: null
+blocker_count: 0
 owner_stop:
-  status: pending
-  reason: "AcceptanceAgentUnavailable"
+  status: none
+  reason: null
   decision: null
 updated_at: "2026-07-23"

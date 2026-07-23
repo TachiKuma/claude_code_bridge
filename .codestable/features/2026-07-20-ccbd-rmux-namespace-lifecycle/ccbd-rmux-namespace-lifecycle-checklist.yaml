@@ -4,36 +4,36 @@ created: 2026-07-20
 steps:
   - action: "namespace_ref state bridge：state/event/summary/ping payload 写 canonical namespace_ref，并保留旧 tmux aliases"
     exit_signal: "tmux payload 不漂移；Rmux payload legacy socket path 为 null，canonical fields 完整"
-    status: pending
+    status: done
   - action: "ProjectNamespaceBackend factory：controller/ensure_context 从 resolver result 构造 backend policy adapter"
     exit_signal: "fake backend 可注入；tmux adapter 行为与旧 TmuxBackend(socket_path=...) 等价"
-    status: pending
+    status: done
   - action: "ensure/reflow/layout projection backend-neutralization：create session/window/split/root pane/identity marker 通过 backend interface"
     exit_signal: "fake backend 证明 ensure、layout recreate、reflow 不调用 tmux primitive；tmux regression 通过"
-    status: pending
+    status: done
   - action: "foreground attach adapter：start_foreground 读取 canonical payload 并调用 MuxBackend/NamespaceLifecycle attach capability 或前序批准 attach adapter"
     exit_signal: "Rmux payload attach test 不调用 tmux_base；tmux attach tests 不漂移"
-    status: pending
+    status: done
   - action: "kill namespace adapter：CLI kill phase 明确 remote stop → local prepare evidence/registry → backend kill_namespace → daemon diagnostics → final PID/orphan/report cleanup"
     exit_signal: "kill ordering tests 证明 evidence/registry prepare 先于 namespace kill、actual PID cleanup 仍在 finalize 阶段执行；shared daemon 不被误杀"
-    status: pending
+    status: done
   - action: "cross-cutting namespace readers：project view、start_flow/runtime binding、health assessment、slot replacement、project_clear/restart、layout/doctor/ping 改读 canonical namespace projection"
     exit_signal: "Rmux namespace 缺 legacy tmux socket 时不被误判 unavailable；tmux-only probes 只在 tmux adapter 内运行"
-    status: pending
+    status: done
   - action: "diagnostics and compatibility：ping/doctor/project view/startup/kill report 展示 canonical namespace_ref 和 legacy aliases"
     exit_signal: "snapshot tests 证明 tmux old fields 保留，Rmux canonical fields 可读"
-    status: pending
+    status: done
   - action: "Windows/Rmux lifecycle smoke：可用 Rmux / fake Rmux 环境跑 start→attach→kill focused smoke"
     exit_signal: "native Windows 或 marked integration transcript 证明 namespace created、attached、killed；full ask 留给后续 smoke item"
-    status: pending
+    status: done
   - action: "scope guard：禁止本 feature 修改 provider parser、accelerator、process liveness、supervision/recovery 或 direct rmux CLI in ccbd/cli layers"
     exit_signal: "diff/import guard + focused code review 通过"
-    status: pending
+    status: done
 
 checks:
   - item: "namespace state canonical-first，tmux legacy aliases 保留，Rmux legacy socket path 为 null"
     source: design §1 / AC-001 / AC-007 / DOD-IMPL-001
-    status: pending
+    status: done
   - item: "ProjectNamespaceController 通过 resolver/factory 消费 ProjectNamespaceBackend"
     source: design §1 / AC-002 / DOD-IMPL-002
     status: pending

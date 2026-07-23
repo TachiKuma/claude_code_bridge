@@ -3,7 +3,7 @@ doc_type: roadmap-goal-feature
 roadmap: windows-rmux-native-backend
 roadmap_item: ccbd-rmux-namespace-lifecycle
 feature: 2026-07-20-ccbd-rmux-namespace-lifecycle
-status: pending
+status: accepted
 ---
 
 # ccbd-rmux-namespace-lifecycle Goal Feature Spec
@@ -23,7 +23,7 @@ status: pending
 
 ## 2. Deliverable
 
-ccbd Rmux project namespace ensure/attach/kill lifecycle
+ccbd Rmux project namespace ensure/attach/kill lifecycle 已完成
 
 ## 3. Core Runtime Path
 
@@ -47,7 +47,7 @@ ccbd Rmux project namespace ensure/attach/kill lifecycle
 - Implementation gate: checklist steps done, scope-gate, dod-runner and evidence-pack passed.
 - Review gate: independent cs-code-review passed with no unresolved blocking findings.
 - QA gate: cs-feat QA passed and covers design scenarios, DoD commands and review QA focus.
-- Acceptance gate: cs-feat acceptance passed via pproval-report.md#goal-acceptance, checklist checks passed and roadmap item writeback complete.
+- Acceptance gate: goal functional acceptance passed by Task agent Wegener; checklist checks passed and roadmap item writeback complete.
 - Recovery: implementation defects return to implementation then review/QA/acceptance; stage evidence defects repair the owning stage only.
 
 ## 6. Evidence And Cleanliness

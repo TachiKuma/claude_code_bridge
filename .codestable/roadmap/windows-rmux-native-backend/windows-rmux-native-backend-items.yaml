@@ -101,7 +101,7 @@ items:
   - slug: ccbd-rmux-namespace-lifecycle
     description: 将 RmuxBackend 接入 ccb、ccbd project namespace ensure、foreground attach、layout projection 和 ccb kill
     depends_on: [rmux-send-capture-logging, windows-job-object-runtime-evidence, ccbd-windows-tcp-loopback-transport]
-    status: in-progress
+    status: done
     feature: 2026-07-20-ccbd-rmux-namespace-lifecycle
     minimal_loop: false
     notes: 第一条真正用户可见闭环；必须通过 mux-agnostic foreground attach，仍建议 opt-in；native Windows 下其验收依赖 ccbd 控制面 transport 可用（见 transport track）
