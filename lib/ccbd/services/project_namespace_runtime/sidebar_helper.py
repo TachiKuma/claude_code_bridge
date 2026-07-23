@@ -7,6 +7,8 @@ from pathlib import Path
 import shutil
 from typing import Mapping
 
+from terminal_runtime.windows_shell_log_builder import build_shell_command
+
 
 SIDEBAR_BINARY_NAME = 'ccb-agent-sidebar'
 SIDEBAR_ENV_PATH = 'CCB_AGENT_SIDEBAR_BIN'
@@ -37,9 +39,9 @@ def resolve_sidebar_helper(
         return _resolve_explicit(Path(override).expanduser(), source=SIDEBAR_ENV_PATH)
 
     root = script_root or _default_script_root()
-    root_candidate = root / 'bin' / SIDEBAR_BINARY_NAME
-    if _is_executable_file(root_candidate):
-        return SidebarHelperResolution(path=str(root_candidate), source='script_root_bin')
+    for root_candidate, source in _repository_helper_candidates(root):
+        if _is_executable_file(root_candidate):
+            return SidebarHelperResolution(path=str(root_candidate), source=source)
 
     prefix = _clean_text(env_map.get('CODEX_INSTALL_PREFIX'))
     if prefix is not None:
@@ -90,7 +92,11 @@ def sidebar_respawn_command(
         )
         if len(args) > 1:
             body = f'{body} {" ".join(_powershell_single_quote(part) for part in args[1:])}'
-        return f'powershell.exe -NoLogo -NoProfile -Command {_powershell_single_quote(body)}'
+        return build_shell_command(
+            shell='powershell.exe',
+            flags=['-NoLogo', '-NoProfile', '-Command'],
+            cmd_body=body,
+        )
     command = ' '.join(_shell_quote(str(part)) for part in args)
     return f'CCB_SIDEBAR_THEME_PROFILE={_shell_quote(theme)} {command}'
 
@@ -142,8 +148,30 @@ def _sidebar_runtime_binary(path: Path, *, script_root: Path) -> Path:
         return path
     if _SIDEBAR_WRAPPER_MARKER not in prefix:
         return path
-    candidate = script_root / 'tools' / 'ccb-agent-sidebar' / 'target' / 'release' / SIDEBAR_BINARY_NAME
-    return candidate if candidate.is_file() else path
+    base = script_root / 'tools' / 'ccb-agent-sidebar' / 'target' / 'release' / SIDEBAR_BINARY_NAME
+    for candidate in _platform_binary_candidates(base):
+        if candidate.is_file():
+            return candidate
+    return path
+
+
+def _repository_helper_candidates(root: Path) -> tuple[tuple[Path, str], ...]:
+    wrapper = root / 'bin' / SIDEBAR_BINARY_NAME
+    target = root / 'tools' / 'ccb-agent-sidebar' / 'target' / 'release' / SIDEBAR_BINARY_NAME
+    if os.name == 'nt':
+        return (
+            (wrapper.with_name(f'{wrapper.name}.exe'), 'script_root_bin'),
+            (target.with_name(f'{target.name}.exe'), 'script_root_target'),
+            (wrapper, 'script_root_bin'),
+            (target, 'script_root_target'),
+        )
+    return ((wrapper, 'script_root_bin'), (target, 'script_root_target'))
+
+
+def _platform_binary_candidates(base: Path) -> tuple[Path, ...]:
+    if os.name == 'nt':
+        return (base.with_name(f'{base.name}.exe'), base)
+    return (base,)
 
 
 def _default_script_root() -> Path:
