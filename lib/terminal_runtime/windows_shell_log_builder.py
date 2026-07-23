@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping, Protocol
+import base64
 import re
 import shlex
 import shutil
@@ -91,7 +92,11 @@ def build_shell_command(*, shell: str, flags: list[str], cmd_body: str) -> str:
         argv = [shell, *flags, cmd_body]
         return ' '.join(shlex.quote(arg) for arg in argv)
     if family == 'powershell':
-        argv = [_quote_windows_token(shell), *flags, _quote_powershell_body(cmd_body)]
+        argv = [
+            _quote_windows_token(shell),
+            *_powershell_encoded_flags(flags),
+            _powershell_encoded_command(cmd_body),
+        ]
         return ' '.join(token for token in argv if token)
     if family == 'cmd':
         argv = [_quote_windows_token(shell), *flags, _quote_cmd_body(cmd_body)]
@@ -310,6 +315,35 @@ def _quote_windows_token(value: str) -> str:
 def _quote_powershell_body(value: str) -> str:
     token = str(value or '')
     return "'" + token.replace("'", "''") + "'"
+
+
+def _powershell_encoded_flags(flags: list[str]) -> list[str]:
+    rendered: list[str] = []
+    command_flag_replaced = False
+    for flag in flags:
+        if _is_powershell_command_flag(flag):
+            if not command_flag_replaced:
+                rendered.append('-EncodedCommand')
+                command_flag_replaced = True
+            continue
+        rendered.append(flag)
+    if not command_flag_replaced:
+        rendered.append('-EncodedCommand')
+    return rendered
+
+
+def _powershell_encoded_command(value: str) -> str:
+    return base64.b64encode(str(value or '').encode('utf-16le')).decode('ascii')
+
+
+def _is_powershell_command_flag(value: str) -> bool:
+    return str(value or '').strip().lower() in {
+        '-command',
+        '-c',
+        '-encodedcommand',
+        '-enc',
+        '-e',
+    }
 
 
 def _quote_cmd_body(value: str) -> str:

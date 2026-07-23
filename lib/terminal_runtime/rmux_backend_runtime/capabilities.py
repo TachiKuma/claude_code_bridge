@@ -107,8 +107,18 @@ def _status_mapping(value: object) -> dict[str, str]:
     for key, raw in value.items():
         if not isinstance(raw, dict):
             continue
-        result[str(key)] = str(raw.get("status") or "unsupported")
+        result[str(key)] = _record_status(raw)
     return result
+
+
+def _record_status(raw: Mapping[str, object]) -> str:
+    status = str(raw.get("status") or "unsupported").strip()
+    if status == "supported":
+        return status
+    workaround = raw.get("workaround")
+    if isinstance(workaround, dict) and bool(workaround.get("accepted")):
+        return "workaround"
+    return status
 
 
 def _apply_semantic_command_projection(commands: dict[str, str], semantics: dict[str, str]) -> None:

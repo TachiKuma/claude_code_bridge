@@ -89,10 +89,10 @@ class TerminalBackendSelection:
         socket_name = str(session_data.get('tmux_socket_name') or '').strip() or None
         socket_path = str(session_data.get('tmux_socket_path') or '').strip() or None
         selected = _normalize_backend_name(
-            session_data.get('terminal_backend')
-            or session_data.get('terminal')
-            or session_data.get('backend_impl')
+            session_data.get('backend_impl')
             or session_data.get('mux_backend')
+            or session_data.get('terminal_backend')
+            or session_data.get('terminal')
         )
         if selected == 'rmux':
             factory = self.rmux_backend_factory or self.psmux_backend_factory
