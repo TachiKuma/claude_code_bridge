@@ -165,6 +165,31 @@ def test_send_text_can_skip_submit_enter() -> None:
     assert client.calls == [("send-keys", "-t", "pane-A", "-l", "no submit")]
 
 
+def test_io_operations_canonicalize_percent_pane_targets(tmp_path: Path) -> None:
+    client = FakeRmuxCommandClient()
+    client.add("list-panes", stdout="%2\t0\n")
+    client.add("list-panes", stdout="%2\t0\n")
+    client.add("capture-pane", stdout="pane text\n")
+    client.add("list-panes", stdout="%2\t0\n")
+    backend = _backend(client, log_command_builder=FakeLogCommandBuilder())
+    pane = backend.pane_ref("%0", session_name="ccb-demo", window_name="main")
+
+    backend.send_text(pane, "hello", submit=False)
+    capture = backend.capture_pane(pane)
+    log_path = backend.ensure_pane_log(pane, log_path=tmp_path / "pane.log")
+
+    assert capture["diagnostics"]["pane_id"] == "ccb-demo:main.%2"
+    assert log_path == str(tmp_path / "pane.log")
+    assert client.calls == [
+        ("list-panes", "-t", "ccb-demo:main", "-F", "#{pane_id}\t#{pane_index}"),
+        ("send-keys", "-t", "ccb-demo:main.%2", "-l", "hello"),
+        ("list-panes", "-t", "ccb-demo:main", "-F", "#{pane_id}\t#{pane_index}"),
+        ("capture-pane", "-p", "-t", "ccb-demo:main.%2"),
+        ("list-panes", "-t", "ccb-demo:main", "-F", "#{pane_id}\t#{pane_index}"),
+        ("pipe-pane", "-o", "-t", "ccb-demo:main.%2", "BUILDER_PIPE_APPEND:pane.log"),
+    ]
+
+
 def test_send_key_maps_allowlisted_control_keys_and_rejects_unknown() -> None:
     client = FakeRmuxCommandClient()
     backend = _backend(client)

@@ -158,11 +158,19 @@ def test_apply_project_tmux_ui_sets_session_theme_and_hook_from_current_install_
     ]
     assert len(sidebar_mouse_bindings) == 1
     sidebar_mouse_binding = sidebar_mouse_bindings[0]
-    assert sidebar_mouse_binding == [
+    assert sidebar_mouse_binding[:5] == [
         'bind-key',
         '-T',
         'root',
         'MouseDown1Pane',
+        'if-shell',
+    ]
+    assert sidebar_mouse_binding[5] == '-F'
+    assert '#{@ccb_role}' in sidebar_mouse_binding[6]
+    assert '#{mouse_x}' in sidebar_mouse_binding[6]
+    assert '#{mouse_y}' in sidebar_mouse_binding[6]
+    assert sidebar_mouse_binding[7:] == [
+        'select-pane -t = ; send-keys -t = c',
         'select-pane -t = ; send-keys -M',
     ]
     assert '__sidebar-click' not in '\n'.join(' '.join(call) for call in calls)
@@ -226,6 +234,13 @@ def test_apply_project_tmux_ui_skips_project_ui_for_psmux_compat_tmux_path(monke
     )
 
     assert calls == []
+
+
+def test_rmux_backend_keeps_project_ui_enabled() -> None:
+    class FakeBackend:
+        backend_impl = 'rmux'
+
+    assert tmux_compat.is_tmux_compat_subset(FakeBackend()) is False
 
 
 def test_apply_project_tmux_ui_applies_window_theme_for_contrast_profile(monkeypatch, tmp_path: Path) -> None:

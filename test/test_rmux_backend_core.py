@@ -638,3 +638,26 @@ def test_attach_namespace_uses_foreground_command_client() -> None:
     assert hasattr(backend, "capture_pane")
     assert hasattr(backend, "ensure_pane_log")
     assert hasattr(backend, "pane_log_path")
+
+
+def test_tmux_run_compat_adapter_delegates_to_rmux_client() -> None:
+    client = FakeRmuxCommandClient()
+    client.add("bind-key", stdout="ok\n")
+    backend = _backend(client)
+
+    result = backend._tmux_run(["bind-key", "-T", "root", "MouseDown1Pane", "send-keys -M"], capture=True)
+
+    assert result.stdout == "ok\n"
+    assert client.calls == [("bind-key", "-T", "root", "MouseDown1Pane", "send-keys -M")]
+
+
+def test_tmux_run_compat_adapter_maps_checked_failures() -> None:
+    client = FakeRmuxCommandClient()
+    client.add("bind-key", stderr="permission denied", returncode=1)
+    backend = _backend(client)
+
+    with pytest.raises(MuxCommandError) as error:
+        backend._tmux_run(["bind-key", "-T", "root", "MouseDown1Pane", "send-keys -M"], check=True)
+
+    assert error.value.operation == "tmux_compat"
+    assert error.value.category == "permission"
