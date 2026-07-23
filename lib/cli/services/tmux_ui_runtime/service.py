@@ -77,6 +77,7 @@ def _apply_sidebar_mouse_controls(
     if not tmux_socket:
         return
     default_action = 'select-pane -t = ; send-keys -M'
+    settings_action = 'select-pane -t = ; send-keys -t = c'
     tmux_run(
         backend,
         [
@@ -84,6 +85,10 @@ def _apply_sidebar_mouse_controls(
             '-T',
             'root',
             'MouseDown1Pane',
+            'if-shell',
+            '-F',
+            _sidebar_settings_click_condition(),
+            settings_action,
             default_action,
         ],
     )
@@ -154,6 +159,24 @@ def _sidebar_resize_sync_shell(
         '--project-id "#{@ccb_project_id}" '
         '>/dev/null 2>&1 || true'
     )
+
+
+def _sidebar_settings_click_condition() -> str:
+    header_row = '#{||:#{==:#{mouse_y},0},#{==:#{mouse_y},#{pane_top}}}'
+    relative_settings_col = (
+        '#{||:'
+        '#{==:#{mouse_x},#{e|-:#{pane_width},4}},'
+        '#{==:#{mouse_x},#{e|-:#{pane_width},3}}'
+        '}'
+    )
+    absolute_settings_col = (
+        '#{||:'
+        '#{==:#{mouse_x},#{e|+:#{pane_left},#{e|-:#{pane_width},4}}},'
+        '#{==:#{mouse_x},#{e|+:#{pane_left},#{e|-:#{pane_width},3}}}'
+        '}'
+    )
+    settings_col = f'#{{||:{relative_settings_col},{absolute_settings_col}}}'
+    return f'#{{&&:#{{==:#{{@ccb_role}},sidebar}},#{{&&:{header_row},{settings_col}}}}}'
 
 
 def _sidebar_window_resize_sync_shell(
