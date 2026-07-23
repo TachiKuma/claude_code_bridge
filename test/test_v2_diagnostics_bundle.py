@@ -9,6 +9,7 @@ from cli.context import CliContextBuilder
 from cli.models import ParsedDoctorCommand
 import cli.services.diagnostics_runtime.bundle as bundle_runtime
 from cli.services.diagnostics import export_diagnostic_bundle
+from ccbd.supervision import SupervisionEvent, SupervisionEventStore
 from project.ids import compute_project_id
 
 
@@ -100,6 +101,50 @@ def test_export_diagnostic_bundle_collects_reports_and_log_tails(tmp_path: Path)
     assert any(entry['archive_path'] == 'project/.ccb/ccbd/startup-report.json' for entry in manifest['entries'])
     assert any(entry['archive_path'] == 'project/.ccb/ccbd/ccbd.stdout.log' for entry in manifest['entries'])
     assert any(entry['archive_path'] == 'project/.ccb/agents/demo/runtime.json' for entry in manifest['entries'])
+
+
+def test_export_diagnostic_bundle_generates_supervision_ledger_payload(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-bundle-supervision-ledger'
+    (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
+    (project_root / '.ccb' / 'ccb.config').write_text('demo:codex\n', encoding='utf-8')
+    context = CliContextBuilder().build(
+        ParsedDoctorCommand(project=None, bundle=True),
+        cwd=project_root,
+        bootstrap_if_missing=False,
+    )
+    SupervisionEventStore(context.paths).append(
+        SupervisionEvent(
+            event_kind='recover_failed',
+            project_id=context.project.project_id,
+            agent_name='demo',
+            occurred_at='2026-07-23T00:00:00Z',
+            prior_health='daemon-unavailable',
+            result_health='daemon-unavailable',
+            details={
+                'action': 'degraded_only',
+                'reason': 'daemon-recovery-unowned',
+                'ownership': 'shared_or_unowned',
+                'evidence_ledger': {
+                    'backend_impl': 'rmux',
+                    'pane_health': 'alive',
+                    'process_health': 'alive',
+                    'namespace_health': 'alive',
+                    'daemon_health': 'dead',
+                    'daemon_ref': {'backend_impl': 'rmux', 'daemon_id': 'shared', 'scope': 'shared'},
+                }
+            },
+        )
+    )
+
+    summary = export_diagnostic_bundle(context, ParsedDoctorCommand(project=None, bundle=True))
+    payload = _read_tar_json(Path(summary.bundle_path), f'{summary.bundle_id}/generated/supervision-ledger.json')
+
+    assert payload['project_id'] == context.project.project_id
+    assert payload['events'][0]['event_kind'] == 'recover_failed'
+    assert payload['events'][0]['action'] == 'degraded_only'
+    assert payload['events'][0]['reason'] == 'daemon-recovery-unowned'
+    assert payload['events'][0]['ownership'] == 'shared_or_unowned'
+    assert payload['events'][0]['evidence_ledger']['daemon_health'] == 'dead'
 
 
 def test_export_diagnostic_bundle_includes_relocated_runtime_state_files(tmp_path: Path) -> None:

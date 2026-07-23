@@ -160,7 +160,7 @@ def _classify_inventory_record(
     if root is None:
         return None
     path = Path(str(record.get('path') or ''))
-    relative_path = str(record.get('relative_path') or '')
+    relative_path = _posix_relative_path(str(record.get('relative_path') or ''))
     size = _record_size(record.get('size_bytes'))
     if bool(record.get('is_symlink')):
         if _is_allowed_provider_secret_symlink(path, layout):
@@ -169,7 +169,7 @@ def _classify_inventory_record(
         if symlink_reason is not None and not _is_marked_projected_symlink(path):
             return StorageEntry(
                 path=path,
-                relative_path=relative_path,
+                relative_path=_posix_relative_path(relative_path),
                 storage_class=StorageClass.UNKNOWN,
                 size_bytes=size,
                 reason=symlink_reason,
@@ -212,7 +212,7 @@ def _classify_path(layout: PathLayout, root: Path, path: Path, *, root_kind: str
     if symlink_reason is not None and not _is_marked_projected_symlink(path):
         return StorageEntry(
             path=path,
-            relative_path=relative_path,
+            relative_path=_posix_relative_path(relative_path),
             storage_class=StorageClass.UNKNOWN,
             size_bytes=size,
             reason=symlink_reason,
@@ -343,7 +343,7 @@ def _entry(
 ) -> StorageEntry:
     return StorageEntry(
         path=path,
-        relative_path=relative_path,
+        relative_path=_posix_relative_path(relative_path),
         storage_class=storage_class,
         size_bytes=size,
         provider=provider,
@@ -464,10 +464,14 @@ def _relative_display(layout: PathLayout, root: Path, path: Path, *, root_kind: 
     try:
         relative = path.relative_to(root)
     except Exception:
-        return str(path)
+        return _posix_relative_path(str(path))
     if root_kind == 'runtime' and root != layout.ccb_dir:
-        return str(relative)
-    return str(relative)
+        return relative.as_posix()
+    return relative.as_posix()
+
+
+def _posix_relative_path(value: str) -> str:
+    return str(value or '').replace('\\', '/')
 
 
 def _safe_size(path: Path) -> int:

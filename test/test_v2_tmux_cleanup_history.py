@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
+from agents.models import AgentRuntime, AgentState
 from ccbd.lifecycle_report_store import CcbdShutdownReportStore, CcbdStartupReportStore
 from ccbd.models import CcbdShutdownReport, CcbdStartupAgentResult, CcbdStartupReport
 from ccbd.services.project_namespace_state import ProjectNamespaceEvent, ProjectNamespaceEventStore, ProjectNamespaceState, ProjectNamespaceStateStore
@@ -94,6 +96,49 @@ def test_doctor_summary_includes_latest_tmux_cleanup_fields(tmp_path: Path) -> N
     assert payload['ccbd']['tmux_cleanup_last_at'] == '2026-03-31T01:20:00Z'
     assert payload['ccbd']['tmux_cleanup_total_orphaned'] == 1
     assert payload['ccbd']['tmux_cleanup_total_killed'] == 1
+
+
+def test_doctor_summary_includes_runtime_evidence_ledger(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-doctor-runtime-ledger'
+    (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
+    (project_root / '.ccb' / 'ccb.config').write_text('demo:codex\n', encoding='utf-8')
+    bootstrap_project(project_root)
+    context = CliContextBuilder().build(ParsedDoctorCommand(project=None), cwd=project_root, bootstrap_if_missing=False)
+    runtime = AgentRuntime(
+        agent_name='demo',
+        state=AgentState.DEGRADED,
+        pid=101,
+        started_at='2026-07-23T00:00:00Z',
+        last_seen_at='2026-07-23T00:00:01Z',
+        runtime_ref='rmux:pane-a',
+        session_ref='ns-1',
+        workspace_path=str(context.paths.workspace_path('demo')),
+        project_id=context.project.project_id,
+        backend_type='pane-backed',
+        queue_depth=0,
+        socket_path=None,
+        health='daemon-unavailable',
+        provider='codex',
+        backend_impl='rmux',
+        namespace_ref={'backend_impl': 'rmux', 'namespace_id': 'ns-1', 'session_name': 'ns-1'},
+        pane_ref={'backend_impl': 'rmux', 'pane_id': 'pane-a'},
+        process_ref={'pid': 101, 'health': 'alive'},
+        daemon_ref={
+            'backend_impl': 'rmux',
+            'daemon_id': 'shared-daemon',
+            'scope': 'shared',
+            'health': 'crashed',
+        },
+    )
+    context.paths.agent_runtime_path('demo').parent.mkdir(parents=True, exist_ok=True)
+    context.paths.agent_runtime_path('demo').write_text(json.dumps(runtime.to_record()) + '\n', encoding='utf-8')
+
+    payload = doctor_summary(context)
+
+    ledger = payload['agents'][0]['evidence_ledger']
+    assert ledger['backend_impl'] == 'rmux'
+    assert ledger['daemon_health'] == 'dead'
+    assert ledger['daemon_ref']['scope'] == 'shared'
 
 
 def test_doctor_summary_includes_mailbox_summary_fields_and_tolerates_mailbox_errors(tmp_path: Path) -> None:

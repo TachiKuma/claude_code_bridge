@@ -4,6 +4,11 @@ from dataclasses import replace
 
 from agents.models import AgentState, RuntimeBindingSource, RuntimeMode, normalize_runtime_binding_source
 from ccbd.services.runtime_recovery_policy import normalized_runtime_health, should_attempt_background_recovery
+from ccbd.services.runtime_recovery_policy import DAEMON_RECOVERY_HEALTHS, NAMESPACE_RECOVERY_HEALTHS
+from ccbd.supervision.evidence import (
+    runtime_active_pane_id as runtime_active_pane_id_impl,
+    runtime_belongs_to_namespace_session,
+)
 from ccbd.system import parse_utc_timestamp
 from ccbd.supervision.backoff import backoff_delay_seconds as backoff_delay_seconds_impl
 from ccbd.supervision.backoff import is_in_backoff_window as is_in_backoff_window_impl
@@ -121,6 +126,7 @@ def runtime_requires_recovery(ctx: RuntimeSupervisionContext, runtime) -> bool:
     return (
         should_reflow_project_namespace(ctx, runtime)
         or explicit_topology_project_socket_foreign_pane(ctx, runtime)
+        or runtime_health(runtime) in DAEMON_RECOVERY_HEALTHS
         or should_attempt_background_recovery(runtime)
     )
 
@@ -138,10 +144,7 @@ def should_reflow_project_namespace(ctx: RuntimeSupervisionContext, runtime, *, 
         return False
     if not project_namespace_reflow_safe(ctx, runtime.agent_name):
         return False
-    socket_path = str(getattr(runtime, 'tmux_socket_path', None) or '').strip()
-    if not socket_path:
-        return False
-    return same_socket_path_impl(socket_path, str(ctx.layout.ccbd_tmux_socket_path))
+    return runtime_belongs_to_project_namespace(ctx, runtime)
 
 
 def should_reflow_project_mount(ctx: RuntimeSupervisionContext, agent_name: str) -> bool:
@@ -176,7 +179,7 @@ def resolved_reconcile_state(runtime) -> str | None:
 
 
 def runtime_in_project_namespace_reflow_health(runtime) -> bool:
-    return runtime_health(runtime) in {'pane-foreign'}
+    return runtime_health(runtime) in ({'pane-foreign'} | NAMESPACE_RECOVERY_HEALTHS)
 
 
 def recovered_replacement_requires_workspace_reflow(ctx: RuntimeSupervisionContext, runtime, recovered) -> bool:
@@ -184,7 +187,7 @@ def recovered_replacement_requires_workspace_reflow(ctx: RuntimeSupervisionConte
         return False
     if not project_namespace_reflow_safe(ctx, runtime.agent_name):
         return False
-    if not runtime_belongs_to_project_socket(ctx, recovered):
+    if not runtime_belongs_to_project_namespace(ctx, recovered):
         return False
     return recovered_pane_replaced(runtime, recovered)
 
@@ -194,7 +197,7 @@ def explicit_topology_project_socket_foreign_pane(ctx: RuntimeSupervisionContext
         return False
     if runtime_health(runtime) != 'pane-foreign':
         return False
-    return runtime_belongs_to_project_socket(ctx, runtime)
+    return runtime_belongs_to_project_namespace(ctx, runtime)
 
 
 def runtime_belongs_to_project_socket(ctx: RuntimeSupervisionContext, runtime) -> bool:
@@ -202,6 +205,15 @@ def runtime_belongs_to_project_socket(ctx: RuntimeSupervisionContext, runtime) -
     if not socket_path:
         return False
     return same_socket_path_impl(socket_path, str(ctx.layout.ccbd_tmux_socket_path))
+
+
+def runtime_belongs_to_project_namespace(ctx: RuntimeSupervisionContext, runtime) -> bool:
+    if runtime_belongs_to_project_socket(ctx, runtime):
+        return True
+    return runtime_belongs_to_namespace_session(
+        runtime,
+        session_name=str(ctx.layout.ccbd_tmux_session_name),
+    )
 
 
 def recovered_pane_replaced(runtime, recovered) -> bool:
@@ -213,14 +225,7 @@ def recovered_pane_replaced(runtime, recovered) -> bool:
 
 
 def runtime_active_pane_id(runtime) -> str | None:
-    for field_name in ('active_pane_id', 'pane_id'):
-        pane_id = str(getattr(runtime, field_name, None) or '').strip()
-        if pane_id.startswith('%'):
-            return pane_id
-    runtime_ref = str(getattr(runtime, 'runtime_ref', None) or '').strip()
-    if runtime_ref.startswith('tmux:%'):
-        return runtime_ref[len('tmux:') :]
-    return None
+    return runtime_active_pane_id_impl(runtime)
 
 
 def runtime_mode_spec(ctx: RuntimeSupervisionContext, agent_name: str):

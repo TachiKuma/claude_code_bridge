@@ -35,6 +35,7 @@ class ProviderRuntimeFacts:
     backend_impl: str | None
     pane_ref: dict | None
     namespace_ref: dict | None
+    daemon_ref: dict | None
     pane_id: str | None
     pane_title_marker: str | None
     pane_state: str | None
@@ -86,6 +87,7 @@ def build_provider_runtime_facts(
         runtime_pid=runtime_pid,
         runtime_root=runtime_root,
     )
+    namespace_ref = session_namespace_ref(session)
     return ProviderRuntimeFacts(
         runtime_ref=session_runtime_ref(session, pane_id_override=pane_id),
         session_ref=session_ref(
@@ -99,7 +101,8 @@ def build_provider_runtime_facts(
         backend_family=session_backend_family(session),
         backend_impl=session_backend_impl(session),
         pane_ref=pane_ref,
-        namespace_ref=session_namespace_ref(session),
+        namespace_ref=namespace_ref,
+        daemon_ref=session_daemon_ref(session, namespace_ref=namespace_ref),
         pane_id=pane_id,
         pane_title_marker=session_pane_title_marker(session),
         pane_state='alive' if pane_id else None,
@@ -110,6 +113,27 @@ def build_provider_runtime_facts(
         ccb_session_id=session_ccb_session_id(session),
         process_ref=process_ref,
     )
+
+
+def session_daemon_ref(session, *, namespace_ref: dict | None) -> dict | None:
+    value = getattr(session, 'daemon_ref', None)
+    if isinstance(value, dict) and value:
+        return dict(value)
+    for container in (
+        namespace_ref,
+        getattr(session, 'backend_daemon_evidence', None),
+        getattr(session, 'daemon_evidence', None),
+    ):
+        if not isinstance(container, dict) or not container:
+            continue
+        daemon_ref = container.get('daemon_ref')
+        if isinstance(daemon_ref, dict) and daemon_ref:
+            payload = dict(daemon_ref)
+            health = container.get('health') or container.get('daemon_health')
+            if health is not None:
+                payload.setdefault('health', health)
+            return payload
+    return None
 
 
 __all__ = [

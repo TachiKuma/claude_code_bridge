@@ -7,6 +7,11 @@ from agents.models import build_project_layout_plan
 from ccbd.services.project_namespace import ProjectNamespaceController
 from ccbd.services.project_namespace_pane import inspect_project_namespace_pane
 from ccbd.services.project_namespace_runtime.backend import build_backend
+from ccbd.services.project_namespace_runtime.namespace_projection import (
+    namespace_ref_for,
+    namespace_session_name,
+    namespace_tmux_socket_path,
+)
 from ccbd.start_runtime.layout import cmd_bootstrap_command
 from terminal_runtime.placeholders import pane_placeholder_argv
 from terminal_runtime.tmux_identity import apply_ccb_pane_identity
@@ -228,8 +233,9 @@ def _build_namespace_backend(namespace_controller: ProjectNamespaceController, n
     try:
         return build_backend(
             namespace_controller._backend_factory,
-            socket_path=str(getattr(namespace, 'tmux_socket_path', None) or '').strip(),
-            namespace=str(getattr(namespace, 'tmux_session_name', None) or '').strip(),
+            socket_path=namespace_tmux_socket_path(namespace),
+            namespace=namespace_session_name(namespace),
+            namespace_ref=namespace_ref_for(namespace),
         )
     except Exception:
         return None

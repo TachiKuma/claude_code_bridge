@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-from ccbd.services.runtime_recovery_policy import normalized_runtime_health
+from ccbd.services.runtime_recovery_policy import (
+    DAEMON_RECOVERY_HEALTHS,
+    daemon_recovery_allowed,
+    normalized_runtime_health,
+)
 
 from .recovery_context import build_recovery_context
 from .recovery_transitions import (
     SUCCESS_RUNTIME_HEALTHS,
     attempt_recovery_action,
+    mark_daemon_degraded,
     mark_recovery_failed,
     mark_recovery_missing,
     mark_recovery_succeeded,
@@ -46,6 +51,12 @@ def recover_runtime(
     if ctx.is_in_backoff_window_fn(ctx.runtime, now=attempted_at):
         return ctx.runtime.health
     prior_health = normalized_runtime_health(ctx.runtime) or ctx.runtime.health
+    if prior_health in DAEMON_RECOVERY_HEALTHS and not daemon_recovery_allowed(ctx.runtime):
+        return mark_daemon_degraded(
+            ctx,
+            attempted_at=attempted_at,
+            prior_health=prior_health,
+        )
     recovering = start_recovery(
         ctx,
         attempted_at=attempted_at,

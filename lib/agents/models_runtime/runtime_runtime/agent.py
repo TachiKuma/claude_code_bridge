@@ -57,6 +57,7 @@ class AgentRuntime:
     last_failure_reason: str | None = None
     mount_attempt_id: str | None = None
     process_ref: dict[str, Any] | None = None
+    daemon_ref: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         self.agent_name = normalize_agent_name(self.agent_name)
@@ -116,6 +117,7 @@ class AgentRuntime:
             'last_failure_reason': self.last_failure_reason,
             'mount_attempt_id': self.mount_attempt_id,
             'process_ref': process_ref_to_record(self.process_ref),
+            'daemon_ref': dict(self.daemon_ref) if isinstance(self.daemon_ref, dict) else None,
         }
 
 

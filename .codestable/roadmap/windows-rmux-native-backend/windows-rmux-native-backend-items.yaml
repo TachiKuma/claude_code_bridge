@@ -109,7 +109,7 @@ items:
   - slug: rmux-supervision-recovery
     description: 接入 pane death、provider process death、namespace crash、Rmux daemon crash 的 supervision、recovery 与 diagnostics
     depends_on: [ccbd-rmux-namespace-lifecycle]
-    status: in-progress
+    status: done
     feature: 2026-07-20-rmux-supervision-recovery
     minimal_loop: false
     notes: 必须证明 pane evidence 与 process/job evidence 的边界

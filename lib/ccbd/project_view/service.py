@@ -16,6 +16,7 @@ from ccbd.models import MountState
 from ccbd.reload_drain_status import reload_drain_revision, reload_drain_status_payload
 from ccbd.project_focus.tmux import backend_for_namespace, refresh_sidebar_panes
 from ccbd.services.dispatcher_runtime import comms_recoverability_for_job
+from ccbd.supervision.evidence import build_runtime_evidence_ledger, runtime_has_explicit_evidence
 from ccbd.system import parse_utc_timestamp, utc_now
 from message_bureau import CallbackEdgeState
 from provider_backends.codex.launcher_runtime.command_runtime.home import resolve_codex_home_layout
@@ -782,6 +783,7 @@ def _agent_view(
         'process_ref': dict(getattr(runtime, 'process_ref', None))
         if isinstance(getattr(runtime, 'process_ref', None), dict)
         else None,
+        **_runtime_evidence_payload(runtime),
         'reconcile_state': getattr(runtime, 'reconcile_state', None) if runtime is not None else None,
         'runtime_failure_reason': getattr(runtime, 'last_failure_reason', None) if runtime is not None else None,
         'workspace_path': getattr(runtime, 'workspace_path', None) if runtime is not None else None,
@@ -2213,6 +2215,12 @@ def _runtime_state(runtime) -> str | None:
     if runtime is None:
         return AgentState.STOPPED.value
     return runtime.state.value
+
+
+def _runtime_evidence_payload(runtime) -> dict[str, object]:
+    if runtime is None or not runtime_has_explicit_evidence(runtime):
+        return {}
+    return {'evidence_ledger': build_runtime_evidence_ledger(runtime)}
 
 
 def _focus_snapshot(context: _ProjectViewBuildContext) -> dict[str, object]:

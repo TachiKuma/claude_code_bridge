@@ -526,6 +526,54 @@ def test_build_agent_payload_surfaces_provider_auth_recovery_block() -> None:
     assert payload['diagnostics']['last_failure_reason'] == detail
 
 
+def test_build_agent_payload_surfaces_runtime_evidence_ledger() -> None:
+    config = _config()
+    runtime = AgentRuntime(
+        agent_name='demo',
+        state=AgentState.DEGRADED,
+        pid=123,
+        started_at='2026-04-22T00:00:00Z',
+        last_seen_at='2026-04-22T00:00:01Z',
+        runtime_ref='rmux:pane-a',
+        session_ref='ns-1',
+        workspace_path='/tmp/ws',
+        project_id='proj-1',
+        backend_type='pane-backed',
+        queue_depth=0,
+        socket_path=None,
+        health='daemon-unavailable',
+        provider='codex',
+        backend_impl='rmux',
+        namespace_ref={'backend_impl': 'rmux', 'namespace_id': 'ns-1', 'session_name': 'ns-1'},
+        pane_ref={'backend_impl': 'rmux', 'pane_id': 'pane-a'},
+        process_ref={'pid': 123, 'health': 'alive'},
+        daemon_ref={
+            'backend_impl': 'rmux',
+            'daemon_id': 'shared-daemon',
+            'scope': 'shared',
+            'health': 'unreachable',
+        },
+    )
+
+    payload = build_agent_payload(
+        project_id='proj-1',
+        agent_name='demo',
+        registry=SimpleNamespace(
+            spec_for=lambda name: config.agents[name],
+            get=lambda name: runtime,
+        ),
+        inspection=_inspection(phase='mounted', desired_state='running'),
+        execution_registry=SimpleNamespace(get=lambda provider: None),
+    )
+
+    ledger = payload['diagnostics']['evidence_ledger']
+    assert ledger['pane_health'] == 'alive'
+    assert ledger['process_health'] == 'alive'
+    assert ledger['namespace_health'] == 'alive'
+    assert ledger['daemon_health'] == 'dead'
+    assert ledger['daemon_ref']['scope'] == 'shared'
+
+
 def test_ping_target_unmounted_ccbd_includes_timing_fields(monkeypatch, tmp_path: Path) -> None:
     context = SimpleNamespace()
 

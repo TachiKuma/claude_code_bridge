@@ -4,6 +4,7 @@ from agents.models import AgentState
 from agents.config_loader import CONFIG_SOURCE_PROJECT, CONFIG_SOURCE_USER
 from agents.config_identity import project_config_identity_payload
 from ccbd.control_plane_transport.endpoint import endpoint_from_legacy_socket_path, endpoint_from_record, endpoint_to_record
+from ccbd.supervision.evidence import build_runtime_evidence_ledger, runtime_has_explicit_evidence
 from provider_execution.capabilities import execution_restore_capability
 from storage.path_helpers import socket_placement_payload
 from terminal_runtime.backend_resolver import selection_diagnostics
@@ -29,6 +30,7 @@ def build_agent_payload(*, project_id: str, agent_name: str, registry, inspectio
             'restart_count': getattr(runtime, 'restart_count', 0) if runtime is not None else 0,
             'last_reconcile_at': getattr(runtime, 'last_reconcile_at', None) if runtime is not None else None,
             'last_failure_reason': getattr(runtime, 'last_failure_reason', None) if runtime is not None else None,
+            **_runtime_evidence_payload(runtime),
             **capability,
         },
     }
@@ -235,6 +237,12 @@ def _agent_mount_state(runtime, *, inspection) -> str:
     if runtime.state is AgentState.STOPPED:
         return 'unmounted'
     return 'mounted'
+
+
+def _runtime_evidence_payload(runtime) -> dict[str, object]:
+    if runtime is None or not runtime_has_explicit_evidence(runtime):
+        return {}
+    return {'evidence_ledger': build_runtime_evidence_ledger(runtime)}
 
 
 __all__ = ['build_agent_payload', 'build_ccbd_payload']

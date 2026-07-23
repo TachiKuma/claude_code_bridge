@@ -82,6 +82,7 @@ def _runtime(
     state: AgentState = AgentState.IDLE,
     health: str = 'healthy',
     process_ref: dict | None = None,
+    daemon_ref: dict | None = None,
 ) -> AgentRuntime:
     return AgentRuntime(
         agent_name=agent_name,
@@ -102,6 +103,7 @@ def _runtime(
         pane_state='alive',
         reconcile_state='steady',
         process_ref=process_ref,
+        daemon_ref=daemon_ref,
     )
 
 
@@ -436,6 +438,58 @@ def test_project_view_exposes_process_ref_diagnostics(tmp_path: Path) -> None:
     assert agent1['pane_id'] == '%1'
     assert agent1['process_ref']['evidence_state'] == 'degraded'
     assert agent1['process_ref']['owner_pid'] == 456
+
+
+def test_project_view_exposes_runtime_evidence_ledger(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-runtime-ledger-view'
+    project_root.mkdir()
+    layout = PathLayout(project_root)
+    project_id = compute_project_id(project_root)
+    config = _config()
+    registry = AgentRegistry(layout, config)
+    runtime = _runtime(
+        'agent1',
+        project_id=project_id,
+        state=AgentState.DEGRADED,
+        health='daemon-unavailable',
+        process_ref={'pid': 456, 'health': 'alive'},
+        daemon_ref={
+            'backend_impl': 'rmux',
+            'daemon_id': 'shared-daemon',
+            'scope': 'shared',
+            'health': 'crashed',
+        },
+    )
+    runtime.backend_impl = 'rmux'
+    runtime.namespace_ref = {
+        'backend_impl': 'rmux',
+        'namespace_id': 'ns-1',
+        'session_name': 'ns-1',
+    }
+    runtime.pane_ref = {'backend_impl': 'rmux', 'pane_id': 'pane-a'}
+    runtime.active_pane_id = 'pane-a'
+    registry.upsert(runtime)
+    for agent_name in ('agent2', 'agent3'):
+        registry.upsert(_runtime(agent_name, project_id=project_id))
+    dispatcher = JobDispatcher(layout, config, registry, clock=lambda: NOW)
+
+    response = _project_view_service(
+        project_root=project_root,
+        project_id=project_id,
+        layout=layout,
+        config=config,
+        registry=registry,
+        dispatcher=dispatcher,
+    ).build_response()
+
+    agent1 = next(agent for agent in response['view']['agents'] if agent['name'] == 'agent1')
+    ledger = agent1['evidence_ledger']
+    assert ledger['backend_impl'] == 'rmux'
+    assert ledger['pane_health'] == 'alive'
+    assert ledger['process_health'] == 'alive'
+    assert ledger['namespace_health'] == 'alive'
+    assert ledger['daemon_health'] == 'dead'
+    assert ledger['daemon_ref']['scope'] == 'shared'
 
 
 def test_project_view_cache_invalidates_when_reload_drain_file_changes(tmp_path: Path) -> None:

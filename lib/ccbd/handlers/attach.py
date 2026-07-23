@@ -19,6 +19,7 @@ def build_attach_handler(runtime_service):
             backend_impl=payload.get('backend_impl'),
             pane_ref=payload.get('pane_ref'),
             namespace_ref=payload.get('namespace_ref'),
+            daemon_ref=payload.get('daemon_ref'),
             pane_id=payload.get('pane_id'),
             active_pane_id=payload.get('active_pane_id'),
             pane_title_marker=payload.get('pane_title_marker'),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .recovery_context import RecoveryContext
+from .evidence import details_with_evidence_ledger
 from .store import SupervisionEvent
 
 
@@ -28,7 +29,7 @@ def append_recovery_event(
             runtime_state=runtime.state.value,
             runtime_ref=runtime.runtime_ref,
             session_ref=runtime.session_ref,
-            details=details or {},
+            details=details_with_evidence_ledger(runtime, details),
         )
     )
 

@@ -171,6 +171,7 @@ def _agent_runtime_from_record(record: dict) -> AgentRuntime:
         last_failure_reason=record.get('last_failure_reason'),
         mount_attempt_id=record.get('mount_attempt_id'),
         process_ref=process_ref_from_record(record.get('process_ref')),
+        daemon_ref=(dict(record.get('daemon_ref')) if isinstance(record.get('daemon_ref'), dict) else None),
     )
 
 

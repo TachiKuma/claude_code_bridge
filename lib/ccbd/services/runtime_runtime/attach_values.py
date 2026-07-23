@@ -33,6 +33,7 @@ def resolve_attach_runtime_values(
     backend_impl: str | None,
     pane_ref: dict | None,
     namespace_ref: dict | None,
+    daemon_ref: dict | None,
     pane_id: str | None,
     active_pane_id: str | None,
     pane_title_marker: str | None,
@@ -82,6 +83,7 @@ def resolve_attach_runtime_values(
     backend_impl_value = preferred_text(existing, 'backend_impl', backend_impl)
     pane_ref_value = preferred_dict(existing, 'pane_ref', pane_ref)
     namespace_ref_value = preferred_dict(existing, 'namespace_ref', namespace_ref)
+    daemon_ref_value = preferred_daemon_ref(existing, daemon_ref=daemon_ref, namespace_ref=namespace_ref_value)
     active_pane_id_value = preferred_active_pane_id(existing, active_pane_id=active_pane_id, pane_id_value=pane_id_value)
     tmux_socket_name_value = preferred_text(existing, 'tmux_socket_name', tmux_socket_name)
     tmux_socket_path_value = preferred_text(existing, 'tmux_socket_path', tmux_socket_path)
@@ -104,6 +106,7 @@ def resolve_attach_runtime_values(
         backend_impl=backend_impl_value,
         pane_ref=pane_ref_value,
         namespace_ref=namespace_ref_value,
+        daemon_ref=daemon_ref_value,
         daemon_generation=daemon_generation_value,
     )
     binding_generation, runtime_generation = next_authority_epoch_generations(
@@ -125,6 +128,7 @@ def resolve_attach_runtime_values(
         backend_impl=backend_impl_value,
         pane_ref=pane_ref_value,
         namespace_ref=namespace_ref_value,
+        daemon_ref=daemon_ref_value,
         pane_id=pane_id_value,
         active_pane_id=active_pane_id_value,
         pane_title_marker=preferred_text(existing, 'pane_title_marker', pane_title_marker),
@@ -168,6 +172,25 @@ def preferred_dict(existing, field_name: str, explicit_value: dict | None) -> di
     if existing is not None and isinstance(getattr(existing, field_name, None), dict):
         return dict(getattr(existing, field_name))
     return None
+
+
+def preferred_daemon_ref(existing, *, daemon_ref: dict | None, namespace_ref: dict | None) -> dict | None:
+    explicit = preferred_dict(existing, 'daemon_ref', daemon_ref)
+    if explicit is not None:
+        return explicit
+    if not isinstance(namespace_ref, dict):
+        return None
+    evidence = namespace_ref.get('backend_daemon_evidence')
+    if isinstance(evidence, dict):
+        nested = evidence.get('daemon_ref')
+        if isinstance(nested, dict) and nested:
+            payload = dict(nested)
+            health = evidence.get('health') or evidence.get('daemon_health')
+            if health is not None:
+                payload.setdefault('health', health)
+            return payload
+    nested = namespace_ref.get('daemon_ref')
+    return dict(nested) if isinstance(nested, dict) and nested else None
 
 
 def preferred_terminal_backend(existing, *, terminal_backend: str | None, runtime_ref_value: str | None) -> str | None:
@@ -274,6 +297,7 @@ def runtime_authority_changed(
     backend_impl: str | None,
     pane_ref: dict | None,
     namespace_ref: dict | None,
+    daemon_ref: dict | None,
     daemon_generation: int | None,
 ) -> bool:
     if existing is None:
@@ -294,6 +318,7 @@ def runtime_authority_changed(
             backend_impl != getattr(existing, 'backend_impl', None),
             pane_ref != getattr(existing, 'pane_ref', None),
             namespace_ref != getattr(existing, 'namespace_ref', None),
+            daemon_ref != getattr(existing, 'daemon_ref', None),
         )
     )
     current_daemon_generation = getattr(existing, 'daemon_generation', None)

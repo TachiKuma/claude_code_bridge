@@ -21,6 +21,7 @@ class AttachRuntimeValues:
     backend_impl: str | None
     pane_ref: dict | None
     namespace_ref: dict | None
+    daemon_ref: dict | None
     pane_id: str | None
     active_pane_id: str | None
     pane_title_marker: str | None

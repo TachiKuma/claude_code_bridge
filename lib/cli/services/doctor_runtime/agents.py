@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from provider_execution.capabilities import execution_restore_capability
+from ccbd.supervision.evidence import build_runtime_evidence_ledger, runtime_has_explicit_evidence
 
 from ..provider_binding import binding_status
 
@@ -212,6 +213,7 @@ def agent_summary(
         'active_pane_id': getattr(runtime, 'active_pane_id', None) if runtime is not None else None,
         'pane_title_marker': getattr(runtime, 'pane_title_marker', None) if runtime is not None else None,
         'pane_state': getattr(runtime, 'pane_state', None) if runtime is not None else None,
+        **runtime_evidence_payload(runtime),
         'execution_resume_supported': capability['resume_supported'],
         'execution_restore_mode': capability['restore_mode'],
         'execution_restore_reason': capability['restore_reason'],
@@ -248,6 +250,12 @@ def runtime_session_ref(runtime) -> str | None:
     if runtime is None:
         return None
     return runtime.session_id or runtime.session_ref or runtime.session_file
+
+
+def runtime_evidence_payload(runtime) -> dict[str, object]:
+    if runtime is None or not runtime_has_explicit_evidence(runtime):
+        return {}
+    return {'evidence_ledger': build_runtime_evidence_ledger(runtime)}
 
 
 def snapshot_confidence(latest_snapshot):

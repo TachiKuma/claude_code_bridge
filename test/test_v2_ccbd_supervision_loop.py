@@ -12,6 +12,7 @@ from ccbd.supervision import RuntimeSupervisionLoop, SupervisionEventStore
 from project.resolver import bootstrap_project
 from provider_core.contracts import ProviderSessionBinding
 from storage.paths import PathLayout
+from terminal_runtime.placeholders import pane_placeholder_argv
 from terminal_runtime.tmux_readiness import TmuxTransientServerUnavailable
 
 
@@ -851,7 +852,7 @@ def test_runtime_supervision_loop_reflows_when_cmd_slot_is_missing(tmp_path: Pat
             return '%8'
 
     monkeypatch.setattr('ccbd.supervision.cmd_slot.ProjectNamespaceController', _NamespaceController)
-    monkeypatch.setattr('ccbd.supervision.cmd_slot.build_backend', lambda backend_factory, socket_path=None: fake_backend)
+    monkeypatch.setattr('ccbd.supervision.cmd_slot.build_backend', lambda backend_factory, **kwargs: fake_backend)
     monkeypatch.setattr(
         'ccbd.supervision.cmd_slot.inspect_project_namespace_pane',
         lambda backend, pane_id: (
@@ -907,9 +908,7 @@ def test_runtime_supervision_loop_reflows_when_cmd_slot_is_missing(tmp_path: Pat
         '50',
         '-c',
         str(layout.project_root),
-        'sh',
-        '-lc',
-        'while :; do sleep 3600; done',
+        *pane_placeholder_argv(),
     ]]
     assert fake_backend.respawn_calls == [{
         'pane_id': '%cmd',
@@ -955,7 +954,7 @@ def test_runtime_supervision_loop_restores_cmd_slot_locally_while_other_agent_bu
             return '%8'
 
     monkeypatch.setattr('ccbd.supervision.cmd_slot.ProjectNamespaceController', _NamespaceController)
-    monkeypatch.setattr('ccbd.supervision.cmd_slot.build_backend', lambda backend_factory, socket_path=None: fake_backend)
+    monkeypatch.setattr('ccbd.supervision.cmd_slot.build_backend', lambda backend_factory, **kwargs: fake_backend)
     monkeypatch.setattr(
         'ccbd.supervision.cmd_slot.inspect_project_namespace_pane',
         lambda backend, pane_id: (
@@ -1080,7 +1079,7 @@ def test_runtime_supervision_loop_reflows_cmd_when_local_replacement_is_unavaila
             raise RuntimeError('workspace root unavailable')
 
     monkeypatch.setattr('ccbd.supervision.cmd_slot.ProjectNamespaceController', _NamespaceController)
-    monkeypatch.setattr('ccbd.supervision.cmd_slot.build_backend', lambda backend_factory, socket_path=None: object())
+    monkeypatch.setattr('ccbd.supervision.cmd_slot.build_backend', lambda backend_factory, **kwargs: object())
 
     loop = RuntimeSupervisionLoop(
         project_id=ctx.project_id,

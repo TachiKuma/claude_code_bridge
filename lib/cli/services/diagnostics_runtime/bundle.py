@@ -5,6 +5,7 @@ import tempfile
 from typing import Any
 
 from ccbd.system import utc_now
+from ccbd.supervision import SupervisionEventStore
 
 from ..doctor import doctor_summary
 from .models import DiagnosticBundleEntry, DiagnosticBundleSummary
@@ -21,11 +22,11 @@ def export_diagnostic_bundle(context, command) -> DiagnosticBundleSummary:
 
     doctor_data, doctor_error = _doctor_payload(context)
     storage_data, storage_error = _storage_payload(context)
+    source_items = project_root_sources(context, storage_payload=storage_data)
     entries: list[DiagnosticBundleEntry] = []
 
-    support_dir = context.paths.ccbd_support_dir
-    support_dir.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix='bundle-', dir=str(support_dir)) as tmpdir:
+    context.paths.ccbd_support_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='bundle-') as tmpdir:
         stage_root = Path(tmpdir) / bundle_id
         stage_root.mkdir(parents=True, exist_ok=True)
         _write_generated_payloads(
@@ -38,7 +39,7 @@ def export_diagnostic_bundle(context, command) -> DiagnosticBundleSummary:
             storage_payload=storage_data,
             storage_error=storage_error,
         )
-        for category, path in project_root_sources(context, storage_payload=storage_data):
+        for category, path in source_items:
             entries.append(stage_file(context, stage_root, category=category, source=path))
         manifest = _bundle_manifest(
             context=context,
@@ -104,6 +105,7 @@ def _write_generated_payloads(
     storage_error: str | None,
 ) -> None:
     write_json(stage_root / 'generated' / 'doctor.json', doctor_payload)
+    write_json(stage_root / 'generated' / 'supervision-ledger.json', _supervision_ledger_payload(context))
     write_json(stage_root / 'generated' / 'storage-summary.json', storage_payload)
     write_json(
         stage_root / 'generated' / 'bundle-metadata.json',
@@ -116,6 +118,42 @@ def _write_generated_payloads(
             'storage_error': storage_error,
         },
     )
+
+
+def _supervision_ledger_payload(context) -> dict[str, Any]:
+    try:
+        events = SupervisionEventStore(context.paths).read_all()
+    except Exception as exc:
+        return {
+            'schema_version': 1,
+            'project_id': context.project.project_id,
+            'error': str(exc),
+            'events': [],
+        }
+    records: list[dict[str, Any]] = []
+    for event in events:
+        details = event.details if isinstance(event.details, dict) else {}
+        ledger = details.get('evidence_ledger')
+        if not isinstance(ledger, dict):
+            continue
+        records.append(
+            {
+                'event_kind': event.event_kind,
+                'agent_name': event.agent_name,
+                'occurred_at': event.occurred_at,
+                'prior_health': event.prior_health,
+                'result_health': event.result_health,
+                'action': details.get('action'),
+                'reason': details.get('reason'),
+                'ownership': details.get('ownership'),
+                'evidence_ledger': dict(ledger),
+            }
+        )
+    return {
+        'schema_version': 1,
+        'project_id': context.project.project_id,
+        'events': records,
+    }
 
 
 def _bundle_manifest(

@@ -4,51 +4,51 @@ created: 2026-07-20
 steps:
   - action: "evidence ledger：定义 pane/process/namespace/daemon evidence model 和 redacted diagnostics projection"
     exit_signal: "unit tests 可构造四类 evidence 并序列化到 SupervisionEvent.details"
-    status: pending
+    status: done
   - action: "backend-neutral matching：替换 tmux_socket_path / % pane id 归属判断为 namespace_ref / pane_ref matching"
     exit_signal: "tmux regression 通过；Rmux pane id 不以 % 开头仍可判断 replacement"
-    status: pending
+    status: done
   - action: "process/job recovery split：把 process dead/job exited 与 pane dead/missing 分开分类"
     exit_signal: "pane alive + process dead 不返回 healthy；process dead 触发 restart/remount 或 degraded"
-    status: pending
+    status: done
   - action: "namespace crash recovery：namespace missing/crashed/foreign 触发 reflow/remount 或 hard diagnostics"
     exit_signal: "fake backend tests 覆盖 namespace missing、marker mismatch、reflow blocked"
-    status: pending
+    status: done
   - action: "daemon crash diagnostics/recovery：接入 Rmux daemon ownership evidence"
     exit_signal: "shared daemon crash 只记录 degraded/外部恢复 evidence；owned generation mismatch 走 approved cleanup/restart path"
-    status: pending
+    status: done
   - action: "event/project view/doctor projection：SupervisionEvent、project view、doctor bundle 展示 ledger summary"
     exit_signal: "snapshot tests 覆盖 pane/process/namespace/daemon 四类 evidence"
-    status: pending
+    status: done
   - action: "Windows recovery smoke：kill pane、kill provider process、观察 shared daemon degraded、owned daemon restart 的 focused smoke"
     exit_signal: "transcript 展示 pane/process 恢复、shared daemon degraded-only、owned daemon approved restart 或明确 degraded diagnostics"
-    status: pending
+    status: done
   - action: "scope guard：不改 provider parser、backend resolver、namespace lifecycle、process liveness implementation"
     exit_signal: "diff/import guard + focused review 通过"
-    status: pending
+    status: done
 
 checks:
   - item: "evidence ledger 分离 pane/process/namespace/daemon health"
     source: design §1 / AC-007 / DOD-IMPL-001
-    status: pending
+    status: done
   - item: "Rmux pane id 不依赖 %，namespace 匹配不依赖 tmux_socket_path"
     source: design §1 / AC-002 / DOD-IMPL-002
-    status: pending
+    status: done
   - item: "process/job death 与 pane death 分开恢复或降级"
     source: design §2.4 / AC-003 / DOD-IMPL-003
-    status: pending
+    status: done
   - item: "namespace crash 触发 reflow/remount 或 hard diagnostics"
     source: design §2.4 / AC-004 / DOD-IMPL-004
-    status: pending
+    status: done
   - item: "daemon crash 使用 ownership evidence，不误杀 shared daemon"
     source: design §2.4 / AC-005 / AC-006 / DOD-IMPL-005
-    status: pending
+    status: done
   - item: "SupervisionEvent/project view/doctor 输出 evidence ledger"
     source: design §2.4 / AC-007 / DOD-IMPL-006
-    status: pending
+    status: done
   - item: "不改 provider parser、resolver、namespace lifecycle、process liveness"
     source: 明确不做 / AC-008 / DOD-IMPL-007
-    status: pending
+    status: done
 
 dod:
   commands:

@@ -132,6 +132,7 @@ def _attach_healthy_runtime(
         backend_impl=facts.backend_impl,
         pane_ref=facts.pane_ref,
         namespace_ref=facts.namespace_ref,
+        daemon_ref=facts.daemon_ref,
         pane_id=facts.pane_id,
         active_pane_id=active_pane_id,
         pane_title_marker=facts.pane_title_marker,
