@@ -22,6 +22,7 @@ from terminal_runtime.rmux_backend_runtime.client import (
 )
 from terminal_runtime.rmux_backend_runtime.io import (
     RmuxCaptureResult,
+    build_default_log_command_builder,
     capture_pane,
     ensure_pane_log,
     pane_log_path,
@@ -48,9 +49,11 @@ from terminal_runtime.rmux_backend_runtime.namespace import (
 from terminal_runtime.rmux_backend_runtime.panes import (
     describe_pane,
     describe_window_panes,
+    is_pane_alive,
     kill_pane,
     list_panes,
     move_pane,
+    pane_exists,
     reflow_window,
     respawn_pane,
     select_layout,
@@ -105,7 +108,11 @@ class RmuxBackend:
         self.socket_path = resolved_socket_path
         self.executable = str(resolved_executable or "rmux")
         self.daemon_evidence = dict(daemon_evidence or {})
-        self._log_command_builder = log_command_builder
+        self._log_command_builder = (
+            log_command_builder
+            if log_command_builder is not None
+            else (build_default_log_command_builder() if os.name == "nt" else None)
+        )
         self._capability_gate = (
             RmuxCapabilityGate(
                 command_status=command_status,
@@ -432,6 +439,15 @@ class RmuxBackend:
         user_options: tuple[str, ...] = (),
     ) -> tuple[dict[str, str], ...]:
         return describe_window_panes(self, namespace, window_name=window_name, user_options=user_options)
+
+    def pane_exists(self, pane_id: str) -> bool:
+        return pane_exists(self, pane_id)
+
+    def is_tmux_pane_alive(self, pane_id: str) -> bool:
+        return is_pane_alive(self, pane_id)
+
+    def is_alive(self, pane_id: str) -> bool:
+        return is_pane_alive(self, pane_id)
 
     def _run_checked(self, args: list[str], *, operation: str, timeout_s: float | None = None):
         return self._client.run_checked(

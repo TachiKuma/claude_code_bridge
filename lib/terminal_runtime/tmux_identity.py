@@ -48,10 +48,11 @@ def apply_ccb_pane_identity(
     if str(managed_by or '').strip():
         user_options['@ccb_managed_by'] = str(managed_by).strip()
     user_options['@ccb_project_id'] = project_id
+    target_pane = _coerce_batch_pane_target(backend, pane_id, window_name=window_name)
     batch_setter = getattr(backend, 'set_pane_identity', None)
     if callable(batch_setter):
         batch_setter(
-            pane_id,
+            target_pane,
             title=title,
             user_options=user_options,
             border_style=visual.border_style,
@@ -84,6 +85,23 @@ def apply_ccb_pane_identity(
             border_style=visual.border_style,
             active_border_style=visual.active_border_style,
         )
+
+
+def _coerce_batch_pane_target(backend, pane_id, *, window_name: str | None):
+    if isinstance(pane_id, dict):
+        return pane_id
+    if getattr(backend, 'backend_family', None) != 'tmux-family':
+        return pane_id
+    if getattr(backend, 'backend_impl', None) != 'rmux':
+        return pane_id
+    session_name = str(getattr(backend, 'namespace', '') or '').strip()
+    if not session_name:
+        return pane_id
+    pane_ref = getattr(backend, 'pane_ref', None)
+    if not callable(pane_ref):
+        return pane_id
+    resolved_window = str(window_name or '').strip() or None
+    return pane_ref(str(pane_id), session_name=session_name, window_name=resolved_window)
 
 
 __all__ = ['TmuxPaneVisual', 'apply_ccb_pane_identity', 'pane_visual']

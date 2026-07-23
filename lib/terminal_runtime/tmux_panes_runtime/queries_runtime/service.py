@@ -6,10 +6,12 @@ from .options import normalize_expected_user_options, normalize_user_option_name
 def pane_exists(service, pane_id: str) -> bool:
     if not service.looks_like_pane_id_fn(pane_id):
         return False
-    cp = run_tmux_capture(service, ["display-message", "-p", "-t", pane_id, "#{pane_id}"], timeout=0.5)
+    cp = run_tmux_capture(service, ["list-panes", "-a", "-F", "#{pane_id}"], timeout=0.5)
     if cp is None:
         return False
-    return getattr(cp, "returncode", 1) == 0 and service.pane_exists_output_fn(getattr(cp, "stdout", "") or "")
+    if getattr(cp, "returncode", 1) != 0:
+        return False
+    return any(line.strip() == pane_id for line in (getattr(cp, "stdout", "") or "").splitlines())
 
 
 def get_current_pane_id(service, *, env_pane: str) -> str:
@@ -49,12 +51,12 @@ def describe_pane(service, pane_id: str, *, user_options: tuple[str, ...] = ()) 
     format_parts = describe_pane_fields(normalized_options)
     cp = run_tmux_capture(
         service,
-        ["display-message", "-p", "-t", pane_id, "\t".join(format_parts)],
+        ["list-panes", "-a", "-F", "\t".join(format_parts)],
         timeout=0.5,
     )
     if cp is None or getattr(cp, "returncode", 1) != 0:
         return None
-    return describe_pane_output(getattr(cp, "stdout", "") or "", normalized_options)
+    return describe_pane_output_for_id(getattr(cp, "stdout", "") or "", normalized_options, pane_id)
 
 
 def get_pane_content(service, pane_id: str, *, lines: int = 20) -> str | None:
@@ -70,10 +72,14 @@ def get_pane_content(service, pane_id: str, *, lines: int = 20) -> str | None:
 def is_pane_alive(service, pane_id: str) -> bool:
     if not pane_id:
         return False
-    cp = service.tmux_run_fn(["display-message", "-p", "-t", pane_id, "#{pane_dead}"], capture=True)
+    cp = service.tmux_run_fn(["list-panes", "-a", "-F", "#{pane_id}\t#{pane_dead}"], capture=True)
     if getattr(cp, "returncode", 1) != 0:
         return False
-    return service.pane_is_alive_fn(getattr(cp, "stdout", "") or "")
+    for line in (getattr(cp, "stdout", "") or "").splitlines():
+        observed, sep, pane_dead = line.partition("\t")
+        if sep == "\t" and observed.strip() == pane_id:
+            return service.pane_is_alive_fn(pane_dead)
+    return False
 
 
 def run_tmux_capture(service, args: list[str], *, timeout: float | None = None):
@@ -130,6 +136,14 @@ def describe_pane_output(stdout: str, normalized_options: list[str]) -> dict[str
     for index, opt in enumerate(normalized_options, start=3):
         described[opt] = (parts[index] or '').strip()
     return described
+
+
+def describe_pane_output_for_id(stdout: str, normalized_options: list[str], pane_id: str) -> dict[str, str] | None:
+    for line in (stdout or "").splitlines():
+        described = describe_pane_output(line, normalized_options)
+        if described is not None and described.get("pane_id") == pane_id:
+            return described
+    return None
 
 
 __all__ = [

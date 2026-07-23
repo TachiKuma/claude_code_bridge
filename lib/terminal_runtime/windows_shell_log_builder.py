@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping, Protocol
+import re
 import shlex
 import shutil
 
@@ -76,7 +77,7 @@ def resolve_shell_flags(*, shell: str, flags_raw: str, fallback_flags: str = '')
         return ['-NoLogo', '-NoProfile', '-Command']
     if family == 'cmd':
         return ['/d', '/s', '/c']
-    shell_name = Path(shell).name.lower()
+    shell_name = _shell_name(shell)
     if shell_name in {'bash', 'zsh', 'ksh', 'fish'}:
         return ['-l', '-c']
     if shell_name in {'sh', 'dash'}:
@@ -169,7 +170,13 @@ class DefaultWindowsShellLogBuilder:
             process_shell=self._process_shell(),
             flags_raw=self.env.get('CCB_TMUX_SHELL_FLAGS', ''),
         )
-        return build_shell_command(shell=resolution.shell, flags=list(resolution.flags), cmd_body=body)
+        if _shell_family(resolution.shell) == 'powershell':
+            body = _translate_posix_exports_for_powershell(body)
+        flags = list(resolution.flags)
+        if _shell_family(resolution.shell) == 'powershell' and not any(flag.lower() == '-noexit' for flag in flags):
+            command_index = next((index for index, flag in enumerate(flags) if flag.lower() in {'-command', '-c'}), len(flags))
+            flags.insert(command_index, '-NoExit')
+        return build_shell_command(shell=resolution.shell, flags=flags, cmd_body=body)
 
     def build_pipe_log_command(self, log_path: Path) -> str:
         fallback_shell, _ = self.default_shell_fn()
@@ -194,6 +201,11 @@ class DefaultWindowsShellLogBuilder:
             fallback_shell=fallback_shell,
             flags_raw=self.env.get('CCB_TMUX_SHELL_FLAGS', ''),
             which_fn=self.which_fn,
+        )
+        cmd = (
+            _translate_posix_exports_for_powershell(cmd)
+            if _shell_family(resolution.shell) == 'powershell'
+            else cmd
         )
         return append_stderr_redirection(cmd, stderr_log_path, shell=resolution.shell)
 
@@ -263,7 +275,7 @@ def _candidate_availability(*, which_fn: Callable[[str], str | None], shell: str
         'powershell': bool(which_fn('powershell')),
         'cmd': bool(which_fn('cmd')),
     }
-    shell_name = Path(shell).name.lower()
+    shell_name = _shell_name(shell)
     if shell_name and shell_name not in candidates:
         candidates[shell_name] = bool(which_fn(shell))
     return candidates
@@ -274,12 +286,16 @@ def _candidate_text(candidates: dict[str, bool]) -> str:
 
 
 def _shell_family(shell: str) -> str:
-    shell_name = Path(shell).name.lower()
-    if shell_name in {'pwsh', 'powershell', 'powershell.exe'}:
+    shell_name = _shell_name(shell)
+    if shell_name in {'pwsh', 'powershell'}:
         return 'powershell'
-    if shell_name in {'cmd', 'cmd.exe'}:
+    if shell_name == 'cmd':
         return 'cmd'
     return 'posix'
+
+
+def _shell_name(shell: str) -> str:
+    return str(shell or '').strip().replace('\\', '/').rsplit('/', 1)[-1].lower().removesuffix('.exe')
 
 
 def _quote_windows_token(value: str) -> str:
@@ -308,3 +324,54 @@ def _quote_path_for_shell(shell: str, path: str) -> str:
     if family == 'cmd':
         return '"' + path.replace('"', '""') + '"'
     return shlex.quote(path)
+
+
+def _translate_posix_exports_for_powershell(command: str) -> str:
+    segments = [segment.strip() for segment in str(command or '').split(';')]
+    translated: list[str] = []
+    for segment in segments:
+        translated.append(_translate_posix_env_segment_for_powershell(segment))
+    return '; '.join(segment for segment in translated if segment)
+
+
+def _translate_posix_env_segment_for_powershell(segment: str) -> str:
+    if segment.startswith('export '):
+        return _translate_posix_export_for_powershell(segment)
+    if segment.startswith('unset '):
+        return _translate_posix_unset_for_powershell(segment)
+    return segment
+
+
+def _translate_posix_export_for_powershell(segment: str) -> str:
+    try:
+        assignments = shlex.split(segment[len('export '):], posix=True)
+    except ValueError:
+        return segment
+    rendered: list[str] = []
+    for assignment in assignments:
+        name, separator, value = assignment.partition('=')
+        if not separator or not _is_posix_env_name(name):
+            return segment
+        rendered.append(f"$env:{name} = {_quote_powershell_string(value)}")
+    return '; '.join(rendered) if rendered else segment
+
+
+def _translate_posix_unset_for_powershell(segment: str) -> str:
+    try:
+        names = shlex.split(segment[len('unset '):], posix=True)
+    except ValueError:
+        return segment
+    rendered: list[str] = []
+    for name in names:
+        if not _is_posix_env_name(name):
+            return segment
+        rendered.append(f"Remove-Item Env:\\{name} -ErrorAction SilentlyContinue")
+    return '; '.join(rendered) if rendered else segment
+
+
+def _is_posix_env_name(value: str) -> bool:
+    return bool(re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', value))
+
+
+def _quote_powershell_string(value: str) -> str:
+    return "'" + str(value or '').replace("'", "''") + "'"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 
 
@@ -144,7 +145,10 @@ def split_window_command(
     )
     command = str(cmd or '').strip()
     if command:
-        args.extend(['sh', '-lc', command])
+        if os.name == 'nt':
+            args.extend(['powershell.exe', '-NoProfile', '-Command', command])
+        else:
+            args.extend(['sh', '-lc', command])
     return args
 
 

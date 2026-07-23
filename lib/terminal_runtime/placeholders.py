@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 
 _PANE_PLACEHOLDER_BODY = 'while :; do sleep 3600; done'
-_WINDOWS_PANE_PLACEHOLDER_BODY = 'while ($true) { Start-Sleep -Seconds 3600 }'
+_WINDOWS_PANE_PLACEHOLDER_BODY = 'Start-Sleep -Seconds 2147483'
 
 
 def pane_placeholder_cmd() -> str:

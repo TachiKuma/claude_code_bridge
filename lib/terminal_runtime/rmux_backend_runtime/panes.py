@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from terminal_runtime.mux_backend_contract import MuxNamespaceRef, MuxPaneRef, SplitDirection
 from terminal_runtime.rmux_backend_runtime.errors import malformed_output_error, not_found_error
+from terminal_runtime.rmux_backend_runtime.targets import canonical_pane_id, pane_target
 
 
 def list_panes(
@@ -57,7 +58,7 @@ def split_pane(
         "-p",
         str(split_percent),
         "-t",
-        _pane_id(parent),
+        pane_target(parent),
         "-P",
         "-F",
         "#{pane_id}",
@@ -76,6 +77,10 @@ def split_pane(
             ipc_ref=backend._ipc_ref(),
             daemon_evidence=backend.daemon_evidence,
         )
+    pane_id = _pane_id_from_split_index_alias(backend, parent=parent, pane_id=pane_id) or canonical_pane_id(
+        backend,
+        {**parent, "pane_id": pane_id},
+    )
     return backend.pane_ref(
         pane_id,
         session_name=parent["session_name"],
@@ -91,18 +96,24 @@ def respawn_pane(
     cwd: str | None = None,
     remain_on_exit: bool = True,
 ) -> None:
-    del remain_on_exit
-    backend._require_capability("respawn_pane", ("respawn-pane",))
-    args = ["respawn-pane", "-k", "-t", _pane_id(pane)]
+    backend._require_capability("respawn_pane", ("respawn-pane", "set-option") if remain_on_exit else ("respawn-pane",))
+    command = _wrapped_provider_command(backend, cmd, cwd=cwd)
+    target = pane_target(pane)
+    if remain_on_exit:
+        backend._run_checked(
+            ["set-option", "-p", "-t", target, "remain-on-exit", "on"],
+            operation="respawn_pane_remain_on_exit",
+        )
+    args = ["respawn-pane", "-k", "-t", target]
     if cwd:
         args.extend(["-c", str(cwd)])
-    args.append(_require_text(cmd, "cmd"))
+    args.append(command)
     backend._run_checked(args, operation="respawn_pane")
 
 
 def kill_pane(backend, pane: MuxPaneRef) -> None:
     backend._require_capability("kill_pane", ("kill-pane",))
-    backend._run_checked(["kill-pane", "-t", _pane_id(pane)], operation="kill_pane")
+    backend._run_checked(["kill-pane", "-t", pane_target(pane)], operation="kill_pane")
 
 
 def reflow_window(
@@ -142,12 +153,12 @@ def select_layout(
 
 def move_pane(backend, pane: MuxPaneRef, *, target: str) -> None:
     backend._require_capability("move_pane", ("move-pane",))
-    backend._run_checked(["move-pane", "-s", _pane_id(pane), "-t", _require_text(target, "target")], operation="move_pane")
+    backend._run_checked(["move-pane", "-s", pane_target(pane), "-t", _require_text(target, "target")], operation="move_pane")
 
 
 def swap_pane(backend, source: MuxPaneRef, *, target: MuxPaneRef) -> None:
     backend._require_capability("swap_pane", ("swap-pane",))
-    backend._run_checked(["swap-pane", "-s", _pane_id(source), "-t", _pane_id(target)], operation="swap_pane")
+    backend._run_checked(["swap-pane", "-s", pane_target(source), "-t", pane_target(target)], operation="swap_pane")
 
 
 def describe_pane(
@@ -166,6 +177,15 @@ def describe_pane(
         if record.get("pane_id") == pane["pane_id"]:
             return record
     return None
+
+
+def pane_exists(backend, pane_id: str) -> bool:
+    return _pane_liveness(backend, pane_id) is not None
+
+
+def is_pane_alive(backend, pane_id: str) -> bool:
+    state = _pane_liveness(backend, pane_id)
+    return bool(state and state.get("alive"))
 
 
 def describe_window_panes(
@@ -218,6 +238,35 @@ def describe_window_panes(
     return tuple(records)
 
 
+def _pane_liveness(backend, pane_id: str) -> dict[str, object] | None:
+    pane_text = _require_text(pane_id, "pane_id")
+    pane_index = pane_text[1:] if pane_text.startswith("%") and pane_text[1:].isdigit() else ""
+    namespace = str(getattr(backend, "namespace", "") or "").strip()
+    format_text = "#{session_name}\t#{window_name}\t#{pane_id}\t#{pane_index}\t#{pane_dead}"
+    try:
+        result = backend._run_checked(
+            ["list-panes", "-a", "-F", format_text],
+            operation="pane_liveness",
+        )
+    except Exception:
+        return None
+    for line in str(getattr(result, "stdout", "") or "").splitlines():
+        parts = [part.strip() for part in line.split("\t")]
+        observed_session = parts[0] if parts else ""
+        observed_id = parts[2] if len(parts) > 2 else ""
+        observed_index = parts[3] if len(parts) > 3 else ""
+        pane_dead = parts[4] if len(parts) > 4 else ""
+        if namespace and observed_session != namespace:
+            continue
+        if observed_id != pane_text and not (pane_index and observed_index == pane_index):
+            continue
+        return {
+            "pane_id": observed_id,
+            "alive": pane_dead in {"", "0", "false", "False"},
+        }
+    return None
+
+
 def _split_flag(direction: str) -> str:
     normalized = str(direction or "").strip().lower()
     if normalized == "right":
@@ -225,10 +274,6 @@ def _split_flag(direction: str) -> str:
     if normalized == "bottom":
         return "-v"
     raise ValueError(f"split_pane direction must be right or bottom, got {direction!r}")
-
-
-def _pane_id(pane: MuxPaneRef) -> str:
-    return _require_text(pane.get("pane_id"), "pane_id")
 
 
 def _session_window_target(session_name: str, window_name: str | None = None) -> str:
@@ -241,6 +286,52 @@ def _first_stdout_token(stdout: str) -> str:
     return ((stdout.splitlines() or [""])[0]).strip()
 
 
+def _pane_id_from_split_index_alias(backend, *, parent: MuxPaneRef, pane_id: str) -> str | None:
+    pane_text = str(pane_id or "").strip()
+    if not (pane_text.startswith("%") and pane_text[1:].isdigit()):
+        return None
+    session = str(parent.get("session_name") or "").strip()
+    window = str(parent.get("window_name") or "").strip()
+    if not session:
+        return None
+    args = (
+        [
+            "list-panes",
+            "-t",
+            f"{session}:{window}",
+            "-F",
+            "#{pane_id}\t#{pane_index}",
+        ]
+        if window
+        else [
+            "list-panes",
+            "-a",
+            "-F",
+            "#{session_name}\t#{pane_id}\t#{pane_index}",
+        ]
+    )
+    try:
+        result = backend._run_checked(args, operation="canonicalize_split_pane")
+    except Exception:
+        return None
+    pane_index = pane_text[1:]
+    matches: list[str] = []
+    for line in str(getattr(result, "stdout", "") or "").splitlines():
+        parts = [part.strip() for part in line.split("\t")]
+        if window:
+            observed_id = parts[0] if parts else ""
+            observed_index = parts[1] if len(parts) > 1 else ""
+        else:
+            observed_session = parts[0] if parts else ""
+            if observed_session != session:
+                continue
+            observed_id = parts[1] if len(parts) > 1 else ""
+            observed_index = parts[2] if len(parts) > 2 else ""
+        if observed_index == pane_index and observed_id.startswith("%"):
+            matches.append(observed_id)
+    return matches[0] if len(matches) == 1 else None
+
+
 def _require_text(value: str | None, field_name: str) -> str:
     text = str(value or "").strip()
     if not text:
@@ -248,12 +339,26 @@ def _require_text(value: str | None, field_name: str) -> str:
     return text
 
 
+def _wrapped_provider_command(backend, cmd: str, *, cwd: str | None) -> str:
+    command = _require_text(cmd, "cmd")
+    builder = getattr(backend, "_log_command_builder", None)
+    wrapper = getattr(builder, "wrap_provider_command", None)
+    if not callable(wrapper):
+        return command
+    try:
+        return str(wrapper(command, cwd=cwd) or "").strip() or command
+    except Exception:
+        return command
+
+
 __all__ = [
     "describe_pane",
     "describe_window_panes",
+    "is_pane_alive",
     "kill_pane",
     "list_panes",
     "move_pane",
+    "pane_exists",
     "reflow_window",
     "respawn_pane",
     "select_layout",

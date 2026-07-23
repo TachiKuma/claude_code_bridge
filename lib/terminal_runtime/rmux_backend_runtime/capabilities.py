@@ -138,7 +138,7 @@ def _summary_approved(data: dict[str, object]) -> bool:
 def _load_json_mapping(path: Path) -> dict[str, object]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except OSError:
+    except (OSError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
 
