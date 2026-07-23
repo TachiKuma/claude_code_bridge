@@ -532,6 +532,17 @@ class FakeMuxBackend:
             "blocking_gaps": list(self._capabilities["blocking_gaps"]),
         }
 
+    def namespace_ref(
+        self,
+        *,
+        session_name: str,
+        namespace_id: str | None = None,
+    ) -> MuxNamespaceRef:
+        ref = self._namespace_ref(session_name)
+        if namespace_id is not None:
+            ref["namespace_id"] = self._require_name(namespace_id, "namespace_id")
+        return ref
+
     def describe_pane(
         self,
         pane: MuxPaneRef,

@@ -7,6 +7,7 @@ import pytest
 
 from agents.models import AgentSpec, PermissionMode, ProjectConfig, QueuePolicy, RestoreMode, RuntimeMode, ToolWindowSpec, WindowSpec, WorkspaceMode
 from ccbd.project_focus import ProjectFocusDependencies, ProjectFocusError, ProjectFocusService
+from ccbd.project_focus.tmux import backend_for_namespace
 from ccbd.services.project_namespace import ProjectNamespaceController
 from ccbd.services.project_namespace_state import ProjectNamespaceState, ProjectNamespaceStateStore
 from storage.paths import PathLayout
@@ -186,6 +187,48 @@ def test_project_focus_agent_selects_configured_window_and_pane(tmp_path: Path) 
         ['display-message', '-p', '-t', '%5', '#{session_name}'],
         ['send-keys', '-t', '%3', 'C-l'],
         ['send-keys', '-t', '%4', 'C-l'],
+    ]
+
+
+def test_project_focus_backend_for_namespace_uses_canonical_ref_for_rmux(tmp_path: Path) -> None:
+    layout = PathLayout(tmp_path / 'repo-rmux-focus-backend')
+    state = ProjectNamespaceState(
+        project_id='proj-rmux-focus',
+        namespace_epoch=1,
+        tmux_socket_path='',
+        tmux_session_name='ccb-rmux-focus',
+        backend_impl='rmux',
+        namespace_id='proj-rmux-focus',
+        namespace_session_name='ccb-rmux-focus',
+        namespace_ipc_kind='named_pipe',
+        namespace_ipc_ref=r'\\.\pipe\ccb-rmux-focus',
+        layout_version=3,
+        ui_attachable=True,
+    )
+    ProjectNamespaceStateStore(layout).save(state)
+    namespace = ProjectNamespaceController(layout, 'proj-rmux-focus').load()
+    calls: list[dict[str, object]] = []
+    backend = object()
+
+    def backend_factory(*, namespace_ref=None, namespace=None, socket_path=None):
+        calls.append({'namespace_ref': dict(namespace_ref or {}), 'namespace': namespace, 'socket_path': socket_path})
+        return backend
+
+    assert namespace is not None
+    assert backend_for_namespace(backend_factory, namespace) is backend
+    assert calls == [
+        {
+            'namespace_ref': {
+                'backend_family': 'tmux-family',
+                'backend_impl': 'rmux',
+                'namespace_id': 'proj-rmux-focus',
+                'session_name': 'ccb-rmux-focus',
+                'ipc_kind': 'named_pipe',
+                'ipc_ref': r'\\.\pipe\ccb-rmux-focus',
+            },
+            'namespace': 'ccb-rmux-focus',
+            'socket_path': r'\\.\pipe\ccb-rmux-focus',
+        }
     ]
 
 

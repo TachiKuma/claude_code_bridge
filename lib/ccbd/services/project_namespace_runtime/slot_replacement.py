@@ -38,7 +38,8 @@ def resolve_project_slot_recovery_context(
     if namespace is None or not namespace.ui_attachable:
         return None
     runtime_socket = str(getattr(runtime, 'tmux_socket_path', None) or '').strip()
-    if runtime_socket and not same_tmux_socket_path(runtime_socket, namespace.tmux_socket_path):
+    namespace_socket = str(getattr(namespace, 'tmux_socket_path', '') or '').strip()
+    if runtime_socket and namespace_socket and not same_tmux_socket_path(runtime_socket, namespace_socket):
         return None
     if not runtime_socket and str(getattr(runtime, 'managed_by', '') or '').strip() != 'ccbd':
         return None

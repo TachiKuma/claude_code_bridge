@@ -90,15 +90,17 @@ def create_session(
     return backend.namespace_ref(session_name=session)
 
 
-def attach_namespace_unsupported(backend, *, namespace: MuxNamespaceRef, window_name: str | None = None) -> int:
-    del namespace, window_name
-    raise MuxCommandError(
-        category="unsupported",
-        backend_impl="rmux",
+def attach_namespace(backend, *, namespace: MuxNamespaceRef, window_name: str | None = None) -> int:
+    backend._require_capability("attach_namespace", ("attach-session",))
+    target = _session_window_target(namespace["session_name"], window_name)
+    result = backend._client.run(["attach-session", "-t", target], foreground=True)
+    if result.returncode == 0:
+        return 0
+    raise map_rmux_result_error(
+        result,
         operation="attach_namespace",
-        detail="rmux foreground attach is owned by a later lifecycle feature",
         ipc_ref=backend._ipc_ref(),
-        evidence={"scope": "rmux-backend-core"},
+        daemon_evidence=backend.daemon_evidence,
     )
 
 
@@ -297,7 +299,7 @@ def _looks_like_windows_pipe(value: str) -> bool:
 
 
 __all__ = [
-    "attach_namespace_unsupported",
+    "attach_namespace",
     "create_session",
     "destroy_namespace",
     "ensure_server_policy",

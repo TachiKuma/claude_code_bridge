@@ -29,15 +29,37 @@ class TmuxWindowRecord:
     active: bool = False
 
 
-def build_backend(backend_factory, *, socket_path: str, namespace: str | None = None):
+def build_backend(
+    backend_factory,
+    *,
+    socket_path: str | None,
+    namespace: str | None = None,
+    namespace_ref: dict[str, object] | None = None,
+):
     namespace_text = str(namespace or '').strip() or None
+    socket_text = str(socket_path or '').strip() or None
+    ref = dict(namespace_ref or {})
+    if ref:
+        namespace_text = str(ref.get('session_name') or namespace_text or '').strip() or None
+        ipc_ref = str(ref.get('ipc_ref') or '').strip() or None
+        ipc_kind = str(ref.get('ipc_kind') or '').strip()
+        if ipc_ref and (
+            ipc_kind in {'unix_socket', 'socket_path'}
+            or (ipc_kind == 'named_pipe' and _looks_like_path_ref(ipc_ref))
+        ):
+            socket_text = ipc_ref
+    if ref:
+        try:
+            return backend_factory(namespace_ref=ref, namespace=namespace_text, socket_path=socket_text)
+        except TypeError:
+            pass
     if namespace_text is not None:
         try:
-            return backend_factory(namespace=namespace_text, socket_path=socket_path)
+            return backend_factory(namespace=namespace_text, socket_path=socket_text)
         except TypeError:
             pass
     try:
-        return backend_factory(socket_path=socket_path)
+        return backend_factory(socket_path=socket_text)
     except TypeError:
         return backend_factory()
 
@@ -451,9 +473,13 @@ def split_pane(
     raise RuntimeError(f'failed to split tmux pane from target {target!r}')
 
 
-def kill_server(backend) -> bool:
+def kill_server(backend, *, session_name: str | None = None) -> bool:
     if _is_mux_backend(backend):
-        return bool(backend.kill_server())
+        if getattr(backend, 'backend_impl', 'tmux') == 'tmux':
+            return bool(backend.kill_server())
+        namespace_text = str(session_name or '').strip()
+        namespace = backend.namespace_ref(session_name=namespace_text) if namespace_text else None
+        return bool(backend.kill_server(namespace))
     try:
         backend._tmux_run(['kill-server'], check=False, capture=True)  # type: ignore[attr-defined]
         import os
@@ -660,6 +686,10 @@ def _session_alive_once(backend, session_name: str) -> bool:
 
 def _is_mux_backend(backend) -> bool:
     return getattr(backend, 'backend_family', None) == 'tmux-family' and callable(getattr(backend, 'namespace_ref', None))
+
+
+def _looks_like_path_ref(value: str) -> bool:
+    return '/' in value or '\\' in value
 
 
 def _tmux_object_ready_timeout_s(timeout_s: float | None = None) -> float:

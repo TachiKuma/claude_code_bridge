@@ -18,6 +18,7 @@ def _supported_status(**overrides: str) -> dict[str, str]:
         "has-session",
         "kill-session",
         "kill-server",
+        "attach-session",
         "list-windows",
         "new-window",
         "select-window",
@@ -43,6 +44,7 @@ def _supported_status(**overrides: str) -> dict[str, str]:
 class FakeRmuxCommandClient:
     responses: dict[str, list[RmuxCommandResult]] = field(default_factory=dict)
     calls: list[tuple[str, ...]] = field(default_factory=list)
+    foreground_calls: list[tuple[str, ...]] = field(default_factory=list)
 
     def add(self, command_name: str, *, stdout: str = "", stderr: str = "", returncode: int = 0) -> None:
         self.responses.setdefault(command_name, []).append(
@@ -55,9 +57,11 @@ class FakeRmuxCommandClient:
         )
 
     def run(self, args, *, input_text=None, timeout_s=None, foreground=False):
-        del input_text, timeout_s, foreground
+        del input_text, timeout_s
         command = tuple(str(arg) for arg in args)
         self.calls.append(command)
+        if foreground:
+            self.foreground_calls.append(command)
         command_name = command[0]
         queue = self.responses.get(command_name) or []
         if queue:
@@ -278,15 +282,14 @@ def test_capability_gate_accepts_semantic_workaround_projection() -> None:
     assert gate.capabilities()["command_status"]["select-pane"] == "workaround"
 
 
-def test_attach_and_send_capture_logging_are_not_core_behaviors() -> None:
-    backend = _backend()
+def test_attach_namespace_uses_foreground_command_client() -> None:
+    client = FakeRmuxCommandClient()
+    backend = _backend(client)
     namespace = backend.namespace_ref(session_name="ccb-demo")
 
-    with pytest.raises(MuxCommandError) as attach:
-        backend.attach_namespace(namespace, window_name="main")
+    assert backend.attach_namespace(namespace, window_name="main") == 0
 
-    assert attach.value.category == "unsupported"
-    assert attach.value.operation == "attach_namespace"
+    assert client.foreground_calls == [("attach-session", "-t", "ccb-demo:main")]
     assert hasattr(backend, "send_text")
     assert hasattr(backend, "send_key")
     assert hasattr(backend, "capture_pane")

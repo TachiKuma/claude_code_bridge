@@ -9,12 +9,13 @@ from typing import Callable
 
 from ccbd.system import utc_now
 
-from .backend import build_backend, session_root_pane, session_window_target, window_root_pane
+from .backend import session_root_pane, session_window_target, window_root_pane
 from .controller_state import ProjectNamespaceControllerState, ProjectNamespaceControllerStateMixin
 from .destroy import destroy_project_namespace
 from .ensure import ensure_project_namespace
 from .additive_patch import apply_additive_patch, apply_reload_patch
 from .models import ProjectNamespace
+from .namespace_projection import build_backend_for_namespace
 from .reflow import reflow_project_workspace
 from .records import namespace_from_state
 from ..project_namespace_state import ProjectNamespaceEventStore, ProjectNamespaceStateStore
@@ -170,11 +171,7 @@ class ProjectNamespaceController(ProjectNamespaceControllerStateMixin):
         current = namespace or self.load()
         if current is None:
             raise RuntimeError('project namespace is not available')
-        backend = build_backend(
-            self._backend_factory,
-            socket_path=current.tmux_socket_path,
-            namespace=current.tmux_session_name,
-        )
+        backend = build_backend_for_namespace(self._backend_factory, current)
         workspace_window_name = str(current.workspace_window_name or '').strip()
         pane_records = snapshot_project_namespace_panes(backend)
         if pane_records is not None:
@@ -208,6 +205,7 @@ def default_project_namespace_backend(
     *,
     namespace: str | None = None,
     socket_path: str | None = None,
+    namespace_ref: dict[str, object] | None = None,
     project_config_backend: str | None = None,
     user_config_backend: str | None = None,
     project_root: str | None = None,
@@ -215,6 +213,16 @@ def default_project_namespace_backend(
     rmux_availability_reader: Callable[[], RmuxAvailability] | None = None,
     capability_reader: Callable[[], RmuxCapabilityStatus] | None = None,
 ):
+    ref = dict(namespace_ref or {})
+    if ref:
+        namespace = str(ref.get('session_name') or namespace or '').strip() or None
+        ipc_kind = str(ref.get('ipc_kind') or '').strip()
+        ipc_ref = str(ref.get('ipc_ref') or '').strip() or None
+        if ipc_ref and (
+            ipc_kind in {'unix_socket', 'socket_path'}
+            or (ipc_kind == 'named_pipe' and _looks_like_path_ref(ipc_ref))
+        ):
+            socket_path = ipc_ref
     selection = TerminalBackendSelection(
         detect_terminal_fn=lambda: None,
         tmux_backend_factory=lambda: TmuxMuxBackendAdapter(TmuxBackend(socket_name=namespace, socket_path=socket_path)),
@@ -228,6 +236,10 @@ def default_project_namespace_backend(
         capability_reader=capability_reader,
     )
     return selection.get_backend()
+
+
+def _looks_like_path_ref(value: str) -> bool:
+    return '/' in value or '\\' in value
 
 
 __all__ = ['ProjectNamespaceController']

@@ -47,7 +47,9 @@ class ProjectNamespaceState:
         namespace_backend_family = NAMESPACE_BACKEND_FAMILY
         require_non_empty_text(self.project_id, field_name='project_id')
         require_positive_int(self.namespace_epoch, field_name='namespace_epoch')
-        require_non_empty_text(self.tmux_socket_path, field_name='tmux_socket_path')
+        tmux_socket_path = clean_text(self.tmux_socket_path)
+        if backend_impl not in {'rmux', 'psmux'}:
+            require_non_empty_text(tmux_socket_path, field_name='tmux_socket_path')
         require_non_empty_text(self.tmux_session_name, field_name='tmux_session_name')
         require_non_empty_text(backend_impl, field_name='backend_impl')
         require_positive_int(self.layout_version, field_name='layout_version')
@@ -69,13 +71,14 @@ class ProjectNamespaceState:
             namespace_ipc_kind = 'named_pipe' if backend_impl in {'rmux', 'psmux'} else 'unix_socket'
         namespace_ipc_ref = clean_text(self.namespace_ipc_ref)
         if not namespace_ipc_ref:
-            namespace_ipc_ref = namespace_id if namespace_ipc_kind == 'named_pipe' else self.tmux_socket_path
+            namespace_ipc_ref = namespace_id if namespace_ipc_kind == 'named_pipe' else (tmux_socket_path or '')
         object.__setattr__(self, 'backend_impl', backend_impl)
         object.__setattr__(self, 'namespace_backend_family', namespace_backend_family)
         object.__setattr__(self, 'namespace_id', namespace_id)
         object.__setattr__(self, 'namespace_session_name', namespace_session_name)
         object.__setattr__(self, 'namespace_ipc_kind', namespace_ipc_kind)
         object.__setattr__(self, 'namespace_ipc_ref', namespace_ipc_ref)
+        object.__setattr__(self, 'tmux_socket_path', tmux_socket_path or '')
 
     def with_started(self, *, occurred_at: str, ui_attachable: bool = True) -> ProjectNamespaceState:
         return replace(
@@ -98,7 +101,7 @@ class ProjectNamespaceState:
             'record_type': NAMESPACE_STATE_RECORD_TYPE,
             'project_id': self.project_id,
             'namespace_epoch': self.namespace_epoch,
-            'tmux_socket_path': self.tmux_socket_path,
+            'tmux_socket_path': self.tmux_socket_path or None,
             'tmux_session_name': self.tmux_session_name,
             'backend_impl': self.backend_impl,
             'namespace_backend_family': self.namespace_backend_family,
@@ -106,6 +109,7 @@ class ProjectNamespaceState:
             'namespace_session_name': self.namespace_session_name,
             'namespace_ipc_kind': self.namespace_ipc_kind,
             'namespace_ipc_ref': self.namespace_ipc_ref,
+            'namespace_ref': self.namespace_ref(),
             'layout_version': self.layout_version,
             'layout_signature': self.layout_signature,
             'control_window_name': self.control_window_name,
@@ -124,17 +128,29 @@ class ProjectNamespaceState:
     def from_record(cls, payload: dict[str, Any]) -> ProjectNamespaceState:
         require_schema_version(payload)
         require_record_type(payload, record_type=NAMESPACE_STATE_RECORD_TYPE)
+        namespace_ref = record_namespace_ref(payload)
+        backend_impl = (
+            clean_text(payload.get('backend_impl'))
+            or clean_text(namespace_ref.get('backend_impl'))
+            or 'tmux'
+        )
+        tmux_socket_path = clean_text(payload.get('tmux_socket_path'))
+        if not tmux_socket_path and backend_impl not in {'rmux', 'psmux'}:
+            tmux_socket_path = clean_text(namespace_ref.get('ipc_ref'))
         return cls(
             project_id=str(payload['project_id']),
             namespace_epoch=int(payload['namespace_epoch']),
-            tmux_socket_path=str(payload['tmux_socket_path']),
+            tmux_socket_path=tmux_socket_path,
             tmux_session_name=str(payload['tmux_session_name']),
-            backend_impl=clean_text(payload.get('backend_impl')) or 'tmux',
-            namespace_backend_family=clean_text(payload.get('namespace_backend_family')) or NAMESPACE_BACKEND_FAMILY,
-            namespace_id=clean_text(payload.get('namespace_id')),
-            namespace_session_name=clean_text(payload.get('namespace_session_name')),
-            namespace_ipc_kind=clean_text(payload.get('namespace_ipc_kind')),
-            namespace_ipc_ref=clean_text(payload.get('namespace_ipc_ref')),
+            backend_impl=backend_impl,
+            namespace_backend_family=clean_text(payload.get('namespace_backend_family'))
+            or clean_text(namespace_ref.get('backend_family'))
+            or NAMESPACE_BACKEND_FAMILY,
+            namespace_id=clean_text(payload.get('namespace_id')) or clean_text(namespace_ref.get('namespace_id')),
+            namespace_session_name=clean_text(payload.get('namespace_session_name'))
+            or clean_text(namespace_ref.get('session_name')),
+            namespace_ipc_kind=clean_text(payload.get('namespace_ipc_kind')) or clean_text(namespace_ref.get('ipc_kind')),
+            namespace_ipc_ref=clean_text(payload.get('namespace_ipc_ref')) or clean_text(namespace_ref.get('ipc_ref')),
             layout_version=int(payload.get('layout_version', 1)),
             layout_signature=clean_text(payload.get('layout_signature')),
             control_window_name=clean_text(payload.get('control_window_name')),
@@ -154,6 +170,7 @@ class ProjectNamespaceState:
             'namespace_epoch': self.namespace_epoch,
             'namespace_backend_family': self.resolved_namespace_backend_family(),
             'namespace_backend_impl': self.backend_impl,
+            'namespace_ref': self.namespace_ref(),
             'namespace_id': self.resolved_namespace_id(),
             'namespace_session_name': self.resolved_namespace_session_name(),
             'namespace_ipc_kind': self.resolved_namespace_ipc_kind(),
@@ -194,7 +211,17 @@ class ProjectNamespaceState:
             return ref
         if self.resolved_namespace_ipc_kind() == 'named_pipe':
             return self.resolved_namespace_id()
-        return self.tmux_socket_path
+        return self.tmux_socket_path or ''
+
+    def namespace_ref(self) -> dict[str, object]:
+        return {
+            'backend_family': self.resolved_namespace_backend_family(),
+            'backend_impl': self.backend_impl,
+            'namespace_id': self.resolved_namespace_id(),
+            'session_name': self.resolved_namespace_session_name(),
+            'ipc_kind': self.resolved_namespace_ipc_kind(),
+            'ipc_ref': self.resolved_namespace_ipc_ref(),
+        }
 
 
 @dataclass(frozen=True)
@@ -252,6 +279,7 @@ class ProjectNamespaceEvent:
             'namespace_ipc_ref': self.namespace_ipc_ref,
             'tmux_socket_path': self.tmux_socket_path,
             'tmux_session_name': self.tmux_session_name,
+            'namespace_ref': self.namespace_ref(),
             'details': dict(self.details or {}),
         }
 
@@ -261,17 +289,23 @@ class ProjectNamespaceEvent:
         require_record_type(payload, record_type=NAMESPACE_EVENT_RECORD_TYPE)
         details = record_details(payload)
         epoch = payload.get('namespace_epoch')
+        namespace_ref = record_namespace_ref(payload)
         return cls(
             event_kind=str(payload['event_kind']),
             project_id=str(payload['project_id']),
             occurred_at=str(payload['occurred_at']),
             namespace_epoch=int(epoch) if epoch is not None else None,
-            namespace_backend_family=clean_text(payload.get('namespace_backend_family')) or NAMESPACE_BACKEND_FAMILY,
-            backend_impl=clean_text(payload.get('backend_impl')) or 'tmux',
-            namespace_id=clean_text(payload.get('namespace_id')),
-            namespace_session_name=clean_text(payload.get('namespace_session_name')),
-            namespace_ipc_kind=clean_text(payload.get('namespace_ipc_kind')),
-            namespace_ipc_ref=clean_text(payload.get('namespace_ipc_ref')),
+            namespace_backend_family=clean_text(payload.get('namespace_backend_family'))
+            or clean_text(namespace_ref.get('backend_family'))
+            or NAMESPACE_BACKEND_FAMILY,
+            backend_impl=clean_text(payload.get('backend_impl'))
+            or clean_text(namespace_ref.get('backend_impl'))
+            or 'tmux',
+            namespace_id=clean_text(payload.get('namespace_id')) or clean_text(namespace_ref.get('namespace_id')),
+            namespace_session_name=clean_text(payload.get('namespace_session_name'))
+            or clean_text(namespace_ref.get('session_name')),
+            namespace_ipc_kind=clean_text(payload.get('namespace_ipc_kind')) or clean_text(namespace_ref.get('ipc_kind')),
+            namespace_ipc_ref=clean_text(payload.get('namespace_ipc_ref')) or clean_text(namespace_ref.get('ipc_ref')),
             tmux_socket_path=clean_text(payload.get('tmux_socket_path')),
             tmux_session_name=clean_text(payload.get('tmux_session_name')),
             details=details,
@@ -281,6 +315,7 @@ class ProjectNamespaceEvent:
         return {
             'namespace_backend_family': self.namespace_backend_family or NAMESPACE_BACKEND_FAMILY,
             'namespace_backend_impl': self.backend_impl,
+            'namespace_ref': self.namespace_ref(),
             'namespace_id': self.namespace_id,
             'namespace_session_name': self.namespace_session_name,
             'namespace_ipc_kind': self.namespace_ipc_kind,
@@ -290,6 +325,16 @@ class ProjectNamespaceEvent:
             'namespace_last_event_epoch': self.namespace_epoch,
             'namespace_last_event_socket_path': self.tmux_socket_path,
             'namespace_last_event_session_name': self.tmux_session_name,
+        }
+
+    def namespace_ref(self) -> dict[str, object]:
+        return {
+            'backend_family': self.namespace_backend_family or NAMESPACE_BACKEND_FAMILY,
+            'backend_impl': self.backend_impl,
+            'namespace_id': self.namespace_id,
+            'session_name': self.namespace_session_name,
+            'ipc_kind': self.namespace_ipc_kind,
+            'ipc_ref': self.namespace_ipc_ref,
         }
 
 
@@ -315,6 +360,13 @@ def record_backend_daemon_evidence(payload: dict[str, Any]) -> dict[str, object]
     if not isinstance(evidence, dict):
         raise ValueError('backend_daemon_evidence must be an object')
     return dict(evidence)
+
+
+def record_namespace_ref(payload: dict[str, Any]) -> dict[str, object]:
+    namespace_ref = payload.get('namespace_ref') or {}
+    if not isinstance(namespace_ref, dict):
+        return {}
+    return dict(namespace_ref)
 
 
 __all__ = ['ProjectNamespaceEvent', 'ProjectNamespaceState']

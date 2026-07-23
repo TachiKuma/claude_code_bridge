@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .backend import build_backend, kill_server
+from .namespace_projection import build_backend_for_namespace
 from .records import build_destroy_summary, build_destroyed_event, build_destroyed_state
 
 
@@ -11,12 +12,16 @@ def destroy_project_namespace(controller, *, reason: str):
     occurred_at = controller._clock()
     tmux_socket_path = str(current.tmux_socket_path) if current is not None else str(controller._layout.ccbd_tmux_socket_path)
     tmux_session_name = str(current.tmux_session_name) if current is not None else controller._layout.ccbd_tmux_session_name
-    backend = build_backend(
-        controller._backend_factory,
-        socket_path=tmux_socket_path,
-        namespace=tmux_session_name,
+    backend = (
+        build_backend_for_namespace(controller._backend_factory, current)
+        if current is not None
+        else build_backend(
+            controller._backend_factory,
+            socket_path=tmux_socket_path,
+            namespace=tmux_session_name,
+        )
     )
-    destroyed = kill_server(backend)
+    destroyed = kill_server(backend, session_name=tmux_session_name)
     next_state = build_destroyed_state(
         current=current,
         project_id=controller._project_id,
@@ -44,6 +49,11 @@ def destroy_project_namespace(controller, *, reason: str):
             project_id=controller._project_id,
             occurred_at=occurred_at,
             namespace_epoch=next_state.namespace_epoch,
+            backend_impl=next_state.backend_impl,
+            namespace_id=next_state.resolved_namespace_id(),
+            namespace_session_name=next_state.resolved_namespace_session_name(),
+            namespace_ipc_kind=next_state.resolved_namespace_ipc_kind(),
+            namespace_ipc_ref=next_state.resolved_namespace_ipc_ref(),
             tmux_socket_path=tmux_socket_path,
             tmux_session_name=tmux_session_name,
             destroyed=destroyed,

@@ -15,6 +15,22 @@ def build_project_clear_context_handler(app):
         namespace = app.project_namespace.load()
         if namespace is None:
             raise RuntimeError('project namespace is not mounted')
+        backend_impl = str(getattr(namespace, 'backend_impl', 'tmux') or 'tmux').strip().lower() or 'tmux'
+        if backend_impl != 'tmux':
+            results = tuple(
+                {
+                    'agent': name,
+                    'status': 'skipped',
+                    'reason': 'unsupported_for_backend',
+                    'backend_impl': backend_impl,
+                }
+                for name in agent_names
+            )
+            return {
+                'status': 'ok',
+                'agent_names': list(agent_names),
+                'results': list(results),
+            }
         backend = TmuxBackend(socket_path=namespace.tmux_socket_path)
         results = tuple(_clear_agent_context(app, backend=backend, agent_name=name) for name in agent_names)
         statuses = {str(item.get('status') or '') for item in results}

@@ -29,7 +29,7 @@ from terminal_runtime.rmux_backend_runtime.io import (
     send_text,
 )
 from terminal_runtime.rmux_backend_runtime.namespace import (
-    attach_namespace_unsupported,
+    attach_namespace,
     create_session,
     destroy_namespace,
     ensure_server_policy,
@@ -193,7 +193,7 @@ class RmuxBackend:
         *,
         window_name: str | None = None,
     ) -> int:
-        return attach_namespace_unsupported(self, namespace=namespace, window_name=window_name)
+        return attach_namespace(self, namespace=namespace, window_name=window_name)
 
     def destroy_namespace(self, namespace: MuxNamespaceRef) -> None:
         destroy_namespace(self, namespace)

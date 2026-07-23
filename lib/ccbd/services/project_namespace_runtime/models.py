@@ -51,6 +51,20 @@ class ProjectNamespace:
             workspace_recreated_this_call=False,
         )
 
+    def namespace_ref(self) -> dict[str, object]:
+        ipc_kind = self.namespace_ipc_kind or ('named_pipe' if self.backend_impl in {'rmux', 'psmux'} else 'unix_socket')
+        ipc_ref = self.namespace_ipc_ref
+        if not ipc_ref:
+            ipc_ref = (self.namespace_id or self.project_id) if ipc_kind == 'named_pipe' else self.tmux_socket_path
+        return {
+            'backend_family': self.namespace_backend_family or 'tmux-family',
+            'backend_impl': self.backend_impl,
+            'namespace_id': self.namespace_id or self.project_id,
+            'session_name': self.namespace_session_name or self.tmux_session_name,
+            'ipc_kind': ipc_kind,
+            'ipc_ref': ipc_ref,
+        }
+
 
 @dataclass(frozen=True)
 class ProjectNamespaceDestroySummary:

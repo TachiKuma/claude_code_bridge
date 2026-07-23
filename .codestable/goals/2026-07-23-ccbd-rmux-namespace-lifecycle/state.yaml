@@ -1,0 +1,31 @@
+schema_version: 2
+goal: "ccbd-rmux-namespace-lifecycle"
+status: blocked
+objective: "将已验收的 RmuxBackend 接入 ccbd project namespace lifecycle，完成 ensure、layout projection、foreground attach 和 ccb kill 的用户可见闭环。"
+start_point: "ccbd-rmux-namespace-lifecycle design/review/checklist 已完成且 review passed；roadmap item 已挂起待继续。当前代码仍以 tmux 语义主导，ProjectNamespaceController、ensure_context、start_foreground、destroy、project_view、project_clear/restart 还在多个入口直接依赖 tmux socket/session 作为 authority。"
+acceptance:
+  - "namespace state / ping / doctor / startup / kill report 写 canonical namespace_ref、namespace_backend_impl、namespace_ipc_kind、namespace_ipc_ref、namespace_session_name，并保留旧 tmux aliases。"
+  - "ProjectNamespaceController 通过 backend resolver / factory 消费 ProjectNamespaceBackend，不再硬编码 tmux-only authority。"
+  - "ensure / reflow / layout projection 通过 backend interface materialize namespace，不直接在调用层拼 tmux / rmux CLI。"
+  - "foreground attach 在 Rmux 路径调用已批准的 attach capability / adapter，不在 start_foreground.py 里直接拼 tmux attach-session。"
+  - "ccb kill 保持 remote stop、local prepare evidence/registry、backend kill_namespace、daemon diagnostics、final PID/orphan/report cleanup 的顺序。"
+  - "project_view、start_flow/runtime binding、health assessment、slot replacement、project_clear/restart、layout_status、doctor、ping 读取 canonical namespace projection。"
+  - "scope guard 证明不修改 provider parser、accelerator、process liveness、supervision/recovery，也不在 ccbd/cli 调用层直接拼 rmux/tmux CLI。"
+  - "独立 Task agent code review passed，独立 Task agent 功能验收 passed，feature checklist/review/QA/acceptance/roadmap/final iteration 全部回写。"
+non_goals:
+  - "不实现 RmuxBackend core/send/capture/logging。"
+  - "不实现 supervision/recovery、pane/provider crash 恢复或 full-chain smoke。"
+  - "不修改 provider completion parser、accelerator transport、process liveness。"
+  - "不把 Rmux 设为默认后端，不改 opt-in / route approval 语义。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 2
+next_action: "等待 owner 提供可见 Task agent 能力，用于独立 code review 与 functional acceptance；恢复后先运行 review gate，再做终端功能验收。"
+blocker_signature: "visible-task-agent-unavailable"
+blocker_count: 1
+owner_stop:
+  status: pending
+  reason: "AcceptanceAgentUnavailable"
+  decision: null
+updated_at: "2026-07-23"

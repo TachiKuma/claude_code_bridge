@@ -18,7 +18,7 @@ def _namespace_blocked_reason(controller, current) -> tuple[str, str] | None:
         return ('project_id_mismatch', 'project namespace project_id does not match controller project_id')
     if getattr(current, 'namespace_epoch', None) is None:
         return ('namespace_epoch_missing', 'project namespace epoch is missing')
-    if str(getattr(current, 'tmux_socket_path', '') or '').strip() == '':
+    if str(getattr(current, 'tmux_socket_path', '') or '').strip() == '' and str(getattr(current, 'backend_impl', '') or '').strip() not in {'rmux', 'psmux'}:
         return ('tmux_socket_path_missing', 'project namespace tmux socket path is missing')
     if str(getattr(current, 'tmux_session_name', '') or '').strip() == '':
         return ('tmux_session_name_missing', 'project namespace tmux session name is missing')

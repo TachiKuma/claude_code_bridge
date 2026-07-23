@@ -221,6 +221,13 @@ def _namespace_record(context, local) -> dict[str, object]:
         {
             'state_load_status': 'ok',
             'namespace_epoch': state.namespace_epoch,
+            'namespace_backend_family': state.resolved_namespace_backend_family(),
+            'namespace_backend_impl': state.backend_impl,
+            'namespace_ref': state.namespace_ref(),
+            'namespace_id': state.resolved_namespace_id(),
+            'namespace_session_name': state.resolved_namespace_session_name(),
+            'namespace_ipc_kind': state.resolved_namespace_ipc_kind(),
+            'namespace_ipc_ref': state.resolved_namespace_ipc_ref(),
             'tmux_socket_path': state.tmux_socket_path,
             'tmux_session_name': state.tmux_session_name,
             'layout_version': state.layout_version,
@@ -242,6 +249,13 @@ def _observe_project_namespace(namespace: dict[str, object]) -> dict[str, object
         return {'observe_status': 'skipped', 'reason': 'namespace_socket_unreachable'}
     if not bool(namespace.get('ui_attachable', True)):
         return {'observe_status': 'skipped', 'reason': 'namespace_not_attachable'}
+    backend_impl = str(namespace.get('namespace_backend_impl') or 'tmux').strip().lower() or 'tmux'
+    if backend_impl != 'tmux':
+        return {
+            'observe_status': 'skipped',
+            'reason': 'unsupported_for_backend',
+            'backend_impl': backend_impl,
+        }
     if shutil.which('tmux') is None:
         return {'observe_status': 'skipped', 'reason': 'tmux_not_found'}
     socket_path = _optional_text(namespace.get('tmux_socket_path'))

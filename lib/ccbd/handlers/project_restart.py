@@ -268,6 +268,17 @@ def restart_project_agent_panes_in_place(app, *, agent_names: tuple[str, ...]) -
     namespace = app.project_namespace.load()
     if namespace is None:
         raise RuntimeError('project namespace is not mounted')
+    backend_impl = str(getattr(namespace, 'backend_impl', 'tmux') or 'tmux').strip().lower() or 'tmux'
+    if backend_impl != 'tmux':
+        return tuple(
+            {
+                'agent': str(agent_name),
+                'status': 'skipped',
+                'reason': 'unsupported_for_backend',
+                'backend_impl': backend_impl,
+            }
+            for agent_name in agent_names
+        )
     backend = TmuxBackend(socket_path=namespace.tmux_socket_path)
     results: list[dict[str, object]] = []
     for agent_name in agent_names:

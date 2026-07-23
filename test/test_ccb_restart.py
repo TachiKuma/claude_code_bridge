@@ -323,3 +323,25 @@ def test_project_restart_agent_socket_targets_one_agent(tmp_path: Path, monkeypa
     assert payload['agent_name'] == 'agent1'
     assert calls == [('agent1',)]
     assert not thread.is_alive()
+
+
+def test_restart_project_agent_panes_skips_non_tmux_namespace(monkeypatch) -> None:
+    def _fail_tmux_backend(**kwargs):
+        raise AssertionError(f'TmuxBackend should not be constructed: {kwargs!r}')
+
+    monkeypatch.setattr(project_restart, 'TmuxBackend', _fail_tmux_backend)
+    app = _app(runtimes={'agent1': _runtime(pane_id='%1')})
+    app.project_namespace = SimpleNamespace(
+        load=lambda: SimpleNamespace(tmux_socket_path='', backend_impl='rmux')
+    )
+
+    results = project_restart.restart_project_agent_panes_in_place(app, agent_names=('agent1',))
+
+    assert results == (
+        {
+            'agent': 'agent1',
+            'status': 'skipped',
+            'reason': 'unsupported_for_backend',
+            'backend_impl': 'rmux',
+        },
+    )

@@ -52,11 +52,14 @@ def _app(
     runtimes: dict[str, object],
     agents: dict[str, object] | None = None,
     dispatcher: object | None = None,
+    namespace: object | None = None,
 ):
     app = SimpleNamespace(
         config=SimpleNamespace(agents=agents or {'agent1': object(), 'agent2': object()}),
         registry=_Registry(runtimes),
-        project_namespace=SimpleNamespace(load=lambda: SimpleNamespace(tmux_socket_path='/tmp/tmux.sock')),
+        project_namespace=SimpleNamespace(
+            load=lambda: namespace or SimpleNamespace(tmux_socket_path='/tmp/tmux.sock')
+        ),
     )
     if dispatcher is not None:
         app.dispatcher = dispatcher
@@ -218,3 +221,37 @@ def test_project_clear_context_handler_blocks_active_or_queued_agent(monkeypatch
         }
     ]
     assert backend.calls == []
+
+
+def test_project_clear_context_handler_skips_non_tmux_namespace(monkeypatch) -> None:
+    def _fail_tmux_backend(**kwargs):
+        raise AssertionError(f'TmuxBackend should not be constructed: {kwargs!r}')
+
+    monkeypatch.setattr(project_clear, 'TmuxBackend', _fail_tmux_backend)
+    handler = build_project_clear_context_handler(
+        _app(
+            runtimes={
+                'agent1': SimpleNamespace(active_pane_id='%1'),
+                'agent2': SimpleNamespace(active_pane_id='%2'),
+            },
+            namespace=SimpleNamespace(tmux_socket_path='', backend_impl='rmux'),
+        )
+    )
+
+    payload = handler({})
+
+    assert payload['status'] == 'ok'
+    assert payload['results'] == [
+        {
+            'agent': 'agent1',
+            'status': 'skipped',
+            'reason': 'unsupported_for_backend',
+            'backend_impl': 'rmux',
+        },
+        {
+            'agent': 'agent2',
+            'status': 'skipped',
+            'reason': 'unsupported_for_backend',
+            'backend_impl': 'rmux',
+        },
+    ]

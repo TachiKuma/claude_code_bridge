@@ -18,6 +18,7 @@ from storage.paths import PathLayout
 from agents.config_loader import load_project_config
 from agents.models import SidebarSpec
 from terminal_runtime.placeholders import pane_placeholder_argv
+from terminal_runtime.fake_mux_backend import FakeMuxBackend
 from terminal_runtime.windows_shell_log_builder import clipboard_pipe_command
 
 
@@ -615,6 +616,105 @@ def test_project_namespace_root_pane_id_passes_namespace_to_backend_factory(tmp_
             'socket_path': str(layout.ccbd_tmux_socket_path),
         }
     ]
+
+
+def test_project_namespace_root_pane_id_passes_canonical_ref_to_backend_factory(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-root-pane-rmux-canonical'
+    layout = PathLayout(project_root)
+    backend = FakeMuxBackend(backend_impl='rmux', ipc_kind='named_pipe', ipc_ref=r'\\.\pipe\ccb-rmux')
+    backend.create_session(session_name='ccb-rmux', project_root=str(project_root), window_name='main')
+    calls: list[dict[str, object]] = []
+
+    def backend_factory(*, namespace_ref=None, namespace: str | None = None, socket_path: str | None = None):
+        calls.append({'namespace_ref': dict(namespace_ref or {}), 'namespace': namespace, 'socket_path': socket_path})
+        return backend
+
+    ProjectNamespaceStateStore(layout).save(
+        ProjectNamespaceState(
+            project_id='proj-root-pane-rmux-canonical',
+            namespace_epoch=1,
+            tmux_socket_path='',
+            tmux_session_name='ccb-rmux',
+            backend_impl='rmux',
+            namespace_id='proj-root-pane-rmux-canonical',
+            namespace_session_name='ccb-rmux',
+            namespace_ipc_kind='named_pipe',
+            namespace_ipc_ref=r'\\.\pipe\ccb-rmux',
+            layout_version=3,
+            workspace_window_name='main',
+            ui_attachable=True,
+        )
+    )
+    controller = ProjectNamespaceController(
+        layout,
+        'proj-root-pane-rmux-canonical',
+        backend_factory=backend_factory,
+    )
+
+    pane_id = controller.root_pane_id()
+
+    assert pane_id == 'pane-1'
+    assert calls == [
+        {
+            'namespace_ref': {
+                'backend_family': 'tmux-family',
+                'backend_impl': 'rmux',
+                'namespace_id': 'proj-root-pane-rmux-canonical',
+                'session_name': 'ccb-rmux',
+                'ipc_kind': 'named_pipe',
+                'ipc_ref': r'\\.\pipe\ccb-rmux',
+            },
+            'namespace': 'ccb-rmux',
+            'socket_path': r'\\.\pipe\ccb-rmux',
+        }
+    ]
+
+
+def test_project_namespace_controller_destroy_rmux_kills_namespace_not_shared_server(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-destroy-rmux'
+    layout = PathLayout(project_root)
+    backend = FakeMuxBackend(backend_impl='rmux', ipc_kind='named_pipe', ipc_ref=r'\\.\pipe\ccb-rmux-destroy')
+    backend.create_session(session_name='ccb-rmux-destroy', project_root=str(project_root), window_name='main')
+    ProjectNamespaceStateStore(layout).save(
+        ProjectNamespaceState(
+            project_id='proj-destroy-rmux',
+            namespace_epoch=2,
+            tmux_socket_path='',
+            tmux_session_name='ccb-rmux-destroy',
+            backend_impl='rmux',
+            namespace_id='proj-destroy-rmux',
+            namespace_session_name='ccb-rmux-destroy',
+            namespace_ipc_kind='named_pipe',
+            namespace_ipc_ref=r'\\.\pipe\ccb-rmux-destroy',
+            layout_version=3,
+            workspace_window_name='main',
+            ui_attachable=True,
+        )
+    )
+    controller = ProjectNamespaceController(
+        layout,
+        'proj-destroy-rmux',
+        clock=lambda: '2026-04-03T04:10:00Z',
+        backend_factory=lambda **kwargs: backend,
+    )
+
+    summary = controller.destroy(reason='kill')
+    state = ProjectNamespaceStateStore(layout).load()
+    latest_event = ProjectNamespaceEventStore(layout).load_latest()
+
+    assert summary.destroyed is True
+    assert any(
+        event['operation'] == 'kill_server' and event.get('session_name') == 'ccb-rmux-destroy'
+        for event in backend.event_log
+    )
+    assert not backend.namespaces
+    assert state is not None
+    assert state.backend_impl == 'rmux'
+    assert state.tmux_socket_path == ''
+    assert state.summary_fields()['namespace_ipc_ref'] == r'\\.\pipe\ccb-rmux-destroy'
+    assert latest_event is not None
+    assert latest_event.summary_fields()['namespace_backend_impl'] == 'rmux'
+    assert latest_event.summary_fields()['namespace_ipc_ref'] == r'\\.\pipe\ccb-rmux-destroy'
 
 
 def test_project_namespace_controller_materializes_explicit_windows_and_sidebar(tmp_path: Path, monkeypatch) -> None:

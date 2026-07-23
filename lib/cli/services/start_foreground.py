@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import os
 import shutil
 import subprocess
 import time
 
 from cli.context import CliContext
 from ccbd.socket_client import CcbdClient, CcbdClientError
+from terminal_runtime import RmuxBackend
+from terminal_runtime.mux_backend_contract import MuxCommandError
 from terminal_runtime.env import tmux_compatible_env
 from terminal_runtime.tmux import tmux_base
 from .daemon_runtime.policy import (
@@ -96,19 +97,32 @@ def _attach_rmux_namespace(
     *,
     env: dict[str, str],
 ) -> ForegroundAttachSummary:
+    del env
     namespace_id = _payload_namespace_id(payload)
     session_name = _payload_namespace_session_name(payload) or namespace_id
     ipc_kind = _payload_namespace_ipc_kind(payload, default='named_pipe')
     ipc_ref = _payload_namespace_ipc_ref(payload)
+    workspace_window_name = str(payload.get('namespace_workspace_window_name') or '').strip() or None
     if not namespace_id or not session_name:
         raise ForegroundAttachError('rmux foreground attach failed: namespace_id/session_name missing')
     if ipc_kind != 'named_pipe':
         raise ForegroundAttachError(f'rmux foreground attach failed: unsupported ipc_kind={ipc_kind!r}')
-    attach = subprocess.Popen(
-        _rmux_cmd(namespace_id, 'attach-session', '-t', session_name),
-        env=env,
-    )
-    returncode = attach.wait()
+    backend = _build_rmux_attach_backend(namespace_id=namespace_id, ipc_ref=ipc_ref)
+    namespace_ref = {
+        'backend_family': 'tmux-family',
+        'backend_impl': 'rmux',
+        'namespace_id': namespace_id,
+        'session_name': session_name,
+        'ipc_kind': ipc_kind,
+        'ipc_ref': ipc_ref or namespace_id,
+    }
+    try:
+        returncode = backend.attach_namespace(namespace_ref, window_name=workspace_window_name)
+    except MuxCommandError as exc:
+        raise ForegroundAttachError(
+            'rmux foreground attach failed: '
+            f'namespace_id={namespace_id!r} session_name={session_name!r} detail={exc.detail}'
+        ) from exc
     if returncode != 0:
         raise ForegroundAttachError(
             'rmux foreground attach failed: '
@@ -445,39 +459,51 @@ def _tmux_cmd(tmux_socket_path: str, *args: str) -> list[str]:
     return [*tmux_base(socket_path=tmux_socket_path), *args]
 
 
-def _rmux_cmd(namespace_id: str, *args: str) -> list[str]:
-    rmux_bin = str(os.environ.get('CCB_RMUX_BIN') or 'rmux').strip() or 'rmux'
-    namespace = str(namespace_id or '').strip()
-    base = [rmux_bin]
-    if namespace:
-        base.extend(['-L', namespace])
-    return [*base, *args]
+def _build_rmux_attach_backend(*, namespace_id: str, ipc_ref: str | None):
+    socket_path = ipc_ref if ipc_ref and _looks_like_path_ref(ipc_ref) else None
+    return RmuxBackend(namespace=namespace_id, socket_path=socket_path)
 
 
 def _payload_backend_impl(payload: dict[str, object]) -> str:
-    return str(payload.get('namespace_backend_impl') or 'tmux').strip().lower() or 'tmux'
+    namespace_ref = _payload_namespace_ref(payload)
+    return str(
+        payload.get('namespace_backend_impl')
+        or namespace_ref.get('backend_impl')
+        or 'tmux'
+    ).strip().lower() or 'tmux'
 
 
 def _payload_namespace_id(payload: dict[str, object]) -> str:
+    namespace_ref = _payload_namespace_ref(payload)
     return str(
         payload.get('namespace_id')
+        or namespace_ref.get('namespace_id')
         or payload.get('project_id')
         or payload.get('namespace_session_name')
+        or namespace_ref.get('session_name')
         or payload.get('namespace_tmux_session_name')
         or ''
     ).strip()
 
 
 def _payload_namespace_session_name(payload: dict[str, object]) -> str:
-    return str(payload.get('namespace_session_name') or payload.get('namespace_tmux_session_name') or '').strip()
+    namespace_ref = _payload_namespace_ref(payload)
+    return str(
+        payload.get('namespace_session_name')
+        or namespace_ref.get('session_name')
+        or payload.get('namespace_tmux_session_name')
+        or ''
+    ).strip()
 
 
 def _payload_namespace_ipc_kind(payload: dict[str, object], *, default: str = 'unix_socket') -> str:
-    return str(payload.get('namespace_ipc_kind') or default).strip() or default
+    namespace_ref = _payload_namespace_ref(payload)
+    return str(payload.get('namespace_ipc_kind') or namespace_ref.get('ipc_kind') or default).strip() or default
 
 
 def _payload_namespace_ipc_ref(payload: dict[str, object]) -> str:
-    ref = str(payload.get('namespace_ipc_ref') or '').strip()
+    namespace_ref = _payload_namespace_ref(payload)
+    ref = str(payload.get('namespace_ipc_ref') or namespace_ref.get('ipc_ref') or '').strip()
     if ref:
         return ref
     if _payload_namespace_ipc_kind(payload, default='unix_socket') == 'named_pipe':
@@ -487,6 +513,15 @@ def _payload_namespace_ipc_ref(payload: dict[str, object]) -> str:
 
 def _payload_namespace_tmux_socket_path(payload: dict[str, object]) -> str:
     return str(payload.get('namespace_tmux_socket_path') or '').strip()
+
+
+def _payload_namespace_ref(payload: dict[str, object]) -> dict[str, object]:
+    namespace_ref = payload.get('namespace_ref')
+    return dict(namespace_ref) if isinstance(namespace_ref, dict) else {}
+
+
+def _looks_like_path_ref(value: str) -> bool:
+    return '/' in value or '\\' in value
 
 
 def _tmux_has_session(tmux_socket_path: str, tmux_session_name: str, *, env: dict[str, str]) -> bool:

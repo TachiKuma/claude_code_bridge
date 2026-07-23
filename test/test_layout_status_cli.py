@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from cli.models import ParsedLayoutCommand
 from cli.parser import CliParser
 from cli.phase2 import maybe_handle_phase2
+from ccbd.services.project_namespace_state import ProjectNamespaceState, ProjectNamespaceStateStore
 from storage.paths import PathLayout
 
 
@@ -464,3 +465,63 @@ main = "main:fake, helper:fake"
     agents = {agent['agent']: agent for agent in windows['main']['agents']}
     assert agents['main']['observed']['pane_index'] == 0
     assert agents['helper']['observed']['pane_width'] == 80
+
+
+def test_layout_status_reports_rmux_namespace_projection_without_tmux_observation(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    layout_status_service = importlib.import_module('cli.services.layout_status')
+
+    project_root = tmp_path / 'repo-layout-status-rmux'
+    _write(
+        project_root / '.ccb' / 'ccb.config',
+        """version = 2
+entry_window = "main"
+
+[windows]
+main = "main:fake"
+""",
+    )
+    layout = PathLayout(project_root)
+    ProjectNamespaceStateStore(layout).save(
+        ProjectNamespaceState(
+            project_id=layout.project_id,
+            namespace_epoch=1,
+            tmux_socket_path='',
+            tmux_session_name='ccb-rmux-layout',
+            backend_impl='rmux',
+            namespace_id=layout.project_id,
+            namespace_session_name='ccb-rmux-layout',
+            namespace_ipc_kind='named_pipe',
+            namespace_ipc_ref=r'\\.\pipe\ccb-rmux-layout',
+            layout_version=3,
+            workspace_window_name='main',
+            ui_attachable=True,
+        )
+    )
+
+    monkeypatch.setattr(
+        layout_status_service,
+        'ping_local_state',
+        lambda _context: SimpleNamespace(
+            mount_state='mounted',
+            socket_connectable=True,
+            tmux_socket_path=None,
+        ),
+    )
+    monkeypatch.setattr(layout_status_service.shutil, 'which', lambda _name: (_ for _ in ()).throw(AssertionError('tmux probe should be skipped')))
+
+    result, payload, stderr = _run_phase2(['layout', 'status', '--json'], cwd=project_root)
+
+    assert result == 0, stderr
+    assert payload['namespace']['state_load_status'] == 'ok'
+    assert payload['namespace']['namespace_backend_impl'] == 'rmux'
+    assert payload['namespace']['namespace_ipc_kind'] == 'named_pipe'
+    assert payload['namespace']['namespace_ipc_ref'] == r'\\.\pipe\ccb-rmux-layout'
+    assert payload['namespace']['tmux_socket_path'] == ''
+    assert payload['observed'] == {
+        'observe_status': 'skipped',
+        'reason': 'unsupported_for_backend',
+        'backend_impl': 'rmux',
+    }

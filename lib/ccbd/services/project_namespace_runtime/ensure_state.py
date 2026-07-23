@@ -15,7 +15,7 @@ from ..project_namespace_state import next_namespace_epoch
 def force_recreate_namespace(controller, context):
     if not context.session_is_alive:
         return context
-    kill_server(context.backend)
+    kill_server(context.backend, session_name=context.desired_session_name)
     return context.with_updates(
         backend=rebuild_namespace_backend(
             controller,
@@ -49,7 +49,7 @@ def recreate_for_layout_change(controller, context):
     )
     if reason is None:
         return context
-    kill_server(context.backend)
+    kill_server(context.backend, session_name=context.desired_session_name)
     return context.with_updates(
         backend=rebuild_namespace_backend(
             controller,
@@ -98,12 +98,16 @@ def persist_refreshed_namespace(controller, context, *, timeout_s: float | None 
             tmux_socket_path=context.desired_socket_path,
             tmux_session_name=context.desired_session_name,
         )
+    namespace_ref = _backend_namespace_ref(context.backend, session_name=context.desired_session_name)
     state = build_active_state(
         project_id=controller._project_id,
         current=current,
         namespace_epoch=current.namespace_epoch,
         backend_impl=getattr(context.backend, 'backend_impl', None),
-        namespace_id=context.desired_session_name,
+        namespace_id=namespace_ref.get('namespace_id') or context.desired_session_name,
+        namespace_session_name=namespace_ref.get('session_name') or context.desired_session_name,
+        namespace_ipc_kind=namespace_ref.get('ipc_kind'),
+        namespace_ipc_ref=namespace_ref.get('ipc_ref'),
         tmux_socket_path=context.desired_socket_path,
         tmux_session_name=context.desired_session_name,
         layout_version=controller._layout_version,
@@ -136,12 +140,16 @@ def build_created_namespace(controller, context, *, timeout_s: float | None = No
         window_name=context.desired_workspace_window_name,
         timeout_s=timeout_s,
     )
+    namespace_ref = _backend_namespace_ref(context.backend, session_name=context.desired_session_name)
     state = build_active_state(
         project_id=controller._project_id,
         current=current,
         namespace_epoch=epoch,
         backend_impl=getattr(context.backend, 'backend_impl', None),
-        namespace_id=context.desired_session_name,
+        namespace_id=namespace_ref.get('namespace_id') or context.desired_session_name,
+        namespace_session_name=namespace_ref.get('session_name') or context.desired_session_name,
+        namespace_ipc_kind=namespace_ref.get('ipc_kind'),
+        namespace_ipc_ref=namespace_ref.get('ipc_ref'),
         tmux_socket_path=context.desired_socket_path,
         tmux_session_name=context.desired_session_name,
         layout_version=controller._layout_version,
@@ -160,6 +168,11 @@ def build_created_namespace(controller, context, *, timeout_s: float | None = No
             project_id=controller._project_id,
             occurred_at=occurred_at,
             namespace_epoch=epoch,
+            backend_impl=state.backend_impl,
+            namespace_id=state.resolved_namespace_id(),
+            namespace_session_name=state.resolved_namespace_session_name(),
+            namespace_ipc_kind=state.resolved_namespace_ipc_kind(),
+            namespace_ipc_ref=state.resolved_namespace_ipc_ref(),
             tmux_socket_path=context.desired_socket_path,
             tmux_session_name=context.desired_session_name,
             recreated=bool(current is not None),
@@ -187,6 +200,17 @@ def build_created_namespace(controller, context, *, timeout_s: float | None = No
         ui_attachable=state.ui_attachable,
         created_this_call=True,
     )
+
+
+def _backend_namespace_ref(backend, *, session_name: str) -> dict[str, object]:
+    projector = getattr(backend, 'namespace_ref', None)
+    if not callable(projector):
+        return {}
+    try:
+        value = projector(session_name=session_name)
+    except Exception:
+        return {}
+    return dict(value) if isinstance(value, dict) else {}
 
 
 __all__ = [
