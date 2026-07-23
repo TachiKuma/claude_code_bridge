@@ -118,14 +118,14 @@ def reconcile_start_workspaces(project_root: Path, config) -> WorkspaceGuardSumm
             )
         )
     for agent_name, reason in pending_state_cleanup:
-        _remove_agent_state(paths, agent_name)
+        removed_agent_state = _remove_agent_state(paths, agent_name)
         retired.append(
             WorkspaceRetirement(
                 agent_name=agent_name,
                 branch_name=None,
                 workspace_path='',
                 reason=reason,
-                removed_agent_state=True,
+                removed_agent_state=removed_agent_state,
             )
         )
 
@@ -281,23 +281,32 @@ def _retire_worktree_spec(
         if plan.branch_name:
             delete_branch(project_root, plan.branch_name)
     if remove_agent_state:
-        _remove_agent_state(paths, spec.name)
+        removed_agent_state = _remove_agent_state(paths, spec.name)
+    else:
+        removed_agent_state = False
     return WorkspaceRetirement(
         agent_name=spec.name,
         branch_name=plan.branch_name,
         workspace_path=str(plan.workspace_path),
         reason=reason,
-        removed_agent_state=remove_agent_state,
+        removed_agent_state=removed_agent_state,
     )
 
 
-def _remove_agent_state(paths: PathLayout, agent_name: str) -> None:
+def _remove_agent_state(paths: PathLayout, agent_name: str) -> bool:
+    removed = False
     for target in (paths.agent_dir(agent_name), paths.agent_mailbox_dir(agent_name)):
-        if target.is_symlink() or target.is_file():
-            target.unlink()
+        try:
+            if target.is_symlink() or target.is_file():
+                target.unlink()
+                removed = True
+                continue
+            if target.is_dir():
+                shutil.rmtree(target)
+                removed = True
+        except PermissionError:
             continue
-        if target.is_dir():
-            shutil.rmtree(target)
+    return removed
 
 
 def _load_persisted_specs(paths: PathLayout) -> dict[str, AgentSpec]:
