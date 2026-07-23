@@ -93,6 +93,7 @@ fn run_tui(args: &Args) -> io::Result<ExitAction> {
                     KeyCode::Char('Q') => return Ok(ExitAction::KillProject),
                     KeyCode::Char('j') | KeyCode::Down => app.move_selection(1),
                     KeyCode::Char('k') | KeyCode::Up => app.move_selection(-1),
+                    KeyCode::Char('c') => app.open_config_ui(&args.project_root, &ccb_program),
                     KeyCode::Char('r') => app.restart_panes(&client),
                     KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         app.force_refresh()
@@ -151,12 +152,41 @@ enum SidebarResizeDivider {
     CommsTips,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CcbProgram {
+    executable: PathBuf,
+    prefix_args: Vec<PathBuf>,
+}
+
+impl CcbProgram {
+    fn new(executable: impl Into<PathBuf>) -> Self {
+        Self {
+            executable: executable.into(),
+            prefix_args: Vec::new(),
+        }
+    }
+
+    fn with_prefix_args(executable: impl Into<PathBuf>, prefix_args: Vec<PathBuf>) -> Self {
+        Self {
+            executable: executable.into(),
+            prefix_args,
+        }
+    }
+
+    fn command(&self) -> Command {
+        let mut command = Command::new(&self.executable);
+        command.args(&self.prefix_args);
+        command
+    }
+}
+
 fn run_ccb_kill(project_root: &Path) -> io::Result<()> {
     run_ccb_kill_with_program(ccb_program(), project_root)
 }
 
-fn run_ccb_kill_with_program(program: PathBuf, project_root: &Path) -> io::Result<()> {
-    let status = Command::new(program)
+fn run_ccb_kill_with_program(program: CcbProgram, project_root: &Path) -> io::Result<()> {
+    let status = program
+        .command()
         .arg("kill")
         .current_dir(project_root)
         .status()?;
@@ -168,21 +198,21 @@ fn run_ccb_kill_with_program(program: PathBuf, project_root: &Path) -> io::Resul
     )))
 }
 
-fn ccb_program() -> PathBuf {
+fn ccb_program() -> CcbProgram {
     if let Some(program) = env::var_os(SIDEBAR_CCB_BIN_ENV)
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
         .filter(|path| path.is_file())
     {
-        return program;
+        return CcbProgram::new(program);
     }
     env::current_exe()
         .ok()
         .and_then(|path| ccb_program_for_sidebar(&path))
-        .unwrap_or_else(|| PathBuf::from("ccb"))
+        .unwrap_or_else(|| CcbProgram::new("ccb"))
 }
 
-fn launch_config_ui(project_root: &Path, program: &Path) -> io::Result<ConfigUiLaunch> {
+fn launch_config_ui(project_root: &Path, program: &CcbProgram) -> io::Result<ConfigUiLaunch> {
     let mut child = config_ui_command(project_root, program)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -202,8 +232,8 @@ fn launch_config_ui(project_root: &Path, program: &Path) -> io::Result<ConfigUiL
     Ok(launch)
 }
 
-fn config_ui_command(project_root: &Path, program: &Path) -> Command {
-    let mut command = Command::new(program);
+fn config_ui_command(project_root: &Path, program: &CcbProgram) -> Command {
+    let mut command = program.command();
     command
         .arg("--project")
         .arg(project_root)
@@ -213,14 +243,32 @@ fn config_ui_command(project_root: &Path, program: &Path) -> Command {
     command
 }
 
-fn ccb_program_for_sidebar(sidebar_exe: &Path) -> Option<PathBuf> {
+fn ccb_program_for_sidebar(sidebar_exe: &Path) -> Option<CcbProgram> {
     for ancestor in sidebar_exe.ancestors().skip(1).take(8) {
+        #[cfg(windows)]
+        {
+            let source_entrypoint = ancestor.join("ccb.py");
+            if source_entrypoint.is_file() {
+                return Some(CcbProgram::with_prefix_args(
+                    windows_python_launcher(),
+                    vec![source_entrypoint],
+                ));
+            }
+        }
         let candidate = ancestor.join("ccb");
         if candidate.is_file() {
-            return Some(candidate);
+            return Some(CcbProgram::new(candidate));
         }
     }
     None
+}
+
+#[cfg(windows)]
+fn windows_python_launcher() -> PathBuf {
+    env::var_os("CCB_SOURCE_PYTHON")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("python"))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -447,17 +495,12 @@ impl SidebarApp {
         area: Rect,
         client: &CcbdClient,
         project_root: &Path,
-        ccb_program: &Path,
+        ccb_program: &CcbProgram,
     ) -> Option<ExitAction> {
         let areas = self.sidebar_areas(area);
         match header_action_at(column, row, areas.tree) {
             Some(HeaderMouseAction::Settings) => {
-                if !self.config_ui_launch_is_active() {
-                    match launch_config_ui(project_root, ccb_program) {
-                        Ok(launch) => self.config_ui_launch = Some(launch),
-                        Err(err) => self.set_error(format!("config ui launch failed: {err}")),
-                    }
-                }
+                self.open_config_ui(project_root, ccb_program);
                 return None;
             }
             Some(HeaderMouseAction::KillProject) => return Some(ExitAction::KillProject),
@@ -471,6 +514,16 @@ impl SidebarApp {
         }
         self.focus_target_at(column, row, area, client);
         None
+    }
+
+    fn open_config_ui(&mut self, project_root: &Path, ccb_program: &CcbProgram) {
+        if self.config_ui_launch_is_active() {
+            return;
+        }
+        match launch_config_ui(project_root, ccb_program) {
+            Ok(launch) => self.config_ui_launch = Some(launch),
+            Err(err) => self.set_error(format!("config ui launch failed: {err}")),
+        }
     }
 
     fn handle_mouse_drag(&mut self, column: u16, row: u16, area: Rect) -> bool {
@@ -2312,7 +2365,10 @@ mod tests {
         std::fs::write(&ccb, b"#!/bin/sh\n").unwrap();
         let sidebar = dir.join("ccb-agent-sidebar");
 
-        assert_eq!(ccb_program_for_sidebar(&sidebar), Some(ccb));
+        assert_eq!(
+            ccb_program_for_sidebar(&sidebar),
+            Some(CcbProgram::new(ccb))
+        );
 
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -2320,7 +2376,7 @@ mod tests {
     #[test]
     fn config_ui_command_is_project_scoped() {
         let project_root = Path::new("/repo/demo");
-        let command = config_ui_command(project_root, Path::new("/opt/ccb/bin/ccb"));
+        let command = config_ui_command(project_root, &CcbProgram::new("/opt/ccb/bin/ccb"));
 
         assert_eq!(command.get_program(), "/opt/ccb/bin/ccb");
         assert_eq!(
@@ -2346,7 +2402,49 @@ mod tests {
         std::fs::write(&sidebar, b"sidebar").unwrap();
         std::fs::write(&ccb, b"ccb").unwrap();
 
-        assert_eq!(ccb_program_for_sidebar(&sidebar), Some(ccb));
+        assert_eq!(
+            ccb_program_for_sidebar(&sidebar),
+            Some(CcbProgram::new(ccb))
+        );
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn ccb_program_resolution_uses_python_for_windows_source_checkout() {
+        let dir = std::env::temp_dir().join(format!(
+            "ccb-agent-sidebar-source-program-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let sidebar = dir.join("tools/ccb-agent-sidebar/target/release/ccb-agent-sidebar.exe");
+        let ccb_py = dir.join("ccb.py");
+        std::fs::create_dir_all(sidebar.parent().unwrap()).unwrap();
+        std::fs::write(&sidebar, b"sidebar").unwrap();
+        std::fs::write(&ccb_py, b"print('ccb')\n").unwrap();
+
+        let program = ccb_program_for_sidebar(&sidebar).unwrap();
+        let command = config_ui_command(Path::new("D:/repo"), &program);
+        let args = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(command.get_program(), "python");
+        assert_eq!(
+            args,
+            [
+                ccb_py.to_string_lossy().to_string(),
+                "--project".to_string(),
+                "D:/repo".to_string(),
+                "config".to_string(),
+                "ui".to_string()
+            ]
+        );
 
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -2372,7 +2470,7 @@ mod tests {
         )
         .unwrap();
         std::fs::set_permissions(&ready, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let launch = launch_config_ui(&dir, &ready).unwrap();
+        let launch = launch_config_ui(&dir, &CcbProgram::new(&ready)).unwrap();
 
         let ready_status = wait_for_config_ui_status(&launch, |status| {
             matches!(status, ConfigUiLaunchStatus::Ready(_))
@@ -2389,7 +2487,7 @@ mod tests {
         )
         .unwrap();
         std::fs::set_permissions(&failed, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let launch = launch_config_ui(&dir, &failed).unwrap();
+        let launch = launch_config_ui(&dir, &CcbProgram::new(&failed)).unwrap();
         let failed_status = wait_for_config_ui_status(&launch, |status| {
             matches!(status, ConfigUiLaunchStatus::Failed(_))
         });
@@ -2447,7 +2545,7 @@ mod tests {
         permissions.set_mode(0o755);
         std::fs::set_permissions(&ccb, permissions).unwrap();
 
-        run_ccb_kill_with_program(ccb, &project_root).unwrap();
+        run_ccb_kill_with_program(CcbProgram::new(ccb), &project_root).unwrap();
 
         assert_eq!(
             std::fs::read_to_string(&marker).unwrap(),
@@ -2865,15 +2963,15 @@ mod tests {
         let area = Rect::new(0, 0, 24, 20);
         let controls = tree_controls_area(sidebar_areas(area, app.sidebar_view()).tree);
         let project_root = Path::new("/tmp");
-        let ccb_program = Path::new("/bin/true");
+        let ccb_program = CcbProgram::new("/bin/true");
 
         assert_eq!(controls, Rect::new(20, 0, 3, 1));
         assert_eq!(
-            app.handle_mouse_down(1, 0, area, &client, project_root, ccb_program),
+            app.handle_mouse_down(1, 0, area, &client, project_root, &ccb_program),
             None
         );
         assert_eq!(
-            app.handle_mouse_down(controls.x, 0, area, &client, project_root, ccb_program,),
+            app.handle_mouse_down(controls.x, 0, area, &client, project_root, &ccb_program,),
             None
         );
         assert_eq!(
@@ -2888,7 +2986,7 @@ mod tests {
         assert!(app.last_error.is_none());
         assert!(!app.needs_refresh());
         assert_eq!(
-            app.handle_mouse_down(controls.x + 2, 0, area, &client, project_root, ccb_program,),
+            app.handle_mouse_down(controls.x + 2, 0, area, &client, project_root, &ccb_program,),
             Some(ExitAction::KillProject)
         );
     }
@@ -2909,7 +3007,7 @@ mod tests {
                 area,
                 &client,
                 Path::new("/tmp"),
-                Path::new("/definitely/missing/ccb"),
+                &CcbProgram::new("/definitely/missing/ccb"),
             ),
             None
         );

@@ -1,9 +1,9 @@
 use std::io::{Read, Write};
+#[cfg(not(unix))]
+use std::net::TcpStream;
 #[cfg(unix)]
 use std::os::unix::net::UnixStream;
 use std::path::Path;
-#[cfg(not(unix))]
-use std::net::TcpStream;
 use std::time::Duration;
 
 use serde_json::json;
@@ -167,8 +167,7 @@ fn request_control_plane(
     let ack_line = read_line(&mut stream)?;
     let ack: serde_json::Value =
         serde_json::from_slice(&ack_line).map_err(|err| format!("decode auth ack: {err}"))?;
-    if ack.get("schema").and_then(|value| value.as_str())
-        != Some("ccbd-control-plane-token-ack-v1")
+    if ack.get("schema").and_then(|value| value.as_str()) != Some("ccbd-control-plane-token-ack-v1")
         || ack.get("ok").and_then(|value| value.as_bool()) != Some(true)
     {
         return Err("ccbd auth ack is invalid".to_string());
@@ -282,8 +281,7 @@ fn load_token(path: &Path) -> Result<String, String> {
         &std::fs::read_to_string(path).map_err(|err| format!("read {}: {err}", path.display()))?,
     )
     .map_err(|err| format!("decode {}: {err}", path.display()))?;
-    if payload.get("schema").and_then(|value| value.as_str())
-        != Some("ccbd-control-plane-token-v1")
+    if payload.get("schema").and_then(|value| value.as_str()) != Some("ccbd-control-plane-token-v1")
     {
         return Err("ccbd control-plane token file is invalid".to_string());
     }

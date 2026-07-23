@@ -14,6 +14,7 @@ ccb-agent-sidebar --ccbd-socket <path> --project-root <path> --pane-window <name
 Keyboard controls:
 
 - `q` / `Esc`: exit the sidebar process only.
+- `c`: open the current project's local `ccb config ui` page.
 - `r`: restart every configured agent pane through ccbd without detaching the current tmux session.
 - `Q`: run `ccb kill` from the project root.
 
