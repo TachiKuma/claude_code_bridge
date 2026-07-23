@@ -105,9 +105,14 @@ def _attach_rmux_namespace(
     workspace_window_name = str(payload.get('namespace_workspace_window_name') or '').strip() or None
     if not namespace_id or not session_name:
         raise ForegroundAttachError('rmux foreground attach failed: namespace_id/session_name missing')
-    if ipc_kind != 'named_pipe':
+    if ipc_kind not in {'named_pipe', 'socket_name'}:
         raise ForegroundAttachError(f'rmux foreground attach failed: unsupported ipc_kind={ipc_kind!r}')
-    backend = _build_rmux_attach_backend(namespace_id=namespace_id, ipc_ref=ipc_ref)
+    backend = _build_rmux_attach_backend(
+        namespace_id=namespace_id,
+        session_name=session_name,
+        ipc_kind=ipc_kind,
+        ipc_ref=ipc_ref,
+    )
     namespace_ref = {
         'backend_family': 'tmux-family',
         'backend_impl': 'rmux',
@@ -228,7 +233,7 @@ def _attach_target_ready(payload: dict[str, object], *, env: dict[str, str]) -> 
                 'project namespace is not attachable after successful `ccb` start',
                 payload,
             )
-        if ipc_kind != 'named_pipe':
+        if ipc_kind not in {'named_pipe', 'socket_name'}:
             return False, _attach_error_with_selection(
                 f'rmux project namespace uses unsupported ipc_kind={ipc_kind!r}',
                 payload,
@@ -459,9 +464,16 @@ def _tmux_cmd(tmux_socket_path: str, *args: str) -> list[str]:
     return [*tmux_base(socket_path=tmux_socket_path), *args]
 
 
-def _build_rmux_attach_backend(*, namespace_id: str, ipc_ref: str | None):
+def _build_rmux_attach_backend(
+    *,
+    namespace_id: str,
+    session_name: str | None = None,
+    ipc_kind: str = 'named_pipe',
+    ipc_ref: str | None,
+):
     socket_path = ipc_ref if ipc_ref and _looks_like_path_ref(ipc_ref) else None
-    return RmuxBackend(namespace=namespace_id, socket_path=socket_path)
+    namespace = str(ipc_ref or '').strip() if ipc_kind == 'socket_name' else ''
+    return RmuxBackend(namespace=namespace or session_name or namespace_id, socket_path=socket_path)
 
 
 def _payload_backend_impl(payload: dict[str, object]) -> str:
