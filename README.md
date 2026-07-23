@@ -1,5 +1,5 @@
 <div align="center">
-
+目测WezTerm的窗口内已经启动了rmux,但是并没有启动ccb的sidebar,codex和claude code的cli没有见到。
 # CCB - Mobile Has Arrived!
 
 **A lightweight multi-agent TUI with a stable cross-provider collaboration layer**<br>
