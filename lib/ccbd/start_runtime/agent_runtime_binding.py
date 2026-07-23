@@ -22,6 +22,9 @@ def resolve_runtime_binding_state(
     project_id: str,
     tmux_socket_path: str | None,
     namespace_epoch: int | None,
+    namespace_backend_impl: str | None = None,
+    namespace_session_name: str | None = None,
+    namespace_window_name: str | None = None,
     window_name: str | None = None,
     ensure_agent_runtime_fn,
     launch_binding_hint_fn,
@@ -45,6 +48,9 @@ def resolve_runtime_binding_state(
             assigned_pane_id=assigned_pane_id,
             style_index=style_index,
             tmux_socket_path=tmux_socket_path,
+            namespace_backend_impl=namespace_backend_impl,
+            namespace_session_name=namespace_session_name,
+            namespace_window_name=namespace_window_name,
             ensure_agent_runtime_fn=ensure_agent_runtime_fn,
             launch_binding_hint_fn=launch_binding_hint_fn,
             provider_prepared=provider_prepared,
@@ -119,13 +125,21 @@ def launch_or_reuse_binding(
     assigned_pane_id: str | None,
     style_index: int,
     tmux_socket_path: str | None,
+    namespace_backend_impl: str | None = None,
+    namespace_session_name: str | None = None,
+    namespace_window_name: str | None = None,
     ensure_agent_runtime_fn,
     launch_binding_hint_fn,
     provider_prepared: bool = False,
     effective_command=None,
 ):
     if binding is not None:
-        return binding, 'attached', {}
+        if not _binding_requires_relaunch(binding):
+            return binding, 'attached', {}
+        assigned_pane_id = assigned_pane_id or _binding_pane_id(binding)
+        raw_binding = raw_binding or binding
+        binding = None
+        stale_binding = True
 
     launch_kwargs = dict(
         assigned_pane_id=assigned_pane_id,
@@ -135,6 +149,12 @@ def launch_or_reuse_binding(
     )
     if effective_command is not None:
         launch_kwargs['effective_command'] = effective_command
+    if namespace_backend_impl is not None:
+        launch_kwargs['namespace_backend_impl'] = namespace_backend_impl
+    if namespace_session_name is not None:
+        launch_kwargs['namespace_session_name'] = namespace_session_name
+    if namespace_window_name is not None:
+        launch_kwargs['namespace_window_name'] = namespace_window_name
     launch = ensure_agent_runtime_fn(
         context,
         command,
@@ -156,6 +176,21 @@ def launch_or_reuse_binding(
     if launch.launched:
         return binding, 'launched', launch_timings_ms
     return binding, 'attached', launch_timings_ms
+
+
+def _binding_requires_relaunch(binding) -> bool:
+    pane_state = str(getattr(binding, 'pane_state', '') or '').strip().lower()
+    return pane_state in {'dead', 'missing', 'foreign'}
+
+
+def _binding_pane_id(binding) -> str | None:
+    runtime_ref = str(getattr(binding, 'runtime_ref', '') or '').strip()
+    runtime_pane = mux_pane_id_from_runtime_ref(runtime_ref)
+    for attr in ('active_pane_id', 'pane_id'):
+        pane_id = str(getattr(binding, attr, '') or '').strip()
+        if pane_id:
+            return pane_id
+    return runtime_pane
 
 
 def relabel_runtime_pane(
@@ -199,6 +234,11 @@ def runtime_status(
 
     runtime_ref = binding.runtime_ref if binding else None
     session_ref = binding.session_ref if binding else None
+    pane_state = str(getattr(binding, 'pane_state', '') or '').strip().lower() if binding else ''
+    if pane_state in {'dead', 'missing', 'foreign'}:
+        actions_taken.append(f'degraded_{pane_state}_binding:{agent_name}')
+        health = f'pane-{pane_state}'
+        return runtime_ref, session_ref, health, 'degraded', 'degraded'
     actions_taken.extend(runtime_action_markers(agent_name=agent_name, agent_action=agent_action))
     return runtime_ref, session_ref, 'healthy', 'idle', agent_action
 

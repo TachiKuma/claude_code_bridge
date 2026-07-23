@@ -65,6 +65,7 @@ def start_agent_runtime(
     tmux_socket_path: str | None,
     namespace_epoch: int | None,
     namespace_backend_impl: str | None = None,
+    namespace_session_name: str | None = None,
     ensure_agent_runtime_fn,
     launch_binding_hint_fn,
     relabel_project_namespace_pane_fn,
@@ -108,6 +109,9 @@ def start_agent_runtime(
             project_id=project_id,
             tmux_socket_path=tmux_socket_path,
             namespace_epoch=namespace_epoch,
+            namespace_backend_impl=namespace_backend_impl,
+            namespace_session_name=namespace_session_name,
+            namespace_window_name=window_name,
             window_name=window_name,
             ensure_agent_runtime_fn=ensure_agent_runtime_fn,
             launch_binding_hint_fn=launch_binding_hint_fn,
@@ -136,10 +140,12 @@ def start_agent_runtime(
         registry = getattr(runtime_service, '_registry', None)
         existing = registry.get(agent_name) if registry is not None else None
         reused_existing_binding = binding is not None and binding_state.agent_action == 'attached'
+        binding_pane_state = str(_binding_attr(binding_state.binding, 'pane_state') or '').strip().lower()
         preserve_existing_success_health = bool(
             reused_existing_binding
             and existing is not None
             and getattr(existing, 'health', None) in {'healthy', 'restored'}
+            and binding_pane_state not in {'dead', 'missing', 'foreign'}
         )
         namespace_pane_id = _namespace_assigned_pane_id(
             assigned_pane_id=assigned_pane_id,

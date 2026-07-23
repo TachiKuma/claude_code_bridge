@@ -117,6 +117,20 @@ def prepare_start_agents(
                     project_root=project_root,
                     ensure_usable=True,
                 )
+            binding_reject_reason = _binding_reject_reason(
+                raw_binding=raw_binding,
+                binding=binding,
+                cmd_enabled=bool(getattr(config, 'cmd_enabled', False)),
+                tmux_session_name=tmux_session_name,
+                workspace_window_id=workspace_window_id,
+                agent_name=agent_name,
+                project_id=project_id,
+                window_name=binding_window_name,
+                namespace_epoch=namespace_epoch,
+                namespace_pane_records=namespace_pane_records,
+            )
+            if _binding_requires_fresh_launch(binding):
+                binding = None
 
             if restore_store.load(agent_name) is None:
                 restore_store.save(agent_name, restore_state_builder(policy.restore_mode.value))
@@ -130,18 +144,7 @@ def prepare_start_agents(
                     raw_binding=raw_binding,
                     binding=binding,
                     stale_binding=raw_binding is not None and binding is None,
-                    binding_reject_reason=_binding_reject_reason(
-                        raw_binding=raw_binding,
-                        binding=binding,
-                        cmd_enabled=bool(getattr(config, 'cmd_enabled', False)),
-                        tmux_session_name=tmux_session_name,
-                        workspace_window_id=workspace_window_id,
-                        agent_name=agent_name,
-                        project_id=project_id,
-                        window_name=binding_window_name,
-                        namespace_epoch=namespace_epoch,
-                        namespace_pane_records=namespace_pane_records,
-                    ),
+                    binding_reject_reason=binding_reject_reason,
                 )
             )
 
@@ -191,6 +194,11 @@ def _prepare_provider_launch_set(prepared, *, paths, context) -> tuple[PreparedS
     return tuple(finalized)
 
 
+def _binding_requires_fresh_launch(binding) -> bool:
+    pane_state = str(getattr(binding, 'pane_state', None) or '').strip().lower() if binding is not None else ''
+    return pane_state in {'dead', 'missing', 'foreign'}
+
+
 def _binding_reject_reason(
     *,
     raw_binding,
@@ -205,6 +213,9 @@ def _binding_reject_reason(
     namespace_pane_records: dict[str, object] | None,
 ) -> str | None:
     if binding is not None:
+        pane_state = str(getattr(binding, 'pane_state', None) or '').strip().lower()
+        if pane_state in {'dead', 'missing', 'foreign'}:
+            return f'pane_{pane_state}'
         return None
     if raw_binding is None:
         return 'binding_missing'

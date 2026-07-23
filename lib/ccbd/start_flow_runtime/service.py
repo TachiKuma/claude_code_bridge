@@ -159,6 +159,7 @@ def run_start_flow(
                 tmux_socket_path=tmux_socket_path,
                 namespace_epoch=namespace_epoch,
                 namespace_backend_impl=namespace_backend_impl,
+                namespace_session_name=tmux_session_name,
                 workspace_window_id=workspace_window_id,
                 workspace_epoch=workspace_epoch,
                 window_name=prepared.window_name,
