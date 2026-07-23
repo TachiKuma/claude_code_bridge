@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import replace
+import json
 import math
 import os
 from pathlib import Path
@@ -17,7 +18,8 @@ from provider_core.runtime_shared import (
     provider_start_parts as resolve_provider_start_parts,
 )
 from runtime_observability import record_startup_operation, startup_operation_scope
-from terminal_runtime import TmuxBackend
+from terminal_runtime import RmuxBackend, TmuxBackend
+from terminal_runtime.rmux_backend_runtime.targets import canonical_pane_id as _canonical_rmux_pane_id
 from workspace.models import WorkspacePlan
 
 from .provider_hooks import prepare_provider_workspace, provider_workspace_path_for_prepare
@@ -67,6 +69,9 @@ def ensure_agent_runtime(
     tmux_socket_path: str | None = None,
     provider_prepared: bool = False,
     effective_command: ParsedStartCommand | None = None,
+    namespace_backend_impl: str | None = None,
+    namespace_session_name: str | None = None,
+    namespace_window_name: str | None = None,
 ) -> RuntimeLaunchResult:
     launcher = _runtime_launcher(spec.provider)
     runtime_dir = context.paths.agent_provider_runtime_dir(spec.name, spec.provider)
@@ -109,6 +114,9 @@ def ensure_agent_runtime(
         assigned_pane_id=assigned_pane_id,
         style_index=style_index,
         tmux_socket_path=tmux_socket_path,
+        namespace_backend_impl=namespace_backend_impl,
+        namespace_session_name=namespace_session_name,
+        namespace_window_name=namespace_window_name,
     )
 
 
@@ -130,6 +138,9 @@ def _launch_tmux_runtime(
     assigned_pane_id: str | None = None,
     style_index: int = 0,
     tmux_socket_path: str | None = None,
+    namespace_backend_impl: str | None = None,
+    namespace_session_name: str | None = None,
+    namespace_window_name: str | None = None,
 ) -> dict[str, float]:
     return _launch_tmux_runtime_impl(
         context,
@@ -137,7 +148,12 @@ def _launch_tmux_runtime(
         spec,
         plan,
         launcher,
-        backend_factory=TmuxBackend,
+        backend_factory=_launch_backend_factory(
+            context=context,
+            namespace_backend_impl=namespace_backend_impl,
+            namespace_session_name=namespace_session_name,
+            namespace_window_name=namespace_window_name,
+        ),
         pane_title_marker_fn=_pane_title_marker,
         launch_session_id_fn=_launch_session_id,
         create_detached_tmux_pane_fn=_create_detached_tmux_pane,
@@ -180,6 +196,9 @@ def _write_session_file(
     start_cmd: str,
     launch_session_id: str,
     provider_payload: dict[str, object],
+    backend_family: str = 'tmux-family',
+    backend_impl: str = 'tmux',
+    window_name: str | None = None,
 ) -> Path:
     return _write_session_file_impl(
         context=context,
@@ -194,7 +213,164 @@ def _write_session_file(
         start_cmd=start_cmd,
         launch_session_id=launch_session_id,
         provider_payload=provider_payload,
+        backend_family=backend_family,
+        backend_impl=backend_impl,
+        window_name=window_name,
     )
+
+
+def _launch_backend_factory(
+    *,
+    context: CliContext,
+    namespace_backend_impl: str | None,
+    namespace_session_name: str | None,
+    namespace_window_name: str | None,
+):
+    if str(namespace_backend_impl or '').strip().lower() != 'rmux':
+        return TmuxBackend
+    namespace = str(namespace_session_name or '').strip() or _namespace_session_from_state(context)
+    window = str(namespace_window_name or '').strip() or None
+
+    def factory(*, socket_path: str | None = None):
+        return _StringPaneRmuxBackend(namespace=namespace, window_name=window, socket_path=socket_path)
+
+    return factory
+
+
+def _namespace_session_from_state(context: CliContext) -> str | None:
+    path = getattr(getattr(context, 'paths', None), 'ccbd_state_path', None)
+    if path is None:
+        return None
+    try:
+        payload = json.loads(Path(path).read_text(encoding='utf-8'))
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    for key in ('namespace_session_name', 'tmux_session_name'):
+        value = str(payload.get(key) or '').strip()
+        if value:
+            return value
+    namespace_ref = payload.get('namespace_ref')
+    if isinstance(namespace_ref, dict):
+        value = str(namespace_ref.get('session_name') or '').strip()
+        if value:
+            return value
+    return None
+
+
+class _StringPaneRmuxBackend:
+    backend_family = 'tmux-family'
+    backend_impl = 'rmux'
+
+    def __init__(
+        self,
+        *,
+        namespace: str | None = None,
+        window_name: str | None = None,
+        socket_path: str | None = None,
+    ) -> None:
+        self._backend = RmuxBackend(namespace=namespace, socket_path=socket_path)
+        self.namespace = self._backend.namespace
+        self.window_name = str(window_name or '').strip() or None
+        self.socket_path = self._backend.socket_path
+        self._socket_name = self.namespace
+        self._socket_path = self.socket_path
+
+    def respawn_pane(
+        self,
+        pane_id: str,
+        *,
+        cmd: str,
+        cwd: str | None = None,
+        remain_on_exit: bool = True,
+    ) -> str | None:
+        replacement = self._backend.respawn_pane(
+            self._pane_ref(pane_id),
+            cmd=cmd,
+            cwd=cwd,
+            remain_on_exit=remain_on_exit,
+        )
+        replacement_pane_id = str(replacement or '').strip()
+        if replacement_pane_id.startswith('%'):
+            return replacement_pane_id
+        return self._canonical_pane_id(pane_id)
+
+    def set_pane_identity(
+        self,
+        pane_id: str,
+        *,
+        title: str,
+        user_options: dict[str, str],
+        border_style: str | None = None,
+        active_border_style: str | None = None,
+    ) -> None:
+        self._backend.set_pane_identity(
+            self._pane_ref(pane_id),
+            title=title,
+            user_options=user_options,
+            border_style=border_style,
+            active_border_style=active_border_style,
+        )
+
+    def set_pane_title(self, pane_id: str, title: str) -> None:
+        self._backend.set_pane_title(self._pane_ref(pane_id), title)
+
+    def set_pane_user_option(self, pane_id: str, name: str, value: str) -> None:
+        self._backend.set_pane_user_option(self._pane_ref(pane_id), name, value)
+
+    def set_pane_style(
+        self,
+        pane_id: str,
+        *,
+        border_style: str | None = None,
+        active_border_style: str | None = None,
+    ) -> None:
+        self._backend.set_pane_style(
+            self._pane_ref(pane_id),
+            border_style=border_style,
+            active_border_style=active_border_style,
+        )
+
+    def _pane_ref(self, pane_id: str, *, canonicalize: bool = True) -> dict[str, str | None]:
+        pane_text = str(pane_id or '').strip()
+        if canonicalize:
+            pane_text = self._canonical_pane_id(pane_text)
+        return {
+            'backend_impl': 'rmux',
+            'pane_id': pane_text,
+            'session_name': self.namespace,
+            'window_name': self.window_name,
+        }
+
+    def _canonical_pane_id(self, pane_id: str) -> str:
+        pane_text = str(pane_id or '').strip()
+        if not pane_text.startswith('%') or not self.namespace:
+            return pane_text
+        pane_ref = self._pane_ref(pane_text, canonicalize=False)
+        try:
+            resolved = _canonical_rmux_pane_id(self._backend, pane_ref)
+        except Exception:
+            resolved = pane_text
+        if resolved.startswith('%') and resolved != pane_text:
+            return resolved
+        if not self.window_name:
+            return pane_text
+        try:
+            result = self._backend._run_checked(
+                [
+                    'display-message',
+                    '-p',
+                    '-t',
+                    f'{self.namespace}:{self.window_name}.{pane_text}',
+                    '#{pane_id}',
+                ],
+                operation='canonicalize_pane',
+            )
+        except Exception:
+            return pane_text
+        resolved = ((str(getattr(result, 'stdout', '') or '').splitlines() or [''])[0]).strip()
+        return resolved if resolved.startswith('%') else pane_text
 
 
 def _launch_session_id(agent_name: str) -> str:
@@ -218,13 +394,14 @@ def _pane_title_marker(context: CliContext, spec: AgentSpec) -> str:
 
 
 def _binding_runtime_alive(binding: AgentBinding) -> bool:
-    return _binding_runtime_alive_impl(binding, tmux_backend_cls=TmuxBackend)
+    return _binding_runtime_alive_impl(binding, tmux_backend_cls=TmuxBackend, rmux_backend_cls=RmuxBackend)
 
 
 def _cleanup_stale_tmux_binding(binding: AgentBinding | None) -> None:
     _cleanup_stale_tmux_binding_impl(
         binding,
         tmux_backend_cls=TmuxBackend,
+        rmux_backend_cls=RmuxBackend,
         kill_tmux_pane_fn=_best_effort_kill_tmux_pane,
     )
 

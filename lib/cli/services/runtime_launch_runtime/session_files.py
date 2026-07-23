@@ -28,6 +28,9 @@ def write_session_file(
     start_cmd: str,
     launch_session_id: str,
     provider_payload: dict[str, object],
+    backend_family: str = 'tmux-family',
+    backend_impl: str = 'tmux',
+    window_name: str | None = None,
 ) -> Path:
     session_path = context.paths.ccb_dir / session_filename(spec)
     existing_payload = _read_existing_session_payload(session_path)
@@ -52,11 +55,11 @@ def write_session_file(
     }
     payload.update(
         build_mux_session_payload(
-            backend_family='tmux-family',
-            backend_impl='tmux',
+            backend_family=backend_family,
+            backend_impl=backend_impl,
             pane_id=pane_id,
             session_name=_session_name(context),
-            window_name=_window_name(context),
+            window_name=window_name or _window_name(context),
             namespace_id=_namespace_id(context),
             tmux_socket_name=tmux_socket_name,
             tmux_socket_path=tmux_socket_path,

@@ -126,12 +126,15 @@ def launch_tmux_runtime(
                 runtime_dir=runtime_dir,
                 run_cwd=runtime_cwd,
                 pane_id=pane_id,
-                tmux_socket_name=str(getattr(backend, '_socket_name', '') or '').strip() or None,
-                tmux_socket_path=str(getattr(backend, '_socket_path', '') or '').strip() or None,
+                tmux_socket_name=_backend_socket_name(backend),
+                tmux_socket_path=_backend_socket_path(backend),
                 pane_title_marker=pane_title_marker,
                 start_cmd=start_cmd,
                 launch_session_id=launch_session_id,
                 provider_payload=provider_payload,
+                backend_family=str(getattr(backend, 'backend_family', '') or '').strip() or 'tmux-family',
+                backend_impl=str(getattr(backend, 'backend_impl', '') or '').strip() or 'tmux',
+                window_name=str(getattr(backend, 'window_name', '') or '').strip() or None,
             )
         finally:
             _record_elapsed_ms(timings_ms, 'session_write', stage_started_ns)
@@ -174,6 +177,22 @@ def _attach_startup_timings(exc: Exception, timings_ms: dict[str, float]) -> Non
         setattr(exc, 'ccb_startup_timings_ms', dict(timings_ms))
     except Exception:
         return
+
+
+def _backend_socket_name(backend) -> str | None:
+    for attr_name in ('_socket_name', 'namespace'):
+        text = str(getattr(backend, attr_name, '') or '').strip()
+        if text:
+            return text
+    return None
+
+
+def _backend_socket_path(backend) -> str | None:
+    for attr_name in ('_socket_path', 'socket_path'):
+        text = str(getattr(backend, attr_name, '') or '').strip()
+        if text:
+            return text
+    return None
 
 
 __all__ = [

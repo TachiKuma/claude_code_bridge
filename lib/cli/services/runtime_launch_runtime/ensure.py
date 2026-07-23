@@ -31,6 +31,9 @@ def ensure_agent_runtime(
     assigned_pane_id: str | None = None,
     style_index: int = 0,
     tmux_socket_path: str | None = None,
+    namespace_backend_impl: str | None = None,
+    namespace_session_name: str | None = None,
+    namespace_window_name: str | None = None,
 ):
     launcher = _pane_backed_launcher(spec)
     if launcher is None:
@@ -59,6 +62,9 @@ def ensure_agent_runtime(
             assigned_pane_id=assigned_pane_id,
             style_index=style_index,
             tmux_socket_path=tmux_socket_path,
+            namespace_backend_impl=namespace_backend_impl,
+            namespace_session_name=namespace_session_name,
+            namespace_window_name=namespace_window_name,
         )
     except Exception as exc:
         launch_elapsed_ms = _elapsed_ms(launch_started_ns)

@@ -24,12 +24,15 @@ def launch_pane(
 ) -> str:
     if assigned_pane_id:
         pane_id = str(assigned_pane_id)
-        backend.respawn_pane(
+        replacement = backend.respawn_pane(
             pane_id,
             cmd=start_cmd,
             cwd=str(run_cwd),
             remain_on_exit=True,
         )
+        replacement_pane_id = str(replacement or '').strip()
+        if replacement_pane_id.startswith('%'):
+            return replacement_pane_id
         return pane_id
     if not allow_detached_fallback:
         raise RuntimeError(
