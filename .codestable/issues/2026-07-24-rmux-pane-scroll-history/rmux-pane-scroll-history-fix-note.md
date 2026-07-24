@@ -62,3 +62,83 @@ tags:
 - `×` 的代码语义是 `KillProject`，不是单纯关闭 sidebar；如果需要“关闭 sidebar 但不 kill project”，应另开 feature / UX 调整，不并入本 bug。
 - 本轮已刷新当前 rmux session 绑定，但真实鼠标点击和滚轮仍需要用户在 WezTerm 前台 TUI 里做最终手工确认。
 - 这次修复优先保证 CCB 的聊天 pane 能滚回历史输出；如果某些非 sidebar 交互式 TUI 依赖 wheel 自身处理鼠标事件，行为会和以前不同。
+
+## 追加修复：Windows + WezTerm + rmux 鼠标目标与 Shift+Q
+
+> 说明：上文首次修复记录里的 `-t =` 方案已被本节追加修复取代；最终实现以显式 `#{mouse_pane}` 为准。
+
+用户复测反馈：`×` 的既有语义虽然是 `KillProject`，但 sidebar 焦点下按 `Q` 只关闭了 sidebar，其他 pane 仍然显示；滚轮历史回看也没有改善。
+
+本轮进一步定位到两个 v8 原生 Windows/rmux 特有兼容点：
+
+1. Rust sidebar 原先只把 `KeyCode::Char('Q')` 识别为 `KillProject`。在 Windows/WezTerm/crossterm 链路中，Shift+Q 可能被表示成 `KeyCode::Char('q') + KeyModifiers::SHIFT`，旧匹配会先落入普通 `q` 的 `SidebarOnly` 分支，因此只退出 sidebar。
+2. Python tmux/rmux mouse 绑定依赖特殊 target `=` 表示“鼠标所在 pane”。rmux 0.9.0 在 Windows attach 场景下对 `=` 的 mouse target 行为与 tmux 不完全一致，sidebar 有焦点时容易按焦点 pane 求值/送键，导致滚轮仍作用不到鼠标所在 agent pane。
+
+追加改动：
+
+- `tools/ccb-agent-sidebar/src/tui.rs`
+  - 新增 `exit_action_for_key()`，把 `Char('Q')` 和 `Char('q') + SHIFT` 都映射为 `KillProject`，普通 `q` / Esc 仍只关闭 sidebar。
+- `lib/cli/services/tmux_ui_runtime/service.py`
+  - root mouse/header/wheel 绑定从 `-t =` 改为显式 `-t "#{mouse_pane}"`。
+  - sidebar header 的 `⚙` / `×`、sidebar mouse passthrough、非 sidebar wheel copy-mode 都统一使用 mouse pane 目标。
+- `test/test_v2_tmux_ui.py`
+  - 更新绑定断言，覆盖 `#{mouse_pane}` 目标。
+
+追加验证：
+
+- `python -m py_compile "lib/cli/services/tmux_ui_runtime/service.py" "test/test_v2_tmux_ui.py"`：通过。
+- `python -m pytest -q "test/test_v2_tmux_ui.py"`：`12 passed, 2 skipped`。
+- `cargo fmt --manifest-path "tools/ccb-agent-sidebar/Cargo.toml" --check`：通过。
+- `cargo test --manifest-path "tools/ccb-agent-sidebar/Cargo.toml" shifted_q_is_project_kill_across_terminal_key_encodings --quiet`：通过。
+- `cargo test --manifest-path "tools/ccb-agent-sidebar/Cargo.toml" --quiet`：`54 passed`。
+- 已将当前 rmux session `ccb-claude_code_bridge-b72b0116` 的 root mouse 绑定刷新为 `#{mouse_pane}`，`rmux list-keys -T root` 已确认 `MouseDown1Pane`、`MouseDown1Border`、`WheelUpPane`、`WheelDownPane`、`MouseDown3Pane` 均使用 `-t "#{mouse_pane}"`。
+- `cargo build --release --manifest-path "tools/ccb-agent-sidebar/Cargo.toml"`：失败，原因是当前运行中的 `ccb-agent-sidebar.exe` 锁住默认 release exe，Windows 返回 `os error 5`。
+- `cargo build --release --manifest-path "tools/ccb-agent-sidebar/Cargo.toml" --target-dir "tools/ccb-agent-sidebar/target/codex-build"`：通过，确认源码可 release 构建。
+
+追加遗留风险：
+
+- 当前正在运行的 sidebar 进程仍使用旧 release exe；`Q` / `×` 的 Rust 侧修复需要退出/重启 sidebar 或重启项目后才能替换默认 `target/release/ccb-agent-sidebar.exe` 并生效。
+- 本轮已刷新 live rmux key bindings，因此滚轮目标修复可在当前 session 直接复测；若仍失败，下一轮应采集真实 mouse event 下 `#{mouse_pane}` 是否为空或错误 pane。
+
+## 追加修复：Windows rmux fallback 的左键选择与文本选区错位
+
+用户再次复测反馈：当前代码状态下 pane 交互仍严重异常：
+
+- 需要双击才能定位到对应 pane。
+- 在 pane 中选择文档时，鼠标实际位置与被选中的文本错开一行。
+
+本轮重新核对当前代码和 rmux 0.9.0 现场默认绑定后，确认上一轮实际落入了 Windows + rmux fallback 分支：
+
+1. `_mouse_pane_format_supported()` 在 Windows + rmux 下返回 false，因此不会使用 `#{mouse_pane}` 绑定。
+2. fallback 把 `MouseDown1Pane` / `MouseDown1Border` / `WheelUpPane` / `WheelDownPane` 直接绑定为裸 `send-keys -M`。
+3. rmux 0.9.0 默认的 `MouseDown1Pane` 是 `select-pane -t = ; send-keys -M`；当前 fallback 去掉了 `select-pane -t =`，导致首次点击没有可靠选中鼠标所在 pane。
+4. 普通 pane 左键被无条件透传到应用 mouse event 链路，也会干扰文本选择路径；这与“定位需要双击”和“选中文本错行”的现象一致。
+5. 复审指出不能只用 `list-keys` 证明 `=` target 在真实 mouse event 下可靠，因此最终 fallback 不再显式依赖 `=` target，而是使用 rmux/tmux mouse binding 的事件上下文。
+
+追加改动：
+
+- `lib/cli/services/tmux_ui_runtime/service.py`
+  - 将 Windows + rmux fallback 从裸 `send-keys -M` 改为 mouse event context 绑定。
+  - 普通 pane 的 `MouseDown1Pane` 默认只执行 `select-pane -M`，避免把左键点击继续转发到非 sidebar pane。
+  - sidebar pane 仍保留 `select-pane -M ; send-keys -M`，不破坏 sidebar 自己的鼠标交互。
+  - wheel fallback 先 `select-pane -M` 选中鼠标事件 pane，再按该 pane 的 `pane_in_mode` 决定透传或进入 `copy-mode -e` 后执行 `scroll-up/down`。
+  - `MouseDown3Pane` fallback 补回 sidebar 分流：sidebar 透传，非 sidebar 先选中目标 pane 再 paste。
+- `test/test_v2_tmux_ui.py`
+  - Windows + rmux 分支断言不再允许 `MouseDown1Pane` 退回裸 `send-keys -M`。
+  - rmux live binding 测试改为验证 fallback 不包含 `#{mouse_pane}` 或显式 `-t =`，并包含 `select-pane -M` 与 `copy-mode -e`。
+
+追加验证：
+
+- `python -m py_compile "lib/cli/services/tmux_ui_runtime/service.py" "test/test_v2_tmux_ui.py"`：通过。
+- `python -m pytest -q "test/test_v2_tmux_ui.py" -k "windows_rmux_project_ui_avoids_shell_status_commands or rmux_accepts_equals_target_project_ui_bindings"`：`2 passed, 13 deselected`。
+- `python -m pytest -q "test/test_v2_tmux_ui.py"`：`13 passed, 2 skipped`。
+- 已刷新当前 live rmux session `ccb-claude_code_bridge-b72b0116` 的 root mouse 绑定。
+- `rmux -L "ccb-claude_code_bridge-b72b0116" list-keys -T root` 已确认：
+  - `MouseDown1Pane` 使用 `select-pane -M`，不再是裸 `send-keys -M`，也不显式使用 `-t =`。
+  - `WheelUpPane` / `WheelDownPane` 使用 `select-pane -M ; if-shell -F "#{pane_in_mode}" ... copy-mode -e ; send-keys -X -N 2 scroll-up/down`。
+  - `MouseDown3Pane` 对 sidebar 走 `select-pane -M ; send-keys -M`，对非 sidebar 走 `select-pane -M ; paste-buffer -p`。
+
+追加遗留风险：
+
+- 真实 WezTerm 前台鼠标选择是否完全消除一行错位仍需用户在当前 TUI 中复测；本轮已修正最直接的 rmux fallback 绑定错误并刷新 live session。
+- 普通非 sidebar TUI pane 的左键 mouse event 不再默认透传；这是为恢复 pane 定位和文本选择优先级做的 Windows + rmux scoped 行为调整。

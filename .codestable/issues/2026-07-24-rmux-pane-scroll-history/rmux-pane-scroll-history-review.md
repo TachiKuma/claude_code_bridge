@@ -4,10 +4,10 @@ issue: 2026-07-24-rmux-pane-scroll-history
 status: passed
 reviewer: subagent
 reviewed: 2026-07-24
-round: 2
+round: 4
 lane_a_state: completed
-lane_a_ref: "019f9385-25e5-7df0-b7b8-9ab468f18930, 019f938b-6bb7-7e70-86e7-7e2feab55099"
-lane_a_reason: "第一轮发现条件未显式 target 鼠标 pane；closure 修复后第二轮复审 blocking none"
+lane_a_ref: "019f9439-f41c-7402-bc96-bd4fa07b1580, 019f94a2-6c50-70f2-9999-d24a2c2e793f"
+lane_a_reason: "round 4 针对 Windows rmux fallback 鼠标定位/选区错位追加完整复审，初审 changes-requested，closure 已确认 blocking/important 全部关闭"
 lane_b_state: unavailable
 lane_b_ref: ""
 lane_b_reason: "ocr llm test 返回 403 Forbidden"
@@ -99,3 +99,116 @@ none
   - `rmux -L <session> if-shell -F -t %1 "#{pane_id}" "display-message ok" "display-message no"`：通过。
   - `rmux -L <session> list-keys -T root`：确认相关绑定包含 `if-shell -F -t =`。
 - Classification: closure 只收紧本轮修复行为和测试证据，没有改变公开 API、数据、安全或并发边界。
+
+## 9. Round 3 追加复审
+
+### Scope
+
+- 用户复测反馈：sidebar 焦点下按 `Q` 只关闭 sidebar，滚轮历史问题仍无改善。
+- 追加 diff：`lib/cli/services/tmux_ui_runtime/service.py`、`test/test_v2_tmux_ui.py`、`tools/ccb-agent-sidebar/src/tui.rs`、本 fix-note。
+- Review mode: full-rereview for material behavior change。
+
+### Independent Review
+
+- 环节 A：subagent `019f9439-f41c-7402-bc96-bd4fa07b1580` completed。
+- 环节 B：OCR CLI 不可用，`ocr llm test` 返回 403 Forbidden。
+- Gate effect：`reviewer: subagent`，可放行；OCR 不可用不阻塞。
+
+### Findings
+
+#### blocking
+
+none
+
+#### important
+
+none
+
+已关闭的 important：
+
+- REV-003 `tools/ccb-agent-sidebar/src/tui.rs:149`：`KeyModifiers::SHIFT` 原先用 `contains()`，会把 `Ctrl+Shift+q` / `Alt+Shift+q` 也映射到 `KillProject`。已改为精确 `modifiers == KeyModifiers::SHIFT`，并补 `Ctrl+q`、`Alt+q`、`Ctrl+Shift+q` 回归断言。
+- REV-004 `test/test_v2_tmux_ui.py`：原测试只验证 argv 字符串，不能证明 rmux 接受 `#{mouse_pane}` 绑定。已新增 `test_rmux_accepts_mouse_pane_project_ui_bindings`，检测到 rmux 时创建临时 session，调用真实 `_apply_sidebar_mouse_controls(... shell_commands_supported=False)`，并断言 `list-keys -T root` 包含 `-t "#{mouse_pane}"`。
+
+#### nit
+
+none
+
+已处理的 nit：
+
+- fix-note 旧段落仍描述 `-t =`。已在追加修复章节开头标注首次修复记录里的 `-t =` 方案已被 `#{mouse_pane}` 最终实现取代。
+
+#### suggestion
+
+- `service.py` 同时维护 `mouse_target` / `quoted_mouse_target`，后续可再收敛为更小 helper；本轮不为单点建议额外抽象。
+
+### Test And QA Focus
+
+- QA 必须重点复核：当前 WezTerm 前台真实滚轮事件中，agent pane 可进入 copy-mode 并滚动历史；重启 sidebar helper 后 `Shift+Q` / header `×` 触发 project kill，而普通 `q` 仍只关 sidebar。
+- 不能靠 review 完全确认的点：真实 mouse event 下 `#{mouse_pane}` 是否始终为用户鼠标所在 pane；本轮已证明 rmux 0.9.0 接受绑定定义，但真实前台事件仍需手工复测。
+
+### Targeted Verification
+
+- `python -m py_compile "lib/cli/services/tmux_ui_runtime/service.py" "test/test_v2_tmux_ui.py"`：通过。
+- `python -m pytest -q "test/test_v2_tmux_ui.py"`：`13 passed, 2 skipped`。
+- `cargo fmt --manifest-path "tools/ccb-agent-sidebar/Cargo.toml" --check`：通过。
+- `cargo test --manifest-path "tools/ccb-agent-sidebar/Cargo.toml" shifted_q_is_project_kill_across_terminal_key_encodings --quiet`：通过。
+- `cargo test --manifest-path "tools/ccb-agent-sidebar/Cargo.toml" --quiet`：`54 passed`。
+- `git diff --check -- ...`：通过，仅有 Windows 换行提示。
+
+### Verdict
+
+- Status: passed
+- Next: 回到 issue fix 收尾；当前 live rmux session 的 mouse binding 已刷新，Rust sidebar helper 需要释放正在运行的 exe 后重建/重启才能让 `Shift+q` 修复进入当前 TUI。
+
+## 10. Round 4 Windows rmux fallback 复审
+
+### Scope
+
+- 用户复测反馈：pane 需要双击才能定位；pane 中选择文档时鼠标实际位置与被选中文本错开一行。
+- 追加 diff：`lib/cli/services/tmux_ui_runtime/service.py`、`test/test_v2_tmux_ui.py`、本 fix-note。
+- Review mode: full-rereview for material behavior change + focused closure。
+
+### Independent Review
+
+- 环节 A：subagent `019f94a2-6c50-70f2-9999-d24a2c2e793f` completed。
+- 环节 B：OCR CLI 不可用，`ocr llm test` 返回 403 Forbidden。
+- Gate effect：`reviewer: subagent`，closure 后可放行；OCR 不可用不阻塞。
+
+### Findings
+
+#### blocking
+
+none
+
+已关闭的 blocking：
+
+- REV-005 `lib/cli/services/tmux_ui_runtime/service.py`：Windows + rmux fallback 继续显式依赖 `-t =`，无法证明真实 mouse event target 可靠。已改为 mouse event context 方案，fallback 不再使用 `#{mouse_pane}` 或显式 `-t =`。
+
+#### important
+
+none
+
+已关闭的 important：
+
+- REV-006 普通 pane 左键语义不清。已明确本轮目标为一次点击选中 pane 并避免普通 pane 左键 mouse event 透传导致选区错位；fallback 默认动作改为 `select-pane -M`。
+- REV-007 `MouseDown3Pane` fallback 全局 paste。已改为按 sidebar role 分流：sidebar 透传，非 sidebar 先 `select-pane -M` 再 paste。
+- REV-008 live binding 测试只证明 `list-keys` 接受字符串。已调整为验证 fallback 不包含 `#{mouse_pane}` / 显式 `-t =`，并保留真实 WezTerm 前台复测为 residual risk。
+
+#### residual-risk
+
+- 真实 WezTerm 前台鼠标选择是否完全消除一行错位仍只能靠人工复测确认；当前 diff 已修正最直接的 fallback 绑定错误并刷新 live session。
+
+### Targeted Verification
+
+- `python -m py_compile "lib/cli/services/tmux_ui_runtime/service.py" "test/test_v2_tmux_ui.py"`：通过。
+- `python -m pytest -q "test/test_v2_tmux_ui.py" -k "windows_rmux_project_ui_avoids_shell_status_commands or rmux_accepts_mouse_context_project_ui_bindings"`：`2 passed, 13 deselected`。
+- `python -m pytest -q "test/test_v2_tmux_ui.py"`：`13 passed, 2 skipped`。
+- `cargo fmt --manifest-path "tools/ccb-agent-sidebar/Cargo.toml" --check`：通过。
+- `cargo test --manifest-path "tools/ccb-agent-sidebar/Cargo.toml" shifted_q_is_project_kill_across_terminal_key_encodings --quiet`：通过。
+- `git diff --check -- ...`：通过，仅有 Windows 换行提示。
+- 已刷新当前 live rmux session `ccb-claude_code_bridge-b72b0116` 的 root mouse 绑定；`list-keys` 确认目标绑定使用 `select-pane -M` / `copy-mode -e`，不使用 `#{mouse_pane}` 或显式 `-t =`。
+
+### Verdict
+
+- Status: passed
+- Next: 用户在当前 WezTerm 前台复测 pane 单击定位、滚轮历史和文本拖选行对齐。
