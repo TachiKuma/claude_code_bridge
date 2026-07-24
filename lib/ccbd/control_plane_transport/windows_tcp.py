@@ -268,6 +268,9 @@ class _BufferedConnection:
     def close(self) -> None:
         self._sock.close()
 
+    def getpeername(self):
+        return self._sock.getpeername()
+
     def __enter__(self) -> '_BufferedConnection':
         return self
 
@@ -334,21 +337,21 @@ def tcp_bootstrap_readiness_probe(server, *, timeout_s: float):
     deadline = time.monotonic() + max(0.1, float(timeout_s))
     nonce = uuid.uuid4().hex
     client = None
-    accepted = None
+    accepted_connections = []
     server._bootstrap_probe_active = True
     completed = False
     try:
         start_worker(server, interval=0.0, on_tick=None)
-        accept_thread, accept_errors, accepted_connections, stop_accept = _start_bootstrap_accept(
+        accept_thread, accept_errors, bootstrap_accepted, stop_accept = _start_bootstrap_accept(
             runtime_socket=runtime_socket,
             deadline=deadline,
         )
         try:
             client = server._control_plane_transport.connect(timeout_s=max(0.1, deadline - time.monotonic()))
-            accepted = _finish_bootstrap_accept(
+            accepted_connections = _finish_bootstrap_accept(
                 accept_thread,
                 accept_errors=accept_errors,
-                accepted_connections=accepted_connections,
+                accepted_connections=bootstrap_accepted,
                 stop_accept=stop_accept,
                 deadline=deadline,
             )
@@ -365,8 +368,10 @@ def tcp_bootstrap_readiness_probe(server, *, timeout_s: float):
                 },
             ),
         )
-        enqueue_connection(server, accepted)
-        accepted = None
+        accepted_connections = _self_probe_connection_first(accepted_connections, client)
+        for accepted in accepted_connections:
+            enqueue_connection(server, accepted)
+        accepted_connections = []
         payload = _pump_until_probe_response(
             server,
             runtime_socket=runtime_socket,
@@ -380,7 +385,7 @@ def tcp_bootstrap_readiness_probe(server, *, timeout_s: float):
         yield payload
         completed = True
     except BaseException:
-        if accepted is not None:
+        for accepted in accepted_connections:
             close_connection(accepted)
         server._stop_event.set()
         raise
@@ -413,7 +418,6 @@ def _start_bootstrap_accept(
                 runtime_socket.settimeout(min(_BOOTSTRAP_ACCEPT_POLL_TIMEOUT_S, remaining))
                 conn, _ = runtime_socket.accept()
                 accepted.append(conn)
-                return
             except (socket.timeout, TimeoutError):
                 continue
             except BaseException as exc:
@@ -433,20 +437,42 @@ def _finish_bootstrap_accept(
     stop_accept,
     deadline: float,
 ):
+    stop_accept.set()
     thread.join(timeout=max(0.0, deadline - time.monotonic()))
     if thread.is_alive():
-        stop_accept.set()
         raise TimeoutError('timed out waiting for ccbd bootstrap auth accept')
     if accept_errors:
         raise accept_errors[0]
     if accepted_connections:
-        return accepted_connections[0]
+        return list(accepted_connections)
     raise TimeoutError('ccbd bootstrap auth accept did not return a connection')
 
 
 def _stop_bootstrap_accept(thread, *, stop_accept) -> None:
     stop_accept.set()
     thread.join(timeout=_BOOTSTRAP_ACCEPT_POLL_TIMEOUT_S * 2)
+
+
+def _self_probe_connection_first(connections: list, client) -> list:
+    client_addr = _socket_address(client, 'getsockname')
+    if client_addr is None:
+        return list(connections)
+    for index, connection in enumerate(connections):
+        if _socket_address(connection, 'getpeername') == client_addr:
+            ordered = list(connections)
+            self_connection = ordered.pop(index)
+            return [self_connection, *ordered]
+    return list(connections)
+
+
+def _socket_address(sock, method_name: str):
+    method = getattr(sock, method_name, None)
+    if not callable(method):
+        return None
+    try:
+        return method()
+    except OSError:
+        return None
 
 
 def _pump_until_probe_response(

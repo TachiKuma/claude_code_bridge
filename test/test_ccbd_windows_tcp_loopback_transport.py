@@ -482,6 +482,55 @@ def test_tcp_bootstrap_probe_ignores_slow_preauth_connection(tmp_path: Path) -> 
         server.shutdown()
 
 
+def test_tcp_bootstrap_probe_handles_existing_authenticated_connection(tmp_path: Path) -> None:
+    transport = WindowsTcpControlPlaneTransport(
+        None,
+        legacy_socket_path=tmp_path / 'ccbd.sock',
+        command_runner=_ok_runner,
+    )
+    server = CcbdSocketServer(tmp_path / 'ccbd.sock', control_plane_transport=transport)
+    seen: list[str] = []
+
+    def _handle_ping(payload):
+        nonce = str(payload.get('bootstrap_probe_nonce') or '')
+        seen.append(nonce)
+        return {'bootstrap_probe_nonce': nonce, 'identity': 'tcp-loopback'}
+
+    server.register_handler('ping', _handle_ping)
+    server.listen()
+    early: dict[str, object] = {}
+    release_early = threading.Event()
+
+    def _connect_before_probe() -> None:
+        try:
+            client = transport.connect(timeout_s=2.0)
+            early['client'] = client
+            release_early.wait(timeout=2.0)
+            send_request(client, RpcRequest(op='ping', request={'target': 'ccbd'}))
+        except BaseException as exc:
+            early['error'] = exc
+
+    early_thread = threading.Thread(target=_connect_before_probe, daemon=True)
+    early_thread.start()
+    time.sleep(0.05)
+    try:
+        with server.bootstrap_readiness_probe(timeout_s=1.0) as payload:
+            assert payload['identity'] == 'tcp-loopback'
+            assert payload['bootstrap_probe_nonce']
+        release_early.set()
+        early_thread.join(timeout=1.0)
+        assert early.get('error') is None
+        assert payload['bootstrap_probe_nonce'] in seen
+    finally:
+        client = early.get('client')
+        if client is not None:
+            try:
+                client.close()
+            except Exception:
+                pass
+        server.shutdown()
+
+
 def test_tcp_bootstrap_probe_sends_request_before_enqueueing_worker_connection(
     monkeypatch,
     tmp_path: Path,
