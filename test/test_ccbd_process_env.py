@@ -140,6 +140,7 @@ def test_spawn_failure_reclaims_only_spawned_child_and_closes_parent_logs(
         captured['stdout'] = kwargs['stdout']
         captured['stderr'] = kwargs['stderr']
         captured['start_new_session'] = kwargs['start_new_session']
+        captured['creationflags'] = kwargs['creationflags']
         return process
 
     def fail_wait(**kwargs) -> None:
@@ -148,6 +149,7 @@ def test_spawn_failure_reclaims_only_spawned_child_and_closes_parent_logs(
 
     reclaimed: list[object] = []
     monkeypatch.setattr(daemon_process.subprocess, 'Popen', fake_popen)
+    monkeypatch.setattr(daemon_process, 'subprocess_kwargs', lambda: {'creationflags': 8})
     monkeypatch.setattr(daemon_process, '_wait_for_ccbd_ready', fail_wait)
     monkeypatch.setattr(daemon_process, '_terminate_spawned_process', reclaimed.append)
 
@@ -163,6 +165,7 @@ def test_spawn_failure_reclaims_only_spawned_child_and_closes_parent_logs(
 
     assert reclaimed == [process]
     assert captured['start_new_session'] is True
+    assert captured['creationflags'] == 8
     assert captured['stdout'].closed
     assert captured['stderr'].closed
 

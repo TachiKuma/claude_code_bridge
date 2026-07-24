@@ -21,12 +21,14 @@ def test_rmux_lifecycle_capture_uses_devnull_stdio_on_windows(monkeypatch) -> No
         return subprocess.CompletedProcess(args=args, returncode=0)
 
     monkeypatch.setattr('terminal_runtime.rmux_runner.platform.system', lambda: 'Windows')
+    monkeypatch.setattr('terminal_runtime.rmux_runner.subprocess_kwargs', lambda: {'creationflags': 8})
 
     cp = run_rmux_subprocess(['rmux', '-L', 'ccb-demo', 'start-server'], run_fn=fake_run, capture=True)
 
     assert cp.returncode == 0
     assert seen['kwargs']['stdout'] is subprocess.DEVNULL
     assert seen['kwargs']['stderr'] is subprocess.DEVNULL
+    assert seen['kwargs']['creationflags'] == 8
     assert 'capture_output' not in seen['kwargs']
 
 
@@ -44,6 +46,7 @@ def test_rmux_foreground_attach_inherits_stdio_even_when_capture_requested() -> 
     assert 'capture_output' not in seen['kwargs']
     assert 'stdout' not in seen['kwargs']
     assert 'stderr' not in seen['kwargs']
+    assert 'creationflags' not in seen['kwargs']
 
 
 def test_rmux_runner_preserves_command_output_for_regular_commands() -> None:
@@ -64,6 +67,22 @@ def test_rmux_runner_preserves_command_output_for_regular_commands() -> None:
     assert result.stderr == 'err'
     assert seen['kwargs']['capture_output'] is True
     assert seen['kwargs']['timeout'] == 2.5
+
+
+def test_rmux_regular_background_command_uses_hidden_window_kwargs(monkeypatch) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_run(args, **kwargs):
+        seen['args'] = args
+        seen['kwargs'] = kwargs
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout='ok', stderr='')
+
+    monkeypatch.setattr('terminal_runtime.rmux_runner.subprocess_kwargs', lambda: {'creationflags': 8})
+
+    result = RmuxRunner(rmux_bin='rmux.exe', run_fn=fake_run).run(['list-panes'])
+
+    assert result.returncode == 0
+    assert seen['kwargs']['creationflags'] == 8
 
 
 @pytest.mark.parametrize(

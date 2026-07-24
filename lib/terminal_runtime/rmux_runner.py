@@ -5,6 +5,8 @@ import subprocess
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
+from terminal_runtime.env import subprocess_kwargs
+
 
 _RMUX_STDIO_AWARE_LIFECYCLE_COMMANDS = {"start-server", "new-session"}
 _RMUX_FOREGROUND_ATTACH_COMMANDS = {"attach", "attach-session"}
@@ -96,6 +98,7 @@ def run_rmux_subprocess(
 
     if _uses_inherited_stdio(args, capture=capture):
         return run_fn(args, **kwargs)
+    kwargs.update(subprocess_kwargs())
     if _uses_devnull_stdio(args, capture=capture):
         return run_fn(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kwargs)
     if capture:

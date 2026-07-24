@@ -19,6 +19,7 @@ from ccbd.services.mount import MountManager
 from ccbd.services.ownership import OwnershipGuard
 from ccbd.system import utc_now
 from runtime_env.control_plane import control_plane_env
+from terminal_runtime.env import subprocess_kwargs
 
 from cli.kill_runtime.processes import is_pid_alive
 
@@ -283,6 +284,7 @@ def spawn_keeper_process(context) -> None:
         stdout=stdout_log,
         stderr=stderr_log,
         start_new_session=True,
+        **subprocess_kwargs(),
     )
 
 

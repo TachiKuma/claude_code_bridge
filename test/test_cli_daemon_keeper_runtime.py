@@ -68,6 +68,7 @@ def test_spawn_keeper_process_uses_lib_root_keeper_main(tmp_path: Path, monkeypa
             popen_calls.append({'cmd': cmd, **kwargs})
 
     monkeypatch.setattr(keeper_runtime.subprocess, 'Popen', _FakePopen)
+    monkeypatch.setattr(keeper_runtime, 'subprocess_kwargs', lambda: {'creationflags': 8})
 
     keeper_runtime.spawn_keeper_process(context)
 
@@ -76,6 +77,7 @@ def test_spawn_keeper_process_uses_lib_root_keeper_main(tmp_path: Path, monkeypa
     expected_script = Path(keeper_runtime.__file__).resolve().parents[3] / 'ccbd' / 'keeper_main.py'
     assert call['cmd'][1] == str(expected_script)
     assert str(expected_script.parent.parent) in str(call['env']['PYTHONPATH'])
+    assert call['creationflags'] == 8
 
 
 def test_ensure_keeper_started_replaces_state_for_unrelated_live_pid(tmp_path: Path) -> None:

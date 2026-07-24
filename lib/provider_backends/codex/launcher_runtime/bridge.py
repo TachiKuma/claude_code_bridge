@@ -8,6 +8,7 @@ import sys
 from provider_backends.codex.runtime_artifacts import codex_runtime_artifact_layout
 from provider_profiles import load_resolved_provider_profile
 from provider_runtime.session_payload import build_mux_session_payload, mux_session_env
+from terminal_runtime.env import subprocess_kwargs
 
 from .command import prepare_codex_home_overrides
 from .session_paths import session_file_for_runtime_dir
@@ -43,6 +44,7 @@ def spawn_codex_bridge(*, runtime_dir: Path, pane_id: str, prepared_state: dict[
             stdout=stdout_log,
             stderr=stderr_log,
             start_new_session=True,
+            **subprocess_kwargs(),
         )
     artifacts.bridge_pid.write_text(f'{proc.pid}\n', encoding='utf-8')
 
