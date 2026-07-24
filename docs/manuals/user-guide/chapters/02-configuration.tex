@@ -192,6 +192,23 @@ tips = ["Run ccb doctor when status is degraded."]
 
 \cfg{position} 可选 \cfg{left} 或 \cfg{right}，默认 \cfg{left}。当前 sidebar 仍是纵向 pane；底部横排布局不属于该配置。旧的 \cfg{ui.sidebar.view} 子表仍可读取，但新配置建议把 sidebar 字段放在同一个 \cfg{ui.sidebar} 表中。
 
+\section{sidebar 使用说明}
+
+sidebar 是项目视图的常驻控制面板，依赖 \cfg{windows} topology 和 \cfg{ui.sidebar.mode = "every_window"}。它不是独立应用，而是每个 managed window 旁边的一块 tmux pane，用来查看窗口、agent、Comms 和 Tips。
+
+\begin{itemize}
+  \item \textbf{布局。} \cfg{position = "left"} 时 sidebar 在窗口左侧；\cfg{position = "right"} 时在右侧。sidebar 仍是纵向竖栏，不会变成底部横排。
+  \item \textbf{Tree 面板。} 上半区显示窗口和 agent。左键点击某一行会切换并聚焦对应 pane。选中项会同步高亮。
+  \item \textbf{顶栏按钮。} 左上角的 \cfg{⚙} 会打开当前项目的 \cmd{ccb config ui}；\cfg{×} 会触发 \cmd{ccb kill}。对应键盘快捷键分别是 \cfg{c} 和 \cfg{Q}。
+  \item \textbf{Comms 面板。} 中间区域显示最近的通信与状态。左键可选中条目，遇到可恢复项时会直接触发恢复、取消或清理动作。滚轮会在该区域内滚动输出。
+  \item \textbf{Tips 面板。} 底部区域显示快捷提示；如果 \cfg{tips_enabled = true}，滚轮可单独滚动该区域。
+  \item \textbf{鼠标滚轮。} 在 sidebar pane 内，滚轮会按当前指针所在区域滚动对应面板；在其他 CLI pane 内，滚轮会进入 tmux copy-mode 并滚动聊天输出。
+  \item \textbf{右键。} 在 CLI chat pane 上右键会按 tmux 绑定执行粘贴，不再弹出默认菜单。若你要保留自定义菜单，需要修改 \src{lib/cli/services/tmux_ui_runtime/service.py} 中的 mouse binding。
+  \item \textbf{键盘。} \cfg{Enter} 聚焦当前选中目标，\cfg{Tab} 聚焦 sidebar 所属窗口，\cfg{r} 重启已配置的 agent pane，\cfg{R} 恢复第一个可见的 Comms 项，\cfg{q}/\cfg{Esc} 只退出 sidebar 本身。
+\end{itemize}
+
+如果 \cfg{config ui} 启动失败，sidebar 顶栏会显示错误状态，而不会阻塞主会话。此时可以直接看顶部错误文本，或在终端里运行 \cmd{ccb config ui} 排查。
+
 \section{agent spec}
 
 agent 字段包括：

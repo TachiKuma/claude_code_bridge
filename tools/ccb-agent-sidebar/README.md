@@ -18,6 +18,14 @@ Keyboard controls:
 - `r`: restart every configured agent pane through ccbd without detaching the current tmux session.
 - `Q`: run `ccb kill` from the project root.
 
+Mouse controls:
+
+- Left click on a tree row selects and focuses the corresponding window or agent pane.
+- Left click on `⚙` opens the project config UI.
+- Left click on `×` kills the project.
+- Wheel scroll over the tree, Comms, or Tips panel scrolls that panel.
+- Right click in an agent/cmd pane pastes clipboard content instead of opening the default tmux menu.
+
 The top panel shows inline controls on the right side of the `Sidebar` title bar:
 
 - `⚙`: open the current project's local `ccb config ui` page
