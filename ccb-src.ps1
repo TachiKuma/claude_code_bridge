@@ -28,10 +28,10 @@ function Resolve-CcbScript {
     $candidateRoots += $env:CCB_SOURCE_ROOT
   }
 
-  $sourceParent = Join-Path "D:/" "Python/GitHub"
-  $candidateRoots += (Join-Path $sourceParent "claude_code_bridge")
-  $candidateRoots += (Join-Path $sourceParent "TachiKuma/claude_code_bridge")
-  $candidateRoots += (Join-Path "E:/" "GitHub开源项目/TachiKuma/claude_code_bridge")
+  $sourceParent = "D:/Python/GitHub"
+  $candidateRoots += "$sourceParent/claude_code_bridge"
+  $candidateRoots += "$sourceParent/TachiKuma/claude_code_bridge"
+  $candidateRoots += "E:/GitHub开源项目/TachiKuma/claude_code_bridge"
 
   $checked = @()
   foreach ($candidateRoot in $candidateRoots) {
@@ -40,9 +40,9 @@ function Resolve-CcbScript {
     }
 
     $expandedRoot = [Environment]::ExpandEnvironmentVariables($candidateRoot)
-    $candidateScript = Join-Path $expandedRoot "ccb.py"
+    $candidateScript = [System.IO.Path]::Combine($expandedRoot, "ccb.py")
     $checked += $candidateScript
-    if (Test-Path -LiteralPath $candidateScript) {
+    if (Test-Path -LiteralPath $candidateScript -ErrorAction SilentlyContinue) {
       return (Resolve-Path -LiteralPath $candidateScript).Path
     }
   }
@@ -392,8 +392,12 @@ $exitProcess = $env:CCB_SRC_EXIT_PROCESS -eq "1"
 Assert-NoProjectOverride -ForwardedArgs $CcbArgs
 $python = Resolve-CcbSourcePython
 $script:CcbExitCode = 1
+$locationPushed = $false
 
 try {
+  Push-Location -LiteralPath $ProjectRoot
+  $locationPushed = $true
+
   $defaultedRmux = Enable-DefaultWindowsRmuxBackend
 
   if ([string]::IsNullOrWhiteSpace($previousAllowedRoots)) {
@@ -415,6 +419,9 @@ try {
     $env:CCB_MUX_BACKEND = $previousMuxBackend
   } else {
     Remove-Item Env:\CCB_MUX_BACKEND -ErrorAction SilentlyContinue
+  }
+  if ($locationPushed) {
+    Pop-Location
   }
 }
 
