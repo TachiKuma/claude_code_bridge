@@ -23,6 +23,7 @@ $ProjectRoot = Resolve-ProjectRoot
 
 function Resolve-CcbScript {
   $candidateRoots = @()
+  $candidateRoots += $ProjectRoot
   if (-not [string]::IsNullOrWhiteSpace($env:CCB_SOURCE_ROOT)) {
     $candidateRoots += $env:CCB_SOURCE_ROOT
   }
