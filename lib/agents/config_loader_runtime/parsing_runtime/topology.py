@@ -6,6 +6,8 @@ from agents.config_loader_runtime.parsing_runtime.agent_specs import build_agent
 from agents.config_loader_runtime.parsing_runtime.expectations import expect_bool, expect_mapping, expect_string, expect_string_list
 from agents.models import (
     AgentValidationError,
+    LayoutLeaf,
+    LayoutNode,
     SidebarSpec,
     SidebarViewSpec,
     ToolWindowSpec,
@@ -141,7 +143,7 @@ def parse_topology_windows(raw_windows: Any) -> tuple[WindowSpec, ...] | None:
                 WindowSpec(
                     name=raw_name,
                     order=index,
-                    layout_spec=layout.render(),
+                    layout_spec=_normalize_topology_layout_names(layout).render(),
                     agent_names=tuple(agent_names),
                     tool_names=tuple(tool_names),
                 )
@@ -153,6 +155,34 @@ def parse_topology_windows(raw_windows: Any) -> tuple[WindowSpec, ...] | None:
         except Exception as exc:
             raise ConfigValidationError(f'windows.{raw_name}: invalid layout: {exc}') from exc
     return tuple(windows)
+
+
+def _normalize_topology_layout_names(layout: LayoutNode) -> LayoutNode:
+    if layout.kind == 'leaf':
+        assert layout.leaf is not None
+        leaf = layout.leaf
+        name = str(leaf.name or '').strip()
+        normalized_name = (
+            normalize_layout_tool_alias(name)
+            if is_layout_tool_alias(name)
+            else normalize_agent_name(name)
+        )
+        return LayoutNode(
+            kind='leaf',
+            leaf=LayoutLeaf(
+                name=normalized_name,
+                provider=leaf.provider,
+                workspace_mode=leaf.workspace_mode,
+                percent=leaf.percent,
+            ),
+        )
+    assert layout.left is not None
+    assert layout.right is not None
+    return LayoutNode(
+        kind=layout.kind,
+        left=_normalize_topology_layout_names(layout.left),
+        right=_normalize_topology_layout_names(layout.right),
+    )
 
 
 def parse_tool_windows(raw_tool_windows: Any) -> tuple[ToolWindowSpec, ...]:
