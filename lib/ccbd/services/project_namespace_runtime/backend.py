@@ -881,6 +881,7 @@ def _canonical_mux_pane_id(
         result = None
     if result is not None:
         pane_index = pane_text[1:]
+        index_match = None
         for line in str(getattr(result, 'stdout', '') or '').splitlines():
             parts = [part.strip() for part in line.split('\t')]
             if window:
@@ -895,7 +896,9 @@ def _canonical_mux_pane_id(
             if observed_id == pane_text:
                 return observed_id
             if pane_index.isdigit() and observed_index == pane_index and observed_id.startswith('%'):
-                return observed_id
+                index_match = observed_id
+        if index_match is not None:
+            return index_match
     if not window:
         return pane_text
     try:

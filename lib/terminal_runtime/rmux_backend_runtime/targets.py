@@ -55,6 +55,7 @@ def _pane_id_from_window_index(backend, *, session: str, window: str, pane_id: s
     except Exception:
         return None
     pane_index = pane_id[1:]
+    index_match = None
     for line in str(getattr(result, "stdout", "") or "").splitlines():
         parts = [part.strip() for part in line.split("\t")]
         observed_id = parts[0] if parts else ""
@@ -62,8 +63,8 @@ def _pane_id_from_window_index(backend, *, session: str, window: str, pane_id: s
         if observed_id == pane_id:
             return observed_id
         if pane_index.isdigit() and observed_index == pane_index and observed_id.startswith("%"):
-            return observed_id
-    return None
+            index_match = observed_id
+    return index_match
 
 
 def _pane_id_from_global_index(backend, *, pane_id: str) -> str | None:
@@ -106,6 +107,7 @@ def _pane_id_from_session_index(backend, *, session: str, pane_id: str) -> str |
     except Exception:
         return None
     pane_index = pane_id[1:]
+    index_match = None
     for line in str(getattr(result, "stdout", "") or "").splitlines():
         parts = [part.strip() for part in line.split("\t")]
         observed_session = parts[0] if parts else ""
@@ -116,8 +118,8 @@ def _pane_id_from_session_index(backend, *, session: str, pane_id: str) -> str |
         if observed_id == pane_id:
             return observed_id
         if pane_index.isdigit() and observed_index == pane_index and observed_id.startswith("%"):
-            return observed_id
-    return None
+            index_match = observed_id
+    return index_match
 
 
 def _pane_id_from_display_message(backend, *, session: str, window: str, pane_id: str) -> str | None:

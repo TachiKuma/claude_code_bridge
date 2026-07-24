@@ -50,6 +50,7 @@ def split_pane(
     cwd: str | None = None,
 ) -> MuxPaneRef:
     backend._require_capability("split_pane", ("split-window",))
+    before_pane_ids = _window_pane_ids(backend, parent)
     flag = _split_flag(direction)
     split_percent = max(1, min(99, int(percent)))
     args = [
@@ -77,12 +78,18 @@ def split_pane(
             ipc_ref=backend._ipc_ref(),
             daemon_evidence=backend.daemon_evidence,
         )
-    pane_id = _pane_id_from_split_index_alias(backend, parent=parent, pane_id=pane_id) or canonical_pane_id(
-        backend,
-        {**parent, "pane_id": pane_id},
-    )
+    if pane_id.startswith("%") and pane_id in before_pane_ids:
+        resolved_pane_id = _pane_id_from_split_index_alias(backend, parent=parent, pane_id=pane_id) or canonical_pane_id(
+            backend,
+            {**parent, "pane_id": pane_id},
+        )
+    else:
+        resolved_pane_id = canonical_pane_id(
+            backend,
+            {**parent, "pane_id": pane_id},
+        )
     return backend.pane_ref(
-        pane_id,
+        resolved_pane_id,
         session_name=parent["session_name"],
         window_name=parent.get("window_name"),
     )
@@ -284,6 +291,26 @@ def _session_window_target(session_name: str, window_name: str | None = None) ->
 
 def _first_stdout_token(stdout: str) -> str:
     return ((stdout.splitlines() or [""])[0]).strip()
+
+
+def _window_pane_ids(backend, parent: MuxPaneRef) -> set[str]:
+    session = str(parent.get("session_name") or "").strip()
+    window = str(parent.get("window_name") or "").strip()
+    if not session:
+        return set()
+    target = _session_window_target(session, window or None)
+    try:
+        result = backend._run_checked(
+            ["list-panes", "-t", target, "-F", "#{pane_id}"],
+            operation="split_pane_before_snapshot",
+        )
+    except Exception:
+        return set()
+    return {
+        line.strip()
+        for line in str(getattr(result, "stdout", "") or "").splitlines()
+        if line.strip()
+    }
 
 
 def _pane_id_from_split_index_alias(backend, *, parent: MuxPaneRef, pane_id: str) -> str | None:
