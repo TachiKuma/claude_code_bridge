@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shlex
 
+from terminal_runtime.env import is_windows
 from terminal_runtime.tmux_compat import is_tmux_compat_subset
 from terminal_runtime.tmux_theme import render_tmux_session_theme
 
@@ -29,6 +30,11 @@ def apply_project_tmux_ui(
     status_script = script_path('ccb-status.sh')
     border_script = script_path('ccb-border.sh')
     git_script = script_path('ccb-git.sh')
+    shell_commands_supported = _shell_commands_supported(resolved_backend)
+    if not shell_commands_supported:
+        status_script = None
+        border_script = None
+        git_script = None
     ccb_version = detect_ccb_version()
     rendered_theme = render_tmux_session_theme(
         ccb_version=ccb_version,
@@ -41,6 +47,7 @@ def apply_project_tmux_ui(
         resolved_backend,
         tmux_socket_path=socket_path,
         session_name=session_name,
+        shell_commands_supported=shell_commands_supported,
     )
     _apply_pane_theme(
         resolved_backend,
@@ -53,6 +60,11 @@ def apply_project_tmux_ui(
         session_name=session_name,
         rendered_theme=rendered_theme,
     )
+
+
+def _shell_commands_supported(backend) -> bool:
+    backend_impl = str(getattr(backend, 'backend_impl', '') or '').strip().lower()
+    return not (is_windows() and backend_impl == 'rmux')
 
 
 def _apply_session_theme(backend, *, session_name: str, rendered_theme) -> None:
@@ -72,12 +84,30 @@ def _apply_sidebar_mouse_controls(
     *,
     tmux_socket_path: str,
     session_name: str,
+    shell_commands_supported: bool = True,
 ) -> None:
     tmux_socket = str(tmux_socket_path or '').strip()
     if not tmux_socket:
         return
     default_action = 'select-pane -t = ; send-keys -M'
     settings_action = 'select-pane -t = ; send-keys -t = c'
+    wheel_up_action = (
+        'if-shell -F "#{pane_in_mode}" '
+        '{ send-keys -M } { copy-mode -e ; send-keys -X -N 2 scroll-up }'
+    )
+    wheel_down_action = (
+        'if-shell -F "#{pane_in_mode}" '
+        '{ send-keys -M } { copy-mode -e ; send-keys -X -N 2 scroll-down }'
+    )
+    for key in (
+        'MouseDown1Pane',
+        'MouseDown1Border',
+        'MouseDown3Pane',
+        'M-MouseDown3Pane',
+        'WheelUpPane',
+        'WheelDownPane',
+    ):
+        tmux_run(backend, ['unbind-key', '-T', 'root', key])
     tmux_run(
         backend,
         [
@@ -92,6 +122,64 @@ def _apply_sidebar_mouse_controls(
             default_action,
         ],
     )
+    tmux_run(
+        backend,
+        [
+            'bind-key',
+            '-T',
+            'root',
+            'MouseDown1Border',
+            'if-shell',
+            '-F',
+            _sidebar_top_border_click_condition(),
+            default_action,
+            'select-pane -M',
+        ],
+    )
+    tmux_run(
+        backend,
+        [
+            'bind-key',
+            '-T',
+            'root',
+            'WheelUpPane',
+            'if-shell',
+            '-F',
+            '#{==:#{@ccb_role},sidebar}',
+            default_action,
+            wheel_up_action,
+        ],
+    )
+    tmux_run(
+        backend,
+        [
+            'bind-key',
+            '-T',
+            'root',
+            'WheelDownPane',
+            'if-shell',
+            '-F',
+            '#{==:#{@ccb_role},sidebar}',
+            default_action,
+            wheel_down_action,
+        ],
+    )
+    tmux_run(
+        backend,
+        [
+            'bind-key',
+            '-T',
+            'root',
+            'MouseDown3Pane',
+            'if-shell',
+            '-F',
+            '#{==:#{@ccb_role},sidebar}',
+            default_action,
+            'paste-buffer -p',
+        ],
+    )
+    if not shell_commands_supported:
+        return
     tmux_run(
         backend,
         [
@@ -162,7 +250,7 @@ def _sidebar_resize_sync_shell(
 
 
 def _sidebar_settings_click_condition() -> str:
-    header_row = '#{||:#{==:#{mouse_y},0},#{==:#{mouse_y},#{pane_top}}}'
+    header_row = _sidebar_header_row_condition()
     relative_settings_col = (
         '#{||:'
         '#{==:#{mouse_x},#{e|-:#{pane_width},4}},'
@@ -177,6 +265,14 @@ def _sidebar_settings_click_condition() -> str:
     )
     settings_col = f'#{{||:{relative_settings_col},{absolute_settings_col}}}'
     return f'#{{&&:#{{==:#{{@ccb_role}},sidebar}},#{{&&:{header_row},{settings_col}}}}}'
+
+
+def _sidebar_top_border_click_condition() -> str:
+    return f'#{{&&:#{{==:#{{@ccb_role}},sidebar}},{_sidebar_header_row_condition()}}}'
+
+
+def _sidebar_header_row_condition() -> str:
+    return '#{||:#{==:#{mouse_y},0},#{==:#{mouse_y},#{pane_top}}}'
 
 
 def _sidebar_window_resize_sync_shell(

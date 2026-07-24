@@ -2,13 +2,19 @@ from __future__ import annotations
 
 from pathlib import Path
 import os
+import shutil
 import subprocess
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 import cli.services.tmux_ui as tmux_ui
 import cli.services.tmux_ui_runtime.helpers as tmux_helpers
+import cli.services.tmux_ui_runtime.service as tmux_ui_service
 import terminal_runtime.tmux_compat as tmux_compat
+
+_BASH = shutil.which('bash')
 
 
 def test_keeper_import_does_not_cycle_through_tmux_ui() -> None:
@@ -153,6 +159,12 @@ def test_apply_project_tmux_ui_sets_session_theme_and_hook_from_current_install_
         and 'run-shell -b' in call[4]
         for call in calls
     )
+    assert ['unbind-key', '-T', 'root', 'MouseDown1Pane'] in calls
+    assert ['unbind-key', '-T', 'root', 'MouseDown1Border'] in calls
+    assert ['unbind-key', '-T', 'root', 'MouseDown3Pane'] in calls
+    assert ['unbind-key', '-T', 'root', 'M-MouseDown3Pane'] in calls
+    assert ['unbind-key', '-T', 'root', 'WheelUpPane'] in calls
+    assert ['unbind-key', '-T', 'root', 'WheelDownPane'] in calls
     sidebar_mouse_bindings = [
         call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'MouseDown1Pane']
     ]
@@ -173,6 +185,79 @@ def test_apply_project_tmux_ui_sets_session_theme_and_hook_from_current_install_
         'select-pane -t = ; send-keys -t = c',
         'select-pane -t = ; send-keys -M',
     ]
+    sidebar_border_bindings = [
+        call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'MouseDown1Border']
+    ]
+    assert len(sidebar_border_bindings) == 1
+    sidebar_border_binding = sidebar_border_bindings[0]
+    assert sidebar_border_binding[:5] == [
+        'bind-key',
+        '-T',
+        'root',
+        'MouseDown1Border',
+        'if-shell',
+    ]
+    assert sidebar_border_binding[5] == '-F'
+    assert '#{@ccb_role}' in sidebar_border_binding[6]
+    assert '#{mouse_y}' in sidebar_border_binding[6]
+    assert sidebar_border_binding[7:] == [
+        'select-pane -t = ; send-keys -M',
+        'select-pane -M',
+    ]
+    sidebar_wheel_up_bindings = [
+        call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'WheelUpPane']
+    ]
+    assert len(sidebar_wheel_up_bindings) == 1
+    sidebar_wheel_up_binding = sidebar_wheel_up_bindings[0]
+    assert sidebar_wheel_up_binding[:5] == [
+        'bind-key',
+        '-T',
+        'root',
+        'WheelUpPane',
+        'if-shell',
+    ]
+    assert sidebar_wheel_up_binding[5] == '-F'
+    assert sidebar_wheel_up_binding[6] == '#{==:#{@ccb_role},sidebar}'
+    assert sidebar_wheel_up_binding[7] == 'select-pane -t = ; send-keys -M'
+    assert sidebar_wheel_up_binding[8] == (
+        'if-shell -F "#{pane_in_mode}" '
+        '{ send-keys -M } { copy-mode -e ; send-keys -X -N 2 scroll-up }'
+    )
+    sidebar_wheel_down_bindings = [
+        call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'WheelDownPane']
+    ]
+    assert len(sidebar_wheel_down_bindings) == 1
+    sidebar_wheel_down_binding = sidebar_wheel_down_bindings[0]
+    assert sidebar_wheel_down_binding[:5] == [
+        'bind-key',
+        '-T',
+        'root',
+        'WheelDownPane',
+        'if-shell',
+    ]
+    assert sidebar_wheel_down_binding[5] == '-F'
+    assert sidebar_wheel_down_binding[6] == '#{==:#{@ccb_role},sidebar}'
+    assert sidebar_wheel_down_binding[7] == 'select-pane -t = ; send-keys -M'
+    assert sidebar_wheel_down_binding[8] == (
+        'if-shell -F "#{pane_in_mode}" '
+        '{ send-keys -M } { copy-mode -e ; send-keys -X -N 2 scroll-down }'
+    )
+    sidebar_right_click_bindings = [
+        call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'MouseDown3Pane']
+    ]
+    assert len(sidebar_right_click_bindings) == 1
+    sidebar_right_click_binding = sidebar_right_click_bindings[0]
+    assert sidebar_right_click_binding[:5] == [
+        'bind-key',
+        '-T',
+        'root',
+        'MouseDown3Pane',
+        'if-shell',
+    ]
+    assert sidebar_right_click_binding[5] == '-F'
+    assert sidebar_right_click_binding[6] == '#{==:#{@ccb_role},sidebar}'
+    assert sidebar_right_click_binding[7] == 'select-pane -t = ; send-keys -M'
+    assert sidebar_right_click_binding[8] == 'paste-buffer -p'
     assert '__sidebar-click' not in '\n'.join(' '.join(call) for call in calls)
     sidebar_resize_bindings = [
         call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'MouseDrag1Border']
@@ -241,6 +326,45 @@ def test_rmux_backend_keeps_project_ui_enabled() -> None:
         backend_impl = 'rmux'
 
     assert tmux_compat.is_tmux_compat_subset(FakeBackend()) is False
+
+
+def test_windows_rmux_project_ui_avoids_shell_status_commands(monkeypatch, tmp_path: Path) -> None:
+    config_dir = tmp_path / 'config'
+    config_dir.mkdir(parents=True)
+    for script_name in ('ccb-status.sh', 'ccb-border.sh', 'ccb-git.sh'):
+        (config_dir / script_name).write_text('#!/bin/sh\n', encoding='utf-8')
+    (tmp_path / 'VERSION').write_text('9.9.9\n', encoding='utf-8')
+
+    calls: list[list[str]] = []
+
+    class FakeBackend:
+        backend_impl = 'rmux'
+
+        def _tmux_run(self, args, *, check=False, capture=False):
+            del check
+            calls.append(list(args))
+            if capture and args[:4] == ['list-panes', '-t', 'ccb-demo', '-F']:
+                return SimpleNamespace(returncode=0, stdout='\n%9\n', stderr='')
+            if capture and args[:4] == ['display-message', '-p', '-t', '%9']:
+                return SimpleNamespace(returncode=0, stdout='', stderr='')
+            return SimpleNamespace(returncode=0, stdout='', stderr='')
+
+    monkeypatch.setattr(tmux_helpers, 'current_install_root', lambda: tmp_path)
+    monkeypatch.setattr(tmux_ui_service, 'is_windows', lambda: True)
+
+    tmux_ui.apply_project_tmux_ui(
+        tmux_socket_path='/tmp/ccb.sock',
+        tmux_session_name='ccb-demo',
+        backend=FakeBackend(),
+    )
+
+    rendered_commands = '\n'.join(' '.join(call) for call in calls)
+    assert ['set-option', '-t', 'ccb-demo', '@ccb_version', '9.9.9'] in calls
+    assert 'ccb-git.sh' not in rendered_commands
+    assert 'ccb-status.sh' not in rendered_commands
+    assert 'ccb-border.sh' not in rendered_commands
+    assert '#(' not in rendered_commands
+    assert 'run-shell' not in rendered_commands
 
 
 def test_apply_project_tmux_ui_applies_window_theme_for_contrast_profile(monkeypatch, tmp_path: Path) -> None:
@@ -358,7 +482,9 @@ def test_apply_project_tmux_ui_uses_active_tool_pane_border_style(monkeypatch, t
     assert ['set-option', '-p', '-t', '%5', 'pane-active-border-style', 'fg=#73daca,bold'] in calls
 
 
+@pytest.mark.skipif(_BASH is None, reason='bash is required to execute tmux helper scripts')
 def test_border_script_keeps_sidebar_active_border_gray(tmp_path: Path) -> None:
+    assert _BASH is not None
     fake_bin = tmp_path / 'bin'
     fake_bin.mkdir()
     log_path = tmp_path / 'tmux.log'
@@ -382,7 +508,7 @@ fi
     fake_tmux.chmod(0o755)
 
     proc = subprocess.run(
-        ['bash', str(Path('config/ccb-border.sh').resolve()), '%0'],
+        [_BASH, str(Path('config/ccb-border.sh').resolve()), '%0'],
         env={**os.environ, 'PATH': f'{fake_bin}:{os.environ.get("PATH", "")}'},
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -396,7 +522,9 @@ fi
     assert 'set-option -p -t %0 pane-active-border-style fg=#6c7086' in calls
 
 
+@pytest.mark.skipif(_BASH is None, reason='bash is required to execute tmux helper scripts')
 def test_tmux_on_script_prefers_stable_install_config_for_border_hook(tmp_path: Path) -> None:
+    assert _BASH is not None
     release_root = tmp_path / 'ccb-v7.3.4-release.fake'
     release_config = release_root / 'config'
     release_config.mkdir(parents=True)
@@ -442,7 +570,7 @@ exit 0
     fake_tmux.chmod(0o755)
 
     proc = subprocess.run(
-        [str(on_script)],
+        [_BASH, str(on_script)],
         env={
             **os.environ,
             'PATH': f'{fake_bin}:{os.environ.get("PATH", "")}',
