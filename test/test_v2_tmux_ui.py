@@ -178,13 +178,15 @@ def test_apply_project_tmux_ui_sets_session_theme_and_hook_from_current_install_
         'if-shell',
     ]
     assert sidebar_mouse_binding[5] == '-F'
-    assert '#{@ccb_role}' in sidebar_mouse_binding[6]
-    assert '#{mouse_x}' in sidebar_mouse_binding[6]
-    assert '#{mouse_y}' in sidebar_mouse_binding[6]
-    assert sidebar_mouse_binding[7:] == [
-        'select-pane -t = ; send-keys -t = c',
-        'select-pane -t = ; send-keys -M',
-    ]
+    assert sidebar_mouse_binding[6:8] == ['-t', '=']
+    assert '#{@ccb_role}' in sidebar_mouse_binding[8]
+    assert '#{mouse_x}' in sidebar_mouse_binding[8]
+    assert '#{mouse_y}' in sidebar_mouse_binding[8]
+    assert sidebar_mouse_binding[9] == 'select-pane -t = ; send-keys -t = c'
+    assert 'if-shell -F -t =' in sidebar_mouse_binding[10]
+    assert sidebar_mouse_binding[10].count('if-shell -F -t =') == 1
+    assert 'send-keys -t = Q' in sidebar_mouse_binding[10]
+    assert 'select-pane -t = ; send-keys -M' in sidebar_mouse_binding[10]
     sidebar_border_bindings = [
         call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'MouseDown1Border']
     ]
@@ -198,12 +200,15 @@ def test_apply_project_tmux_ui_sets_session_theme_and_hook_from_current_install_
         'if-shell',
     ]
     assert sidebar_border_binding[5] == '-F'
-    assert '#{@ccb_role}' in sidebar_border_binding[6]
-    assert '#{mouse_y}' in sidebar_border_binding[6]
-    assert sidebar_border_binding[7:] == [
-        'select-pane -t = ; send-keys -M',
-        'select-pane -M',
-    ]
+    assert sidebar_border_binding[6:8] == ['-t', '=']
+    assert '#{@ccb_role}' in sidebar_border_binding[8]
+    assert '#{mouse_y}' in sidebar_border_binding[8]
+    assert sidebar_border_binding[9] == 'select-pane -t = ; send-keys -t = c'
+    assert 'if-shell -F -t =' in sidebar_border_binding[10]
+    assert sidebar_border_binding[10].count('if-shell -F -t =') == 2
+    assert 'send-keys -t = Q' in sidebar_border_binding[10]
+    assert 'select-pane -t = ; send-keys -M' in sidebar_border_binding[10]
+    assert 'select-pane -M' in sidebar_border_binding[10]
     sidebar_wheel_up_bindings = [
         call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'WheelUpPane']
     ]
@@ -217,11 +222,12 @@ def test_apply_project_tmux_ui_sets_session_theme_and_hook_from_current_install_
         'if-shell',
     ]
     assert sidebar_wheel_up_binding[5] == '-F'
-    assert sidebar_wheel_up_binding[6] == '#{==:#{@ccb_role},sidebar}'
-    assert sidebar_wheel_up_binding[7] == 'select-pane -t = ; send-keys -M'
-    assert sidebar_wheel_up_binding[8] == (
-        'if-shell -F "#{pane_in_mode}" '
-        '{ send-keys -M } { copy-mode -e ; send-keys -X -N 2 scroll-up }'
+    assert sidebar_wheel_up_binding[6:8] == ['-t', '=']
+    assert sidebar_wheel_up_binding[8] == '#{==:#{@ccb_role},sidebar}'
+    assert sidebar_wheel_up_binding[9] == 'select-pane -t = ; send-keys -M'
+    assert sidebar_wheel_up_binding[10] == (
+        'if-shell -F -t = "#{pane_in_mode}" '
+        '{ send-keys -t = -M } { copy-mode -e -t = ; send-keys -t = -X -N 2 scroll-up }'
     )
     sidebar_wheel_down_bindings = [
         call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'WheelDownPane']
@@ -236,11 +242,12 @@ def test_apply_project_tmux_ui_sets_session_theme_and_hook_from_current_install_
         'if-shell',
     ]
     assert sidebar_wheel_down_binding[5] == '-F'
-    assert sidebar_wheel_down_binding[6] == '#{==:#{@ccb_role},sidebar}'
-    assert sidebar_wheel_down_binding[7] == 'select-pane -t = ; send-keys -M'
-    assert sidebar_wheel_down_binding[8] == (
-        'if-shell -F "#{pane_in_mode}" '
-        '{ send-keys -M } { copy-mode -e ; send-keys -X -N 2 scroll-down }'
+    assert sidebar_wheel_down_binding[6:8] == ['-t', '=']
+    assert sidebar_wheel_down_binding[8] == '#{==:#{@ccb_role},sidebar}'
+    assert sidebar_wheel_down_binding[9] == 'select-pane -t = ; send-keys -M'
+    assert sidebar_wheel_down_binding[10] == (
+        'if-shell -F -t = "#{pane_in_mode}" '
+        '{ send-keys -t = -M } { copy-mode -e -t = ; send-keys -t = -X -N 2 scroll-down }'
     )
     sidebar_right_click_bindings = [
         call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'MouseDown3Pane']
@@ -255,9 +262,10 @@ def test_apply_project_tmux_ui_sets_session_theme_and_hook_from_current_install_
         'if-shell',
     ]
     assert sidebar_right_click_binding[5] == '-F'
-    assert sidebar_right_click_binding[6] == '#{==:#{@ccb_role},sidebar}'
-    assert sidebar_right_click_binding[7] == 'select-pane -t = ; send-keys -M'
-    assert sidebar_right_click_binding[8] == 'paste-buffer -p'
+    assert sidebar_right_click_binding[6:8] == ['-t', '=']
+    assert sidebar_right_click_binding[8] == '#{==:#{@ccb_role},sidebar}'
+    assert sidebar_right_click_binding[9] == 'select-pane -t = ; send-keys -M'
+    assert sidebar_right_click_binding[10] == 'paste-buffer -p'
     assert '__sidebar-click' not in '\n'.join(' '.join(call) for call in calls)
     sidebar_resize_bindings = [
         call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'MouseDrag1Border']
