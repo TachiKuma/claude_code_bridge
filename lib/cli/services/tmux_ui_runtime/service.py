@@ -278,11 +278,13 @@ def _apply_sidebar_mouse_controls_without_mouse_pane_format(backend) -> None:
     )
     wheel_up_action = (
         'select-pane -M ; if-shell -F "#{pane_in_mode}" '
-        '{ send-keys -M } { copy-mode -e ; send-keys -X -N 2 scroll-up }'
+        '{ send-keys -M } { if-shell -F "#{||:#{==:#{history_size},0},#{alternate_on}}" '
+        '"send-keys -M" "copy-mode -e ; send-keys -X -N 2 scroll-up" }'
     )
     wheel_down_action = (
         'select-pane -M ; if-shell -F "#{pane_in_mode}" '
-        '{ send-keys -M } { copy-mode -e ; send-keys -X -N 2 scroll-down }'
+        '{ send-keys -M } { if-shell -F "#{||:#{==:#{history_size},0},#{alternate_on}}" '
+        '"send-keys -M" "copy-mode -e ; send-keys -X -N 2 scroll-down" }'
     )
     tmux_run(
         backend,
@@ -352,20 +354,6 @@ def _apply_sidebar_mouse_controls_without_mouse_pane_format(backend) -> None:
             '#{==:#{@ccb_role},sidebar}',
             sidebar_action,
             wheel_down_action,
-        ],
-    )
-    tmux_run(
-        backend,
-        [
-            'bind-key',
-            '-T',
-            'root',
-            'MouseDown3Pane',
-            'if-shell',
-            '-F',
-            '#{==:#{@ccb_role},sidebar}',
-            sidebar_action,
-            'select-pane -M ; paste-buffer -p',
         ],
     )
 

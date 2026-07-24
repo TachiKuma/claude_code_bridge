@@ -391,16 +391,27 @@ def test_windows_rmux_project_ui_avoids_shell_status_commands(monkeypatch, tmp_p
     assert wheel_up_binding[:6] == ['bind-key', '-T', 'root', 'WheelUpPane', 'if-shell', '-F']
     assert wheel_up_binding[7] == 'select-pane -M ; send-keys -M'
     assert 'select-pane -M' in wheel_up_binding[8]
+    assert 'pane_in_mode' in wheel_up_binding[8]
     assert 'copy-mode -e' in wheel_up_binding[8]
+    assert 'history_size' in wheel_up_binding[8]
+    assert 'alternate_on' in wheel_up_binding[8]
     assert 'send-keys -X -N 2 scroll-up' in wheel_up_binding[8]
     assert ' -t =' not in '\n'.join(wheel_up_binding)
-    right_click_bindings = [call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'MouseDown3Pane']]
-    assert len(right_click_bindings) == 1
-    right_click_binding = right_click_bindings[0]
-    assert right_click_binding[:6] == ['bind-key', '-T', 'root', 'MouseDown3Pane', 'if-shell', '-F']
-    assert right_click_binding[6] == '#{==:#{@ccb_role},sidebar}'
-    assert right_click_binding[7] == 'select-pane -M ; send-keys -M'
-    assert right_click_binding[8] == 'select-pane -M ; paste-buffer -p'
+    wheel_down_bindings = [call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'WheelDownPane']]
+    assert len(wheel_down_bindings) == 1
+    wheel_down_binding = wheel_down_bindings[0]
+    assert wheel_down_binding[:6] == ['bind-key', '-T', 'root', 'WheelDownPane', 'if-shell', '-F']
+    assert wheel_down_binding[7] == 'select-pane -M ; send-keys -M'
+    assert 'select-pane -M' in wheel_down_binding[8]
+    assert 'pane_in_mode' in wheel_down_binding[8]
+    assert 'copy-mode -e' in wheel_down_binding[8]
+    assert 'history_size' in wheel_down_binding[8]
+    assert 'alternate_on' in wheel_down_binding[8]
+    assert 'send-keys -X -N 2 scroll-down' in wheel_down_binding[8]
+    assert ' -t =' not in '\n'.join(wheel_down_binding)
+    assert not [call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'MouseDown3Pane']]
+    assert not [call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'M-MouseDown3Pane']]
+    assert 'paste-buffer -p' not in rendered_commands
 
 
 @pytest.mark.skipif(shutil.which('rmux') is None, reason='rmux is required for live binding validation')
@@ -438,18 +449,29 @@ try:
         if any(line.startswith(f"bind-key -T root {key}") for key in (
             "MouseDown1Pane",
             "MouseDown1Border",
-            "MouseDown3Pane",
             "WheelUpPane",
             "WheelDownPane",
         ))
     ]
     scoped_text = "\n".join(scoped_lines)
-    for key in ("MouseDown1Pane", "MouseDown1Border", "MouseDown3Pane", "WheelUpPane", "WheelDownPane"):
+    all_key_lines = [line for line in text.splitlines() if line.startswith("bind-key -T root ")]
+    for key in ("MouseDown1Pane", "MouseDown1Border", "WheelUpPane", "WheelDownPane"):
         assert key in scoped_text
+    assert not any(line.startswith("bind-key -T root MouseDown3Pane") for line in all_key_lines)
+    assert not any(line.startswith("bind-key -T root M-MouseDown3Pane") for line in all_key_lines)
     assert "#{mouse_pane}" not in text
     assert "-t =" not in scoped_text
     assert "MouseDown1Pane" in scoped_text and "select-pane -M" in scoped_text
-    assert "WheelUpPane" in scoped_text and "copy-mode -e" in scoped_text
+    for key, direction in (("WheelUpPane", "scroll-up"), ("WheelDownPane", "scroll-down")):
+        matching = [line for line in scoped_lines if line.startswith(f"bind-key -T root {key}")]
+        assert len(matching) == 1
+        line = matching[0]
+        assert "pane_in_mode" in line
+        assert "history_size" in line
+        assert "alternate_on" in line
+        assert "copy-mode -e" in line
+        assert direction in line
+    assert "paste-buffer -p" not in scoped_text
 finally:
     backend._tmux_run(["kill-session", "-t", session], check=False, capture=True)
 '''
