@@ -106,6 +106,8 @@ class WorkspaceMaterializer:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding='utf-8',
+            errors='replace',
         )
 
     def _worktree_registration_status(self, repo_root: Path, workspace_path: Path) -> tuple[bool, bool]:
@@ -115,6 +117,8 @@ class WorkspaceMaterializer:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding='utf-8',
+            errors='replace',
         )
         if result.returncode != 0:
             return False, False
@@ -197,6 +201,8 @@ class WorkspaceMaterializer:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding='utf-8',
+            errors='replace',
         )
         return result.returncode == 0
 
@@ -207,6 +213,8 @@ class WorkspaceMaterializer:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding='utf-8',
+            errors='replace',
         )
         if result.returncode != 0:
             raise RuntimeError((result.stderr or result.stdout or 'git command failed').strip())
@@ -220,7 +228,15 @@ class WorkspaceMaterializer:
         return path.resolve()
 
     def _run(self, args: list[str], *, error: str) -> None:
-        result = subprocess.run(args, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        result = subprocess.run(
+            args,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+        )
         if result.returncode != 0:
             detail = (result.stderr or result.stdout or '').strip()
             raise RuntimeError(f'{error}: {detail}')

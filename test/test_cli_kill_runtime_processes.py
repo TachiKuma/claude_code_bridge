@@ -74,14 +74,22 @@ def test_list_process_cmdlines_falls_back_to_ps_when_proc_is_unavailable(tmp_pat
         returncode = 0
         stdout = ' 101 /usr/bin/python /opt/ccb/lib/ccbd/main.py --project /tmp/repo\n 202 helper\n'
 
+    calls: list[dict[str, object]] = []
+
+    def _run(args, **kwargs):
+        calls.append(dict(kwargs))
+        return _Result()
+
     monkeypatch.setattr(
         'runtime_pid_cleanup.procfs.subprocess.run',
-        lambda args, check=False, capture_output=True, text=True: _Result(),
+        _run,
     )
 
     mapping = list_process_cmdlines(proc_root=proc_root, current_pid=202)
 
     assert mapping == {101: '/usr/bin/python /opt/ccb/lib/ccbd/main.py --project /tmp/repo'}
+    assert calls[0]['encoding'] == 'utf-8'
+    assert calls[0]['errors'] == 'replace'
 
 
 def test_list_process_cmdlines_uses_one_ps_snapshot_for_system_proc(monkeypatch) -> None:

@@ -81,6 +81,8 @@ def _read_process_cmdline_via_ps(pid: int) -> str:
             check=False,
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',
         )
     except Exception:
         return ''
@@ -96,6 +98,8 @@ def _list_process_cmdlines_via_ps(*, current_pid: int) -> dict[int, str]:
             check=False,
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',
         )
     except Exception:
         return {}

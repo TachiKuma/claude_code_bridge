@@ -102,6 +102,8 @@ def workspace_is_dirty(workspace_path: Path) -> bool | None:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding='utf-8',
+        errors='replace',
     )
     if result.returncode != 0:
         raise RuntimeError(_detail(result) or f'failed to inspect workspace status: {target}')
@@ -177,6 +179,8 @@ def _git(repo_root: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding='utf-8',
+        errors='replace',
     )
 
 

@@ -12,6 +12,7 @@ from agents.store import AgentSpecStore
 from project.resolver import bootstrap_project
 from storage.paths import PathLayout
 from workspace.binding import WorkspaceBindingStore
+from workspace.git_worktree import can_use_git_worktree, list_registered_worktrees
 from workspace.materializer import WorkspaceMaterializer
 from workspace.planner import WorkspacePlanner
 from workspace.reconcile import reconcile_start_workspaces
@@ -223,6 +224,26 @@ def test_workspace_materializer_creates_real_git_worktree(tmp_path: Path) -> Non
         text=True,
     ).stdout.strip()
     assert branch == 'ccb/agent1'
+
+
+def test_git_worktree_text_commands_use_utf8_replace(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run(command, **kwargs):
+        calls.append(dict(kwargs))
+        stdout = ''
+        if command[-3:] == ['worktree', 'list', '--porcelain']:
+            stdout = 'worktree E:\\GitHub开源项目\\repo\n\n'
+        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr='')
+
+    monkeypatch.setattr('workspace.git_worktree.subprocess.run', fake_run)
+
+    assert can_use_git_worktree(tmp_path) is True
+    assert list_registered_worktrees(tmp_path) == (Path('E:/GitHub开源项目/repo').resolve(strict=False),)
+    assert calls
+    assert all(call.get('text') is True for call in calls)
+    assert all(call.get('encoding') == 'utf-8' for call in calls)
+    assert all(call.get('errors') == 'replace' for call in calls)
 
 
 def test_workspace_materializer_reuses_internal_group_worktree(tmp_path: Path) -> None:
