@@ -4,10 +4,10 @@ issue: 2026-07-24-rmux-pane-scroll-history
 status: passed
 reviewer: subagent
 reviewed: 2026-07-24
-round: 4
+round: 5
 lane_a_state: completed
-lane_a_ref: "019f9439-f41c-7402-bc96-bd4fa07b1580, 019f94a2-6c50-70f2-9999-d24a2c2e793f"
-lane_a_reason: "round 4 针对 Windows rmux fallback 鼠标定位/选区错位追加完整复审，初审 changes-requested，closure 已确认 blocking/important 全部关闭"
+lane_a_ref: "019f9439-f41c-7402-bc96-bd4fa07b1580, 019f94a2-6c50-70f2-9999-d24a2c2e793f, 019f959b-f8e0-7201-9b6a-805d45d45fdd"
+lane_a_reason: "round 5 针对 Codex pane 空 scrollback 与右键粘贴劫持追加复审；初审无 blocking，2 个 important 测试缺口已 closure"
 lane_b_state: unavailable
 lane_b_ref: ""
 lane_b_reason: "ocr llm test 返回 403 Forbidden"
@@ -212,3 +212,52 @@ none
 
 - Status: passed
 - Next: 用户在当前 WezTerm 前台复测 pane 单击定位、滚轮历史和文本拖选行对齐。
+
+## 11. Round 5 Codex pane 空 scrollback 与右键粘贴复审
+
+### Scope
+
+- 用户复测反馈：非 sidebar pane 滚轮显示 `[0/0]`；只有 Claude pane 能滚历史，三个 Codex pane 不能滚；WezTerm 右键粘贴被非预期内容替代。
+- 追加 diff：`lib/cli/services/tmux_ui_runtime/service.py`、`test/test_v2_tmux_ui.py`、本 fix-note。
+- Review mode: full-rereview for material behavior change + focused closure。
+
+### Independent Review
+
+- 环节 A：subagent `019f959b-f8e0-7201-9b6a-805d45d45fdd` completed。
+- 环节 B：OCR CLI 不可用，`ocr llm test` 返回 403 Forbidden。
+- Gate effect：`reviewer: subagent`，closure 后可放行；OCR 不可用不阻塞。
+
+### Findings
+
+#### blocking
+
+none
+
+#### important
+
+none
+
+已关闭的 important：
+
+- REV-009 live rmux 测试对 `MouseDown3Pane` 的不存在断言只检查过滤后的 `scoped_text`，有假阳性空间。已改为基于全量 `bind-key -T root` 行断言不存在 `MouseDown3Pane` / `M-MouseDown3Pane`。
+- REV-010 测试只精确检查 `WheelUpPane`，不能证明 `WheelDownPane` 同样具备 `history_size` / `alternate_on` 分流。已分别提取 `WheelUpPane` / `WheelDownPane`，单元和 live 测试均断言两者包含 `pane_in_mode`、`history_size`、`alternate_on`、`copy-mode -e`，并分别匹配 `scroll-up` / `scroll-down`。
+
+#### residual-risk
+
+- `history_size=0` 的 Codex pane 是否能滚动取决于 Codex TUI 是否消费 mouse wheel；当前修复只能确认 CCB 不再把它错误送入 rmux 空 copy-mode。
+- 右键粘贴是否完全恢复还取决于 WezTerm + rmux mouse mode 对未绑定 `MouseDown3Pane` 的处理；当前代码已移除 CCB 的 `paste-buffer -p` 劫持路径。
+
+### Targeted Verification
+
+- `python -m py_compile "lib/cli/services/tmux_ui_runtime/service.py" "test/test_v2_tmux_ui.py"`：通过。
+- `python -m pytest -q "test/test_v2_tmux_ui.py" -k "windows_rmux_project_ui_avoids_shell_status_commands or rmux_accepts_mouse_context_project_ui_bindings"`：`2 passed, 13 deselected`。
+- `python -m pytest -q "test/test_v2_tmux_ui.py"`：`13 passed, 2 skipped`。
+- `cargo fmt --manifest-path "tools/ccb-agent-sidebar/Cargo.toml" --check`：通过。
+- `cargo test --manifest-path "tools/ccb-agent-sidebar/Cargo.toml" shifted_q_is_project_kill_across_terminal_key_encodings --quiet`：通过。
+- `git diff --check -- ...`：通过，仅有 Windows 换行提示。
+- 已刷新当前 live rmux session `ccb-claude_code_bridge-b72b0116` 的 root mouse 绑定；`list-keys` 确认 `WheelUpPane` / `WheelDownPane` 包含 `history_size` / `alternate_on` 分流，且 `MouseDown3Pane` 不再由 CCB fallback 重新绑定。
+
+### Verdict
+
+- Status: passed
+- Next: 用户在当前 WezTerm 前台复测 Codex pane 滚轮不再出现 `[0/0]`、Claude pane 仍可滚 rmux 历史、CLI 输入框右键粘贴恢复预期内容。

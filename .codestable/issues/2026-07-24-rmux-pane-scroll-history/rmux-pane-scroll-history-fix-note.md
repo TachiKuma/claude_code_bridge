@@ -142,3 +142,47 @@ tags:
 
 - 真实 WezTerm 前台鼠标选择是否完全消除一行错位仍需用户在当前 TUI 中复测；本轮已修正最直接的 rmux fallback 绑定错误并刷新 live session。
 - 普通非 sidebar TUI pane 的左键 mouse event 不再默认透传；这是为恢复 pane 定位和文本选择优先级做的 Windows + rmux scoped 行为调整。
+
+## 追加修复：Codex pane 空 scrollback 与右键粘贴劫持
+
+用户继续复测反馈：
+
+- 非 sidebar pane 滚轮时会在 pane 右上角显示黄底黑字 `[0/0]`。
+- 只有 Claude 所在 pane 的 `[0/0]` 数字会变化，聊天内容也会同步滚动；另外三个 Codex pane 仍无法滚动查看历史记录。
+- WezTerm 配置的选择复制 / 右键粘贴在 pane 内 CLI 输入框失效，右键粘贴的是非预期内容。
+
+本轮运行时核对当前 rmux session：
+
+- `%2` 标题为 `✳ Claude Code`，`history_size=284`，因此进入 rmux copy-mode 后有历史可滚。
+- `%1` / `%3` / `%4` 为另外三个 agent pane，`history_size=0`，因此进入 rmux copy-mode 只能显示 `[0/0]`，没有 rmux scrollback 可滚。
+- 当前 Windows + rmux fallback 的 `MouseDown3Pane` 绑定为非 sidebar 执行 `paste-buffer -p`，会读取 rmux buffer，而不是 WezTerm / 系统剪贴板。
+
+追加改动：
+
+- `lib/cli/services/tmux_ui_runtime/service.py`
+  - Windows + rmux fallback 的非 sidebar wheel 增加 `history_size` / `alternate_on` 判断：
+    - 已在 copy-mode 时继续透传给 rmux copy-mode。
+    - `history_size=0` 或 alternate-screen 时，把 wheel 交还给 pane 内应用处理。
+    - 只有存在 rmux scrollback 时才进入 `copy-mode -e` 并执行 `scroll-up/down`。
+  - Windows + rmux fallback 不再重新绑定 `MouseDown3Pane`，避免把非 sidebar 右键强制变成 `paste-buffer -p`。
+- `test/test_v2_tmux_ui.py`
+  - Windows + rmux 分支断言 wheel 绑定必须包含 `history_size` / `alternate_on` 分流。
+  - 断言 fallback 不再绑定 `MouseDown3Pane`，且不包含 `paste-buffer -p`。
+
+追加验证：
+
+- `python -m py_compile "lib/cli/services/tmux_ui_runtime/service.py" "test/test_v2_tmux_ui.py"`：通过。
+- `python -m pytest -q "test/test_v2_tmux_ui.py" -k "windows_rmux_project_ui_avoids_shell_status_commands or rmux_accepts_mouse_context_project_ui_bindings"`：`2 passed, 13 deselected`。
+- `python -m pytest -q "test/test_v2_tmux_ui.py"`：`13 passed, 2 skipped`。
+- `cargo fmt --manifest-path "tools/ccb-agent-sidebar/Cargo.toml" --check`：通过。
+- `cargo test --manifest-path "tools/ccb-agent-sidebar/Cargo.toml" shifted_q_is_project_kill_across_terminal_key_encodings --quiet`：通过。
+- 已按独立复审意见补强测试：分别覆盖 `WheelUpPane` / `WheelDownPane` 的 `history_size` / `alternate_on` 分流，并在 live rmux 输出全量 root bind-key 行中确认 `MouseDown3Pane` / `M-MouseDown3Pane` 未被 fallback 重新绑定。
+- 已刷新当前 live rmux session `ccb-claude_code_bridge-b72b0116` 的 root mouse 绑定。
+- `rmux -L "ccb-claude_code_bridge-b72b0116" list-keys -T root` 已确认：
+  - `WheelUpPane` / `WheelDownPane` 包含 `history_size` / `alternate_on` 分流。
+  - `MouseDown3Pane` 不再出现在 CCB 覆盖的 root mouse binding 中。
+
+追加遗留风险：
+
+- 对 `history_size=0` 的 Codex pane，实际滚动效果取决于 Codex TUI 是否消费 mouse wheel；本轮已停止把它错误送入 rmux 空 copy-mode。
+- 非 sidebar 右键不再由 CCB 强制 paste rmux buffer；WezTerm 右键粘贴能否恢复取决于 WezTerm 在 rmux mouse mode 下的 mouse binding 优先级，需要用户前台复测。
