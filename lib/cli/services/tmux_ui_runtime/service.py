@@ -67,6 +67,11 @@ def _shell_commands_supported(backend) -> bool:
     return not (is_windows() and backend_impl == 'rmux')
 
 
+def _mouse_pane_format_supported(backend) -> bool:
+    backend_impl = str(getattr(backend, 'backend_impl', '') or '').strip().lower()
+    return not (is_windows() and backend_impl == 'rmux')
+
+
 def _apply_session_theme(backend, *, session_name: str, rendered_theme) -> None:
     for option, value in rendered_theme.session_options.items():
         if option == 'status-format[0]':
@@ -89,16 +94,20 @@ def _apply_sidebar_mouse_controls(
     tmux_socket = str(tmux_socket_path or '').strip()
     if not tmux_socket:
         return
-    default_action = 'select-pane -t = ; send-keys -M'
-    settings_action = 'select-pane -t = ; send-keys -t = c'
-    kill_action = 'select-pane -t = ; send-keys -t = Q'
+    mouse_target = '#{mouse_pane}'
+    quoted_mouse_target = '"#{mouse_pane}"'
+    default_action = f'select-pane -t {quoted_mouse_target} ; send-keys -t {quoted_mouse_target} -M'
+    settings_action = f'select-pane -t {quoted_mouse_target} ; send-keys -t {quoted_mouse_target} c'
+    kill_action = f'select-pane -t {quoted_mouse_target} ; send-keys -t {quoted_mouse_target} Q'
     wheel_up_action = (
-        'if-shell -F -t = "#{pane_in_mode}" '
-        '{ send-keys -t = -M } { copy-mode -e -t = ; send-keys -t = -X -N 2 scroll-up }'
+        f'if-shell -F -t {quoted_mouse_target} "#{{pane_in_mode}}" '
+        f'{{ send-keys -t {quoted_mouse_target} -M }} '
+        f'{{ copy-mode -e -t {quoted_mouse_target} ; send-keys -t {quoted_mouse_target} -X -N 2 scroll-up }}'
     )
     wheel_down_action = (
-        'if-shell -F -t = "#{pane_in_mode}" '
-        '{ send-keys -t = -M } { copy-mode -e -t = ; send-keys -t = -X -N 2 scroll-down }'
+        f'if-shell -F -t {quoted_mouse_target} "#{{pane_in_mode}}" '
+        f'{{ send-keys -t {quoted_mouse_target} -M }} '
+        f'{{ copy-mode -e -t {quoted_mouse_target} ; send-keys -t {quoted_mouse_target} -X -N 2 scroll-down }}'
     )
     for key in (
         'MouseDown1Pane',
@@ -109,6 +118,9 @@ def _apply_sidebar_mouse_controls(
         'WheelDownPane',
     ):
         tmux_run(backend, ['unbind-key', '-T', 'root', key])
+    if not _mouse_pane_format_supported(backend):
+        _apply_sidebar_mouse_controls_without_mouse_pane_format(backend)
+        return
     tmux_run(
         backend,
         [
@@ -119,11 +131,11 @@ def _apply_sidebar_mouse_controls(
             'if-shell',
             '-F',
             '-t',
-            '=',
+            mouse_target,
             _sidebar_settings_click_condition(),
             settings_action,
             (
-                'if-shell -F -t = '
+                f'if-shell -F -t {quoted_mouse_target} '
                 + shlex.quote(_sidebar_kill_click_condition())
                 + ' '
                 + shlex.quote(kill_action)
@@ -142,16 +154,16 @@ def _apply_sidebar_mouse_controls(
             'if-shell',
             '-F',
             '-t',
-            '=',
+            mouse_target,
             _sidebar_settings_click_condition(),
             settings_action,
             (
-                'if-shell -F -t = '
+                f'if-shell -F -t {quoted_mouse_target} '
                 + shlex.quote(_sidebar_kill_click_condition())
                 + ' '
                 + shlex.quote(kill_action)
                 + ' '
-                + shlex.quote(_sidebar_top_border_action(default_action))
+                + shlex.quote(_sidebar_top_border_action(default_action, target=quoted_mouse_target))
             ),
         ],
     )
@@ -165,7 +177,7 @@ def _apply_sidebar_mouse_controls(
             'if-shell',
             '-F',
             '-t',
-            '=',
+            mouse_target,
             '#{==:#{@ccb_role},sidebar}',
             default_action,
             wheel_up_action,
@@ -181,7 +193,7 @@ def _apply_sidebar_mouse_controls(
             'if-shell',
             '-F',
             '-t',
-            '=',
+            mouse_target,
             '#{==:#{@ccb_role},sidebar}',
             default_action,
             wheel_down_action,
@@ -197,7 +209,7 @@ def _apply_sidebar_mouse_controls(
             'if-shell',
             '-F',
             '-t',
-            '=',
+            mouse_target,
             '#{==:#{@ccb_role},sidebar}',
             default_action,
             'paste-buffer -p',
@@ -251,6 +263,113 @@ def _apply_sidebar_mouse_controls(
     )
 
 
+def _apply_sidebar_mouse_controls_without_mouse_pane_format(backend) -> None:
+    select_action = 'select-pane -M'
+    sidebar_action = 'select-pane -M ; send-keys -M'
+    settings_action = 'select-pane -M ; send-keys c'
+    kill_action = 'select-pane -M ; send-keys Q'
+    sidebar_or_select_action = (
+        'if-shell -F '
+        + shlex.quote('#{==:#{@ccb_role},sidebar}')
+        + ' '
+        + shlex.quote(sidebar_action)
+        + ' '
+        + shlex.quote(select_action)
+    )
+    wheel_up_action = (
+        'select-pane -M ; if-shell -F "#{pane_in_mode}" '
+        '{ send-keys -M } { copy-mode -e ; send-keys -X -N 2 scroll-up }'
+    )
+    wheel_down_action = (
+        'select-pane -M ; if-shell -F "#{pane_in_mode}" '
+        '{ send-keys -M } { copy-mode -e ; send-keys -X -N 2 scroll-down }'
+    )
+    tmux_run(
+        backend,
+        [
+            'bind-key',
+            '-T',
+            'root',
+            'MouseDown1Pane',
+            'if-shell',
+            '-F',
+            _sidebar_settings_click_condition(),
+            settings_action,
+            (
+                'if-shell -F '
+                + shlex.quote(_sidebar_kill_click_condition())
+                + ' '
+                + shlex.quote(kill_action)
+                + ' '
+                + shlex.quote(sidebar_or_select_action)
+            ),
+        ],
+    )
+    tmux_run(
+        backend,
+        [
+            'bind-key',
+            '-T',
+            'root',
+            'MouseDown1Border',
+            'if-shell',
+            '-F',
+            _sidebar_settings_click_condition(),
+            settings_action,
+            (
+                'if-shell -F '
+                + shlex.quote(_sidebar_kill_click_condition())
+                + ' '
+                + shlex.quote(kill_action)
+                + ' '
+                + shlex.quote(_sidebar_top_border_action(sidebar_action))
+            ),
+        ],
+    )
+    tmux_run(
+        backend,
+        [
+            'bind-key',
+            '-T',
+            'root',
+            'WheelUpPane',
+            'if-shell',
+            '-F',
+            '#{==:#{@ccb_role},sidebar}',
+            sidebar_action,
+            wheel_up_action,
+        ],
+    )
+    tmux_run(
+        backend,
+        [
+            'bind-key',
+            '-T',
+            'root',
+            'WheelDownPane',
+            'if-shell',
+            '-F',
+            '#{==:#{@ccb_role},sidebar}',
+            sidebar_action,
+            wheel_down_action,
+        ],
+    )
+    tmux_run(
+        backend,
+        [
+            'bind-key',
+            '-T',
+            'root',
+            'MouseDown3Pane',
+            'if-shell',
+            '-F',
+            '#{==:#{@ccb_role},sidebar}',
+            sidebar_action,
+            'select-pane -M ; paste-buffer -p',
+        ],
+    )
+
+
 def _sidebar_resize_sync_shell(
     tmux_socket_path: str,
     *,
@@ -300,9 +419,10 @@ def _sidebar_kill_click_condition() -> str:
     return f'#{{&&:#{{==:#{{@ccb_role}},sidebar}},#{{&&:{header_row},{kill_col}}}}}'
 
 
-def _sidebar_top_border_action(default_action: str) -> str:
+def _sidebar_top_border_action(default_action: str, *, target: str | None = None) -> str:
+    target_args = f' -t {target}' if target else ''
     return (
-        'if-shell -F -t = '
+        f'if-shell -F{target_args} '
         + shlex.quote(_sidebar_top_border_click_condition())
         + ' '
         + shlex.quote(default_action)
