@@ -23,7 +23,7 @@ from agents.config_loader import (
     render_project_config_text,
 )
 import runtime_env.source_home as source_home_module
-from agents.models import AgentApiSpec, PermissionMode, QueuePolicy, RestoreMode, RuntimeMode, WorkspaceMode
+from agents.models import AgentApiSpec, PermissionMode, QueuePolicy, RestoreMode, RuntimeMode, WorkspaceMode, build_project_layout_plan
 
 
 def _write(path: Path, text: str) -> None:
@@ -493,6 +493,63 @@ def test_load_project_config_normalizes_mixed_case_compact_agent_names(tmp_path:
     assert result.config.layout_spec == (
         'cmd, alice:codex; tomy:codex, hanmeimei:claude; lilei:gemini, harry:gemini'
     )
+
+
+def test_load_project_config_normalizes_mixed_case_windows_layout_names(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-mixed-case-windows'
+    config_path = project_root / '.ccb' / 'ccb.config'
+    _write(
+        config_path,
+        """version = 2
+entry_window = "main"
+
+[windows]
+main = "Main_Coder:codex, Code_Reviewer:codex; Archi:claude, CCB_Self:codex"
+
+[agents.Main_Coder]
+role = "agentroles.coder"
+
+[agents.Code_Reviewer]
+role = "agentroles.code_reviewer"
+
+[agents.Archi]
+role = "agentroles.archi"
+
+[agents.CCB_Self]
+role = "agentroles.ccb_self"
+""",
+    )
+
+    result = load_project_config(project_root)
+    plan = build_project_layout_plan(result.config)
+
+    assert result.config.default_agents == ('main_coder', 'code_reviewer', 'archi', 'ccb_self')
+    assert result.config.windows[0].layout_spec == (
+        'main_coder:codex, code_reviewer:codex; archi:claude, ccb_self:codex'
+    )
+    assert plan.visible_leaf_names == ('main_coder', 'code_reviewer', 'archi', 'ccb_self')
+
+
+def test_load_project_config_normalizes_mixed_case_windows_tool_alias(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-mixed-case-windows-tool'
+    config_path = project_root / '.ccb' / 'ccb.config'
+    _write(
+        config_path,
+        """version = 2
+entry_window = "main"
+
+[windows]
+main = "Main_Coder:codex, Rich"
+""",
+    )
+
+    result = load_project_config(project_root)
+    plan = build_project_layout_plan(result.config)
+
+    assert result.config.default_agents == ('main_coder',)
+    assert result.config.windows[0].layout_spec == 'main_coder:codex, rich'
+    assert result.config.windows[0].tool_names == ('rich',)
+    assert plan.visible_leaf_names == ('main_coder', 'rich')
 
 
 def test_load_project_config_rejects_case_insensitive_duplicates(tmp_path: Path) -> None:

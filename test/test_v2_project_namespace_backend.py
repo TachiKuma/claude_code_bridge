@@ -173,6 +173,14 @@ class _CanonicalizingMuxBackend(_RecordingMuxBackend):
         return subprocess.CompletedProcess(['rmux', *args], 1, stdout='', stderr="can't find pane: %0\n")
 
 
+class _ExactFirstCanonicalizingMuxBackend(_RecordingMuxBackend):
+    def _run_checked(self, args, *, operation, timeout_s=None):
+        self.calls.append(('_run_checked', {}, {'args': tuple(args), 'operation': operation, 'timeout_s': timeout_s}))
+        if tuple(args[:3]) == ('list-panes', '-t', 'ccb-session:workspace'):
+            return subprocess.CompletedProcess(['rmux', *args], 0, stdout='%3\t2\n%2\t4\n', stderr='')
+        return subprocess.CompletedProcess(['rmux', *args], 1, stdout='', stderr="can't find pane: %2\n")
+
+
 def test_prepare_server_then_create_session_and_clipboard_policy_retry_transient_tmux_failures(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -491,6 +499,23 @@ def test_mux_percent_pane_adapter_canonicalizes_rmux_index_alias() -> None:
         '%1',
         '%1',
     ]
+    assert any(call[0] == '_run_checked' and call[2]['args'][:3] == ('list-panes', '-t', 'ccb-session:workspace') for call in backend.calls)
+
+
+def test_mux_percent_pane_adapter_prefers_exact_pane_id_over_window_index() -> None:
+    backend = _ExactFirstCanonicalizingMuxBackend()
+
+    set_pane_user_option(
+        backend,
+        '%2',
+        '@ccb_agent',
+        'agent2',
+        session_name='ccb-session',
+        window_name='workspace',
+    )
+
+    option_call = next(call for call in backend.calls if call[0] == 'set_pane_user_option')
+    assert option_call[1]['pane_id'] == '%2'
     assert any(call[0] == '_run_checked' and call[2]['args'][:3] == ('list-panes', '-t', 'ccb-session:workspace') for call in backend.calls)
 
 

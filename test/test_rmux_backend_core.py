@@ -395,6 +395,7 @@ def test_pane_core_uses_backend_local_refs_without_tmux_percent_requirement() ->
 def test_split_pane_canonicalizes_returned_percent_index_alias_before_respawn() -> None:
     client = FakeRmuxCommandClient()
     client.add("list-panes", stdout="%2\tmain\n")
+    client.add("list-panes", stdout="%2\n")
     client.add("split-window", stdout="%1\n")
     client.add("list-panes", stdout="%2\t0\n%3\t1\n")
     backend = _backend(client)
@@ -412,6 +413,7 @@ def test_split_pane_canonicalizes_returned_percent_index_alias_before_respawn() 
 def test_split_pane_prefers_returned_percent_index_over_existing_percent_id() -> None:
     client = FakeRmuxCommandClient()
     client.add("list-panes", stdout="%1\tmain\n")
+    client.add("list-panes", stdout="%1\n")
     client.add("split-window", stdout="%1\n")
     client.add("list-panes", stdout="%1\t0\n%2\t1\n")
     backend = _backend(client)
@@ -422,6 +424,38 @@ def test_split_pane_prefers_returned_percent_index_over_existing_percent_id() ->
 
     assert child["pane_id"] == "%2"
     assert ("list-panes", "-t", "ccb-demo:main", "-F", "#{pane_id}\t#{pane_index}") in client.calls
+
+
+def test_split_pane_uses_exact_returned_percent_id_when_new_at_split_time() -> None:
+    client = FakeRmuxCommandClient()
+    client.add("list-panes", stdout="%0\tmain\n%1\tmain\n%2\tmain\n")
+    client.add("list-panes", stdout="%0\n%1\n%2\n")
+    client.add("split-window", stdout="%3\n")
+    client.add("list-panes", stdout="%0\t0\n%1\t1\n%2\t3\n%3\t2\n")
+    backend = _backend(client)
+    namespace = backend.namespace_ref(session_name="ccb-demo")
+
+    panes = backend.list_panes(namespace, window_name="main")
+    child = backend.split_pane(panes[1], direction="bottom", percent=50, cwd="D:/repo")
+
+    assert child["pane_id"] == "%3"
+    assert ("list-panes", "-t", "ccb-demo:main", "-F", "#{pane_id}") in client.calls
+    assert ("list-panes", "-t", "ccb-demo:main", "-F", "#{pane_id}\t#{pane_index}") in client.calls
+
+
+def test_split_pane_treats_existing_returned_percent_id_as_index_alias() -> None:
+    client = FakeRmuxCommandClient()
+    client.add("list-panes", stdout="%0\tmain\n%1\tmain\n%2\tmain\n")
+    client.add("list-panes", stdout="%0\n%1\n%2\n")
+    client.add("split-window", stdout="%2\n")
+    client.add("list-panes", stdout="%0\t0\n%1\t1\n%3\t2\n%2\t3\n")
+    backend = _backend(client)
+    namespace = backend.namespace_ref(session_name="ccb-demo")
+
+    panes = backend.list_panes(namespace, window_name="main")
+    child = backend.split_pane(panes[1], direction="bottom", percent=50, cwd="D:/repo")
+
+    assert child["pane_id"] == "%3"
 
 
 def test_error_mapping_keeps_command_daemon_and_malformed_output_evidence() -> None:
@@ -489,6 +523,20 @@ def test_presentation_identity_qualifies_percent_pane_targets() -> None:
         ("set-option", "-p", "-t", "ccb-demo:main.%1", "@ccb_agent", "codex"),
         ("list-panes", "-t", "ccb-demo:main", "-F", "#{pane_id}\t#{pane_index}"),
         ("set-option", "-p", "-t", "ccb-demo:main.%1", "pane-border-style", "fg=blue"),
+    ]
+
+
+def test_presentation_identity_prefers_exact_percent_pane_id_over_window_index() -> None:
+    client = FakeRmuxCommandClient()
+    client.add("list-panes", stdout="%3\t2\n%2\t4\n")
+    backend = _backend(client)
+    pane = backend.pane_ref("%2", session_name="ccb-demo", window_name="main")
+
+    backend.set_pane_user_option(pane, "@ccb_agent", "agent2")
+
+    assert client.calls == [
+        ("list-panes", "-t", "ccb-demo:main", "-F", "#{pane_id}\t#{pane_index}"),
+        ("set-option", "-p", "-t", "ccb-demo:main.%2", "@ccb_agent", "agent2"),
     ]
 
 

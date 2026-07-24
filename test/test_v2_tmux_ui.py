@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+import uuid
 from types import SimpleNamespace
 
 import pytest
@@ -178,15 +179,15 @@ def test_apply_project_tmux_ui_sets_session_theme_and_hook_from_current_install_
         'if-shell',
     ]
     assert sidebar_mouse_binding[5] == '-F'
-    assert sidebar_mouse_binding[6:8] == ['-t', '=']
+    assert sidebar_mouse_binding[6:8] == ['-t', '#{mouse_pane}']
     assert '#{@ccb_role}' in sidebar_mouse_binding[8]
     assert '#{mouse_x}' in sidebar_mouse_binding[8]
     assert '#{mouse_y}' in sidebar_mouse_binding[8]
-    assert sidebar_mouse_binding[9] == 'select-pane -t = ; send-keys -t = c'
-    assert 'if-shell -F -t =' in sidebar_mouse_binding[10]
-    assert sidebar_mouse_binding[10].count('if-shell -F -t =') == 1
-    assert 'send-keys -t = Q' in sidebar_mouse_binding[10]
-    assert 'select-pane -t = ; send-keys -M' in sidebar_mouse_binding[10]
+    assert sidebar_mouse_binding[9] == 'select-pane -t "#{mouse_pane}" ; send-keys -t "#{mouse_pane}" c'
+    assert 'if-shell -F -t "#{mouse_pane}"' in sidebar_mouse_binding[10]
+    assert sidebar_mouse_binding[10].count('if-shell -F -t "#{mouse_pane}"') == 1
+    assert 'send-keys -t "#{mouse_pane}" Q' in sidebar_mouse_binding[10]
+    assert 'select-pane -t "#{mouse_pane}" ; send-keys -t "#{mouse_pane}" -M' in sidebar_mouse_binding[10]
     sidebar_border_bindings = [
         call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'MouseDown1Border']
     ]
@@ -200,14 +201,14 @@ def test_apply_project_tmux_ui_sets_session_theme_and_hook_from_current_install_
         'if-shell',
     ]
     assert sidebar_border_binding[5] == '-F'
-    assert sidebar_border_binding[6:8] == ['-t', '=']
+    assert sidebar_border_binding[6:8] == ['-t', '#{mouse_pane}']
     assert '#{@ccb_role}' in sidebar_border_binding[8]
     assert '#{mouse_y}' in sidebar_border_binding[8]
-    assert sidebar_border_binding[9] == 'select-pane -t = ; send-keys -t = c'
-    assert 'if-shell -F -t =' in sidebar_border_binding[10]
-    assert sidebar_border_binding[10].count('if-shell -F -t =') == 2
-    assert 'send-keys -t = Q' in sidebar_border_binding[10]
-    assert 'select-pane -t = ; send-keys -M' in sidebar_border_binding[10]
+    assert sidebar_border_binding[9] == 'select-pane -t "#{mouse_pane}" ; send-keys -t "#{mouse_pane}" c'
+    assert 'if-shell -F -t "#{mouse_pane}"' in sidebar_border_binding[10]
+    assert sidebar_border_binding[10].count('if-shell -F -t "#{mouse_pane}"') == 2
+    assert 'send-keys -t "#{mouse_pane}" Q' in sidebar_border_binding[10]
+    assert 'select-pane -t "#{mouse_pane}" ; send-keys -t "#{mouse_pane}" -M' in sidebar_border_binding[10]
     assert 'select-pane -M' in sidebar_border_binding[10]
     sidebar_wheel_up_bindings = [
         call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'WheelUpPane']
@@ -222,12 +223,13 @@ def test_apply_project_tmux_ui_sets_session_theme_and_hook_from_current_install_
         'if-shell',
     ]
     assert sidebar_wheel_up_binding[5] == '-F'
-    assert sidebar_wheel_up_binding[6:8] == ['-t', '=']
+    assert sidebar_wheel_up_binding[6:8] == ['-t', '#{mouse_pane}']
     assert sidebar_wheel_up_binding[8] == '#{==:#{@ccb_role},sidebar}'
-    assert sidebar_wheel_up_binding[9] == 'select-pane -t = ; send-keys -M'
+    assert sidebar_wheel_up_binding[9] == 'select-pane -t "#{mouse_pane}" ; send-keys -t "#{mouse_pane}" -M'
     assert sidebar_wheel_up_binding[10] == (
-        'if-shell -F -t = "#{pane_in_mode}" '
-        '{ send-keys -t = -M } { copy-mode -e -t = ; send-keys -t = -X -N 2 scroll-up }'
+        'if-shell -F -t "#{mouse_pane}" "#{pane_in_mode}" '
+        '{ send-keys -t "#{mouse_pane}" -M } '
+        '{ copy-mode -e -t "#{mouse_pane}" ; send-keys -t "#{mouse_pane}" -X -N 2 scroll-up }'
     )
     sidebar_wheel_down_bindings = [
         call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'WheelDownPane']
@@ -242,12 +244,13 @@ def test_apply_project_tmux_ui_sets_session_theme_and_hook_from_current_install_
         'if-shell',
     ]
     assert sidebar_wheel_down_binding[5] == '-F'
-    assert sidebar_wheel_down_binding[6:8] == ['-t', '=']
+    assert sidebar_wheel_down_binding[6:8] == ['-t', '#{mouse_pane}']
     assert sidebar_wheel_down_binding[8] == '#{==:#{@ccb_role},sidebar}'
-    assert sidebar_wheel_down_binding[9] == 'select-pane -t = ; send-keys -M'
+    assert sidebar_wheel_down_binding[9] == 'select-pane -t "#{mouse_pane}" ; send-keys -t "#{mouse_pane}" -M'
     assert sidebar_wheel_down_binding[10] == (
-        'if-shell -F -t = "#{pane_in_mode}" '
-        '{ send-keys -t = -M } { copy-mode -e -t = ; send-keys -t = -X -N 2 scroll-down }'
+        'if-shell -F -t "#{mouse_pane}" "#{pane_in_mode}" '
+        '{ send-keys -t "#{mouse_pane}" -M } '
+        '{ copy-mode -e -t "#{mouse_pane}" ; send-keys -t "#{mouse_pane}" -X -N 2 scroll-down }'
     )
     sidebar_right_click_bindings = [
         call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'MouseDown3Pane']
@@ -262,9 +265,9 @@ def test_apply_project_tmux_ui_sets_session_theme_and_hook_from_current_install_
         'if-shell',
     ]
     assert sidebar_right_click_binding[5] == '-F'
-    assert sidebar_right_click_binding[6:8] == ['-t', '=']
+    assert sidebar_right_click_binding[6:8] == ['-t', '#{mouse_pane}']
     assert sidebar_right_click_binding[8] == '#{==:#{@ccb_role},sidebar}'
-    assert sidebar_right_click_binding[9] == 'select-pane -t = ; send-keys -M'
+    assert sidebar_right_click_binding[9] == 'select-pane -t "#{mouse_pane}" ; send-keys -t "#{mouse_pane}" -M'
     assert sidebar_right_click_binding[10] == 'paste-buffer -p'
     assert '__sidebar-click' not in '\n'.join(' '.join(call) for call in calls)
     sidebar_resize_bindings = [
@@ -373,6 +376,97 @@ def test_windows_rmux_project_ui_avoids_shell_status_commands(monkeypatch, tmp_p
     assert 'ccb-border.sh' not in rendered_commands
     assert '#(' not in rendered_commands
     assert 'run-shell' not in rendered_commands
+    assert '#{mouse_pane}' not in rendered_commands
+    mouse_down_bindings = [call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'MouseDown1Pane']]
+    assert len(mouse_down_bindings) == 1
+    mouse_down_binding = mouse_down_bindings[0]
+    assert mouse_down_binding[:6] == ['bind-key', '-T', 'root', 'MouseDown1Pane', 'if-shell', '-F']
+    assert 'send-keys -M' in mouse_down_binding[8]
+    assert 'select-pane -M' in mouse_down_binding[8]
+    assert 'select-pane -t =' not in '\n'.join(mouse_down_binding)
+    assert ['bind-key', '-T', 'root', 'MouseDown1Pane', 'send-keys', '-M'] not in calls
+    wheel_up_bindings = [call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'WheelUpPane']]
+    assert len(wheel_up_bindings) == 1
+    wheel_up_binding = wheel_up_bindings[0]
+    assert wheel_up_binding[:6] == ['bind-key', '-T', 'root', 'WheelUpPane', 'if-shell', '-F']
+    assert wheel_up_binding[7] == 'select-pane -M ; send-keys -M'
+    assert 'select-pane -M' in wheel_up_binding[8]
+    assert 'copy-mode -e' in wheel_up_binding[8]
+    assert 'send-keys -X -N 2 scroll-up' in wheel_up_binding[8]
+    assert ' -t =' not in '\n'.join(wheel_up_binding)
+    right_click_bindings = [call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'MouseDown3Pane']]
+    assert len(right_click_bindings) == 1
+    right_click_binding = right_click_bindings[0]
+    assert right_click_binding[:6] == ['bind-key', '-T', 'root', 'MouseDown3Pane', 'if-shell', '-F']
+    assert right_click_binding[6] == '#{==:#{@ccb_role},sidebar}'
+    assert right_click_binding[7] == 'select-pane -M ; send-keys -M'
+    assert right_click_binding[8] == 'select-pane -M ; paste-buffer -p'
+
+
+@pytest.mark.skipif(shutil.which('rmux') is None, reason='rmux is required for live binding validation')
+def test_rmux_accepts_mouse_context_project_ui_bindings(monkeypatch, tmp_path: Path) -> None:
+    session = f'ccb-test-ui-{uuid.uuid4().hex[:12]}'
+    repo_root = Path(__file__).resolve().parents[1]
+    env = dict(os.environ)
+    env['PYTHONPATH'] = str(repo_root / 'lib') + os.pathsep + env.get('PYTHONPATH', '')
+    env['CCB_TMUX_UI_TEST_SESSION'] = session
+    script = r'''
+import os
+
+from cli.services.tmux_ui_runtime.service import _apply_sidebar_mouse_controls
+from terminal_runtime.rmux_backend import RmuxBackend
+import cli.services.tmux_ui_runtime.service as tmux_ui_service
+
+session = os.environ["CCB_TMUX_UI_TEST_SESSION"]
+backend = RmuxBackend(namespace=session, project_root=os.getcwd())
+backend._tmux_run(["start-server"], check=False, capture=True)
+backend._tmux_run(["new-session", "-d", "-s", session, "-n", "main"], check=False, capture=True)
+try:
+    tmux_ui_service.is_windows = lambda: True
+    _apply_sidebar_mouse_controls(
+        backend,
+        tmux_socket_path=session,
+        session_name=session,
+        shell_commands_supported=False,
+    )
+    result = backend._tmux_run(["list-keys", "-T", "root"], check=False, capture=True)
+    text = str(getattr(result, "stdout", "") or "")
+    assert result.returncode == 0
+    scoped_lines = [
+        line
+        for line in text.splitlines()
+        if any(line.startswith(f"bind-key -T root {key}") for key in (
+            "MouseDown1Pane",
+            "MouseDown1Border",
+            "MouseDown3Pane",
+            "WheelUpPane",
+            "WheelDownPane",
+        ))
+    ]
+    scoped_text = "\n".join(scoped_lines)
+    for key in ("MouseDown1Pane", "MouseDown1Border", "MouseDown3Pane", "WheelUpPane", "WheelDownPane"):
+        assert key in scoped_text
+    assert "#{mouse_pane}" not in text
+    assert "-t =" not in scoped_text
+    assert "MouseDown1Pane" in scoped_text and "select-pane -M" in scoped_text
+    assert "WheelUpPane" in scoped_text and "copy-mode -e" in scoped_text
+finally:
+    backend._tmux_run(["kill-session", "-t", session], check=False, capture=True)
+'''
+
+    result = subprocess.run(
+        [sys.executable, '-c', script],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding='utf-8',
+        errors='replace',
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
 
 
 def test_apply_project_tmux_ui_applies_window_theme_for_contrast_profile(monkeypatch, tmp_path: Path) -> None:
