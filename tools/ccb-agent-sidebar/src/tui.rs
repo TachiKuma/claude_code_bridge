@@ -88,21 +88,24 @@ fn run_tui(args: &Args) -> io::Result<ExitAction> {
 
         if event::poll(Duration::from_millis(250))? {
             match event::read()? {
-                Event::Key(key) => match key.code {
-                    KeyCode::Char('q') | KeyCode::Esc => return Ok(ExitAction::SidebarOnly),
-                    KeyCode::Char('Q') => return Ok(ExitAction::KillProject),
-                    KeyCode::Char('j') | KeyCode::Down => app.move_selection(1),
-                    KeyCode::Char('k') | KeyCode::Up => app.move_selection(-1),
-                    KeyCode::Char('c') => app.open_config_ui(&args.project_root, &ccb_program),
-                    KeyCode::Char('r') => app.restart_panes(&client),
-                    KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                        app.force_refresh()
+                Event::Key(key) => {
+                    if let Some(action) = exit_action_for_key(key.code, key.modifiers) {
+                        return Ok(action);
                     }
-                    KeyCode::Char('R') => app.recover_first_visible_comms(&client),
-                    KeyCode::Enter => app.focus_selected_target(&client),
-                    KeyCode::Tab => app.focus_pane_window(&client),
-                    _ => {}
-                },
+                    match key.code {
+                        KeyCode::Char('j') | KeyCode::Down => app.move_selection(1),
+                        KeyCode::Char('k') | KeyCode::Up => app.move_selection(-1),
+                        KeyCode::Char('c') => app.open_config_ui(&args.project_root, &ccb_program),
+                        KeyCode::Char('r') => app.restart_panes(&client),
+                        KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            app.force_refresh()
+                        }
+                        KeyCode::Char('R') => app.recover_first_visible_comms(&client),
+                        KeyCode::Enter => app.focus_selected_target(&client),
+                        KeyCode::Tab => app.focus_pane_window(&client),
+                        _ => {}
+                    }
+                }
                 Event::Mouse(mouse) => {
                     let size = terminal.size()?;
                     let area = Rect::new(0, 0, size.width, size.height);
@@ -137,6 +140,15 @@ fn run_tui(args: &Args) -> io::Result<ExitAction> {
                 _ => {}
             }
         }
+    }
+}
+
+fn exit_action_for_key(code: KeyCode, modifiers: KeyModifiers) -> Option<ExitAction> {
+    match code {
+        KeyCode::Char('Q') => Some(ExitAction::KillProject),
+        KeyCode::Char('q') if modifiers == KeyModifiers::SHIFT => Some(ExitAction::KillProject),
+        KeyCode::Char('q') | KeyCode::Esc => Some(ExitAction::SidebarOnly),
+        _ => None,
     }
 }
 
@@ -2552,6 +2564,37 @@ mod tests {
             format!("{}|kill\n", project_root.display())
         );
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn shifted_q_is_project_kill_across_terminal_key_encodings() {
+        assert_eq!(
+            exit_action_for_key(KeyCode::Char('q'), KeyModifiers::NONE),
+            Some(ExitAction::SidebarOnly)
+        );
+        assert_eq!(
+            exit_action_for_key(KeyCode::Char('Q'), KeyModifiers::NONE),
+            Some(ExitAction::KillProject)
+        );
+        assert_eq!(
+            exit_action_for_key(KeyCode::Char('q'), KeyModifiers::SHIFT),
+            Some(ExitAction::KillProject)
+        );
+        assert_eq!(
+            exit_action_for_key(KeyCode::Char('q'), KeyModifiers::CONTROL),
+            Some(ExitAction::SidebarOnly)
+        );
+        assert_eq!(
+            exit_action_for_key(KeyCode::Char('q'), KeyModifiers::ALT),
+            Some(ExitAction::SidebarOnly)
+        );
+        assert_eq!(
+            exit_action_for_key(
+                KeyCode::Char('q'),
+                KeyModifiers::CONTROL | KeyModifiers::SHIFT
+            ),
+            Some(ExitAction::SidebarOnly)
+        );
     }
 
     #[test]
