@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 import time
 
+import pytest
+
 from ccbd.api_models import RpcRequest
 from ccbd.control_plane_transport.fake import FakeConnection, FakeControlPlaneTransport
 from ccbd.socket_server import CcbdSocketServer
 from ccbd.socket_server_runtime.loop import enqueue_connection, start_worker, stop_worker
-from ccbd.socket_client_runtime import decode_response, recv_response_line, send_request
+from ccbd.socket_client_runtime import CcbdClientError, decode_response, recv_response_line, send_request
 
 
 def test_fake_transport_listen_request_and_shutdown_roundtrip() -> None:
@@ -138,3 +140,18 @@ def test_fake_connection_recv_returns_eof_after_peer_close() -> None:
     server_conn.close()
 
     assert client.recv(65536) == b''
+
+
+def test_recv_response_line_rejects_response_without_newline_over_max_size() -> None:
+    class _OversizedSocket:
+        def __init__(self) -> None:
+            self._chunks = [b'a' * (1024 * 1024), b'b']
+
+        def recv(self, size: int) -> bytes:
+            del size
+            if not self._chunks:
+                return b''
+            return self._chunks.pop(0)
+
+    with pytest.raises(CcbdClientError, match='response exceeds maximum size'):
+        recv_response_line(_OversizedSocket())

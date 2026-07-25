@@ -111,6 +111,36 @@ def test_wrap_provider_command_translates_posix_exports_for_powershell() -> None
     assert "codex --dangerously-bypass-hook-trust" in decoded
 
 
+def test_wrap_provider_command_preserves_quoted_semicolon_in_export_value() -> None:
+    builder = build_windows_shell_log_builder(
+        env={'CCB_TMUX_SHELL': 'pwsh'},
+        default_shell_fn=lambda: ('powershell', '-Command'),
+        which_fn=_which({'pwsh'}),
+    )
+
+    command = builder.wrap_provider_command("export NOTE='a;b'; codex", cwd=None)
+    decoded = _decoded_encoded_command(command)
+
+    assert "$env:NOTE = 'a;b'" in decoded
+    assert "export " not in decoded
+    assert "codex" in decoded
+
+
+def test_wrap_provider_command_preserves_quoted_semicolon_in_non_export_segment() -> None:
+    builder = build_windows_shell_log_builder(
+        env={'CCB_TMUX_SHELL': 'pwsh'},
+        default_shell_fn=lambda: ('powershell', '-Command'),
+        which_fn=_which({'pwsh'}),
+    )
+
+    command = builder.wrap_provider_command('python -c "print(\'a;b\')"; codex', cwd=None)
+    decoded = _decoded_encoded_command(command)
+
+    assert "print('a;b')" in decoded
+    assert "print('a; b')" not in decoded
+    assert decoded.endswith('; codex')
+
+
 def test_wrap_provider_command_translates_exports_for_pwsh_exe() -> None:
     builder = build_windows_shell_log_builder(
         env={'CCB_TMUX_SHELL': 'pwsh.exe'},

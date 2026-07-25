@@ -3,7 +3,7 @@ doc_type: roadmap-goal-feature
 roadmap: windows-rmux-native-backend
 roadmap_item: ccbd-windows-process-liveness
 feature: 2026-07-20-ccbd-windows-process-liveness
-status: pending
+status: accepted
 ---
 
 # ccbd-windows-process-liveness Goal Feature Spec

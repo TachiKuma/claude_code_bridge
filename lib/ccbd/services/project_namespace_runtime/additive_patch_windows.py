@@ -140,7 +140,7 @@ def _maybe_create_sidebar(
         timeout_s=timeout_s,
     )
     _append_unique(result.created_panes, user_root)
-    _respawn_sidebar(
+    sidebar_pane = _respawn_sidebar(
         backend,
         root_pane,
         getattr(sidebar, 'launch_args', ()),
@@ -148,9 +148,10 @@ def _maybe_create_sidebar(
         session_name=current.tmux_session_name,
         window_name=window_name,
     )
+    _replace_unique(result.created_panes, old=root_pane, new=sidebar_pane)
     apply_pane_identity(
         backend,
-        root_pane,
+        sidebar_pane,
         title='sidebar',
         agent_label='sidebar',
         project_id=controller._project_id,
@@ -166,13 +167,13 @@ def _maybe_create_sidebar(
     if helper_identity:
         set_pane_user_option(
             backend,
-            root_pane,
+            sidebar_pane,
             SIDEBAR_HELPER_ID_OPTION,
             helper_identity,
             session_name=current.tmux_session_name,
             window_name=window_name,
         )
-    result.sidebar_panes[window_name] = root_pane
+    result.sidebar_panes[window_name] = sidebar_pane
     return user_root
 
 
@@ -304,7 +305,8 @@ def _materialize_new_tool_pane(
     result: WindowPatchResult | None,
 ) -> None:
     command = str(command or '').strip() or pane_placeholder_cmd()
-    if not respawn_pane(
+    original_pane_id = pane_id
+    replacement = respawn_pane(
         backend,
         pane_id,
         cmd=command,
@@ -312,7 +314,11 @@ def _materialize_new_tool_pane(
         remain_on_exit=True,
         session_name=session_name,
         window_name=window_name,
-    ):
+    )
+    if replacement:
+        pane_id = _replacement_pane_id(replacement, pane_id)
+        _replace_unique(created_panes, old=original_pane_id, new=pane_id)
+    else:
         runner = getattr(backend, '_tmux_run', None)
         if callable(runner):
             runner(['respawn-pane', '-k', '-t', pane_id, 'sh', '-lc', command], check=False)
@@ -413,10 +419,10 @@ def _respawn_sidebar(
     cwd: str,
     session_name: str | None = None,
     window_name: str | None = None,
-) -> None:
+) -> str:
     args = sidebar_respawn_args(tuple(launch_args or ()))
     command = sidebar_respawn_command(args, theme_profile=tmux_theme_profile()) or pane_placeholder_cmd()
-    if respawn_pane(
+    replacement = respawn_pane(
         backend,
         pane_id,
         cmd=command,
@@ -424,16 +430,37 @@ def _respawn_sidebar(
         remain_on_exit=True,
         session_name=session_name,
         window_name=window_name,
-    ):
-        return
+    )
+    if replacement:
+        return _replacement_pane_id(replacement, pane_id)
     runner = getattr(backend, '_tmux_run', None)
     if callable(runner):
         runner(['respawn-pane', '-k', '-t', pane_id, 'sh', '-lc', command], check=False)
+    return pane_id
 
 
 def _append_unique(values: list[str], value: str) -> None:
     if value and value not in values:
         values.append(value)
+
+
+def _replacement_pane_id(replacement: object, original: str) -> str:
+    replacement_text = str(replacement or '').strip()
+    return replacement_text if replacement_text.startswith('%') else original
+
+
+def _replace_unique(values: list[str], *, old: str, new: str) -> None:
+    if not old or not new or old == new:
+        return
+    if new in values:
+        values[:] = [value for value in values if value != old]
+        return
+    for index, value in enumerate(values):
+        if value == old:
+            values[index] = new
+            break
+    else:
+        values.append(new)
 
 
 __all__ = ['WindowPatchResult', 'create_new_windows']

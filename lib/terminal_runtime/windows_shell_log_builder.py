@@ -361,11 +361,43 @@ def _quote_path_for_shell(shell: str, path: str) -> str:
 
 
 def _translate_posix_exports_for_powershell(command: str) -> str:
-    segments = [segment.strip() for segment in str(command or '').split(';')]
+    segments = _split_shell_segments(command)
     translated: list[str] = []
     for segment in segments:
         translated.append(_translate_posix_env_segment_for_powershell(segment))
     return '; '.join(segment for segment in translated if segment)
+
+
+def _split_shell_segments(command: str) -> list[str]:
+    segments: list[str] = []
+    current: list[str] = []
+    in_single_quote = False
+    in_double_quote = False
+    escaped = False
+    for char in str(command or ''):
+        if escaped:
+            current.append(char)
+            escaped = False
+            continue
+        if char == '\\' and not in_single_quote:
+            current.append(char)
+            escaped = True
+            continue
+        if char == "'" and not in_double_quote:
+            in_single_quote = not in_single_quote
+            current.append(char)
+            continue
+        if char == '"' and not in_single_quote:
+            in_double_quote = not in_double_quote
+            current.append(char)
+            continue
+        if char == ';' and not in_single_quote and not in_double_quote:
+            segments.append(''.join(current).strip())
+            current = []
+            continue
+        current.append(char)
+    segments.append(''.join(current).strip())
+    return segments
 
 
 def _translate_posix_env_segment_for_powershell(segment: str) -> str:

@@ -3,7 +3,7 @@ doc_type: roadmap-goal-feature
 roadmap: windows-rmux-native-backend
 roadmap_item: ccbd-windows-tcp-loopback-transport
 feature: 2026-07-20-ccbd-windows-tcp-loopback-transport
-status: pending
+status: accepted
 ---
 
 # ccbd-windows-tcp-loopback-transport Goal Feature Spec

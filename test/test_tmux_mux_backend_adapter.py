@@ -423,7 +423,8 @@ def test_default_tmux_factories_wrap_tmux_backend_in_mux_adapter(monkeypatch) ->
     class TmuxFactoryBackend(FakeTmuxBackend):
         pass
 
-    terminal_api._backend_cache = None
+    monkeypatch.setattr(terminal_api, "_backend_cache", None)
+    monkeypatch.setattr(terminal_api, "_backend_cache_impl", None)
     monkeypatch.setattr(terminal_api, "TmuxBackend", TmuxFactoryBackend)
     backend = terminal_api.get_backend("tmux")
 
@@ -433,6 +434,26 @@ def test_default_tmux_factories_wrap_tmux_backend_in_mux_adapter(monkeypatch) ->
     session_backend = terminal_api.get_backend_for_session({"terminal_backend": "tmux", "tmux_socket_path": "/tmp/demo.sock"})
     assert isinstance(session_backend, TmuxMuxBackendAdapter)
     assert session_backend.namespace_ref(session_name="s")["ipc_ref"] == "/tmp/demo.sock"
+
+
+def test_terminal_api_get_backend_reuses_global_backend_cache(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class CountingTmuxBackend(FakeTmuxBackend):
+        def __init__(self, *args, **kwargs) -> None:
+            calls.append("tmux")
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(terminal_api, "_backend_cache", None)
+    monkeypatch.setattr(terminal_api, "_backend_cache_impl", None)
+    monkeypatch.setattr(terminal_api, "TmuxBackend", CountingTmuxBackend)
+
+    first = terminal_api.get_backend("tmux")
+    second = terminal_api.get_backend("tmux")
+
+    assert first is second
+    assert isinstance(first, TmuxMuxBackendAdapter)
+    assert calls == ["tmux"]
 
 
 def test_project_namespace_default_tmux_backend_wraps_adapter(monkeypatch) -> None:

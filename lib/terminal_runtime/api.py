@@ -102,6 +102,7 @@ def get_shell_type() -> str:
 
 
 _backend_cache: Optional[TerminalBackend] = None
+_backend_cache_impl: Optional[str] = None
 
 
 def _inside_tmux() -> bool:
@@ -123,10 +124,11 @@ def detect_terminal() -> Optional[str]:
 
 
 def get_backend(terminal_type: Optional[str] = None) -> Optional[TerminalBackend]:
-    global _backend_cache
+    global _backend_cache, _backend_cache_impl
     selected_type = terminal_type or os.environ.get("CCB_TERMINAL_BACKEND")
-    _backend_cache = _resolve_backend(
+    _backend_cache, _backend_cache_impl = _resolve_backend(
         cached_backend=_backend_cache,
+        cached_backend_impl=_backend_cache_impl,
         terminal_type=selected_type,
         detect_terminal_fn=detect_terminal,
         tmux_backend_factory=_tmux_mux_backend_factory,

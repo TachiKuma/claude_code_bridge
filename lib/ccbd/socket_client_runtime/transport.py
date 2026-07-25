@@ -9,6 +9,9 @@ from ccbd.control_plane_transport.factory import transport_for_legacy_socket_pat
 from .errors import CcbdClientError  # re-exported compatibility surface
 
 
+_MAX_RESPONSE_BYTES = 1024 * 1024
+
+
 def connect_socket(socket_path: Path, *, timeout_s: float):
     try:
         return transport_for_legacy_socket_path(socket_path).connect(timeout_s=timeout_s)
@@ -24,13 +27,20 @@ def send_request(sock, request: RpcRequest) -> None:
 
 
 def recv_response_line(sock) -> bytes:
-    raw = b''
-    while b'\n' not in raw:
+    raw = bytearray()
+    while raw.find(b'\n') < 0:
         chunk = sock.recv(65536)
         if not chunk:
             break
-        raw += chunk
-    return raw
+        raw.extend(chunk)
+        newline_at = raw.find(b'\n')
+        if newline_at >= 0:
+            if newline_at + 1 > _MAX_RESPONSE_BYTES:
+                raise CcbdClientError('ccbd response exceeds maximum size')
+            break
+        if len(raw) > _MAX_RESPONSE_BYTES:
+            raise CcbdClientError('ccbd response exceeds maximum size')
+    return bytes(raw)
 
 
 def decode_response(raw: bytes) -> RpcResponse:

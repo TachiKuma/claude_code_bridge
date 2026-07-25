@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
@@ -80,6 +81,7 @@ class _PatchFakeBackend:
     split_calls: list[tuple[str, str, int]] = field(default_factory=list)
     tmux_calls: list[tuple[str, ...]] = field(default_factory=list)
     respawn_calls: list[tuple[str, str]] = field(default_factory=list)
+    respawn_replacements: dict[str, str] = field(default_factory=dict)
     pane_counter: int = 0
     window_counter: int = 0
 
@@ -114,9 +116,18 @@ class _PatchFakeBackend:
                 matches.append(pane_id)
         return matches
 
-    def respawn_pane(self, pane_id: str, *, cmd: str, cwd: str | None = None, remain_on_exit: bool = True) -> None:
+    def respawn_pane(self, pane_id: str, *, cmd: str, cwd: str | None = None, remain_on_exit: bool = True) -> str | None:
         del cwd, remain_on_exit
         self.respawn_calls.append((pane_id, cmd))
+        replacement = self.respawn_replacements.get(pane_id)
+        if replacement:
+            for windows in self.sessions.values():
+                for record in windows:
+                    panes = record['panes']
+                    for index, existing in enumerate(list(panes)):
+                        if existing == pane_id:
+                            panes[index] = replacement
+            return replacement
 
     def kill_pane(self, pane_id: str) -> None:
         self.tmux_calls.append(('kill-pane', '-t', pane_id))
@@ -334,8 +345,9 @@ def test_apply_add_window_creates_only_new_window_sidebar_and_agent_panes(tmp_pa
     assert all('kill' not in ' '.join(call) for call in backend.tmux_calls)
     assert backend.split_calls == [('%3', 'right', 85), ('%4', 'bottom', 50)]
     assert backend.respawn_calls[0][0] == '%3'
-    assert 'CCB_SIDEBAR_THEME_PROFILE' in backend.respawn_calls[0][1]
-    assert '--theme' not in backend.respawn_calls[0][1]
+    sidebar_command = _decoded_powershell_command_or_raw(backend.respawn_calls[0][1])
+    assert 'CCB_SIDEBAR_THEME_PROFILE' in sidebar_command
+    assert '--theme' not in sidebar_command
     assert backend.pane_options['%3']['@ccb_role'] == 'sidebar'
     assert backend.pane_options['%3']['@ccb_slot'] == 'sidebar:review'
     assert backend.pane_options['%3']['@ccb_managed_by'] == 'ccbd'
@@ -388,6 +400,44 @@ def test_apply_add_window_materializes_rich_alias_as_tool_pane(tmp_path: Path, m
     assert backend.pane_options['%5']['@ccb_window'] == 'review'
     assert 'rich' not in result.agent_panes
     assert result.preserved_after == {'agent1': '%1', 'agent2': '%2'}
+
+
+def test_apply_add_tool_window_uses_respawn_replacement_pane_ids(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    current = _load_config(tmp_path / 'current-tool-window-replacement', BASE_CONFIG)
+    new = _load_config(tmp_path / 'new-tool-window-replacement', ADD_TOOL_WINDOW_CONFIG)
+    layout = PathLayout(_project(tmp_path / 'repo-tool-window-replacement', BASE_CONFIG))
+    backend = _PatchFakeBackend(socket_path=str(layout.ccbd_tmux_socket_path))
+    backend.respawn_replacements = {'%3': '%30', '%4': '%40'}
+    backend.add_window(layout.ccbd_tmux_session_name, 'main')
+    backend.sessions[layout.ccbd_tmux_session_name][0]['panes'].append('%2')
+    backend.pane_counter = 2
+    _seed_agent_pane(backend, '%1', project_id='proj-1', window='main', agent='agent1')
+    _seed_agent_pane(backend, '%2', project_id='proj-1', window='main', agent='agent2')
+    _store_namespace(layout, project_id='proj-1')
+    controller = ProjectNamespaceController(layout, 'proj-1', backend_factory=lambda socket_path=None: backend)
+    _forbid_recreate_paths(monkeypatch)
+    plan = build_reload_dry_run_plan(current, new, project_id='proj-1', current_namespace=controller.load())
+
+    result = controller.apply_additive_patch(
+        patch_plan=plan['namespace_patch_plan'],
+        old_topology=build_namespace_topology_plan(current),
+        new_topology=build_namespace_topology_plan(new),
+        timeout_s=0.0,
+    )
+
+    assert result.status == 'applied'
+    assert result.created_panes == ('%30', '%40')
+    assert result.sidebar_panes == {'files': '%30'}
+    assert result.tool_panes == {'files': '%40'}
+    assert backend.pane_options['%30']['@ccb_role'] == 'sidebar'
+    assert backend.pane_options['%30']['@ccb_slot'] == 'sidebar:files'
+    assert backend.pane_options['%40']['@ccb_role'] == 'tool'
+    assert backend.pane_options['%40']['@ccb_slot'] == 'tool:files'
+    assert '%3' not in backend.pane_options
+    assert '%4' not in backend.pane_options
 
 
 def test_preserved_snapshot_and_assertion_use_fake_identity_data(tmp_path: Path) -> None:
@@ -1477,9 +1527,10 @@ def test_apply_add_tool_window_creates_tool_window_sidebar_and_tool_pane(
     assert result.tool_panes == {'files': '%4'}
     assert result.agent_panes == {}
     assert backend.respawn_calls[-2][0] == '%3'
-    assert 'CCB_SIDEBAR_THEME_PROFILE' in backend.respawn_calls[-2][1]
-    assert 'light' in backend.respawn_calls[-2][1]
-    assert '--theme' not in backend.respawn_calls[-2][1]
+    sidebar_command = _decoded_powershell_command_or_raw(backend.respawn_calls[-2][1])
+    assert 'CCB_SIDEBAR_THEME_PROFILE' in sidebar_command
+    assert 'light' in sidebar_command
+    assert '--theme' not in sidebar_command
     assert backend.respawn_calls[-1] == ('%4', 'ccb-workbench files')
     assert backend.pane_options['%3']['@ccb_role'] == 'sidebar'
     assert backend.pane_options['%3']['@ccb_slot'] == 'sidebar:files'
@@ -1951,3 +2002,10 @@ def _project(project_root: Path, config_text: str) -> Path:
 
 def _load_config(project_root: Path, config_text: str):
     return load_project_config(_project(project_root, config_text)).config
+
+
+def _decoded_powershell_command_or_raw(command: str) -> str:
+    if ' -EncodedCommand ' not in command:
+        return command
+    encoded = command.split()[-1]
+    return base64.b64decode(encoded).decode('utf-16le')

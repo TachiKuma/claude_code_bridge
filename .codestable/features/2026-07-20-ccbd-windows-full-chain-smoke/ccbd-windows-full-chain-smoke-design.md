@@ -132,7 +132,7 @@ class CcbdWindowsFullChainSmokeTranscript(TypedDict):
 scripts/ccbd-windows-full-chain-smoke.ps1
 scripts/ccbd_windows_full_chain_smoke.py
 test/test_ccbd_windows_full_chain_smoke.py
-artifacts/ccbd-windows-full-chain-smoke/transcript.json
+artifacts/rmux-windows-validation/manual-transcript.json
 ```
 
 Interface 设计检查：
@@ -263,7 +263,7 @@ Validation Commands:
 | CMD-002 | `python ".codestable/tools/validate-yaml.py" --file ".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml"` | roadmap items 回写合法性 | core | fix-or-block |
 | CMD-003 | `python -m pytest -q test/test_ccbd_windows_full_chain_smoke.py` | transcript parser、classification、redaction、negative fixtures、scope guard | core | fix-or-block |
 | CMD-004 | `powershell -NoProfile -ExecutionPolicy Bypass -File ".\\scripts\\ccbd-windows-full-chain-smoke.ps1" -ProjectRoot "$env:TEMP\\ccb-rmux-full-chain" -Backend rmux -Json` | native Windows true-host transcript | core-manual | attach-transcript-or-block-pass |
-| CMD-005 | `python scripts/ccbd_windows_full_chain_smoke.py --transcript "artifacts/ccbd-windows-full-chain-smoke/transcript.json" --json` | parser verdict | core | fix-or-block |
+| CMD-005 | `python "scripts/rmux_windows_validation_matrix.py" --lane windows_true_host --scope full --transcript "artifacts/rmux-windows-validation/manual-transcript.json" --json` | parser verdict | core | fix-or-block |
 | CMD-006 | `python scripts/ccbd_windows_full_chain_smoke.py --scope-guard --diff-base HEAD --json` | deterministic scope guard；forbidden path fail closed | core | fix-or-block |
 
 Required Artifacts：design、checklist、design-review、PowerShell runner、Python parser、parser fixtures、negative probe/WSL/fake fixtures、failure-class fixtures、fake-provider 测试入口 fixture、redaction tests、native Windows transcript sidecar、stdout/stderr artifact refs、cleanup evidence、deterministic scope guard output、acceptance report、items.yaml 回写。

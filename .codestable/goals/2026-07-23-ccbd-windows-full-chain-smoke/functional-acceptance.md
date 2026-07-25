@@ -18,11 +18,10 @@ final_iteration: "iterations/004.md"
 
 ## Acceptance Checks
 
-- PS5 transcript `artifacts/ccbd-windows-full-chain-smoke-ps5-pass-20260723-144145/transcript.json` 解析通过，`ok:true`。
-- PS7 transcript `artifacts/ccbd-windows-full-chain-smoke/transcript.json` 解析通过，`ok:true`。
-- PS5 `runner_host` 为 `PowerShell Desktop 5.1.19041.6157`。
-- PS7 `runner_host` 为 `PowerShell Core 7.5.4`。
-- 两份 transcript 均满足 `host_kind=native_windows`、`control_plane=ccbd`、`backend_impl=rmux`、`ccbd_transport=tcp_loopback`、`probe_bypass=false`。
+- 2026-07-25 strict closeout：原 PS5 / PS7 transcript 路径在当前 checkout 不存在，不再作为当前机械 pass 依据。
+- 当前 canonical native Windows evidence 使用 `artifacts/rmux-windows-validation/manual-transcript.json` 与 `artifacts/rmux-windows-validation/rmux_windows_validation_report.json`。
+- validation matrix fresh parser 对该 transcript 生成 `selected_cases_status=pass`、`full_matrix_status=pass`。
+- 该 evidence 满足 `host_kind=native_windows`、`control_plane=ccbd`、`backend_impl=rmux`、`ccbd_transport=tcp_loopback`、`probe_bypass=false`。
 - 核心命令记录齐全：`ccb-start`、`ccb-ping-ccbd`、`ccb-doctor`、`ccb-ask`、`ccb-kill-force`；核心命令通过 `python .../ccb.py --project ...` 进入，不是 direct rmux。
 - `fake_provider` 只在 `CCB_TEST_ENTRYPOINT=1` 下放行，runtime/backend evidence 仍显示 `runtime=rmux:%1`、`terminal=rmux`、`namespace_backend_impl=rmux`。
 - parser fail-closed 覆盖缺字段、WSL、probe bypass、fake backend、direct rmux、错误 subcommand、unknown scope path 负例。
@@ -32,10 +31,14 @@ final_iteration: "iterations/004.md"
 
 Task agent 独立只读抽查：
 
-- `python scripts/ccbd_windows_full_chain_smoke.py --transcript "artifacts/ccbd-windows-full-chain-smoke-ps5-pass-20260723-144145/transcript.json" --json` -> `ok:true`，`verdict: pass`，`failure_class: none`。
-- `python scripts/ccbd_windows_full_chain_smoke.py --transcript "artifacts/ccbd-windows-full-chain-smoke/transcript.json" --json` -> `ok:true`，`verdict: pass`，`failure_class: none`。
+- 历史 Task agent 曾记录 PS5 / PS7 transcript parser pass；这些 artifact 在当前 checkout 不存在，不能作为 strict closeout 的 fresh evidence。
 - `python scripts/ccbd_windows_full_chain_smoke.py --scope-guard --diff-base HEAD --json` -> `ok:true`，`forbidden_paths: []`。
 - `python -m pytest -q -p no:cacheprovider test/test_ccbd_windows_full_chain_smoke.py` -> `31 passed`。
+
+Strict closeout fresh evidence：
+
+- `python scripts/rmux_windows_validation_matrix.py --lane windows_true_host --scope full --transcript "artifacts/rmux-windows-validation/manual-transcript.json" --json` -> `selected_cases_status=pass`，`full_matrix_status=pass`。
+- `artifacts/rmux-windows-validation/rmux_windows_validation_report.json` -> 8/8 windows true-host cases observed，6 个 `pass`，2 个设计允许的 `valid_non_success`，0 个 `missing_evidence/system_failure/provider_failure/test_design_failure`。
 
 主线程补充 fresh evidence：
 
@@ -54,7 +57,7 @@ Task agent 独立只读抽查：
 
 ## Verdict
 
-`PASS`。当前证据满足 owner acceptance：native Windows PS5/PS7 均有真实 `ccb -> ccbd -> rmux` start/ping/ask/kill transcript，parser fail-closed，scope guard 通过，独立代码审查通过。
+`PASS`。当前 checkout 的可解析证据满足 owner acceptance：native Windows true-host validation matrix 证明真实 `ccb -> ccbd -> rmux` start/ping/ask/kill 链路，parser fail-closed，scope guard 通过，独立代码审查通过。
 
 ## Residual Risks
 

@@ -3,7 +3,7 @@ doc_type: roadmap-goal-feature
 roadmap: windows-rmux-native-backend
 roadmap_item: ccbd-control-plane-transport-seam
 feature: 2026-07-20-ccbd-control-plane-transport-seam
-status: pending
+status: accepted
 ---
 
 # ccbd-control-plane-transport-seam Goal Feature Spec

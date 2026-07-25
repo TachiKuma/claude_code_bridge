@@ -6,6 +6,7 @@ from terminal_runtime.backend_selection import TerminalBackendSelection, Termina
 def resolve_backend(
     *,
     cached_backend,
+    cached_backend_impl=None,
     terminal_type,
     detect_terminal_fn,
     tmux_backend_factory,
@@ -20,7 +21,7 @@ def resolve_backend(
     rmux_availability_reader=None,
     capability_reader=None,
 ):
-    return TerminalBackendSelection(
+    selection = TerminalBackendSelection(
         detect_terminal_fn=detect_terminal_fn,
         tmux_backend_factory=tmux_backend_factory,
         psmux_backend_factory=psmux_backend_factory,
@@ -34,7 +35,10 @@ def resolve_backend(
         rmux_availability_reader=rmux_availability_reader,
         capability_reader=capability_reader,
         cached_backend=cached_backend,
-    ).get_backend(terminal_type)
+        cached_backend_impl=cached_backend_impl,
+    )
+    backend = selection.get_backend(terminal_type)
+    return backend, selection.cached_backend_impl
 
 
 def resolve_backend_selection(

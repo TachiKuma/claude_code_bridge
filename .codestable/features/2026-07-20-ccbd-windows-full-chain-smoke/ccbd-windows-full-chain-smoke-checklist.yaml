@@ -80,7 +80,7 @@ dod:
         - negative_probe_wsl_fake_fixtures
         - scope_guard
     - id: CMD-004
-      command: "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"./scripts/ccbd-windows-full-chain-smoke.ps1\" -ProjectRoot \"$env:TEMP/ccb-rmux-full-chain-ps5-v15\" -Backend rmux -AskCaseKind fake_provider -Json; pwsh -NoProfile -ExecutionPolicy Bypass -File \"./scripts/ccbd-windows-full-chain-smoke.ps1\" -ProjectRoot \"$env:TEMP/ccb-rmux-full-chain-pwsh7-v3\" -Backend rmux -AskCaseKind fake_provider -Json"
+      command: "python \"scripts/rmux_windows_validation_matrix.py\" --lane windows_true_host --scope full --transcript \"artifacts/rmux-windows-validation/manual-transcript.json\" --output-dir \"$env:TEMP/rmux-validation-strict-closeout\" --json"
       core: true
       manual: true
       failure_handling: attach-transcript-or-block-pass
@@ -89,7 +89,7 @@ dod:
         - native_windows_true_host_transcript
         - start_ping_ask_kill
     - id: CMD-005
-      command: "python scripts/ccbd_windows_full_chain_smoke.py --transcript \"artifacts/ccbd-windows-full-chain-smoke-ps5-pass-20260723-144145/transcript.json\" --json; python scripts/ccbd_windows_full_chain_smoke.py --transcript \"artifacts/ccbd-windows-full-chain-smoke/transcript.json\" --json"
+      command: "python \"scripts/rmux_windows_validation_matrix.py\" --validate-manifest --json"
       core: true
       failure_handling: fix-or-block
       test_status: passed
