@@ -95,6 +95,17 @@ Source install links global `ccb` / `ask` back to the checkout. Regular users sh
 
 </details>
 
+### Native Windows Rmux Beta
+
+Native Windows Rmux is a beta opt-in route for source / `install.ps1` installs. It is not enabled
+through `npm install -g @seemseam/ccb` yet because the Windows npm artifact/checksum/postinstall
+gate has not passed.
+
+Use `powershell -ExecutionPolicy Bypass -File .\install.ps1 install` from a checkout, then run
+`ccb doctor` and inspect `rmux_support_tier`, `windows_install_entry`, and
+`rmux_fallback_guidance`. CCB does not download rmux automatically; keep the Linux/macOS/WSL tmux
+route as fallback.
+
 <a id="quick-start"></a>
 
 ## Quick Start

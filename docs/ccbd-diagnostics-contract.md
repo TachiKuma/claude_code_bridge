@@ -23,6 +23,27 @@ It is the authoritative design anchor for:
 
 The repo-local memory file [AGENTS.md](/home/bfly/yunwei/ccb_source/AGENTS.md) must point to this document instead of duplicating the rules.
 
+## Windows Rmux Packaging Projection
+
+`ccb doctor` and `ccb doctor --output` must expose the Windows Rmux packaging support projection
+from the single owner `terminal_runtime.rmux_packaging_support.rmux_packaging_support_summary`.
+
+Required doctor / bundle fields:
+
+- `rmux_support_tier`
+- `rmux_version`
+- `rmux_capability_status`
+- `rmux_validation_ref`
+- `windows_install_entry`
+- `windows_npm_enabled`
+- `windows_install_ps1_rmux_check`
+- `rmux_fallback_guidance`
+
+These fields are diagnostics only. They must not contain provider credentials, TCP tokens, or user
+home secrets. Native Windows Rmux is currently beta opt-in through `install.ps1` / source install;
+the npm `win32` entry remains disabled until the Windows npm artifact, checksum, postinstall, and
+docs strategy gate passes.
+
 ## 2. Goals
 
 Diagnostics must let another user reproduce backend state and failure context without interactive shell access to the original machine.

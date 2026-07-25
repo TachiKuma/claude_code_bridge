@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "goal": "rmux-packaging-docs-contracts",
+  "route_approval_ref": ".codestable/features/2026-07-19-rmux-route-approval/approval-report.md#rmux-route",
+  "capability_report_ref": ".codestable/features/2026-07-19-rmux-route-approval/rmux-capability-report.json",
+  "validation_report_ref": "artifacts/rmux-windows-validation/rmux_windows_validation_report.json",
+  "selection_scope": "full",
+  "selected_cases_status": "pass",
+  "full_matrix_status": "pass",
+  "true_host_core_rows_observed": true,
+  "local_install_ref": null,
+  "package_gate_ref": null,
+  "docs_consistency_ref": "artifacts/rmux-packaging-docs-contracts/docs-consistency.json",
+  "final_support_tier": "beta",
+  "install_entry": "install_ps1",
+  "windows_npm_enabled": false,
+  "package_metadata_decision": "no-change",
+  "package_metadata_rationale": "package.json.os remains linux/darwin because Windows npm artifact/checksum/postinstall evidence is missing.",
+  "release_actions": {
+    "git_push": false,
+    "git_tag": false,
+    "npm_publish": false,
+    "release_upload": false
+  },
+  "updated_at": "2026-07-25"
+}

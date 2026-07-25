@@ -11,6 +11,7 @@ def render_doctor(payload: Mapping[str, object]) -> tuple[str, ...]:
     runtime = payload.get('runtime') or {}
     requirements = payload.get('requirements') or {}
     backend_selection = payload.get('backend_selection') or {}
+    rmux_packaging = payload.get('rmux_packaging_support') or {}
     ccbd = payload['ccbd']
     lines = [
         f'project: {payload["project"]}',
@@ -82,6 +83,14 @@ def render_doctor(payload: Mapping[str, object]) -> tuple[str, ...]:
         f'backend_selection_fallback_reason: {backend_selection.get("fallback_reason")}',
         f'backend_selection_failure_reason: {backend_selection.get("failure_reason")}',
         f'backend_selection_diagnostic: {backend_selection.get("diagnostic")}',
+        f'rmux_support_tier: {rmux_packaging.get("support_tier")}',
+        f'rmux_version: {rmux_packaging.get("rmux_version")}',
+        f'rmux_capability_status: {rmux_packaging.get("rmux_capability_status")}',
+        f'rmux_validation_ref: {rmux_packaging.get("validation_ref")}',
+        f'windows_install_entry: {rmux_packaging.get("install_entry")}',
+        f'windows_npm_enabled: {rmux_packaging.get("windows_npm_enabled")}',
+        f'windows_install_ps1_rmux_check: {rmux_packaging.get("install_ps1_rmux_check")}',
+        f'rmux_fallback_guidance: {rmux_packaging.get("fallback_guidance")}',
         f'ccbd_health: {ccbd["health"]}',
         f'ccbd_generation: {ccbd["generation"]}',
         f'ccbd_last_heartbeat_at: {ccbd["last_heartbeat_at"]}',

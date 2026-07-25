@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "support_tier": "beta",
+  "install_entry": "install_ps1",
+  "windows_npm_enabled": false,
+  "install_ps1_rmux_check": "warn",
+  "selection_scope": "full",
+  "selected_cases_status": "pass",
+  "full_matrix_status": "pass",
+  "true_host_core_rows_observed": true,
+  "validation_ref": "artifacts/rmux-windows-validation/rmux_windows_validation_report.json",
+  "route_approval_ref": ".codestable/features/2026-07-19-rmux-route-approval/approval-report.md#rmux-route",
+  "capability_report_ref": ".codestable/features/2026-07-19-rmux-route-approval/rmux-capability-report.json",
+  "local_install_ref": null,
+  "package_gate_ref": null,
+  "docs_consistency_ref": "artifacts/rmux-packaging-docs-contracts/docs-consistency.json",
+  "rmux_capability_status": "ok",
+  "npm_no_change_rationale": "package.json.os does not include win32; native Windows Rmux uses install.ps1/source until npm gate passes.",
+  "fallback_guidance": "Use install.ps1/source on native Windows for rmux beta opt-in; npm remains Linux/macOS only."
+}

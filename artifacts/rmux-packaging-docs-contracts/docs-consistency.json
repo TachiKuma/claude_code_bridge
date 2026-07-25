@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "support_tier": "beta",
+  "install_entry": "install_ps1",
+  "windows_npm_enabled": false,
+  "checked_files": [
+    "README.md",
+    "docs/ccbd-diagnostics-contract.md",
+    "docs/plantree/plans/windows-rmux-native-backend/topics/rmux-packaging-support-contract.md",
+    "docs/plantree/plans/windows-rmux-native-backend/topics/rmux-user-install-runbook.md",
+    "package.json"
+  ],
+  "required_projection_fields": [
+    "rmux_support_tier",
+    "rmux_version",
+    "rmux_capability_status",
+    "rmux_validation_ref",
+    "windows_install_entry",
+    "windows_npm_enabled",
+    "windows_install_ps1_rmux_check",
+    "rmux_fallback_guidance"
+  ],
+  "conflicts": [],
+  "updated_at": "2026-07-25"
+}

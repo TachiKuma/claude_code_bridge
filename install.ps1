@@ -3,6 +3,8 @@
   [ValidateSet("install", "uninstall", "help")]
   [string]$Command = "help",
   [string]$InstallPrefix = "$env:LOCALAPPDATA\codex-dual",
+  [ValidateSet("detect_only", "warn", "fail_fast")]
+  [string]$RmuxCheck = "warn",
   [switch]$Yes
 )
 
@@ -83,6 +85,7 @@ function Show-Usage {
   Write-Host ""
   Write-Host "Options:"
   Write-Host "  -InstallPrefix <path>    # Custom install location (default: $env:LOCALAPPDATA\codex-dual)"
+  Write-Host "  -RmuxCheck <mode>        # detect_only, warn, or fail_fast for native Windows Rmux prerequisite checks"
   Write-Host ""
   Write-Host "Requirements:"
   Write-Host "  - Python 3.10+"
@@ -252,6 +255,113 @@ function Require-Python310 {
   Write-Host "[OK] Python $($info.Version) ($($info.Executable))"
 }
 
+function Get-RmuxPackagingSupportProjection {
+  $projectionPath = Join-Path $repoRoot "lib\terminal_runtime\rmux_packaging_support_projection.json"
+  if (Test-Path $projectionPath) {
+    try {
+      return Get-Content -Raw -Encoding UTF8 $projectionPath | ConvertFrom-Json
+    } catch {}
+  }
+  return [pscustomobject]@{
+    support_tier = "experimental"
+    install_entry = "diagnostic_only"
+    windows_npm_enabled = $false
+    install_ps1_rmux_check = "detect_only"
+    fallback_guidance = "Use the existing Linux/macOS/WSL tmux route and run ccb doctor for rmux diagnostics."
+  }
+}
+
+function Get-RmuxPrerequisiteStatus {
+  $command = Get-Command rmux -ErrorAction SilentlyContinue
+  if (-not $command) {
+    $command = Get-Command psmux -ErrorAction SilentlyContinue
+  }
+  if (-not $command) {
+    return @{
+      Status = "missing"
+      Executable = ""
+      Version = ""
+      Reason = "rmux or psmux executable is not on PATH"
+    }
+  }
+
+  try {
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $command.Source
+    $psi.Arguments = "-V"
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $psi
+    $process.Start() | Out-Null
+    if (-not $process.WaitForExit(2000)) {
+      try { $process.Kill() } catch {}
+      return @{
+        Status = "partial"
+        Executable = $command.Source
+        Version = ""
+        Reason = "rmux version probe timed out"
+      }
+    }
+    $version = $process.StandardOutput.ReadToEnd().Trim()
+    if ([string]::IsNullOrWhiteSpace($version)) {
+      $version = $process.StandardError.ReadToEnd().Trim()
+    }
+    if ($process.ExitCode -eq 0) {
+      return @{
+        Status = "ok"
+        Executable = $command.Source
+        Version = $version
+        Reason = ""
+      }
+    }
+    return @{
+      Status = "partial"
+      Executable = $command.Source
+      Version = $version
+      Reason = "rmux version probe failed with exit $($process.ExitCode)"
+    }
+  } catch {
+    return @{
+      Status = "partial"
+      Executable = $command.Source
+      Version = ""
+      Reason = $_.Exception.Message
+    }
+  }
+}
+
+function Show-RmuxPrerequisiteNotice {
+  param([string]$Mode)
+
+  $projection = Get-RmuxPackagingSupportProjection
+  $status = Get-RmuxPrerequisiteStatus
+  Write-Host "[INFO] Windows Rmux support tier: $($projection.support_tier)"
+  Write-Host "[INFO] Windows Rmux install entry: $($projection.install_entry)"
+  Write-Host "[INFO] Windows Rmux npm enabled: $($projection.windows_npm_enabled)"
+  Write-Host "[INFO] Rmux prerequisite status: $($status.Status)"
+  if ($status.Executable) {
+    Write-Host "[INFO] Rmux executable: $($status.Executable)"
+  }
+  if ($status.Version) {
+    Write-Host "[INFO] Rmux version: $($status.Version)"
+  }
+  if ($status.Status -ne "ok") {
+    Write-Host "[INFO] Native Windows Rmux is optional. CCB will not download or install rmux automatically."
+    Write-Host "[INFO] $($projection.fallback_guidance)"
+    if ($status.Reason) {
+      Write-Host "[INFO] Rmux diagnostic reason: $($status.Reason)"
+    }
+    if ($Mode -eq "fail_fast") {
+      Write-Host "[ERROR] Rmux prerequisite check failed and -RmuxCheck fail_fast was requested."
+      exit 1
+    }
+  }
+}
+
 function Test-PythonTomlReader {
   param([string]$PythonCmd)
 
@@ -387,6 +497,7 @@ function Install-Native {
 
   Require-Python310 -PythonCmd $pythonCmd
   Install-Tomli -PythonCmd $pythonCmd
+  Show-RmuxPrerequisiteNotice -Mode $RmuxCheck
 
   Write-Host "Installing ccb to $InstallPrefix ..."
   Write-Host "Using Python: $pythonCmd"

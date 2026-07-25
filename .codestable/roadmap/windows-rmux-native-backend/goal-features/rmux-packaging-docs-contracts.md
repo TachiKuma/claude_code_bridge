@@ -3,7 +3,7 @@ doc_type: roadmap-goal-feature
 roadmap: windows-rmux-native-backend
 roadmap_item: rmux-packaging-docs-contracts
 feature: 2026-07-20-rmux-packaging-docs-contracts
-status: pending
+status: accepted
 ---
 
 # rmux-packaging-docs-contracts Goal Feature Spec
@@ -46,7 +46,8 @@ none；以 approval/report/schema/docs/guard 证据替代用户运行路径。
 - Implementation gate: checklist steps done, scope-gate, dod-runner and evidence-pack passed.
 - Review gate: independent cs-code-review passed with no unresolved blocking findings.
 - QA gate: cs-feat QA passed and covers design scenarios, DoD commands and review QA focus.
-- Acceptance gate: cs-feat acceptance passed via pproval-report.md#goal-acceptance, checklist checks passed and roadmap item writeback complete.
+- Acceptance gate: cs-feat acceptance passed via approval-report.md#goal-acceptance, checklist checks passed and roadmap item writeback complete.
+- Acceptance result: accepted on 2026-07-25; final support tier is beta, Windows npm remains disabled, native Windows entry is install.ps1/source opt-in.
 - Recovery: implementation defects return to implementation then review/QA/acceptance; stage evidence defects repair the owning stage only.
 
 ## 6. Evidence And Cleanliness
