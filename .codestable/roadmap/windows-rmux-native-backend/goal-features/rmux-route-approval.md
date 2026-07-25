@@ -3,7 +3,7 @@ doc_type: roadmap-goal-feature
 roadmap: windows-rmux-native-backend
 roadmap_item: rmux-route-approval
 feature: 2026-07-19-rmux-route-approval
-status: pending
+status: accepted
 ---
 
 # rmux-route-approval Goal Feature Spec

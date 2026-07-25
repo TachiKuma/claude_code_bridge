@@ -1,0 +1,98 @@
+roadmap: windows-rmux-ux-parity-hardening
+created: 2026-07-25
+
+items:
+  - slug: windows-rmux-wezterm-native-interaction-parity
+    description: 普通 pane 采用 WezTerm GUI-native 交互，sidebar 全接管，滚轮/剪贴板/左键不被 CCB/rmux 劫持
+    depends_on: []
+    status: in-progress
+    feature: 2026-07-25-windows-rmux-wezterm-native-interaction-parity
+    minimal_loop: true
+    brainstorm_required: true
+    brainstorm: .codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-brainstorm.md
+    brainstorm_status: confirmed
+    design_admission: admitted
+    notes: >-
+      已先行进入 feature design，且已有 confirmed feature-brainstorm。继续实现前必须保证 design
+      引用该 brainstorm，并记录 owner 已批准/通过进入 design；同时补齐 feature frontmatter 的
+      roadmap/roadmap_item 元数据，复用既有 passed design-review 作为该 item 的 design-review evidence
+
+  - slug: windows-rmux-output-capture-parity
+    description: 验证 rmux capture 与 Linux/macOS tmux baseline 在 provider completion、ANSI、宽字符、wrapping 上的保真边界
+    depends_on: [windows-rmux-wezterm-native-interaction-parity]
+    status: planned
+    feature: null
+    minimal_loop: false
+    brainstorm_required: true
+    brainstorm: null
+    brainstorm_status: pending
+    design_admission: blocked_until_owner_brainstorm_approval
+    notes: >-
+      design 不得启动，直到 owner 通过 $cs-brainstorm 对该 item 完成深入讨论并明确批准/通过进入 design。
+      用户滚轮不是 capture 证据；必须用后端 capture fixtures 和 provider completion golden fixtures。
+      复用 rmux-send-capture-logging accepted evidence 作为 baseline，只补 UX parity delta、跨平台 baseline
+      刷新、宽字符/wrapping/尾部空白差异归因，并产出 evidence/windows-rmux-ux-parity-evidence.json
+
+  - slug: windows-rmux-pane-identity-layout-parity
+    description: 收口 pane id/index/canonicalization、layout 重建和 agent-pane 绑定恢复
+    depends_on: [windows-rmux-wezterm-native-interaction-parity]
+    status: planned
+    feature: null
+    minimal_loop: false
+    brainstorm_required: true
+    brainstorm: null
+    brainstorm_status: pending
+    design_admission: blocked_until_owner_brainstorm_approval
+    notes: >-
+      design 不得启动，直到 owner 通过 $cs-brainstorm 对该 item 完成深入讨论并明确批准/通过进入 design。
+      吸收 %N exact/index alias 既有问题，复用既有 canonicalization/split/layout 基础，只补
+      identity/layout UX contract、agent-pane binding 恢复、conflict diagnostics，并产出
+      evidence/windows-rmux-ux-parity-evidence.json
+
+  - slug: windows-rmux-visual-no-popup-parity
+    description: 恢复或替代动态状态栏/边框/标题，同时保证无 Git Bash 或 console popup
+    depends_on: [windows-rmux-wezterm-native-interaction-parity]
+    status: planned
+    feature: null
+    minimal_loop: false
+    brainstorm_required: true
+    brainstorm: null
+    brainstorm_status: pending
+    design_admission: blocked_until_owner_brainstorm_approval
+    notes: >-
+      design 不得启动，直到 owner 通过 $cs-brainstorm 对该 item 完成深入讨论并明确批准/通过进入 design。
+      当前 static fallback 是止血 baseline；动态状态恢复前必须有 popup probe evidence。
+      本 item 不重复定义 base support projection，只补 no-popup UX evidence 并产出
+      evidence/windows-rmux-ux-parity-evidence.json
+
+  - slug: windows-rmux-lifecycle-recovery-ux-parity
+    description: 覆盖 reattach、关闭 WezTerm、kill cleanup、pane/provider/rmux daemon crash 后恢复或 degraded diagnostics
+    depends_on: [windows-rmux-pane-identity-layout-parity, windows-rmux-output-capture-parity]
+    status: planned
+    feature: null
+    minimal_loop: false
+    brainstorm_required: true
+    brainstorm: null
+    brainstorm_status: pending
+    design_admission: blocked_until_owner_brainstorm_approval
+    notes: >-
+      design 不得启动，直到 owner 通过 $cs-brainstorm 对该 item 完成深入讨论并明确批准/通过进入 design。
+      identity 与 capture 稳定后再验证 recovery，避免归因漂移。复用 rmux-supervision-recovery、
+      ccbd-windows-full-chain-smoke、rmux-windows-validation-matrix baseline，只补 attach/reconnect/kill/crash
+      的用户可见恢复、residue report、degraded diagnostics，并产出 evidence/windows-rmux-ux-parity-evidence.json
+
+  - slug: windows-rmux-supportability-parity-contract
+    description: 汇总 parity evidence 到 doctor/install/support tier/docs，一致表达 beta/supported/blocked 和 fallback
+    depends_on: [windows-rmux-output-capture-parity, windows-rmux-pane-identity-layout-parity, windows-rmux-visual-no-popup-parity, windows-rmux-lifecycle-recovery-ux-parity]
+    status: planned
+    feature: null
+    minimal_loop: false
+    brainstorm_required: true
+    brainstorm: null
+    brainstorm_status: pending
+    design_admission: blocked_until_owner_brainstorm_approval
+    notes: >-
+      design 不得启动，直到 owner 通过 $cs-brainstorm 对该 item 完成深入讨论并明确批准/通过进入 design。
+      消费 rmux-packaging-docs-contracts 最终 support projection，作为 UX parity overlay；不重复定义
+      npm、install.ps1、release guard，不单独授权 npm 发布。必须聚合所有 child 的
+      evidence/windows-rmux-ux-parity-evidence.json；缺失 core dimension 时投影为 missing

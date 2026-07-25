@@ -1,9 +1,9 @@
 ---
 doc_type: roadmap
 slug: windows-rmux-native-backend
-status: active
+status: complete
 created: 2026-07-06
-last_reviewed: 2026-07-19
+last_reviewed: 2026-07-25
 tags: [windows, rmux, mux-backend, terminal-runtime, ccbd-control-plane, af-unix]
 related_requirements: []
 related_architecture:
@@ -793,93 +793,93 @@ class RpcTransportAuthError(Exception):
 4. **mux-backend-contract** — 定义 `MuxBackend` 组合能力 / `ProjectNamespaceBackend` higher-level policy / namespace 与 pane 引用 / capability / error 契约和 fake backend 测试替身。
    - 所属模块：MuxBackend Contract
    - 依赖：`backend-resolver-opt-in-contract`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：先建 seam 和测试替身，避免实现直接耦合 Rmux。
+   - 状态：accepted
+   - 对应 feature：`2026-07-19-mux-backend-contract`
+   - 备注：已建立 mux backend contract、fake backend 测试替身与旧 tmux 兼容边界。
 
 5. **tmux-backend-contract-adapter** — 将现有 TmuxBackend 适配到 `MuxBackend`，保持 Linux/macOS/WSL 行为不变。
    - 所属模块：MuxBackend Contract
    - 依赖：`mux-backend-contract`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：回归重点是当前 tmux lifecycle 与 provider path 不漂移。
+   - 状态：accepted
+   - 对应 feature：`2026-07-19-tmux-backend-contract-adapter`
+   - 备注：TmuxBackend 已适配到 mux contract，旧 tmux lifecycle 与 provider path 回归通过。
 
 6. **windows-namespace-ipc-schema** — 增加 mux-agnostic namespace state、named pipe IPC 字段、ping/doctor payload 和旧 `namespace_tmux_*` 兼容别名策略。
    - 所属模块：Windows Runtime Boundary
    - 依赖：`mux-backend-contract`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：不直接启动 Rmux；先让 namespace schema、foreground attach 输入和 diagnostics 字段可测。
+   - 状态：accepted
+   - 对应 feature：`2026-07-19-windows-namespace-ipc-schema`
+   - 备注：canonical namespace state/event、ping/doctor payload、foreground attach canonical-first 与 legacy alias 已通过 review/QA/acceptance。
 
 7. **windows-shell-log-builder** — 增加 Windows shell command builder、pipe/log command builder、stderr redirection 和默认 shell 诊断。
    - 所属模块：Windows Runtime Boundary
    - 依赖：`mux-backend-contract`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：替代 `sh -lc`、`tee -a` 等 Unix-only 命令构造。
+   - 状态：accepted
+   - 对应 feature：`2026-07-20-windows-shell-log-builder`
+   - 备注：Windows shell/log builder 已落地，替代 Unix-only command construction。
 
 8. **windows-job-object-runtime-evidence** — 增加 Windows Job Object 进程树 evidence、runtime authority 字段和 kill/recovery 判定输入。
    - 所属模块：Windows Runtime Boundary
    - 依赖：`windows-namespace-ipc-schema`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：pane alive 不等于 provider healthy；job evidence 是第二生命信号。
+   - 状态：accepted
+   - 对应 feature：`2026-07-20-windows-job-object-runtime-evidence`
+   - 备注：Job Object runtime evidence 已进入 authority / kill / recovery 判定输入。
 
 9. **provider-runtime-backend-session-contract** — 将 provider launch、session payload、runtime health 和 provider env 迁移到 backend-neutral mux 字段，并保留旧 tmux 字段兼容别名。
    - 所属模块：Provider Runtime Contract
    - 依赖：`mux-backend-contract`, `windows-namespace-ipc-schema`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：覆盖共享 session writer、provider-specific launcher、pane_log_support session reader、provider env 和 `TmuxBackend` 直接导入；不改变 provider completion 解析。
+   - 状态：accepted
+   - 对应 feature：`2026-07-20-provider-runtime-backend-session-contract`
+   - 备注：provider session payload、env、health/recovery 已迁移到 backend-neutral mux 字段，并保留 legacy tmux alias。
 
 10. **rmux-daemon-ownership-boundary** — 定义 Rmux daemon discovery/start/health/crash/cleanup 的 ownership 和 diagnostics evidence。
    - 所属模块：Rmux Daemon Ownership
    - 依赖：`mux-backend-contract`, `windows-namespace-ipc-schema`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：Rmux daemon 只能是 backend evidence，不能成为 project authority；共享 daemon 与 per-project cleanup 必须可诊断。
+   - 状态：accepted
+   - 对应 feature：`2026-07-20-rmux-daemon-ownership-boundary`
+   - 备注：Rmux daemon ownership、health、crash 与 cleanup evidence 已归入 backend evidence，不成为第二 project authority。
 
 11. **rmux-backend-core** — 实现 Rmux namespace/session/window/pane/list/split/respawn/kill/title/user-option/style 的 backend core。
    - 所属模块：RmuxBackend
    - 依赖：`tmux-backend-contract-adapter`, `windows-namespace-ipc-schema`, `windows-shell-log-builder`, `provider-runtime-backend-session-contract`, `rmux-daemon-ownership-boundary`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：必须消费 capability report，unsupported required command 不能静默降级。
+   - 状态：accepted
+   - 对应 feature：`2026-07-20-rmux-backend-core`
+   - 备注：Rmux namespace/window/pane core 已按 capability report 接入，unsupported required command 不静默降级。
 
 12. **rmux-send-capture-logging** — 实现 Rmux send-text/send-key/capture-pane/pipe-pane/logging，并覆盖 Ctrl-C/Ctrl-D 与大文本输入。
    - 所属模块：RmuxBackend
    - 依赖：`rmux-backend-core`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：重点替换 `load-buffer/paste-buffer/tee -a` 的 Windows 语义；必须用 provider completion parser golden fixtures 验证 capture 格式保真。
+   - 状态：accepted
+   - 对应 feature：`2026-07-20-rmux-send-capture-logging`
+   - 备注：Rmux send/capture/logging 已覆盖 Ctrl-C、Ctrl-D、大文本输入和 provider completion capture 保真。
 
 13. **ccbd-rmux-namespace-lifecycle** — 将 RmuxBackend 接入 `ccb` / `ccbd` project namespace ensure、foreground attach、layout projection 和 `ccb kill`。
    - 所属模块：CCBD Integration
    - 依赖：`rmux-send-capture-logging`, `windows-job-object-runtime-evidence`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：第一条真正用户可见闭环；必须通过 mux-agnostic foreground attach，仍建议 opt-in。
+   - 状态：accepted
+   - 对应 feature：`2026-07-20-ccbd-rmux-namespace-lifecycle`
+   - 备注：RmuxBackend 已接入 ccbd project namespace、foreground attach、layout projection 和 `ccb kill`。
 
 14. **rmux-supervision-recovery** — 接入 pane death、provider process death、namespace crash、Rmux daemon crash 的 supervision/recovery 与 diagnostics。
    - 所属模块：CCBD Integration
    - 依赖：`ccbd-rmux-namespace-lifecycle`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：必须证明 pane evidence 与 process/job evidence 的边界。
+   - 状态：accepted
+   - 对应 feature：`2026-07-20-rmux-supervision-recovery`
+   - 备注：pane/provider/namespace/daemon recovery 与 diagnostics 已完成，pane evidence 与 process/job evidence 边界已记录。
 
 15. **rmux-windows-validation-matrix** — 建立 Windows 原生真实平台验证矩阵和可重复 runbook，覆盖多 agent、ask、kill、restart、多项目。
    - 所属模块：Validation & Packaging
    - 依赖：`rmux-supervision-recovery`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：包含 CI 可跑部分与手工真机证据部分。
+   - 状态：accepted
+   - 对应 feature：`2026-07-20-rmux-windows-validation-matrix`
+   - 备注：matrix、report builder、PowerShell/Markdown runbook、scope guard、subset CI 与 2026-07-23 native Windows true-host full report 已通过，`full_matrix_status=pass`。
 
 16. **rmux-packaging-docs-contracts** — 更新 installer/package/docs/contracts，将 Rmux 后端从实验能力收口为受支持入口或明确 beta。
     - 所属模块：Validation & Packaging
     - 依赖：`rmux-windows-validation-matrix`
-    - 状态：planned
-    - 对应 feature：未启动
-    - 备注：包含用户安装说明、diagnostics bundle 字段、README/contract 同步；区分 Windows npm 分发与 `install.ps1` 本地安装两个入口。
+    - 状态：accepted
+    - 对应 feature：`2026-07-20-rmux-packaging-docs-contracts`
+    - 备注：support projection、install.ps1 rmux check、doctor/diagnostics 字段、README/contract 同步、release guard 和 evidence pack 已交付；当前支持档为 beta，Windows npm 未启用。
 
 ### 新增：CCBD 控制面 transport track（v8.2.1 再基线，与上面 rmux track 正交并行）
 
@@ -913,8 +913,9 @@ class RpcTransportAuthError(Exception):
 21. **ccbd-windows-full-chain-smoke** — native Windows 真机证明 `ccb→ccbd→rmux` 全链路跑通（`ccb` 启动 namespace / `ccb ask` / `ccb kill`），不经 probe 旁路。
    - 所属模块：Validation & Packaging（终点验收）
    - 依赖：`ccbd-windows-tcp-loopback-transport`, `ccbd-rmux-namespace-lifecycle`, `accelerator-transport-windows-guard`, `ccbd-windows-process-liveness`
-   - 状态：planned
-   - 备注：本轮 owner 终点 `windows-rmux-native-working` 的验收 item；证据须为真链路 command transcript。
+   - 状态：accepted
+   - 对应 feature：`2026-07-20-ccbd-windows-full-chain-smoke`
+   - 备注：本轮 owner 终点 `windows-rmux-native-working` 的验收 item已完成；当前 canonical evidence 为 `artifacts/rmux-windows-validation/manual-transcript.json` + `rmux_windows_validation_report.json`，fresh matrix parser 可验证 `full_matrix_status=pass`。
 
 **最小闭环**：第 1 条 `rmux-capability-gate` 做完后，能在 Windows 真机上以证据判断 Rmux 是否满足继续投入条件；第 2 条 `rmux-route-approval` 明确继续、暂停或重新选型。若 blocking gap 存在或 owner 未批准，后续实现不启动。transport track（17/18/20）不依赖 route approval，可并行起步——它解的是 ccbd 控制面而非 mux 选型，不受 Rmux 路线是否继续影响。
 
@@ -944,7 +945,7 @@ class RpcTransportAuthError(Exception):
 | TCP loopback 端点仅 same-user 可用，无法收敛 ACL 时 fail-fast | `ccbd-windows-tcp-loopback-transport` | token ACL / icacls 单测 + 跨用户拒绝 smoke | pytest / diagnostics | yes |
 | `ccb ask` 的 accelerator caller 在 Windows 不因 AF_UNIX 崩 | `accelerator-transport-windows-guard` | Windows ask 路径单测 + AttributeError 回归 | pytest | yes |
 | ccbd 进程存活判定在 Windows 正确（不误判活为死、不误投 Ctrl-C） | `ccbd-windows-process-liveness` | 跨平台 process-liveness 单测 + Windows keeper/health 存活回归 | pytest | yes |
-| `ccb→ccbd→rmux` 全链路在 native Windows 真跑通（start/ask/kill，非 probe 旁路） | `ccbd-windows-full-chain-smoke` | Windows 真机全链路 command transcript | command transcript / acceptance report | yes |
+| `ccb→ccbd→rmux` 全链路在 native Windows 真跑通（start/ask/kill，非 probe 旁路） | `ccbd-windows-full-chain-smoke` | Windows 真机 full-chain transcript / validation matrix report | command transcript / acceptance report | yes |
 
 ## 6. 排期思路
 
@@ -1028,3 +1029,4 @@ class RpcTransportAuthError(Exception):
 - **2026-07-19（v8.2.1 再基线，update）**：基线 v8.0.16→v8.2.1（§4 锚点文件、`backend_selection.py` tmux-only、AF_UNIX 硬编码点均已在 v8.2.1 复核）。新增模块 “CCBD Control Plane Transport” 与 “Accelerator Transport Guard”；新增接口契约 §4.9 ccbd 控制面 RPC transport seam；新增 items 17–21（`ccbd-control-plane-transport-seam`、`ccbd-windows-tcp-loopback-transport`、`accelerator-transport-windows-guard`、`ccbd-windows-process-liveness`、`ccbd-windows-full-chain-smoke`）；`ccbd-rmux-namespace-lifecycle` 依赖增加 `ccbd-windows-tcp-loopback-transport`；新增「本轮里程碑范围」界定 `windows-rmux-native-working` 终点边界（supervision-recovery / 多项目矩阵 / packaging 列为 post-milestone）。触发因素：原 roadmap 缺失 ccbd 控制面 transport blocker，导致 `ccb→ccbd→rmux` 全链路在 native Windows 从未成立。
 - **2026-07-19（独立审查 round 5 修订）**：独立 reviewer 判 changes-requested。修 §8 对 `lifecycle.py:19` guard 误标（实为有 guard 抛 `RuntimeError`）；补第四个控制面 blocker `ccbd-windows-process-liveness`（`process_exists` 的 `os.kill(pid,0)` 在 Windows 破坏 liveness）并纳入 full-chain-smoke 依赖；§4.9 补 client 侧端点发现归属；收紧 item 19 accelerator「默认 codex ask 必经」措辞。
 - **2026-07-20（native Windows evidence policy）**：记录 owner decision：本 milestone 的核心证据以 native Windows 为准，真实 Unix `AF_UNIX` 主机证据缺失不再作为 goal 恢复条件；`ccbd-control-plane-transport-seam` 可将其作为 compatibility residual，后续由 `ccbd-windows-tcp-loopback-transport` 与 `ccbd-windows-full-chain-smoke` 证明 Windows 控制面。同步更新 goal protocol / gate / audit 文档，明确 Windows `fcntl` collection blocker 不受该 residual policy 豁免。
+- **2026-07-25（strict closeout）**：核验收口发现 `items.yaml` 已 21/21 done，但 roadmap 正文、goal-state、goal-feature frontmatter 与 feature 报告存在状态漂移。已补齐 `windows-namespace-ipc-schema` acceptance、`ccbd-windows-full-chain-smoke` review/QA/acceptance，并把主 roadmap / goal-state / goal-feature 状态同步为 complete / accepted。历史 PS5/PS7 transcript 路径在当前 checkout 不存在，不再作为当前 pass 依据；当前 canonical native Windows evidence 为 `artifacts/rmux-windows-validation/manual-transcript.json` 与 `artifacts/rmux-windows-validation/rmux_windows_validation_report.json`。

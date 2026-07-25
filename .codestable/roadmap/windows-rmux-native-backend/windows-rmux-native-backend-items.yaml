@@ -125,10 +125,10 @@ items:
   - slug: rmux-packaging-docs-contracts
     description: 更新 installer、package、docs、contracts，将 Rmux 后端从实验能力收口为受支持入口或明确 beta
     depends_on: [rmux-windows-validation-matrix]
-    status: in-progress
+    status: done
     feature: 2026-07-20-rmux-packaging-docs-contracts
     minimal_loop: false
-    notes: 包含用户安装说明、diagnostics bundle 字段、README/contract 同步；区分 Windows npm 分发与 install.ps1 本地安装两个入口
+    notes: support projection、install.ps1 rmux check、doctor/diagnostics 字段、README/docs contract、release guard 与 evidence pack 已交付；当前支持档为 beta，Windows npm 未启用，native Windows 入口为 install.ps1/source opt-in
 
   # ---- CCBD 控制面 transport track（2026-07-19 v8.2.1 再基线新增）----
   # 与 rmux mux 后端正交的独立前置：native Windows 无 AF_UNIX，ccb→ccbd 控制面 RPC 起不来。

@@ -3,7 +3,7 @@ doc_type: roadmap-goal-feature
 roadmap: windows-rmux-native-backend
 roadmap_item: backend-resolver-opt-in-contract
 feature: 2026-07-19-backend-resolver-opt-in-contract
-status: pending
+status: accepted
 ---
 
 # backend-resolver-opt-in-contract Goal Feature Spec

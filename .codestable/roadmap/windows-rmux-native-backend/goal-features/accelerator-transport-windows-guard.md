@@ -3,7 +3,7 @@ doc_type: roadmap-goal-feature
 roadmap: windows-rmux-native-backend
 roadmap_item: accelerator-transport-windows-guard
 feature: 2026-07-20-accelerator-transport-windows-guard
-status: pending
+status: accepted
 ---
 
 # accelerator-transport-windows-guard Goal Feature Spec
