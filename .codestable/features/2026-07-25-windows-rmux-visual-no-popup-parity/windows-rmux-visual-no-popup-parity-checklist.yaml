@@ -1,0 +1,100 @@
+feature: 2026-07-25-windows-rmux-visual-no-popup-parity
+created: 2026-07-25
+
+steps:
+  - action: "baseline inventory：复用 Git Bash popup fix-note、current static fallback、existing no-shell tests 和 packaging/docs support baseline"
+    exit_signal: "visual-no-popup-report.json 的 baseline_refs 指向存在的 fix-note、code、tests 和 acceptance，且没有声明 static fallback 未完成"
+    status: pending
+  - action: "visual policy/report schema：建立 visual-no-popup-report.json 的 policies、popup_probes、dynamic_restore_candidates 和 residual_risks 校验"
+    exit_signal: "report JSON 可解析，required fields、enum、artifact refs、disabled_reason 和 failure rules 通过"
+    status: pending
+  - action: "static command audit：覆盖 Windows/rmux apply_project_tmux_ui 输出和真实 UI activation 入口 set_tmux_ui_active / ccb-tmux-on.sh，确认不含 shell scripts、#()、run-shell、resize/border shell hook"
+    exit_signal: "test/report 同时证明 Python project UI 与 shell activation static fallback no-popup；发现 shell hook 即 failed"
+    status: pending
+  - action: "dynamic restore gate：为 Git branch、ccbd health、pane_title_display、border/status candidates 建立 policy gate"
+    exit_signal: "每个 candidate 都有 execution_kind、popup_probe_status、dynamic_status_enabled、disabled_reason；未 pass probe 不启用"
+    status: pending
+  - action: "popup probe / live observation：在 native Windows + WezTerm + rmux 上记录 process sampling、rmux options/hooks transcript 和 manual observation"
+    exit_signal: "probe case 有 observed_processes_ref、visible_popup_observed、diagnostics_ref、verdict；GUI 不可用时 evidence_status 不能为 pass"
+    status: pending
+  - action: "UX evidence integration：生成 windows-rmux-ux-parity-evidence.json"
+    exit_signal: "UX evidence JSON 满足 schema_version=1、host_kind=native_windows、terminal_host=wezterm、backend_impl=rmux、control_plane=ccbd、parity_dimension=visual_no_popup、evidence_status/failure_class enum、artifact refs 和 partial/blocked/failed residual_risks 规则"
+    status: pending
+  - action: "restore-if-probe-passed：只对 probe passed 的 candidate 做最小 dynamic restore，其余保持 static fallback"
+    exit_signal: "相关 pytest、YAML/JSON 校验和 py_compile 通过；enabled candidate 都有 no-popup evidence；未启用项有 disabled_reason"
+    status: pending
+  - action: "final scope / validation guard：确认 no-popup changes 未漂移到 support tier、npm/install gate、foreground interaction、capture、identity 或 lifecycle contract"
+    exit_signal: "scope guard / diff review 通过；static-only 结果不因没有 production dynamic restore 被误判为缺 step"
+    status: pending
+
+checks:
+  - item: "design 引用 confirmed feature brainstorm，且 owner 已批准进入 design"
+    source: "design frontmatter / §0"
+    status: pending
+  - item: "复用 Git Bash popup fix-note 和 static fallback baseline，不默认恢复 shell hook"
+    source: "design §1 / Baseline reuse / delta"
+    status: pending
+  - item: "WindowsRmuxVisualCommandPolicy 覆盖 surface、execution_kind、dynamic_status_enabled、popup_probe_status、disabled_reason、artifact_ref，且 popup_probe_status 只允许 pass|failed|not-run"
+    source: "design §2.1 / S2"
+    status: pending
+  - item: "static fallback command audit 同时覆盖 apply_project_tmux_ui 和 set_tmux_ui_active / ccb-tmux-on.sh，不包含 ccb-git.sh、ccb-status.sh、ccb-border.sh、#()、run-shell"
+    source: "AC-001 / S3"
+    status: pending
+  - item: "Git、health、pane_title_display、border、resize_hook 都有 current owner/source、forbidden path 和 candidate no-popup execution"
+    source: "AC-009 / S4"
+    status: pending
+  - item: "dynamic restore candidate 未通过 no-popup probe 时必须 disabled/static_only 且不能启用"
+    source: "AC-003 / AC-004 / S4"
+    status: pending
+  - item: "enabled dynamic candidate 必须有 no-popup probe pass artifact"
+    source: "AC-005 / S5 / S7"
+    status: pending
+  - item: "native Windows + WezTerm live/manual evidence 不可用时不能写 full pass"
+    source: "AC-006 / S5 / S6"
+    status: pending
+  - item: "windows-rmux-ux-parity-evidence.json 固定 parity_dimension=visual_no_popup"
+    source: "AC-007 / S6"
+    status: pending
+  - item: "不修改 packaging/support tier owner、npm/install gate、foreground interaction、capture、identity 或 lifecycle contract"
+    source: "AC-008 / S7"
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-25-windows-rmux-visual-no-popup-parity/windows-rmux-visual-no-popup-parity-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-ux-parity-hardening/windows-rmux-ux-parity-hardening-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_windows_rmux_visual_no_popup_parity.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-004
+      command: "python -m pytest -q test/test_v2_tmux_ui.py -k \"windows_rmux_project_ui_avoids_shell_status_commands or set_tmux_ui_active or ccb_tmux_on or rmux_accepts_mouse_context_project_ui_bindings\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-005
+      command: "python -m py_compile \"lib/cli/services/tmux_ui_runtime/service.py\" \"lib/cli/services/tmux_ui_runtime/activation.py\" \"test/test_v2_tmux_ui.py\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-006
+      command: "python -m pytest -q test/test_rmux_packaging_docs_contracts.py test/test_cli_doctor_rmux_packaging.py"
+      core: false
+      failure_handling: fix-or-block-if-touched
+  evidence_required:
+    - visual_no_popup_report_json
+    - ux_parity_evidence_json
+    - popup_probe_transcript
+    - activation_no_popup_transcript
+    - manual_wezterm_no_popup_observation
+    - command_output
+    - diff_summary
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_import: forbidden

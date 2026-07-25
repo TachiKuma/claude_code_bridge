@@ -1,7 +1,7 @@
 ---
 doc_type: roadmap
 slug: windows-rmux-ux-parity-hardening
-status: draft
+status: active
 created: 2026-07-25
 last_reviewed: 2026-07-25
 tags: [windows, rmux, wezterm, ux-parity, hardening, terminal-runtime]
@@ -63,6 +63,13 @@ related_architecture:
 - design frontmatter 或 design 正文必须引用该 brainstorm 路径，并记录 owner 已批准/通过进入 design。
 - `.codestable/roadmap/windows-rmux-ux-parity-hardening/windows-rmux-ux-parity-hardening-items.yaml` 中对应 item 必须回填 `brainstorm_required: true`、`brainstorm`、`brainstorm_status` 与 `design_admission`；`brainstorm_status` 非 `confirmed` 时不得启动 design。
 - 已经先行进入 design 的 item 不得绕过本 gate；若缺少 confirmed brainstorm 或 design 未引用该 brainstorm，继续实现前必须补齐确认记录和引用。
+
+状态枚举：
+
+- `brainstorm_status` 只允许 `pending | confirmed`。
+- `design_admission` 只允许 `blocked_until_owner_brainstorm_approval | admitted`。
+- `design_admission: admitted` 必须同时满足：`brainstorm_required: true`、`brainstorm_status: confirmed`、`brainstorm` 指向存在的 feature brainstorm、该 brainstorm frontmatter 为 `doc_type: feature-brainstorm` / `status: confirmed`，且 design frontmatter 或正文引用该 brainstorm 并记录 owner 已批准/通过进入 design。
+- `$cs-brainstorm` 完成后，只有 owner 明确批准/通过进入 design，才能把对应 item 从 `brainstorm_status: pending` / `design_admission: blocked_until_owner_brainstorm_approval` 更新为 `brainstorm_status: confirmed` / `design_admission: admitted`。
 
 ## 3. 模块拆分（概设）
 

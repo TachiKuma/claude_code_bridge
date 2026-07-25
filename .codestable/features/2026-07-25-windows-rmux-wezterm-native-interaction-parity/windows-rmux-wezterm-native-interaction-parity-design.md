@@ -1,6 +1,9 @@
 ---
 doc_type: feature-design
 feature: 2026-07-25-windows-rmux-wezterm-native-interaction-parity
+roadmap: windows-rmux-ux-parity-hardening
+roadmap_item: windows-rmux-wezterm-native-interaction-parity
+brainstorm: .codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-brainstorm.md
 requirement:
 execution_lane: standard
 status: draft
@@ -21,6 +24,12 @@ tags: [windows, rmux, wezterm, interaction, mouse, keyboard, clipboard, sidebar,
 | KillProject | sidebar 退出项目的既有高影响动作。 | sidebar `x` 保持 KillProject 语义，不改成仅隐藏 sidebar。 |
 
 ## 1. 决策与约束
+
+### Design admission
+
+本 design 的前置 brainstorm 为 `.codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-brainstorm.md`。该记录 frontmatter 为 `doc_type: feature-brainstorm` / `status: confirmed`，并已收敛到 Windows/rmux/WezTerm 前台交互采用 GUI-native parity；它是本 feature 进入 design 的 owner admission evidence。
+
+本 design 绑定 roadmap `windows-rmux-ux-parity-hardening` / item `windows-rmux-wezterm-native-interaction-parity`。继续实现前必须保留上述 brainstorm 引用，并遵守 roadmap 的 Design 前置 Brainstorm Gate；后续对本 design 的实质更新也必须先确认 admission 仍有效。
 
 ### 需求摘要
 
