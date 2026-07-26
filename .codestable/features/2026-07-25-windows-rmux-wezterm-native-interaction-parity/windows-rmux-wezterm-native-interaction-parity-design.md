@@ -7,7 +7,7 @@ brainstorm: .codestable/features/2026-07-25-windows-rmux-wezterm-native-interact
 requirement:
 execution_lane: standard
 status: draft
-summary: Windows/rmux/WezTerm 前台交互采用 GUI-native parity，普通 pane 透明化，sidebar 专属接管
+summary: Windows/rmux/WezTerm 前台交互采用 GUI-native parity，普通 pane 透明化，sidebar 专属接管；fallback 改用 rmux 支持的 -t= 鼠标定位修正单击 focus 与 sidebar header 点击
 tags: [windows, rmux, wezterm, interaction, mouse, keyboard, clipboard, sidebar, parity]
 ---
 
@@ -37,12 +37,18 @@ tags: [windows, rmux, wezterm, interaction, mouse, keyboard, clipboard, sidebar,
 
 成功标准：
 
-- Windows/rmux fallback 下，普通 pane 的左键路径只做 focus，不透传普通左键到 pane 应用。
+- Windows/rmux fallback 下，普通 pane 的**左键单击即聚焦**：绑定为 `select-pane -t =`（rmux 支持的当前鼠标 pane target），不裸透传 `send-keys -M` 到普通 pane 应用。
 - Windows/rmux fallback 下，普通 pane 的右键不被绑定为 `paste-buffer -p`。
 - Windows/rmux fallback 下，普通 pane 的滚轮不进入 `copy-mode -e`，不触发空 scrollback `[0/0]`。
-- sidebar pane 仍能通过鼠标滚轮、点击 agent、`⚙`、`x` 完成既有 CCB TUI 交互。
+- sidebar pane 仍能通过鼠标滚轮、点击 agent、`⚙`、`x` 完成既有 CCB TUI 交互；且 **sidebar header 的 `⚙` settings 与 `x` KillProject 点击必须实际触发对应动作**（不只是绑定串被 `list-keys` 注册）——通过在 `@ccb_role=sidebar` 分流后把鼠标事件透传给 sidebar crossterm 应用，由 Rust `header_action_at` 命中处理。
 - `Q` 和 `Shift+Q` 在 Windows/WezTerm/crossterm 编码差异下仍映射到同一 KillProject 语义。
 - Linux/macOS tmux 既有 project UI 行为不因本 feature 回退。
+
+已知残留（GUI-native 取舍下第一版不实现，只记录，不算 AC 失败）：
+
+- **右键粘贴**：普通 pane 右键不做 `paste-buffer -p`；WezTerm 原生右键粘贴在 rmux mouse capture 下无法接管，作为 GUI-native 预期残留记录在 `evidence/manual-wezterm-runbook.md`。
+- **滚轮原生滚动**：普通 pane 滚轮不进 copy-mode，也不保证原生 scrollback；GUI-native 预期残留。
+- **拖拽选区起点行 off-by-one**：根因在 rmux daemon 内部鼠标坐标→pane 行映射（本 feature 不绑 `MouseDrag1Pane`），属 rmux 外部二进制；按第 2.1 节假设作为 rmux 外部残留，不在本 feature 修复，必要时另行推动 rmux 侧修正。
 
 明确不做：
 
@@ -69,13 +75,15 @@ tags: [windows, rmux, wezterm, interaction, mouse, keyboard, clipboard, sidebar,
 4. **滚轮和后端 capture 解耦。**  
    用户滚轮不作为 `capture-pane` / provider completion 的可靠性证明；机器读取继续由后端 capture 测试覆盖。
 
-### Top 3 风险与缓解
+### Top 4 风险与缓解
 
 1. **风险：rmux mouse capture 使 WezTerm 原生滚轮/右键仍无法完全接管。**  
-   缓解：验收目标先定为“不被 CCB/rmux 劫持到 copy-mode / paste-buffer /普通左键透传”，并要求真实 WezTerm 手工 runbook 记录残留。
-2. **风险：sidebar 全接管改动误伤普通 pane。**  
+   缓解：右键粘贴、滚轮原生滚动作为 GUI-native 预期残留（见「已知残留」），验收目标定为“不被 CCB/rmux 劫持到 copy-mode / paste-buffer /普通左键透传”，并要求真实 WezTerm 手工 runbook 记录残留。**注意区分**：单击 focus（1）与 sidebar header 点击（5/6）**不是** capture 限制，而是 fallback 代码 bug（误用 `select-pane -M`、`if-shell` 漏 `-t`），必须修复。
+2. **风险：验证只覆盖“绑定被注册”而漏掉“点击时动作是否真的执行”。**
+   缓解：这是本轮首次 QA 漏检的根因——旧测试只断言 `list-keys` 输出含绑定串，`if-shell` 漏 `-t` 导致条件对活动 pane 求值恒假、点击无效却未被发现。新测试必须断言 fallback 生成的绑定**内容正确**：普通 pane 左键为 `select-pane -t =`（非 `-M`）、sidebar 分流的 `if-shell` 带 `-t =` 目标或采用无条件 `send-keys -t = -M` 透传。
+3. **风险：sidebar 全接管改动误伤普通 pane。**
    缓解：单元测试和 live binding snapshot 必须同时断言普通 pane fallback 不含 `copy-mode -e`、`paste-buffer -p` 和裸 `send-keys -M` 左键透传。
-3. **风险：为了交互修复顺手改变 Linux/macOS tmux 行为。**  
+4. **风险：为了交互修复顺手改变 Linux/macOS tmux 行为。**
    缓解：scope guard 只允许 Windows + `backend_impl=rmux` fallback 语义变化；现有 tmux UI 测试保持回归。
 
 ### 非显然依赖与关键假设
@@ -101,16 +109,21 @@ tags: [windows, rmux, wezterm, interaction, mouse, keyboard, clipboard, sidebar,
 #### 现状
 
 - `lib/cli/services/tmux_ui_runtime/service.py` 的 `_apply_sidebar_mouse_controls()` 负责 root table mouse binding。非 Windows/rmux 路径使用 `#{mouse_pane}`，Windows/rmux 因 `_mouse_pane_format_supported()` 返回 false 进入 `_apply_sidebar_mouse_controls_without_mouse_pane_format()`。
-- Windows/rmux fallback 目前已经避免绑定 `MouseDown3Pane`，防止普通右键被 `paste-buffer -p` 劫持；但普通 pane wheel 仍可能在 `history_size > 0` 时进入 `copy-mode -e`。
-- `test/test_v2_tmux_ui.py` 已覆盖 Windows/rmux 不使用 `#{mouse_pane}` / `-t =`、不绑定右键 paste-buffer、以及 live rmux binding snapshot。
-- `tools/ccb-agent-sidebar/src/tui.rs` 中 `exit_action_for_key()` 已把 `KeyCode::Char('Q')` 和 `KeyCode::Char('q') + SHIFT` 映射为 `KillProject`。
+- **rmux 0.9.0 能力事实（2026-07-27 实测更正）**：rmux **支持** `if-shell`、`select-pane`、`unbind-key`、`send-keys -M`、格式算术与条件，以及 `-t =`（当前鼠标 pane target）。仅 `#{mouse_pane}` 不作 `-t` 自动解析（字面查找失败），因此 `_mouse_pane_format_supported()` 返回 false 走 fallback 是合理的，但 **fallback 内部本应改用 `-t =`**。
+- **fallback 缺陷（人工前台测试确认）**：
+  - 普通 pane 左键绑定为退化占位 `select-pane -M`（`-M`=清 marked-pane、无 `-t`，无法定位鼠标 pane）→ 单击不聚焦；双击聚焦只是因为 CCB 未 unbind `DoubleClick1Pane`，保留了 rmux 默认 `select-pane -t =`。
+  - sidebar 分流用的 `if-shell -F <cond>` **漏了 `-t =` target**（对比支持路径全带 `-t #{mouse_pane}`），条件里的 `#{@ccb_role}`/`#{pane_width}` 对“当前活动 pane”而非“被点击的 sidebar pane”求值 → 恒假 → sidebar `⚙`/`x` 点击不触发。
+- Windows/rmux fallback 已避免绑定 `MouseDown3Pane`（右键不劫持 `paste-buffer -p`）；普通 pane wheel 不进 `copy-mode -e`。右键粘贴、原生滚轮为 GUI-native 预期残留（见第 1 节）。
+- `test/test_v2_tmux_ui.py` 旧用例只断言 `list-keys` 输出**含**绑定串，未验证点击时动作是否真的执行——这正是 sidebar 点击失效漏检的原因。
+- `tools/ccb-agent-sidebar/src/tui.rs` 已有正确的鼠标命中链路：`handle_mouse_down` → `header_action_at`（⚙ 在 `pane_width-4`、`x` 在 `pane_width-2`），以及 `exit_action_for_key()` 把 `Q` / `Shift+Q` 映射为 `KillProject`。本机制正确，无需改 Rust。
 
 #### 变化
 
-- 收紧 Windows/rmux fallback 的普通 pane wheel 语义：普通 pane 不进入 `copy-mode -e`，不执行 `send-keys -X scroll-up/down`。
-- 保留普通 pane 左键 `select-pane -M` focus 行为，避免裸 `send-keys -M` 透传普通左键。
-- 保留 sidebar `send-keys -M`、`c` 和 `Q` 语义；sidebar `x` 仍映射 KillProject。
-- 将测试从“history_size/alternate_on 分流”更新为“普通 pane 不 copy-mode，sidebar 独占 wheel passthrough”。
+- **普通 pane 左键单击 focus**：`select-pane -M` → `select-pane -t =`，实现单击聚焦，且不裸透传 `send-keys -M`（符合 AC-003）。
+- **sidebar header 点击透传给 Rust**：sidebar 分流后，`⚙` settings 与 `x` KillProject 不再依赖 mux 层 `if-shell` 坐标条件 + `send-keys c`/`Q`，改为无条件 `send-keys -t = -M` 把原始鼠标事件透传给已 `EnableMouseCapture` 的 sidebar crossterm 应用，由 Rust `header_action_at` 命中并触发 config UI / KillProject。该方案绕开“`#{mouse_x}` 在事件中是否填充”的不确定性，也消除 fallback `if-shell` 漏 `-t` 的隐患。
+- 普通 pane wheel 语义维持：不进入 `copy-mode -e`，不执行 `send-keys -X scroll-up/down`；原生滚动作为 GUI-native 残留。
+- 保留 sidebar 滚轮 / agent 点击的 `send-keys -M` 透传；`Q` 键盘路径仍映射 KillProject。
+- 测试从“只断言 `list-keys` 含绑定串”升级为**断言绑定内容正确**：普通 pane 左键为 `select-pane -t =`（非 `-M`）、sidebar header 采用透传（无残留的漏 `-t` 条件）；并保留普通 pane 不含 `copy-mode -e` / `paste-buffer -p` / 裸 `send-keys -M` 的既有断言。
 
 ##### Interface 设计检查
 
@@ -135,13 +148,16 @@ tags: [windows, rmux, wezterm, interaction, mouse, keyboard, clipboard, sidebar,
 
 #### 现状
 
-当前 fallback 兼容了 rmux 不可靠的 `#{mouse_pane}` target，并修过右键 paste-buffer 劫持；但 wheel 仍保留普通 pane copy-mode 分支，和本轮“终端原生滚动优先”决策冲突。
+当前 fallback 因误判 rmux 不支持 `-t =`，普通 pane 左键/滚轮用了退化占位 `select-pane -M`（不 focus），sidebar header 用了漏 `-t` 的 `if-shell` 条件（点击恒不触发）。右键 paste-buffer 劫持已修过。
 
 #### 变化
 
-- Windows/rmux fallback 的 `WheelUpPane` / `WheelDownPane`：sidebar 继续 `select-pane -M ; send-keys -M`，普通 pane 不执行 copy-mode scroll。
-- `MouseDown1Pane` / `MouseDown1Border`：保留 sidebar header direct action；普通 pane 只 focus。
-- `MouseDown3Pane` / `M-MouseDown3Pane`：Windows/rmux fallback 继续不绑定。
+- `MouseDown1Pane` / `MouseDown1Border`：
+  - 普通 pane：`select-pane -t =`（单击 focus），不裸透传 `send-keys -M`。
+  - sidebar pane：在 `@ccb_role=sidebar` 分流后无条件 `send-keys -t = -M` 透传给 Rust，由 `header_action_at` 处理 `⚙` settings / `x` KillProject；不再用 mux 层 `if-shell` 坐标条件直接 `send-keys c`/`Q`。
+- `WheelUpPane` / `WheelDownPane`：sidebar 继续透传（`select-pane -t = ; send-keys -M`）；普通 pane 不执行 copy-mode scroll（原生滚动残留）。
+- `MouseDown3Pane` / `M-MouseDown3Pane`：Windows/rmux fallback 继续不绑定（右键粘贴残留）。
+- fallback 内所有需要定位鼠标 pane 的动作统一用 `-t =`，不再出现无 `-t` 的 `select-pane -M` 或漏 `-t` 的 `if-shell`。
 
 流程级约束：
 
@@ -159,12 +175,12 @@ tags: [windows, rmux, wezterm, interaction, mouse, keyboard, clipboard, sidebar,
 
 ### 2.4 推进策略
 
-1. **编排骨架：收紧 Windows/rmux fallback 的普通 pane left-click、wheel 和 right-click 行为。**  
-   退出信号：fake backend calls 中普通 pane left-click 只保留 focus，不裸透传 `send-keys -M`；普通 pane wheel/right-click 分支不再包含 `copy-mode -e`、`send-keys -X scroll-up/down`、`paste-buffer -p`。
-2. **sidebar 交互保持：验证 header、滚轮、agent 点击和 KillProject 不回退。**  
-   退出信号：sidebar 分支仍包含 `send-keys -M`、`send-keys c`、`send-keys Q`，Rust `Q` / `Shift+Q` 测试通过。
+1. **普通 pane 左键修正 + wheel/right-click 收紧。**
+   退出信号：fake backend calls 中普通 pane left-click 绑定为 `select-pane -t =`（单击 focus），**不再出现无 `-t` 的 `select-pane -M`**，且不裸透传 `send-keys -M`；普通 pane wheel/right-click 分支不含 `copy-mode -e`、`send-keys -X scroll-up/down`、`paste-buffer -p`。
+2. **sidebar header 点击透传修复：`⚙` settings / `x` KillProject 实际生效。**
+   退出信号：sidebar 分流后 header 点击绑定为无条件 `send-keys -t = -M` 透传（不再是漏 `-t` 的 `if-shell` + `send-keys c`/`Q`）；运行时/内容断言证明该绑定内容正确；Rust `header_action_at` 对 `⚙`（`pane_width-4`）/ `x`（`pane_width-2`）命中单测通过；Rust `Q` / `Shift+Q` KillProject 测试通过；sidebar 滚轮 / agent 点击透传不回退。
 3. **live binding snapshot：在 rmux 可用时验证 root bindings。**  
-   退出信号：`rmux list-keys -T root` 不包含普通 pane copy-mode / paste-buffer 劫持，且包含 sidebar 分流；证据写入 `.codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/live-binding-snapshot.txt` 或 QA 同名小节。
+   退出信号：`rmux list-keys -T root` 中普通 pane left-click 为 `select-pane -t =`、不含 copy-mode / paste-buffer 劫持，sidebar 分流为透传；证据写入 `.codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/live-binding-snapshot.txt` 或 QA 同名小节。
 4. **前台手工 runbook：记录 WezTerm GUI 操作结果。**  
    退出信号：用户或 QA 记录单击聚焦、拖选、右键粘贴、滚轮、sidebar `⚙` / `x` 的实际结果；证据写入 `.codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/manual-wezterm-runbook.md` 或 QA 同名小节；缺 rmux 记 `blocked: rmux-unavailable`，缺 GUI 前台记 `partial: gui-unavailable`，不得把 skipped live test 记为 full pass。
 5. **回归收口：跑 tmux UI 与 sidebar TUI 相关测试。**  
@@ -196,16 +212,18 @@ tags: [windows, rmux, wezterm, interaction, mouse, keyboard, clipboard, sidebar,
 |---|---|---|---|
 | AC-001 | Windows + `backend_impl=rmux` apply project UI | 普通 pane wheel 分支不包含 `copy-mode -e` 或 `send-keys -X scroll-up/down` | unit |
 | AC-002 | Windows + `backend_impl=rmux` apply project UI | 普通 pane right-click 不绑定 `MouseDown3Pane` / `M-MouseDown3Pane` 到 `paste-buffer -p` | unit |
-| AC-003 | Windows + `backend_impl=rmux` 普通 pane 左键 | binding 只做 pane focus，不裸透传 `send-keys -M` 到普通 pane 应用 | unit / live |
-| AC-004 | Windows + `backend_impl=rmux` sidebar wheel / click | sidebar 分支仍透传 mouse event，并保留 settings / KillProject header action | unit / live |
+| AC-003 | Windows + `backend_impl=rmux` 普通 pane 左键 | binding 为 `select-pane -t =`（单击即聚焦），不裸透传 `send-keys -M`，且**不出现无 `-t` 的 `select-pane -M`** | unit / live |
+| AC-004 | Windows + `backend_impl=rmux` sidebar wheel / click | sidebar 分支透传 mouse event；header `⚙` settings / `x` KillProject 点击**实际触发对应动作**——绑定为无条件 `send-keys -t = -M` 透传、由 Rust `header_action_at` 命中处理，非仅 `list-keys` 注册 | unit / cargo / live / manual |
 | AC-005 | Windows/WezTerm/crossterm `Q` / `Shift+Q` | 两种编码均映射到 KillProject，普通 `q` / Esc 不 kill project | cargo test |
 | AC-006 | 非 Windows tmux 路径 | 既有 tmux project UI mouse/theme 行为不回退 | unit |
-| AC-007 | WezTerm 手工前台 | 单击聚焦、拖选、右键粘贴、滚轮、sidebar `⚙` / `x` 结果被记录；残留限制明确分类 | manual |
+| AC-007 | WezTerm 手工前台 | 单击聚焦、sidebar `⚙` / `x` 记录为 pass；右键粘贴、滚轮、拖选起点行 off-by-one 记录为**已知残留**（GUI-native / rmux 外部），不计 AC 失败 | manual |
+| AC-008 | Windows + `backend_impl=rmux` sidebar header 点击的运行时派发 | 有断言证明 sidebar header 绑定内容为透传（非漏 `-t` 的 `if-shell` 条件），覆盖「点击时动作是否真执行」而非仅「绑定被注册」 | unit / cargo |
 
 测试更新要求：
 
-- `test_windows_rmux_project_ui_avoids_shell_status_commands` 中 wheel 断言必须反转：普通 pane fallback 不再要求 `copy-mode -e`、`history_size`、`alternate_on`、`send-keys -X -N 2 scroll-up/down` 存在；应断言这些不出现在普通 pane fallback 分支。
-- 同一测试或拆出的精准测试必须继续证明 sidebar 分支保留 `select-pane -M ; send-keys -M`，普通 pane left-click 不裸透传 `send-keys -M`。
+- `test_windows_rmux_project_ui_avoids_shell_status_commands` 中 wheel 断言维持：普通 pane fallback 不出现 `copy-mode -e`、`history_size`、`alternate_on`、`send-keys -X -N 2 scroll-up/down`。
+- 精准测试必须证明：普通 pane left-click 绑定为 **`select-pane -t =`**（单击 focus），**不再出现无 `-t` 的 `select-pane -M`**，且不裸透传 `send-keys -M`。
+- **新增运行时派发断言（AC-008）**：sidebar header `⚙`/`x` 点击绑定为无条件 `send-keys -t = -M` 透传，**不含漏 `-t` 的 `if-shell` settings/kill 条件**；测试覆盖“点击时动作是否真执行”这一旧用例盲区（旧用例只验证 `list-keys` 含绑定串）。Rust 侧 `header_action_at` 对 `⚙`（`pane_width-4`）/ `x`（`pane_width-2`）命中的单测作为行为证据。
 - live rmux 用例运行时使用 `-rs` 或等价输出记录 skip reason；skip 只能作为环境事实，不能替代 live binding snapshot。
 
 ### 3.2 明确不做的反向核对项
@@ -222,19 +240,20 @@ tags: [windows, rmux, wezterm, interaction, mouse, keyboard, clipboard, sidebar,
 |---|---|---|---|---|
 | AC-001 普通 pane wheel 不进 copy-mode | S1 | test | `python -m pytest -q test/test_v2_tmux_ui.py -k windows_rmux_project_ui_avoids_shell_status_commands` | yes |
 | AC-002 右键不劫持 paste-buffer | S1 | test | `python -m pytest -q test/test_v2_tmux_ui.py -k windows_rmux_project_ui_avoids_shell_status_commands` | yes |
-| AC-003 左键只 focus | S1,S3 | test / live | `python -m pytest -q -rs test/test_v2_tmux_ui.py -k rmux_accepts_mouse_context_project_ui_bindings` | yes |
-| AC-004 sidebar 全接管 | S2,S3 | test / live | `python -m pytest -q test/test_v2_tmux_ui.py` | yes |
+| AC-003 左键单击 focus（`select-pane -t =`） | S1,S3 | test / live | `python -m pytest -q -rs test/test_v2_tmux_ui.py -k rmux_accepts_mouse_context_project_ui_bindings` | yes |
+| AC-004 sidebar 全接管 + header 点击生效 | S2,S3 | test / cargo / live | `python -m pytest -q test/test_v2_tmux_ui.py` | yes |
 | AC-005 Q / Shift+Q KillProject | S2 | test | `cargo test --manifest-path tools/ccb-agent-sidebar/Cargo.toml shifted_q_is_project_kill_across_terminal_key_encodings --quiet` | yes |
 | AC-006 tmux 路径回归 | S5 | test | `python -m pytest -q test/test_v2_tmux_ui.py` | yes |
-| AC-007 WezTerm 前台手工 | S4 | manual | 在 native Windows + WezTerm + rmux 复测交互 runbook | yes |
+| AC-007 WezTerm 前台手工（单击/sidebar pass，右键/滚轮/选区残留） | S4 | manual | 在 native Windows + WezTerm + rmux 复测交互 runbook | yes |
+| AC-008 sidebar header 运行时派发断言 | S2 | test / cargo | `python -m pytest -q test/test_v2_tmux_ui.py` + `cargo test --manifest-path tools/ccb-agent-sidebar/Cargo.toml --quiet` | yes |
 
 ### 3.4 DoD Contract
 
 | ID | 要求 | 证据 | 阻塞级别 |
 |---|---|---|---|
 | DOD-DESIGN-001 | design/checklist/design-review 完整且通过 | design review | blocking |
-| DOD-IMPL-001 | Windows/rmux fallback 普通 pane 不再劫持 wheel / right-click / left-click passthrough | unit/live evidence | blocking |
-| DOD-IMPL-002 | sidebar mouse/header/KillProject 语义不回退 | unit/live/cargo evidence | blocking |
+| DOD-IMPL-001 | Windows/rmux fallback 普通 pane 左键单击 focus（`select-pane -t =`，无 `-M` 占位），不劫持 wheel / right-click、不裸透传 left-click | unit/live evidence | blocking |
+| DOD-IMPL-002 | sidebar mouse/header/KillProject 语义不回退，且 header `⚙`/`x` 点击**运行时实际触发**（透传 `send-keys -t = -M` + Rust `header_action_at`），有覆盖派发的断言（AC-008），非仅 `list-keys` 注册 | unit/live/cargo evidence | blocking |
 | DOD-IMPL-003 | Linux/macOS tmux project UI 测试不回退 | pytest | blocking |
 | DOD-REVIEW-001 | code review passed 且无 unresolved blocking | review report | blocking |
 | DOD-QA-001 | QA 包含 native Windows + WezTerm 手工记录，无法执行时明确 blocked/partial | QA report | blocking |

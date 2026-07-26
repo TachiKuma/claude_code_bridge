@@ -5,8 +5,8 @@ status: passed
 review_state: passed
 review_reason: ""
 reviewer_id: "019f96f8-30c4-7f23-999a-f412735f503d"
-reviewed: 2026-07-25
-round: 2
+reviewed: 2026-07-27
+round: 3
 ---
 
 # windows-rmux-wezterm-native-interaction-parity feature design 审查报告
@@ -101,3 +101,15 @@ Summary: E=5, C=1, H=0, H-only core checks=none。
 - Attributed delta: design/checklist 仅补强左键 focus 追踪、测试断言反转边界、live/manual artifact 路径、skip/blocked/partial 归因、check source 和表格列数；second-round 后只收紧 checklist S3 文案。
 - Verification: `python ".codestable/tools/validate-yaml.py" --file ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-checklist.yaml" --yaml-only` 通过。
 - Classification: 修订没有改变用户目标、公开 UX 决策、架构边界或 feature 范围；只是把验证语义和证据路径写得可执行。
+
+## Round 3 (2026-07-27 实测更正复审)
+
+审查范围：仅 design.md + checklist.yaml，采信事实基准（rmux 0.9.0 实测支持 `if-shell`/`select-pane`/`-t =`/格式算术；根因＝fallback 误用无 `-t` 的 `select-pane -M` ＋ sidebar `if-shell` 漏 `-t`）。逐条结论如下：
+
+1. 一致性（design 各节 ↔ checklist）—— minor：全文无残留旧方案矛盾文字，未出现「保留 select-pane -M focus」类表述；§2.1/§2.2 现状节把 `select-pane -M` 与漏 `-t` 的 `if-shell` 明确标为缺陷，变化节统一改 `-t =` / 透传，口径自洽；成功标准 / §2.4 / AC-003/004/008 / DoD-IMPL-001/002 / checklist steps 1-2 与 checks 均一致。AC-001..008 各有对应 check，映射完整。
+2. 方案-实测一致 —— minor：§2.1 已用「2026-07-27 实测更正」显式记录 rmux 支持能力，并解释 `#{mouse_pane}` 不作 `-t` 自动解析→走 fallback 合理、但 fallback 应改 `-t =`；无遗留「rmux 不支持 if-shell/select-pane」错误表述，修法与事实基准逐条吻合。
+3. 残留分类自洽 —— minor：3（右键粘贴）/4（滚轮）＝GUI-native 预期残留、2（选区起点行 off-by-one）＝rmux daemon 内部坐标映射（rmux 外部二进制），与关键决策①一致且明确「不计 AC 失败」（AC-007）；1/5/6 明确归为 fallback bug 必修，风险节 1 特别与「capture 限制」区分。
+4. 范围守护 —— minor：scope guard 限定 Windows + `backend_impl=rmux` fallback；§3.2 反向核对与「明确不做」覆盖不加模式开关、不碰 provider capture/completion、不改 install/support tier、不改 KillProject、不动 Rust TUI（除回退）；AC-006/DoD-IMPL-003 守住 tmux 回归。未越界。
+5. 盲区闭合（核心）—— minor：AC-008 ＋测试更新要求明确断言「绑定内容正确」（普通 pane 左键＝`select-pane -t =` 非 `-M`；sidebar header＝无条件 `send-keys -t = -M` 透传、不含漏 `-t` 的 `if-shell`），显式覆盖旧用例「只验 `list-keys` 含绑定串」盲区，并以 Rust `header_action_at`（⚙ `pane_width-4`/x `pane_width-2`）命中单测作行为证据。派发盲区已闭合。
+
+结论：blocking＝0；设计与实测事实、关键决策、残留分类、范围守护、派发盲区全部自洽，测试要求已从「注册断言」升级为「内容/派发断言」。review_state: **passed**。

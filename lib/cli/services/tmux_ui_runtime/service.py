@@ -264,98 +264,34 @@ def _apply_sidebar_mouse_controls(
 
 
 def _apply_sidebar_mouse_controls_without_mouse_pane_format(backend) -> None:
-    select_action = 'select-pane -M'
-    sidebar_action = 'select-pane -M ; send-keys -M'
-    settings_action = 'select-pane -M ; send-keys c'
-    kill_action = 'select-pane -M ; send-keys Q'
-    sidebar_or_select_action = (
-        'if-shell -F '
-        + shlex.quote('#{==:#{@ccb_role},sidebar}')
-        + ' '
-        + shlex.quote(sidebar_action)
-        + ' '
-        + shlex.quote(select_action)
-    )
-    wheel_up_action = (
-        'select-pane -M ; if-shell -F "#{pane_in_mode}" '
-        '{ send-keys -M } { if-shell -F "#{||:#{==:#{history_size},0},#{alternate_on}}" '
-        '"send-keys -M" "copy-mode -e ; send-keys -X -N 2 scroll-up" }'
-    )
-    wheel_down_action = (
-        'select-pane -M ; if-shell -F "#{pane_in_mode}" '
-        '{ send-keys -M } { if-shell -F "#{||:#{==:#{history_size},0},#{alternate_on}}" '
-        '"send-keys -M" "copy-mode -e ; send-keys -X -N 2 scroll-down" }'
-    )
-    tmux_run(
-        backend,
-        [
-            'bind-key',
-            '-T',
-            'root',
-            'MouseDown1Pane',
-            'if-shell',
-            '-F',
-            _sidebar_settings_click_condition(),
-            settings_action,
-            (
-                'if-shell -F '
-                + shlex.quote(_sidebar_kill_click_condition())
-                + ' '
-                + shlex.quote(kill_action)
-                + ' '
-                + shlex.quote(sidebar_or_select_action)
-            ),
-        ],
-    )
-    tmux_run(
-        backend,
-        [
-            'bind-key',
-            '-T',
-            'root',
-            'MouseDown1Border',
-            'if-shell',
-            '-F',
-            _sidebar_settings_click_condition(),
-            settings_action,
-            (
-                'if-shell -F '
-                + shlex.quote(_sidebar_kill_click_condition())
-                + ' '
-                + shlex.quote(kill_action)
-                + ' '
-                + shlex.quote(_sidebar_top_border_action(sidebar_action))
-            ),
-        ],
-    )
-    tmux_run(
-        backend,
-        [
-            'bind-key',
-            '-T',
-            'root',
-            'WheelUpPane',
-            'if-shell',
-            '-F',
-            '#{==:#{@ccb_role},sidebar}',
-            sidebar_action,
-            wheel_up_action,
-        ],
-    )
-    tmux_run(
-        backend,
-        [
-            'bind-key',
-            '-T',
-            'root',
-            'WheelDownPane',
-            'if-shell',
-            '-F',
-            '#{==:#{@ccb_role},sidebar}',
-            sidebar_action,
-            wheel_down_action,
-        ],
-    )
+    # rmux 支持 -t =（当前鼠标 pane target）。用它替代无法定位鼠标 pane 的 select-pane -M：
+    # 普通 pane 单击即 focus；sidebar pane 聚焦并把原始鼠标事件透传给 sidebar crossterm 应用，
+    # 由 Rust header_action_at 命中 ⚙ settings / x KillProject / agent 选择，
+    # 不再用漏 -t 的 if-shell 坐标条件在 mux 层分发 send-keys c/Q。
+    select_action = 'select-pane -t ='
+    sidebar_action = 'select-pane -t = ; send-keys -t = -M'
+    for mouse_key in (
+        'MouseDown1Pane',
+        'MouseDown1Border',
+        'WheelUpPane',
+        'WheelDownPane',
+    ):
+        tmux_run(
+            backend,
+            [
+                'bind-key',
+                '-T',
+                'root',
+                mouse_key,
+                'if-shell',
+                '-F',
+                '-t',
+                '=',
+                '#{==:#{@ccb_role},sidebar}',
+                sidebar_action,
+                select_action,
+            ],
+        )
 
 
 def _sidebar_resize_sync_shell(

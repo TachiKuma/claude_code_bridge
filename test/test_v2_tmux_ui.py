@@ -380,35 +380,54 @@ def test_windows_rmux_project_ui_avoids_shell_status_commands(monkeypatch, tmp_p
     mouse_down_bindings = [call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'MouseDown1Pane']]
     assert len(mouse_down_bindings) == 1
     mouse_down_binding = mouse_down_bindings[0]
-    assert mouse_down_binding[:6] == ['bind-key', '-T', 'root', 'MouseDown1Pane', 'if-shell', '-F']
-    assert 'send-keys -M' in mouse_down_binding[8]
-    assert 'select-pane -M' in mouse_down_binding[8]
-    assert 'select-pane -t =' not in '\n'.join(mouse_down_binding)
+    # MouseDown1Pane fallback 改用 rmux 支持的 -t = 定位；条件也必须在鼠标 pane 上求值
+    assert mouse_down_binding[:8] == [
+        'bind-key',
+        '-T',
+        'root',
+        'MouseDown1Pane',
+        'if-shell',
+        '-F',
+        '-t',
+        '=',
+    ]
+    assert mouse_down_binding[8] == '#{==:#{@ccb_role},sidebar}'
+    # sidebar 分支：聚焦并把原始鼠标事件透传给 Rust header_action_at（命中 ⚙/x/agent）
+    assert mouse_down_binding[9] == 'select-pane -t = ; send-keys -t = -M'
+    # 普通 pane：单击即 focus（rmux -t =），不裸透传 send-keys -M
+    assert mouse_down_binding[10] == 'select-pane -t ='
+    # 不再出现无 -t 的 select-pane -M 占位，也不再有 mux 层 settings/kill 分发（改由 Rust 命中）
+    assert 'select-pane -M' not in '\n'.join(mouse_down_binding)
+    assert 'send-keys c' not in '\n'.join(mouse_down_binding)
+    assert 'send-keys Q' not in '\n'.join(mouse_down_binding)
+    assert '#{mouse_x}' not in '\n'.join(mouse_down_binding)
     assert ['bind-key', '-T', 'root', 'MouseDown1Pane', 'send-keys', '-M'] not in calls
     wheel_up_bindings = [call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'WheelUpPane']]
     assert len(wheel_up_bindings) == 1
     wheel_up_binding = wheel_up_bindings[0]
-    assert wheel_up_binding[:6] == ['bind-key', '-T', 'root', 'WheelUpPane', 'if-shell', '-F']
-    assert wheel_up_binding[7] == 'select-pane -M ; send-keys -M'
-    assert 'select-pane -M' in wheel_up_binding[8]
-    assert 'pane_in_mode' in wheel_up_binding[8]
-    assert 'copy-mode -e' in wheel_up_binding[8]
-    assert 'history_size' in wheel_up_binding[8]
-    assert 'alternate_on' in wheel_up_binding[8]
-    assert 'send-keys -X -N 2 scroll-up' in wheel_up_binding[8]
-    assert ' -t =' not in '\n'.join(wheel_up_binding)
+    assert wheel_up_binding[:8] == ['bind-key', '-T', 'root', 'WheelUpPane', 'if-shell', '-F', '-t', '=']
+    assert wheel_up_binding[8] == '#{==:#{@ccb_role},sidebar}'
+    assert wheel_up_binding[9] == 'select-pane -t = ; send-keys -t = -M'
+    assert wheel_up_binding[10] == 'select-pane -t ='
+    assert 'pane_in_mode' not in wheel_up_binding[10]
+    assert 'copy-mode -e' not in wheel_up_binding[10]
+    assert 'history_size' not in wheel_up_binding[10]
+    assert 'alternate_on' not in wheel_up_binding[10]
+    assert 'send-keys -X -N 2 scroll-up' not in wheel_up_binding[10]
+    assert 'select-pane -M' not in '\n'.join(wheel_up_binding)
     wheel_down_bindings = [call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'WheelDownPane']]
     assert len(wheel_down_bindings) == 1
     wheel_down_binding = wheel_down_bindings[0]
-    assert wheel_down_binding[:6] == ['bind-key', '-T', 'root', 'WheelDownPane', 'if-shell', '-F']
-    assert wheel_down_binding[7] == 'select-pane -M ; send-keys -M'
-    assert 'select-pane -M' in wheel_down_binding[8]
-    assert 'pane_in_mode' in wheel_down_binding[8]
-    assert 'copy-mode -e' in wheel_down_binding[8]
-    assert 'history_size' in wheel_down_binding[8]
-    assert 'alternate_on' in wheel_down_binding[8]
-    assert 'send-keys -X -N 2 scroll-down' in wheel_down_binding[8]
-    assert ' -t =' not in '\n'.join(wheel_down_binding)
+    assert wheel_down_binding[:8] == ['bind-key', '-T', 'root', 'WheelDownPane', 'if-shell', '-F', '-t', '=']
+    assert wheel_down_binding[8] == '#{==:#{@ccb_role},sidebar}'
+    assert wheel_down_binding[9] == 'select-pane -t = ; send-keys -t = -M'
+    assert wheel_down_binding[10] == 'select-pane -t ='
+    assert 'pane_in_mode' not in wheel_down_binding[10]
+    assert 'copy-mode -e' not in wheel_down_binding[10]
+    assert 'history_size' not in wheel_down_binding[10]
+    assert 'alternate_on' not in wheel_down_binding[10]
+    assert 'send-keys -X -N 2 scroll-down' not in wheel_down_binding[10]
+    assert 'select-pane -M' not in '\n'.join(wheel_down_binding)
     assert not [call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'MouseDown3Pane']]
     assert not [call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'M-MouseDown3Pane']]
     assert 'paste-buffer -p' not in rendered_commands
@@ -460,17 +479,30 @@ try:
     assert not any(line.startswith("bind-key -T root MouseDown3Pane") for line in all_key_lines)
     assert not any(line.startswith("bind-key -T root M-MouseDown3Pane") for line in all_key_lines)
     assert "#{mouse_pane}" not in text
-    assert "-t =" not in scoped_text
-    assert "MouseDown1Pane" in scoped_text and "select-pane -M" in scoped_text
-    for key, direction in (("WheelUpPane", "scroll-up"), ("WheelDownPane", "scroll-down")):
+    assert "select-pane -t =" in scoped_text
+    assert "send-keys -t = -M" in scoped_text
+    assert "select-pane -M" not in scoped_text
+    mouse_down_matching = [
+        line for line in scoped_lines if line.startswith("bind-key -T root MouseDown1Pane")
+    ]
+    assert len(mouse_down_matching) == 1
+    assert "if-shell -F -t =" in mouse_down_matching[0]
+    assert "select-pane -t =" in mouse_down_matching[0]
+    assert "send-keys -t = -M" in mouse_down_matching[0]
+    assert "send-keys c" not in mouse_down_matching[0]
+    assert "send-keys Q" not in mouse_down_matching[0]
+    for key in ("WheelUpPane", "WheelDownPane"):
         matching = [line for line in scoped_lines if line.startswith(f"bind-key -T root {key}")]
         assert len(matching) == 1
         line = matching[0]
-        assert "pane_in_mode" in line
-        assert "history_size" in line
-        assert "alternate_on" in line
-        assert "copy-mode -e" in line
-        assert direction in line
+        assert "if-shell -F -t =" in line
+        assert "select-pane -t = ; send-keys -t = -M" in line
+        assert "pane_in_mode" not in line
+        assert "history_size" not in line
+        assert "alternate_on" not in line
+        assert "copy-mode -e" not in line
+        assert "scroll-up" not in line
+        assert "scroll-down" not in line
     assert "paste-buffer -p" not in scoped_text
 finally:
     backend._tmux_run(["kill-session", "-t", session], check=False, capture=True)
