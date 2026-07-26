@@ -18,6 +18,8 @@ CodeStable 所有落盘产出的正文用**中文**：plan / design、plan revie
 
 ### 命令与脚本陷阱
 
+- 跑 `.codestable` 下 cs 工具脚本（如 `codestable-workflow-next.py`）前先 `export PYTHONDONTWRITEBYTECODE=1`；否则脚本第 16 行 `os.execvpe` 自我重执行在本机 Python 3.14 + Windows 触发 access violation（段错误 exit 139）。
+
 ### 路径与目录约定
 
 ### 环境变量与凭证

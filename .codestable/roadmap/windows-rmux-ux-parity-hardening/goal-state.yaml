@@ -1,0 +1,68 @@
+roadmap: windows-rmux-ux-parity-hardening
+status: handoff
+baseline_ref: 4a10e41bb668f8f6c954d47098531069e1182d7b
+driver_kind: host-agent
+driver_id: 019f9e9e-e8da-7561-8cf9-bcdf1f663114
+execution_confirmation_id: goal-execution-2026-07-26-windows-rmux-ux-parity-hardening
+acceptance_authorization: approved
+acceptance_authorization_ref: approval-report.md#goal-acceptance
+commit_authorization: approved
+commit_authorization_ref: approval-report.md#goal-commits
+handoff_reason: "windows-rmux-wezterm-native-interaction-parity QA FAIL: owner completed the human-operated native Windows + WezTerm + rmux foreground mouse transcript on 2026-07-26; all six AC-007 interactions FAILED (single-click focus, drag-selection row offset, right-click paste, wheel scroll, sidebar settings click, sidebar x KillProject). This is confirmed defective interaction parity, not an evidence gap."
+handoff_next: "Human foreground evidence is recorded and FAILED in .codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/manual-wezterm-runbook.md. Return this feature to implementation/fix via cs-feat: (1) single-click focus bound to double-click instead of single; (2) drag-selection start row off-by-one (column correct); (3) right-click paste swallowed before WezTerm's .wezterm.lua paste binding; (4) ordinary pane wheel has no scroll/passthrough binding; (5)+(6) ccb-agent-sidebar click hit-test/event dispatch not wired for settings and x KillProject. Fix all six, then rerun cs-feat QA."
+current_feature_index: 0
+features:
+  - slug: windows-rmux-wezterm-native-interaction-parity
+    roadmap_item: windows-rmux-wezterm-native-interaction-parity
+    feature_dir: .codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity
+    design: .codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-design.md
+    checklist: .codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-checklist.yaml
+    review: .codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-review.md
+    qa: .codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-qa.md
+    acceptance: .codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-acceptance.md
+    status: pending
+  - slug: windows-rmux-output-capture-parity
+    roadmap_item: windows-rmux-output-capture-parity
+    feature_dir: .codestable/features/2026-07-25-windows-rmux-output-capture-parity
+    design: .codestable/features/2026-07-25-windows-rmux-output-capture-parity/windows-rmux-output-capture-parity-design.md
+    checklist: .codestable/features/2026-07-25-windows-rmux-output-capture-parity/windows-rmux-output-capture-parity-checklist.yaml
+    review: .codestable/features/2026-07-25-windows-rmux-output-capture-parity/windows-rmux-output-capture-parity-review.md
+    qa: .codestable/features/2026-07-25-windows-rmux-output-capture-parity/windows-rmux-output-capture-parity-qa.md
+    acceptance: .codestable/features/2026-07-25-windows-rmux-output-capture-parity/windows-rmux-output-capture-parity-acceptance.md
+    status: pending
+  - slug: windows-rmux-pane-identity-layout-parity
+    roadmap_item: windows-rmux-pane-identity-layout-parity
+    feature_dir: .codestable/features/2026-07-25-windows-rmux-pane-identity-layout-parity
+    design: .codestable/features/2026-07-25-windows-rmux-pane-identity-layout-parity/windows-rmux-pane-identity-layout-parity-design.md
+    checklist: .codestable/features/2026-07-25-windows-rmux-pane-identity-layout-parity/windows-rmux-pane-identity-layout-parity-checklist.yaml
+    review: .codestable/features/2026-07-25-windows-rmux-pane-identity-layout-parity/windows-rmux-pane-identity-layout-parity-review.md
+    qa: .codestable/features/2026-07-25-windows-rmux-pane-identity-layout-parity/windows-rmux-pane-identity-layout-parity-qa.md
+    acceptance: .codestable/features/2026-07-25-windows-rmux-pane-identity-layout-parity/windows-rmux-pane-identity-layout-parity-acceptance.md
+    status: pending
+  - slug: windows-rmux-visual-no-popup-parity
+    roadmap_item: windows-rmux-visual-no-popup-parity
+    feature_dir: .codestable/features/2026-07-25-windows-rmux-visual-no-popup-parity
+    design: .codestable/features/2026-07-25-windows-rmux-visual-no-popup-parity/windows-rmux-visual-no-popup-parity-design.md
+    checklist: .codestable/features/2026-07-25-windows-rmux-visual-no-popup-parity/windows-rmux-visual-no-popup-parity-checklist.yaml
+    review: .codestable/features/2026-07-25-windows-rmux-visual-no-popup-parity/windows-rmux-visual-no-popup-parity-review.md
+    qa: .codestable/features/2026-07-25-windows-rmux-visual-no-popup-parity/windows-rmux-visual-no-popup-parity-qa.md
+    acceptance: .codestable/features/2026-07-25-windows-rmux-visual-no-popup-parity/windows-rmux-visual-no-popup-parity-acceptance.md
+    status: pending
+  - slug: windows-rmux-lifecycle-recovery-ux-parity
+    roadmap_item: windows-rmux-lifecycle-recovery-ux-parity
+    feature_dir: .codestable/features/2026-07-26-windows-rmux-lifecycle-recovery-ux-parity
+    design: .codestable/features/2026-07-26-windows-rmux-lifecycle-recovery-ux-parity/windows-rmux-lifecycle-recovery-ux-parity-design.md
+    checklist: .codestable/features/2026-07-26-windows-rmux-lifecycle-recovery-ux-parity/windows-rmux-lifecycle-recovery-ux-parity-checklist.yaml
+    review: .codestable/features/2026-07-26-windows-rmux-lifecycle-recovery-ux-parity/windows-rmux-lifecycle-recovery-ux-parity-review.md
+    qa: .codestable/features/2026-07-26-windows-rmux-lifecycle-recovery-ux-parity/windows-rmux-lifecycle-recovery-ux-parity-qa.md
+    acceptance: .codestable/features/2026-07-26-windows-rmux-lifecycle-recovery-ux-parity/windows-rmux-lifecycle-recovery-ux-parity-acceptance.md
+    status: pending
+  - slug: windows-rmux-supportability-parity-contract
+    roadmap_item: windows-rmux-supportability-parity-contract
+    feature_dir: .codestable/features/2026-07-26-windows-rmux-supportability-parity-contract
+    design: .codestable/features/2026-07-26-windows-rmux-supportability-parity-contract/windows-rmux-supportability-parity-contract-design.md
+    checklist: .codestable/features/2026-07-26-windows-rmux-supportability-parity-contract/windows-rmux-supportability-parity-contract-checklist.yaml
+    review: .codestable/features/2026-07-26-windows-rmux-supportability-parity-contract/windows-rmux-supportability-parity-contract-review.md
+    qa: .codestable/features/2026-07-26-windows-rmux-supportability-parity-contract/windows-rmux-supportability-parity-contract-qa.md
+    acceptance: .codestable/features/2026-07-26-windows-rmux-supportability-parity-contract/windows-rmux-supportability-parity-contract-acceptance.md
+    status: pending

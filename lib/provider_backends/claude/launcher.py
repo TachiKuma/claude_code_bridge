@@ -262,6 +262,8 @@ def _claude_help_text(cmd_parts: tuple[str, ...]) -> str:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding='utf-8',
+            errors='replace',
             timeout=3,
         )
     except Exception:

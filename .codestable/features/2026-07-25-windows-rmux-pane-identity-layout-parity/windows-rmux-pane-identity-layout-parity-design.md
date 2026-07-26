@@ -5,7 +5,7 @@ roadmap: windows-rmux-ux-parity-hardening
 roadmap_item: windows-rmux-pane-identity-layout-parity
 brainstorm: .codestable/features/2026-07-25-windows-rmux-pane-identity-layout-parity/windows-rmux-pane-identity-layout-parity-brainstorm.md
 execution_lane: goal
-status: draft
+status: approved
 summary: 以身份快照、绑定恢复和冲突诊断验证 Windows/rmux pane identity/layout parity，不默认重写 layout authority
 tags: [windows, rmux, wezterm, pane, identity, layout, canonicalization, parity, evidence, epic-child]
 ---

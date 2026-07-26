@@ -5,7 +5,7 @@ roadmap: windows-rmux-ux-parity-hardening
 roadmap_item: windows-rmux-visual-no-popup-parity
 brainstorm: .codestable/features/2026-07-25-windows-rmux-visual-no-popup-parity/windows-rmux-visual-no-popup-parity-brainstorm.md
 execution_lane: goal
-status: draft
+status: approved
 summary: 以 no-popup evidence gate 恢复或替代 Windows/rmux 动态视觉状态，保留 static fallback fail-closed
 tags: [windows, rmux, wezterm, visual, no-popup, status, border, title, evidence, epic-child]
 ---

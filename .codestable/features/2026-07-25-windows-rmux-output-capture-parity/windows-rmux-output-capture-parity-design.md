@@ -5,7 +5,7 @@ roadmap: windows-rmux-ux-parity-hardening
 roadmap_item: windows-rmux-output-capture-parity
 brainstorm: .codestable/features/2026-07-25-windows-rmux-output-capture-parity/windows-rmux-output-capture-parity-brainstorm.md
 execution_lane: goal
-status: draft
+status: approved
 summary: 以证据优先方式验证 Windows/rmux output capture parity，区分 machine capture、provider completion 和 user-visible history
 tags: [windows, rmux, wezterm, output, capture, completion, parity, evidence, epic-child]
 ---

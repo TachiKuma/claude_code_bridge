@@ -119,7 +119,7 @@ def build_start_cmd(
         cmd_parts.append('--continue')
     cmd_parts.extend(spec.startup_args)
 
-    cmd = ' '.join(shlex.quote(str(part)) for part in cmd_parts)
+    cmd = ' '.join(_quote_command_arg(str(part)) for part in cmd_parts)
     cmd = apply_provider_command_template(cmd, spec.provider_command_template)
     if env_prefix:
         return f'{env_prefix}; {cmd}'
@@ -228,11 +228,22 @@ def _persistable_start_cmd(start_cmd: str, *, settings_path: Path) -> str:
 
 def _quote_shell_token(token: str) -> str:
     if '=' not in token:
-        return shlex.quote(token)
+        return _quote_shell_value(token)
     key, value = token.split('=', 1)
     if not key.replace('_', '').isalnum() or not key[0].isalpha():
-        return shlex.quote(token)
-    return f'{key}={shlex.quote(value)}'
+        return _quote_shell_value(token)
+    return f'{key}={_quote_shell_value(value)}'
+
+
+def _quote_command_arg(token: str) -> str:
+    return _quote_shell_value(token)
+
+
+def _quote_shell_value(value: str) -> str:
+    text = str(value or '')
+    if ',' in text and "'" not in text:
+        return f"'{text}'"
+    return shlex.quote(text)
 
 
 __all__ = ['build_runtime_launcher', 'build_session_payload', 'build_start_cmd', 'prepare_runtime', 'resolve_run_cwd']
