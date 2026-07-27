@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "host_kind": "native_windows",
+  "terminal_host": "wezterm",
+  "backend_impl": "rmux",
+  "control_plane": "ccbd",
+  "parity_dimension": "foreground_interaction",
+  "evidence_status": "blocked",
+  "failure_class": "unsupported_capability",
+  "artifacts": {
+    "rmux_capability": "evidence/rmux-mouse-capability.md",
+    "wezterm_capability": "evidence/wezterm-settings-only-channel.md",
+    "capability_summary": "evidence/capability-summary.json",
+    "parent_foreground_retest": "../2026-07-27-sidebar-settings-click-e2e/evidence/manual-foreground-retest.md",
+    "parent_mouse_probe": "../2026-07-27-sidebar-settings-click-e2e/evidence/sidebar-mouse-probe.json",
+    "parent_projection": "../2026-07-27-sidebar-settings-click-e2e/evidence/windows-rmux-ux-parity-evidence.json"
+  },
+  "residual_risks": [
+    "Windows/rmux sidebar settings mouse click remains blocked in rmux 0.9.0 because no precise settings-only coordinate or equivalent predicate is available in ordinary root bindings.",
+    "WezTerm mouse_reporting=true bindings can intercept pane mouse events but cannot safely limit the route to the CCB sidebar settings cell.",
+    "Direct send-keys c remains diagnostic-only evidence for the Rust settings action and must not be counted as mouse click parity."
+  ],
+  "details": {
+    "sidebar_settings_routing": {
+      "selected_route": "unsupported_capability",
+      "route_candidates": {
+        "rmux_precise_route": {
+          "supported": false,
+          "failure_detail": "rmux retains mouse target/event internally but does not expose mouse_x/mouse_y or an equivalent settings-only predicate to ordinary root binding formats in the live CCB namespace."
+        },
+        "wezterm_precise_route": {
+          "supported": false,
+          "failure_detail": "WezTerm mouse bindings do not provide a configuration-level settings cell predicate; a mouse_reporting=true left-click binding would be pane-wide."
+        }
+      },
+      "failure_detail": "No approved settings-only channel exists for native Windows + WezTerm + rmux foreground clicks; broad sidebar-left-click fallback remains rejected.",
+      "runtime_behavior_changed": false,
+      "broad_fallback_added": false,
+      "diagnostic_direct_c": "Direct send-keys c opened config UI in the parent foreground retest, proving settings action health but not mouse routing parity."
+    }
+  }
+}
