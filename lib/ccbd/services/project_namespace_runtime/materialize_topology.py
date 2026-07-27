@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from types import SimpleNamespace
 from typing import Any
 
@@ -26,6 +27,9 @@ from .backend import (
     window_root_pane,
 )
 from .sidebar_helper import SIDEBAR_HELPER_ID_OPTION, sidebar_helper_fingerprint, sidebar_respawn_args, sidebar_respawn_command
+
+
+SIDEBAR_HELPER_ARGS_ID_OPTION = '@ccb_sidebar_helper_args_id'
 
 
 def refresh_topology_ui(context) -> None:
@@ -529,6 +533,7 @@ def _materialize_sidebar(
         _record_sidebar_helper_identity(
             context.backend,
             sidebar_pane,
+            launch_args=sidebar.launch_args,
             session_name=context.desired_session_name,
             window_name=window.name,
         )
@@ -571,6 +576,7 @@ def _materialize_sidebar(
     _record_sidebar_helper_identity(
         context.backend,
         root_pane,
+        launch_args=sidebar.launch_args,
         session_name=context.desired_session_name,
         window_name=window.name,
     )
@@ -617,13 +623,20 @@ def refresh_topology_sidebar_helpers(
             if record is not None
             else _pane_option(backend, pane_id, SIDEBAR_HELPER_ID_OPTION)
         )
-        if current_identity == desired_identity:
+        launch_args = tuple(getattr(sidebar, 'launch_args', ()) or ())
+        desired_args_identity = _sidebar_launch_args_identity(launch_args)
+        current_args_identity = (
+            str(getattr(record, 'sidebar_helper_args_id', '') or '').strip()
+            if record is not None
+            else _pane_option(backend, pane_id, SIDEBAR_HELPER_ARGS_ID_OPTION)
+        )
+        if current_identity == desired_identity and current_args_identity == desired_args_identity:
             continue
         window_name = str(getattr(window, 'name', '') or '') or None
         pane_id = _respawn_sidebar(
             backend,
             pane_id,
-            tuple(getattr(sidebar, 'launch_args', ()) or ()),
+            launch_args,
             cwd=str(controller._layout.project_root),
             session_name=tmux_session_name,
             window_name=window_name,
@@ -632,6 +645,7 @@ def refresh_topology_sidebar_helpers(
             backend,
             pane_id,
             identity=desired_identity,
+            launch_args=launch_args,
             session_name=tmux_session_name,
             window_name=window_name,
         )
@@ -644,6 +658,7 @@ def _record_sidebar_helper_identity(
     pane_id: str,
     *,
     identity: str | None = None,
+    launch_args: tuple[str, ...] | None = None,
     session_name: str | None = None,
     window_name: str | None = None,
 ) -> None:
@@ -658,6 +673,23 @@ def _record_sidebar_helper_identity(
         session_name=session_name,
         window_name=window_name,
     )
+    if launch_args is not None:
+        set_pane_user_option(
+            backend,
+            pane_id,
+            SIDEBAR_HELPER_ARGS_ID_OPTION,
+            _sidebar_launch_args_identity(launch_args),
+            session_name=session_name,
+            window_name=window_name,
+        )
+
+
+def _sidebar_launch_args_identity(launch_args: tuple[str, ...]) -> str:
+    digest = hashlib.sha256()
+    for part in tuple(launch_args or ()):
+        digest.update(str(part).encode('utf-8', errors='surrogatepass'))
+        digest.update(b'\0')
+    return f'sha256:{digest.hexdigest()}'
 
 
 def _materialize_agent_layout(

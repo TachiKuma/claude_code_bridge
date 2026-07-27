@@ -25,12 +25,12 @@ def test_startup_pane_snapshot_serves_topology_and_binding_without_rescan() -> N
             return SimpleNamespace(
                 returncode=0,
                 stdout=(
-                    '%1\tccb-demo\t@0\tmain\t0\tagent\tagent1\tmain\t\t\tproj-1\tccbd\t7'
+                    '%1\tccb-demo\t@0\tmain\t0\tagent\tagent1\tmain\t\t\t\tproj-1\tccbd\t7'
                     '\tagent1\tagent1\tlabel-1\tborder-1\tactive-1\tsession-1\t120\t80\n'
-                    '%2\tccb-demo\t@1\treview\t0\tagent\tagent2\treview\t\t\tproj-1\tccbd\t7'
+                    '%2\tccb-demo\t@1\treview\t0\tagent\tagent2\treview\t\t\t\tproj-1\tccbd\t7'
                     '\tagent2\tagent2\tlabel-2\tborder-2\tactive-2\tsession-2\t120\t80\n'
                     '%3\tccb-demo\t@1\treview\t0\tsidebar\tsidebar:review\treview\treview\thelper-v1'
-                    '\tproj-1\tccbd\t7\tSidebar\tccb\tlabel-3\tborder-3\tactive-3\t\t120\t20\n'
+                    '\thelper-args-v1\tproj-1\tccbd\t7\tSidebar\tccb\tlabel-3\tborder-3\tactive-3\t\t120\t20\n'
                 ),
             )
 
@@ -103,6 +103,7 @@ def test_startup_pane_snapshot_serves_topology_and_binding_without_rescan() -> N
     assert records['%2'].window_width == 120
     assert records['%2'].pane_width == 80
     assert records['%3'].sidebar_helper_id == 'helper-v1'
+    assert records['%3'].sidebar_helper_args_id == 'helper-args-v1'
 
 
 def _topology_record(pane_id: str, **overrides) -> ProjectNamespacePaneRecord:

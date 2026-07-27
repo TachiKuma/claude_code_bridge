@@ -22,6 +22,7 @@ class ProjectNamespacePaneRecord:
     ccb_window: str | None = None
     sidebar_instance: str | None = None
     sidebar_helper_id: str | None = None
+    sidebar_helper_args_id: str | None = None
     agent_label: str | None = None
     label_style: str | None = None
     border_style: str | None = None
@@ -172,6 +173,7 @@ def inspect_project_namespace_pane(backend, pane_id: str) -> ProjectNamespacePan
         ccb_window=_clean(details.get('@ccb_window')),
         sidebar_instance=_clean(details.get('@ccb_sidebar_instance')),
         sidebar_helper_id=_clean(details.get('@ccb_sidebar_helper_id')),
+        sidebar_helper_args_id=_clean(details.get('@ccb_sidebar_helper_args_id')),
         agent_label=_clean(details.get('@ccb_agent')),
         label_style=_clean(details.get('@ccb_label_style')),
         border_style=_clean(details.get('@ccb_border_style')),
@@ -202,6 +204,7 @@ def snapshot_project_namespace_panes(backend) -> dict[str, ProjectNamespacePaneR
             '#{@ccb_window}',
             '#{@ccb_sidebar_instance}',
             '#{@ccb_sidebar_helper_id}',
+            '#{@ccb_sidebar_helper_args_id}',
             '#{@ccb_project_id}',
             '#{@ccb_managed_by}',
             '#{@ccb_namespace_epoch}',
@@ -245,6 +248,7 @@ def snapshot_project_namespace_panes(backend) -> dict[str, ProjectNamespacePaneR
             ccb_window=_clean(details.get('@ccb_window')),
             sidebar_instance=_clean(details.get('@ccb_sidebar_instance')),
             sidebar_helper_id=_clean(details.get('@ccb_sidebar_helper_id')),
+            sidebar_helper_args_id=_clean(details.get('@ccb_sidebar_helper_args_id')),
             agent_label=_clean(details.get('@ccb_agent')),
             label_style=_clean(details.get('@ccb_label_style')),
             border_style=_clean(details.get('@ccb_border_style')),
@@ -301,6 +305,7 @@ def _describe_pane_via_tmux(backend, pane_id: str) -> dict[str, str] | None:
                         '#{@ccb_window}',
                         '#{@ccb_sidebar_instance}',
                         '#{@ccb_sidebar_helper_id}',
+                        '#{@ccb_sidebar_helper_args_id}',
                         '#{@ccb_project_id}',
                         '#{@ccb_managed_by}',
                         '#{@ccb_namespace_epoch}',
@@ -415,8 +420,10 @@ def _decode_tmux_pane_description(line: str) -> dict[str, str] | None:
             '@ccb_managed_by': parts[11].strip(),
             '@ccb_namespace_epoch': parts[12].strip(),
         }
-    if len(parts) not in {19, 21}:
+    if len(parts) not in {19, 21, 22}:
         return None
+    has_args_id = len(parts) == 22
+    offset = 1 if has_args_id else 0
     result = {
         'pane_id': parts[0].strip(),
         'session_name': parts[1].strip(),
@@ -428,19 +435,23 @@ def _decode_tmux_pane_description(line: str) -> dict[str, str] | None:
         '@ccb_window': parts[7].strip(),
         '@ccb_sidebar_instance': parts[8].strip(),
         '@ccb_sidebar_helper_id': parts[9].strip(),
-        '@ccb_project_id': parts[10].strip(),
-        '@ccb_managed_by': parts[11].strip(),
-        '@ccb_namespace_epoch': parts[12].strip(),
-        'pane_title': parts[13].strip(),
-        '@ccb_agent': parts[14].strip(),
-        '@ccb_label_style': parts[15].strip(),
-        '@ccb_border_style': parts[16].strip(),
-        '@ccb_active_border_style': parts[17].strip(),
-        '@ccb_session_id': parts[18].strip(),
+        '@ccb_sidebar_helper_args_id': parts[10].strip() if has_args_id else '',
+        '@ccb_project_id': parts[10 + offset].strip(),
+        '@ccb_managed_by': parts[11 + offset].strip(),
+        '@ccb_namespace_epoch': parts[12 + offset].strip(),
+        'pane_title': parts[13 + offset].strip(),
+        '@ccb_agent': parts[14 + offset].strip(),
+        '@ccb_label_style': parts[15 + offset].strip(),
+        '@ccb_border_style': parts[16 + offset].strip(),
+        '@ccb_active_border_style': parts[17 + offset].strip(),
+        '@ccb_session_id': parts[18 + offset].strip(),
     }
     if len(parts) == 21:
         result['window_width'] = parts[19].strip()
         result['pane_width'] = parts[20].strip()
+    elif len(parts) == 22:
+        result['window_width'] = parts[20].strip()
+        result['pane_width'] = parts[21].strip()
     return result
 
 
@@ -457,6 +468,7 @@ def _describe_pane_via_backend(backend, pane_id: str) -> dict[str, str] | None:
                 '@ccb_window',
                 '@ccb_sidebar_instance',
                 '@ccb_sidebar_helper_id',
+                '@ccb_sidebar_helper_args_id',
                 '@ccb_agent',
                 '@ccb_label_style',
                 '@ccb_border_style',

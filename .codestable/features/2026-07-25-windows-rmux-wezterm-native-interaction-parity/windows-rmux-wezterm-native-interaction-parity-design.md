@@ -6,7 +6,7 @@ roadmap_item: windows-rmux-wezterm-native-interaction-parity
 brainstorm: .codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-brainstorm.md
 requirement:
 execution_lane: standard
-status: draft
+status: approved
 summary: Windows/rmux/WezTerm 前台交互采用 GUI-native parity，普通 pane 透明化，sidebar 专属接管；fallback 改用 rmux 支持的 -t= 鼠标定位修正单击 focus 与 sidebar header 点击
 tags: [windows, rmux, wezterm, interaction, mouse, keyboard, clipboard, sidebar, parity]
 ---

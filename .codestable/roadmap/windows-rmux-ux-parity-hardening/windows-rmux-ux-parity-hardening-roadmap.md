@@ -364,7 +364,45 @@ class WindowsRmuxUxSupportProjection(TypedDict):
    - 状态：in-progress
    - 对应 feature：`2026-07-25-windows-rmux-wezterm-native-interaction-parity`
    - Design 前置 brainstorm：已确认 `.codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-brainstorm.md`
-   - 备注：已先行进入 feature design；本 roadmap 采用该 feature 作为最小闭环。继续实现前仍必须保证 design 引用上述 brainstorm，并记录 owner 已批准/通过进入 design。
+   - 备注：已先行进入 feature design；本 roadmap 采用该 feature 作为最小闭环。2026-07-27 owner 前台复测后该 feature 状态为 failed：6 项中仅普通 pane 单击聚焦通过，普通拖拽选区、右键粘贴、滚轮、sidebar settings、sidebar `x` KillProject 均失败。根因审查见 `.codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/root-cause-review-and-feature-split.md`；继续修复前必须拆成下列细粒度 feature。
+
+#### Foreground Interaction 失败后拆分（2026-07-27）
+
+1. **ordinary-pane-single-click-focus-baseline**
+   - 状态：passed-baseline
+   - 范围：只封存 `select-pane -t =` 单击聚焦行为，作为回归基线。
+   - 验收：native Windows + WezTerm + rmux 前台单击普通 pane 后 active pane 切换；不包含拖拽、右键、滚轮。
+
+2. **sidebar-settings-click-e2e**
+   - 历史拆分状态：blocked；当前执行状态见顶层 roadmap item `sidebar-settings-click-e2e`
+   - 范围：证明真实 sidebar pane 点击 settings 是否经 rmux `send-keys -M` 到达 crossterm `Event::Mouse`，并触发 config UI 或显示可诊断错误。
+   - 验收：记录真实 pane 的 `@ccb_role`、`@ccb_sidebar_helper_id`、helper fingerprint、鼠标事件计数或等价 probe、config UI launch 结果。
+   - 后续拆分：`sidebar-settings-rmux-mouse-routing` 承接 rmux 无坐标/不透传 `-M` 的专用通道研究；不得在本 item 中接受 broad sidebar-left-click fallback。
+
+2a. **sidebar-settings-rmux-mouse-routing**
+   - 状态：planned
+   - 范围：深挖 rmux 无 `mouse_x/mouse_y` 且 `send-keys -M` 不透传时，是否存在不影响 `x` KillProject 和普通 sidebar click 的 settings-only 通道。
+   - 验收：若可实现，真实前台点击 settings 可打开 config UI，且点击 `x` / 普通 sidebar 区域不打开 settings；若不可实现，产出 rmux/WezTerm capability evidence 并投影为 `unsupported_capability`。
+
+3. **sidebar-kill-project-click-e2e**
+   - 状态：failed
+   - 范围：证明 sidebar `x` 点击到达 Rust TUI，并触发 `ExitAction::KillProject` 与 `ccb kill`。
+   - 验收：点击 `x` 后 project 被 kill，或显示明确 kill failure；不能用键盘 `Q` 测试替代。
+
+4. **ordinary-pane-drag-selection-native**
+   - 状态：failed
+   - 范围：重新选择普通 pane 拖拽策略：WezTerm GUI-native、Shift bypass，或 tmux/rmux copy-mode。
+   - 验收：真实前台能选中字符串；若策略要求修饰键，验收动作必须写明。
+
+5. **ordinary-pane-right-click-paste**
+   - 状态：failed
+   - 范围：重新设计右键粘贴策略：host clipboard bridge、rmux buffer paste，或 WezTerm config 层绑定。
+   - 验收：从其他软件复制文本后，右键普通 pane 可把文本送入 shell input；多行行为必须明确。
+
+6. **ordinary-pane-wheel-scroll**
+   - 状态：failed
+   - 范围：重新选择滚轮策略：WezTerm native scroll、rmux copy-mode scroll，或 pane app wheel passthrough。
+   - 验收：真实前台滚轮有可见滚动，并记录滚动的是 terminal scrollback、rmux copy-mode 还是 pane app。
 
 2. **windows-rmux-output-capture-parity** — 验证 rmux capture 与 Linux/macOS tmux baseline 在 provider completion、ANSI、宽字符、wrapping 上的保真边界。
    - 所属模块：Output And Capture
@@ -491,3 +529,5 @@ Top 3 风险与缓解：
 - 2026-07-25：从 `.codestable/brainstorms/windows-rmux-ux-parity-hardening/brainstorm.md` 升级为 draft roadmap；纳入 6 个 parity 维度，并将已启动的 `windows-rmux-wezterm-native-interaction-parity` 作为最小闭环 item。
 - 2026-07-25：根据独立 roadmap review 收紧 supportability owner 边界、UX parity JSON evidence 落点、与 `windows-rmux-native-backend` accepted evidence 的 baseline/delta 规则，以及先行 feature 的 roadmap 绑定恢复规则。
 - 2026-07-25：按 owner 要求新增每个子 feature 的 design 前置 `$cs-brainstorm` gate；所有 child design 启动前必须先完成针对该 item 的深入讨论，并获得 owner 明确批准/通过。
+- 2026-07-27：根据 owner 前台复测 1 PASS / 5 FAIL、独立根因 reviewer `019fa3a0-891c-7d33-9b12-04303133dd2f` 与 WezTerm/rmux 源码/文档审查，将 `windows-rmux-wezterm-native-interaction-parity` 标记为需要拆成 6 个前台交互细粒度 feature；QA passed 前不得进入 acceptance。
+- 2026-07-27：`sidebar-settings-click-e2e` 真实复测确认 rmux root binding 能触发，但 rmux 不提供 `mouse_x/mouse_y` 且 `send-keys -M` 不进入 Rust/crossterm；owner 拒绝 broad sidebar-left-click fallback 后，新增 `sidebar-settings-rmux-mouse-routing` 作为后续 settings-only 通道研究 feature。

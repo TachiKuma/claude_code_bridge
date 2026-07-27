@@ -268,8 +268,6 @@ def _apply_sidebar_mouse_controls_without_mouse_pane_format(backend) -> None:
     # 所有条件与动作都显式绑定到鼠标 pane，避免普通 pane 误用当前 active pane。
     select_action = 'select-pane -t ='
     sidebar_action = 'select-pane -t = ; send-keys -t = -M'
-    settings_action = 'select-pane -t = ; send-keys -t = c'
-    kill_action = 'select-pane -t = ; send-keys -t = Q'
 
     tmux_run(backend, ['unbind-key', '-T', 'root', 'MouseDrag1Pane'])
 
@@ -285,34 +283,12 @@ def _apply_sidebar_mouse_controls_without_mouse_pane_format(backend) -> None:
                 '-F',
                 '-t',
                 '=',
-                _sidebar_settings_click_condition(),
-                settings_action,
-                (
-                    'if-shell -F -t = '
-                    + shlex.quote(_sidebar_kill_click_condition())
-                    + ' '
-                    + shlex.quote(kill_action)
-                    + ' '
-                    + shlex.quote(
-                        _sidebar_or_normal_mouse_action(
-                            sidebar_action,
-                            normal_action=select_action,
-                        )
-                    )
-                ),
+                '#{==:#{@ccb_role},sidebar}',
+                sidebar_action,
+                select_action,
             ],
         )
 
-
-def _sidebar_or_normal_mouse_action(sidebar_action: str, *, normal_action: str) -> str:
-    return (
-        'if-shell -F -t = '
-        + shlex.quote('#{==:#{@ccb_role},sidebar}')
-        + ' '
-        + shlex.quote(sidebar_action)
-        + ' '
-        + shlex.quote(normal_action)
-    )
 
 def _sidebar_resize_sync_shell(
     tmux_socket_path: str,

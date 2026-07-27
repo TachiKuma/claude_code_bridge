@@ -31,6 +31,7 @@ use crate::model::{
     AgentView, CommsItem, ProjectView, ProjectViewResponse, RowTarget, SidebarViewInfo, WindowView,
     row_targets,
 };
+use crate::mouse_probe::SidebarMouseProbe;
 use crate::status::{activity_color_with_theme, activity_symbol};
 use crate::theme::SidebarTheme;
 
@@ -71,6 +72,7 @@ fn run_tui(args: &Args) -> io::Result<ExitAction> {
     let mut terminal = Terminal::new(backend)?;
     let client = CcbdClient::new(args.ccbd_socket.clone());
     let ccb_program = ccb_program();
+    let mut mouse_probe = SidebarMouseProbe::from_env();
     let mut app = SidebarApp::with_theme(
         args.pane_window.clone(),
         SidebarTheme::from_profile(&args.theme),
@@ -85,6 +87,7 @@ fn run_tui(args: &Args) -> io::Result<ExitAction> {
         }
 
         terminal.draw(|frame| draw(frame, &app))?;
+        observe_config_ui_probe(&app, mouse_probe.as_mut());
 
         if event::poll(Duration::from_millis(250))? {
             match event::read()? {
@@ -95,7 +98,13 @@ fn run_tui(args: &Args) -> io::Result<ExitAction> {
                     match key.code {
                         KeyCode::Char('j') | KeyCode::Down => app.move_selection(1),
                         KeyCode::Char('k') | KeyCode::Up => app.move_selection(-1),
-                        KeyCode::Char('c') => app.open_config_ui(&args.project_root, &ccb_program),
+                        KeyCode::Char('c') => {
+                            if let Some(probe) = mouse_probe.as_mut() {
+                                probe.observe_settings_action();
+                            }
+                            app.open_config_ui(&args.project_root, &ccb_program);
+                            observe_config_ui_probe(&app, mouse_probe.as_mut());
+                        }
                         KeyCode::Char('r') => app.restart_panes(&client),
                         KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                             app.force_refresh()
@@ -109,6 +118,13 @@ fn run_tui(args: &Args) -> io::Result<ExitAction> {
                 Event::Mouse(mouse) => {
                     let size = terminal.size()?;
                     let area = Rect::new(0, 0, size.width, size.height);
+                    if let Some(probe) = mouse_probe.as_mut() {
+                        probe.observe_mouse_event(
+                            &format!("{:?}", mouse.kind),
+                            mouse.column,
+                            mouse.row,
+                        );
+                    }
                     match mouse.kind {
                         MouseEventKind::Down(MouseButton::Left) => {
                             if let Some(action) = app.handle_mouse_down(
@@ -118,6 +134,7 @@ fn run_tui(args: &Args) -> io::Result<ExitAction> {
                                 &client,
                                 &args.project_root,
                                 &ccb_program,
+                                mouse_probe.as_mut(),
                             ) {
                                 return Ok(action);
                             }
@@ -140,6 +157,12 @@ fn run_tui(args: &Args) -> io::Result<ExitAction> {
                 _ => {}
             }
         }
+    }
+}
+
+fn observe_config_ui_probe(app: &SidebarApp, mouse_probe: Option<&mut SidebarMouseProbe>) {
+    if let Some(probe) = mouse_probe {
+        probe.observe_config_ui_status(app.config_ui_status_line());
     }
 }
 
@@ -508,11 +531,18 @@ impl SidebarApp {
         client: &CcbdClient,
         project_root: &Path,
         ccb_program: &CcbProgram,
+        mut mouse_probe: Option<&mut SidebarMouseProbe>,
     ) -> Option<ExitAction> {
         let areas = self.sidebar_areas(area);
         match header_action_at(column, row, areas.tree) {
             Some(HeaderMouseAction::Settings) => {
+                if let Some(probe) = mouse_probe.as_mut() {
+                    probe.observe_settings_action();
+                }
                 self.open_config_ui(project_root, ccb_program);
+                if let Some(probe) = mouse_probe.as_mut() {
+                    probe.observe_config_ui_status(self.config_ui_status_line());
+                }
                 return None;
             }
             Some(HeaderMouseAction::KillProject) => return Some(ExitAction::KillProject),
@@ -534,7 +564,11 @@ impl SidebarApp {
         }
         match launch_config_ui(project_root, ccb_program) {
             Ok(launch) => self.config_ui_launch = Some(launch),
-            Err(err) => self.set_error(format!("config ui launch failed: {err}")),
+            Err(err) => {
+                let detail = compact_launch_error(&err.to_string());
+                self.config_ui_launch =
+                    Some(Arc::new(Mutex::new(ConfigUiLaunchStatus::Failed(detail))));
+            }
         }
     }
 
@@ -2997,24 +3031,19 @@ mod tests {
         assert_eq!(app.comms_index_at(1, before_comms, area), None);
     }
 
-    #[cfg(unix)]
     #[test]
     fn header_buttons_are_right_aligned_and_kill_project() {
-        let client = CcbdClient::new("/tmp/ccb-sidebar-unused.sock");
+        let client = CcbdClient::new("ccb-sidebar-unused.sock");
         let mut app = SidebarApp::new("main".into());
         app.apply_response(sample_response());
         let area = Rect::new(0, 0, 24, 20);
         let controls = tree_controls_area(sidebar_areas(area, app.sidebar_view()).tree);
-        let project_root = Path::new("/tmp");
-        let ccb_program = CcbProgram::new("/bin/true");
+        let project_root = Path::new(".");
+        let ccb_program = CcbProgram::new("ccb");
 
         assert_eq!(controls, Rect::new(20, 0, 3, 1));
         assert_eq!(
-            app.handle_mouse_down(1, 0, area, &client, project_root, &ccb_program),
-            None
-        );
-        assert_eq!(
-            app.handle_mouse_down(controls.x, 0, area, &client, project_root, &ccb_program,),
+            app.handle_mouse_down(1, 0, area, &client, &project_root, &ccb_program, None),
             None
         );
         assert_eq!(
@@ -3025,23 +3054,35 @@ mod tests {
             ),
             Some(HeaderMouseAction::Settings)
         );
+        assert_eq!(
+            header_action_at(controls.x, 0, sidebar_areas(area, app.sidebar_view()).tree),
+            Some(HeaderMouseAction::Settings)
+        );
 
         assert!(app.last_error.is_none());
         assert!(!app.needs_refresh());
         assert_eq!(
-            app.handle_mouse_down(controls.x + 2, 0, area, &client, project_root, &ccb_program,),
+            app.handle_mouse_down(
+                controls.x + 2,
+                0,
+                area,
+                &client,
+                project_root,
+                &ccb_program,
+                None,
+            ),
             Some(ExitAction::KillProject)
         );
     }
 
-    #[cfg(unix)]
     #[test]
     fn header_settings_launch_failure_is_visible() {
-        let client = CcbdClient::new("/tmp/ccb-sidebar-unused.sock");
+        let client = CcbdClient::new("ccb-sidebar-unused.sock");
         let mut app = SidebarApp::new("main".into());
         app.apply_response(sample_response());
         let area = Rect::new(0, 0, 24, 20);
         let controls = tree_controls_area(sidebar_areas(area, app.sidebar_view()).tree);
+        let project_root = env::current_dir().expect("current dir");
 
         assert_eq!(
             app.handle_mouse_down(
@@ -3049,17 +3090,94 @@ mod tests {
                 0,
                 area,
                 &client,
-                Path::new("/tmp"),
+                &project_root,
                 &CcbProgram::new("/definitely/missing/ccb"),
+                None,
             ),
             None
         );
 
+        assert!(app.last_error.is_none());
         assert!(
-            app.last_error
+            app.config_ui_status_line()
                 .as_deref()
-                .is_some_and(|error| error.starts_with("config ui launch failed:"))
+                .is_some_and(|status| status.starts_with("config ui failed:"))
         );
+    }
+
+    #[test]
+    fn header_settings_click_updates_mouse_probe() {
+        let client = CcbdClient::new("ccb-sidebar-unused.sock");
+        let mut app = SidebarApp::new("main".into());
+        app.apply_response(sample_response());
+        let area = Rect::new(0, 0, 24, 20);
+        let controls = tree_controls_area(sidebar_areas(area, app.sidebar_view()).tree);
+        let project_root = env::current_dir().expect("current dir");
+        let probe_path = std::env::temp_dir().join(format!(
+            "ccb-sidebar-settings-probe-{}-{}.json",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut probe =
+            SidebarMouseProbe::from_env_value(Some(probe_path.clone().into_os_string()))
+                .expect("probe");
+
+        probe.observe_mouse_event("Down(Left)", controls.x, 0);
+        assert_eq!(
+            app.handle_mouse_down(
+                controls.x,
+                0,
+                area,
+                &client,
+                &project_root,
+                &CcbProgram::new("/definitely/missing/ccb"),
+                Some(&mut probe),
+            ),
+            None
+        );
+
+        let text = std::fs::read_to_string(&probe_path).expect("probe output");
+        assert!(text.contains("\"event_observed\":true"));
+        assert!(text.contains("\"settings_action_observed\":true"));
+        assert!(text.contains("\"kind\":\"Down(Left)\""));
+        assert!(text.contains("\"column\":20"));
+        assert!(text.contains("\"row\":0"));
+        assert!(text.contains("\"config_ui\":\"config ui failed:"));
+        let _ = std::fs::remove_file(probe_path);
+    }
+
+    #[test]
+    fn config_ui_probe_tracks_async_status_changes() {
+        let mut app = SidebarApp::new("main".into());
+        let launch = Arc::new(Mutex::new(ConfigUiLaunchStatus::Opening));
+        app.config_ui_launch = Some(Arc::clone(&launch));
+        let probe_path = std::env::temp_dir().join(format!(
+            "ccb-sidebar-config-probe-{}-{}.json",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut probe =
+            SidebarMouseProbe::from_env_value(Some(probe_path.clone().into_os_string()))
+                .expect("probe");
+
+        observe_config_ui_probe(&app, Some(&mut probe));
+        set_config_ui_launch_status(
+            &launch,
+            ConfigUiLaunchStatus::Ready("http://127.0.0.1:43123/?token=test".to_string()),
+        );
+        observe_config_ui_probe(&app, Some(&mut probe));
+
+        let text = std::fs::read_to_string(&probe_path).expect("probe output");
+        assert!(text
+            .contains("\"config_ui\":\"config ui: http://127.0.0.1:43123/?token=<redacted>\""));
+        assert!(!text.contains("token=test"));
+        let _ = std::fs::remove_file(probe_path);
     }
 
     #[test]

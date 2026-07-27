@@ -109,10 +109,15 @@ def test_foreground_start_refreshes_sidebar_with_current_cli_when_daemon_is_reus
         tmux_session_name='ccb-project',
         namespace_epoch=7,
     )
-    controller = SimpleNamespace(load=lambda: namespace)
     backend = object()
+    config = SimpleNamespace(runtime_mux=SimpleNamespace(backend='rmux', explicit_backend=True))
     topology_plan = object()
     seen: dict[str, object] = {}
+    def backend_factory(**kwargs):
+        seen['backend_factory_kwargs'] = kwargs
+        return backend
+
+    controller = SimpleNamespace(load=lambda: namespace, _backend_factory=backend_factory)
     context = SimpleNamespace(
         paths=PathLayout(project_root),
         project=SimpleNamespace(project_id='project-1', project_root=project_root),
@@ -120,20 +125,23 @@ def test_foreground_start_refreshes_sidebar_with_current_cli_when_daemon_is_reus
 
     monkeypatch.setattr(
         'cli.services.start.ProjectNamespaceController',
-        lambda layout, project_id: controller,
+        lambda layout, project_id, **kwargs: seen.setdefault(
+            'controller_kwargs',
+            {'layout': layout, 'project_id': project_id, **kwargs},
+        )
+        and controller,
     )
     monkeypatch.setattr(
         'cli.services.start.load_project_config',
-        lambda root: SimpleNamespace(config=object()),
+        lambda root: SimpleNamespace(config=config, source_kind='project_config'),
     )
-    monkeypatch.setattr(
-        'cli.services.start.build_namespace_topology_plan',
-        lambda config: topology_plan,
-    )
-    monkeypatch.setattr(
-        'cli.services.start.TmuxBackend',
-        lambda *, socket_path: seen.setdefault('backend_socket', socket_path) and backend,
-    )
+    def build_topology(config, *, ccbd_socket_path, project_root):
+        seen['topology_config'] = config
+        seen['topology_ccbd_socket_path'] = ccbd_socket_path
+        seen['topology_project_root'] = project_root
+        return topology_plan
+
+    monkeypatch.setattr('cli.services.start.build_namespace_topology_plan', build_topology)
 
     def refresh(
         current_controller,
@@ -155,8 +163,23 @@ def test_foreground_start_refreshes_sidebar_with_current_cli_when_daemon_is_reus
     result = _refresh_running_sidebar_helpers(context)
 
     assert result == {'status': 'refreshed', 'panes': ('%7',)}
+    controller_kwargs = seen.pop('controller_kwargs')
+    assert controller_kwargs == {
+        'layout': context.paths,
+        'project_id': 'project-1',
+        'project_root': str(project_root),
+        'project_config_backend': 'rmux',
+        'user_config_backend': None,
+    }
+    backend_kwargs = seen.pop('backend_factory_kwargs')
+    assert backend_kwargs['namespace'] == 'ccb-project'
+    assert backend_kwargs['socket_path'] == namespace.tmux_socket_path
+    assert backend_kwargs['namespace_ref']['session_name'] == 'ccb-project'
+    assert backend_kwargs['namespace_ref']['backend_impl'] == 'tmux'
     assert seen == {
-        'backend_socket': namespace.tmux_socket_path,
+        'topology_config': config,
+        'topology_ccbd_socket_path': str(context.paths.ccbd_socket_path),
+        'topology_project_root': str(project_root),
         'controller': controller,
         'backend': backend,
         'topology_plan': topology_plan,

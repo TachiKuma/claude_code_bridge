@@ -215,12 +215,84 @@ def test_changed_sidebar_helper_respawns_only_sidebar_pane(monkeypatch, tmp_path
 
     assert respawns == [('%1', sidebar.launch_args, str(tmp_path))]
     assert pane_options['%1']['@ccb_sidebar_helper_id'] == 'sha256:new'
+    assert pane_options['%1'][materialize_topology.SIDEBAR_HELPER_ARGS_ID_OPTION].startswith('sha256:')
+
+
+def test_current_sidebar_helper_respawns_when_launch_args_identity_is_missing(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    pane_options = {'%1': {'@ccb_sidebar_helper_id': 'sha256:current'}}
+    respawns: list[tuple[str, tuple[str, ...], str]] = []
+
+    class Backend:
+        def set_pane_user_option(self, pane_id: str, key: str, value: str) -> None:
+            pane_options.setdefault(pane_id, {})[key] = value
+
+    backend = Backend()
+    controller = SimpleNamespace(_project_id='project-1', _layout=SimpleNamespace(project_root=tmp_path))
+    sidebar = SimpleNamespace(
+        launch_args=(
+            'ccb-agent-sidebar',
+            '--ccbd-socket',
+            str(tmp_path / '.ccb' / 'ccbd.sock'),
+            '--project-root',
+            str(tmp_path),
+            '--pane-window',
+            'main',
+        )
+    )
+    topology_plan = SimpleNamespace(windows=(SimpleNamespace(name='main', sidebar=sidebar),))
+
+    monkeypatch.setattr(materialize_topology, 'sidebar_helper_fingerprint', lambda: 'sha256:current')
+    monkeypatch.setattr(materialize_topology, '_list_panes_by_user_options', lambda *_args, **_kwargs: ['%1'])
+    monkeypatch.setattr(
+        materialize_topology,
+        'inspect_project_namespace_pane',
+        lambda _backend, pane_id: ProjectNamespacePaneRecord(
+            pane_id=pane_id,
+            session_name='ccb-project',
+            window_name='main',
+            role='sidebar',
+            slot_key='sidebar:main',
+            ccb_window='main',
+            sidebar_instance='main',
+            project_id='project-1',
+            managed_by='ccbd',
+            namespace_epoch=7,
+            alive=True,
+        ),
+    )
+    monkeypatch.setattr(
+        materialize_topology,
+        '_pane_option',
+        lambda _backend, pane_id, key: pane_options.get(pane_id, {}).get(key, ''),
+    )
+    monkeypatch.setattr(
+        materialize_topology,
+        '_respawn_sidebar',
+        lambda _backend, pane_id, args, *, cwd, **_kwargs: respawns.append((pane_id, args, cwd)),
+    )
+
+    refreshed = materialize_topology.refresh_topology_sidebar_helpers(
+        controller,
+        backend,
+        topology_plan=topology_plan,
+        tmux_session_name='ccb-project',
+        namespace_epoch=7,
+    )
+
+    assert refreshed == ('%1',)
+    assert respawns == [('%1', sidebar.launch_args, str(tmp_path))]
+    assert pane_options['%1']['@ccb_sidebar_helper_id'] == 'sha256:current'
+    assert pane_options['%1'][materialize_topology.SIDEBAR_HELPER_ARGS_ID_OPTION].startswith('sha256:')
 
 
 def test_current_sidebar_helper_uses_startup_snapshot_without_tmux_reads(monkeypatch, tmp_path: Path) -> None:
     controller = SimpleNamespace(_project_id='project-1', _layout=SimpleNamespace(project_root=tmp_path))
     sidebar = SimpleNamespace(launch_args=('ccb-agent-sidebar', '--pane-window', 'main'))
     topology_plan = SimpleNamespace(windows=(SimpleNamespace(name='main', sidebar=sidebar),))
+    args_identity = materialize_topology._sidebar_launch_args_identity(sidebar.launch_args)
     record = ProjectNamespacePaneRecord(
         pane_id='%1',
         session_name='ccb-project',
@@ -230,6 +302,7 @@ def test_current_sidebar_helper_uses_startup_snapshot_without_tmux_reads(monkeyp
         ccb_window='main',
         sidebar_instance='main',
         sidebar_helper_id='sha256:current',
+        sidebar_helper_args_id=args_identity,
         project_id='project-1',
         managed_by='ccbd',
         namespace_epoch=7,
@@ -247,3 +320,50 @@ def test_current_sidebar_helper_uses_startup_snapshot_without_tmux_reads(monkeyp
     )
 
     assert refreshed == ()
+
+
+def test_current_sidebar_helper_snapshot_respawns_when_launch_args_identity_missing(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    controller = SimpleNamespace(_project_id='project-1', _layout=SimpleNamespace(project_root=tmp_path))
+    sidebar = SimpleNamespace(launch_args=('ccb-agent-sidebar', '--pane-window', 'main'))
+    topology_plan = SimpleNamespace(windows=(SimpleNamespace(name='main', sidebar=sidebar),))
+    record = ProjectNamespacePaneRecord(
+        pane_id='%1',
+        session_name='ccb-project',
+        window_name='main',
+        role='sidebar',
+        slot_key='sidebar:main',
+        ccb_window='main',
+        sidebar_instance='main',
+        sidebar_helper_id='sha256:current',
+        project_id='project-1',
+        managed_by='ccbd',
+        namespace_epoch=7,
+        alive=True,
+    )
+    respawns: list[tuple[str, tuple[str, ...], str]] = []
+
+    class Backend:
+        def set_pane_user_option(self, _pane_id: str, _key: str, _value: str) -> None:
+            pass
+
+    monkeypatch.setattr(materialize_topology, 'sidebar_helper_fingerprint', lambda: 'sha256:current')
+    monkeypatch.setattr(
+        materialize_topology,
+        '_respawn_sidebar',
+        lambda _backend, pane_id, args, *, cwd, **_kwargs: respawns.append((pane_id, args, cwd)),
+    )
+
+    refreshed = materialize_topology.refresh_topology_sidebar_helpers(
+        controller,
+        Backend(),
+        topology_plan=topology_plan,
+        pane_records={'%1': record},
+        tmux_session_name='ccb-project',
+        namespace_epoch=7,
+    )
+
+    assert refreshed == ('%1',)
+    assert respawns == [('%1', sidebar.launch_args, str(tmp_path))]

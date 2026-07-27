@@ -381,7 +381,7 @@ def test_windows_rmux_project_ui_avoids_shell_status_commands(monkeypatch, tmp_p
     mouse_down_bindings = [call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'MouseDown1Pane']]
     assert len(mouse_down_bindings) == 1
     mouse_down_binding = mouse_down_bindings[0]
-    # MouseDown1Pane fallback 改用 rmux 支持的 -t = 定位；按钮条件也必须在鼠标 pane 上求值
+    # MouseDown1Pane fallback 改用 rmux 支持的 -t = 定位；sidebar 点击统一尝试透传给 Rust。
     assert mouse_down_binding[:8] == [
         'bind-key',
         '-T',
@@ -393,16 +393,19 @@ def test_windows_rmux_project_ui_avoids_shell_status_commands(monkeypatch, tmp_p
         '=',
     ]
     assert '#{@ccb_role}' in mouse_down_binding[8]
-    assert '#{mouse_x}' in mouse_down_binding[8]
-    assert '#{mouse_y}' in mouse_down_binding[8]
-    assert mouse_down_binding[9] == 'select-pane -t = ; send-keys -t = c'
-    assert 'send-keys -t = Q' in mouse_down_binding[10]
-    # sidebar 非按钮点击：聚焦并把原始鼠标事件透传给 Rust；普通 pane：单击即 focus
-    assert 'select-pane -t = ; send-keys -t = -M' in mouse_down_binding[10]
-    assert 'select-pane -t =' in mouse_down_binding[10]
+    assert '#{mouse_x}' not in mouse_down_binding[8]
+    assert '#{mouse_y}' not in mouse_down_binding[8]
+    assert mouse_down_binding[9] == 'select-pane -t = ; send-keys -t = -M'
+    assert mouse_down_binding[10] == 'select-pane -t ='
+    assert 'send-keys -t = c' not in rendered_commands
+    assert 'send-keys -t = Q' not in rendered_commands
     # 不再出现无 -t 的 select-pane -M 占位
     assert 'select-pane -M' not in '\n'.join(mouse_down_binding)
     assert ['bind-key', '-T', 'root', 'MouseDown1Pane', 'send-keys', '-M'] not in calls
+    for mouse_key in ('MouseDown1Border',):
+        bindings = [call for call in calls if call[:4] == ['bind-key', '-T', 'root', mouse_key]]
+        assert len(bindings) == 1
+        assert bindings[0][4:] == mouse_down_binding[4:]
     # 普通 pane 的 drag/right/wheel 不在 rmux fallback 中重绑，避免 copy-mode 坐标偏移、
     # buffer paste 多行执行和 wheel 被 mux 消费。
     assert not [call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'WheelUpPane']]
@@ -410,6 +413,8 @@ def test_windows_rmux_project_ui_avoids_shell_status_commands(monkeypatch, tmp_p
     assert not [call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'MouseDrag1Pane']]
     assert not [call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'MouseDown3Pane']]
     assert not [call for call in calls if call[:4] == ['bind-key', '-T', 'root', 'M-MouseDown3Pane']]
+    assert 'scroll-up' not in rendered_commands
+    assert 'scroll-down' not in rendered_commands
     assert 'copy-mode -M -t =' not in rendered_commands
     assert 'paste-buffer' not in rendered_commands
 
@@ -460,18 +465,23 @@ try:
     assert "#{mouse_pane}" not in text
     assert "select-pane -t =" in scoped_text
     assert "send-keys -t = -M" in scoped_text
+    assert "send-keys -t = c" not in scoped_text
+    assert "send-keys -t = Q" not in scoped_text
     assert "select-pane -M" not in scoped_text
     assert "paste-buffer" not in scoped_text
     assert "copy-mode -M -t =" not in scoped_text
+    assert "scroll-up" not in scoped_text
+    assert "scroll-down" not in scoped_text
     mouse_down_matching = [
         line for line in scoped_lines if line.startswith("bind-key -T root MouseDown1Pane")
     ]
     assert len(mouse_down_matching) == 1
     assert "if-shell -F -t =" in mouse_down_matching[0]
     assert "select-pane -t =" in mouse_down_matching[0]
+    assert "#{mouse_x}" not in mouse_down_matching[0]
+    assert "#{mouse_y}" not in mouse_down_matching[0]
+    assert "send-keys -t = c" not in mouse_down_matching[0]
     assert "send-keys -t = -M" in mouse_down_matching[0]
-    assert "send-keys -t = c" in mouse_down_matching[0]
-    assert "send-keys -t = Q" in mouse_down_matching[0]
 finally:
     backend._tmux_run(["kill-session", "-t", session], check=False, capture=True)
 '''

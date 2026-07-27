@@ -1,0 +1,107 @@
+feature: 2026-07-27-sidebar-settings-click-e2e
+slug: sidebar-settings-click-e2e
+status: draft
+steps:
+  - id: S1
+    action: "建立 settings click e2e 基线：读取真实 sidebar pane identity、helper fingerprint 与 root mouse binding"
+    status: done
+    exit_signal: "evidence 记录 @ccb_role=sidebar、@ccb_sidebar_helper_id、expected helper fingerprint、settings 相关 root binding；缺失时有明确 failure_class"
+    verification: "command transcript / JSON parse"
+    deliverables: ["evidence"]
+  - id: S2
+    action: "补齐 identity/fingerprint evidence classifier"
+    status: done
+    exit_signal: "测试或 transcript 能区分 helper fingerprint match/mismatch，并在 mismatch 时写入明确 failure detail"
+    verification: "unit / command transcript"
+    deliverables: ["code", "tests"]
+  - id: S3
+    action: "补齐 pane target / role failure tests"
+    status: done
+    exit_signal: "测试或 transcript 能区分 @ccb_role 缺失、pane target 非 sidebar 两类失败，不进入 Rust hit-test 归因"
+    verification: "unit / command transcript"
+    deliverables: ["code", "tests"]
+  - id: S4
+    action: "保持 Windows/rmux sidebar mouse binding 回归保护"
+    status: done
+    exit_signal: "pytest 断言 Windows/rmux fallback 的 sidebar 分支使用 -t = 定位鼠标 pane 并尝试 send-keys -t = -M；不接受把整个 sidebar 左键映射为 settings；普通 pane drag/right/wheel 不纳入本 step"
+    verification: "python -m pytest -q -rs test/test_v2_tmux_ui.py"
+    deliverables: ["tests"]
+  - id: S5
+    action: "增加或复用 CCB_AGENT_SIDEBAR_MOUSE_PROBE opt-in mouse event/action probe seam"
+    status: done
+    exit_signal: "probe 默认关闭；在 CCB_AGENT_SIDEBAR_MOUSE_PROBE 环境下重启 ccbd/namespace，或证明 respawn 父进程已持有该 env 后，真实 sidebar pane 会覆盖写 evidence/sidebar-mouse-probe.json，并可观察 event_observed=true、settings_action_observed=true 和 last_mouse_event；输出有界"
+    verification: "cargo test / manual transcript"
+    deliverables: ["code", "tests", "evidence"]
+  - id: S6
+    action: "验证 settings action 的 config UI 可见反馈"
+    status: done
+    exit_signal: "config UI ready 显示 URL；同步 spawn/launch 失败和子进程运行后失败都在渲染层显示 config ui failed: <reason> 或等价失败状态，不只写内部 last_error"
+    verification: "cargo test --manifest-path tools/ccb-agent-sidebar/Cargo.toml --quiet"
+    deliverables: ["tests"]
+  - id: S7
+    action: "产出 native Windows + WezTerm + rmux 前台 settings click transcript 和 UX parity JSON"
+    status: pending
+    exit_signal: "evidence/windows-rmux-ux-parity-evidence.json 顶层符合 roadmap schema，manual transcript 记录真实点击结果；非 pass 时 residual_risks 或 failure detail 非空"
+    verification: "manual foreground retest / JSON parse"
+    deliverables: ["evidence"]
+  - id: S8
+    action: "范围守护与清洁度检查"
+    status: done
+    exit_signal: "diff 不修改 KillProject、ordinary drag/right/wheel 策略；无临时 TODO/FIXME/XXX、无默认 debug 输出"
+    verification: "diff review / rg cleanliness"
+    deliverables: ["review-notes"]
+checks:
+  - id: AC-001
+    item: "真实 sidebar pane identity 与 helper fingerprint 可核验"
+    source: "design §3 AC-001"
+    status: done
+  - id: AC-002
+    item: "Windows/rmux fallback root mouse binding 证明点击到达 rmux；当前保持 send-keys -t = -M，不接受 broad settings fallback"
+    source: "design §3 AC-002"
+    status: done
+  - id: AC-003
+    item: "前台 settings 点击到达 Rust mouse event/action"
+    source: "design §3 AC-003"
+    status: pending
+  - id: AC-004
+    item: "config UI 正常启动时显示 ready URL 或等价状态"
+    source: "design §3 AC-004"
+    status: done
+  - id: AC-005
+    item: "config UI 启动失败时显示明确失败原因"
+    source: "design §3 AC-005"
+    status: done
+  - id: AC-006
+    item: "helper stale / pane option 异常可被归因，不误报 Rust hit-test"
+    source: "design §3 AC-006"
+    status: done
+  - id: AC-007
+    item: "不修改 KillProject、普通 pane drag/right/wheel 策略"
+    source: "design §3 AC-007"
+    status: done
+dod:
+  commands:
+    - id: CMD-001
+      command: "python -m pytest -q -rs test/test_v2_tmux_ui.py"
+      core: true
+      failure_handling: "fix-or-block"
+    - id: CMD-002
+      command: "python -m pytest -q -rs test/test_v2_tmux_ui.py -k rmux_accepts_mouse_context_project_ui_bindings"
+      core: true
+      failure_handling: "fix-or-block"
+    - id: CMD-003
+      command: "cargo test --manifest-path tools/ccb-agent-sidebar/Cargo.toml --quiet"
+      core: true
+      failure_handling: "fix-or-block"
+    - id: CMD-004
+      command: "python -m py_compile lib/cli/services/tmux_ui_runtime/service.py test/test_v2_tmux_ui.py"
+      core: true
+      failure_handling: "fix-or-block"
+    - id: CMD-005
+      command: "python -c \"import json, pathlib; p=pathlib.Path('.codestable/features/2026-07-27-sidebar-settings-click-e2e/evidence/windows-rmux-ux-parity-evidence.json'); d=json.loads(p.read_text(encoding='utf-8')); req={'schema_version','host_kind','terminal_host','backend_impl','control_plane','parity_dimension','evidence_status','failure_class','artifacts','residual_risks'}; assert req <= d.keys(); assert d['schema_version']==1; assert d['parity_dimension']=='foreground_interaction'; assert d['evidence_status'] in {'pass','partial','blocked','failed'}; assert d['failure_class'] in {'none','rmux_unavailable','wezterm_gui_unavailable','provider_failure','system_failure','test_design_failure','unsupported_capability'}; assert isinstance(d['artifacts'], dict) and d['artifacts']; base=p.parents[1]; assert all(isinstance(v,str) and v.strip() and ((pathlib.Path(v) if pathlib.Path(v).is_absolute() else base/pathlib.Path(v)).exists()) for v in d['artifacts'].values()); assert isinstance(d['residual_risks'], list); detail=d.get('failure_detail') or d.get('details',{}).get('failure_detail') or d.get('details',{}).get('sidebar_settings_click',{}).get('failure_detail'); assert d['evidence_status']=='pass' or d['residual_risks'] or detail; assert d['evidence_status'] not in {'blocked','failed'} or d['failure_class']!='none'\""
+      core: true
+      failure_handling: "fix-or-block"
+    - id: CMD-006
+      command: "$env:PYTHONDONTWRITEBYTECODE='1'; python \"C:/Users/Administrator/.codex/plugins/cache/codestable/codestable/1.0.4/skills/cs-onboard/tools/codestable-workflow-next.py\" feature --feature \".codestable/features/2026-07-27-sidebar-settings-click-e2e\" --epic-child-batch --json"
+      core: true
+      failure_handling: "fix-or-block"

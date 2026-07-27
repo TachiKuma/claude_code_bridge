@@ -8,14 +8,42 @@ items:
     status: in-progress
     feature: 2026-07-25-windows-rmux-wezterm-native-interaction-parity
     minimal_loop: true
+    split_required: true
+    split_reason: >-
+      2026-07-27 owner foreground retest 后确认该 item 不能继续作为单一 feature 验收：
+      6 项中仅 ordinary pane single-click focus 通过，ordinary drag selection、right-click paste、
+      wheel scroll、sidebar settings click、sidebar x KillProject 均失败。根因审查见
+      .codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/root-cause-review-and-feature-split.md
+    split_children:
+      - slug: ordinary-pane-single-click-focus-baseline
+        status: passed-baseline
+        next_action: seal_as_regression_baseline
+      - slug: sidebar-settings-click-e2e
+        status: split-to-top-level-item
+        owner: trace-only
+        canonical_item: sidebar-settings-click-e2e
+        next_action: follow_top_level_item
+      - slug: sidebar-kill-project-click-e2e
+        status: failed
+        next_action: design_diagnostic_feature
+      - slug: ordinary-pane-drag-selection-native
+        status: failed
+        next_action: choose_mouse_strategy_before_fix
+      - slug: ordinary-pane-right-click-paste
+        status: failed
+        next_action: choose_clipboard_strategy_before_fix
+      - slug: ordinary-pane-wheel-scroll
+        status: failed
+        next_action: choose_scroll_strategy_before_fix
     brainstorm_required: true
     brainstorm: .codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-brainstorm.md
     brainstorm_status: confirmed
     design_admission: admitted
     notes: >-
-      已先行进入 feature design，且已有 confirmed feature-brainstorm。继续实现前必须保证 design
-      引用该 brainstorm，并记录 owner 已批准/通过进入 design；同时补齐 feature frontmatter 的
-      roadmap/roadmap_item 元数据，复用既有 passed design-review 作为该 item 的 design-review evidence
+      已先行进入 feature design，且已有 confirmed feature-brainstorm。2026-07-27 前台复测失败后，
+      该 item 不得继续按单一验收目标推进；split_children 仅作为历史拆分索引，不认领 child
+      feature。canonical owner 以顶层 item 和 roadmap goal-state 为准，其中 sidebar settings / x
+      优先做真实 rmux send-keys -M 到 crossterm Event::Mouse 诊断。
 
   - slug: windows-rmux-output-capture-parity
     description: 验证 rmux capture 与 Linux/macOS tmux baseline 在 provider completion、ANSI、宽字符、wrapping 上的保真边界
@@ -34,6 +62,46 @@ items:
       用户滚轮不是 capture 证据；必须用后端 capture fixtures 和 provider completion golden fixtures。
       复用 rmux-send-capture-logging accepted evidence 作为 baseline，只补 UX parity delta、跨平台 baseline
       刷新、宽字符/wrapping/尾部空白差异归因，并产出 evidence/windows-rmux-ux-parity-evidence.json
+
+  - slug: sidebar-settings-click-e2e
+    description: 诊断并修复 sidebar settings 点击经 rmux send-keys -M 到 crossterm Event::Mouse 的端到端链路
+    depends_on: []
+    status: blocked
+    feature: 2026-07-27-sidebar-settings-click-e2e
+    minimal_loop: true
+    split_parent: windows-rmux-wezterm-native-interaction-parity
+    brainstorm_required: true
+    brainstorm: .codestable/features/2026-07-27-sidebar-settings-click-e2e/sidebar-settings-click-e2e-brainstorm.md
+    brainstorm_status: confirmed
+    design_admission: admitted
+    notes: >-
+      从 windows-rmux-wezterm-native-interaction-parity 前台复测失败中拆出。该 item 只处理
+      sidebar settings 点击链路，先证明真实 sidebar pane identity、helper fingerprint、root binding、
+      mouse event/action probe 与 config UI 状态，不合并 KillProject 或普通 pane drag/right/wheel。
+      2026-07-27 真实 Windows + WezTerm + rmux 前台复测确认 root binding 可触发，但 rmux 未提供
+      mouse_x/mouse_y，且 send-keys -M 未进入 Rust/crossterm mouse event。owner 拒绝 broad fallback
+      “sidebar 任意左键打开 settings”，因此本 item 保持 blocked，后续专用通道拆到
+      sidebar-settings-rmux-mouse-routing。
+
+  - slug: sidebar-settings-rmux-mouse-routing
+    description: 深挖 rmux 无 mouse_x/mouse_y 且 send-keys -M 不透传时，settings-only 点击通道或能力边界
+    depends_on: [sidebar-settings-click-e2e]
+    status: in-progress
+    feature: 2026-07-27-sidebar-settings-rmux-mouse-routing
+    minimal_loop: true
+    split_parent: sidebar-settings-click-e2e
+    brainstorm_required: true
+    brainstorm: .codestable/features/2026-07-27-sidebar-settings-rmux-mouse-routing/sidebar-settings-rmux-mouse-routing-brainstorm.md
+    brainstorm_status: confirmed
+    design_admission: admitted
+    notes: >-
+      从 sidebar-settings-click-e2e code review blocked 项拆出。目标不是恢复 broad fallback，而是
+      研究并实现不影响 sidebar x KillProject、普通 sidebar click、普通 pane drag/right/wheel 的
+      settings-only 通道。候选方向包括 rmux capability/source audit、mouse coordinate/passthrough
+      upstream limitation evidence、WezTerm/terminal-level precise binding、sidebar header-only auxiliary
+      channel、或明确 unsupported capability 投影。owner 已确认按拆分 feature 继续；本 feature 自身
+      brainstorm 已落盘并确认，design 只能选择 settings-only 精确通道或 unsupported capability evidence，
+      不得恢复 broad sidebar-left-click fallback。
 
   - slug: windows-rmux-pane-identity-layout-parity
     description: 收口 pane id/index/canonicalization、layout 重建和 agent-pane 绑定恢复

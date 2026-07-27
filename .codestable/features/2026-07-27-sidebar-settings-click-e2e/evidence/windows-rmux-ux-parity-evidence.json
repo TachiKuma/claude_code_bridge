@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "host_kind": "native_windows",
+  "terminal_host": "wezterm",
+  "backend_impl": "rmux",
+  "control_plane": "ccbd",
+  "parity_dimension": "foreground_interaction",
+  "evidence_status": "blocked",
+  "failure_class": "unsupported_capability",
+  "artifacts": {
+    "baseline": "evidence/sidebar-settings-baseline.md",
+    "foreground_retest": "evidence/manual-foreground-retest.md",
+    "mouse_probe": "evidence/sidebar-mouse-probe.json"
+  },
+  "residual_risks": [
+    "Current rmux foreground binding resolves the sidebar pane but does not expose mouse_x/mouse_y and does not forward send-keys -M into the pane. Owner rejected broad fallback that maps any sidebar left-click to settings, so settings button click remains blocked pending a dedicated rmux coordinate or mouse passthrough solution."
+  ],
+  "details": {
+    "sidebar_settings_click": {
+      "pane": {
+        "pane_id": "%0",
+        "role": "sidebar",
+        "session_name": "ccb-claude_code_bridge-b72b0116",
+        "window_name": "main",
+        "sidebar_helper_id": "sha256:41850a3b765275660291d842a6392149fe2f32bac339803083cba951e128bb98",
+        "sidebar_helper_args_id": "sha256:1947d9580a65b89f9204d4f7965617454f921cb300f98b915878702e7ffd7603"
+      },
+      "mouse": {
+        "binding": "MouseDown1Pane/MouseDown1Border: if sidebar then select-pane -t = ; send-keys -t = -M",
+        "root_binding_observed": true,
+        "coordinate_probe": ",,41,0,0,sidebar",
+        "event_observed": false,
+        "settings_action_observed": false,
+        "mouse_event_count": 0,
+        "last_mouse_event": null
+      },
+      "config_ui": {
+        "status": "not-run-from-click",
+        "detail": "Direct send-keys -t %0 c opened config UI, proving Rust settings action is healthy; rejected rmux broad click fallback is not accepted as click evidence."
+      },
+      "failure_detail": "rmux did not provide mouse_x/mouse_y for the real foreground click and send-keys -M did not reach crossterm/Rust mouse handling."
+    }
+  }
+}

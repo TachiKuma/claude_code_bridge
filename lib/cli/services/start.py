@@ -4,11 +4,11 @@ from dataclasses import replace
 import os
 import time
 
-from agents.config_loader import load_project_config
+from agents.config_loader import CONFIG_SOURCE_PROJECT, CONFIG_SOURCE_USER, load_project_config
 from ccbd.services.project_namespace import ProjectNamespaceController
 from ccbd.services.project_namespace_runtime import build_namespace_topology_plan
 from ccbd.services.project_namespace_runtime.materialize_topology import refresh_topology_sidebar_helpers
-from terminal_runtime import TmuxBackend
+from ccbd.services.project_namespace_runtime.namespace_projection import build_backend_for_namespace
 
 from .daemon import ensure_daemon_started
 from .daemon_runtime.policy import STARTUP_TRANSACTION_TIMEOUT_S
@@ -99,14 +99,32 @@ def _merge_workspace_guard_summary(context, summary: StartSummary, guard_summary
 
 def _refresh_running_sidebar_helpers(context) -> dict[str, object]:
     try:
-        controller = ProjectNamespaceController(context.paths, context.project.project_id)
+        loaded_config = load_project_config(context.project.project_root)
+        mux_backend = (
+            loaded_config.config.runtime_mux.backend
+            if loaded_config.config.runtime_mux.explicit_backend
+            else None
+        )
+        controller = ProjectNamespaceController(
+            context.paths,
+            context.project.project_id,
+            project_root=str(context.project.project_root),
+            project_config_backend=mux_backend
+            if loaded_config.source_kind == CONFIG_SOURCE_PROJECT
+            else None,
+            user_config_backend=mux_backend
+            if loaded_config.source_kind == CONFIG_SOURCE_USER
+            else None,
+        )
         namespace = controller.load()
         if namespace is None:
             return {'status': 'not_mounted'}
         topology_plan = build_namespace_topology_plan(
-            load_project_config(context.project.project_root).config
+            loaded_config.config,
+            ccbd_socket_path=str(context.paths.ccbd_socket_path),
+            project_root=str(context.project.project_root),
         )
-        backend = TmuxBackend(socket_path=namespace.tmux_socket_path)
+        backend = build_backend_for_namespace(controller._backend_factory, namespace)
         refreshed = refresh_topology_sidebar_helpers(
             controller,
             backend,
