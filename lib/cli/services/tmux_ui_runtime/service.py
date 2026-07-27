@@ -264,18 +264,16 @@ def _apply_sidebar_mouse_controls(
 
 
 def _apply_sidebar_mouse_controls_without_mouse_pane_format(backend) -> None:
-    # rmux 支持 -t =（当前鼠标 pane target）。用它替代无法定位鼠标 pane 的 select-pane -M：
-    # 普通 pane 单击即 focus；sidebar pane 聚焦并把原始鼠标事件透传给 sidebar crossterm 应用，
-    # 由 Rust header_action_at 命中 ⚙ settings / x KillProject / agent 选择，
-    # 不再用漏 -t 的 if-shell 坐标条件在 mux 层分发 send-keys c/Q。
+    # rmux 支持 -t =（当前鼠标 pane target），但不支持 #{mouse_pane}。
+    # 所有条件与动作都显式绑定到鼠标 pane，避免普通 pane 误用当前 active pane。
     select_action = 'select-pane -t ='
     sidebar_action = 'select-pane -t = ; send-keys -t = -M'
-    for mouse_key in (
-        'MouseDown1Pane',
-        'MouseDown1Border',
-        'WheelUpPane',
-        'WheelDownPane',
-    ):
+    settings_action = 'select-pane -t = ; send-keys -t = c'
+    kill_action = 'select-pane -t = ; send-keys -t = Q'
+
+    tmux_run(backend, ['unbind-key', '-T', 'root', 'MouseDrag1Pane'])
+
+    for mouse_key in ('MouseDown1Pane', 'MouseDown1Border'):
         tmux_run(
             backend,
             [
@@ -287,12 +285,34 @@ def _apply_sidebar_mouse_controls_without_mouse_pane_format(backend) -> None:
                 '-F',
                 '-t',
                 '=',
-                '#{==:#{@ccb_role},sidebar}',
-                sidebar_action,
-                select_action,
+                _sidebar_settings_click_condition(),
+                settings_action,
+                (
+                    'if-shell -F -t = '
+                    + shlex.quote(_sidebar_kill_click_condition())
+                    + ' '
+                    + shlex.quote(kill_action)
+                    + ' '
+                    + shlex.quote(
+                        _sidebar_or_normal_mouse_action(
+                            sidebar_action,
+                            normal_action=select_action,
+                        )
+                    )
+                ),
             ],
         )
 
+
+def _sidebar_or_normal_mouse_action(sidebar_action: str, *, normal_action: str) -> str:
+    return (
+        'if-shell -F -t = '
+        + shlex.quote('#{==:#{@ccb_role},sidebar}')
+        + ' '
+        + shlex.quote(sidebar_action)
+        + ' '
+        + shlex.quote(normal_action)
+    )
 
 def _sidebar_resize_sync_shell(
     tmux_socket_path: str,
@@ -321,12 +341,14 @@ def _sidebar_settings_click_condition() -> str:
     header_row = _sidebar_header_row_condition()
     relative_settings_col = (
         '#{||:'
+        '#{==:#{mouse_x},#{e|-:#{pane_width},5}},'
         '#{==:#{mouse_x},#{e|-:#{pane_width},4}},'
         '#{==:#{mouse_x},#{e|-:#{pane_width},3}}'
         '}'
     )
     absolute_settings_col = (
         '#{||:'
+        '#{==:#{mouse_x},#{e|+:#{pane_left},#{e|-:#{pane_width},5}}},'
         '#{==:#{mouse_x},#{e|+:#{pane_left},#{e|-:#{pane_width},4}}},'
         '#{==:#{mouse_x},#{e|+:#{pane_left},#{e|-:#{pane_width},3}}}'
         '}'
@@ -337,8 +359,18 @@ def _sidebar_settings_click_condition() -> str:
 
 def _sidebar_kill_click_condition() -> str:
     header_row = _sidebar_header_row_condition()
-    relative_kill_col = '#{==:#{mouse_x},#{e|-:#{pane_width},2}}'
-    absolute_kill_col = '#{==:#{mouse_x},#{e|+:#{pane_left},#{e|-:#{pane_width},2}}}'
+    relative_kill_col = (
+        '#{||:'
+        '#{==:#{mouse_x},#{e|-:#{pane_width},2}},'
+        '#{==:#{mouse_x},#{e|-:#{pane_width},1}}'
+        '}'
+    )
+    absolute_kill_col = (
+        '#{||:'
+        '#{==:#{mouse_x},#{e|+:#{pane_left},#{e|-:#{pane_width},2}}},'
+        '#{==:#{mouse_x},#{e|+:#{pane_left},#{e|-:#{pane_width},1}}}'
+        '}'
+    )
     kill_col = f'#{{||:{relative_kill_col},{absolute_kill_col}}}'
     return f'#{{&&:#{{==:#{{@ccb_role}},sidebar}},#{{&&:{header_row},{kill_col}}}}}'
 
@@ -395,6 +427,8 @@ def _apply_pane_theme(backend, *, session_name: str, border_script: str | None, 
         window_name = _window_name_from_target(session_name=session_name, target=target)
         window_styles = active_window_styles.get(window_name, {})
         options = dict(rendered_theme.window_options)
+        if _is_rmux_backend(backend):
+            options['pane-border-status'] = 'bottom'
         options.update(window_styles)
         for option, value in options.items():
             tmux_run(backend, ['set-window-option', '-t', target, option, value])
@@ -426,6 +460,10 @@ def _border_hook_command(border_script: str) -> str:
     quoted_script = shlex.quote(str(border_script))
     shell = f'[ -x {quoted_script} ] || exit 0; {quoted_script} "#{{pane_id}}" >/dev/null 2>&1 || true'
     return 'run-shell -b ' + shlex.quote(shell)
+
+
+def _is_rmux_backend(backend) -> bool:
+    return str(getattr(backend, 'backend_impl', '') or '').strip().lower() == 'rmux'
 
 
 def _session_windows(backend, *, session_name: str) -> tuple[str, ...]:
