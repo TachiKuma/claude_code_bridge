@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "host_kind": "native_windows",
+  "terminal_host": "wezterm",
+  "backend_impl": "rmux",
+  "control_plane": "ccbd",
+  "parity_dimension": "foreground_interaction",
+  "evidence_status": "partial",
+  "failure_class": "wezterm_gui_unavailable",
+  "artifacts": {
+    "design": ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-design.md",
+    "checklist": ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-checklist.yaml",
+    "live_binding_snapshot": ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/live-binding-snapshot.txt",
+    "manual_wezterm_runbook": ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/manual-wezterm-runbook.md",
+    "pytest_tmux_ui": "python -m pytest -q test/test_v2_tmux_ui.py",
+    "pytest_live_rmux_bindings": "python -m pytest -q -rs test/test_v2_tmux_ui.py -k rmux_accepts_mouse_context_project_ui_bindings",
+    "sidebar_cargo": "C:/Users/Administrator/.cargo/bin/cargo.exe test --manifest-path tools/ccb-agent-sidebar/Cargo.toml --quiet"
+  },
+  "residual_risks": [
+    "Foreground WezTerm mouse and clipboard operations were not manually executed in this non-interactive API session.",
+    "Automated evidence proves binding generation and rmux acceptance, but not actual drag-select, right-click paste, or wheel UX in the visible GUI."
+  ]
+}

@@ -1,0 +1,117 @@
+feature: 2026-07-25-windows-rmux-lifecycle-recovery-ux-parity
+created: 2026-07-27
+
+steps:
+  - action: "baseline + schema：引用 accepted baseline 并建立 lifecycle report schema"
+    exit_signal: "baseline_refs 指向存在 artifact；validator 校验 roadmap §4.6 required fields、superset fields、LifecycleCleanupResidue 和 partial/blocked residual risk"
+    status: pending
+  - action: "scenario reattach：证明重新 ccb attach 回到正确 namespace/pane，或记录 identity/attach diagnostics 和 blocked/partial"
+    exit_signal: "scenario=reattach case 有 transcript、diagnostics_ref、verdict、failure_class 和 residual_risks"
+    status: pending
+  - action: "scenario terminal_closed：证明关闭 WezTerm GUI 宿主后的 namespace/provider/rmux survival 或 degraded"
+    exit_signal: "scenario=terminal_closed case 区分 GUI close 与 kill project；缺 native GUI 时只能 partial/blocked"
+    status: pending
+  - action: "scenario kill_cleanup：验证 ccb kill residue"
+    exit_signal: "LifecycleCleanupResidue 覆盖 endpoint/token/rmux namespace/session/provider process/provider job/owned process residue 和 retained_reason"
+    status: pending
+  - action: "scenario pane_crash：消费 supervision ledger 验证 pane crash recovery/degraded diagnostics"
+    exit_signal: "scenario=pane_crash case 有 recovery_action、diagnostics_ref、failure_class、residual_risks"
+    status: pending
+  - action: "scenario provider_crash：消费 provider/job/process evidence，分离 provider_failure 与 system_failure"
+    exit_signal: "scenario=provider_crash case 不把 provider auth/quota/credential failure 写成 rmux system_failure"
+    status: pending
+  - action: "scenario rmux_daemon_crash：消费 daemon ownership evidence，区分 shared degraded-only 与 owned/project recovery"
+    exit_signal: "scenario=rmux_daemon_crash case 证明 shared daemon 不自动 kill/restart/refresh；owned/project daemon recovery 有 ownership evidence"
+    status: pending
+  - action: "UX evidence + scope guard：生成 windows-rmux-ux-parity-evidence.json 并执行范围守护"
+    exit_signal: "roadmap §4.1 required fields、enum、artifacts、residual_risks 校验通过；supportability 只消费 UX evidence JSON；未证实缺口时没有 production recovery 重构"
+    status: pending
+
+checks:
+  - item: "brainstorm admission 已 confirmed，owner 已批准 UX continuity first 和 crash 诊断可证伪通过标准"
+    source: "design §0 / brainstorm"
+    status: pending
+  - item: "lifecycle-recovery-report.json 覆盖 reattach、terminal_closed、kill_cleanup、pane_crash、provider_crash、rmux_daemon_crash"
+    source: "design §2.1 / AC-002..AC-007"
+    status: pending
+  - item: "windows-rmux-ux-parity-evidence.json 固定 parity_dimension=lifecycle_recovery 并符合 roadmap §4.1 required fields"
+    source: "design §2.1 / AC-008"
+    status: pending
+  - item: "UX evidence terminal_host 始终为 wezterm；GUI 不可用只能通过 failure_class=wezterm_gui_unavailable、partial/blocked 和 residual_risks 表达"
+    source: "design §2.1 / roadmap §4.1 / FDR2-001"
+    status: pending
+  - item: "terminal_closed 与 kill_cleanup 分离，关闭 WezTerm 不得被算作 project cleanup"
+    source: "design §2.2 / AC-003 / AC-004"
+    status: pending
+  - item: "kill_cleanup residue 使用 LifecycleCleanupResidue，覆盖 endpoint_removed、token_removed、rmux_namespace_removed、rmux_session_removed、provider_process_residue、provider_job_residue、owned_process_residue、retained_reason"
+    source: "design §2.1 / AC-004 / DOD-IMPL-005"
+    status: pending
+  - item: "crash scenarios 必须有 recovery/degraded action、diagnostics_ref、failure_class、residual_risks"
+    source: "design §2.1 / AC-005..AC-007"
+    status: pending
+  - item: "shared rmux daemon crash 不自动 kill/restart/refresh，owned/project daemon recovery 必须有 ownership evidence"
+    source: "design §2.2 / AC-007 / DOD-IMPL-006"
+    status: pending
+  - item: "provider auth/quota/credential failure 不得归为 rmux lifecycle system_failure"
+    source: "design §1 / AC-006"
+    status: pending
+  - item: "native Windows + WezTerm evidence 缺失时 GUI scenarios 只能 partial/blocked，不能 full pass"
+    source: "design §1 / AC-003 / AC-008"
+    status: pending
+  - item: "未证实缺口时不做 production recovery、namespace lifecycle、validation matrix 或 support tier 重构"
+    source: "design §1 / AC-009 / DOD-IMPL-007"
+    status: pending
+  - item: "supportability 只能消费 evidence/windows-rmux-ux-parity-evidence.json；LifecycleRecoveryReport 只能作为 artifacts.lifecycle_recovery_report 引用"
+    source: "design §2.1 / design §4 / roadmap §4.1"
+    status: pending
+  - item: "LifecycleRecoveryReport.cases[] 每个元素都是 roadmap §4.6 record 的 superset，并逐 case 校验 §4.6 required fields"
+    source: "design §2.1 / design §4 / roadmap §4.6"
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-25-windows-rmux-lifecycle-recovery-ux-parity/windows-rmux-lifecycle-recovery-ux-parity-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-ux-parity-hardening/windows-rmux-ux-parity-hardening-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_windows_rmux_lifecycle_recovery_parity.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-004
+      command: "python -m pytest -q test/test_ccbd_runtime_attach.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-005
+      command: "python -m pytest -q test/test_ccbd_rmux_supervision_recovery.py test/test_ccbd_rmux_daemon_supervision.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-006
+      command: "python -m pytest -q test/test_ccbd_diagnostics_bundle_rmux.py test/test_cli_ping_supervision.py test/test_cli_doctor_supervision.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-007
+      command: "python -m pytest -q test/test_rmux_windows_validation_matrix.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-008
+      command: "python -m py_compile <本 feature 实际触碰的 Python modules>"
+      core: true
+      failure_handling: fix-or-block
+  evidence_required:
+    - lifecycle_recovery_report
+    - windows_rmux_ux_parity_evidence
+    - manual_lifecycle_runbook_or_blocked_record
+    - diagnostics_refs
+    - residue_report
+    - command_output
+    - diff_summary
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden

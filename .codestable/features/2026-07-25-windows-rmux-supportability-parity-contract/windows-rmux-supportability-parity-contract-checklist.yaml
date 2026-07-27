@@ -1,0 +1,103 @@
+feature: 2026-07-25-windows-rmux-supportability-parity-contract
+created: 2026-07-27
+
+steps:
+  - action: "baseline + projection boundary：锁定 base support projection owner 与 UX overlay boundary"
+    exit_signal: "tests/fixtures 证明 overlay 不改变 npm/install/release base rules；base fields 保持兼容"
+    status: pending
+  - action: "dimension evidence loader：读取 expected 5 upstream dimensions 的 UX evidence JSON，并将缺失/不可解析/维度不匹配投影为 missing"
+    exit_signal: "fixture 覆盖 pass、partial、blocked、failed、missing 和 malformed JSON"
+    status: pending
+  - action: "overlay tier classifier：从 dimension statuses 计算 overlay candidate tier 和 residual risks"
+    exit_signal: "任一 failed/blocked/missing 不得 candidate supported；partial-only candidate beta"
+    status: pending
+  - action: "base cap merge：按 Tier merge table 合并 base support tier 与 overlay candidate，生成 final support tier"
+    exit_signal: "base beta + UX pass 仍 final beta；base experimental/blocked 不能被 UX overlay 提升；blocked 比 experimental 更保守"
+    status: pending
+  - action: "doctor/diagnostics projection：把 final projection 接入 doctor payload/render 与 diagnostic bundle"
+    exit_signal: "doctor lines 和 bundle JSON 展示相同 ux_parity dimensions、tier、risks、fallback guidance"
+    status: pending
+  - action: "docs consistency：更新/校验 README、support contract、install runbook、diagnostics contract 对 UX overlay 字段的一致表达"
+    exit_signal: "docs guard 从 projection 或 fixture 校验 required fields；docs 不单独写死更高 tier"
+    status: pending
+  - action: "supportability evidence + scope guard：生成 supportability 自身 UX evidence JSON，并证明没有重复定义 install/npm/release owner"
+    exit_signal: "roadmap §4.1 校验通过，missing_evidence 未泄漏到最终 evidence；scope guard 无 forbidden owner changes；residual risks 完整"
+    status: pending
+
+checks:
+  - item: "brainstorm admission 已 confirmed，owner 已批准 UX parity overlay first 和不重复定义 npm/install.ps1/release guard"
+    source: "design §0 / brainstorm"
+    status: pending
+  - item: "只消费每个 child 的 evidence/windows-rmux-ux-parity-evidence.json；child 私有 report 只能作为 artifacts ref"
+    source: "design §1 / §2.2"
+    status: pending
+  - item: "5 个上游 dimensions 均被投影：foreground_interaction、output_capture、pane_identity_layout、visual_no_popup、lifecycle_recovery；本 feature 生成第 6 维 supportability evidence"
+    source: "design §2.1 / AC-002"
+    status: pending
+  - item: "缺失/不可解析/维度不匹配的 child evidence 投影为 missing 且 residual risk 非空"
+    source: "design §2.1 / AC-002 / DOD-IMPL-002"
+    status: pending
+  - item: "missing_evidence 只允许出现在私有 supportability report；最终 roadmap §4.1 evidence 必须映射为合法 failure_class=test_design_failure"
+    source: "design §2.1 / AC-009 / DOD-IMPL-006"
+    status: pending
+  - item: "任一 failed/blocked/missing 时 final support tier 不得为 supported"
+    source: "design §2.1 / AC-003 / DOD-IMPL-003"
+    status: pending
+  - item: "partial-only overlay 可以 beta，但 doctor/docs/diagnostics 必须列 residual risks"
+    source: "design §2.1 / AC-004"
+    status: pending
+  - item: "final support tier 不高于 base support projection；base experimental/blocked 不能被 overlay 提升"
+    source: "design §2.1 / AC-001 / AC-005"
+    status: pending
+  - item: "doctor 和 diagnostic bundle 展示同一 UX parity projection，且 base rmux fields 保持兼容"
+    source: "design §2.2 / AC-006 / AC-007"
+    status: pending
+  - item: "docs consistency gate 覆盖 UX parity tier、dimension statuses、residual risks 和 fallback guidance"
+    source: "design §2.4 / AC-008 / DOD-IMPL-005"
+    status: pending
+  - item: "supportability 自身 windows-rmux-ux-parity-evidence.json 固定 parity_dimension=supportability 并符合 roadmap §4.1"
+    source: "design §2.1 / AC-009 / DOD-IMPL-006"
+    status: pending
+  - item: "未重复定义 npm、install.ps1、release guard；package.json.os 不新增 win32，scripts 不新增 publish/release/tag，install.ps1 owner rules 与 forbidden release actions 保持机器可断言"
+    source: "design §1 / AC-010 / DOD-IMPL-007"
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-25-windows-rmux-supportability-parity-contract/windows-rmux-supportability-parity-contract-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-ux-parity-hardening/windows-rmux-ux-parity-hardening-items.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_windows_rmux_supportability_parity.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-004
+      command: "python -m pytest -q test/test_rmux_packaging_docs_contracts.py test/test_cli_doctor_rmux_packaging.py test/test_doctor_rmux_packaging_summary.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-005
+      command: "python -m pytest -q test/test_ccbd_diagnostics_bundle_rmux.py test/test_rmux_docs_consistency_gate.py test/test_install_windows_rmux_contract.py test/test_rmux_packaging_release_guard.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-006
+      command: "python -m py_compile <本 feature 实际触碰的 Python modules>"
+      core: true
+      failure_handling: fix-or-block
+  evidence_required:
+    - supportability_parity_report
+    - windows_rmux_ux_parity_evidence
+    - doctor_projection
+    - diagnostics_bundle_projection
+    - docs_consistency_report
+    - scope_guard
+    - diff_summary
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden

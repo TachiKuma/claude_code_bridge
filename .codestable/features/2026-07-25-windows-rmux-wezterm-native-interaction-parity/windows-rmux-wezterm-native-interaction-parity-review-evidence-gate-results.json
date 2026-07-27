@@ -1,0 +1,48 @@
+{
+  "gate_id": "review-evidence-gate",
+  "feature": "2026-07-25-windows-rmux-wezterm-native-interaction-parity",
+  "inputs": {
+    "design": ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-design.md",
+    "checklist": ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-checklist.yaml",
+    "review": ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-review.md",
+    "evidence_pack": ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-evidence-pack.md",
+    "gate_results": ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-gate-results.json",
+    "dod_results": ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-dod-results.json"
+  },
+  "input_digests": {
+    "design": "756e7b7e44463824931fb73780800091614fde9b30e4f159f2f96c1eb10ae10e",
+    "checklist": "1525995aca20fe97bd7a2cd51015d05e263b4ff4faeab7286845971bb2923f00",
+    "review": "501337f26c97b4ba575477f54760fc4753906100e972c0d1353ceec2f3759de0",
+    "evidence_pack": "07ace74b1b8efeb7df820c3646297940416bf5fdaf76d5e1ef198f6789d0e3ce",
+    "gate_results": "4f361136142b8d9097db079b3f4873eaaf99d01ac7be253e5e683e1006e8a3e1",
+    "dod_results": "188804610d46a5a0dcab69b462f8ff1759abc96426a722f9b93df2e0f2730630"
+  },
+  "stage": "review.before_pass",
+  "kind": "protocol-only",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [
+    {
+      "kind": "ocr-skipped",
+      "reason": "ocr was available but workspace scope was ambiguous due unrelated dirty roadmap/feature files; independent Task agent review completed and local line review covered current feature diff"
+    },
+    {
+      "kind": "manual-gui-residual-risk",
+      "reason": "real foreground WezTerm mouse and clipboard operations are deferred to QA/acceptance"
+    }
+  ],
+  "evidence": [
+    {
+      "lane_a_state": "completed",
+      "lane_a_ref": "019fa14f-a035-7471-8098-b916de520d7a",
+      "reviewer": "subagent",
+      "review_status": "passed"
+    }
+  ],
+  "providers": {
+    "ocr": {
+      "status": "skipped",
+      "reason": "scope-ambiguous"
+    }
+  }
+}
