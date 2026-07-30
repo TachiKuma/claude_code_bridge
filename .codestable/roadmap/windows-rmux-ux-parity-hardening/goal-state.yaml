@@ -10,6 +10,11 @@ commit_authorization: approved
 commit_authorization_ref: approval-report.md#goal-commits
 handoff_reason: "windows-rmux-wezterm-native-interaction-parity QA FAILED after 2026-07-27 owner foreground retest: only ordinary pane single-click focus passed. Ordinary pane drag selection, right-click paste, WezTerm wheel scroll, sidebar settings click, and sidebar x KillProject all failed. Independent reviewer 019fa3a0-891c-7d33-9b12-04303133dd2f and local WezTerm/rmux source review found the root cause: global mouse on / mouse reporting means negative binding assertions do not prove GUI-native behavior or sidebar e2e dispatch."
 handoff_next: "Do not continue acceptance. Use .codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/root-cause-review-and-feature-split.md and split the foreground checks into finer features: ordinary-pane-single-click-focus-baseline, sidebar-settings-click-e2e, sidebar-kill-project-click-e2e, ordinary-pane-drag-selection-native, ordinary-pane-right-click-paste, ordinary-pane-wheel-scroll. Start with sidebar e2e diagnostics, then resume each approved child fix with code review plus QA."
+owner_pause:
+  requested_at: 2026-07-30
+  reason: "owner requested pausing windows-rmux-ux-parity-hardening before exploring a Herdr-based native Windows CCB implementation"
+  superseded_by: ".codestable/brainstorms/windows-native-herdr-ccb/brainstorm.md"
+  resume_note: "Resume only after owner explicitly chooses to continue the rmux parity hardening line; do not infer resume from Herdr feasibility work."
 current_feature_index: 0
 features:
   - slug: windows-rmux-wezterm-native-interaction-parity

@@ -1,0 +1,91 @@
+roadmap: windows-native-herdr-ccb
+created: 2026-07-30
+
+items:
+  - slug: windows-x64-v852-baseline-gate
+    description: 建立 CCB v8.5.2 与 Native Windows x64-only 准入、诊断和 package metadata 口径
+    depends_on: []
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: "只产出 platform gate contract、版本/位宽探测和 startup/doctor 基础诊断；实现前必须从 v8.5.2 tag 或 release-equivalent 基线起步；os=win32 表示 Windows OS，cpu=x64 才表示 64-bit。"
+
+  - slug: herdr-backend-contract-spike
+    description: 用 Herdr socket API 在 Native Windows x64 上验证 session、pane、send、capture、kill、restore 和 provider dry-run 最小语义
+    depends_on: [windows-x64-v852-baseline-gate]
+    status: planned
+    feature: null
+    minimal_loop: true
+    notes: "只产出 spike 与 evidence；必须覆盖 kill_pane 和一个 provider CLI dry-run pane，但不要求完整 provider parity；若 Herdr socket API 无法覆盖最小语义，停止正式 adapter 路线并回写缺口。"
+
+  - slug: mux-backend-contract-herdr-v2
+    description: 将既有 mux 小协议升级为支持 tmux、rmux、herdr 共存的 backend contract v2
+    depends_on: [herdr-backend-contract-spike]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: "Herdr 不得伪装为 tmux-family；调用层只能依赖 backend-neutral refs、capabilities 和 structured errors。"
+
+  - slug: herdr-backend-client
+    description: 实现 Herdr socket client、schema/version gate、capability gate、structured error 与 operation evidence
+    depends_on: [mux-backend-contract-herdr-v2]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: "Herdr API schema mismatch、Windows beta gap 或 x64 gate 失败时必须 fail closed。"
+
+  - slug: ccbd-herdr-namespace-lifecycle
+    description: 将 Herdr backend 接入 ccbd project namespace、pane topology、foreground attach、kill、restart 和 reload
+    depends_on: [herdr-backend-client]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: "ccbd 仍是 project authority；Herdr session 和 pane 只作为 terminal backend evidence。"
+
+  - slug: provider-runtime-on-herdr
+    description: 让托管 provider 在 Herdr pane 中完成启动、ask、pend、completion、cancellation 和 provider state 绑定
+    depends_on: [ccbd-herdr-namespace-lifecycle]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: "Herdr agent state 只能作为 diagnostics evidence，不能单独判定 CCB completion。"
+
+  - slug: herdr-bounded-recovery-boundary
+    description: 对齐 CCB v8.5.2 bounded pane recovery 与 Herdr session restore，确保恢复 owner 唯一
+    depends_on: [provider-runtime-on-herdr]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: "必须保留 90 秒 probation、退避、bounded crash logs 和 durable circuit；避免 CCB 与 Herdr 双重 respawn。"
+
+  - slug: herdr-user-surfaces-parity
+    description: 将 Herdr backend evidence 投影到 foreground attach、Mobile terminal、Config UI、doctor、ping、mounted 和 project view
+    depends_on: [provider-runtime-on-herdr, herdr-bounded-recovery-boundary]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: "用户可见面必须展示 beta gaps、degraded next action 和 support tier，不得只显示 backend 可用。"
+
+  - slug: windows-x64-release-surface
+    description: 补齐 Windows x64 npm/install/update/native helper/managed Python/doctor 的发布面 gate
+    depends_on: [windows-x64-v852-baseline-gate, herdr-user-surfaces-parity]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: "消费 windows-x64-v852-baseline-gate 的 platform gate，不重新实现位宽探测；只建立 release surface 和 gate；不授权 npm publish、release、push 或 promotion。"
+
+  - slug: native-windows-public-workflow-validation-matrix
+    description: 在 Native Windows x64 上验证 CCB public workflows 的 pass、partial、blocked、failed 证据矩阵
+    depends_on: [windows-x64-release-surface, herdr-user-surfaces-parity]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: "覆盖 ccb、ask、pend、watch、ping、mounted、kill、restart、reload、foreground attach、Mobile terminal、Config UI、doctor/update。"
+
+  - slug: herdr-supportability-projection
+    description: 将 validation evidence 汇总到 support tier、README/docs、doctor 和 residual risk
+    depends_on: [native-windows-public-workflow-validation-matrix]
+    status: planned
+    feature: null
+    minimal_loop: false
+    notes: "core workflows 未全 pass 前只能投影为 experimental/beta；blocked 或 partial 不得宣称 supported。"
