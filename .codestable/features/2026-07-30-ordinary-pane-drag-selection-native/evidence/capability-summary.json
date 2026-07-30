@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "feature": "2026-07-30-ordinary-pane-drag-selection-native",
+  "selected_route": "unsupported_capability",
+  "route_candidates": {
+    "default_gui_native_drag": {
+      "supported": false,
+      "reason": "Current CCB/rmux/tmux policy enables mouse on, so ordinary pane drag enters application mouse reporting rather than WezTerm's default GUI selection path."
+    },
+    "negative_binding_assertion": {
+      "supported": false,
+      "reason": "Absence of MouseDrag1Pane or copy-mode -M bindings is necessary regression protection but does not prove the foreground terminal can select text."
+    },
+    "shift_bypass": {
+      "supported": false,
+      "reason": "Shift bypass is a possible explicit user gesture, but it has not been selected, documented, or foreground-validated as the supported default route."
+    },
+    "tmux_rmux_copy_mode_selection": {
+      "supported": false,
+      "reason": "Copy-mode selection would change the interaction contract from WezTerm GUI-native selection to tmux/rmux-like selection."
+    },
+    "unsupported_capability": {
+      "supported": true,
+      "reason": "No approved default native drag route exists under current mouse on policy; runtime behavior remains unchanged."
+    }
+  },
+  "current_policy": {
+    "mouse_on_default": true,
+    "ordinary_mouse_down_focus_supported": true,
+    "ordinary_drag_binding_removed": true,
+    "native_drag_selection_supported_by_current_default": false,
+    "runtime_behavior_changed": false
+  },
+  "explicitly_rejected_routes": [
+    {
+      "name": "claim_no_copy_mode_binding_as_native_pass",
+      "reason": "This only proves a command was not bound; it does not observe WezTerm GUI selection."
+    },
+    {
+      "name": "silent_shift_bypass_as_default",
+      "reason": "A modifier bypass changes the user action and must be explicitly accepted and validated."
+    },
+    {
+      "name": "copy_mode_selection_as_gui_native",
+      "reason": "Copy-mode may be a valid separate feature strategy, but not a GUI-native parity pass."
+    }
+  ]
+}

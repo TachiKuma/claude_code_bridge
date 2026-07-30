@@ -1,0 +1,28 @@
+schema_version: 2
+goal: root-cause-review-and-feature-split
+status: complete
+objective: "完成 root-cause-review-and-feature-split.md 的终端验收与 goal 终态记录，确认 windows-rmux-wezterm-native-interaction-parity 已从单一失败 feature 正确转为可恢复的拆分 handoff。"
+start_point: "root-cause-review-and-feature-split.md 已存在且 status=failed；父 feature QA status=failed；windows-rmux-ux-parity-hardening epic 处于 handoff，handoff_next 指向该 root-cause 文件并要求拆分 foreground checks。"
+acceptance:
+  - "功能验收确认 root-cause-review-and-feature-split.md 记录 1 PASS / 5 FAIL、根因和六项拆分，且明确不得继续父 feature acceptance。"
+  - "功能验收确认 roadmap items.yaml 引用 root-cause 文件，标记 split_required=true，并保留六项 split_children 与后续动作。"
+  - "功能验收确认 epic goal-state.yaml handoff_next 指向 root-cause 文件，并要求从 sidebar e2e diagnostics 开始，而不是继续原 acceptance。"
+  - "功能验收确认父 feature workflow 恢复为 QA failed / acceptance missing，并由 epic owner 接管。"
+  - "功能验收确认已启动至少一个拆分后的 sidebar e2e 诊断分支，且不会把 root-cause split goal 误写成所有 child feature 已完成。"
+non_goals:
+  - "不实现 ordinary drag/right/wheel 或 sidebar kill-project 的修复。"
+  - "不把 windows-rmux-wezterm-native-interaction-parity 标为 accepted 或 passed。"
+  - "不修改运行时代码或测试代码。"
+  - "不执行 git commit、push、merge、release 或 deploy。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 1
+next_action: "Goal complete; root-cause split handoff 已完成终端功能验收，可由 epic 继续处理各拆分 child。"
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-30"

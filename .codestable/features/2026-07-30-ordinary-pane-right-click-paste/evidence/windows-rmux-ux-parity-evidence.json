@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "host_kind": "native_windows",
+  "terminal_host": "wezterm",
+  "backend_impl": "rmux",
+  "control_plane": "ccbd",
+  "parity_dimension": "foreground_interaction",
+  "evidence_status": "blocked",
+  "failure_class": "unsupported_capability",
+  "artifacts": {
+    "diagnosis": "evidence/diagnosis.md",
+    "capability_summary": "evidence/capability-summary.json",
+    "parent_root_cause": "../2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/root-cause-review-and-feature-split.md",
+    "parent_qa": "../2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-qa.md"
+  },
+  "residual_risks": [
+    "Ordinary pane right-click paste remains failed in native Windows + WezTerm + rmux foreground retest.",
+    "Current mouse on policy routes pane mouse events through application mouse reporting, so WezTerm GUI-native paste is not proven by rmux binding snapshots or negative paste-buffer assertions.",
+    "Changing the result from blocked to pass requires an approved strategy and fresh foreground validation: host clipboard paste bridge, well-defined paste-buffer route, or an explicitly documented terminal config path."
+  ],
+  "details": {
+    "ordinary_pane_right_click_paste": {
+      "selected_route": "unsupported_capability",
+      "failure_detail": "No approved default route currently lets ordinary pane right-click paste system clipboard text into shell input while keeping existing Windows/rmux policy unchanged.",
+      "runtime_behavior_changed": false,
+      "mouse_on_policy_changed": false,
+      "host_clipboard_bridge_implemented": false,
+      "paste_buffer_restored": false,
+      "wezterm_config_claimed_as_default": false,
+      "negative_binding_assertion_counted_as_pass": false,
+      "foreground_paste_observed": false
+    }
+  }
+}

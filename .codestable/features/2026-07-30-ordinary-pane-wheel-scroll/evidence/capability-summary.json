@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "feature": "2026-07-30-ordinary-pane-wheel-scroll",
+  "selected_route": "unsupported_capability",
+  "route_candidates": {
+    "default_gui_native_wheel_scroll": {
+      "supported": false,
+      "reason": "Current CCB/rmux/tmux policy enables mouse on, so ordinary pane wheel events enter application mouse reporting rather than WezTerm's default terminal scroll path."
+    },
+    "negative_binding_assertion": {
+      "supported": false,
+      "reason": "Absence of WheelUpPane, WheelDownPane, scroll-up, or scroll-down bindings is necessary regression protection but does not prove foreground wheel scrolling is visible."
+    },
+    "tmux_rmux_copy_mode_scroll": {
+      "supported": false,
+      "reason": "Copy-mode scroll may be a valid alternative but changes the interaction contract from WezTerm GUI-native scroll to tmux/rmux-like scrollback behavior."
+    },
+    "mouse_off_or_modifier_bypass": {
+      "supported": false,
+      "reason": "Host terminal native scroll requires an explicit mouse reporting off or modifier-bypass route and fresh foreground validation; no such route is selected in this goal."
+    },
+    "pane_app_wheel_passthrough": {
+      "supported": false,
+      "reason": "Pane app wheel passthrough depends on the running app and cannot be claimed as generic ordinary pane terminal scrollback."
+    },
+    "unsupported_capability": {
+      "supported": true,
+      "reason": "No approved default wheel scroll route exists under current mouse on policy; runtime behavior remains unchanged."
+    }
+  },
+  "current_policy": {
+    "mouse_on_default": true,
+    "ordinary_mouse_down_focus_supported": true,
+    "ordinary_wheel_binding_removed": true,
+    "native_wheel_scroll_supported_by_current_default": false,
+    "copy_mode_scroll_implemented_for_rmux_fallback": false,
+    "runtime_behavior_changed": false
+  },
+  "explicitly_rejected_routes": [
+    {
+      "name": "claim_no_scroll_binding_as_native_pass",
+      "reason": "This only proves a command was not bound; it does not observe visible foreground scroll."
+    },
+    {
+      "name": "copy_mode_scroll_as_gui_native",
+      "reason": "Copy-mode scroll may be a valid separate feature strategy, but not a GUI-native parity pass."
+    },
+    {
+      "name": "pane_app_passthrough_as_terminal_scrollback",
+      "reason": "An app-specific wheel route does not prove generic terminal scrollback behavior."
+    }
+  ]
+}

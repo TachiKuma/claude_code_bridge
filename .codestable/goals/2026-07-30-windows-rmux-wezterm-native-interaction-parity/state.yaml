@@ -1,0 +1,29 @@
+schema_version: 2
+goal: "windows-rmux-wezterm-native-interaction-parity"
+status: active # active | complete | blocked
+objective: "在 native Windows + WezTerm + rmux 前台，把 5 项失败的鼠标交互（ordinary pane 拖拽选区 / 右键粘贴 / 滚轮，sidebar settings 点击、sidebar x KillProject 点击）从 unsupported_capability 落地为真·parity：ordinary 三项走真 GUI-native（按 role 分鼠标策略），sidebar 两项修好 send-keys -M → crossterm e2e 链路。"
+start_point: "父 feature windows-rmux-wezterm-native-interaction-parity QA failed（1 PASS/5 FAIL），已经 root-cause 拆成 6 child；5 项失败 child 于 2026-07-30 完成诊断闭环但结论均为 unsupported_capability（只诊断、未选策略、未落生产修复）。单击聚焦 baseline PASS。全局 mouse on 是根因。epic windows-rmux-ux-parity-hardening 处于 handoff。"
+acceptance:
+  - "sidebar-settings-click：真实 sidebar pane 点击 settings 后，自动化 e2e 证明 mouse Event 到达 crossterm 且触发 config UI 打开（或显示具体 launch error），不再只凭 list-keys/cargo test。"
+  - "sidebar-kill-project-click：真实点击 x 后自动化 e2e 证明 ExitAction::KillProject 触发并执行 ccb kill，清理 rmux/ccbd/project residue（或显示具体 kill failure）。"
+  - "ordinary-pane-drag-selection：ordinary pane 关闭 mouse reporting 后，owner 前台裸鼠标拖拽可见选中文本；随 impl 提供精确手测脚本，owner 回报 pass。"
+  - "ordinary-pane-right-click-paste：owner 前台从其他软件复制后，右键 ordinary pane 文本进入 shell input；多行语义明确；owner 回报 pass。"
+  - "ordinary-pane-wheel-scroll：owner 前台滚轮在 ordinary pane 产生可见滚动（记录滚动的是 terminal scrollback / rmux copy-mode / pane app）；owner 回报 pass。"
+  - "新增按 role 分鼠标策略（ordinary mouse-off + 应用要鼠标时再开的切换；sidebar 保持 mouse-on）不破坏单击聚焦 baseline，不破坏 sidebar 点击路由。"
+  - "每个 child 经 cs-code-review 独立审查 + QA；Task agent 功能验收记录 pass verdict。"
+non_goals:
+  - "不改变 direction/strategy：不退回 tmux/rmux-like 或 SHIFT-bypass 作为 ordinary 三项的主方案（owner 已选真 GUI-native）。"
+  - "不执行 git commit / push / merge / release / deploy（仍需 owner 另行批准）。"
+  - "不处理 6 项之外的新交互能力。"
+budget:
+  kind: none # none | time | iterations | token | owner-defined
+  limit: null
+current_iteration: 1
+next_action: "Iteration 002：确认 rmux 在 Windows 支持 if-shell -F 里的 #{mouse_x}/#{pane_left}/#{pane_width}，然后在 Windows/rmux fallback 把 sidebar settings/kill 点击改为 binding 内列命中 + 键盘命令（c/Q）翻译，替代不工作的 send-keys -M；配单测 + -CC attach 集成测试。"
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none # none | pending | resolved
+  reason: null
+  decision: null
+updated_at: "2026-07-30"

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "feature": "2026-07-30-ordinary-pane-right-click-paste",
+  "selected_route": "unsupported_capability",
+  "route_candidates": {
+    "default_gui_native_right_click_paste": {
+      "supported": false,
+      "reason": "Current CCB/rmux/tmux policy enables mouse on, so ordinary pane right-click enters application mouse reporting rather than WezTerm's default mouse assignment path."
+    },
+    "negative_binding_assertion": {
+      "supported": false,
+      "reason": "Absence of MouseDown3Pane or paste-buffer bindings is necessary regression protection but does not prove foreground right-click can paste system clipboard text."
+    },
+    "host_clipboard_paste_bridge": {
+      "supported": false,
+      "reason": "A bridge would need explicit clipboard source, encoding, multi-line, and failure-diagnostic semantics; it has not been designed or implemented in this goal."
+    },
+    "tmux_rmux_paste_buffer": {
+      "supported": false,
+      "reason": "paste-buffer requires a known buffer source and paste semantics; simply restoring the binding would not prove system clipboard right-click paste."
+    },
+    "wezterm_config_binding": {
+      "supported": false,
+      "reason": "A WezTerm configuration-level binding may be a user workaround but is not current CCB default production behavior."
+    },
+    "unsupported_capability": {
+      "supported": true,
+      "reason": "No approved default right-click paste route exists under current mouse on policy; runtime behavior remains unchanged."
+    }
+  },
+  "current_policy": {
+    "mouse_on_default": true,
+    "ordinary_mouse_down_focus_supported": true,
+    "ordinary_right_click_binding_removed": true,
+    "native_right_click_paste_supported_by_current_default": false,
+    "host_clipboard_bridge_implemented": false,
+    "runtime_behavior_changed": false
+  },
+  "explicitly_rejected_routes": [
+    {
+      "name": "claim_no_paste_buffer_binding_as_native_pass",
+      "reason": "This only proves a command was not bound; it does not observe foreground paste into shell input."
+    },
+    {
+      "name": "prefix_paste_as_right_click_pass",
+      "reason": "Keyboard prefix paste is a separate path and does not validate ordinary pane right-click paste."
+    },
+    {
+      "name": "wezterm_user_config_as_ccb_default",
+      "reason": "A terminal config workaround is not CCB runtime behavior unless explicitly adopted and validated."
+    }
+  ]
+}
