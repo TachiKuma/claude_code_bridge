@@ -19,6 +19,7 @@ from .doctor_runtime import (
     runtime_identity_summary,
 )
 from terminal_runtime.rmux_packaging_support import rmux_packaging_support_summary
+from terminal_runtime.windows_x64_platform_gate import windows_x64_platform_gate_summary
 
 
 def doctor_summary(context) -> dict:
@@ -55,6 +56,10 @@ def doctor_summary(context) -> dict:
         'config': config_validation.to_record(),
         'backend_selection': backend_selection_summary(context),
         'rmux_packaging_support': rmux_packaging_support_summary(installation.get('path') or context.project.project_root),
+        'windows_x64_platform_gate': windows_x64_platform_gate_summary(
+            installation.get('path') or context.project.project_root,
+            installation=installation,
+        ),
         'ccbd': ccbd_summary(local=local, stores=stores, errors=errors, remote=remote_ccbd),
         'agents': agents,
     }

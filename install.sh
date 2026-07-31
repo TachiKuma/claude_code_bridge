@@ -392,6 +392,8 @@ Optional environment variables:
   CCB_BUILD_ARCH           Override build arch metadata (default: uname -m)
   CCB_BUILD_TIME           Override build timestamp metadata (default: current UTC time)
   CCB_SOURCE_KIND          Override source kind metadata (default: source if .git exists, else release)
+  CCB_SOURCE_REF           Override source admission ref metadata (e.g. refs/tags/v8.5.2)
+  CCB_BRANCH_REF           Override implementation branch ref metadata (e.g. refs/heads/feature/windows-herdr)
   CCB_PYTHON_BIN           Python 3.10+ executable to use for install-time checks and wrappers
   CCB_USE_MANAGED_VENV     Use install-local Python venv: auto (default), 1, or 0
                            auto = enabled for macOS release installs, disabled for source/dev installs
@@ -1278,6 +1280,44 @@ resolve_install_mode() {
   fi
 }
 
+resolve_source_ref() {
+  if [[ -n "${CCB_SOURCE_REF:-}" ]]; then
+    echo "$CCB_SOURCE_REF"
+    return
+  fi
+  local build_info_source_ref
+  build_info_source_ref="$(read_source_build_info_field "source_ref")"
+  if [[ -n "$build_info_source_ref" ]]; then
+    echo "$build_info_source_ref"
+    return
+  fi
+  if command -v git >/dev/null 2>&1 && git -C "$REPO_ROOT" rev-parse --verify -q "refs/tags/v8.5.2" >/dev/null 2>&1; then
+    if git -C "$REPO_ROOT" merge-base --is-ancestor "refs/tags/v8.5.2" HEAD >/dev/null 2>&1; then
+      echo "refs/tags/v8.5.2"
+    fi
+  fi
+}
+
+resolve_branch_ref() {
+  if [[ -n "${CCB_BRANCH_REF:-}" ]]; then
+    echo "$CCB_BRANCH_REF"
+    return
+  fi
+  local build_info_branch_ref
+  build_info_branch_ref="$(read_source_build_info_field "branch_ref")"
+  if [[ -n "$build_info_branch_ref" ]]; then
+    echo "$build_info_branch_ref"
+    return
+  fi
+  if command -v git >/dev/null 2>&1 && git -C "$REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    local branch
+    branch="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || true)"
+    if [[ -n "$branch" ]]; then
+      echo "refs/heads/$branch"
+    fi
+  fi
+}
+
 install_uses_live_source() {
   [[ "$(resolve_install_mode)" == "source" ]]
 }
@@ -1473,7 +1513,7 @@ print_install_identity_notice() {
 }
 
 write_install_metadata() {
-  local version commit date build_time installed_at platform_name arch_name channel source_kind install_mode
+  local version commit date branch_ref source_ref build_time installed_at platform_name arch_name channel source_kind install_mode
   local install_user_id install_user_name sudo_user root_install_json install_user_id_json
   version="$(resolve_install_version)"
   commit="$(read_embedded_assignment "$INSTALL_PREFIX/ccb.py" "GIT_COMMIT")"
@@ -1484,6 +1524,8 @@ write_install_metadata() {
   if [[ -z "$date" ]]; then
     date="$(read_source_build_info_field "date")"
   fi
+  branch_ref="$(resolve_branch_ref)"
+  source_ref="$(resolve_source_ref)"
   build_time="${CCB_BUILD_TIME:-$(read_source_build_info_field "build_time")}"
   if [[ -z "$build_time" ]]; then
     build_time="$(current_utc_timestamp)"
@@ -1518,11 +1560,13 @@ write_install_metadata() {
     echo "WARN: python required to write VERSION/BUILD_INFO metadata"
     return
   fi
-  local version_json commit_json date_json build_time_json platform_json arch_json channel_json source_kind_json install_mode_json installed_at_json
+  local version_json commit_json date_json branch_ref_json source_ref_json build_time_json platform_json arch_json channel_json source_kind_json install_mode_json installed_at_json
   local install_user_name_json sudo_user_json
   version_json="$(json_string_literal "$version")"
   commit_json="$(json_string_literal "$commit")"
   date_json="$(json_string_literal "$date")"
+  branch_ref_json="$(json_string_literal "$branch_ref")"
+  source_ref_json="$(json_string_literal "$source_ref")"
   build_time_json="$(json_string_literal "$build_time")"
   platform_json="$(json_string_literal "$platform_name")"
   arch_json="$(json_string_literal "$arch_name")"
@@ -1542,6 +1586,8 @@ payload = {
     "version": ${version_json},
     "commit": ${commit_json},
     "date": ${date_json},
+    "branch_ref": ${branch_ref_json},
+    "source_ref": ${source_ref_json},
     "build_time": ${build_time_json},
     "platform": ${platform_json},
     "arch": ${arch_json},

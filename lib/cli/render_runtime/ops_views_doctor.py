@@ -12,6 +12,7 @@ def render_doctor(payload: Mapping[str, object]) -> tuple[str, ...]:
     requirements = payload.get('requirements') or {}
     backend_selection = payload.get('backend_selection') or {}
     rmux_packaging = payload.get('rmux_packaging_support') or {}
+    windows_x64_gate = payload.get('windows_x64_platform_gate') or {}
     ccbd = payload['ccbd']
     lines = [
         f'project: {payload["project"]}',
@@ -91,6 +92,18 @@ def render_doctor(payload: Mapping[str, object]) -> tuple[str, ...]:
         f'windows_npm_enabled: {rmux_packaging.get("windows_npm_enabled")}',
         f'windows_install_ps1_rmux_check: {rmux_packaging.get("install_ps1_rmux_check")}',
         f'rmux_fallback_guidance: {rmux_packaging.get("fallback_guidance")}',
+        f'windows_x64_supported: {windows_x64_gate.get("supported")}',
+        f'windows_x64_failure_reason: {windows_x64_gate.get("failure_reason")}',
+        f'windows_x64_detail_reason: {windows_x64_gate.get("detail_reason")}',
+        f'windows_x64_diagnostic: {windows_x64_gate.get("diagnostic")}',
+        f'ccb_expected_version: {windows_x64_gate.get("expected_ccb_version")}',
+        f'ccb_detected_version: {windows_x64_gate.get("detected_ccb_version")}',
+        f'windows_x64_os_platform: {windows_x64_gate.get("os_platform")}',
+        f'windows_x64_cpu_arch: {windows_x64_gate.get("cpu_arch")}',
+        f'windows_x64_node_arch: {windows_x64_gate.get("node_arch")}',
+        f'windows_x64_python_bitness: {windows_x64_gate.get("python_bitness")}',
+        f'startup_baseline_failure_reason: {windows_x64_gate.get("failure_reason")}',
+        f'startup_baseline_detail_reason: {windows_x64_gate.get("detail_reason")}',
         f'ccbd_health: {ccbd["health"]}',
         f'ccbd_generation: {ccbd["generation"]}',
         f'ccbd_last_heartbeat_at: {ccbd["last_heartbeat_at"]}',

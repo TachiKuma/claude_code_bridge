@@ -17,11 +17,14 @@ from provider_core.runtime_shared import provider_executable
 def installation_summary() -> dict[str, object]:
     install_dir = find_install_dir(_script_root())
     info = get_version_info(install_dir)
+    runtime_probes = _native_runtime_probes(install_dir)
     return {
         'path': str(install_dir),
         'version': info.get('version'),
         'commit': info.get('commit'),
         'date': info.get('date'),
+        'branch_ref': info.get('branch_ref'),
+        'source_ref': info.get('source_ref'),
         'channel': info.get('channel'),
         'platform': info.get('platform'),
         'arch': info.get('arch'),
@@ -33,6 +36,10 @@ def installation_summary() -> dict[str, object]:
         'install_user_name': info.get('install_user_name'),
         'root_install': info.get('root_install'),
         'sudo_user': info.get('sudo_user'),
+        'herdr_path': runtime_probes['herdr']['path'],
+        'herdr_arch': runtime_probes['herdr']['arch'],
+        'helper_arch': {name: probe['arch'] for name, probe in runtime_probes['helpers'].items()},
+        'helper_paths': {name: probe['path'] for name, probe in runtime_probes['helpers'].items()},
     }
 
 
@@ -137,6 +144,59 @@ def _provider_command_diagnostic(provider: str, command_path: str | None) -> dic
         'reason': 'wsl_windows_interop_executable',
         'warning': 'codex resolves to a Windows interop executable; use a Linux codex binary or CODEX_START_CMD',
     }
+
+
+def _native_runtime_probes(install_dir: Path) -> dict[str, object]:
+    helper_names = ('ccb-rs-helper', 'ccb-agent-sidebar')
+    helpers = {name: _binary_probe(install_dir, name) for name in helper_names}
+    herdr = _binary_probe(install_dir, 'herdr')
+    return {'helpers': helpers, 'herdr': herdr}
+
+
+def _binary_probe(root: Path, command: str) -> dict[str, str | None]:
+    candidate_paths = []
+    suffixes = ('.exe', '')
+    for suffix in suffixes:
+        candidate_paths.append(root / 'bin' / f'{command}{suffix}')
+        candidate_paths.append(root / 'tools' / command / 'target' / 'release' / f'{command}{suffix}')
+    which_path = shutil.which(command)
+    if which_path:
+        candidate_paths.append(Path(which_path))
+    for candidate in candidate_paths:
+        if candidate.exists():
+            return {
+                'path': str(candidate),
+                'arch': _probe_pe_arch(candidate),
+            }
+    return {'path': None, 'arch': 'missing'}
+
+
+def _probe_pe_arch(path: Path) -> str:
+    try:
+        with path.open('rb') as handle:
+            if handle.read(2) != b'MZ':
+                return 'unknown'
+            handle.seek(0x3C)
+            offset = handle.read(4)
+            if len(offset) != 4:
+                return 'unknown'
+            pe_offset = int.from_bytes(offset, 'little')
+            handle.seek(pe_offset)
+            if handle.read(4) != b'PE\x00\x00':
+                return 'unknown'
+            machine = handle.read(2)
+            if len(machine) != 2:
+                return 'unknown'
+    except OSError:
+        return 'unknown'
+    machine_value = int.from_bytes(machine, 'little')
+    if machine_value == 0x8664:
+        return 'x64'
+    if machine_value == 0xAA64:
+        return 'arm64'
+    if machine_value == 0x014C:
+        return 'ia32'
+    return 'unknown'
 
 
 def _is_wsl_runtime() -> bool:

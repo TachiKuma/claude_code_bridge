@@ -438,7 +438,7 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
 1. **windows-x64-v852-baseline-gate** — 建立 CCB `v8.5.2` + Native Windows x64-only 准入和诊断。
    - 所属模块：Platform Baseline Gate
    - 依赖：无
-   - 状态：in-progress
+   - 状态：accepted
    - 对应 feature：`2026-07-31-windows-x64-v852-baseline-gate`
    - 备注：只产出 platform gate contract、版本/位宽探测和 startup/doctor 基础诊断；必须解释 `os=win32,cpu=x64`；implementation admission 必须证明从 CCB `v8.5.2` 源头拉取并在新分支推进，当前工作区状态只能 blocked/default。
 

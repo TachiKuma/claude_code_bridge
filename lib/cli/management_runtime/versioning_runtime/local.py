@@ -10,6 +10,8 @@ def get_version_info(dir_path: Path) -> dict:
     info = {
         "commit": None,
         "date": None,
+        "branch_ref": None,
+        "source_ref": None,
         "version": None,
         "build_time": None,
         "platform": None,
@@ -89,6 +91,8 @@ def read_build_info(build_info_file: Path) -> dict[str, object]:
         "version",
         "commit",
         "date",
+        "branch_ref",
+        "source_ref",
         "build_time",
         "platform",
         "arch",
@@ -112,22 +116,62 @@ def read_build_info(build_info_file: Path) -> dict[str, object]:
 def git_version_info(dir_path: Path) -> dict[str, str] | None:
     if not shutil.which("git") or not (dir_path / ".git").exists():
         return None
+    commit = _git_output(dir_path, ["git", "-C", str(dir_path), "log", "-1", "--format=%h"])
+    date = _git_output(dir_path, ["git", "-C", str(dir_path), "log", "-1", "--format=%ci"])
+    branch = _git_output(dir_path, ["git", "-C", str(dir_path), "branch", "--show-current"])
+    exact_tag = _git_output(dir_path, ["git", "-C", str(dir_path), "describe", "--tags", "--exact-match"])
+    source_ref = _source_ref_from_git(dir_path, exact_tag=exact_tag)
+    if not commit or not date:
+        return None
+    info: dict[str, str] = {
+        "commit": commit,
+        "date": date.split()[0],
+    }
+    if branch:
+        info["branch_ref"] = f"refs/heads/{branch}"
+    if source_ref:
+        info["source_ref"] = source_ref
+    return info
+
+
+def _source_ref_from_git(dir_path: Path, *, exact_tag: str | None) -> str | None:
+    if exact_tag:
+        return f"refs/tags/{exact_tag}"
+    tag_ref = "refs/tags/v8.5.2"
+    if _git_succeeds(dir_path, ["git", "-C", str(dir_path), "rev-parse", "--verify", "-q", tag_ref]) and _git_succeeds(
+        dir_path,
+        ["git", "-C", str(dir_path), "merge-base", "--is-ancestor", tag_ref, "HEAD"],
+    ):
+        return tag_ref
+    return None
+
+
+def _git_output(dir_path: Path, args: list[str]) -> str | None:
     result = subprocess.run(
-        ["git", "-C", str(dir_path), "log", "-1", "--format=%h|%ci"],
+        args,
+        cwd=dir_path,
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
     )
-    if result.returncode != 0 or not result.stdout.strip():
+    if result.returncode != 0:
         return None
-    parts = result.stdout.strip().split("|")
-    if len(parts) < 2:
-        return None
-    return {
-        "commit": parts[0],
-        "date": parts[1].split()[0],
-    }
+    text = result.stdout.strip()
+    return text or None
+
+
+def _git_succeeds(dir_path: Path, args: list[str]) -> bool:
+    result = subprocess.run(
+        args,
+        cwd=dir_path,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return result.returncode == 0
 
 
 def normalize_installation_info(info: dict, *, dir_path: Path) -> dict:

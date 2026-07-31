@@ -5,7 +5,7 @@ items:
   - slug: windows-x64-v852-baseline-gate
     description: 建立 CCB v8.5.2 与 Native Windows x64-only 准入、诊断和 package metadata 口径
     depends_on: []
-    status: in-progress
+    status: done
     feature: 2026-07-31-windows-x64-v852-baseline-gate
     minimal_loop: false
     notes: "只产出 platform gate contract、版本/位宽探测和 startup/doctor 基础诊断；implementation admission 必须证明从 CCB v8.5.2 源头拉取并在新分支推进；当前工作区状态只能 blocked/default；os=win32 表示 Windows OS，cpu=x64 才表示 64-bit。"

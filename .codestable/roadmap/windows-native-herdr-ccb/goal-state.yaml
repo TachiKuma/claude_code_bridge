@@ -1,16 +1,16 @@
 roadmap: "windows-native-herdr-ccb"
-status: awaiting-authorization
+status: ready-to-dispatch
 baseline_ref: "a097e64bb53650582dba2a16964802173eda05e1"
 driver_kind: none
 driver_id: ""
-execution_confirmation_id: ""
-acceptance_authorization: pending
+execution_confirmation_id: "goal-execution-2026-08-01-windows-native-herdr-ccb"
+acceptance_authorization: approved
 acceptance_authorization_ref: "approval-report.md#goal-acceptance"
-commit_authorization: pending
+commit_authorization: approved
 commit_authorization_ref: "approval-report.md#goal-commits"
 handoff_reason: ""
 handoff_next: ""
-current_feature_index: 0
+current_feature_index: 1
 features:
   - slug: "windows-x64-v852-baseline-gate"
     roadmap_item: "windows-x64-v852-baseline-gate"
@@ -20,7 +20,7 @@ features:
     review: ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/windows-x64-v852-baseline-gate-review.md"
     qa: ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/windows-x64-v852-baseline-gate-qa.md"
     acceptance: ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/windows-x64-v852-baseline-gate-acceptance.md"
-    status: pending
+    status: accepted
   - slug: "herdr-backend-contract-spike"
     roadmap_item: "herdr-backend-contract-spike"
     feature_dir: ".codestable/features/2026-07-31-herdr-backend-contract-spike"
