@@ -4,9 +4,9 @@ feature: 2026-07-31-mux-backend-contract-herdr-v2
 status: passed
 review_state: passed
 review_reason: ""
-reviewer_id: 019fb687-e868-7293-988e-920ea28142e2
-reviewed: 2026-07-31
-round: 5
+reviewer_id: 019fb90f-0ee4-7322-b44e-033197f143df
+reviewed: 2026-08-01
+round: 9
 ---
 
 # mux-backend-contract-herdr-v2 feature design 审查报告
@@ -24,17 +24,17 @@ round: 5
 
 - Status: completed
 - Detection: independent-agent
-- Provider / agent: round 1 `019fb669-6cc8-72d0-912a-548c5a3ef72f` changes-requested；round 2 `019fb66e-855b-7a11-97a3-1a4bdb7f7649` changes-requested；round 3 `019fb674-e302-7591-87f0-60909cb22f3c` changes-requested；round 4 `019fb682-09bd-7b81-87c0-dd626d5f3062` changes-requested；round 5 `019fb687-e868-7293-988e-920ea28142e2` passed。
-- Raw output: round 5 未发现 blocking / important / nit；确认 CMD-005 staged content guard、path guard、doctor/support guard、CMD-006 upstream evidence fail-closed、roadmap contract closure 均已关闭。
+- Provider / agent: round 1 `019fb669-6cc8-72d0-912a-548c5a3ef72f` changes-requested；round 2 `019fb66e-855b-7a11-97a3-1a4bdb7f7649` changes-requested；round 3 `019fb674-e302-7591-87f0-60909cb22f3c` changes-requested；round 4 `019fb682-09bd-7b81-87c0-dd626d5f3062` changes-requested；round 5 `019fb687-e868-7293-988e-920ea28142e2` passed；round 6 `019fb8fa-aa16-72c3-8d02-02b7ae03120e` changes-requested；round 7 `019fb900-5bee-7471-837e-7f3939d65acf` changes-requested；round 8 `019fb909-a44f-7163-ba93-33c56068e263` changes-requested；round 9 `019fb90f-0ee4-7322-b44e-033197f143df` passed。
+- Raw output: round 9 未发现 blocking / important；确认 CMD-005 覆盖 installer/support/provider/ccbd/package/doctor 越界、staged/untracked/content/path，CMD-006 能阻止 tmux/rmux fallback success，Native Windows x64 `auto` / platform default 直路由 Herdr blocked/success selection，Herdr 保持 `herdr-native` 且本 feature 不越界实现 production Herdr client。
 - Merge policy: 已逐条核验 reviewer finding 与 design/checklist/roadmap/code 事实；只合并有仓库事实支撑的结论。
-- Gate effect: independent review completed，允许本地合并后定稿 `passed`。
+- Gate effect: independent review completed and merged; final verdict passed.
 
 ## 2. Design Summary
 
 - Goal: 将 CCB terminal runtime 的 mux backend 小协议升级为能表达 `tmux`、`rmux` 与未来 `herdr` 共存的 V2 contract、capability、structured error 和 resolver diagnostics。
 - Key contracts: Herdr 使用 `herdr-native` family，不伪装 `tmux-family`；V2 refs/capabilities/errors 支持 `herdr_socket`、`restore_token`、`schema-mismatch`、Windows beta gaps 和 fail-closed blocking gaps。
 - Steps: 6 个 step，覆盖 V2 contract types、fake backend fixture、resolver diagnostics、spike capability projection、scope/evidence guard、tmux/rmux regression。
-- Checks: 10 个 check 覆盖 compatibility、Herdr refs、capability gaps、schema mismatch、fake backend、resolver blocked/failure、auto unchanged、upstream evidence fail-closed 和 production scope guard。
+- Checks: 10 个 check 覆盖 compatibility、Herdr refs、capability gaps、schema mismatch、fake backend、resolver blocked/failure、Native Windows auto Herdr blocked/success selection、upstream evidence fail-closed 和 production scope guard。
 - Baseline / validation: CMD-001/CMD-002 YAML gate；CMD-003/CMD-004 focused pytest；CMD-005 scope guard；CMD-006 upstream evidence / blocked fixture guard。
 
 ## 3. Findings
@@ -63,7 +63,7 @@ none
 ### praise
 
 - `MuxBackendSelectionV2` / `MuxBackendSelectionFailureV2` 把 requested/effective/source/platform gate/capability ref/failure reason 放进同一结果，足以支撑 roadmap §4.2 的 resolver contract。
-- `CMD-006` 明确缺 upstream evidence、stop recommendation、blocking gaps 或未归类 `unknown` 时必须出现 Herdr blocked fixture/result，避免 capability unknown 被误判为 supported。
+- `CMD-006` 明确缺 upstream evidence、stop/needs-upstream-issue、blocked/failed verdict、failure_class 非 none、blocking gaps、未归类 status 或 `unknown` 时必须出现 Herdr native blocked fixture/result，且不得以 tmux/rmux fallback success 通过。
 
 ## 4. User Review Focus
 
@@ -98,5 +98,5 @@ Summary: E=5, C=1, H=0, H-only core checks=none。
 
 - Closed findings: first-round FDR-001、FDR-002、FDR-003、FDR-004；second-round FDR-001、FDR-003；third-round FDR-001 与 doctor/support guard finding；fourth-round staged content guard finding。
 - Attributed delta: 增加 `HerdrFailureReasonV2`、`MuxBackendSelectionV2`、`MuxBackendSelectionFailureV2`；明确 `socket_path` / `none` legacy 来源；收紧 CMD-005 到 path + content 双 guard；收紧 CMD-006 到 blocked fixture/result fail-closed。
-- Verification: checklist YAML 与 roadmap items YAML 均通过；CMD-005 当前执行通过；CMD-005/CMD-006 命令片段语法可编译；round 5 independent reviewer 返回 `passed`。
+- Verification: design/checklist/review YAML 均通过；roadmap items YAML 通过；CMD-005 当前执行通过；round 9 independent reviewer 返回 `passed`。
 - Classification: 多轮修订均为 design/checklist 契约和 validation guard 补强，没有进入 implementation，没有改变本 feature 不实现 production Herdr client、provider runtime、ccbd durable state、package/doctor/support 的范围边界。

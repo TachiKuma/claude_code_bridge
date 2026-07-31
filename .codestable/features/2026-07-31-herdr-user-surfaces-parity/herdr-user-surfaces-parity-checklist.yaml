@@ -16,7 +16,7 @@ steps:
     status: pending
   - id: S4
     action: "Mobile terminal target v2：Mobile history/websocket/message 经 backend-neutral operation adapter，Herdr unsupported 时 structured blocked/degraded"
-    exit_signal: "Herdr target 不要求 tmux socket/session/%pane；supported 路径调用 backend primitive；blocked 路径返回 stable error code、reason 和 next action"
+    exit_signal: "Herdr target 不要求 tmux socket/session/%pane；pass 路径调用 backend primitive；blocked/degraded 路径返回 stable error code、reason 和 next action，且后续 supported 被阻塞"
     status: pending
   - id: S5
     action: "Doctor / mounted / diagnostics support surfaces：doctor render、mounted state projection、project view、diagnostics bundle 对齐同一 Herdr projection"
@@ -24,15 +24,15 @@ steps:
     status: pending
   - id: S6
     action: "Config UI readonly status：Config UI readonly status/session payload 对齐同一 Herdr projection，不改变编辑 contract"
-    exit_signal: "Config UI readonly endpoint 或 /api/session 显示 backend status/capability/beta gaps/support tier projection；config save/apply/reload tests 不变"
+    exit_signal: "Config UI readonly endpoint 或 /api/session 显示 backend status/capability/beta gaps/support tier projection；Config UI pass 是 supported hard gate；config save/apply/reload tests 不变"
     status: pending
   - id: S7
     action: "Regression and scope guard：运行 tmux/rmux/Mobile/doctor/config UI regression、Herdr fake surface tests、scope/redaction guard"
-    exit_signal: "existing public surface tests 通过；新增 Herdr surface tests 通过；无 provider completion/release/support final claim/raw token 越界"
+    exit_signal: "existing public surface tests 通过；新增 Herdr surface tests 通过；无 provider completion/package/release/update/installer/support final claim/Herdr socket schema-client/raw token 越界"
     status: pending
   - id: S8
-    action: "Native Windows surface transcript：收集 foreground attach、Mobile terminal 或 blocked payload、doctor、ping、mounted、project view Herdr evidence"
-    exit_signal: "transcript 显示 Herdr backend evidence、capability/support tier projection/beta gaps/degraded next action；缺 host/Herdr 时 acceptance blocked"
+    action: "Native Windows surface transcript：收集 foreground attach、Mobile terminal pass/blocked、Config UI pass/blocked、doctor、ping、mounted、project view Herdr evidence"
+    exit_signal: "transcript 显示 Herdr backend evidence、capability/support tier projection/beta gaps/degraded next action；Mobile/Config partial/degraded 只能作为 blocked evidence；缺 host/Herdr 时 acceptance blocked"
     status: pending
 
 checks:
@@ -48,19 +48,19 @@ checks:
   - item: "foreground attach supported/blocked 两条路径均可观察，Herdr 不落 tmux fallback"
     source: design AC-004 / AC-005 / S3
     status: pending
-  - item: "Mobile terminal target v2 经 backend-neutral operation adapter，不要求 tmux socket/session/%pane，unsupported 时 structured blocked"
+  - item: "Mobile terminal target v2 经 backend-neutral operation adapter，不要求 tmux socket/session/%pane；非 pass 时 structured blocked 且阻塞 supported"
     source: design AC-006 / AC-007 / S4
     status: pending
-  - item: "Config UI 只增加 readonly status，不改变 config edit/apply/reload contract"
+  - item: "Config UI 只增加 readonly status，不改变 config edit/apply/reload contract；非 pass 时阻塞 supported"
     source: design AC-009 / DOD-IMPL-005 / S6
     status: pending
   - item: "tmux/rmux public surface regression 不退化"
     source: design AC-010 / S7
     status: pending
-  - item: "不修改 provider completion、release/package/support final claim"
+  - item: "不修改 provider completion、package/release/update/installer/support final claim、Herdr socket schema/client owner"
     source: design AC-011 / S7
     status: pending
-  - item: "Native Windows x64 transcript 覆盖 surface parity 或 blocked evidence"
+  - item: "Native Windows x64 transcript 覆盖 foreground attach、Mobile terminal、Config UI、doctor、ping、mounted、project view；Mobile/Config 非 pass 必须 blocked evidence"
     source: design AC-012 / S8
     status: pending
 
@@ -93,11 +93,11 @@ dod:
       failure_handling: fix-or-block
     - id: CMD-007
       command: >-
-        python -c 'import subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; text=run(["git","diff","--","lib","test"])+run(["git","diff","--cached","--","lib","test"]); forbidden=re.compile(r"(CompletionStatus\.COMPLETED|npm publish|release surface|support_tier\s*=\s*[''""]supported|restore_token.*(doctor|project_view|diagnostics|mobile|ping|logger|print))", re.I|re.S); assert not forbidden.search(text)'
+        python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; implementation_roots=('lib/','test/','bin/','scripts/'); scoped=sorted(p for p in paths if p.startswith(implementation_roots)); forbidden_files={'package.json','package-lock.json','install.ps1','install.sh','install.cmd','README.md','docs/ccbd-diagnostics-contract.md','bin/ccb-npm-install.js','lib/cli/management_runtime/install.py','lib/cli/management_runtime/commands_runtime/install.py','lib/terminal_runtime/rmux_packaging_support.py','lib/terminal_runtime/rmux_packaging_support_projection.json'}; forbidden_text_paths={p for p in paths if p in forbidden_files or p.startswith(('docs/','bin/','scripts/')) or p.startswith(implementation_roots)}; herdr_owner=re.compile(r'(^|/)(lib|test)/.*herdr.*(socket|schema|client)|(^|/)(lib|test)/.*(socket|schema|client).*herdr', re.I); bad=sorted(p for p in paths if p in forbidden_files or herdr_owner.search(p)); assert not bad, bad; text=run(['git','diff','--','lib','test','bin','scripts','docs','README.md','package.json','package-lock.json','install.ps1','install.sh','install.cmd'])+run(['git','diff','--cached','--','lib','test','bin','scripts','docs','README.md','package.json','package-lock.json','install.ps1','install.sh','install.cmd'])+''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in forbidden_text_paths if pathlib.Path(p).is_file() and p.endswith(('.py','.md','.yaml','.yml','.json','.js','.ps1','.sh','.cmd'))); q=re.escape(chr(34)+chr(39)); supported=r'support_tier\s*[:=]\s*['+q+r']supported|Windows x64 CCB supported|supported hard gate passed'; raw_token=r'(?<![A-Za-z0-9_])restore_token(?![A-Za-z0-9_]).*(doctor|project_view|diagnostics|mobile|ping|logger|print)'; forbidden=re.compile(r'(CompletionStatus\.COMPLETED|npm publish|release surface|update surface|installer|'+supported+r'|'+raw_token+r')', re.I|re.S); assert not forbidden.search(text)"
       core: true
       failure_handling: fix-or-block
     - id: CMD-008
-      command: "MANUAL Native Windows x64: capture foreground attach, Mobile terminal or blocked payload, doctor, ping, mounted, project view Herdr evidence transcript"
+      command: "MANUAL Native Windows x64: capture foreground attach, Mobile terminal pass/blocked, Config UI pass/blocked, doctor, ping, mounted, project view Herdr evidence transcript"
       core: true
       failure_handling: blocked-if-no-host-or-herdr
   evidence_required:
@@ -113,7 +113,8 @@ dod:
     - native_windows_x64_surface_transcript
   cleanliness:
     provider_completion_changes: forbidden
-    release_package_changes: forbidden
+    package_release_update_installer_changes: forbidden
     final_support_tier_claim: forbidden
+    herdr_socket_schema_client_owner_changes: forbidden
     raw_restore_token_public_logging: forbidden
     debug_output: forbidden

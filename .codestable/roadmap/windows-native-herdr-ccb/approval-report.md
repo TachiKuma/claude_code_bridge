@@ -2,11 +2,17 @@
 doc_type: approval-report
 unit: .codestable/roadmap/windows-native-herdr-ccb
 status: approved
-reason: review-authorization
+reason: all-feature-designs
 approvals:
   roadmap-review: approved
   roadmap-plan: approved
-approval_groups: {}
+  all-feature-designs: approved
+approval_groups:
+  child-designs:
+    status: approved
+    confirmation_id: child-designs-2026-08-01-windows-native-herdr-ccb
+    decisions:
+      all-feature-designs: approved
 created_at: 2026-07-31
 ---
 
@@ -15,45 +21,57 @@ created_at: 2026-07-31
 ## Decision History
 
 - 2026-07-31：owner 回复“批准”，批准 `approval-report.md#roadmap-review` 与 `approval-report.md#roadmap-plan`，授权将 `windows-native-herdr-ccb` roadmap 从 `draft` 改为 `active` 并进入后续 child design batch。
+- 2026-07-31：owner 确认 draft requirement `.codestable/requirements/native-windows-ccb-via-herdr.md`，要求基于 Herdr 全能力 parity 达到 Windows x64 CCB supported；旧的 roadmap review 与 child design-review 已被该 requirement update 取代，需要重新独立审查。
+- 2026-07-31：owner 回复“确认”，批准修订后的 `windows-native-herdr-ccb` roadmap，授权将 roadmap 从 `draft` 改回 `active`，并进入 child design-review 重审。
+- 2026-08-01：owner 回复“所有 child design统一确认batch-approved”，批准 `approval-report.md#all-feature-designs`，授权将 `windows-native-herdr-ccb` 下 11 个已审查通过的 child feature design 统一标记为 `status: approved`。
 
 ## Decision Needed
 
-已批准 `windows-native-herdr-ccb` epic 规划进入后续 child design batch。该批准覆盖两项可机械核验的命名决策：
-
-- `approval-report.md#roadmap-review`：确认已接受独立 roadmap review 的 `passed` 结论。
-- `approval-report.md#roadmap-plan`：授权将 roadmap 从 `draft` 标记为 `active`，并按 items DAG 继续生成各 child feature design。
+none
 
 ## Why Now
 
-`cs-epic` 已恢复到 `ConfirmRoadmap` checkpoint：roadmap review 已 `passed`，但 roadmap 仍是 `draft`。根据 epic 状态机，未经 owner 明确批准，不得把规划标记为 active，也不得进入 child design batch。
+`workflow-next epic` 在所有未 dropped child feature 的 design-review 均 passed 后，要求一个可恢复的统一 owner approval，才能从 child design batch 进入 goal package 阶段。
 
 ## Context
 
 当前 epic 目标是基于 Herdr 建立 Native Windows x64 CCB public workflow parity 路线。Roadmap 已拆为 11 个 child feature，覆盖 Windows x64 / CCB `v8.5.2` 基线、Herdr socket spike、mux backend contract V2、Herdr backend client、ccbd namespace、provider runtime、bounded recovery、用户可见面、release surface、validation matrix 与 supportability projection。
 
-独立 reviewer `019fb3a9-e22f-7d23-83dd-88137f91832c` 已给出 `review_state: passed`，并确认 blocking 为 none。已修复的 important findings 包括 `watch` 覆盖粒度、baseline gate 与 release surface 边界、spike 对 `kill_pane` / provider CLI dry run 的覆盖；nit 为 validation evidence workflow key 收紧。
+以下 child feature design-review 已重新通过，本次 batch approval 只批准这些 design 进入后续 goal package / implementation planning：
+
+- `windows-x64-v852-baseline-gate`
+- `herdr-backend-contract-spike`
+- `mux-backend-contract-herdr-v2`
+- `herdr-backend-client`
+- `ccbd-herdr-namespace-lifecycle`
+- `provider-runtime-on-herdr`
+- `herdr-bounded-recovery-boundary`
+- `herdr-user-surfaces-parity`
+- `windows-x64-release-surface`
+- `native-windows-public-workflow-validation-matrix`
+- `herdr-supportability-projection`
 
 ## Options
 
-- Approved: 批准 `roadmap-review` 与 `roadmap-plan`，允许将 roadmap 标记为 `active` 并进入 child design batch。
-- Rejected: 不批准当前 roadmap，停留在 planning/review 修订阶段。
+- Approved: 批准所有已通过独立 review 的 child design，允许进入 goal package 阶段。
+- Rejected: 停留在 child design confirmation gate，并指出需要重审或修订的 child design。
 
 ## Recommendation
 
-Approved。当前 roadmap 已通过独立 review，边界清晰：CCB 继续拥有 control plane / provider runtime / completion / recovery / support projection 权威，Herdr 只作为 Native Windows terminal primitive；且最小闭环先由 `herdr-backend-contract-spike` 事实验证后再投入正式 adapter，符合 KISS 与 YAGNI。
+Approved。当前 11 个 child design 均已通过独立 design-review，且最后一个 supportability projection design 的 round 13 复审无 blocking/important/nit/suggestion。
 
 ## Risks And Tradeoffs
 
-- 批准 roadmap 不代表批准实现、QA、acceptance 或 commit；它只允许进入 child design batch。
-- Herdr socket API、Windows beta 缺口和 Native Windows x64 真机验证仍是后续 feature design / QA 的硬 gate。
-- 当前工作区与 CCB `v8.5.2` 基线不一致的风险仍需由 `windows-x64-v852-baseline-gate` 在首个 child feature 中处理。
+- 批准 design 不代表实现已经完成，也不代表 acceptance、QA、commit 或 release 已授权。
+- 后续 implementation 仍必须按 DAG 和每个 child checklist 执行；batch approval 只放行 goal package，不放宽实现依赖。
+- Native Windows x64 真机验证、Herdr API 事实、docs/doctor guard、release surface gate 和 support projection artifact 仍是 implementation / QA / acceptance 的硬证据。
 
 ## Non-Automatic Actions
 
-本批准不会自动执行 implementation、acceptance、git commit、push、merge、release、publish、deploy、promotion、production cutover、npm 发布或任何远端状态变更。
+本 design 批量确认不会自动执行 git commit、push、merge、release、publish、deploy、promotion、production cutover、npm 发布、远端 API 调用或任何生产状态变更。
 
-后续所有 child feature design 仍需要独立 design-review；全部 child design-review passed 后，还会再次停下请求统一确认所有 design。Goal execution 与本地 scoped commit 也会在 goal package 阶段单独请求授权。
+Goal execution 与本地 scoped commit 仍会在 goal package 阶段单独请求授权；当前 checkpoint 只允许将 child design 标为 approved 并生成 goal package。
 
 ## After You Answer
 
-Owner 已批准。下一步按 `workflow-next epic` 进入 child design batch。
+进入 goal package 阶段前，owner 要求先执行本地 git commit；commit 不包含 push、merge、release、publish、deploy、promotion 或 production cutover。

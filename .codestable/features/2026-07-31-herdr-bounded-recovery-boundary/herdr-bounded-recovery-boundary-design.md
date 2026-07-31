@@ -1,11 +1,11 @@
 ---
 doc_type: feature-design
 feature: 2026-07-31-herdr-bounded-recovery-boundary
-requirement:
+requirement: native-windows-ccb-via-herdr
 roadmap: windows-native-herdr-ccb
 roadmap_item: herdr-bounded-recovery-boundary
 execution_lane: goal
-status: draft
+status: approved
 summary: 对齐 CCB bounded pane recovery 与 Herdr session restore，确保 CCB 是唯一 recovery owner，Herdr restore 只作为 backend operation/evidence
 tags: [herdr, recovery, supervision, bounded-recovery, restore, epic-child]
 ---
@@ -20,7 +20,7 @@ tags: [herdr, recovery, supervision, bounded-recovery, restore, epic-child]
 | Herdr restore evidence | Herdr session restore token presence、agent state ref、session/pane health、operation evidence。 | raw restore token 只能进入 private backend call；public CCB recovery evidence ledger 必须先 sanitize，不能独立触发恢复成功。 |
 | bounded recovery | 有 probation、backoff、restart_count、crash log bound、blocked health 和 circuit 的恢复流程。 | 不是无限后台重启，也不是 Herdr 自动恢复成功即 CCB 成功。 |
 | recovery probation | 恢复后必须经历的稳定窗口；roadmap 要求保留 90 秒 probation 语义。 | Herdr pane 短暂 alive 不等于恢复完成。 |
-| Herdr auto restore mode | Herdr 自身恢复能力对 CCB 的暴露模式：disabled、observe-only 或 unsupported。 | 若不能关闭，必须证明不会与 CCB respawn 冲突，否则 capability blocked。 |
+| Herdr auto restore mode | Herdr 自身恢复能力对 CCB 的暴露模式：disabled、observe-only、unsupported 或 unknown。 | 只有 disabled 可进入 recovery-capable / supported；observe-only/unsupported/unknown 只能作为 diagnostics/blocked evidence。 |
 
 仓库事实：
 
@@ -44,16 +44,16 @@ tags: [herdr, recovery, supervision, bounded-recovery, restore, epic-child]
 成功标准：
 
 - recovery admission 必须确认前置 `provider-runtime-on-herdr` implementation/acceptance ready；只看到 design-review passed 时 dependency-blocked。
-- `HerdrRecoveryPolicy.owner` 固定为 `"ccb"`；`herdr_auto_restore_mode` 只能是 `disabled`、`observe-only` 或 `unsupported`，不能是 co-owner。
+- `HerdrRecoveryPolicy.owner` 固定为 `"ccb"`；`herdr_auto_restore_mode` 只有 `disabled` 能进入 recovery-capable / supported path，`observe-only`、`unsupported` 或 `unknown` 直接 capability-blocked。
 - CCB recovery evidence ledger 能表达 `backend_impl="herdr"`、sanitized `namespace_ref`、`pane_ref`、`restore_token_present`、Herdr agent state ref、process/namespace/daemon health、action 和 reason。
 - Herdr path 保留 90 秒 probation、restart_count/backoff、bounded crash logs、provider recovery block 和 durable circuit；短暂 pane alive 或 Herdr agent restored 不能直接清除 degraded/circuit。
-- Herdr session restore 若可用，只能由 CCB recovery action 调用；若 Herdr 自动恢复无法关闭，必须以 evidence 证明 observe-only 且不 respawn，否则该 recovery capability blocked。
+- Herdr session restore 若可用，只能由 CCB recovery action 调用；若 Herdr 自动恢复无法关闭或只能证明 observe-only，必须直接阻塞 recovery capability / supported path，不得继续 respawn。
 - pane/process/namespace/daemon recovery 在 Herdr 下有结构化 action：`observe`、`reattach`、`respawn`、`pane_recover`、`provider_restart`、`namespace_recover`、`daemon_recover`、`circuit_open`、`blocked`；失败写 `recover_failed` 和 actionable reason。legacy event detail 若仍输出 `namespace_recover` / `provider_restart`，必须映射到同一 canonical enum，不新增第二套同义 action。
 
 明确不做：
 
 - 不修改 provider launch、ask/pend/completion/cancellation 权威；这是前置 `provider-runtime-on-herdr` 范围。
-- 不扩展 Mobile terminal、Config UI、doctor/support tier、package/release 或 public validation matrix。
+- 不扩展 Mobile terminal、Config UI、doctor/support tier、package/release/update/installer 或 public validation matrix。
 - 不实现 Herdr socket schema/client；只消费前置 Herdr backend capability/evidence。
 - 不把 Herdr agent state 当作 completion 或 recovery success authority。
 - 不发布、不 promotion、不执行 git commit/push/tag/merge/release/deploy。
@@ -71,16 +71,16 @@ tags: [herdr, recovery, supervision, bounded-recovery, restore, epic-child]
 ### Top 3 风险与缓解
 
 1. **风险：CCB 与 Herdr 双重 respawn。**  
-   缓解：`owner="ccb"` 是 hard contract；Herdr auto restore 不能 disabled 时必须 observe-only evidence，否则 recovery capability blocked。
+   缓解：`owner="ccb"` 是 hard contract；Herdr auto restore 不能证明 disabled 时直接 recovery capability blocked，observe-only 只可作为诊断证据。
 2. **风险：短暂 restored/pane alive 清掉故障状态。**  
    缓解：90 秒 probation 和 circuit evidence 是 core check；恢复成功必须等 CCB health/probation gate，不以 Herdr agent state 为准。
-3. **风险：Herdr 恢复改动越界到 provider completion 或 user surface。**  
-   缓解：scope guard 禁止 provider completion、Mobile/Config UI、doctor/support、release/public matrix diff。
+3. **风险：Herdr 恢复改动越界到 provider completion 或 user surface。**
+   缓解：scope guard 禁止 provider completion、Mobile/Config UI、doctor/support、package/release/update/installer/public matrix diff。
 
 ### 非显然依赖与关键假设
 
 - 依赖 `provider-runtime-on-herdr` 的 implementation/acceptance：Herdr provider session payload、backend resolver、PaneIO/log/capture 和 restart surface 已真实落地。
-- 假设 Herdr backend capability 可报告 auto restore 是否 disabled / observe-only；无法报告时 fail closed。
+- 假设 Herdr backend capability 可报告 auto restore 是否 disabled；无法报告、只能 observe-only 或明确 unsupported 时 fail closed。
 - 假设 raw restore token 仍只在 private state/backend call 内流转；recovery events、project view、logs 只能输出 presence/ref。
 - Native Windows x64 manual recovery transcript 需要真实 Herdr backend；缺 host/Herdr 时 acceptance blocked，不能用 WSL/Linux 替代。
 
@@ -107,7 +107,7 @@ tags: [herdr, recovery, supervision, bounded-recovery, restore, epic-child]
 ```python
 class HerdrRecoveryPolicy(TypedDict):
     owner: Literal["ccb"]
-    herdr_auto_restore_mode: Literal["observe-only", "disabled", "unsupported"]
+    herdr_auto_restore_mode: Literal["disabled", "observe-only", "unsupported", "unknown"]
     probation_seconds: int  # must be 90
     backoff_schedule_seconds: list[int]
     circuit_threshold: int
@@ -137,6 +137,7 @@ class HerdrRecoveryEvidence(TypedDict):
 
 - tmux/rmux recovery health 和 tests 不退化；Herdr health 是 additive。
 - `restore_token_present` 是 public/event field；raw restore token 只允许 private backend call。
+- `herdr_auto_restore_mode` 在类型层保留 `observe-only|unsupported|unknown` 是为了表达 blocked diagnostics；supported/recovery-capable path 必须要求值为 `disabled`。
 - `namespace_ref` 进入 `evidence_ledger`、recovery event、project view、diagnostics、logs、support bundle 或 acceptance artifact 前必须 sanitize；若原始 `namespace_ref` 含 `restore_token`，public ledger 删除该键并设置 `restore_token_present=True`。redaction test 必须用含 raw token 的 `runtime.namespace_ref` fixture 证明 public payload 只出现 presence，不出现 token 值。
 - `herdr_agent_state_ref` 只用于 diagnostics；不能让 `recover_succeeded` 或 runtime `health="restored"` 只依赖它。
 - `probation_seconds` 必须为 90，且恢复后的 steady/healthy 需要可审计 probation evidence；如果现有代码没有 probation 字段，implementation 要加最小 durable projection。
@@ -169,7 +170,7 @@ flowchart TD
   A[supervision detects degraded Herdr runtime] --> B{backoff active?}
   B -- yes --> C[keep degraded, no backend call]
   B -- no --> D[load HerdrRecoveryPolicy]
-  D --> E{owner == ccb and auto restore safe?}
+  D --> E{owner == ccb and auto restore disabled?}
   E -- no --> F[capability blocked / durable circuit evidence]
   E -- yes --> G[start_recovery event]
   G --> H{health class}
@@ -189,7 +190,7 @@ flowchart TD
 - background recovery 每次先查 backoff；backoff 命中不调用 Herdr restore/respawn。
 - dispatcher lifecycle start 的 queued-slot refresh 入口必须复用同一 Herdr recovery admission/policy，或在 Herdr degraded/probation/circuit 状态下直接 keep/drop，不得绕过 `recover_started`、backoff、probation 和 circuit 去调用 `refresh_provider_binding(recover=True)`。
 - recovery start 必须写 `recover_started`，ledger 包含 Herdr sanitized namespace/pane/process/daemon evidence 和 auto restore mode。
-- Herdr auto restore mode 为 `unsupported` 或无法证明 observe-only 时，action 为 `blocked` 或 `circuit_open`，不得继续 respawn。
+- Herdr auto restore mode 不是 `disabled` 时，action 为 `blocked` 或 `circuit_open`，不得继续 respawn；observe-only 不能作为成功路径。
 - pane/process recovery 调用 CCB runtime_service / provider session recovery；Herdr `respawn_pane` / `reattach` 是该动作内部 primitive，不是独立 owner。
 - namespace recovery 可用 Herdr restore token 作为 private backend operation 输入；restore token 缺失且 required 时 fail closed。调用 seam 必须挂在 CCB-owned runtime/namespace service，例如 `runtime_service.recover_provider_namespace(..., restore_token=...)` 或等价 project namespace runtime 方法；`recovery_transitions.py` 不得直接解析 Herdr JSON 或直接调用 Herdr socket client。
 - recovery succeeded 必须通过 90 秒 probation 或等价 durable evidence 后清理 degraded/circuit；短暂 alive 只能进入 `recovering`/`restored-probation` 状态。
@@ -207,10 +208,10 @@ flowchart TD
 
 ### 2.4 推进策略
 
-1. **Admission and policy contract**：确认 upstream provider runtime accepted，新增 Herdr recovery policy/evidence contract。
+1. **Admission and policy contract**：确认 upstream provider runtime accepted，新增 Herdr recovery policy/evidence contract，并要求 Herdr auto restore disabled evidence。
 2. **Evidence ledger and redaction**：扩展 Herdr recovery ledger，sanitize `namespace_ref.restore_token`，输出 restore token presence / agent state ref，不泄露 raw token。
 3. **Probation/circuit state machine**：保留 restart_count backoff，新增或补齐 90 秒 probation projection、success gate、failure backoff 和 durable circuit。
-4. **Recovery action routing**：对 pane/process/namespace/daemon Herdr health 路由到 CCB-owned action，Herdr auto restore unsafe 时 blocked，并让 lifecycle start refresh 复用同一 admission。
+4. **Recovery action routing**：对 pane/process/namespace/daemon Herdr health 路由到 CCB-owned action，Herdr auto restore 非 disabled 时 blocked，并让 lifecycle start refresh 复用同一 admission。
 5. **Provider pane primitive**：在 pane lifecycle recovery 中支持 Herdr pane_ref respawn/reattach，不要求 `%pane`，且不进入 tmux ownership/identity 分支，但仍受 CCB gate 控制。
 6. **Crash log retention and regression guard**：保留 bounded crash logs/reason sidecar，跑 tmux/rmux recovery regression、Herdr fake recovery tests、scope/content guard。
 7. **Native Windows recovery evidence**：收集 Herdr pane/process/namespace recovery transcript 或 blocked evidence。
@@ -237,7 +238,7 @@ flowchart TD
 |---|---|---|---|
 | AC-001 | `provider-runtime-on-herdr` 未 implementation/acceptance ready | dependency-blocked admission report，不进入 recovery 实现 | artifact/unit |
 | AC-002 | Herdr runtime health `pane-dead/process-dead/namespace-crashed/daemon-unavailable` | evidence ledger 含 sanitized Herdr refs、health、auto restore mode、action/reason | unit |
-| AC-003 | Herdr auto restore unsupported 或不能证明 observe-only | CCB 标记 recovery capability blocked/circuit_open，不调用 respawn | unit |
+| AC-003 | Herdr auto restore 非 disabled，包括 observe-only、unsupported 或 unknown | CCB 标记 recovery capability blocked/circuit_open，不调用 respawn；observe-only 只进入 diagnostics | unit |
 | AC-004 | backoff window active | 不调用 Herdr restore/respawn，保持 degraded 与上次 failure evidence | unit |
 | AC-005 | Herdr pane/process recoverable | CCB 调 runtime_service/provider session recovery；Herdr primitive 只作为 respawn/reattach evidence | unit |
 | AC-006 | Herdr namespace recoverable 且 restore token present | CCB 调 private backend restore/reflow；raw token 不进入 public namespace_ref/event/log/diagnostics | unit/static |
@@ -245,7 +246,7 @@ flowchart TD
 | AC-008 | provider auth revoked / recovery blocked | hard-block，不反复 Herdr restore/respawn；保留 crash reason sidecar | unit |
 | AC-009 | tmux/rmux recovery regression | 现有 rmux supervision recovery、restore helper、pane crash tests 不退化 | unit |
 | AC-010 | Native Windows x64 Herdr recovery | transcript 覆盖 pane/process/namespace recovery 或 auto restore blocked evidence | manual transcript |
-| AC-011 | scope boundary | 不改 provider completion、Mobile/Config UI、doctor/support、package/release/public matrix | diff review |
+| AC-011 | scope boundary | 不改 provider completion、Mobile/Config UI、doctor/support、package/release/update/installer/public matrix、Herdr socket schema/client owner | diff review |
 
 ### 3.2 明确不做的反向核对项
 
@@ -253,7 +254,7 @@ flowchart TD
 - 不应把 Herdr agent state、pane alive、session restored 单独写成 `recover_succeeded`。
 - 不应让 Herdr 自动恢复与 CCB recovery 同时 respawn。
 - 不应在 recovery events/logs 中输出 raw restore token、provider secret 或 terminal buffer 全量。
-- 不应修改 Mobile/Config UI/doctor/support/package/release/public validation matrix。
+- 不应修改 Mobile/Config UI/doctor/support/package/release/update/installer/public validation matrix。
 
 ### 3.3 Acceptance Coverage Matrix
 
@@ -277,12 +278,12 @@ flowchart TD
 |---|---|---|---|
 | DOD-DESIGN-001 | design/checklist/review 完整，且对齐 roadmap item `herdr-bounded-recovery-boundary` | design review | blocking |
 | DOD-IMPL-000 | 前置 provider runtime acceptance passed 且 artifact/evidence refs 可验证；缺失时 dependency-blocked | artifact/unit | blocking |
-| DOD-IMPL-001 | `HerdrRecoveryPolicy.owner="ccb"`，Herdr auto restore 只能 disabled/observe-only/unsupported；unsafe fail closed | unit | blocking |
+| DOD-IMPL-001 | `HerdrRecoveryPolicy.owner="ccb"`，Herdr auto restore 必须 disabled 才能 recovery-capable；observe-only/unsupported/unknown fail closed | unit | blocking |
 | DOD-IMPL-002 | Herdr recovery evidence ledger redacted，含 sanitized refs、health、restore_token_present、agent_state_ref、action/reason；`namespace_ref.restore_token` 不进入 public payload | unit/static | blocking |
 | DOD-IMPL-003 | 90 秒 probation、restart_count/backoff、durable circuit 保留，probation 未到期不能写 recover_succeeded / steady | unit | blocking |
 | DOD-IMPL-004 | pane/process/namespace/daemon Herdr recovery 路由由 CCB supervision 决定，lifecycle start refresh 不绕过同一 gate；Herdr primitive 不成为 owner | unit/integration | blocking |
 | DOD-IMPL-005 | provider auth revoked / recovery blocked hard-block，不循环 Herdr respawn | unit | blocking |
-| DOD-IMPL-006 | bounded crash logs/reason sidecar 保留，且无 provider completion、user surface、doctor/support、package/release/public matrix 越界 | unit/diff review | blocking |
+| DOD-IMPL-006 | bounded crash logs/reason sidecar 保留，且无 provider completion、user surface、doctor/support、package/release/update/installer/public matrix、Herdr socket schema/client owner 越界 | unit/diff review | blocking |
 | DOD-REVIEW-001 | code review passed 且无 unresolved blocking | review report | blocking |
 | DOD-QA-001 | QA 复核 owner boundary、probation/circuit、redaction、tmux/rmux regression | QA report | blocking |
 | DOD-ACCEPT-001 | acceptance 回写 roadmap item，并包含 Native Windows x64 Herdr recovery transcript 或 blocked evidence | acceptance report | blocking |
@@ -297,9 +298,9 @@ Validation Commands:
 | CMD-004 | `python -m pytest -q test/test_ccbd_rmux_supervision_recovery.py test/test_ccbd_restore_helpers.py test/test_pane_crash_reason.py -k "recovery or recover or crash or backoff or blocked"` | existing recovery regression 与 crash reason baseline | core | fix-or-block |
 | CMD-005 | `python -m pytest -q test/test_ccbd_herdr_recovery_boundary.py -k "herdr or recovery or probation or circuit or restore or owner"` | Herdr recovery owner、policy、probation/circuit、restore redaction focused tests | core | fix-or-block |
 | CMD-006 | `python -m pytest -q test/test_ccbd_runtime_refresh.py test/test_ccbd_health_monitor_rebind.py -k "recovery or recover or herdr or restored or blocked"` | runtime refresh/rebind recovery integration | core | fix-or-block |
-| CMD-007 | `python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; implementation_roots=('lib/','test/','bin/','scripts/'); scoped=sorted(p for p in paths if p.startswith(implementation_roots)); forbidden_prefix=('lib/mobile/','mobile/','config-ui/','lib/config_ui/','lib/cli/services/doctor_runtime/'); forbidden_files={'package.json','package-lock.json','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py'}; bad=sorted(p for p in scoped if p.startswith(forbidden_prefix) or p in forbidden_files); assert not bad, bad; text=run(['git','diff','--','lib','test','bin','scripts'])+run(['git','diff','--cached','--','lib','test','bin','scripts']); forbidden=re.compile(r'(CompletionStatus\\.COMPLETED|support_tier|npm publish|release surface|public workflow validation|Mobile terminal|Config UI)', re.I); assert not forbidden.search(text)"` | provider completion/user-surface/release scope guard；排除 .codestable design 文档自身 | core | fix-or-block |
-| CMD-008 | `python -c "import subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; text=run(['git','diff','--','lib','test'])+run(['git','diff','--cached','--','lib','test']); assert re.search(r'probation_seconds|probation|restored-probation|recovery_probation', text, re.I); assert re.search(r'circuit_threshold|circuit_open|recovery_circuit', text, re.I); public=re.compile(r'(evidence_ledger|append_recovery_event|details=|diagnostics|project_view|support|logger|print).*restore_token|restore_token.*(evidence_ledger|append_recovery_event|details=|diagnostics|project_view|support|logger|print)', re.I|re.S); assert not public.search(text)"` | probation/circuit presence 与 public raw restore token leakage guard；允许 private backend call/test fixture | core | fix-or-block |
-| CMD-009 | `MANUAL Native Windows x64: capture Herdr recovery transcript for pane/process/namespace recovery or auto-restore blocked evidence, including 90s probation/circuit evidence` | roadmap recovery evidence | core | blocked-if-no-host-or-herdr |
+| CMD-007 | `python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; implementation_roots=('lib/','test/','bin/','scripts/'); scoped=sorted(p for p in paths if p.startswith(implementation_roots)); forbidden_prefix=('lib/mobile/','mobile/','config-ui/','lib/config_ui/','lib/cli/services/doctor_runtime/'); forbidden_files={'package.json','package-lock.json','install.ps1','install.sh','install.cmd','README.md','docs/ccbd-diagnostics-contract.md','bin/ccb-npm-install.js','lib/cli/management_runtime/install.py','lib/cli/management_runtime/commands_runtime/install.py','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py','lib/terminal_runtime/rmux_packaging_support.py','lib/terminal_runtime/rmux_packaging_support_projection.json'}; herdr_owner=re.compile(r'(^|/)(lib|test)/.*herdr.*(socket|schema|client)|(^|/)(lib|test)/.*(socket|schema|client).*herdr', re.I); bad=sorted(p for p in scoped if p.startswith(forbidden_prefix) or p in forbidden_files or herdr_owner.search(p)); assert not bad, bad; text=run(['git','diff','--','lib','test','bin','scripts'])+run(['git','diff','--cached','--','lib','test','bin','scripts'])+''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in scoped if pathlib.Path(p).is_file() and p.endswith(('.py','.md','.yaml','.yml','.json','.js','.ps1','.sh','.cmd'))); forbidden=re.compile(r'(CompletionStatus\\.COMPLETED|support_tier|npm publish|release surface|update surface|installer|public workflow validation|Mobile terminal|Config UI|HerdrSocket|herdr socket (client|schema)|schema[_-]?parser)', re.I); assert not forbidden.search(text)"` | provider completion/user-surface/package/release/update/installer/Herdr socket schema-client scope guard；排除 .codestable design 文档自身 | core | fix-or-block |
+| CMD-008 | `python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only','--','lib','test'],['git','diff','--cached','--name-only','--diff-filter=ACMR','--','lib','test'],['git','ls-files','--others','--exclude-standard','--','lib','test']) for p in run(a).splitlines() if p.strip()}; text=run(['git','diff','--','lib','test'])+run(['git','diff','--cached','--','lib','test'])+''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in paths if pathlib.Path(p).is_file() and p.endswith(('.py','.md','.yaml','.yml','.json'))); assert re.search(r'probation_seconds|probation|restored-probation|recovery_probation', text, re.I); assert re.search(r'circuit_threshold|circuit_open|recovery_circuit', text, re.I); raw_key=r'(?<![A-Za-z0-9_])restore_token(?![A-Za-z0-9_])'; public=re.compile(r'(evidence_ledger|append_recovery_event|details=|diagnostics|project_view|support|logger|print).*'+raw_key+r'|'+raw_key+r'.*(evidence_ledger|append_recovery_event|details=|diagnostics|project_view|support|logger|print)', re.I|re.S); assert not public.search(text)"` | probation/circuit presence 与 public raw restore token leakage guard，包含 untracked lib/test；允许 `restore_token_present` / `namespace_restore_token_present` presence projection、private backend call 和 test fixture | core | fix-or-block |
+| CMD-009 | `MANUAL Native Windows x64: capture Herdr recovery transcript for pane/process/namespace recovery with auto restore disabled, or auto-restore-not-disabled blocked evidence, including 90s probation/circuit evidence` | roadmap recovery evidence | core | blocked-if-no-host-or-herdr-or-auto-restore-not-disabled |
 
 Required Artifacts：design、checklist、design-review、upstream admission evidence、Herdr recovery policy tests、namespace_ref sanitizer tests、evidence ledger redaction tests、probation/backoff/circuit tests、pane/process/namespace/daemon recovery tests、auth revoked/recovery blocked tests、tmux/rmux regression tests、scope/content guards、Native Windows x64 Herdr recovery transcript、acceptance 阶段按 epic/roadmap owner 协议回写 items.yaml。
 

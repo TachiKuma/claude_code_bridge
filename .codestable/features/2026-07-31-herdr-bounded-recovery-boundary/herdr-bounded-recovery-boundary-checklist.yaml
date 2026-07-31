@@ -4,7 +4,7 @@ created: 2026-07-31
 steps:
   - id: S1
     action: "Admission and policy contract：确认 provider-runtime-on-herdr implementation/acceptance ready，并定义 HerdrRecoveryPolicy owner=ccb"
-    exit_signal: "provider-runtime-on-herdr roadmap done、acceptance passed、artifact/evidence refs 存在；Herdr auto restore mode 只能 disabled/observe-only/unsupported，unsafe 时 dependency/capability blocked"
+    exit_signal: "provider-runtime-on-herdr roadmap done、acceptance passed、artifact/evidence refs 存在；Herdr auto restore mode 必须可证明 disabled，observe-only/unsupported/unknown 时 dependency/capability blocked"
     status: pending
   - id: S2
     action: "Evidence ledger and redaction：扩展 Herdr recovery evidence ledger，sanitize namespace_ref.restore_token，输出 refs、health、restore_token_present、agent_state_ref、action/reason"
@@ -16,7 +16,7 @@ steps:
     status: pending
   - id: S4
     action: "Recovery action routing：pane/process/namespace/daemon Herdr health 由 CCB supervision 路由，lifecycle start refresh 复用同一 gate"
-    exit_signal: "pane/process 走 runtime_service/provider session recovery；namespace restore 通过 CCB-owned runtime/namespace service private call；daemon 只在 project-owned/allowed 时 recover；Herdr auto restore unsafe 时 blocked"
+    exit_signal: "pane/process 走 runtime_service/provider session recovery；namespace restore 通过 CCB-owned runtime/namespace service private call；daemon 只在 project-owned/allowed 时 recover；Herdr auto restore 非 disabled 时 blocked"
     status: pending
   - id: S5
     action: "Provider pane primitive：支持 Herdr pane_ref respawn/reattach recovery primitive，不要求 tmux %pane，且不进入 tmux ownership/identity 分支"
@@ -24,7 +24,7 @@ steps:
     status: pending
   - id: S6
     action: "Crash log retention and regression guard：保留 bounded crash logs/reason sidecar，运行 tmux/rmux recovery regression、Herdr fake recovery tests、scope/content guard"
-    exit_signal: "existing rmux/restore/crash tests 通过；新增 Herdr recovery focused tests 通过；bounded crash logs/reason sidecar 保留；无 provider completion/user-surface/release 越界"
+    exit_signal: "existing rmux/restore/crash tests 通过；新增 Herdr recovery focused tests 通过；bounded crash logs/reason sidecar 保留；无 provider completion/user-surface/package/release/update/installer/Herdr socket schema-client 越界"
     status: pending
   - id: S7
     action: "Native Windows recovery evidence：收集 Herdr pane/process/namespace recovery transcript 或 auto-restore blocked evidence"
@@ -35,7 +35,7 @@ checks:
   - item: "provider-runtime-on-herdr 不是仅 design-review passed，而是 implementation/acceptance evidence 可验证"
     source: design AC-001 / DOD-IMPL-000 / S1
     status: pending
-  - item: "HerdrRecoveryPolicy owner 固定为 ccb，Herdr auto restore 不能成为 co-owner"
+  - item: "HerdrRecoveryPolicy owner 固定为 ccb，Herdr auto restore 必须 disabled；observe-only/unsupported/unknown 不能进入 recovery-capable 或 supported"
     source: design AC-003 / DOD-IMPL-001 / S1
     status: pending
   - item: "Herdr recovery evidence ledger redacted，namespace_ref.restore_token 不进入 public payload，只输出 restore_token_present"
@@ -53,10 +53,10 @@ checks:
   - item: "tmux/rmux recovery regression 不退化"
     source: design AC-009 / S6
     status: pending
-  - item: "Native Windows x64 Herdr recovery transcript 覆盖 recovery 或 blocked evidence"
+  - item: "Native Windows x64 Herdr recovery transcript 覆盖 auto restore disabled 下的 recovery，或 auto-restore-not-disabled blocked evidence"
     source: design AC-010 / DOD-ACCEPT-001 / S7
     status: pending
-  - item: "本 feature 不修改 provider completion、Mobile/Config UI、doctor/support、package/release/public matrix"
+  - item: "本 feature 不修改 provider completion、Mobile/Config UI、doctor/support、package/release/update/installer/public matrix、Herdr socket schema/client owner"
     source: design AC-011 / 明确不做 / S6
     status: pending
 
@@ -90,16 +90,16 @@ dod:
       failure_handling: fix-or-block
     - id: CMD-007
       command: >-
-        python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; implementation_roots=('lib/','test/','bin/','scripts/'); scoped=sorted(p for p in paths if p.startswith(implementation_roots)); forbidden_prefix=('lib/mobile/','mobile/','config-ui/','lib/config_ui/','lib/cli/services/doctor_runtime/'); forbidden_files={'package.json','package-lock.json','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py'}; bad=sorted(p for p in scoped if p.startswith(forbidden_prefix) or p in forbidden_files); assert not bad, bad; text=run(['git','diff','--','lib','test','bin','scripts'])+run(['git','diff','--cached','--','lib','test','bin','scripts']); forbidden=re.compile(r'(CompletionStatus\.COMPLETED|support_tier|npm publish|release surface|public workflow validation|Mobile terminal|Config UI)', re.I); assert not forbidden.search(text)"
+        python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; implementation_roots=('lib/','test/','bin/','scripts/'); scoped=sorted(p for p in paths if p.startswith(implementation_roots)); forbidden_prefix=('lib/mobile/','mobile/','config-ui/','lib/config_ui/','lib/cli/services/doctor_runtime/'); forbidden_files={'package.json','package-lock.json','install.ps1','install.sh','install.cmd','README.md','docs/ccbd-diagnostics-contract.md','bin/ccb-npm-install.js','lib/cli/management_runtime/install.py','lib/cli/management_runtime/commands_runtime/install.py','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py','lib/terminal_runtime/rmux_packaging_support.py','lib/terminal_runtime/rmux_packaging_support_projection.json'}; herdr_owner=re.compile(r'(^|/)(lib|test)/.*herdr.*(socket|schema|client)|(^|/)(lib|test)/.*(socket|schema|client).*herdr', re.I); bad=sorted(p for p in scoped if p.startswith(forbidden_prefix) or p in forbidden_files or herdr_owner.search(p)); assert not bad, bad; text=run(['git','diff','--','lib','test','bin','scripts'])+run(['git','diff','--cached','--','lib','test','bin','scripts'])+''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in scoped if pathlib.Path(p).is_file() and p.endswith(('.py','.md','.yaml','.yml','.json','.js','.ps1','.sh','.cmd'))); forbidden=re.compile(r'(CompletionStatus\.COMPLETED|support_tier|npm publish|release surface|update surface|installer|public workflow validation|Mobile terminal|Config UI|HerdrSocket|herdr socket (client|schema)|schema[_-]?parser)', re.I); assert not forbidden.search(text)"
       core: true
       failure_handling: fix-or-block
     - id: CMD-008
       command: >-
-        python -c "import subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; text=run(['git','diff','--','lib','test'])+run(['git','diff','--cached','--','lib','test']); assert re.search(r'probation_seconds|probation|restored-probation|recovery_probation', text, re.I); assert re.search(r'circuit_threshold|circuit_open|recovery_circuit', text, re.I); public=re.compile(r'(evidence_ledger|append_recovery_event|details=|diagnostics|project_view|support|logger|print).*restore_token|restore_token.*(evidence_ledger|append_recovery_event|details=|diagnostics|project_view|support|logger|print)', re.I|re.S); assert not public.search(text)"
+        python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only','--','lib','test'],['git','diff','--cached','--name-only','--diff-filter=ACMR','--','lib','test'],['git','ls-files','--others','--exclude-standard','--','lib','test']) for p in run(a).splitlines() if p.strip()}; text=run(['git','diff','--','lib','test'])+run(['git','diff','--cached','--','lib','test'])+''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in paths if pathlib.Path(p).is_file() and p.endswith(('.py','.md','.yaml','.yml','.json'))); assert re.search(r'probation_seconds|probation|restored-probation|recovery_probation', text, re.I); assert re.search(r'circuit_threshold|circuit_open|recovery_circuit', text, re.I); raw_key=r'(?<![A-Za-z0-9_])restore_token(?![A-Za-z0-9_])'; public=re.compile(r'(evidence_ledger|append_recovery_event|details=|diagnostics|project_view|support|logger|print).*'+raw_key+r'|'+raw_key+r'.*(evidence_ledger|append_recovery_event|details=|diagnostics|project_view|support|logger|print)', re.I|re.S); assert not public.search(text)"
       core: true
       failure_handling: fix-or-block
     - id: CMD-009
-      command: "MANUAL Native Windows x64: capture Herdr recovery transcript for pane/process/namespace recovery or auto-restore blocked evidence, including 90s probation/circuit evidence"
+      command: "MANUAL Native Windows x64: capture Herdr recovery transcript for pane/process/namespace recovery with auto restore disabled, or auto-restore-not-disabled blocked evidence, including 90s probation/circuit evidence"
       core: true
       failure_handling: blocked-if-no-host-or-herdr
   evidence_required:
@@ -117,6 +117,7 @@ dod:
   cleanliness:
     provider_completion_changes: forbidden
     user_surface_projection_changes: forbidden
-    package_release_changes: forbidden
+    package_release_update_installer_changes: forbidden
+    herdr_socket_schema_client_owner_changes: forbidden
     raw_restore_token_public_logging: forbidden
     debug_output: forbidden

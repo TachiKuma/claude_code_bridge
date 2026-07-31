@@ -6,7 +6,7 @@ steps:
     exit_signal: "focused test/import 证明 MuxNamespaceRefV2、MuxPaneRefV2、MuxCommandErrorV2、MuxCapabilitiesV2、herdr-native、herdr_socket、schema-mismatch 已存在；否则本 feature dependency-blocked"
     status: pending
   - action: "dependency and evidence admission：读取 upstream spike evidence / blocked fixture，建立 Herdr capability gate 的输入规则"
-    exit_signal: "缺 evidence、stop、blocking gaps、unknown 未归类时 unit test 断言 Herdr construction/selection blocked"
+    exit_signal: "缺 evidence、stop/needs-upstream-issue、blocked/failed verdict、failure_class 非 none、blocking gaps、unknown 或未归类 status 时 unit test 断言 Herdr construction/selection blocked"
     status: pending
   - action: "schema/socket client：实现最小 Herdr socket client interface、server_info/schema parser、schema mismatch error mapping"
     exit_signal: "fake socket schema pass/mismatch tests 通过；mismatch 携带 schema/operation evidence"
@@ -14,8 +14,8 @@ steps:
   - action: "HerdrBackend facade：实现 namespace/pane refs、create/restore session、create_pane、send_text、capture_pane、kill_pane 和 capabilities"
     exit_signal: "fake socket lifecycle/io tests 返回 herdr-native refs、herdr_socket ipc、restore token 和 operation evidence"
     status: pending
-  - action: "resolver/factory gated route：将 explicit herdr 接入 backend resolver/factory，保留 auto/default 不变"
-    exit_signal: "explicit Herdr gate pass 时创建 HerdrBackend；not-windows/not-x64/platform-gate-blocked/capability/schema/socket gate fail 时返回 V2 failure diagnostics；auto 无 evidence 不选 Herdr"
+  - action: "resolver/factory gated route：将 explicit herdr 与 Native Windows auto 接入 backend resolver/factory，保留非 Windows auto/default 不变"
+    exit_signal: "explicit Herdr 或 Native Windows auto gate pass 时创建 HerdrBackend；not-windows/not-x64/platform-gate-blocked/capability/schema/socket gate fail 时返回 V2 failure diagnostics；非 Windows auto 无 evidence 不选 Herdr"
     status: pending
   - action: "scope guard：确认未改 ccbd durable state、provider runtime、doctor/support、package/release surface、recovery"
     exit_signal: "diff guard 覆盖 forbidden path/content，只有 terminal_runtime adapter/resolver/api 和 focused tests 改动"
@@ -31,7 +31,7 @@ checks:
   - item: "缺 upstream spike evidence / blocked fixture 时 Herdr capability gate blocked，不构造 production Herdr backend"
     source: design AC-001 / DOD-IMPL-002
     status: pending
-  - item: "adapter_recommendation=stop、blocking gaps 或 unknown 未归类时 Herdr selection/construction fail closed"
+  - item: "adapter_recommendation=stop/needs-upstream-issue、blocked/failed verdict、failure_class 非 none、blocking gaps、unknown 或未归类 status 时 Herdr selection/construction fail closed"
     source: design AC-002 / DOD-IMPL-002
     status: pending
   - item: "Herdr server_info/schema 匹配时 client 通过 schema gate，并记录 server_info/socket ref"
@@ -52,7 +52,7 @@ checks:
   - item: "explicit herdr route gates fail 时返回 V2 failure，区分 not-windows/not-x64/platform-gate-blocked/capability/schema/socket failure，不 fallback 假成功"
     source: design AC-008 / DOD-IMPL-004
     status: pending
-  - item: "auto on non Windows / no Herdr evidence 保持现有 tmux/rmux behavior，不产生 Herdr effective backend"
+  - item: "Native Windows x64 auto 直路由 Herdr，缺 Herdr evidence 时 blocked diagnostic；非 Windows / WSL auto 保持现有 tmux/rmux behavior，不产生 Herdr effective backend"
     source: design AC-009
     status: pending
   - item: "本 feature 不修改 ccbd durable state、provider runtime、doctor/support、package/release/recovery"
@@ -100,7 +100,7 @@ dod:
         - rmux_backend_regression
     - id: CMD-006
       command: >-
-        python -c "import subprocess; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; forbidden_prefix=('lib/provider_backends/','lib/provider_runtime/','lib/ccbd/services/project_namespace_state_runtime/','lib/ccbd/services/project_namespace_runtime/','lib/cli/services/doctor_runtime/','lib/ccbd/services/dispatcher_runtime/lifecycle_start_runtime/recovery_runtime/'); forbidden_files={'package.json','package-lock.json','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py','lib/terminal_runtime/rmux_packaging_support.py'}; bad=sorted(p for p in paths if p.startswith(forbidden_prefix) or p in forbidden_files); assert not bad, bad"
+        python -c "import subprocess; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; forbidden_prefix=('lib/provider_backends/','lib/provider_runtime/','lib/ccbd/services/project_namespace_state_runtime/','lib/ccbd/services/project_namespace_runtime/','lib/cli/services/doctor_runtime/','lib/ccbd/services/dispatcher_runtime/lifecycle_start_runtime/recovery_runtime/'); forbidden_files={'package.json','package-lock.json','install.ps1','install.sh','install.cmd','README.md','docs/ccbd-diagnostics-contract.md','bin/ccb-npm-install.js','lib/cli/management_runtime/install.py','lib/cli/management_runtime/commands_runtime/install.py','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py','lib/terminal_runtime/rmux_packaging_support.py','lib/terminal_runtime/rmux_packaging_support_projection.json'}; bad=sorted(p for p in paths if p.startswith(forbidden_prefix) or p in forbidden_files); assert not bad, bad"
       core: true
       failure_handling: fix-or-block
       test_status: new
@@ -109,6 +109,10 @@ dod:
         - no_provider_runtime_scope_guard
         - no_doctor_support_tier_scope_guard
         - no_package_release_scope_guard
+        - no_installer_scope_guard
+        - install_cmd_scope_guard
+        - npm_postinstall_scope_guard
+        - cli_install_management_scope_guard
         - no_recovery_scope_guard
     - id: CMD-007
       command: >-

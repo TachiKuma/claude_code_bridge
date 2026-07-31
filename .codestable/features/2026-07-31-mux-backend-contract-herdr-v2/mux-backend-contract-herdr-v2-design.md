@@ -1,11 +1,11 @@
 ---
 doc_type: feature-design
 feature: 2026-07-31-mux-backend-contract-herdr-v2
-requirement:
+requirement: native-windows-ccb-via-herdr
 roadmap: windows-native-herdr-ccb
 roadmap_item: mux-backend-contract-herdr-v2
 execution_lane: goal
-status: draft
+status: approved
 summary: 将现有 mux backend 小协议升级为能表达 tmux/rmux/herdr 共存的 V2 contract、capability 和 structured error，同时保持生产 Herdr client 仍由后续 feature 实现
 tags: [terminal-runtime, mux-backend, herdr, contract-v2, fake-backend, resolver, epic-child]
 ---
@@ -44,13 +44,14 @@ tags: [terminal-runtime, mux-backend, herdr, contract-v2, fake-backend, resolver
 - `MuxCommandErrorV2` 包含 `schema-mismatch`，且 `backend_impl="herdr"` 时能携带 schema/operation evidence。
 - fake backend 可用 `backend_impl="herdr"`、`backend_family="herdr-native"` 驱动 contract/state tests，不 mock Herdr JSON。
 - resolver/diagnostics 能表示 Herdr requested/effective/failure，但默认 Linux/macOS/WSL 与现有 tmux/rmux 行为不变；真正 auto-select Herdr 仍依赖后续 capability feature。
+- Native Windows x64 的 platform default / `auto` policy 必须能表达“直接路由 Herdr”；缺 Herdr capability 时返回 blocked diagnostic，不得 fallback 到 tmux/rmux 成功。非 Windows 默认仍保持既有 tmux/rmux。
 - resolver failure diagnostics 必须携带 `platform_gate` / `capability_report_ref` / `failure_reason`，不能复用 rmux-only `invalid-request` 或 `capability-gap` 掩盖 Herdr blocked 事实。
 
 明确不做：
 
 - 不实现 `HerdrBackendClient`、socket API wrapper、schema parser 或 production Herdr adapter。
 - 不改 provider runtime、ccbd namespace lifecycle、project namespace state 持久 schema 的生产语义。
-- 不把 Herdr 设为默认 backend，不启用 `runtime.mux.backend=herdr` 的生产成功路线。
+- 不启用 production `runtime.mux.backend=herdr` 成功路线；但 contract/resolver diagnostics 必须为后续 Native Windows `auto -> Herdr` 直路由提供可表达的 blocked/success 结果。
 - 不发布 Windows support，不修改 package metadata、installer、doctor support tier。
 - 不执行 git commit、push、tag、merge、release、publish、deploy 或 promotion。
 
@@ -182,7 +183,7 @@ flowchart TD
 - Herdr capability 只能由 spike evidence 驱动；没有 evidence 时 `requested_backend="herdr"` 必须返回 `failure_reason="herdr-capability-missing"`，不得成功构造 production backend。
 - `platform_gate.supported=false` 时 Herdr request 必须返回 `failure_reason="platform-gate-blocked"` 并携带 platform gate 摘要。
 - Herdr unavailable 或 schema 不匹配必须分别返回 `herdr-unavailable` / `schema-mismatch`，不能复用 rmux-only `route-not-approved` 或泛化 `invalid-request`。
-- Linux/macOS/WSL 默认路径不变；`auto` 没有 platform gate + capability evidence 时仍 fallback 现有 tmux/rmux 逻辑，不得产生 `effective_backend="herdr"`。
+- Linux/macOS/WSL 默认路径不变；Native Windows x64 的 `auto` / platform default 必须指向 Herdr selection。缺 platform gate + capability evidence 时返回 Herdr blocked diagnostic，不得 fallback 现有 tmux/rmux 成功；非 Windows `auto` 仍不得产生 `effective_backend="herdr"`。
 - V2 类型必须允许 legacy tmux/rmux refs 继续通过；迁移 ccbd durable state 属后续 child。
 - `schema-mismatch` 只能用于外部 API/schema 不满足 adapter contract；不能滥用于普通命令失败。
 
@@ -201,11 +202,11 @@ flowchart TD
 2. **fake backend V2 fixture**：让 `FakeMuxBackend` 可构造 Herdr refs/capabilities/errors，不 mock Herdr JSON。  
    退出信号：fake Herdr backend 可 create session、split pane、send/capture/kill，并返回 Herdr-shaped refs。
 3. **resolver diagnostics V2**：扩展 requested/failure diagnostics 表达 `herdr`、`auto_probe`、`platform_gate`、`capability_report_ref` 和 Herdr failure reason。  
-   退出信号：显式 Herdr request 返回 structured blocked/failure；`auto` 和非 Windows默认仍走 tmux/rmux 现有逻辑，不产生 Herdr effective backend。
+   退出信号：显式 Herdr request 返回 structured blocked/failure；Native Windows `auto` 返回 Herdr blocked/success selection；非 Windows 默认仍走 tmux/rmux 现有逻辑，不产生 Herdr effective backend。
 4. **capability projection from spike**：定义从上游 `herdr-contract-spike-evidence.json` 到 V2 capability fixture 的最小转换规则。  
-   退出信号：缺 evidence、`adapter_recommendation=stop`、`blocking_gaps` 非空或 unknown 未归类时，Herdr selection/capability 必须 fail closed。
+   退出信号：缺 evidence、`adapter_recommendation=stop|needs-upstream-issue`、顶层 verdict blocked/failed、failure_class 非 none、`blocking_gaps` 非空或 unknown 未归类时，Herdr selection/capability 必须 fail closed。
 5. **scope and upstream evidence guard**：增加 core guard 检查 production Herdr client、provider runtime、ccbd durable state、package/doctor/support 越界，并检查上游 spike evidence 或 blocked fixture。  
-   退出信号：guard 能检测禁止路径/内容，包括 staged rename/copy 到 `lib/terminal_runtime/herdr*` 的 production client/adapter/schema parser 形态，以及 doctor/support tier 投影文件；缺上游 evidence、`adapter_recommendation=stop`、`blocking_gaps` 非空或 `unknown` 未归类时，必须有 Herdr blocked fixture/result，不能出现 production success route。
+   退出信号：guard 能检测禁止路径/内容，包括 staged rename/copy 到 `lib/terminal_runtime/herdr*` 的 production client/adapter/schema parser 形态、untracked content，以及 doctor/support tier 投影文件；缺上游 evidence、`adapter_recommendation=stop|needs-upstream-issue`、顶层 verdict blocked/failed、failure_class 非 none、`blocking_gaps` 非空或 `unknown` 未归类时，必须有 Herdr blocked fixture/result，不能出现 production success route。
 6. **regression guard**：运行现有 tmux/rmux contract、backend selection、project namespace backend focused tests。  
    退出信号：现有 tests 通过；没有 provider runtime、ccbd state schema、package metadata 越界 diff。
 
@@ -235,15 +236,15 @@ flowchart TD
 | AC-005 | Fake Herdr backend | fake 可驱动 create/split/send/capture/kill，不依赖 Herdr JSON | unit |
 | AC-006 | explicit Herdr request without capability evidence | resolver diagnostics fail closed，failure_reason 为 `herdr-capability-missing`，不构造 production backend | unit |
 | AC-007 | platform gate blocked / Herdr unavailable / schema mismatch | failure diagnostics 分别携带 `platform-gate-blocked`、`herdr-unavailable`、`schema-mismatch` 与 refs | unit |
-| AC-008 | auto backend on non Windows / no Herdr evidence | 默认仍保持现有 tmux/rmux behavior，不产生 Herdr effective backend | unit |
-| AC-009 | upstream spike evidence missing/stop/blocking gaps | capability projection fail closed，只允许 fake contract fixture，不允许 production success route | unit |
+| AC-008 | auto backend selection | Native Windows x64 直接进入 Herdr selection，缺 evidence 时 blocked diagnostic；非 Windows / WSL 默认仍保持现有 tmux/rmux behavior，不产生 Herdr effective backend | unit |
+| AC-009 | upstream spike evidence missing/stop/blocked/failure/gaps | capability projection fail closed，只允许 fake contract fixture，不允许 production success route | unit |
 | AC-010 | production scope guard | 不改 provider runtime、ccbd durable state、package metadata、doctor support tier，不新增 production Herdr client | diff review |
 
 ### 3.2 明确不做的反向核对项
 
 - 不应新增 production Herdr socket client。
 - 不应让 `herdr` 成为 `tmux-family`。
-- 不应让 `auto` 在无 spike/capability evidence 时选择 Herdr。
+- 不应让 Native Windows `auto` 在无 spike/capability evidence 时 fallback 到 tmux/rmux 成功或产生 Herdr success route；正确结果是 Herdr blocked diagnostic。
 - 不应迁移 ccbd project namespace durable schema。
 - 不应修改 provider completion 或 launch behavior。
 
@@ -258,7 +259,7 @@ flowchart TD
 | AC-005 fake Herdr backend | S2 | unit | fake backend tests | yes |
 | AC-006 explicit Herdr blocked | S3,S4 | unit | resolver diagnostics tests | yes |
 | AC-007 platform/schema failures | S3,S4 | unit | failure diagnostics tests | yes |
-| AC-008 auto unchanged | S3,S6 | unit | backend selection regression | yes |
+| AC-008 auto selection | S3,S6 | unit | backend selection regression | yes |
 | AC-009 upstream evidence guard | S4,S5 | unit | spike evidence guard tests | yes |
 | AC-010 scope guard | S5,S6 | diff review | no production Herdr client/state/package diff | yes |
 
@@ -269,8 +270,8 @@ flowchart TD
 | DOD-DESIGN-001 | design/checklist/review 完整，且对齐 roadmap item `mux-backend-contract-herdr-v2` | design review | blocking |
 | DOD-IMPL-001 | V2 refs/capabilities/errors 能表达 Herdr native family，不破坏 tmux/rmux | unit | blocking |
 | DOD-IMPL-002 | fake Herdr backend 支持 V2 refs 和 structured errors，不 mock Herdr JSON | unit | blocking |
-| DOD-IMPL-003 | resolver diagnostics 对 Herdr request fail closed，auto/default 不变 | unit | blocking |
-| DOD-IMPL-004 | `unknown` capability 不可进入 supported/workaround，blocking gaps 或缺上游 evidence 阻止 selection | unit | blocking |
+| DOD-IMPL-003 | resolver diagnostics 对 Herdr request fail closed；非 Windows auto/default 不变，Native Windows x64 auto/platform default 表达 Herdr blocked/success selection | unit | blocking |
+| DOD-IMPL-004 | `unknown` capability 不可进入 supported/workaround；缺上游 evidence、stop/needs-upstream-issue、blocked/failed verdict、failure_class 非 none 或 blocking gaps 阻止 success selection | unit | blocking |
 | DOD-IMPL-005 | 无 production Herdr client、ccbd state migration、provider runtime、package/support 越界，且 guard 能检查路径和内容 | diff review | blocking |
 | DOD-REVIEW-001 | code review passed 且无 unresolved blocking | review report | blocking |
 | DOD-QA-001 | QA 复核 contract、fake、resolver、scope guard | QA report | blocking |
@@ -284,8 +285,8 @@ Validation Commands:
 | CMD-002 | `python ".codestable/tools/validate-yaml.py" --file ".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml"` | roadmap items 回写合法性 | core | fix-or-block |
 | CMD-003 | `python -m pytest -q test/test_mux_backend_contract.py test/test_terminal_runtime_backend_selection.py` | contract/resolver regression 与 V2 focused tests | core | fix-or-block |
 | CMD-004 | `python -m pytest -q test/test_v2_project_namespace_backend.py` | existing namespace backend compatibility guard | core | fix-or-block |
-| CMD-005 | `python -c "import re, subprocess; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; collect=lambda a: run(a).splitlines(); paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in collect(a) if p.strip()}; forbidden_prefix=('lib/provider_backends/','lib/provider_runtime/','lib/ccbd/services/project_namespace_state_runtime/','lib/cli/services/doctor_runtime/'); forbidden_files={'package.json','package-lock.json','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py','lib/terminal_runtime/rmux_packaging_support.py'}; allowed_terminal={'lib/terminal_runtime/mux_backend_contract.py','lib/terminal_runtime/fake_mux_backend.py','lib/terminal_runtime/backend_resolver.py','lib/terminal_runtime/backend_selection.py'}; bad=sorted(p for p in paths if p.startswith(forbidden_prefix) or p in forbidden_files or (p.startswith('lib/terminal_runtime/herdr') and p not in allowed_terminal)); assert not bad, bad; text=run(['git','diff','--','lib','package.json'])+run(['git','diff','--cached','--','lib','package.json']); forbidden=re.compile(r'(class\s+Herdr.*(Client|Adapter|Schema)|def\s+.*herdr.*socket|socket[_-]?api|schema[_-]?parser|HerdrSocket|production Herdr adapter)', re.I); assert not forbidden.search(text)"` | production Herdr client / Herdr socket adapter/schema parser / provider / ccbd durable state / package / doctor support tier scope guard，覆盖 modified、staged rename/copy、staged content 与 untracked 路径 | core | fix-or-block |
-| CMD-006 | `python -c "import json, pathlib; src=pathlib.Path('.codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json'); fixture=pathlib.Path('.codestable/features/2026-07-31-mux-backend-contract-herdr-v2/evidence/herdr-capability-blocked-fixture.json'); reasons={'herdr-capability-missing','platform-gate-blocked','unsupported-capability','schema-mismatch','herdr-unavailable'}; load=lambda p: json.loads(p.read_text(encoding='utf-8')); has_unknown=lambda m: any(v=='unknown' for v in (m or {}).values()); blocked_ok=lambda d: d.get('backend_impl')=='herdr' and (d.get('blocked') is True or d.get('effective_backend')!='herdr') and d.get('failure_reason') in reasons; d=load(src) if src.exists() else None; p=(d or {}).get('capability_projection') or {}; must_block=(not src.exists()) or (d or {}).get('adapter_recommendation')=='stop' or bool(p.get('blocking_gaps')) or has_unknown(p.get('command_status')) or has_unknown(p.get('semantic_status')); assert not must_block or blocked_ok(load(fixture))"` | upstream spike evidence guard；缺 evidence、stop、blocking gaps 或 unknown 未归类时 Herdr selection/capability 必须有 blocked fixture/result | core | fix-or-block |
+| CMD-005 | `python -c "import pathlib,re,subprocess; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; collect=lambda a: run(a).splitlines(); untracked=[p.replace(chr(92),'/') for p in collect(['git','ls-files','--others','--exclude-standard']) if p.strip()]; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR']) for p in collect(a) if p.strip()}; paths.update(untracked); forbidden_prefix=('lib/provider_backends/','lib/provider_runtime/','lib/ccbd/services/project_namespace_state_runtime/','lib/cli/services/doctor_runtime/'); forbidden_files={'package.json','package-lock.json','install.ps1','install.sh','install.cmd','README.md','docs/ccbd-diagnostics-contract.md','bin/ccb-npm-install.js','lib/cli/management_runtime/install.py','lib/cli/management_runtime/commands_runtime/install.py','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py','lib/terminal_runtime/rmux_packaging_support.py','lib/terminal_runtime/rmux_packaging_support_projection.json'}; allowed_terminal={'lib/terminal_runtime/mux_backend_contract.py','lib/terminal_runtime/fake_mux_backend.py','lib/terminal_runtime/backend_resolver.py','lib/terminal_runtime/backend_selection.py'}; bad=sorted(p for p in paths if p.startswith(forbidden_prefix) or p in forbidden_files or (p.startswith('lib/terminal_runtime/herdr') and p not in allowed_terminal)); assert not bad, bad; untracked_text=''.join('\\n'+pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in untracked if (p.startswith(('lib/','bin/')) or p in {'package.json','install.ps1','install.sh','install.cmd','README.md','docs/ccbd-diagnostics-contract.md'}) and pathlib.Path(p).is_file()); guard_paths=['lib','package.json','install.ps1','install.sh','install.cmd','README.md','docs/ccbd-diagnostics-contract.md','bin/ccb-npm-install.js','lib/cli/management_runtime/install.py','lib/cli/management_runtime/commands_runtime/install.py']; text=run(['git','diff','--']+guard_paths)+run(['git','diff','--cached','--']+guard_paths)+untracked_text; forbidden=re.compile(r'(class\s+Herdr.*(Client|Adapter|Schema)|def\s+.*herdr.*socket|socket[_-]?api|schema[_-]?parser|HerdrSocket|production Herdr adapter|support_tier.*(beta|supported)|windows.*herdr.*supported)', re.I); assert not forbidden.search(text)"` | production Herdr client / Herdr socket adapter/schema parser / provider / ccbd durable state / package / installer / doctor support tier scope guard，覆盖 modified、staged rename/copy、staged content、untracked 路径与 untracked content | core | fix-or-block |
+| CMD-006 | `python -c "import json, pathlib; src=pathlib.Path('.codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json'); fixture=pathlib.Path('.codestable/features/2026-07-31-mux-backend-contract-herdr-v2/evidence/herdr-capability-blocked-fixture.json'); reasons={'herdr-capability-missing','platform-gate-blocked','unsupported-capability','schema-mismatch','herdr-unavailable'}; allowed={'supported','partial','unsupported','workaround'}; load=lambda p: json.loads(p.read_text(encoding='utf-8')); values=lambda m: list((m or {}).values()); has_unknown=lambda m: any(v=='unknown' for v in values(m)); invalid_status=lambda m: any(v not in allowed for v in values(m)); blocked_ok=lambda d: d.get('blocked') is True and d.get('backend_family')=='herdr-native' and d.get('backend_impl')=='herdr' and d.get('requested_backend') in {'herdr','auto'} and d.get('fallback_used') is not True and d.get('effective_backend') in (None,'herdr') and d.get('failure_reason') in reasons; d=load(src) if src.exists() else None; p=(d or {}).get('capability_projection') or {}; rec=(d or {}).get('adapter_recommendation'); verdict=(d or {}).get('verdict'); failure=(d or {}).get('failure_class'); command=p.get('command_status'); semantic=p.get('semantic_status'); must_block=(not src.exists()) or rec not in {'continue','continue-with-gaps'} or rec in {'stop','needs-upstream-issue'} or verdict in {'blocked','failed'} or failure not in (None,'','none') or bool(p.get('blocking_gaps')) or has_unknown(command) or has_unknown(semantic) or invalid_status(command) or invalid_status(semantic); assert not must_block or blocked_ok(load(fixture))"` | upstream spike evidence guard；缺 evidence、stop/needs-upstream-issue、blocked/failed verdict、failure_class 非 none、blocking gaps、unknown 或未归类 status 时 Herdr selection/capability 必须有 blocked fixture/result，且 blocked fixture 不得 fallback 到 tmux/rmux success | core | fix-or-block |
 
 Required Artifacts：design、checklist、design-review、V2 contract diff、fake backend tests、resolver diagnostics tests、upstream spike evidence guard、Herdr blocked fixture/result、scope guard、items.yaml 回写。
 

@@ -2,8 +2,8 @@ feature: 2026-07-31-herdr-backend-contract-spike
 created: 2026-07-31
 
 steps:
-  - action: "spike scope guard 与 host admission：建立独立 named session、Windows x64 platform gate ref、Herdr binary/schema ref，以及 dedicated/disposable Herdr server 或 isolated socket/config 的运行前检查"
-    exit_signal: "非 Native Windows x64、Herdr 缺失或 restart 无法隔离时写 blocked evidence；脚本不会修改生产代码、用户默认 Herdr session 或全局 Herdr server"
+  - action: "spike scope guard 与 host admission：建立独立 named session、显式 --platform-gate-ref、Windows x64 HostEvidence、Herdr binary/schema ref，以及 dedicated/disposable Herdr server 或 isolated socket/config 的运行前检查"
+    exit_signal: "非 Native Windows x64、WSL、platform gate blocked、缺 platform_gate_ref、Herdr 缺失或 restart 无法隔离时写 blocked evidence；脚本不会修改生产代码、用户默认 Herdr session 或全局 Herdr server"
     status: pending
   - action: "Herdr schema/status probe：采集 Herdr version/status 和 herdr api schema --json 或等价 schema artifact"
     exit_signal: "schema artifact 存在且 evidence 记录 schema version/ref；schema 不可读时 failure_class 为 schema-mismatch 或 herdr-missing"
@@ -11,18 +11,24 @@ steps:
   - action: "session/pane I/O probe：创建或 attach project-scoped named session，spawn PowerShell pane，发送 sentinel input 并读取/capture sentinel output"
     exit_signal: "operation evidence 同时记录 pane ref、send status、read output match；失败时保留 command refs 和 diagnostic"
     status: pending
-  - action: "provider dry-run pane probe：在独立 pane 启动无凭证 provider/agent dry-run 或 fallback command，验证 spawn/output/exit 或 kill 可观察"
-    exit_signal: "provider pane 有 start/output/exit 或 killed evidence；命令不可用时标 provider-dry-run-unavailable，不伪造 provider parity"
+  - action: "provider CLI dry-run pane probe：在独立 pane 启动无凭证 provider/agent dry-run；provider 不可用时可另跑 fallback terminal smoke"
+    exit_signal: "provider_cli_dry_run 与 fallback_terminal_smoke 分离；fallback 只能导致 partial/blocked 或 provider-dry-run-unavailable，不伪造 provider parity，public_provider_parity_claimed=false"
     status: pending
-  - action: "kill 与 restore semantics probe：kill 一个 pane，验证 pane 关闭可观察，并在已隔离/已授权的 dedicated server 或 isolated socket 上执行 detach/reattach 与 server restart restore 检查"
-    exit_signal: "evidence 明确区分 live detach 进程持续、server restart layout 恢复、输出/history/agent restore 是否可用；未隔离时写 blocked evidence 而不是重启全局 server"
+  - action: "kill pane probe：kill 一个由 spike 创建的 pane，验证 pane 关闭可观察"
+    exit_signal: "kill operation evidence 指向目标 pane，证明未误删 session 或其他 pane"
+    status: pending
+  - action: "detach/reattach identity probe：detach/reattach 独立 named session，验证 session/pane identity 与 live process continuity"
+    exit_signal: "detach evidence 与 server restart evidence 分离，进程持续只适用于 live detach"
+    status: pending
+  - action: "isolated server restart restore probe：只在 dedicated/disposable server 或 isolated socket/config 下执行 server restart restore 检查"
+    exit_signal: "restart_isolation 字段完整；未隔离时写 blocked evidence 而不是重启全局 server"
     status: pending
   - action: "evidence verdict 与 route recommendation：汇总 herdr-contract-spike-evidence.json，给出 continue、continue-with-gaps、stop 或 needs-upstream-issue"
-    exit_signal: "JSON 通过 validator；adapter_recommendation=continue 只在核心 operation 全 pass 且 capability_projection.blocking_gaps 为空时出现"
+    exit_signal: "JSON 通过 validator；adapter_recommendation=continue 只在 host/platform、failure_class、核心 operation、restart isolation、provider_cli_dry_run 和 capability_projection truth table 全部通过时出现"
     status: pending
 
 checks:
-  - item: "非 Native Windows x64、platform gate blocked 或 Herdr 缺失时输出 blocked evidence，不运行 destructive 操作"
+  - item: "非 Native Windows x64、WSL、platform gate blocked、缺 platform_gate_ref 或 Herdr 缺失时输出 blocked evidence，不运行 destructive 操作"
     source: design AC-001 / DOD-IMPL-002
     status: pending
   - item: "Herdr version/status/schema 可追溯，schema artifact 被 evidence 引用"
@@ -34,20 +40,23 @@ checks:
   - item: "PowerShell pane send/read sentinel 成功，operation evidence 包含 pane ref、send status 和 output match"
     source: design AC-004
     status: pending
-  - item: "provider dry-run pane 的 spawn/output/exit 或 kill 可观察；provider unavailable 与 Herdr failure 分离"
+  - item: "provider_cli_dry_run 与 fallback_terminal_smoke 分离；provider unavailable 与 Herdr failure 分离，fallback 不支撑 all-provider parity"
     source: design AC-005 / DOD-IMPL-004
     status: pending
   - item: "kill pane 后关闭可观察，未误删 session 或其他 pane"
     source: design AC-006
     status: pending
-  - item: "detach/reattach 与 server restart restore 被分别记录，不夸大冷启动后的进程存活；restart 只能在 dedicated/disposable server 或 isolated socket/config 下执行"
-    source: design AC-007 / AC-008 / DOD-IMPL-003
+  - item: "detach/reattach 被单独记录，不夸大 server restart 后的进程存活"
+    source: design AC-007 / DOD-IMPL-003
     status: pending
-  - item: "herdr-contract-spike-evidence.json 通过 schema/semantic validator，recommendation 与 operation 状态、capability_projection.blocking_gaps 和 restart_scope 一致"
-    source: design AC-009 / DOD-IMPL-005
+  - item: "server restart 只能在 dedicated/disposable server 或 isolated socket/config 下执行；restart_isolation 包含 server_ref_kind、session_name、socket/config ref、server_identity_before/after、preexisting_sessions_before、created_by_spike、stop_command_ref、cleanup_targets"
+    source: design AC-008 / DOD-IMPL-003
     status: pending
-  - item: "本 feature 不修改 production terminal_runtime、ccbd、provider_backends、package metadata"
-    source: design 明确不做 / DOD-IMPL-001
+  - item: "herdr-contract-spike-evidence.json 通过 schema/semantic validator，recommendation truth table 与 host、operation、provider、restart、capability 状态一致"
+    source: design AC-010 / DOD-IMPL-005
+    status: pending
+  - item: "本 feature 不修改 production terminal_runtime、ccbd、provider_backends、package metadata；resolve_mux_backend(cli_backend='herdr') 仍 invalid-request，production mux contract 不含 herdr-native"
+    source: design AC-009 / DOD-IMPL-001 / DOD-IMPL-006
     status: pending
 
 dod:
@@ -69,17 +78,20 @@ dod:
         - evidence_schema
         - failure_class_semantics
         - artifact_refs
+        - host_platform_gate_required
+        - provider_fallback_split
+        - restart_isolation_required
         - adapter_recommendation_guard
     - id: CMD-004
-      command: "python -m pytest -q test/test_mux_backend_contract.py test/test_terminal_runtime_backend_selection.py"
+      command: "python -m pytest -q test/test_mux_backend_contract.py test/test_terminal_runtime_backend_selection.py test/test_herdr_spike_no_production_route.py"
       core: true
       failure_handling: fix-or-block
-      test_status: existing
+      test_status: mixed
       covers:
         - production_contract_no_change
         - resolver_no_herdr_route_in_spike
     - id: CMD-005
-      command: "python \".codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-backend-contract-spike/run_spike.py\" --session ccb-herdr-spike --isolated-server --out \".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json\""
+      command: "python \".codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-backend-contract-spike/run_spike.py\" --platform-gate-ref \".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json\" --session ccb-herdr-spike --isolated-server --out \".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json\""
       core: true
       manual_core: native_windows_x64_host
       failure_handling: blocked-evidence-if-host-missing-or-restart-not-isolated
@@ -87,10 +99,11 @@ dod:
       covers:
         - native_windows_herdr_spike
         - session_pane_send_capture_kill_restore
-        - provider_dry_run_pane
+        - provider_cli_dry_run_pane
+        - fallback_terminal_smoke_split
         - isolated_restart_scope
     - id: CMD-006
-      command: "python -c \"import json, pathlib; p=pathlib.Path('.codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json'); d=json.loads(p.read_text(encoding='utf-8')); req={'schema_version','feature','generated_at','host','herdr','operations','provider_dry_run','restore','capability_projection','verdict','failure_class','adapter_recommendation','residual_risks','artifact_refs'}; assert req <= d.keys(); assert d['schema_version']==1; assert d['feature']=='2026-07-31-herdr-backend-contract-spike'; assert d['verdict'] in {'pass','partial','blocked','failed'}; assert d['adapter_recommendation'] in {'continue','continue-with-gaps','stop','needs-upstream-issue'}; r=d['restore']; assert r.get('restart_scope') in {'dedicated-disposable-server','isolated-socket','blocked-not-isolated'}; assert r.get('restart_scope')!='blocked-not-isolated' or d['verdict']=='blocked'\""
+      command: "python -m pytest -q test/test_herdr_contract_spike_evidence.py -k \"minimal_machine_check or truth_table\""
       core: true
       failure_handling: fix-or-block
       test_status: new
@@ -99,6 +112,7 @@ dod:
         - residual_risks_required
         - restart_scope_guard
         - capability_projection_guard
+        - recommendation_truth_table
   evidence_required:
     - spike_runbook
     - spike_script

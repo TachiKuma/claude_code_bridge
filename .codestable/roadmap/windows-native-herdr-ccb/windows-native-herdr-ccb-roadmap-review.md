@@ -3,58 +3,95 @@ doc_type: roadmap-review
 roadmap: windows-native-herdr-ccb
 status: passed
 review_state: passed
+review_reason: ""
 created: 2026-07-30
-reviewer: 019fb3a9-e22f-7d23-83dd-88137f91832c
+reviewed: 2026-07-31
+round: 2
+reviewer: 019fb8b8-2b7c-7160-9b3a-f05048a10630
+reviewer_id: 019fb8b8-2b7c-7160-9b3a-f05048a10630
 tags: [windows, native-windows, herdr, x64, roadmap-review]
 ---
 
 # windows-native-herdr-ccb roadmap 审查报告
 
-## 审查对象
+## 1. Scope And Inputs
 
 - Roadmap: `.codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-roadmap.md`
 - Items: `.codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml`
-- Brainstorm: `.codestable/brainstorms/windows-native-herdr-ccb/brainstorm.md`
-- Feasibility: `.codestable/brainstorms/windows-native-herdr-ccb/feasibility-report.md`
+- Requirement: `.codestable/requirements/native-windows-ccb-via-herdr.md`
+- Related docs: `.codestable/brainstorms/windows-native-herdr-ccb/brainstorm.md`, `.codestable/brainstorms/windows-native-herdr-ccb/feasibility-report.md`, `.codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-roadmap.md`
+- Feature docs checked: 11 个 child feature design / checklist / design-review frontmatter
+- Code facts checked: none，本轮为 requirement-driven roadmap/design 文档重审
 
-## 结论
+### Independent Review
 
-`review_state: passed`。
+- Status: completed
+- Detection: independent-agent
+- Provider / agent: Pauli `019fb8b8-2b7c-7160-9b3a-f05048a10630`
+- Raw output: 独立 reviewer 返回 blocking none、2 个 important、1 个 nit、1 个 suggestion 和 residual risks
+- Merge policy: 主 agent 已逐条按 roadmap/items/design-review 文件事实核验并修复 important / suggestion
+- Gate effect: roadmap review passed；child design-review 仍保持 `changes-requested`，需要后续逐项重审
 
-该 roadmap 适合 epic，不是 single feature / brainstorm。模块拆分和接口契约整体足够 deep，可作为后续 feature-design 的硬约束。Herdr / Native Windows x64 / `os=win32,cpu=x64` 口径一致。CCB authority 与 Herdr terminal primitive 边界清楚，双 authority 风险已被 provider completion、agent state、recovery owner contract 显式约束。
+## 2. Roadmap Summary
 
-## Findings
+- Goal completion signal: 以用户自备 Herdr 的全能力 parity 为基础，让 Native Windows x64 达到 CCB supported。
+- Hard gates: strict CCB `v8.5.2` 源头新分支、Native Windows 直接路由 Herdr、所有公开 provider 的 `ask/pend/completion/cancel`、Mobile terminal、Config UI、Herdr auto restore disabled、Windows npm install dry-run。
+- Module split: platform gate、Herdr spike、backend contract/client、ccbd namespace、provider runtime、recovery、user surfaces、release surface、validation matrix、supportability projection。
+- Items: 11 个 item；`herdr-backend-contract-spike` 是唯一 minimal loop；items.yaml 为 DAG，无未知依赖。
 
-### Blocking
+## 3. Findings
+
+### blocking
 
 none
 
-### Important
+### important
 
-- RMR-001：Goal Coverage Matrix 对 `watch` 的覆盖偏粗。
-  - 处理：已补 `watch` 独立覆盖行，要求由 `provider-runtime-on-herdr`、`herdr-user-surfaces-parity`、`native-windows-public-workflow-validation-matrix` 共同覆盖，并以 Native Windows x64 watch transcript / streaming evidence 验证。
+- [x] RMR-001 `.codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-roadmap.md#5` roadmap §5 的人工状态摘要仍写 `planned` / `未启动`，与 items.yaml 中 11 个 `in-progress` feature 指针冲突。
+  - Evidence: 独立 reviewer 指出 roadmap §5 与 `.codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml` 不一致。
+  - Impact: 人工 review 可能误判 child design 尚未生成。
+  - Fix: 已把 11 个 child 的状态改为 `in-progress`，并填入对应 `2026-07-31-*` feature 目录。
 
-- RMR-002：`windows-x64-v852-baseline-gate` 与 `windows-x64-release-surface` 的 install/update/doctor/package gate 边界有轻微重叠。
-  - 处理：已明确 baseline gate 只产出 platform gate contract、版本/位宽探测和 startup/doctor 基础诊断；release surface 只消费该 gate 做 npm metadata、install/update、native helper packaging、release-surface projection 和 support 文档。
+- [x] RMR-002 11 个 child design-review frontmatter 已是 `changes-requested`，但正文 verdict/gate effect 仍可读成当前 `passed`。
+  - Evidence: 独立 reviewer 指出多个 `*-design-review.md` 的 `Status: passed` / gate effect 文案残留。
+  - Impact: 人工读者可能误把旧 review 当作当前可批准依据。
+  - Fix: 已把 11 个 child design-review 正文 gate effect / verdict 改为 superseded / changes-requested；frontmatter 保持 `changes-requested`。
 
-- RMR-003：最小 spike 相比 feasibility input 少写 `kill_pane` / provider CLI dry run。
-  - 处理：已把 spike 范围扩展为 session/pane/send/capture/kill/restore 和 provider CLI dry-run pane；仍不要求完整 provider parity。
+### nit
 
-### Nit
+- [x] RMR-003 旧 roadmap review findings 段会与当前 `changes-requested` 混淆。
+  - Fix: 已用本轮 review 报告替换旧报告，仅保留当前审查结论。
 
-- RMR-004：`WindowsHerdrPublicWorkflowEvidence.workflows` 是自由 dict。
-  - 处理：已增加 `required_workflows` 最低 key set，包含 `ccb`、`ask`、`pend`、`watch`、`ping`、`mounted`、`kill`、`restart`、`reload`、`foreground_attach`、`mobile_terminal`、`config_ui`、`doctor_update`、`support_projection`。后续 feature-design 可继续将 `workflows` 收紧为枚举 key。
+### suggestion
 
-## 机械检查
+- [x] RMR-004 roadmap §4.7 应明确 `public_providers` 的来源。
+  - Fix: 已补充 `public_providers` 必须来自当前公开 provider catalog，或 acceptance 冻结清单；新增公开 provider 后必须进入 provider workflow rows。
 
-- items 数量：11
-- `minimal_loop: true`：恰好一条，`herdr-backend-contract-spike`
-- 依赖检查：无未知依赖
-- DAG 检查：无循环
-- YAML 校验：roadmap frontmatter 通过，items YAML 通过
+## 4. User Review Focus
 
-## Residual Risk
+- 用户需要重点拍板：是否接受 strict `v8.5.2` 源头新分支、Native Windows 直路由 Herdr、all-provider、Mobile/Config、auto-restore disabled 和 npm install dry-run 作为 supported 硬门槛。
+- 后续 feature-design 需要重点复核：11 个 child design-review 已被 requirement update 取代，必须重新审查后才能进入 all-feature-designs 统一确认。
+- 不能靠 roadmap review 完全确认的点：Herdr socket API/schema、Herdr auto restore 是否可关闭、所有公开 provider 凭证/CLI 可用性、专用 Windows x64 真机 transcript。
 
-- Herdr 版本与 socket API schema 尚未锁定，正式 implementation 前仍需要 spike 证据。
-- 当前工作区 `package.json` 显示 `8.2.1`，实现前必须选择 `v8.5.2` tag 或同步等价基线。
-- Native Windows x64 真机证据不可由 WSL/Linux 替代。
+## 5. Evidence Confidence Ledger
+
+| Check | Verdict | Evidence Class | Basis | Follow-up |
+|---|---|---|---|---|
+| Granularity Gate | pass | E | roadmap §2 明确跨平台、backend、provider、UI、release/support 多模块 | none |
+| Goal Coverage Matrix | pass | E | roadmap Goal Coverage Matrix 覆盖 strict v8.5.2、Herdr、all-provider、Mobile/Config、recovery、npm dry-run、supportability | child design-review 复核 |
+| DAG and minimal loop | pass | E | items.yaml 11 个 item，无未知依赖；`herdr-backend-contract-spike` 唯一 minimal loop | none |
+| Interface contract usability | pass | E | roadmap §4 写到 TypedDict / Literal / failure reason / hard gate 级别 | child design-review 复核 |
+| Module interface depth | pass | E | backend selection、Mux V2、Herdr client、provider runtime、recovery、workflow evidence 均有 owner/seam 说明 | none |
+
+Summary: E=5, C=0, H=0, H-only core checks=none。
+
+## 6. Residual Risk
+
+- Herdr socket API/schema 尚未锁定；roadmap 已用 spike 和 schema gate 管控，但实现前仍是外部事实风险。
+- 当前工作区不是 strict `v8.5.2` 实现基线；实现前必须从 CCB 源头拉取 `v8.5.2` 并新建分支。
+- all-provider 真机 transcript 依赖 Windows x64 主机、Herdr 和各 provider 凭证；缺任一项只能 blocked，不能 supported。
+
+## 7. Verdict
+
+- Status: passed
+- Next: 进入 child design-review 重审；全部通过后再请求 all-feature-designs 统一确认。

@@ -3,9 +3,10 @@ doc_type: roadmap
 slug: windows-native-herdr-ccb
 status: active
 created: 2026-07-30
-last_reviewed: 2026-07-30
+last_reviewed: 2026-07-31
 tags: [windows, native-windows, herdr, x64, mux-backend, public-workflow-parity]
-related_requirements: []
+related_requirements:
+  - .codestable/requirements/native-windows-ccb-via-herdr.md
 related_architecture:
   - .codestable/brainstorms/windows-native-herdr-ccb/brainstorm.md
   - .codestable/brainstorms/windows-native-herdr-ccb/feasibility-report.md
@@ -16,7 +17,7 @@ related_architecture:
 
 ## 1. 背景
 
-owner 已明确暂停 `windows-rmux-ux-parity-hardening`，转向以 CCB `v8.5.2` 为基底探索 Native Windows 全功能路线。这里的“全功能”不表示复刻 Herdr/Unix 的所有能力，而是 CCB public workflow parity：`ccb`、`ask`、`pend`、`watch`、`ping`、`mounted`、`kill`、`restart`、`reload`、foreground attach、Mobile terminal、Config UI、doctor/update/support projection 在 Native Windows 上具备可验证的等价工作流。
+owner 已明确暂停 `windows-rmux-ux-parity-hardening`，转向以 CCB `v8.5.2` 为严格源头基线规划 Native Windows supported 路线。本 roadmap 现在绑定 draft requirement `.codestable/requirements/native-windows-ccb-via-herdr.md`：目标是在 Native Windows x64 上以用户自备 Herdr 的全能力 parity 为基础，让 CCB 的公开工作流达到 Windows x64 CCB supported。这里的“全能力 parity”指 Herdr 需要提供 CCB 所需 terminal primitive 的完整能力证据；CCB 的 authority 边界仍保留在 control plane、provider runtime、completion、queue/cancellation、Mobile、release/update 和 support tier。公开工作流覆盖 `ccb`、所有公开 provider 的 `ask`、`pend`、completion、cancel、`watch`、`ping`、`mounted`、`kill`、`restart`、`reload`、foreground attach、Mobile terminal、Config UI、doctor/update/support projection。
 
 Herdr 的价值在于它已经面向 agentic terminal multiplexer，具备 Windows beta、ConPTY pane、session/pane、socket API、session restore 与 agent state 观察能力。CCB 的价值仍在 control plane、provider runtime authority、completion、queue/cancellation、Mobile、release/update 和 support tier。推荐路线不是把 CCB 重写成 Herdr 插件，而是在 CCB 内新增 Herdr Native Windows backend。
 
@@ -26,12 +27,12 @@ Herdr 的价值在于它已经面向 agentic terminal multiplexer，具备 Windo
 
 ### 本 roadmap 覆盖
 
-- 以 CCB `v8.5.2` tag / release-equivalent 基线为实现起点，建立 Native Windows x64-only gate。
+- 以严格 CCB `v8.5.2` 源头为实现起点，并在开工前从 CCB 源头拉取后新建分支；当前工作区状态不得作为实现基线。
 - 通过 Herdr socket API spike 验证 CCB 所需 session/pane/send/capture/restore 最小语义。
 - 将现有 mux backend contract 从 tmux/rmux 语义扩展为可承载 Herdr native backend 的小协议集合。
 - 实现 Herdr backend client、capability gate、namespace lifecycle、pane IO、foreground attach 和 terminal snapshot integration。
 - 保留 CCB 对 provider state、completion、queue、cancellation、bounded recovery、diagnostics、Mobile、Config UI、update 的权威边界。
-- 建立 Native Windows public workflow validation matrix，并把 support tier 明确投影为 beta/experimental 直到矩阵通过。
+- 建立 Native Windows public workflow validation matrix；只有 strict `v8.5.2`、Herdr capability、所有公开 provider、Mobile/Config UI、release dry-run 和 recovery owner 证据全部通过后，才允许 support tier 投影为 `supported`。
 
 ### 明确不做
 
@@ -40,7 +41,7 @@ Herdr 的价值在于它已经面向 agentic terminal multiplexer，具备 Windo
 - 不把 Herdr agent detection 作为 CCB provider completion / health 的唯一权威；它只能进入 evidence/diagnostics。
 - 不把 CCB control plane、provider completion、Mobile relay 或 update/support tier 重写成 Herdr 插件。
 - 不承诺 Herdr Windows beta 不支持的 remote/live handoff/fd handoff/process group 等能力达到 Unix parity。
-- 不在本 roadmap 内发布 npm、push、release 或 promotion；发布动作仍需独立授权。
+- 不在本 roadmap 内发布 npm、push、release 或 promotion；Windows npm 目标只到代码层 `npm install` dry-run / `npm pack --dry-run` 证据，真实发布动作仍需独立授权。
 
 ### Granularity Gate
 
@@ -49,13 +50,13 @@ Herdr 的价值在于它已经面向 agentic terminal multiplexer，具备 Windo
 | 为什么不是 single feature | 该需求横跨平台基线、mux contract、Herdr socket adapter、ccbd namespace、provider runtime、bounded recovery、Mobile/Config UI、packaging/update/support 和真实 Windows x64 验证矩阵。 |
 | 为什么不是 brainstorm | 方向已经明确：Herdr 作为 Native Windows backend，CCB 保持 control plane/provider authority；剩余问题是拆解、契约和验证路径。 |
 | roadmap 边界 | 只覆盖 CCB public workflow parity 的 Native Windows x64 Herdr backend；不做 32-bit/arm64/remote handoff/Herdr 插件化路线。 |
-| 最小闭环 | `herdr-backend-contract-spike` 完成后，用 Python/CCB 侧客户端通过 Herdr socket API 创建 session/pane、发送输入、捕获输出并验证 restore identity，证明路线值得继续。 |
+| 最小闭环 | `herdr-backend-contract-spike` 完成后，用 Python/CCB 侧客户端通过 Herdr socket API 创建 session/pane、发送输入、捕获输出、kill pane 并验证 restore identity，证明 Herdr 能提供 CCB 所需 terminal primitive；它不代表 Windows supported。 |
 
 ## 3. 模块拆分（概设）
 
 ```text
 windows-native-herdr-ccb
-├── Platform Baseline Gate：v8.5.2 与 Windows x64 全链路准入
+├── Platform Baseline Gate：strict v8.5.2 源头/新分支与 Windows x64 全链路准入
 ├── Herdr Contract Spike：Herdr socket API 与 CCB 最小 mux 语义验证
 ├── Backend Contract V2：把既有 tmux/rmux MuxBackend 扩展到 Herdr native backend
 ├── Herdr Backend Client：Herdr socket client、capability gate、error/evidence 归一
@@ -66,9 +67,9 @@ windows-native-herdr-ccb
 └── Validation & Support：Native Windows public workflow matrix、packaging、docs、support tier
 ```
 
-### Platform Baseline Gate · v8.5.2 与 Windows x64 准入
+### Platform Baseline Gate · strict v8.5.2 与 Windows x64 准入
 
-- **职责**：确认实现基线为 CCB `v8.5.2`，并在 install/startup/doctor 中建立 Windows x64-only gate。
+- **职责**：确认实现基线严格来自 CCB `v8.5.2` 源头并已在新分支上推进，同时在 install/startup/doctor 中建立 Windows x64-only gate。
 - **承载的子 feature**：`windows-x64-v852-baseline-gate`
 - **触碰的现有代码 / 模块**：`package.json`、`bin/ccb-npm-install.js`、install/update/versioning、managed Python bootstrap、doctor/startup diagnostics。
 - **Depth 判断**：deep。它把“win32 是 OS 名称、x64 是位宽”的平台事实集中到一个准入 gate，避免每条 feature 各自判断位宽。
@@ -104,28 +105,28 @@ windows-native-herdr-ccb
 
 ### Provider Runtime Integration · provider 工作流
 
-- **职责**：让 Codex/Claude/Gemini/Opencode 等 provider 在 Herdr pane 内按 CCB 既有隔离与 completion contract 工作。
+- **职责**：让所有公开 provider 在 Herdr pane 内按 CCB 既有隔离与 `ask`/`pend`/completion/cancel contract 工作。
 - **承载的子 feature**：`provider-runtime-on-herdr`
 - **触碰的现有代码 / 模块**：`lib/cli/services/runtime_launch_runtime/*`、`lib/provider_backends/*` launcher/session/comm、pane log support、dispatcher runtime。
 - **Depth 判断**：deep。CCB public workflow parity 的核心是 ask/pend/completion 可信，不是单纯 pane 能启动。
 
 ### Recovery Boundary · 单一恢复 owner
 
-- **职责**：对齐 CCB v8.5.2 bounded pane recovery 与 Herdr session restore，避免 CCB 和 Herdr 双重 respawn。
+- **职责**：对齐 CCB v8.5.2 bounded pane recovery 与 Herdr session restore，避免 CCB 和 Herdr 双重 respawn；Herdr auto restore 不能关闭时直接阻塞 recovery/supported 路径。
 - **承载的子 feature**：`herdr-bounded-recovery-boundary`
 - **触碰的现有代码 / 模块**：`lib/ccbd/services/dispatcher_runtime/lifecycle_start_runtime/recovery_runtime/*`、health monitor、runtime records、Herdr backend diagnostics。
 - **Depth 判断**：deep。恢复路径是高风险状态机；必须有单一 owner 和 durable circuit evidence。
 
 ### User Surfaces · 用户可见面
 
-- **职责**：把 Herdr backend evidence 投影到 foreground attach、Mobile terminal snapshot、Config UI、doctor、ping、mounted、project view。
+- **职责**：把 Herdr backend evidence 投影到 foreground attach、Mobile terminal snapshot、Config UI、doctor、ping、mounted、project view；Mobile terminal 与 Config UI 是 supported hard gate。
 - **承载的子 feature**：`herdr-user-surfaces-parity`
 - **触碰的现有代码 / 模块**：foreground attach、mobile terminal gateway、Config UI launcher、ping/project-view/doctor render。
 - **Depth 判断**：deep。public workflow parity 必须用户可见、可诊断，而不是仅 backend API 可用。
 
 ### Validation & Support · 验证、发布面、支持等级
 
-- **职责**：建立 Native Windows x64 validation matrix、npm `os=win32,cpu=x64` package gate、install/update/doctor/docs/support projection。
+- **职责**：建立 Native Windows x64 validation matrix、npm `os=win32,cpu=x64` package gate、install/update/doctor/docs/support projection；Windows npm 只要求代码层 install dry-run，不授权 publish。
 - **承载的子 feature**：`windows-x64-release-surface`, `native-windows-public-workflow-validation-matrix`, `herdr-supportability-projection`
 - **触碰的现有代码 / 模块**：`package.json`、install/update scripts、CI/release docs、README、doctor/support bundle。
 - **Depth 判断**：deep。支持等级必须由证据驱动，不由单机成功或文档声明驱动。
@@ -146,6 +147,9 @@ class WindowsX64PlatformGate(TypedDict):
     cpu_arch: Literal["x64"]
     node_arch: Literal["x64"]
     python_bitness: Literal["64bit"]
+    ccb_source_ref: str
+    ccb_branch_ref: str
+    ccb_source_status: Literal["strict-v8.5.2", "not-v8.5.2", "unknown"]
     herdr_arch: Literal["x64"]
     helper_arch: dict[str, Literal["x64", "missing", "unknown"]]
     supported: bool
@@ -164,6 +168,7 @@ class WindowsX64PlatformGate(TypedDict):
 
 - `os_platform="win32"` 只表示 Node/npm Windows 平台名；不得据此接受 32-bit Windows。
 - `supported=true` 必须同时满足 Node x64、Python 64-bit、Herdr x64、CCB native helper x64。
+- implementation admission 必须证明 `ccb_source_status="strict-v8.5.2"`，且 `ccb_source_ref` 指向 CCB `v8.5.2` 源头、`ccb_branch_ref` 指向新建实现分支；当前工作区状态只能产生 blocked/default 证据。
 - 32-bit / WOW64 / arm64 native 路径必须 fail closed，并在 doctor/startup 显示 actionable diagnostic。
 - npm metadata 使用 `os: ["win32"]` 与 `cpu: ["x64"]`；文档必须解释 `win32` 不是 32-bit。
 
@@ -199,7 +204,8 @@ class MuxBackendSelectionV2(TypedDict):
 **约束**：
 
 - 既有 `runtime.mux.backend = "tmux" | "rmux" | "auto"` 需要通过 update 扩展为 `"tmux" | "rmux" | "herdr" | "auto"`。
-- Windows x64 上只有 Herdr spike/capability 通过后，`auto` 才允许选择 Herdr；显式 `herdr` 缺 capability 时 fail fast。
+- Native Windows x64 检测通过后，`auto` / platform default 必须直接路由到 Herdr；Herdr 缺失、版本/schema 不匹配、能力不足或用户未安装时 fail closed 并给出 actionable diagnostic，不得 fallback 成 tmux/rmux 成功。
+- 显式 `herdr` 缺 capability 时 fail fast；显式 tmux/rmux 在 Native Windows supported 路径外处理，不能作为 Windows supported 的替代证据。
 - Linux/macOS/WSL 默认仍保持 tmux；本 roadmap 不改变非 Windows 默认 backend。
 - Herdr 不能伪装为 `backend_family="tmux-family"`；需要兼容旧 payload 时只在 adapter boundary 投影 legacy alias。
 
@@ -352,7 +358,7 @@ class HerdrProviderCompletionEvidence(TypedDict):
 ```python
 class HerdrRecoveryPolicy(TypedDict):
     owner: Literal["ccb"]
-    herdr_auto_restore_mode: Literal["observe-only", "disabled", "unsupported"]
+    herdr_auto_restore_mode: Literal["disabled"]
     probation_seconds: int
     backoff_schedule_seconds: list[int]
     circuit_threshold: int
@@ -373,7 +379,7 @@ class HerdrRecoveryEvidence(TypedDict):
 - CCB 是唯一 recovery owner；Herdr restore 只能作为 CCB 调用的 backend operation 或 evidence source。
 - raw restore token 只允许进入 CCB 发起的 private backend operation；public event、diagnostics、project view、logs 和 support evidence 只能输出 `restore_token_present` / ref，不得输出 token 值。
 - v8.5.2 的 90 秒 probation、bounded crash logs、backoff/circuit 语义必须保留。
-- Herdr 自身自动恢复若无法关闭，必须以 diagnostics 证明不会与 CCB respawn 冲突；否则该 capability blocked。
+- Herdr 自身自动恢复必须可关闭并由 evidence 证明 `herdr_auto_restore_mode="disabled"`；`observe-only`、`unsupported` 或 `unknown` 最多进入 diagnostics/blocked evidence，不能进入 recovery-capable 或 Windows supported 路径。
 
 ### 4.7 Public Workflow Evidence
 
@@ -389,6 +395,8 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
     cpu_arch: Literal["x64"]
     ccb_version: Literal["8.5.2"]
     herdr_version: str
+    ccb_source_status: Literal["strict-v8.5.2", "blocked", "unknown"]
+    herdr_auto_restore_mode: Literal["disabled", "observe-only", "unsupported", "unknown"]
     workflows: dict[str, Literal["pass", "partial", "blocked", "failed", "not-run"]]
     required_workflows: list[Literal[
         "ccb",
@@ -406,6 +414,11 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
         "doctor_update",
         "support_projection",
     ]]
+    public_providers: list[str]
+    provider_workflow_rows: dict[str, dict[Literal["ask", "pend", "completion", "cancel"], Literal["pass", "partial", "blocked", "failed", "not-run"]]]
+    mobile_terminal_status: Literal["pass", "partial", "blocked", "failed", "not-run"]
+    config_ui_status: Literal["pass", "partial", "blocked", "failed", "not-run"]
+    windows_npm_install_dry_run_status: Literal["pass", "partial", "blocked", "failed", "not-run"]
     beta_gaps: list[str]
     residual_risks: list[str]
     artifacts: dict[str, str]
@@ -414,89 +427,90 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
 
 **约束**：
 
-- `support_tier="supported"` 需要 core workflows 全部 `pass` 且无 blocking beta gaps。
+- `support_tier="supported"` 需要 core workflows 全部 `pass`、所有公开 provider 的 `ask/pend/completion/cancel` 全部 `pass`、Mobile terminal 与 Config UI 均 `pass`、`windows_npm_install_dry_run_status="pass"`、`ccb_source_status="strict-v8.5.2"`、`herdr_auto_restore_mode="disabled"` 且无 blocking beta gaps。
+- `public_providers` 必须来自当前公开 provider catalog，或在 acceptance 中冻结一份可审计 provider 清单；新增公开 provider 后必须进入 provider workflow rows，不能沿用旧 supported evidence。
 - `required_workflows` 是最低 key set；feature-design 可扩展，但不得删减上述 public workflow key。
 - `partial` / `blocked` 不得被 README、doctor、installer 描述为 full support。
-- evidence 必须由 Native Windows x64 真机或明确标注的 Windows runner 产出；WSL/Linux 证据不能替代。
+- evidence 必须由专用 Native Windows x64 真机或明确标注的 Windows runner 产出；本项目当前所在机器是目标 Windows x64 验证主机。WSL/Linux 证据不能替代。
 
 ## 5. 子 feature 清单
 
 1. **windows-x64-v852-baseline-gate** — 建立 CCB `v8.5.2` + Native Windows x64-only 准入和诊断。
    - 所属模块：Platform Baseline Gate
    - 依赖：无
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：只产出 platform gate contract、版本/位宽探测和 startup/doctor 基础诊断；必须解释 `os=win32,cpu=x64`；当前工作区显示 `8.2.1`，实现前需切到 `v8.5.2` 或同步等价基线。
+   - 状态：in-progress
+   - 对应 feature：`2026-07-31-windows-x64-v852-baseline-gate`
+   - 备注：只产出 platform gate contract、版本/位宽探测和 startup/doctor 基础诊断；必须解释 `os=win32,cpu=x64`；implementation admission 必须证明从 CCB `v8.5.2` 源头拉取并在新分支推进，当前工作区状态只能 blocked/default。
 
 2. **herdr-backend-contract-spike** — 用 Herdr socket API 验证 session/pane/send/capture/kill/restore 与 provider dry-run pane 最小语义。
    - 所属模块：Herdr Contract Spike
    - 依赖：`windows-x64-v852-baseline-gate`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：只写 spike 与 evidence，不改生产代码；必须覆盖 `kill_pane` 和一个 provider CLI dry-run pane，但不要求完整 provider parity；失败则停止 adapter 线并记录缺口。
+   - 状态：in-progress
+   - 对应 feature：`2026-07-31-herdr-backend-contract-spike`
+   - 备注：只写 spike 与 evidence，不改生产代码；必须覆盖 `kill_pane` 和一个 provider CLI dry-run pane，但不代表所有公开 provider parity；失败则停止 adapter 线并记录缺口。
 
 3. **mux-backend-contract-herdr-v2** — 将既有 mux 小协议升级到 `tmux` / `rmux` / `herdr` 共存，并保留 legacy compatibility。
    - 所属模块：Backend Contract V2
    - 依赖：`herdr-backend-contract-spike`
-   - 状态：planned
-   - 对应 feature：未启动
+   - 状态：in-progress
+   - 对应 feature：`2026-07-31-mux-backend-contract-herdr-v2`
    - 备注：Herdr 不得伪装成 tmux-family；fake backend 必须能覆盖 Herdr refs/error/capability。
 
 4. **herdr-backend-client** — 实现 Herdr socket client、schema/version gate、capability/error/evidence 映射。
    - 所属模块：Herdr Backend Client
    - 依赖：`mux-backend-contract-herdr-v2`
-   - 状态：planned
-   - 对应 feature：未启动
+   - 状态：in-progress
+   - 对应 feature：`2026-07-31-herdr-backend-client`
    - 备注：缺 schema 或 Windows beta gap 时 fail closed。
 
 5. **ccbd-herdr-namespace-lifecycle** — 把 Herdr backend 接入 ccbd project namespace、layout、foreground attach、kill/restart/reload。
    - 所属模块：CCBD Namespace Integration
    - 依赖：`herdr-backend-client`
-   - 状态：planned
-   - 对应 feature：未启动
+   - 状态：in-progress
+   - 对应 feature：`2026-07-31-ccbd-herdr-namespace-lifecycle`
    - 备注：ccbd 仍是 authority；Herdr session/pane 是 terminal backend evidence。
 
-6. **provider-runtime-on-herdr** — 让 provider 启动、`ask`、`pend`、completion、cancellation 在 Herdr pane 中按 CCB 语义工作。
+6. **provider-runtime-on-herdr** — 让所有公开 provider 的启动、`ask`、`pend`、completion、cancel 在 Herdr pane 中按 CCB 语义工作。
    - 所属模块：Provider Runtime Integration
    - 依赖：`ccbd-herdr-namespace-lifecycle`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：Herdr agent state 不能单独判定 completion。
+   - 状态：in-progress
+   - 对应 feature：`2026-07-31-provider-runtime-on-herdr`
+   - 备注：Codex/Claude/Gemini/Opencode 等当前公开 provider set 都必须覆盖；任一 provider 未通过或未给 blocked evidence 时不得进入 supported。
 
 7. **herdr-bounded-recovery-boundary** — 对齐 CCB v8.5.2 bounded recovery 与 Herdr restore，避免双重恢复。
    - 所属模块：Recovery Boundary
    - 依赖：`provider-runtime-on-herdr`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：保留 90 秒 probation、backoff、crash record bound、durable circuit。
+   - 状态：in-progress
+   - 对应 feature：`2026-07-31-herdr-bounded-recovery-boundary`
+   - 备注：保留 90 秒 probation、backoff、crash record bound、durable circuit；Herdr auto restore 不能关闭或不能证明 disabled 时直接阻塞 recovery-capable/supported。
 
 8. **herdr-user-surfaces-parity** — 将 Herdr evidence 投影到 foreground attach、Mobile terminal、Config UI、doctor、ping、mounted、project view。
    - 所属模块：User Surfaces
    - 依赖：`provider-runtime-on-herdr`, `herdr-bounded-recovery-boundary`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：用户可见面必须展示 beta gaps 和 actionable diagnostics。
+   - 状态：in-progress
+   - 对应 feature：`2026-07-31-herdr-user-surfaces-parity`
+   - 备注：用户可见面必须展示 beta gaps 和 actionable diagnostics；Mobile terminal 与 Config UI degraded/partial 时不得进入 supported。
 
 9. **windows-x64-release-surface** — 补齐 npm `os=win32,cpu=x64`、managed Python、native helper、install/update/doctor gate。
    - 所属模块：Validation & Support
    - 依赖：`windows-x64-v852-baseline-gate`, `herdr-user-surfaces-parity`
-   - 状态：planned
-   - 对应 feature：未启动
-   - 备注：消费 `windows-x64-v852-baseline-gate` 的 platform gate，不重新实现位宽探测；不发布、不 promotion；只建立 release surface 和 gate。
+   - 状态：in-progress
+   - 对应 feature：`2026-07-31-windows-x64-release-surface`
+   - 备注：消费 `windows-x64-v852-baseline-gate` 的 platform gate，不重新实现位宽探测；不发布、不 promotion；只建立 release surface 和 code-level Windows `npm install` dry-run gate。
 
 10. **native-windows-public-workflow-validation-matrix** — 覆盖 CCB public workflow parity 的 Native Windows x64 真机验证矩阵。
     - 所属模块：Validation & Support
     - 依赖：`windows-x64-release-surface`, `herdr-user-surfaces-parity`
-    - 状态：planned
-    - 对应 feature：未启动
-    - 备注：必须覆盖 `ccb`、`ask`、`pend`、`watch`、`ping`、`mounted`、`kill`、`restart`、`reload`、foreground attach、Mobile terminal、Config UI、doctor/update。
+    - 状态：in-progress
+    - 对应 feature：`2026-07-31-native-windows-public-workflow-validation-matrix`
+    - 备注：必须覆盖 `ccb`、`watch`、`ping`、`mounted`、`kill`、`restart`、`reload`、foreground attach、Mobile terminal、Config UI、doctor/update，以及所有公开 provider 在 Herdr pane 下的 `ask`、`pend`、completion、cancel。
 
 11. **herdr-supportability-projection** — 将 validation evidence 汇总到 support tier、README/docs、doctor 和 residual risk。
     - 所属模块：Validation & Support
     - 依赖：`native-windows-public-workflow-validation-matrix`
-    - 状态：planned
-    - 对应 feature：未启动
-    - 备注：core workflows 未全 pass 前只能是 experimental/beta，不得宣称 supported。
+    - 状态：in-progress
+    - 对应 feature：`2026-07-31-herdr-supportability-projection`
+    - 备注：core workflows、所有公开 provider、Mobile/Config UI、Herdr auto restore disabled、strict `v8.5.2`、Windows npm install dry-run 未全 pass 前只能是 experimental/beta/unsupported，不得宣称 supported。
 
 **最小闭环**：第 2 条 `herdr-backend-contract-spike` 做完后，能够在 Native Windows x64 上通过 Herdr socket API 证明 CCB 最小 backend 语义可行；它不代表 public workflow parity 完成，只决定是否继续投入正式 adapter。
 
@@ -504,46 +518,47 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
 
 | Goal / completion signal | Covered by item(s) | Verification entry | Evidence type | Core? |
 |---|---|---|---|---|
-| CCB 基线确认为 `v8.5.2` 且平台为 Windows x64-only | `windows-x64-v852-baseline-gate` | version/package/platform gate tests + doctor output | unit/CLI evidence | yes |
+| CCB 基线严格来自 `v8.5.2` 源头、新分支推进，且平台为 Windows x64-only | `windows-x64-v852-baseline-gate` | source/ref/branch admission + version/package/platform gate tests + doctor output | unit/CLI/source evidence | yes |
 | Herdr socket API 能创建 session/pane、发送输入、捕获输出、kill pane、恢复 identity，并启动一个 provider dry-run pane | `herdr-backend-contract-spike` | spike script on Native Windows x64 | spike evidence JSON | yes |
 | Herdr backend 不伪装 tmux-family，调用层只依赖小协议 | `mux-backend-contract-herdr-v2` | contract/fake backend tests | unit/diff review | yes |
 | Herdr socket schema/version/capability 缺口 fail closed | `herdr-backend-client` | client tests + schema mismatch fixture | unit evidence | yes |
 | `ccb` project namespace 能由 Herdr backend 创建、attach、kill、restart、reload | `ccbd-herdr-namespace-lifecycle` | Windows foreground/manual + focused pytest | command/manual transcript | yes |
-| `ask` / `pend` / completion 在 Herdr pane 中保持 CCB provider authority | `provider-runtime-on-herdr` | provider-specific focused tests + real provider dry run | pytest/runtime evidence | yes |
+| 所有公开 provider 的 `ask` / `pend` / completion / cancel 在 Herdr pane 中保持 CCB provider authority | `provider-runtime-on-herdr`, `native-windows-public-workflow-validation-matrix` | provider-specific focused tests + per-provider Native Windows transcript matrix | pytest/runtime/manual evidence | yes |
 | `watch` 能在 Herdr pane 工作流中持续显示 streaming/output/cancellation 状态，且不会把 Herdr agent state 当 completion authority | `provider-runtime-on-herdr`, `herdr-user-surfaces-parity`, `native-windows-public-workflow-validation-matrix` | watch transcript on Native Windows x64 | streaming transcript / runtime evidence | yes |
-| pane/provider crash recovery 保留 v8.5.2 bounded semantics | `herdr-bounded-recovery-boundary` | recovery tests + crash evidence | pytest/evidence JSON | yes |
-| Mobile terminal、Config UI、doctor/ping/mounted/project view 可见且可诊断 | `herdr-user-surfaces-parity` | mobile gateway tests + CLI render tests + manual UI check | test/manual evidence | yes |
-| npm/install/update 能表达 `os=win32,cpu=x64` 且不接受 32-bit 链路 | `windows-x64-release-surface` | package dry run + install/update tests | command/diff evidence | yes |
-| public workflow parity matrix 全部核心项有 pass/partial/blocked 证据 | `native-windows-public-workflow-validation-matrix` | validation matrix runner | evidence JSON | yes |
-| support tier 不夸大 beta/unsupported gaps | `herdr-supportability-projection` | docs/doctor/support projection tests | diff/CLI render evidence | yes |
+| pane/provider crash recovery 保留 v8.5.2 bounded semantics，且 Herdr auto restore 可证明 disabled | `herdr-bounded-recovery-boundary` | recovery tests + auto-restore-disabled evidence + crash evidence | pytest/evidence JSON | yes |
+| Mobile terminal、Config UI、doctor/ping/mounted/project view 可见且可诊断，Mobile/Config 不 degraded | `herdr-user-surfaces-parity`, `native-windows-public-workflow-validation-matrix` | mobile gateway tests + Config UI tests + CLI render tests + manual UI transcript | test/manual evidence | yes |
+| npm/install/update 能表达 `os=win32,cpu=x64` 且不接受 32-bit 链路，Windows npm install dry-run 通过 | `windows-x64-release-surface` | package dry run + npm install dry-run + install/update tests | command/diff evidence | yes |
+| public workflow parity matrix 全部核心项与所有公开 provider 行有 pass/partial/blocked 证据 | `native-windows-public-workflow-validation-matrix` | validation matrix runner + provider workflow rows | evidence JSON | yes |
+| support tier 不夸大 beta/unsupported gaps，且仅在所有 hard gate 通过时输出 supported | `herdr-supportability-projection` | docs/doctor/support projection tests | diff/CLI render evidence | yes |
 
 ## 6. 排期思路
 
-顺序以风险递减和依赖 DAG 为主。先做 x64/v8.5.2 基线，避免在旧工作区或混合 bitness 上做无效实现；再做 Herdr spike，用事实决定是否继续。spike 通过后再升级 backend contract 和 adapter；只有 backend 和 namespace lifecycle 稳定后才进入 provider runtime。恢复、用户可见面、release surface、validation matrix 与 support projection放在后半段，避免在核心 backend 还不成立时先写发布面承诺。
+顺序以风险递减和依赖 DAG 为主。先做 strict x64/v8.5.2 源头/新分支基线，避免在旧工作区或混合 bitness 上做无效实现；再做 Herdr spike，用事实决定是否继续。spike 通过后再升级 backend contract 和 adapter；只有 backend 和 namespace lifecycle 稳定后才进入 all-provider runtime。恢复、用户可见面、release surface、validation matrix 与 support projection 放在后半段，避免在核心 backend 还不成立时先写发布面承诺。
 
 Top 3 风险与缓解：
 
 - **Herdr socket API 不足或不稳定**：用 `herdr-backend-contract-spike` 和 `herdr-backend-client` schema gate 先证伪，失败即停止 adapter 投入。
 - **CCB 与 Herdr 双 authority**：roadmap 明确 CCB owns provider/control/recovery，Herdr owns terminal primitive；agent state 只作为 evidence。
 - **Windows support 夸大**：platform gate、validation matrix、support projection 强制把 x64-only、beta gaps 和 residual risk 体现在 doctor/docs 中。
+- **单 provider 或 degraded UI 被误当 supported**：provider runtime 与 validation matrix 必须覆盖所有公开 provider 的 `ask/pend/completion/cancel`，Mobile terminal 与 Config UI 作为 supported hard gate。
 
 关键假设：
 
-- Herdr 可在 Native Windows x64 上以稳定 socket API 暴露 session/pane/send/capture/restore。
+- Herdr 由用户自备，并可在 Native Windows x64 上以稳定 socket API 暴露 session/pane/send/capture/restore；CCB 只负责检测、诊断和路由，不负责下载安装 Herdr。
 - CCB v8.5.2 的 bounded recovery 和 provider completion contract 可迁移到 Herdr pane，而无需改 provider auth/session 权威模型。
 - 当前 tmux/rmux backend contract 产物可以演进为 V2，而不需要推翻重写。
 
 非显然依赖：
 
-- 当前工作区与 `v8.5.2` tag 不一致，实现前必须选择真实基线。
+- 当前工作区与 `v8.5.2` 源头不一致，实现前必须从 CCB 源头拉取 `v8.5.2` 并新建分支；当前代码状态不能作为实现基线。
 - Herdr Windows beta 的不支持项会影响 support tier，但不必阻塞 CCB core public workflow parity，除非它们进入 core workflow。
-- Native Windows 真实验证不可由 WSL/Linux 替代。
+- Native Windows 真实验证不可由 WSL/Linux 替代；专用验证主机就是当前项目所在 Windows x64 机器。
 
 基线与验证入口：
 
 - YAML/spec：`.codestable/tools/validate-yaml.py`
 - Python tests：`python -m pytest -q ...`
-- Package/release：`npm pack --dry-run`、install/update focused tests
+- Package/release：`npm pack --dry-run`、Windows `npm install` dry-run、install/update focused tests
 - Native Windows evidence：Herdr spike/validation matrix JSON、foreground transcript、doctor/ping/mounted output
 - Mobile/Config UI：existing mobile gateway/render tests + manual Windows x64 transcript
 

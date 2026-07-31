@@ -1,11 +1,11 @@
 ---
 doc_type: feature-design
 feature: 2026-07-31-provider-runtime-on-herdr
-requirement:
+requirement: native-windows-ccb-via-herdr
 roadmap: windows-native-herdr-ccb
 roadmap_item: provider-runtime-on-herdr
 execution_lane: goal
-status: draft
+status: approved
 summary: 让 CCB 托管 provider 在 Herdr pane 中按既有隔离、ask/pend/completion/cancellation 契约工作，同时保持 provider completion authority 归 CCB
 tags: [provider-runtime, herdr, pane-io, completion, cancellation, epic-child]
 ---
@@ -40,7 +40,7 @@ tags: [provider-runtime, herdr, pane-io, completion, cancellation, epic-child]
 
 ### 需求摘要
 
-本 feature 让 CCB 托管 provider 在 Herdr project namespace 的 pane 中启动、收发 ask、通过 pend/watch 观察进度、按 provider-native completion contract 完成或失败，并支持 cancellation 与 provider pane restart surface 的 Herdr evidence。目标是把 Herdr 接入 provider runtime 的 terminal primitive 层，而不改变 CCB 对 provider state、auth、completion 和 queue 的权威。
+本 feature 让 CCB 托管的所有公开 provider 在 Herdr project namespace 的 pane 中启动、收发 ask、通过 pend/watch 观察进度、按 provider-native completion contract 完成或失败，并支持 cancel 与 provider pane restart surface 的 Herdr evidence。目标是把 Herdr 接入 provider runtime 的 terminal primitive 层，而不改变 CCB 对 provider state、auth、completion 和 queue 的权威。
 
 成功标准：
 
@@ -51,12 +51,13 @@ tags: [provider-runtime, herdr, pane-io, completion, cancellation, epic-child]
 - `ask`/`pend`/completion 仍走 dispatcher runtime、provider execution adapter、completion tracker 与 provider manifest；Herdr terminal capture 只能作为 provider-declared fallback 或 diagnostics。
 - Herdr agent state 可作为 `herdr_agent_state_ref` 写入 diagnostics/evidence；不得单独把 job 判定为 `completed`，也不得绕过 Codex reply delivery acceptance gate。
 - cancellation 仍由 CCB job/cancel flag/execution service 主导；Herdr backend 只提供 send interrupt / kill pane / capture evidence，不直接决定 job terminal 状态。
-- 必须有 provider-specific focused tests，并至少一个 Native Windows x64 real provider dry run transcript，覆盖 launch、ask、pend/completion、cancel 或 blocked evidence。
+- 必须有 provider-specific focused tests，并为当前 provider catalog 暴露的全部公开 provider 分别提供 Native Windows x64 Herdr pane 下的 `ask`、`pend`、completion、cancel transcript 或明确 blocked evidence；只通过一个或少数代表 provider 不能代表 supported。
+- acceptance 必须先冻结 `public_providers` snapshot，来源为 `lib/provider_core/registry_runtime/builtin_backends.py` 的 `CORE_PROVIDER_NAMES + OPTIONAL_PROVIDER_NAMES` 或等价 provider registry 输出；当前基线至少包含 `codex`、`claude`、`gemini`、`opencode`、`droid`、`agy`、`kimi`、`deepseek`、`mimo`、`qwen`、`cursor`、`copilot`、`crush`、`grok`、`kiro`、`pi`、`omp`、`zai`。
 
 明确不做：
 
 - 不实现 bounded recovery owner、90 秒 probation、backoff/circuit；`herdr-bounded-recovery-boundary` 才处理 crash recovery policy。
-- 不扩展 Mobile terminal、Config UI、doctor/support tier、release/package/public validation matrix；这些属于后续 child。
+- 不扩展 Mobile terminal、Config UI、doctor/support tier、package/release/update/installer/public validation matrix；这些属于后续 child。
 - 不修改 Herdr socket schema/client 本身；只消费前置 HerdrBackend / PaneIO / capability surface。
 - 不把 Herdr agent state、terminal text quiet 或 pane liveness 单独升级为高置信 completion。
 - 不重写 provider-specific execution adapters；只补足它们消费 backend-neutral session payload 所需的边界。
@@ -78,15 +79,15 @@ tags: [provider-runtime, herdr, pane-io, completion, cancellation, epic-child]
    缓解：completion evidence guard 禁止 Herdr agent state 直接产出 `completed`；provider-specific tests 覆盖 native log/event 优先、terminal capture degraded fallback、Codex acceptance gate。
 2. **风险：session payload 兼容性破坏 tmux/rmux provider。**  
    缓解：所有新增字段 additive；`project_session_payload()` 保持旧 alias；focused regression 覆盖 assigned tmux/rmux pane、runtime launch session file、provider session models。
-3. **风险：本 feature 偷偷进入 recovery/user-surface/release 范围。**  
-   缓解：scope/content guard 禁止 recovery owner、support tier、Mobile/Config UI、package/release/public validation matrix 越界。
+3. **风险：本 feature 偷偷进入 recovery/user-surface/package/release/update/installer 范围。**
+   缓解：scope/content guard 禁止 recovery owner、support tier、Mobile/Config UI、package/release/update/installer/public validation matrix 越界。
 
 ### 非显然依赖与关键假设
 
 - 依赖前置 child 的实现而非 design-review：`HerdrBackend`、MuxBackend V2 refs/errors/capabilities、Herdr namespace lifecycle、PaneIO send/capture/respawn/log、project namespace assigned pane evidence 必须可导入并通过 focused tests。
 - 假设 `ccbd-herdr-namespace-lifecycle` 能给 provider runtime 一个已分配的 Herdr `MuxPaneRefV2` 与 redacted/public namespace evidence；raw restore token 不进入 provider public logs。
 - 假设 provider launcher 的 managed HOME 和 native completion artifacts 不依赖 tmux，仅依赖 runtime_dir、run_cwd、session payload 与 provider CLI。
-- Native Windows x64 real provider dry run 需要本机 Herdr 与至少一个可执行 provider CLI；缺 host/credential 时 acceptance 只能 blocked 或记录 explicit blocked evidence，不能用 WSL/Linux 替代。
+- Native Windows x64 all-provider validation 需要本机 Herdr 与每个公开 provider CLI/credential；缺 host/credential 时对应 provider row 只能 blocked 或记录 explicit blocked evidence，不能用 WSL/Linux 替代，也不能用一个 provider 成功替代其它 provider。公开 provider 集合必须来自 acceptance 当时的 provider catalog snapshot，不能手工只列 Codex/Claude/Gemini/Opencode。
 
 ## 2. 名词与编排
 
@@ -210,7 +211,7 @@ flowchart TD
 4. **Provider session lifecycle**：让 pane log support / Claude/Gemini/Opencode/Codex 等 session ensure_pane 走 backend-neutral liveness/log/capture，tmux rebound 仅限 tmux-compatible。
 5. **Ask/pend/completion authority**：provider execution adapter 继续按 manifest/native evidence 产出 completion；Herdr terminal capture 为 fallback/diagnostics；Herdr agent state 不可 terminal complete。
 6. **Cancellation and provider pane restart surface**：cancel/restart 只通过 CCB authority 写 job/session 状态，Herdr backend 提供 interrupt/respawn/kill evidence。
-7. **Scope/regression/manual evidence**：运行 focused provider/runtime tests、scope guard，并收集 Native Windows x64 real provider dry run transcript。
+7. **Scope/regression/manual evidence**：运行 focused provider/runtime tests、scope guard，并收集所有公开 provider 的 Native Windows x64 Herdr pane `ask/pend/completion/cancel` transcript 或 blocked evidence。
 
 ### 2.5 结构健康度与微重构
 
@@ -243,13 +244,13 @@ flowchart TD
 | AC-009 | terminal capture fallback | provider 声明 terminal capture fallback 时可用 Herdr capture/pane log 辅助，置信度和 reason 明确 degraded/observed；不能只因 Herdr agent state `done` 完成 | unit |
 | AC-010 | cancellation on Herdr | cancel request 写入 CCB state/cancel flag/execution_service；Herdr interrupt/kill/capture 仅作 evidence；job terminal 为 `cancelled` | unit/integration |
 | AC-011 | provider pane restart surface | Herdr 下 provider pane restart 不再静默 scheduled；若实现 respawn，则更新 session binding/evidence；若 capability 不足则明确 unsupported/deferred | unit |
-| AC-012 | Native Windows x64 real provider dry run | 至少一个 provider CLI 在 Herdr pane 中完成 launch、ask、pend/completion、cancel 或 blocked evidence transcript | manual transcript |
-| AC-013 | scope boundary | 不实现 recovery owner、Mobile/Config UI、doctor/support、package/release/public matrix、Herdr socket schema client | diff review |
+| AC-012 | Native Windows x64 all-provider workflow | acceptance 先冻结来自当前 provider catalog 的 `public_providers` snapshot；每个公开 provider 均在 Herdr pane 中完成 launch、ask、pend/completion、cancel，或逐 provider 记录明确 blocked evidence；任一 provider 缺失不得宣称 supported | manual transcript |
+| AC-013 | scope boundary | 不实现 recovery owner、Mobile/Config UI、doctor/support、package/release/update/installer/public matrix、Herdr socket schema client | diff review |
 
 ### 3.2 明确不做的反向核对项
 
 - 不应修改 bounded recovery policy、probation、backoff、circuit threshold。
-- 不应新增 doctor/support tier、Mobile terminal、Config UI、npm/package/release surface。
+- 不应新增 doctor/support tier、Mobile terminal、Config UI、npm/package/release/update/installer surface。
 - 不应新增 Herdr socket schema/client parser。
 - 不应把 Herdr agent state、pane liveness 或 terminal text quiet 单独转成 `CompletionStatus.COMPLETED`。
 - 不应让 Herdr provider session 通过 `tmux` backend factory 运行。
@@ -270,7 +271,7 @@ flowchart TD
 | AC-009 terminal fallback | S5 | unit | terminal capture fallback degraded tests + guard | yes |
 | AC-010 cancellation | S6 | unit/integration | cancel flags / execution service tests | yes |
 | AC-011 restart surface | S6 | unit | project restart Herdr evidence tests | yes |
-| AC-012 real dry run | S7 | manual transcript | Native Windows x64 Herdr provider dry run | yes |
+| AC-012 all-provider dry run | S7 | manual transcript | Native Windows x64 Herdr all-provider ask/pend/completion/cancel matrix | yes |
 | AC-013 scope boundary | S7 | diff review | forbidden path/content guard | yes |
 
 ### 3.4 DoD Contract
@@ -284,10 +285,10 @@ flowchart TD
 | DOD-IMPL-003 | provider session lifecycle 使用 backend-neutral liveness/log/capture，tmux ownership/rebound 只限 tmux-compatible | unit | blocking |
 | DOD-IMPL-004 | ask/pend/completion 保持 CCB provider authority；Herdr agent state 只作 diagnostics，terminal capture fallback 降级可见 | unit/integration | blocking |
 | DOD-IMPL-005 | cancellation 和 provider pane restart surface 有 Herdr evidence，不接管 bounded recovery owner | unit/integration | blocking |
-| DOD-IMPL-006 | 无 recovery、doctor/support、Mobile/Config UI、package/release/public matrix、Herdr socket schema client 越界 | diff review | blocking |
+| DOD-IMPL-006 | 无 recovery、doctor/support、Mobile/Config UI、package/release/update/installer/public matrix、Herdr socket schema client 越界 | diff review | blocking |
 | DOD-REVIEW-001 | code review passed 且无 unresolved blocking | review report | blocking |
 | DOD-QA-001 | QA 复核 provider authority、Herdr fallback、scope guard 与 regression | QA report | blocking |
-| DOD-ACCEPT-001 | acceptance 回写 roadmap item，并包含 Native Windows x64 real provider dry run transcript | acceptance report | blocking |
+| DOD-ACCEPT-001 | acceptance 回写 roadmap item，并包含 provider catalog `public_providers` snapshot，以及 Native Windows x64 all-provider ask/pend/completion/cancel transcript 或逐 provider blocked evidence | acceptance report | blocking |
 
 Validation Commands:
 
@@ -301,18 +302,18 @@ Validation Commands:
 | CMD-006 | `python -m pytest -q test/test_v2_phase2_ask.py test/test_v2_ask_service.py test/test_reply_delivery_start_completion.py test/test_v2_completion_orchestration.py test/test_cancel_flags.py -k "ask or pend or completion or reply_delivery or cancel or provider"` | ask/pend/completion/cancellation dispatcher contract 不退化 | core | fix-or-block |
 | CMD-007 | `python -m pytest -q test/test_claude_execution_polling.py test/test_gemini_execution_hook.py test/test_opencode_execution_polling.py test/test_native_cli_completion.py test/test_codex_reply_delivery.py -k "completion or hook_artifact or reply_delivery or terminal_capture or herdr"` | provider-native completion 优先、terminal capture fallback 和 Codex acceptance gate | core | fix-or-block |
 | CMD-008 | `python -m pytest -q test/test_ccbd_start_agent_runtime.py test/test_ccbd_health_assessment_provider_pane.py -k "runtime or pane or restart or herdr or unsupported or deferred"` | ccbd start/runtime binding 与 provider pane restart surface evidence | core | fix-or-block |
-| CMD-009 | `python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; forbidden_prefix=('lib/ccbd/services/dispatcher_runtime/lifecycle_start_runtime/recovery_runtime/','lib/cli/services/doctor_runtime/','lib/mobile/','mobile/','config-ui/','lib/config_ui/'); forbidden_files={'package.json','package-lock.json','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py','lib/terminal_runtime/rmux_packaging_support.py'}; bad=sorted(p for p in paths if p.startswith(forbidden_prefix) or p in forbidden_files); assert not bad, bad; text=run(['git','diff','--','lib','test'])+run(['git','diff','--cached','--','lib','test'])+''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in paths if pathlib.Path(p).is_file() and p.endswith(('.py','.md','.yaml','.yml','.json'))); forbidden=re.compile(r'(probation_seconds|circuit_threshold|support_tier|npm publish|release surface|public workflow validation|Mobile terminal|Config UI|HerdrSocket|schema[_-]?parser)', re.I); assert not forbidden.search(text)"` | recovery/support/release/user-surface/Herdr socket schema scope guard | core | fix-or-block |
-| CMD-010 | `python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; text=run(['git','diff','--','lib','test'])+run(['git','diff','--cached','--','lib','test']); assert not re.search(r'herdr_agent_state[^\\n]{0,200}(CompletionStatus\\.COMPLETED|status\\s*=\\s*[\"\\']completed|verdict\\s*=\\s*[\"\\']completed)', text, re.I)"` | Herdr agent state 不得直接产生 completed verdict | core | fix-or-block |
-| CMD-011 | `MANUAL Native Windows x64: run one managed provider on Herdr backend, capture launch session payload, ask, pend/completion, and cancel or blocked evidence transcript` | roadmap Goal Coverage 的 real provider dry run evidence | core | blocked-if-no-host-herdr-or-provider |
+| CMD-009 | `python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; code_paths={p for p in paths if p.startswith(('lib/','test/'))}; forbidden_prefix=('lib/ccbd/services/dispatcher_runtime/lifecycle_start_runtime/recovery_runtime/','lib/cli/services/doctor_runtime/','lib/mobile/','mobile/','config-ui/','lib/config_ui/'); forbidden_files={'package.json','package-lock.json','install.ps1','install.sh','install.cmd','README.md','docs/ccbd-diagnostics-contract.md','bin/ccb-npm-install.js','lib/cli/management_runtime/install.py','lib/cli/management_runtime/commands_runtime/install.py','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py','lib/terminal_runtime/rmux_packaging_support.py','lib/terminal_runtime/rmux_packaging_support_projection.json'}; herdr_owner=re.compile(r'(^|/)(lib|test)/.*herdr.*(socket|schema|client)|(^|/)(lib|test)/.*(socket|schema|client).*herdr', re.I); bad=sorted(p for p in paths if p.startswith(forbidden_prefix) or p in forbidden_files or herdr_owner.search(p)); assert not bad, bad; text=run(['git','diff','--','lib','test'])+run(['git','diff','--cached','--','lib','test'])+''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in code_paths if pathlib.Path(p).is_file() and p.endswith(('.py','.md','.yaml','.yml','.json'))); forbidden=re.compile(r'(probation_seconds|circuit_threshold|support_tier|npm publish|release surface|update surface|installer|public workflow validation|Mobile terminal|Config UI|HerdrSocket|herdr socket (client|schema)|schema[_-]?parser)', re.I); assert not forbidden.search(text)"` | recovery/support/package/release/update/installer/user-surface/Herdr socket schema/client scope guard | core | fix-or-block |
+| CMD-010 | `python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only','--','lib','test'],['git','diff','--cached','--name-only','--diff-filter=ACMR','--','lib','test'],['git','ls-files','--others','--exclude-standard','--','lib','test']) for p in run(a).splitlines() if p.strip()}; text=run(['git','diff','--','lib','test'])+run(['git','diff','--cached','--','lib','test'])+''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in paths if pathlib.Path(p).is_file() and p.endswith(('.py','.md','.yaml','.yml','.json'))); q=re.escape(chr(34)+chr(39)); pattern=r'herdr_agent_state[^\\n]{0,200}(CompletionStatus\\.COMPLETED|status\\s*=\\s*['+q+r']completed|verdict\\s*=\\s*['+q+r']completed)'; assert not re.search(pattern, text, re.I)"` | Herdr agent state 不得直接产生 completed verdict，包含 untracked 新文件 | core | fix-or-block |
+| CMD-011 | `MANUAL Native Windows x64: first freeze public_providers from provider catalog (CORE_PROVIDER_NAMES + OPTIONAL_PROVIDER_NAMES or equivalent registry output), then for each listed provider run on Herdr backend and capture launch session payload, ask, pend/completion, and cancel; if unavailable, record per-provider blocked evidence` | roadmap Goal Coverage 的 all-provider Herdr workflow evidence | core | blocked-if-any-provider-missing-or-no-host-herdr |
 
-Required Artifacts：design、checklist、design-review、implementation admission evidence（含 upstream acceptance artifacts / roadmap done refs，或 dependency-blocked admission report）、fake Herdr runtime launch tests、ProviderRuntimeBackendRef/session payload tests、backend_for_session Herdr tests、provider session ensure_pane tests、provider-native completion/fallback tests、cancel/restart evidence tests、scope/content guards、Native Windows x64 real provider dry run transcript、acceptance 阶段按 epic/roadmap owner 协议回写 items.yaml。
+Required Artifacts：design、checklist、design-review、implementation admission evidence（含 upstream acceptance artifacts / roadmap done refs，或 dependency-blocked admission report）、fake Herdr runtime launch tests、ProviderRuntimeBackendRef/session payload tests、backend_for_session Herdr tests、provider session ensure_pane tests、provider-native completion/fallback tests、cancel/restart evidence tests、scope/content guards、provider catalog `public_providers` snapshot、Native Windows x64 all-provider ask/pend/completion/cancel transcript 或逐 provider blocked evidence、acceptance 阶段按 epic/roadmap owner 协议回写 items.yaml。
 
 ### 3.5 自我批判结论
 
 - 可证伪性：每个核心场景都有 unit/integration/manual 或 diff guard。
 - 步骤原子性：admission、launch、session payload、provider lifecycle、completion、cancellation/restart、guard/manual evidence 分离。
 - 最弱依赖：前置 Herdr namespace lifecycle 必须真实实现并验收；已设置 DOD-IMPL-000 和 CMD-003 dependency-blocked。
-- 证据完整性：自动化覆盖 fake Herdr backend；acceptance 必须收集 Native Windows x64 real provider dry run，不能由 Linux/WSL 替代。
+- 证据完整性：自动化覆盖 fake Herdr backend；acceptance 必须收集 Native Windows x64 all-provider ask/pend/completion/cancel transcript 或逐 provider blocked evidence，不能由 Linux/WSL 或单 provider 成功替代。
 - 基线可执行性：focused pytest 入口明确；若前置 tests 未存在或 Herdr surface 未落地，按 dependency-blocked 归因。
 - 交付物可核验性：acceptance 可从 session payload、backend fake calls、dispatcher job events、completion diagnostics、cancel evidence、scope guard和 manual transcript 反查。
 - 清洁度规则：不新增临时 TODO/FIXME、调试输出、注释掉代码、无用 import；不把 raw restore token、provider secret、terminal buffer 全量写入日志。

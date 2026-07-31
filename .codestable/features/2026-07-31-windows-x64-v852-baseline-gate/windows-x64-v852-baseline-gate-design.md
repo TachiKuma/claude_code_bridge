@@ -1,11 +1,11 @@
 ---
 doc_type: feature-design
 feature: 2026-07-31-windows-x64-v852-baseline-gate
-requirement:
+requirement: native-windows-ccb-via-herdr
 roadmap: windows-native-herdr-ccb
 roadmap_item: windows-x64-v852-baseline-gate
 execution_lane: goal
-status: draft
+status: approved
 summary: 建立 CCB v8.5.2 与 Native Windows x64-only 的平台准入 gate，并把版本、位宽和基础诊断作为后续 Herdr backend 的共享前置证据
 tags: [windows, x64, v852, platform-gate, doctor, installer, epic-child]
 ---
@@ -41,7 +41,7 @@ tags: [windows, x64, v852, platform-gate, doctor, installer, epic-child]
 成功标准：
 
 - `WindowsX64PlatformGate` 能表达 `os_platform`、`cpu_arch`、`node_arch`、`python_bitness`、`ccb_version_source`、`detected_ccb_version`、`herdr_arch`、`helper_arch`、`platform_ready`、`native_helpers_ready`、`herdr_executable_ready`、`supported`、`failure_reason`、`detail_reason`、`diagnostic`。
-- 当前仓库不是 `v8.5.2` 时，gate 输出可见基线风险，不允许把后续 Herdr route 标记为 supported。
+- implementation admission 必须证明实现线来自 CCB `v8.5.2` 源头并已新建分支；当前仓库不是严格 `v8.5.2` 源头时，gate 输出可见基线风险，只能产出 blocked/default，不允许把后续 Herdr route 标记为 available 或 supported。
 - `os_platform="win32"` 不能单独通过 gate；必须同时满足 x64、Python 64-bit、必要 helper/Herdr 位宽证据。
 - doctor 能展示 gate summary、parent-compatible failure reason 和 detail reason，便于用户知道应切到 v8.5.2、换 64-bit runtime、安装 x64 Herdr 或修 helper。
 - 非 Windows、Windows 32-bit、arm64 Windows、WOW64/混合链路均 fail closed。
@@ -67,8 +67,8 @@ tags: [windows, x64, v852, platform-gate, doctor, installer, epic-child]
 
 1. **风险：把 Node 的 `win32` 误解成 32-bit 支持。**  
    缓解：gate contract 同时记录 `os_platform` 与 `cpu_arch/node_arch`，doctor 文案明确 `win32` 是 OS 名称。
-2. **风险：当前仓库版本不是 `v8.5.2`，后续 feature 在错误基线上实现。**  
-   缓解：gate summary 必须读取 CCB version source，非 `8.5.2` 时输出 `failure_reason="unknown"` + `detail_reason="ccb-version-mismatch"` 的 blocked diagnostic。
+2. **风险：当前仓库版本不是严格 CCB `v8.5.2` 源头，后续 feature 在错误基线上实现。**
+   缓解：gate summary 必须读取 CCB source/version/branch evidence；非 `v8.5.2` 源头或未新建实现分支时输出 blocked diagnostic，当前工作区不得作为 implementation-ready 基线。
 3. **风险：install、doctor、backend resolver 各自实现位宽判断，未来不一致。**  
    缓解：新增单一 platform gate module，doctor 和后续 resolver 只消费该 summary。
 
@@ -77,7 +77,7 @@ tags: [windows, x64, v852, platform-gate, doctor, installer, epic-child]
 - 依赖 Node runtime 能通过小型 probe 或 install script 输入暴露 `process.platform/process.arch`。
 - 依赖 Python 能通过 `platform.architecture()`、`sys.maxsize` 或等价方式判断 64-bit runtime。
 - 依赖 Herdr 可执行文件路径来自 PATH 或显式配置；若找不到，第一版返回 `missing`，不自动安装。
-- 假设 helper 位宽可以通过现有 release metadata、文件名约定或可执行探针得到；无法证明时返回 `unknown` 并 fail closed。初始 helper keys 只包含 `ccb-rs-helper` 与 `ccb-agent-sidebar`，不把未设计的 Herdr socket helper 塞进本 gate。
+- 假设 helper 位宽可以通过可信 release metadata、PE header probe 或 explicit artifact ref 得到；wrapper / 文件名约定只能辅助定位，不能单独作为 x64 证据。helper 位宽判定使用 fail-closed 冲突规则：可信来源全部一致为 `x64` 时才可接受；任一可信来源明确为 `arm64|ia32` 时返回对应非 x64 arch 并阻塞；可信来源之间不一致或只有部分来源 `unknown` 时返回 `unknown` 并设置 `detail_reason="helper-unknown"`；缺少 artifact 时返回 `missing`。无法证明时返回 `unknown` 或 `missing` 并 fail closed。初始 helper keys 只包含 `ccb-rs-helper` 与 `ccb-agent-sidebar`，不把未设计的 Herdr socket helper 塞进本 gate。
 
 ## 2. 名词与编排
 
@@ -101,6 +101,9 @@ class WindowsX64PlatformGate(TypedDict):
     node_arch: Literal["x64", "arm64", "ia32", "missing", "unknown"]
     python_bitness: Literal["64bit", "32bit", "unknown"]
     ccb_version_source: Literal["installation", "package_json", "version_file", "unknown"]
+    ccb_source_ref: str | None
+    ccb_branch_ref: str | None
+    ccb_source_status: Literal["strict-v8.5.2", "not-v8.5.2", "unknown"]
     detected_ccb_version: str | None
     package_json_version: str | None
     version_file_version: str | None
@@ -125,6 +128,7 @@ class WindowsX64PlatformGate(TypedDict):
         "node-not-x64",
         "ccb-version-mismatch",
         "ccb-version-source-mismatch",
+        "source-branch-blocked",
         "python-bitness-unknown",
         "herdr-missing",
         "helper-missing",
@@ -137,11 +141,14 @@ class WindowsX64PlatformGate(TypedDict):
 字段语义：
 
 - `platform_ready=true` 只表示 Windows OS + x64 CPU/Node + Python 64-bit + CCB baseline version 通过。
+- `ccb_source_status="strict-v8.5.2"` 需要 implementation admission 提供 CCB `v8.5.2` 源头 ref 和新分支 ref；缺任一项时不得进入 implementation-ready。
 - `native_helpers_ready=true` 要求 `helper_arch["ccb-rs-helper"] == "x64"` 且 `helper_arch["ccb-agent-sidebar"] == "x64"`；任一 `missing|unknown|arm64|ia32` 都为 false。
+- helper arch evidence 的接受顺序不是“择优覆盖”，而是“可信来源交叉核验”：release metadata、PE header probe、explicit artifact ref 任一来源给出非 x64 或互相冲突时都不得用另一个 x64 来源覆盖；结果必须 fail closed，并在 raw probes 中保留各来源原值。
 - `herdr_executable_ready=true` 只要求 Herdr 可执行文件位宽为 x64，不证明 socket API 或 session/pane 语义；socket capability 属 `herdr-backend-contract-spike`。
 - `supported=true` 是 full gate：`platform_ready && native_helpers_ready && herdr_executable_ready`。后续 consumer 若只需要平台基线，应读取 `platform_ready`，不要把 `supported` 当成 Herdr API capability。
-- `ccb_version_source` 优先级为 `installation` > `package_json` > `version_file` > `unknown`。当多个可读版本源不一致时，`failure_reason="unknown"` 且 `detail_reason="ccb-version-source-mismatch"`；当检测版本与 `expected_ccb_version` 不等时，`failure_reason="unknown"` 且 `detail_reason="ccb-version-mismatch"`。当前仓库 `package.json` 与 `VERSION` 均为 `8.2.1`，因此预期输出应 fail closed。
-- `failure_reason` 严格保持 roadmap §4.1 枚举：`not-windows|not-x64|python-not-x64|herdr-not-x64|helper-not-x64|unknown|null`。Node 架构和版本源等更细原因只能进入 `detail_reason` 与 `diagnostic`，不得扩展 parent contract。
+- `ccb_version_source` 优先级为 `installation` > `package_json` > `version_file` > `unknown`。当多个可读版本源不一致时，`failure_reason="unknown"` 且 `detail_reason="ccb-version-source-mismatch"`；当检测版本与 `expected_ccb_version` 不等时，`failure_reason="unknown"` 且 `detail_reason="ccb-version-mismatch"`；当版本满足但缺少 CCB `v8.5.2` 源头 ref 或新建实现分支 ref 时，`failure_reason="unknown"` 且 `detail_reason="source-branch-blocked"`。当前仓库 `package.json` 与 `VERSION` 均为 `8.2.1`，因此预期输出应 fail closed。
+- `failure_reason` 严格保持 roadmap §4.1 枚举：`not-windows|not-x64|python-not-x64|herdr-not-x64|helper-not-x64|unknown|null`。Node 架构、版本源和 source/branch admission 等更细原因只能进入 `detail_reason` 与 `diagnostic`，不得扩展 parent contract。
+- `WindowsX64PlatformGate` 是 roadmap §4.1 的向后兼容扩展：新增的 `linux|darwin|arm64|ia32|missing|unknown` raw states 只用于本 feature 的 fail-closed 检测和 doctor 诊断。后续 consumer 的稳定依赖面是 `platform_ready`、`native_helpers_ready`、`herdr_executable_ready`、`supported`、parent-compatible `failure_reason`、`detail_reason`、`diagnostic`、`ccb_source_status`、`ccb_source_ref`、`ccb_branch_ref`；如果需要完整原始探针，只能读取 evidence JSON 的 `raw_probes`。
 
 ##### Interface 设计检查
 
@@ -169,10 +176,10 @@ flowchart TD
 
 流程级约束：
 
-- 判定顺序 fail closed：非 Windows、非 x64、Node 非 x64、Python 非 64-bit、CCB 版本源不一致、CCB 版本非 `8.5.2`、Herdr/helper 位宽不可证明时均不得 `supported=true`。
+- 判定顺序 fail closed：非 Windows、非 x64、Node 非 x64、Python 非 64-bit、CCB 版本源不一致、CCB 非严格 `v8.5.2` 源头、新分支证据缺失、Herdr/helper 位宽不可证明时均不得 `supported=true`。
 - `herdr_arch="missing"` 可以作为后续 spike 前的 actionable missing，不等于 platform unsupported；但如果用户请求 Herdr route，则后续 consumer 必须把 missing 当 blocked。
 - doctor 输出必须包含 raw fields 与 human diagnostic，不能只给布尔值。
-- doctor startup-baseline projection 的稳定输出面是 `doctor_summary()["windows_x64_platform_gate"]` 与 `render_doctor()` 的 `windows_x64_*` / `startup_baseline_*` 行。本 feature 不扩展 `CcbdStartupReport` schema，不写 `readiness_timeline`，不新增 startup report 字段。若未来 ccbd startup 需要持久化该 gate，必须另起设计把同一 summary 放入 `CcbdStartupReport.readiness_timeline["windows_x64_platform_gate"]` 并补 render 规则。
+- doctor startup-baseline projection 的稳定输出面是 top-level `doctor_summary()["windows_x64_platform_gate"]` 与 `render_doctor()` 的 top-level `windows_x64_*` / `startup_baseline_*` 行。`startup_baseline_failure_reason` 与 `startup_baseline_detail_reason` 只从 `windows_x64_platform_gate.failure_reason/detail_reason` 派生，不进入 `ccbd` payload。本 feature 不扩展 `CcbdStartupReport` schema，不写 `readiness_timeline`，不新增 startup report 字段。若未来 ccbd startup 需要持久化该 gate，必须另起设计把同一 summary 放入 `CcbdStartupReport.readiness_timeline["windows_x64_platform_gate"]` 并补 render 规则。
 - package metadata 仍归 `windows-x64-release-surface`；本 feature 不改变 npm install 支持范围。
 
 ### 2.3 挂载点清单
@@ -180,24 +187,24 @@ flowchart TD
 - `lib/terminal_runtime/windows_x64_platform_gate.py`：新增 platform gate owner。
 - `lib/cli/services/doctor.py`：把 gate summary 注入 `doctor_summary()` payload。
 - `lib/cli/render_runtime/ops_views_doctor.py`：渲染 Windows x64 gate raw fields、supported、failure reason 和 diagnostic。
-- `lib/cli/services/doctor.py` / `lib/cli/render_runtime/ops_views_doctor.py`：只消费 gate summary 展示 `startup_baseline_failure_reason` 与 `startup_baseline_detail_reason`；本 feature 不改 `CcbdStartupReport` schema、不改变 backend selection。
+- `lib/cli/services/doctor.py` / `lib/cli/render_runtime/ops_views_doctor.py`：只消费 top-level gate summary 展示 `windows_x64_supported`、`windows_x64_failure_reason`、`windows_x64_detail_reason`、`windows_x64_diagnostic`、`ccb_expected_version`、`ccb_detected_version`、`startup_baseline_failure_reason` 与 `startup_baseline_detail_reason`；本 feature 不改 `CcbdStartupReport` schema、不改变 backend selection。
 - `bin/ccb-npm-install.js` 或 Node-side probe tests：只在需要证明 Node `process.platform/process.arch` 字段时增加可测试 probe，不启用 win32 artifact。
 - tests：新增 platform gate unit、doctor startup-baseline render、package metadata no-change guard。
 
 ### 2.4 推进策略
 
 1. **platform gate owner**：新增 `lib/terminal_runtime/windows_x64_platform_gate.py` 纯函数 projection，输入为 CCB version sources、OS/CPU、Node arch、Python bitness、Herdr/helper arch probe。  
-   退出信号：unit tests 覆盖 pass、not-windows、not-x64、python-not-x64、helper-not-x64、unknown + `detail_reason=node-not-x64|ccb-version-mismatch|ccb-version-source-mismatch|helper-unknown`。
+   退出信号：unit tests 覆盖 pass、not-windows、not-x64、python-not-x64、helper-not-x64、unknown + `detail_reason=node-not-x64|ccb-version-mismatch|ccb-version-source-mismatch|source-branch-blocked|helper-unknown`。
 2. **probe integration**：实现生产 probe，复用现有 installation summary / Python runtime 信息，Node arch 通过受控 Node probe 或 package/install context 获取。  
    退出信号：缺 Node/Herdr/helper 时返回 `missing|unknown`，不抛未处理异常。
 3. **doctor projection**：把 `windows_x64_platform_gate` 加入 doctor payload 和 text render。  
    退出信号：doctor render snapshot 包含 `windows_x64_supported`、`windows_x64_failure_reason`、`windows_x64_detail_reason`、`windows_x64_diagnostic`、`ccb_expected_version`、`ccb_detected_version`。
 4. **doctor startup-baseline projection**：通过 doctor render 展示 gate failure，避免后续 Herdr route 在错误基线下继续；本 feature不写 `CcbdStartupReport` 新字段、不写 `readiness_timeline`。  
-   退出信号：doctor 测试证明 `startup_baseline_failure_reason` 与 `startup_baseline_detail_reason` 可见，且没有自动改 backend 或 config。
+   退出信号：doctor 测试证明 top-level `startup_baseline_failure_reason` 与 `startup_baseline_detail_reason` 从 `windows_x64_platform_gate` 派生且可见，且没有自动改 backend 或 config。
 5. **package metadata no-change guard**：锁定本 feature 不修改 npm `os/cpu` 支持范围，不增加 win32 artifact route。  
    退出信号：测试或 diff guard 证明 `package.json.os` 未添加 `win32`，postinstall artifact route 未宣称 win32 supported。
 6. **evidence handoff**：产出 `.codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json`，供 `herdr-backend-contract-spike` 和后续 release surface 消费。  
-   退出信号：机器可读 evidence 包含 `schema_version=1`、`feature`、`generated_at`、`host_label`、`gate`、`raw_probes`、`version_sources`、`artifact_refs`。
+   退出信号：机器可读 evidence 包含 `schema_version=1`、`feature`、`generated_at`、`host_label`、parent-compatible `gate`、`raw_probes`、`version_sources`、`artifact_refs`；`gate.ccb_source_ref`、`gate.ccb_branch_ref`、`gate.ccb_source_status` 明确来自 implementation admission evidence。
 
 ### 2.5 结构健康度与微重构
 
@@ -221,12 +228,13 @@ flowchart TD
 | AC-001 | Windows x64、Node x64、Python 64-bit、CCB `8.5.2`、Herdr x64、`ccb-rs-helper` x64、`ccb-agent-sidebar` x64 | gate `platform_ready=true`、`native_helpers_ready=true`、`herdr_executable_ready=true`、`supported=true`，failure_reason 为 null | unit |
 | AC-002 | `os_platform=win32` 但 `cpu_arch=ia32` 或 `node_arch=ia32` | gate `supported=false`；CPU 32-bit 使用 `failure_reason="not-x64"`，Node 32-bit 使用 `failure_reason="not-x64"` + `detail_reason="node-not-x64"` | unit |
 | AC-003 | Python 为 32-bit 或 unknown | gate fail closed，`failure_reason="python-not-x64"` 或 `unknown`，doctor 显示 Python 位宽诊断 | unit/render |
-| AC-004 | CCB detected version 不是 `8.5.2` 或 version sources 不一致 | gate fail closed，`failure_reason="unknown"`，detail reason 为 `ccb-version-mismatch` 或 `ccb-version-source-mismatch`，doctor 显示 expected/detected/source versions | unit/render |
+| AC-004 | CCB source/version/branch 不是严格 `v8.5.2` 源头新分支，或 version sources 不一致 | gate fail closed，`failure_reason="unknown"`，detail reason 为 `ccb-version-mismatch`、`ccb-version-source-mismatch` 或 source/branch blocked 诊断，doctor 显示 expected/detected/source versions | unit/render |
 | AC-005 | 非 Windows 或 arm64 Windows | gate fail closed，不建议 Herdr Native Windows route | unit |
-| AC-006 | Herdr、`ccb-rs-helper` 或 `ccb-agent-sidebar` missing/unknown | summary 保留 raw state，diagnostic 可操作，`supported=false`，不把未知当 x64 supported | unit |
+| AC-006 | Herdr、`ccb-rs-helper` 或 `ccb-agent-sidebar` missing/unknown，或 helper 可信 arch 来源冲突 | summary 保留 raw state，diagnostic 可操作，`supported=false`，不把未知或冲突当 x64 supported | unit |
 | AC-007 | `ccb doctor` payload/render | 输出 platform gate raw fields、supported、failure reason、diagnostic | snapshot |
 | AC-008 | doctor startup-baseline projection | `startup_baseline_failure_reason` 与 `startup_baseline_detail_reason` 取自 gate summary，且不写新 `CcbdStartupReport` 字段、不写 `readiness_timeline`、不自动修改 backend/config | test |
 | AC-009 | package metadata | 本 feature 不新增 `package.json.os=win32`，不新增 Windows npm artifact 支持 | guard |
+| AC-010 | 当前工作区未证明来自 CCB `v8.5.2` 源头新分支 | 只能输出 blocked/default admission evidence，不允许 implementation-ready 或 available | unit/diff |
 
 ### 3.2 明确不做的反向核对项
 
@@ -245,10 +253,11 @@ flowchart TD
 | AC-003 Python bitness | S1,S3 | unit/render | platform gate + doctor tests | yes |
 | AC-004 version mismatch | S1,S3 | unit/render | version fixture + doctor tests | yes |
 | AC-005 non-Windows/arm64 | S1 | unit | platform gate tests | yes |
-| AC-006 missing/unknown tools | S1,S2 | unit | probe tests | yes |
+| AC-006 missing/unknown/conflicting tools | S1,S2 | unit | probe tests including helper metadata/PE/artifact conflict fixture | yes |
 | AC-007 doctor render | S3 | snapshot | doctor render tests | yes |
 | AC-008 doctor startup-baseline projection | S4 | test | doctor startup-baseline projection tests | yes |
 | AC-009 package no-change | S5 | guard | package/install artifact tests | yes |
+| AC-010 strict source/branch admission | S1,S6 | unit/diff/evidence | platform gate tests + platform-gate-summary.json source/ref/branch fields | yes |
 
 ### 3.4 DoD Contract
 
@@ -256,10 +265,11 @@ flowchart TD
 |---|---|---|---|
 | DOD-DESIGN-001 | design/checklist/review 完整，且对齐 roadmap item `windows-x64-v852-baseline-gate` | design review | blocking |
 | DOD-IMPL-001 | platform gate owner 是 `lib/terminal_runtime/windows_x64_platform_gate.py` 单一 module，caller 不各自解释位宽 | unit/diff review | blocking |
-| DOD-IMPL-002 | gate fail-closed 覆盖 Windows x64 pass、非 Windows、32-bit、arm64、Python 32-bit、版本不匹配、helper unknown | unit tests | blocking |
+| DOD-IMPL-002 | gate fail-closed 覆盖 Windows x64 pass、非 Windows、32-bit、arm64、Python 32-bit、版本不匹配、helper unknown 和 helper trusted-source conflict | unit tests | blocking |
 | DOD-IMPL-003 | doctor payload/render 展示 raw fields、supported、failure reason、diagnostic | snapshot | blocking |
 | DOD-IMPL-004 | doctor startup-baseline projection 通过同一 gate summary 可见，且不写新 `CcbdStartupReport` 字段、不写 `readiness_timeline`、不自动改 backend/config | test | blocking |
 | DOD-IMPL-005 | package metadata 与 npm install artifact route 没有被本 feature 启用 win32 | guard | blocking |
+| DOD-IMPL-006 | implementation admission 严格要求 CCB `v8.5.2` 源头和新分支 ref；当前工作区状态不能作为实现基线 | unit/diff review | blocking |
 | DOD-REVIEW-001 | code review passed 且无 unresolved blocking | review report | blocking |
 | DOD-QA-001 | QA 覆盖 gate、doctor startup-baseline projection、package no-change guard | QA report | blocking |
 | DOD-ACCEPT-001 | acceptance 回写 roadmap item 并记录 gate evidence refs | acceptance report | blocking |

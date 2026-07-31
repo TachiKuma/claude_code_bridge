@@ -4,9 +4,9 @@ feature: 2026-07-31-herdr-backend-client
 status: passed
 review_state: passed
 review_reason: ""
-reviewer_id: 019fb6a0-d427-7e33-aae0-3d87e9b39ea3
-reviewed: 2026-07-31
-round: 2
+reviewer_id: 019fb916-487d-7ac3-b8ca-09580201a0c6
+reviewed: 2026-08-01
+round: 3
 ---
 
 # herdr-backend-client feature design 审查报告
@@ -24,17 +24,17 @@ round: 2
 
 - Status: completed
 - Detection: independent-agent
-- Provider / agent: round 1 `019fb695-9630-7713-9c1c-185984702e17` changes-requested；round 2 `019fb6a0-d427-7e33-aae0-3d87e9b39ea3` passed。
-- Raw output: round 2 未发现 blocking 或 important；仅记录 V2 contract 尚未实现和 upstream spike evidence 尚不存在两个 residual risk。
+- Provider / agent: round 1 `019fb695-9630-7713-9c1c-185984702e17` changes-requested；round 2 `019fb6a0-d427-7e33-aae0-3d87e9b39ea3` passed；round 3 `019fb916-487d-7ac3-b8ca-09580201a0c6` passed.
+- Raw output: round 3 未发现 blocking / important；确认 production Herdr socket client 设计范围正确，Native Windows x64 `auto` / platform default 直路由 Herdr blocked/success selection，缺 evidence 不 fallback tmux/rmux，Herdr 保持 `herdr-native`，capability gate 与 scope guards 覆盖充分。
 - Merge policy: 已逐条核验 reviewer findings 与 design/checklist/roadmap/code 事实；blocking/important 已通过 design/checklist 修订关闭。
-- Gate effect: independent review completed，允许本地合并后定稿 `passed`。
+- Gate effect: independent review completed and merged; final verdict passed.
 
 ## 2. Design Summary
 
 - Goal: 实现 terminal_runtime 层 Herdr production socket client、schema/version gate、capability gate、structured error、operation evidence，并以 gated route 接入 resolver/factory。
 - Key contracts: Herdr adapter 必须依赖前置 V2 contract 单一来源；`HerdrBackendClient` 是内部 socket seam，public caller 只看 MuxBackend V2 refs/errors/evidence；platform gate 消费前置 baseline gate，不重写 doctor/install gate。
 - Steps: 7 个 step，新增 S0 V2 implementation admission，随后处理 evidence admission、schema client、backend facade、resolver/factory route、scope guard、regression。
-- Checks: 11 个 check 覆盖 V2 admission、evidence fail-closed、schema pass/mismatch、refs、pane IO、explicit route success/failure、auto unchanged 和 scope boundary。
+- Checks: 11 个 check 覆盖 V2 admission、evidence fail-closed、schema pass/mismatch、refs、pane IO、explicit route success/failure、Native Windows auto Herdr blocked/success selection、非 Windows auto/default unchanged 和 scope boundary。
 - Baseline / validation: CMD-001/CMD-002 YAML gate；CMD-003 dependency admission；CMD-004/CMD-005 tests；CMD-006/CMD-007 scope/content guard。
 
 ## 3. Findings
@@ -97,5 +97,5 @@ Summary: E=5, C=1, H=0, H-only core checks=none。
 
 - Closed findings: FDR-001、FDR-002、FDR-003、FDR-004、FDR-005。
 - Attributed delta: 新增 S0 V2 implementation admission、DOD-IMPL-000、CMD-003 dependency-blocked；CMD-007 读取 modified/staged/untracked `lib/test` 内容；补 `platform_gate_reader` / `WindowsX64PlatformGate` provider 边界；补 public `HerdrBackend` 到 internal `HerdrBackendClient` mapping；收紧 items.yaml 为 acceptance 阶段按 epic/roadmap owner 协议回写。
-- Verification: checklist YAML 与 roadmap items YAML 通过；CMD-006/CMD-007 当前执行通过；round 2 independent reviewer 返回 `passed`。
+- Verification: design/checklist/review YAML 均通过；roadmap items YAML 通过；CMD-006 当前执行通过；round 3 independent reviewer 返回 `passed`。
 - Classification: 修订均为 design/checklist 契约和 guard 补强，没有进入 implementation，没有改变本 feature 的范围边界。

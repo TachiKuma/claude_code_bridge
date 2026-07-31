@@ -2,27 +2,27 @@ feature: 2026-07-31-windows-x64-v852-baseline-gate
 created: 2026-07-31
 
 steps:
-  - action: "platform gate owner：新增 lib/terminal_runtime/windows_x64_platform_gate.py 单一 WindowsX64PlatformGate projection，集中 CCB version sources、OS/CPU、Node arch、Python bitness、Herdr/helper arch 和 fail-closed reason"
-    exit_signal: "unit tests 覆盖 pass、not-windows、not-x64、python-not-x64、helper-not-x64、unknown + detail_reason=node-not-x64|ccb-version-mismatch|ccb-version-source-mismatch|helper-unknown"
+  - action: "platform gate owner：新增 lib/terminal_runtime/windows_x64_platform_gate.py 单一 WindowsX64PlatformGate projection，集中 CCB v8.5.2 源头/新分支 evidence、version sources、OS/CPU、Node arch、Python bitness、Herdr/helper arch 和 fail-closed reason"
+    exit_signal: "unit tests 覆盖 pass、not-windows、not-x64、python-not-x64、helper-not-x64、unknown + detail_reason=node-not-x64|ccb-version-mismatch|ccb-version-source-mismatch|source-branch-blocked|helper-unknown；helper trusted-source conflict 不得 supported"
     status: pending
   - action: "probe integration：实现生产 probe，复用 installation/runtime 信息，并通过受控 Node probe 或 install context 获取 Node platform/arch"
     exit_signal: "缺 Node/Herdr/helper 时返回 missing 或 unknown，不抛未处理异常，不把未知当 supported"
     status: pending
   - action: "doctor projection：把 windows_x64_platform_gate 加入 doctor payload 和 render 输出"
-    exit_signal: "doctor render 包含 windows_x64_supported、windows_x64_failure_reason、windows_x64_diagnostic、ccb_expected_version、ccb_detected_version"
+    exit_signal: "doctor render 包含 windows_x64_supported、windows_x64_failure_reason、windows_x64_detail_reason、windows_x64_diagnostic、ccb_expected_version、ccb_detected_version"
     status: pending
-  - action: "doctor startup-baseline projection：通过同一 gate summary 展示 startup_baseline_failure_reason 和 startup_baseline_detail_reason，防止后续 Herdr route 在错误基线下继续"
-    exit_signal: "doctor 测试证明 failure/detail reason 可见，且没有新增 CcbdStartupReport 字段、没有写 readiness_timeline、没有自动修改 backend 或 config"
+  - action: "doctor startup-baseline projection：通过同一 top-level gate summary 展示 startup_baseline_failure_reason 和 startup_baseline_detail_reason，防止后续 Herdr route 在错误基线下继续"
+    exit_signal: "doctor 测试证明 startup_baseline_failure_reason/detail_reason 从 windows_x64_platform_gate 派生且可见，且没有新增 CcbdStartupReport 字段、没有写 readiness_timeline、没有自动修改 backend 或 config"
     status: pending
   - action: "package metadata no-change guard：锁定本 feature 不启用 npm win32，不新增 Windows npm artifact route"
     exit_signal: "测试或 diff guard 证明 package.json.os 未添加 win32，postinstall artifact route 未宣称 win32 supported"
     status: pending
   - action: "evidence handoff：产出 .codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json"
-    exit_signal: "机器可读 evidence 包含 schema_version、feature、generated_at、host_label、gate、raw_probes、version_sources、artifact_refs"
+    exit_signal: "机器可读 evidence 包含 schema_version、feature、generated_at、host_label、parent-compatible gate、raw_probes、version_sources、artifact_refs；gate.ccb_source_ref、gate.ccb_branch_ref、gate.ccb_source_status 来自 implementation admission evidence"
     status: pending
 
 checks:
-  - item: "Windows x64、Node x64、Python 64-bit、CCB 8.5.2、Herdr x64、ccb-rs-helper x64、ccb-agent-sidebar x64 时 gate supported=true"
+  - item: "Windows x64、Node x64、Python 64-bit、CCB strict v8.5.2 源头新分支、Herdr x64、ccb-rs-helper x64、ccb-agent-sidebar x64 时 gate supported=true"
     source: design AC-001 / DOD-IMPL-002
     status: pending
   - item: "win32 + ia32 或 node ia32 不通过；Node 32-bit 使用 failure_reason=not-x64 + detail_reason=node-not-x64，不能把 win32 解释成 32-bit 支持"
@@ -31,19 +31,22 @@ checks:
   - item: "Python 32-bit 或 unknown fail closed，failure_reason 使用 python-not-x64 或 unknown，并在 doctor 输出中可见"
     source: design AC-003 / DOD-IMPL-003
     status: pending
-  - item: "CCB detected version 非 8.5.2 或 version sources 不一致时 fail closed，failure_reason=unknown，detail_reason=ccb-version-mismatch 或 ccb-version-source-mismatch，doctor 显示 expected/detected/source versions"
+  - item: "CCB detected/source 非 strict v8.5.2、新分支 evidence 缺失或 version sources 不一致时 fail closed，failure_reason=unknown，detail_reason=ccb-version-mismatch、ccb-version-source-mismatch 或 source-branch-blocked，doctor 显示 expected/detected/source versions"
     source: design AC-004 / Top 3 风险
+    status: pending
+  - item: "当前工作区未证明来自 CCB v8.5.2 源头新分支时，只能输出 blocked/default admission evidence，不允许 implementation-ready 或 available"
+    source: design AC-010 / DOD-IMPL-006
     status: pending
   - item: "非 Windows、arm64 Windows、WOW64 或混合链路不建议 Herdr Native Windows route"
     source: design AC-005
     status: pending
-  - item: "Herdr、ccb-rs-helper 或 ccb-agent-sidebar missing/unknown 保留 raw state，不自动下载、不假装 supported"
+  - item: "Herdr、ccb-rs-helper 或 ccb-agent-sidebar missing/unknown 保留 raw state；helper x64 证据只接受可信 release metadata、PE header probe 或 explicit artifact ref，wrapper/文件名约定不能单独让 supported=true；任一可信来源非 x64 或互相冲突时 fail closed"
     source: design AC-006 / 明确不做
     status: pending
   - item: "doctor payload/render 输出 platform gate raw fields、supported、failure reason、diagnostic"
     source: design AC-007 / DOD-IMPL-003
     status: pending
-  - item: "startup_baseline_failure_reason 与 startup_baseline_detail_reason 取自 gate summary，且不新增 CcbdStartupReport 字段、不写 readiness_timeline、不自动修改 backend/config"
+  - item: "startup_baseline_failure_reason 与 startup_baseline_detail_reason 取自 top-level windows_x64_platform_gate，且不进入 ccbd payload、不新增 CcbdStartupReport 字段、不写 readiness_timeline、不自动修改 backend/config"
     source: design AC-008 / DOD-IMPL-004
     status: pending
   - item: "本 feature 不新增 package.json.os=win32，不新增 Windows npm artifact 支持"
@@ -70,6 +73,7 @@ dod:
         - version_baseline_gate
         - os_cpu_node_python_bitness
         - helper_unknown_fail_closed
+        - helper_trusted_source_conflict_fail_closed
     - id: CMD-004
       command: "python -m pytest -q test/test_cli_doctor_windows_x64_platform_gate.py"
       core: true

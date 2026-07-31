@@ -27,8 +27,8 @@ steps:
     exit_signal: "cancel job 写 cancel flag/execution_service/cancelled decision；Herdr backend failure 不产生 completed；restart surface 返回真实 respawn/session binding evidence 或明确 unsupported/deferred，不接管 bounded recovery"
     status: pending
   - id: S7
-    action: "Scope/regression/manual evidence：运行 focused provider/runtime tests、scope/content guard，并收集 Native Windows x64 real provider dry run transcript"
-    exit_signal: "所有 core commands 通过或按 dependency/manual blocked 归因；transcript 覆盖 launch、ask、pend/completion、cancel 或 blocked evidence；无 recovery/user-surface/release/Herdr socket schema 越界"
+    action: "Scope/regression/manual evidence：运行 focused provider/runtime tests、scope/content guard，冻结 public_providers catalog snapshot，并收集所有公开 provider 的 Native Windows x64 Herdr pane ask/pend/completion/cancel transcript"
+    exit_signal: "所有 core commands 通过或按 dependency/manual blocked 归因；snapshot 来自当前 provider catalog；transcript 逐 provider 覆盖 launch、ask、pend/completion、cancel 或 blocked evidence；任一公开 provider 缺失不得进入 supported；无 recovery/user-surface/package/release/update/installer/Herdr socket schema/client 越界"
     status: pending
 
 checks:
@@ -62,10 +62,10 @@ checks:
   - item: "cancellation 和 provider pane restart surface 不接管 bounded recovery owner"
     source: design AC-010 / AC-011 / DOD-IMPL-005 / S6
     status: pending
-  - item: "Native Windows x64 real provider dry run transcript 覆盖 launch、ask、pend/completion、cancel 或 blocked evidence"
+  - item: "acceptance 先冻结当前 provider catalog 的 public_providers snapshot；Native Windows x64 all-provider transcript 覆盖每个公开 provider 的 launch、ask、pend/completion、cancel，或逐 provider explicit blocked evidence"
     source: design AC-012 / DOD-ACCEPT-001 / S7
     status: pending
-  - item: "本 feature 不修改 recovery owner、Mobile/Config UI、doctor/support、package/release/public matrix、Herdr socket schema client"
+  - item: "本 feature 不修改 recovery owner、Mobile/Config UI、doctor/support、package/release/update/installer/public matrix、Herdr socket schema/client owner"
     source: design AC-013 / 明确不做 / S7
     status: pending
 
@@ -108,18 +108,18 @@ dod:
       failure_handling: fix-or-block
     - id: CMD-009
       command: >-
-        python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; forbidden_prefix=('lib/ccbd/services/dispatcher_runtime/lifecycle_start_runtime/recovery_runtime/','lib/cli/services/doctor_runtime/','lib/mobile/','mobile/','config-ui/','lib/config_ui/'); forbidden_files={'package.json','package-lock.json','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py','lib/terminal_runtime/rmux_packaging_support.py'}; bad=sorted(p for p in paths if p.startswith(forbidden_prefix) or p in forbidden_files); assert not bad, bad; text=run(['git','diff','--','lib','test'])+run(['git','diff','--cached','--','lib','test'])+''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in paths if pathlib.Path(p).is_file() and p.endswith(('.py','.md','.yaml','.yml','.json'))); forbidden=re.compile(r'(probation_seconds|circuit_threshold|support_tier|npm publish|release surface|public workflow validation|Mobile terminal|Config UI|HerdrSocket|schema[_-]?parser)', re.I); assert not forbidden.search(text)"
+        python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; code_paths={p for p in paths if p.startswith(('lib/','test/'))}; forbidden_prefix=('lib/ccbd/services/dispatcher_runtime/lifecycle_start_runtime/recovery_runtime/','lib/cli/services/doctor_runtime/','lib/mobile/','mobile/','config-ui/','lib/config_ui/'); forbidden_files={'package.json','package-lock.json','install.ps1','install.sh','install.cmd','README.md','docs/ccbd-diagnostics-contract.md','bin/ccb-npm-install.js','lib/cli/management_runtime/install.py','lib/cli/management_runtime/commands_runtime/install.py','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py','lib/terminal_runtime/rmux_packaging_support.py','lib/terminal_runtime/rmux_packaging_support_projection.json'}; herdr_owner=re.compile(r'(^|/)(lib|test)/.*herdr.*(socket|schema|client)|(^|/)(lib|test)/.*(socket|schema|client).*herdr', re.I); bad=sorted(p for p in paths if p.startswith(forbidden_prefix) or p in forbidden_files or herdr_owner.search(p)); assert not bad, bad; text=run(['git','diff','--','lib','test'])+run(['git','diff','--cached','--','lib','test'])+''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in code_paths if pathlib.Path(p).is_file() and p.endswith(('.py','.md','.yaml','.yml','.json'))); forbidden=re.compile(r'(probation_seconds|circuit_threshold|support_tier|npm publish|release surface|update surface|installer|public workflow validation|Mobile terminal|Config UI|HerdrSocket|herdr socket (client|schema)|schema[_-]?parser)', re.I); assert not forbidden.search(text)"
       core: true
       failure_handling: fix-or-block
     - id: CMD-010
       command: >-
-        python -c "import subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; text=run(['git','diff','--','lib','test'])+run(['git','diff','--cached','--','lib','test']); assert not re.search(r'herdr_agent_state[^\n]{0,200}(CompletionStatus\.COMPLETED|status\s*=\s*[\"\\']completed|verdict\s*=\s*[\"\\']completed)', text, re.I)"
+        python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only','--','lib','test'],['git','diff','--cached','--name-only','--diff-filter=ACMR','--','lib','test'],['git','ls-files','--others','--exclude-standard','--','lib','test']) for p in run(a).splitlines() if p.strip()}; text=run(['git','diff','--','lib','test'])+run(['git','diff','--cached','--','lib','test'])+''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in paths if pathlib.Path(p).is_file() and p.endswith(('.py','.md','.yaml','.yml','.json'))); q=re.escape(chr(34)+chr(39)); pattern=r'herdr_agent_state[^\n]{0,200}(CompletionStatus\.COMPLETED|status\s*=\s*['+q+r']completed|verdict\s*=\s*['+q+r']completed)'; assert not re.search(pattern, text, re.I)"
       core: true
       failure_handling: fix-or-block
     - id: CMD-011
-      command: "MANUAL Native Windows x64: run one managed provider on Herdr backend, capture launch session payload, ask, pend/completion, and cancel or blocked evidence transcript"
+      command: "MANUAL Native Windows x64: first freeze public_providers from provider catalog (CORE_PROVIDER_NAMES + OPTIONAL_PROVIDER_NAMES or equivalent registry output), then for each listed provider run on Herdr backend and capture launch session payload, ask, pend/completion, and cancel; if unavailable, record per-provider blocked evidence"
       core: true
-      failure_handling: blocked-if-no-host-herdr-or-provider
+      failure_handling: blocked-if-any-provider-missing-or-no-host-herdr
   evidence_required:
     - implementation_admission_evidence
     - fake_herdr_runtime_launch_tests
@@ -130,11 +130,12 @@ dod:
     - provider_native_completion_fallback_tests
     - cancellation_restart_evidence_tests
     - scope_content_guards
-    - native_windows_x64_real_provider_dry_run_transcript
+    - provider_catalog_public_providers_snapshot
+    - native_windows_x64_all_provider_workflow_transcript
   cleanliness:
     recovery_owner_changes: forbidden
     user_surface_projection_changes: forbidden
-    package_release_changes: forbidden
-    herdr_socket_schema_client_changes: forbidden
+    package_release_update_installer_changes: forbidden
+    herdr_socket_schema_client_owner_changes: forbidden
     raw_restore_token_public_logging: forbidden
     debug_output: forbidden

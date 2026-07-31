@@ -27,7 +27,7 @@ steps:
     exit_signal: "destroy 只杀 current Herdr namespace；additive_patch_apply.py 从 current namespace V2 ref 建 backend context；add/remove/move/reflow patch modules 使用 V2 refs 调用 kill/ensure/reflow/patch primitive，缺 required capability 时 patch result blocked/failed 且不 published/noop 成功；project_restart.py agent/panes handlers 在 Herdr 下返回 unsupported/deferred evidence，不改 provider completion，不走静默 scheduled success"
     status: pending
   - id: S6
-    action: "[S6] scope/content guard：禁止 provider runtime、recovery owner、Mobile/Config UI、doctor/support/package/release/public validation matrix 越界"
+    action: "[S6] scope/content guard：禁止 provider runtime、recovery owner、Mobile/Config UI、doctor/support/package/release/update/installer/public validation matrix 越界"
     exit_signal: "guard 覆盖 modified、staged、rename/copy、untracked path 和 staged/untracked content"
     status: pending
   - id: S7
@@ -81,7 +81,7 @@ checks:
   - item: "现有 tmux/rmux namespace、rmux foreground attach、reload tests 不退化"
     source: design AC-012
     status: pending
-  - item: "本 feature 不修改 provider runtime、recovery、Mobile/Config UI、doctor/support、package/release、public validation matrix"
+  - item: "本 feature 不修改 provider runtime、recovery、Mobile/Config UI、doctor/support、package/release/update/installer、public validation matrix"
     source: design AC-013 / 明确不做
     status: pending
 
@@ -136,7 +136,7 @@ dod:
         - provider_completion_unchanged
     - id: CMD-007
       command: >-
-        python -c "import subprocess; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; forbidden_prefix=('lib/provider_backends/','lib/provider_runtime/','lib/ccbd/services/dispatcher_runtime/lifecycle_start_runtime/recovery_runtime/','lib/cli/services/doctor_runtime/','lib/mobile/','mobile/','config-ui/','lib/config_ui/'); forbidden_files={'package.json','package-lock.json','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py','lib/terminal_runtime/rmux_packaging_support.py'}; bad=sorted(p for p in paths if p.startswith(forbidden_prefix) or p in forbidden_files); assert not bad, bad"
+        python -c "import subprocess; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; forbidden_prefix=('lib/provider_backends/','lib/provider_runtime/','lib/ccbd/services/dispatcher_runtime/lifecycle_start_runtime/recovery_runtime/','lib/cli/services/doctor_runtime/','lib/mobile/','mobile/','config-ui/','lib/config_ui/'); forbidden_files={'package.json','package-lock.json','install.ps1','install.sh','install.cmd','README.md','docs/ccbd-diagnostics-contract.md','bin/ccb-npm-install.js','lib/cli/management_runtime/install.py','lib/cli/management_runtime/commands_runtime/install.py','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py','lib/terminal_runtime/rmux_packaging_support.py','lib/terminal_runtime/rmux_packaging_support_projection.json'}; bad=sorted(p for p in paths if p.startswith(forbidden_prefix) or p in forbidden_files); assert not bad, bad"
       core: true
       failure_handling: fix-or-block
       test_status: new
@@ -146,6 +146,10 @@ dod:
         - no_doctor_support_scope_guard
         - no_mobile_config_ui_scope_guard
         - no_package_release_scope_guard
+        - no_update_installer_scope_guard
+        - install_cmd_scope_guard
+        - npm_postinstall_scope_guard
+        - cli_install_management_scope_guard
     - id: CMD-008
       command: >-
         python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only','--','lib','test'],['git','diff','--cached','--name-only','--diff-filter=ACMR','--','lib','test'],['git','ls-files','--others','--exclude-standard','--','lib','test']) for p in run(a).splitlines() if p.strip()}; text=run(['git','diff','--','lib','test'])+run(['git','diff','--cached','--','lib','test'])+''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in paths if pathlib.Path(p).is_file() and p.endswith(('.py','.md','.yaml','.yml','.json'))); forbidden=re.compile(r'(HerdrProviderCompletionEvidence|completion_source|probation_seconds|circuit_threshold|support_tier|npm publish|release surface|public workflow validation|Mobile terminal|Config UI)', re.I); assert not forbidden.search(text)"

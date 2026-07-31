@@ -1,12 +1,12 @@
 ---
 doc_type: feature-design
 feature: 2026-07-31-herdr-user-surfaces-parity
-requirement:
+requirement: native-windows-ccb-via-herdr
 roadmap: windows-native-herdr-ccb
 roadmap_item: herdr-user-surfaces-parity
 execution_lane: goal
-status: draft
-summary: 将 Herdr backend evidence 安全投影到 foreground attach、Mobile terminal、Config UI、doctor、ping、mounted 和 project view，展示 beta gaps 与 degraded next action
+status: approved
+summary: 将 Herdr backend evidence 安全投影到 foreground attach、Mobile terminal、Config UI、doctor、ping、mounted 和 project view，并把 Mobile/Config UI 作为 supported hard gate
 tags: [herdr, user-surfaces, mobile, config-ui, doctor, ping, project-view, epic-child]
 ---
 
@@ -36,20 +36,21 @@ tags: [herdr, user-surfaces, mobile, config-ui, doctor, ping, project-view, epic
 
 ### 需求摘要
 
-本 feature 定义 Herdr backend evidence 在 public surfaces 中的投影契约。用户在 Native Windows x64 Herdr backend 下，应能从 foreground attach、Mobile terminal、Config UI、doctor、ping、mounted、project view 和 diagnostics bundle 看到一致的 backend identity、capability/beta gaps、degraded reason、recovery/action next step；同时 Herdr pane/session primitive 不能越界成为 provider completion 或 recovery owner。
+本 feature 定义 Herdr backend evidence 在 public surfaces 中的投影契约。用户在 Native Windows x64 Herdr backend 下，应能从 foreground attach、Mobile terminal、Config UI、doctor、ping、mounted、project view 和 diagnostics bundle 看到一致的 backend identity、capability/beta gaps、degraded reason、recovery/action next step；Mobile terminal 与 Config UI 必须作为后续 supported hard gate 输出 pass/blocked 证据；同时 Herdr pane/session primitive 不能越界成为 provider completion 或 recovery owner。
 
 成功标准：
 
 - implementation admission 必须验证 `provider-runtime-on-herdr` 与 `herdr-bounded-recovery-boundary` 已 accepted；只有 design-review passed 时 dependency-blocked。
 - ProjectView / ping / doctor / diagnostics bundle 都能展示 `backend_impl="herdr"`、Herdr namespace/pane refs、capability status、support tier projection/source、beta gaps、degraded next action，且 raw restore token 不进入 public payload。
 - foreground attach 支持 Herdr attach capability：支持则调用 backend-neutral attach；不支持则 fail closed 并显示 beta gap / next action。
-- Mobile terminal 支持 Herdr terminal target abstraction：支持 websocket/history/message 则走 Herdr PaneIO/PanePresentation primitive；不支持则返回 structured blocked/degraded payload，不伪装成 tmux。
+- Mobile terminal 支持 Herdr terminal target abstraction：支持 websocket/history/message 则走 Herdr PaneIO/PanePresentation primitive；不支持则返回 structured blocked/degraded payload，不伪装成 tmux。Mobile terminal 若不是 pass，后续 supportability 不得输出 `supported`。
 - Config UI 只增加只读 backend/status/capability 投影，不改变 provider config validation、profile save、reload/apply contract。
+- Config UI readonly status 必须有 pass/blocked 证据；若 degraded/partial，后续 supportability 不得输出 `supported`。
 - mounted/project view 不只显示 backend available，还要显示 partial/blocked reason、support tier projection source 和下一步。
 
 明确不做：
 
-- 不新增 release/publish/npm metadata/support tier 最终宣称；这些属于后续 `windows-x64-release-surface` / validation / support projection。
+- 不新增 package/release/update/installer/npm metadata/support tier 最终宣称；这些属于后续 `windows-x64-release-surface` / validation / support projection。
 - 不改变 provider completion、ask/pend/cancellation 权威；Herdr agent state diagnostics-only。
 - 不实现 Herdr socket client schema；只消费前置 Herdr backend/client capability。
 - 不把 Mobile/Config UI 做视觉大改版；本 feature 只补 data contract、render rows、blocked/degraded states 和 focused tests。
@@ -71,8 +72,8 @@ tags: [herdr, user-surfaces, mobile, config-ui, doctor, ping, project-view, epic
    缓解：所有 surfaces 必须带 `capability_status`、`blocking_gaps`、`degraded_next_action`；acceptance 用 blocked/partial 样例核对。
 2. **风险：Mobile terminal 继续依赖 tmux evidence。**  
    缓解：S3 建 backend-neutral terminal target；tmux-only target 缺失时不再报 “tmux evidence missing” 给 Herdr，而返回 Herdr-specific blocked/degraded code。
-3. **风险：支持等级被提前夸大。**  
-   缓解：本 feature 只输出 projection source 和 beta gaps，不改 README/support tier final claim，不碰 package/release。
+3. **风险：支持等级被提前夸大。**
+   缓解：本 feature 只输出 projection source 和 beta gaps，不改 README/support tier final claim，不碰 package/release/update/installer。
 
 ### 非显然依赖与关键假设
 
@@ -134,7 +135,7 @@ class TerminalOperationAdapter(Protocol):
 
 - tmux/rmux public payload 不退化；Herdr fields additive。
 - ProjectView / ping / doctor / diagnostics 中的 namespace/pane refs 必须 redacted；不得输出 raw restore token。
-- `support_tier_projection` 是当前 evidence 投影，只允许 `unsupported` / `experimental` / `beta`；不得在本 feature 输出 `supported`。最终 `support_tier="supported"` 只能由后续 validation / supportability projection 依据完整矩阵产生。
+- `support_tier_projection` 是当前 evidence 投影，只允许 `unsupported` / `experimental` / `beta`；不得在本 feature 输出 `supported`。最终 `support_tier="supported"` 只能由后续 validation / supportability projection 依据完整矩阵产生，并要求 Mobile terminal 与 Config UI 均为 pass。
 - `support_tier_projection_source` 必须说明来源：backend capability、validation pending，或 supportability deferred；doctor/mounted/project view 必须显示该来源，避免把当前状态误读成最终支持承诺。
 - `degraded_next_action` 必须可行动，例如 `install-herdr-x64`、`enable-herdr-backend`、`collect-validation-transcript`、`repair-provider-auth`、`wait-probation`。
 - Mobile terminal 的 websocket attach、history、message 三条路径都必须通过 `TerminalOperationAdapter` 或等价 seam；tmux 现有实现只是一个 adapter，Herdr 不得在 `MobileGatewayService` 内复制 tmux socket/session/pane 分支。
@@ -194,7 +195,7 @@ flowchart TD
 5. **Doctor / mounted / diagnostics support surfaces**：doctor render、mounted state projection、project view、diagnostics bundle 对齐同一 projection 和 redacted evidence source。
 6. **Config UI readonly status**：Config UI readonly status/session payload 对齐同一 projection，不改变 config edit/apply。
 7. **Regression and scope guard**：跑 existing tmux/rmux/Mobile/doctor/config UI tests、Herdr fake surface tests、scope/redaction guard。
-8. **Native Windows surface transcript**：收集 foreground attach、Mobile terminal 或 blocked evidence、doctor/ping/mounted/project view transcript。
+8. **Native Windows surface transcript**：收集 foreground attach、Mobile terminal pass/blocked、Config UI pass/blocked、doctor/ping/mounted/project view transcript；Mobile/Config partial/degraded 只能作为 blocked evidence。
 
 ### 2.5 结构健康度与微重构
 
@@ -221,20 +222,20 @@ flowchart TD
 | AC-003 | `ccb ping ccbd` / agent ping on Herdr | ping payload 与 ProjectView projection 一致，不泄露 raw token，support tier source 一致 | unit/CLI |
 | AC-004 | foreground attach on Herdr attach supported | 调 backend-neutral attach，summary 显示 Herdr namespace/session refs | unit/manual |
 | AC-005 | foreground attach on Herdr attach unsupported | fail closed，错误含 beta gap / next action，不要求 tmux | unit |
-| AC-006 | Mobile terminal target on Herdr supported | websocket/history/message 使用 backend-neutral operation adapter，不要求 tmux socket/session | unit/integration |
-| AC-007 | Mobile terminal target on Herdr unsupported/partial | 返回 `TerminalBlockedPayload`，UI 可显示 code、reason、next action | unit |
+| AC-006 | Mobile terminal target on Herdr supported | websocket/history/message 使用 backend-neutral operation adapter，不要求 tmux socket/session，matrix 可记录 mobile_terminal pass | unit/integration |
+| AC-007 | Mobile terminal target on Herdr unsupported/partial | 返回 `TerminalBlockedPayload`，UI 可显示 code、reason、next action；后续 supportability 必须 blocked，不得 supported | unit |
 | AC-008 | doctor/mounted/project view/diagnostics bundle | 输出 Herdr support tier projection/source、capability status、blocked reason、degraded next action；bundle 中来源为 redacted ccbd/generated artifact | CLI/unit |
-| AC-009 | Config UI readonly status | `/api/session` 或 dedicated readonly endpoint 显示 backend status/beta gaps，不改变 config edit/apply | unit/browser-light |
+| AC-009 | Config UI readonly status | `/api/session` 或 dedicated readonly endpoint 显示 backend status/beta gaps，不改变 config edit/apply；Config UI pass 是 supported hard gate | unit/browser-light |
 | AC-010 | tmux/rmux regression | existing attach/Mobile/project view/doctor tests 不退化 | unit |
-| AC-011 | scope boundary | 不改 provider completion、release/package/support final claim、provider auth/session authority | diff review |
-| AC-012 | Native Windows x64 surface evidence | transcript 覆盖 foreground attach/Mobile/doctor/ping/mounted/project view 或 blocked evidence | manual transcript |
+| AC-011 | scope boundary | 不改 provider completion、package/release/update/installer/support final claim、provider auth/session authority、Herdr socket schema/client owner | diff review |
+| AC-012 | Native Windows x64 surface evidence | transcript 覆盖 foreground attach、Mobile terminal、Config UI、doctor/ping/mounted/project view；Mobile/Config 若非 pass 必须明确 blocked evidence | manual transcript |
 
 ### 3.2 明确不做的反向核对项
 
 - 不应新增 `CompletionStatus.COMPLETED` 判定或改变 job terminal verdict。
 - 不应把 Herdr agent state 显示为 completion authority。
 - 不应输出 raw restore token、provider secret 或 terminal buffer 全量。
-- 不应修改 package/release/npm publish/support final claim。
+- 不应修改 package/release/update/installer/npm publish/support final claim。
 - 不应让 Herdr 走 tmux socket/session/pane `%N` 伪装路径。
 
 ### 3.3 Acceptance Coverage Matrix
@@ -263,9 +264,9 @@ flowchart TD
 | DOD-IMPL-001 | shared Herdr surface projection 字段一致，含 support tier projection/source，redacted refs 不泄露 raw token | unit/static | blocking |
 | DOD-IMPL-002 | ProjectView/ping/doctor/mounted/diagnostics 显示 capability/beta gaps/support tier projection/source/degraded next action | unit/CLI | blocking |
 | DOD-IMPL-003 | foreground attach Herdr supported/blocked 两条路径都可观察，不落 tmux fallback | unit/manual | blocking |
-| DOD-IMPL-004 | Mobile terminal target v2 经 backend-neutral operation adapter 支持 Herdr supported/blocked，tmux/rmux regression 不退化 | unit/integration | blocking |
-| DOD-IMPL-005 | Config UI 只读 status 投影不改变 config edit/apply contract | unit | blocking |
-| DOD-IMPL-006 | 无 provider completion、release/package/support final claim 越界 | diff review | blocking |
+| DOD-IMPL-004 | Mobile terminal target v2 经 backend-neutral operation adapter 支持 Herdr pass/blocked，tmux/rmux regression 不退化；非 pass 阻塞 supported | unit/integration | blocking |
+| DOD-IMPL-005 | Config UI 只读 status 投影不改变 config edit/apply contract；非 pass 阻塞 supported | unit/browser-light | blocking |
+| DOD-IMPL-006 | 无 provider completion、package/release/update/installer/support final claim、Herdr socket schema/client owner 越界 | diff review | blocking |
 | DOD-REVIEW-001 | code review passed 且无 unresolved blocking | review report | blocking |
 | DOD-QA-001 | QA 复核 public surface consistency、redaction、blocked states、tmux/rmux regression | QA report | blocking |
 | DOD-ACCEPT-001 | acceptance 回写 roadmap item，并包含 Native Windows x64 surface transcript 或 blocked evidence | acceptance report | blocking |
@@ -280,8 +281,8 @@ Validation Commands:
 | CMD-004 | `python -m pytest -q test/test_ccbd_project_view.py test/test_v2_ccbd_ping_runtime.py test/test_cli_doctor_supervision.py test/test_v2_cli_render.py test/test_v2_diagnostics_bundle.py -k "herdr or backend or evidence or diagnostics or project_view or ping or doctor or mounted or ps or layout"` | ProjectView/ping/doctor/mounted/diagnostics projection | core | fix-or-block |
 | CMD-005 | `python -m pytest -q test/test_v2_start_foreground.py test/test_mobile_gateway_terminal.py test/test_mobile_gateway_service.py test/test_config_ui.py -k "herdr or backend or terminal or attach or blocked or config or readonly"` | foreground/Mobile/Config UI Herdr surfaces | core | fix-or-block |
 | CMD-006 | `python -m pytest -q test/test_terminal_runtime_tmux_attach.py test/test_mobile_gateway_terminal.py test/test_mobile_gateway_service.py test/test_ccbd_project_view.py test/test_cli_doctor_supervision.py` | tmux/rmux public surface regression | core | fix-or-block |
-| CMD-007 | `python -c 'import subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; text=run(["git","diff","--","lib","test"])+run(["git","diff","--cached","--","lib","test"]); forbidden=re.compile(r"(CompletionStatus\\.COMPLETED|npm publish|release surface|support_tier\\s*=\\s*[''""]supported|restore_token.*(doctor|project_view|diagnostics|mobile|ping|logger|print))", re.I|re.S); assert not forbidden.search(text)'` | provider completion/release/support/redaction scope guard | core | fix-or-block |
-| CMD-008 | `MANUAL Native Windows x64: capture foreground attach, Mobile terminal or blocked payload, doctor, ping, mounted, project view Herdr evidence transcript` | public workflow evidence | core | blocked-if-no-host-or-herdr |
+| CMD-007 | `python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; implementation_roots=('lib/','test/','bin/','scripts/'); scoped=sorted(p for p in paths if p.startswith(implementation_roots)); forbidden_files={'package.json','package-lock.json','install.ps1','install.sh','install.cmd','README.md','docs/ccbd-diagnostics-contract.md','bin/ccb-npm-install.js','lib/cli/management_runtime/install.py','lib/cli/management_runtime/commands_runtime/install.py','lib/terminal_runtime/rmux_packaging_support.py','lib/terminal_runtime/rmux_packaging_support_projection.json'}; forbidden_text_paths={p for p in paths if p in forbidden_files or p.startswith(('docs/','bin/','scripts/')) or p.startswith(implementation_roots)}; herdr_owner=re.compile(r'(^|/)(lib|test)/.*herdr.*(socket|schema|client)|(^|/)(lib|test)/.*(socket|schema|client).*herdr', re.I); bad=sorted(p for p in paths if p in forbidden_files or herdr_owner.search(p)); assert not bad, bad; text=run(['git','diff','--','lib','test','bin','scripts','docs','README.md','package.json','package-lock.json','install.ps1','install.sh','install.cmd'])+run(['git','diff','--cached','--','lib','test','bin','scripts','docs','README.md','package.json','package-lock.json','install.ps1','install.sh','install.cmd'])+''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in forbidden_text_paths if pathlib.Path(p).is_file() and p.endswith(('.py','.md','.yaml','.yml','.json','.js','.ps1','.sh','.cmd'))); q=re.escape(chr(34)+chr(39)); supported=r'support_tier\\s*[:=]\\s*['+q+r']supported|Windows x64 CCB supported|supported hard gate passed'; raw_token=r'(?<![A-Za-z0-9_])restore_token(?![A-Za-z0-9_]).*(doctor|project_view|diagnostics|mobile|ping|logger|print)'; forbidden=re.compile(r'(CompletionStatus\\.COMPLETED|npm publish|release surface|update surface|installer|'+supported+r'|'+raw_token+r')', re.I|re.S); assert not forbidden.search(text)"` | provider completion/package/release/update/installer/support/redaction/Herdr socket schema-client scope guard，覆盖顶层 forbidden files、docs/bin/scripts/lib/test 的 staged/unstaged/untracked，且排除 .codestable design 文档自身 | core | fix-or-block |
+| CMD-008 | `MANUAL Native Windows x64: capture foreground attach, Mobile terminal or blocked payload, Config UI pass/blocked, doctor, ping, mounted, project view Herdr evidence transcript` | public workflow evidence | core | blocked-if-no-host-or-herdr |
 
 Required Artifacts：design、checklist、design-review、upstream admission evidence、Herdr surface projection tests、ProjectView/ping/doctor/mounted/diagnostics tests、diagnostics bundle redacted source evidence、foreground attach supported/blocked tests、Mobile terminal target v2 adapter tests、Config UI readonly status tests、tmux/rmux regression tests、redaction/scope guards、Native Windows x64 surface transcript、acceptance 阶段按 epic/roadmap owner 协议回写 items.yaml。
 

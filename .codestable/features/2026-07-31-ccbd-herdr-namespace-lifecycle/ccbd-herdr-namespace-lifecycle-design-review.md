@@ -4,9 +4,9 @@ feature: 2026-07-31-ccbd-herdr-namespace-lifecycle
 status: passed
 review_state: passed
 review_reason: ""
-reviewer_id: 019fb6d5-3c0e-7af1-b1f9-7c7656e276cb
-reviewed: 2026-07-31
-round: 4
+reviewer_id: 019fb91b-f137-7bb3-943b-19df389bbc42
+reviewed: 2026-08-01
+round: 5
 ---
 
 # ccbd-herdr-namespace-lifecycle feature design 审查报告
@@ -25,10 +25,10 @@ round: 4
 
 - Status: completed
 - Detection: independent-agent
-- Provider / agent: `019fb6d5-3c0e-7af1-b1f9-7c7656e276cb`
-- Raw output: round 4 reviewer returned `changes-requested` with no blocking and 2 important findings.
+- Provider / agent: round 4 `019fb6d5-3c0e-7af1-b1f9-7c7656e276cb` changes-requested；round 5 `019fb91b-f137-7bb3-943b-19df389bbc42` passed.
+- Raw output: round 5 未发现 blocking / important；确认 scope 只覆盖 ccbd namespace lifecycle、layout/reflow、foreground attach、kill/restart/reload，public payload/project view/foreground/event/log 均受 redacted projection 约束，Herdr foreground attach fail closed 且不 fallback tmux，provider/recovery/doctor/support/Mobile/Config/release/install 边界均有 guard。
 - Merge policy: 主线程逐条用 design/checklist/roadmap/code 事实核验；两个 important 已做 focused closure。
-- Gate effect: independent review gate satisfied; focused closure verified after narrow deltas.
+- Gate effect: independent review completed and merged; final verdict passed.
 
 ## 2. Design Summary
 
@@ -106,3 +106,4 @@ Summary: E=6, C=3, H=0, H-only core checks=none。
   - `validate-yaml.py` for roadmap items: passed。
   - 本地核验 design/checklist 已含 AC-011、CMD-013、restart agent/panes handler、no scheduled silent success、AC-012/AC-013 traceability。
 - Classification: 本 closure 只关闭独立 reviewer 指出的 stale contradiction 与 surface traceability；未新增实现范围，Herdr provider pane restart 仍明确留给后续 feature。
+- Focused closure: round 5 nit 将术语表 `restore_token_present` 统一为 `namespace_restore_token_present`，不改变行为、公开契约、验收语义或范围。
