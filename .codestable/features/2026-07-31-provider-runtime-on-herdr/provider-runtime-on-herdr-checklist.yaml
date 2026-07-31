@@ -1,0 +1,140 @@
+feature: 2026-07-31-provider-runtime-on-herdr
+created: 2026-07-31
+
+steps:
+  - id: S1
+    action: "Implementation admission：确认前置 V2 contract、HerdrBackend、ccbd Herdr namespace lifecycle 和 assigned pane evidence 已 implementation/acceptance ready"
+    exit_signal: "前置 roadmap item 为 done、acceptance report 为 passed、required artifacts/evidence refs 存在且 focused tests/import check 通过；缺 Herdr PaneIO、namespace/pane refs、foreground/namespace evidence 或 acceptance transcript 时写 dependency-blocked admission report"
+    status: pending
+  - id: S2
+    action: "Backend-neutral runtime launch：让 provider pane launch 在 Herdr backend 下通过 PaneIO/PanePresentation 启动 assigned pane，不要求 tmux binary"
+    exit_signal: "fake Herdr backend 记录 respawn/create、identity、log/capture 调用；Herdr path 不调用 detached tmux fallback、tmux size probe 或 tmux server policy；tmux/rmux launch regression 不退化"
+    status: pending
+  - id: S3
+    action: "Provider runtime session payload：扩展 writer/parser/resolver 支持 ProviderRuntimeBackendRef、managed_home、completion_source、completion_source_kind、Herdr namespace_ref/pane_ref 与 restore token redaction"
+    exit_signal: "session 文件能 round-trip backend_impl=herdr、herdr-native/herdr_socket、pane_ref、managed_home、roadmap 粗粒度 completion_source、精确 completion_source_kind、namespace_restore_token_present；raw restore_token 不进 public payload/log；legacy tmux/rmux alias 兼容"
+    status: pending
+  - id: S4
+    action: "Provider session lifecycle：让 pane_log_support 和 provider session ensure_pane 使用 backend-neutral liveness/log/capture，tmux ownership/rebound 只限 tmux-compatible"
+    exit_signal: "Claude/Gemini/Opencode/Codex 或 pane-log focused tests 证明 Herdr session 不走 tmux ownership/rebound；capability unsupported 输出 actionable error；tmux/rmux ensure_pane 兼容"
+    status: pending
+  - id: S5
+    action: "Ask/pend/completion authority：保持 dispatcher/provider execution/completion tracker 为 completion authority，Herdr terminal capture 仅作 provider-declared fallback 或 diagnostics"
+    exit_signal: "provider-native log/event/hook artifact、session snapshot 或 structured result 保留精确 completion_source_kind；terminal capture fallback 降级可见；Herdr agent state 不得直接产出 completed verdict；Codex reply delivery acceptance gate 不退化"
+    status: pending
+  - id: S6
+    action: "Cancellation and provider pane restart surface：让 Herdr cancel/restart 只通过 CCB job/session authority 写状态，backend primitive 只提供 interrupt/kill/respawn/capture evidence"
+    exit_signal: "cancel job 写 cancel flag/execution_service/cancelled decision；Herdr backend failure 不产生 completed；restart surface 返回真实 respawn/session binding evidence 或明确 unsupported/deferred，不接管 bounded recovery"
+    status: pending
+  - id: S7
+    action: "Scope/regression/manual evidence：运行 focused provider/runtime tests、scope/content guard，并收集 Native Windows x64 real provider dry run transcript"
+    exit_signal: "所有 core commands 通过或按 dependency/manual blocked 归因；transcript 覆盖 launch、ask、pend/completion、cancel 或 blocked evidence；无 recovery/user-surface/release/Herdr socket schema 越界"
+    status: pending
+
+checks:
+  - item: "前置 Herdr V2/client/namespace lifecycle 不是仅 design-review passed，而是 implementation/acceptance evidence 可验证"
+    source: design AC-001 / DOD-IMPL-000 / S1
+    status: pending
+  - item: "Herdr provider launch 不要求 tmux binary，不走 detached tmux fallback，不要求 pane id 为 %N"
+    source: design AC-003 / DOD-IMPL-001 / S2
+    status: pending
+  - item: "tmux/rmux pane-backed provider launch 与 existing session payload tests 不退化"
+    source: design AC-002 / S2
+    status: pending
+  - item: "ProviderRuntimeBackendRef 写入 backend_impl、namespace_ref、pane_ref、managed_home、completion_source、completion_source_kind，并保留 protected shared keys 冲突诊断"
+    source: design AC-004 / DOD-IMPL-002 / S3
+    status: pending
+  - item: "Herdr session payload 能构造 Herdr backend；未知 backend 不默认回 tmux"
+    source: design AC-005 / S3
+    status: pending
+  - item: "provider session ensure_pane/log/capture 在 Herdr 下不调用 tmux ownership/rebound"
+    source: design AC-006 / DOD-IMPL-003 / S4
+    status: pending
+  - item: "ask/pend/completion 继续由 dispatcher/provider execution/completion tracker 裁决，pend 不是 authoritative completion path"
+    source: design AC-007 / DOD-IMPL-004 / S5
+    status: pending
+  - item: "provider-native log/event/hook artifact、session snapshot、structured result stream 保留精确 completion_source_kind；terminal capture fallback 只能按 provider contract 降级使用"
+    source: design AC-008 / AC-009 / S5
+    status: pending
+  - item: "Herdr agent state 只进入 diagnostics/evidence，不得单独产生 completed verdict"
+    source: design AC-008 / AC-009 / S5 / CMD-010
+    status: pending
+  - item: "cancellation 和 provider pane restart surface 不接管 bounded recovery owner"
+    source: design AC-010 / AC-011 / DOD-IMPL-005 / S6
+    status: pending
+  - item: "Native Windows x64 real provider dry run transcript 覆盖 launch、ask、pend/completion、cancel 或 blocked evidence"
+    source: design AC-012 / DOD-ACCEPT-001 / S7
+    status: pending
+  - item: "本 feature 不修改 recovery owner、Mobile/Config UI、doctor/support、package/release/public matrix、Herdr socket schema client"
+    source: design AC-013 / 明确不做 / S7
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-31-provider-runtime-on-herdr/provider-runtime-on-herdr-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: >-
+        python -c "import pathlib, re; root=pathlib.Path('.codestable/features'); items=pathlib.Path('.codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml').read_text(encoding='utf-8'); deps={'mux-backend-contract-herdr-v2':'2026-07-31-mux-backend-contract-herdr-v2','herdr-backend-client':'2026-07-31-herdr-backend-client','ccbd-herdr-namespace-lifecycle':'2026-07-31-ccbd-herdr-namespace-lifecycle'}; artifact_marker=re.compile(r'(Required Artifacts|required artifacts|evidence_required|证据|交付物|artifact)', re.I); ref_marker=re.compile(r'(CMD-\d+|pytest|transcript|\.json|\.md|evidence|artifact|test)', re.I); missing=[]; [missing.append(f'{slug}: roadmap not done') for slug,feature in deps.items() if not re.search(r'- slug: '+re.escape(slug)+r'[\s\S]*?status: done[\s\S]*?feature: '+re.escape(feature), items)]; read=lambda p: p.read_text(encoding='utf-8',errors='ignore'); ok=lambda feature: any(('doc_type: feature-acceptance' in (text:=read(p)) and 'status: passed' in text and artifact_marker.search(text) and ref_marker.search(text)) for p in (root/feature).glob('*-acceptance.md')); [missing.append(f'{feature}: acceptance missing/passed/artifact-evidence-refs') for feature in deps.values() if not ok(feature)]; assert not missing, missing"
+        && python -m pytest -q test/test_mux_backend_contract.py test/test_herdr_backend_client.py test/test_v2_project_namespace_backend.py test/test_v2_start_foreground.py -k "herdr or mux or namespace or foreground or attach"
+      core: true
+      failure_handling: dependency-blocked
+    - id: CMD-004
+      command: "python -m pytest -q test/test_v2_runtime_launch.py test/test_runtime_launch_timings.py test/test_v2_runtime_launch_session_files.py -k \"runtime or launch or session or pane or mux or herdr or rmux\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-005
+      command: "python -m pytest -q test/test_provider_runtime_session_payload_guard.py test/test_pane_log_support_session.py test/test_claude_session_ensure_pane.py test/test_gemini_session_ensure_pane.py test/test_opencode_session_ensure_pane.py -k \"session or pane or backend or herdr or mux or restore_token\""
+      core: true
+      failure_handling: fix-or-block
+      test_status: includes-new-test-files
+    - id: CMD-006
+      command: "python -m pytest -q test/test_v2_phase2_ask.py test/test_v2_ask_service.py test/test_reply_delivery_start_completion.py test/test_v2_completion_orchestration.py test/test_cancel_flags.py -k \"ask or pend or completion or reply_delivery or cancel or provider\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-007
+      command: "python -m pytest -q test/test_claude_execution_polling.py test/test_gemini_execution_hook.py test/test_opencode_execution_polling.py test/test_native_cli_completion.py test/test_codex_reply_delivery.py -k \"completion or hook_artifact or reply_delivery or terminal_capture or herdr\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-008
+      command: "python -m pytest -q test/test_ccbd_start_agent_runtime.py test/test_ccbd_health_assessment_provider_pane.py -k \"runtime or pane or restart or herdr or unsupported or deferred\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-009
+      command: >-
+        python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; forbidden_prefix=('lib/ccbd/services/dispatcher_runtime/lifecycle_start_runtime/recovery_runtime/','lib/cli/services/doctor_runtime/','lib/mobile/','mobile/','config-ui/','lib/config_ui/'); forbidden_files={'package.json','package-lock.json','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py','lib/terminal_runtime/rmux_packaging_support.py'}; bad=sorted(p for p in paths if p.startswith(forbidden_prefix) or p in forbidden_files); assert not bad, bad; text=run(['git','diff','--','lib','test'])+run(['git','diff','--cached','--','lib','test'])+''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in paths if pathlib.Path(p).is_file() and p.endswith(('.py','.md','.yaml','.yml','.json'))); forbidden=re.compile(r'(probation_seconds|circuit_threshold|support_tier|npm publish|release surface|public workflow validation|Mobile terminal|Config UI|HerdrSocket|schema[_-]?parser)', re.I); assert not forbidden.search(text)"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-010
+      command: >-
+        python -c "import subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; text=run(['git','diff','--','lib','test'])+run(['git','diff','--cached','--','lib','test']); assert not re.search(r'herdr_agent_state[^\n]{0,200}(CompletionStatus\.COMPLETED|status\s*=\s*[\"\\']completed|verdict\s*=\s*[\"\\']completed)', text, re.I)"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-011
+      command: "MANUAL Native Windows x64: run one managed provider on Herdr backend, capture launch session payload, ask, pend/completion, and cancel or blocked evidence transcript"
+      core: true
+      failure_handling: blocked-if-no-host-herdr-or-provider
+  evidence_required:
+    - implementation_admission_evidence
+    - fake_herdr_runtime_launch_tests
+    - provider_runtime_backend_ref_session_payload_tests
+    - completion_source_kind_mapping_tests
+    - backend_for_session_herdr_tests
+    - provider_session_ensure_pane_tests
+    - provider_native_completion_fallback_tests
+    - cancellation_restart_evidence_tests
+    - scope_content_guards
+    - native_windows_x64_real_provider_dry_run_transcript
+  cleanliness:
+    recovery_owner_changes: forbidden
+    user_surface_projection_changes: forbidden
+    package_release_changes: forbidden
+    herdr_socket_schema_client_changes: forbidden
+    raw_restore_token_public_logging: forbidden
+    debug_output: forbidden

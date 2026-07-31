@@ -1,0 +1,119 @@
+feature: 2026-07-31-herdr-user-surfaces-parity
+created: 2026-07-31
+
+steps:
+  - id: S1
+    action: "Admission and projection contract：确认 provider-runtime-on-herdr 与 herdr-bounded-recovery-boundary acceptance ready，并定义 shared Herdr surface projection"
+    exit_signal: "两个 upstream roadmap item done、acceptance passed、artifact/evidence refs 存在；projection 字段含 capability_status、support_tier_projection、support_tier_projection_source、beta_gaps、blocking_gaps、degraded_next_action、redacted refs"
+    status: pending
+  - id: S2
+    action: "ProjectView / ping source of truth：投影 Herdr backend identity、capability、support tier projection、beta gaps、degraded next action 和 redacted refs"
+    exit_signal: "ProjectView 与 ping payload 字段一致；backend_impl=herdr、capability_status、support_tier_projection/source、blocking_gaps、degraded_next_action 可断言；raw restore token 不出现"
+    status: pending
+  - id: S3
+    action: "Foreground attach：Herdr attach supported 时走 backend-neutral attach，unsupported/partial 时 structured blocked"
+    exit_signal: "fake Herdr attach 成功路径返回 Herdr summary；unsupported 路径错误含 beta gap/next action；不要求 tmux binary"
+    status: pending
+  - id: S4
+    action: "Mobile terminal target v2：Mobile history/websocket/message 经 backend-neutral operation adapter，Herdr unsupported 时 structured blocked/degraded"
+    exit_signal: "Herdr target 不要求 tmux socket/session/%pane；supported 路径调用 backend primitive；blocked 路径返回 stable error code、reason 和 next action"
+    status: pending
+  - id: S5
+    action: "Doctor / mounted / diagnostics support surfaces：doctor render、mounted state projection、project view、diagnostics bundle 对齐同一 Herdr projection"
+    exit_signal: "doctor/ping/ps/layout status/project view/diagnostics bundle 显示一致 capability、support tier projection/source、beta gaps、degraded next action；bundle 来源为 redacted ccbd/generated artifact"
+    status: pending
+  - id: S6
+    action: "Config UI readonly status：Config UI readonly status/session payload 对齐同一 Herdr projection，不改变编辑 contract"
+    exit_signal: "Config UI readonly endpoint 或 /api/session 显示 backend status/capability/beta gaps/support tier projection；config save/apply/reload tests 不变"
+    status: pending
+  - id: S7
+    action: "Regression and scope guard：运行 tmux/rmux/Mobile/doctor/config UI regression、Herdr fake surface tests、scope/redaction guard"
+    exit_signal: "existing public surface tests 通过；新增 Herdr surface tests 通过；无 provider completion/release/support final claim/raw token 越界"
+    status: pending
+  - id: S8
+    action: "Native Windows surface transcript：收集 foreground attach、Mobile terminal 或 blocked payload、doctor、ping、mounted、project view Herdr evidence"
+    exit_signal: "transcript 显示 Herdr backend evidence、capability/support tier projection/beta gaps/degraded next action；缺 host/Herdr 时 acceptance blocked"
+    status: pending
+
+checks:
+  - item: "provider-runtime-on-herdr 与 herdr-bounded-recovery-boundary 不是仅 design-review passed，而是 implementation/acceptance evidence 可验证"
+    source: design AC-001 / DOD-IMPL-000 / S1
+    status: pending
+  - item: "ProjectView/ping/doctor/mounted/diagnostics/Config UI 使用一致 Herdr surface projection，含 support tier projection/source"
+    source: design AC-002 / AC-003 / AC-008 / AC-009 / S2 / S5 / S6
+    status: pending
+  - item: "public refs redacted，不泄露 raw restore token、provider secret 或 terminal buffer 全量"
+    source: design DOD-IMPL-001 / AC-002 / AC-003 / S2 / S7
+    status: pending
+  - item: "foreground attach supported/blocked 两条路径均可观察，Herdr 不落 tmux fallback"
+    source: design AC-004 / AC-005 / S3
+    status: pending
+  - item: "Mobile terminal target v2 经 backend-neutral operation adapter，不要求 tmux socket/session/%pane，unsupported 时 structured blocked"
+    source: design AC-006 / AC-007 / S4
+    status: pending
+  - item: "Config UI 只增加 readonly status，不改变 config edit/apply/reload contract"
+    source: design AC-009 / DOD-IMPL-005 / S6
+    status: pending
+  - item: "tmux/rmux public surface regression 不退化"
+    source: design AC-010 / S7
+    status: pending
+  - item: "不修改 provider completion、release/package/support final claim"
+    source: design AC-011 / S7
+    status: pending
+  - item: "Native Windows x64 transcript 覆盖 surface parity 或 blocked evidence"
+    source: design AC-012 / S8
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-31-herdr-user-surfaces-parity/herdr-user-surfaces-parity-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: >-
+        python -c "import pathlib, re; root=pathlib.Path('.codestable/features'); items=pathlib.Path('.codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml').read_text(encoding='utf-8'); deps=[('provider-runtime-on-herdr','2026-07-31-provider-runtime-on-herdr'),('herdr-bounded-recovery-boundary','2026-07-31-herdr-bounded-recovery-boundary')]; artifact_marker=re.compile(r'(Required Artifacts|required artifacts|evidence_required|证据|交付物|artifact)', re.I); ref_marker=re.compile(r'(CMD-\d+|pytest|transcript|\.json|\.md|evidence|artifact|test)', re.I); missing=[]; read=lambda p: p.read_text(encoding='utf-8',errors='ignore'); [missing.extend([] if re.search(r'- slug: '+re.escape(slug)+r'[\s\S]*?status: done[\s\S]*?feature: '+re.escape(feature), items) else [f'{slug}: roadmap not done']) or missing.extend([] if any(('doc_type: feature-acceptance' in (text:=read(p)) and 'status: passed' in text and artifact_marker.search(text) and ref_marker.search(text)) for p in (root/feature).glob('*-acceptance.md')) else [f'{feature}: acceptance missing/passed/artifact-evidence-refs']) for slug, feature in deps]; assert not missing, missing"
+      core: true
+      failure_handling: dependency-blocked
+    - id: CMD-004
+      command: "python -m pytest -q test/test_ccbd_project_view.py test/test_v2_ccbd_ping_runtime.py test/test_cli_doctor_supervision.py test/test_v2_cli_render.py test/test_v2_diagnostics_bundle.py -k \"herdr or backend or evidence or diagnostics or project_view or ping or doctor or mounted or ps or layout\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-005
+      command: "python -m pytest -q test/test_v2_start_foreground.py test/test_mobile_gateway_terminal.py test/test_mobile_gateway_service.py test/test_config_ui.py -k \"herdr or backend or terminal or attach or blocked or config or readonly\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-006
+      command: "python -m pytest -q test/test_terminal_runtime_tmux_attach.py test/test_mobile_gateway_terminal.py test/test_mobile_gateway_service.py test/test_ccbd_project_view.py test/test_cli_doctor_supervision.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-007
+      command: >-
+        python -c 'import subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; text=run(["git","diff","--","lib","test"])+run(["git","diff","--cached","--","lib","test"]); forbidden=re.compile(r"(CompletionStatus\.COMPLETED|npm publish|release surface|support_tier\s*=\s*[''""]supported|restore_token.*(doctor|project_view|diagnostics|mobile|ping|logger|print))", re.I|re.S); assert not forbidden.search(text)'
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-008
+      command: "MANUAL Native Windows x64: capture foreground attach, Mobile terminal or blocked payload, doctor, ping, mounted, project view Herdr evidence transcript"
+      core: true
+      failure_handling: blocked-if-no-host-or-herdr
+  evidence_required:
+    - upstream_provider_runtime_admission_evidence
+    - herdr_surface_projection_tests
+    - project_view_ping_doctor_mounted_diagnostics_tests
+    - diagnostics_bundle_redacted_source_evidence
+    - foreground_attach_supported_blocked_tests
+    - mobile_terminal_target_v2_adapter_tests
+    - config_ui_readonly_status_tests
+    - tmux_rmux_public_surface_regression_tests
+    - redaction_scope_guards
+    - native_windows_x64_surface_transcript
+  cleanliness:
+    provider_completion_changes: forbidden
+    release_package_changes: forbidden
+    final_support_tier_claim: forbidden
+    raw_restore_token_public_logging: forbidden
+    debug_output: forbidden

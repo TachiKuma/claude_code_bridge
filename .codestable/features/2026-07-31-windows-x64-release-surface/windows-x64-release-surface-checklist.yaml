@@ -1,0 +1,205 @@
+feature: 2026-07-31-windows-x64-release-surface
+created: 2026-07-31
+
+steps:
+  - id: S1
+    action: "发布面投影 owner：新增 Python builder、packaged JSON payload 和 WindowsX64ReleaseSurfaceProjection schema，统一 baseline gate、herdr user-surface parity、package metadata、artifact route、managed Python、native helper、upstream failure detail 和 fail-closed reason"
+    exit_signal: "fake baseline gate / user-surface parity / artifact / helper / python probe 下，load_windows_x64_release_surface_projection 能稳定给出 available、degraded 或 blocked，且 Node 与 PowerShell fixture 能读取同一 JSON"
+    status: pending
+  - id: S2
+    action: "dependency and baseline admission：验证 windows-x64-v852-baseline-gate 与 herdr-user-surfaces-parity 已 done 且有 passed acceptance/evidence refs，并证明当前实现线是 v8.5.2 或 release-equivalent"
+    exit_signal: "parent items status 均为 done、parent acceptance frontmatter 均为 doc_type=feature-acceptance 且 status=passed、baseline/user-surface evidence refs 存在时才允许 available/degraded release route；否则只能生成 blocked/default projection"
+    status: pending
+  - id: S3
+    action: "npm postinstall/package gate：让 package.json.os 放开 win32、package.json.files 包含 npm 可读 projection JSON，让 ccb-npm-install.js 读取 artifact fields，在 native Windows x64 走统一 release route，并在 Windows ia32、Windows arm64、WOW64 上 fail closed"
+    exit_signal: "npm 能进入 Windows postinstall；projection JSON 出现在 npm pack payload；native Windows x64 可通过 release route；ia32/arm64/WOW64 不能误装，且错误语义一致"
+    status: pending
+  - id: S4
+    action: "install.ps1/update wiring：让 install.ps1 与 ccb update 读取同一 JSON 发布面投影；Windows update 按 update_entry 的 diagnostic_only、install_ps1、npm、source 分支执行，不能落到 Unix installer"
+    exit_signal: "Windows x64 install/update 入口一致；缺 managed Python、helper、artifact 或 upstream evidence 时 next_action 与 diagnostic 一致；Windows update 不调用 run_staged_unix_installer"
+    status: pending
+  - id: S5
+    action: "doctor/docs projection：把 Windows x64 发布面 rows 输出到 doctor、doctor --output、README 与 diagnostics contract"
+    exit_signal: "doctor/render/docs 都能看到 install_entry、update_entry、managed_python_status、native_helper_status、failure_reason 和 next_action"
+    status: pending
+  - id: S6
+    action: "cleanup, rollback and scope guard：运行 Linux/macOS/WSL 回归、Windows Rmux 回归、pack manifest 断言、Windows uninstall/update rollback 证据和 publish/promotion scope guard"
+    exit_signal: "既有路径不退化，install.ps1 uninstall 与 update failure rollback 有证据，且没有 provider completion、recovery owner、support final claim、publish/promotion 越界"
+    status: pending
+
+checks:
+  - item: "Windows x64 发布面由单一 JSON projection owner 产出，Python、Node、PowerShell 调用方不分别解释 host / arch / helper / Python"
+    source: design AC-001 / DOD-IMPL-001 / S1
+    status: pending
+  - item: "Windows ia32、arm64、WOW64 或非 Windows 都 fail closed，且有明确 next_action"
+    source: design AC-002 / DOD-IMPL-002 / S3
+    status: pending
+  - item: "npm/install/update 入口在 Windows x64 上共用同一发布面语义"
+    source: design AC-003 / AC-004 / S3 / S4
+    status: pending
+  - item: "roadmap 依赖 herdr-user-surfaces-parity 被作为显式输入；缺 upstream evidence 时 release surface blocked，而不是本 feature 自行生成用户可见面语义"
+    source: design 非显然依赖 / AC-010 / S2
+    status: pending
+  - item: "两个 upstream roadmap item 必须 done 且有 passed acceptance/evidence refs；当前实现线必须是 v8.5.2 或 release-equivalent，否则只能 blocked/default projection"
+    source: design AC-010 / DOD-IMPL-006 / DOD-IMPL-007 / S2
+    status: pending
+  - item: "CMD-009 固定检查 parent item done、parent acceptance doc_type/status 和 baseline/user-surface evidence refs，避免实现阶段自行解释 upstream evidence"
+    source: design dependency admission / CMD-009 / S2
+    status: pending
+  - item: "projection 包含 artifact_basename、archive_name、extract_dir、checksum_entry 和 release_artifact_ref，Node/update/install 不复制 artifact 平台矩阵"
+    source: design JSON 兼容规则 / DOD-IMPL-001 / S1 / S3
+    status: pending
+  - item: "package.json.files 或等价 package payload 契约保证 Windows postinstall 能读取 projection JSON"
+    source: design JSON 兼容规则 / CMD-006 / S3
+    status: pending
+  - item: "projection 暴露 projection_source、implementation_admission、baseline_version_status 和 windows_installer_entry，避免 Python/Node/PowerShell 读取不同来源或自行发明 installer 字段"
+    source: design JSON 兼容规则 / S1 / S4
+    status: pending
+  - item: "upstream failure detail、upstream_failure_ref、upstream_detail_reason 和 beta_gaps 能透传到 doctor/docs/install/update"
+    source: design JSON 兼容规则 / AC-005 / AC-006 / S1 / S4
+    status: pending
+  - item: "managed Python 与 native helper 状态能在 doctor/docs 中看见"
+    source: design AC-005 / AC-006 / S4 / S5
+    status: pending
+  - item: "Linux/macOS/WSL 现有安装更新路径与 Rmux 诊断不退化"
+    source: design AC-007 / S6
+    status: pending
+  - item: "不修改 provider completion、recovery owner、publish/promotion 或最终 support claim"
+    source: design AC-008 / S6
+    status: pending
+  - item: "Windows x64 真机 transcript 或 blocked evidence 可回收为 acceptance 证据"
+    source: design AC-009 / S5 / S6
+    status: pending
+  - item: "install.ps1 uninstall cleanup 与 ccb update failure rollback 有 transcript 或 blocked evidence"
+    source: design AC-011 / S6
+    status: pending
+  - item: "Windows update failure rollback 有 fake staged root / fake install.ps1 failure 单测，验证 restore-or-retain backup 且不调用 Unix installer"
+    source: design Windows update 子流程 / CMD-012 / S6
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-31-windows-x64-release-surface/windows-x64-release-surface-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_windows_x64_release_surface.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - windows_release_surface_projection
+        - json_projection_contract
+        - node_powershell_adapters
+        - artifact_route_projection
+        - package_payload_projection
+        - package_install_route
+        - fail_closed_windows_bitness
+    - id: CMD-004
+      command: "python -m pytest -q test/test_cli_doctor_windows_x64_release_surface.py test/test_windows_bootstrap_script.py test/test_cli_management_update.py -k \"windows or release_surface or install or update or doctor\""
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - doctor_render_projection
+        - install_update_wiring
+        - managed_python_and_helper_diagnostics
+    - id: CMD-005
+      command: "python -m pytest -q test/test_cli_doctor_rmux_packaging.py test/test_install_windows_rmux_contract.py test/test_rmux_packaging_docs_contracts.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: existing
+      covers:
+        - rmux_diagnostics_regression
+        - windows_install_contract_regression
+    - id: CMD-006
+      command: "node -e \"const cp=require('child_process'); const out=cp.execFileSync('npm',['pack','--dry-run','--json'],{encoding:'utf8'}); const files=JSON.parse(out)[0].files.map(f=>f.path); if(!files.includes('lib/terminal_runtime/windows_x64_release_surface_projection.json')) throw new Error('projection JSON missing from npm pack payload')\""
+      core: true
+      failure_handling: fix-or-block
+      test_status: existing
+      covers:
+        - package_metadata_and_files
+        - projection_json_in_npm_payload
+    - id: CMD-007
+      command: >-
+        python -c "import pathlib,re,subprocess; roots=('lib','test','docs','README.md','package.json','bin','install.ps1'); run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; tracked=run(['git','diff','--',*roots])+run(['git','diff','--cached','--',*roots]); others=[p for p in run(['git','ls-files','--others','--exclude-standard','--',*roots]).splitlines() if p]; extra=''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in others if pathlib.Path(p).is_file()); lower=(tracked+extra).lower(); patterns=('npm\\s+publish','git\\s+push','git\\s+tag','support_tier\\s*[:=]\\s*'+chr(34)+'?supported'+chr(34)+'?','release[_ -]?promotion\\s*[:=]\\s*(true|enabled)','provider_completion','recovery_owner'); hits=[p for p in patterns if re.search(p,lower)]; assert not hits,hits"
+      core: true
+      failure_handling: fix-or-block
+      test_status: existing
+      covers:
+        - scope_guard
+    - id: CMD-008
+      command: "MANUAL Native Windows x64: capture npm install / install.ps1 / ccb update / ccb doctor transcript"
+      core: true
+      failure_handling: blocked-if-no-host-or-herdr
+      test_status: manual
+      covers:
+        - native_windows_transcript
+    - id: CMD-009
+      command: "python -m pytest -q test/test_windows_x64_release_surface_dependency_admission.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - upstream_dependency_admission
+        - parent_item_done_gate
+        - parent_acceptance_frontmatter_gate
+        - baseline_and_user_surface_evidence_refs
+        - blocked_projection_without_upstream_evidence
+    - id: CMD-010
+      command: "python -m pytest -q test/test_windows_x64_release_surface_baseline_version.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - v852_or_release_equivalent_admission
+        - blocked_projection_on_821_workspace
+    - id: CMD-011
+      command: "MANUAL Native Windows x64: capture install.ps1 uninstall cleanup and ccb update failure rollback transcript"
+      core: true
+      failure_handling: blocked-if-no-host-or-herdr
+      test_status: manual
+      covers:
+        - windows_uninstall_cleanup
+        - update_failure_rollback
+    - id: CMD-012
+      command: "python -m pytest -q test/test_windows_x64_release_surface_update_rollback.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - fake_staged_install_ps1_failure
+        - windows_update_restore_or_retain_backup
+        - windows_update_identity_smoke_failure_output
+        - no_unix_installer_on_windows_update_branch
+  evidence_required:
+    - windows_release_surface_projection_module
+    - windows_release_surface_projection_json
+    - node_powershell_projection_adapter_fixtures
+    - package_payload_projection_assertion
+    - artifact_route_projection_tests
+    - upstream_dependency_admission_tests
+    - v852_baseline_admission_tests
+    - windows_update_rollback_unit_tests
+    - package_install_route_tests
+    - update_wiring_tests
+    - doctor_render_tests
+    - docs_contract_updates
+    - rmux_and_non_windows_regression_tests
+    - pack_dry_run
+    - scope_guard
+    - native_windows_x64_transcript
+    - windows_uninstall_cleanup_transcript
+    - update_failure_rollback_evidence
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
+    secret_in_docs: forbidden
+    publish_or_push_action: forbidden

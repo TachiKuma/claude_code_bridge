@@ -1,7 +1,7 @@
 ---
 doc_type: roadmap
 slug: windows-native-herdr-ccb
-status: draft
+status: active
 created: 2026-07-30
 last_reviewed: 2026-07-30
 tags: [windows, native-windows, herdr, x64, mux-backend, public-workflow-parity]
@@ -362,14 +362,16 @@ class HerdrRecoveryEvidence(TypedDict):
     agent_slug: str
     pane_ref_before: MuxPaneRefV2 | None
     pane_ref_after: MuxPaneRefV2 | None
-    restore_token: str | None
-    action: Literal["observe", "respawn", "reattach", "circuit-open", "blocked"]
+    restore_token_present: bool
+    herdr_agent_state_ref: str | None
+    action: Literal["observe", "respawn", "reattach", "namespace_recover", "circuit_open", "blocked"]
     reason: str
 ```
 
 **约束**：
 
 - CCB 是唯一 recovery owner；Herdr restore 只能作为 CCB 调用的 backend operation 或 evidence source。
+- raw restore token 只允许进入 CCB 发起的 private backend operation；public event、diagnostics、project view、logs 和 support evidence 只能输出 `restore_token_present` / ref，不得输出 token 值。
 - v8.5.2 的 90 秒 probation、bounded crash logs、backoff/circuit 语义必须保留。
 - Herdr 自身自动恢复若无法关闭，必须以 diagnostics 证明不会与 CCB respawn 冲突；否则该 capability blocked。
 
