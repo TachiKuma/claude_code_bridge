@@ -103,7 +103,7 @@ def _passing_evidence(tmp_path: Path) -> dict[str, object]:
                 "server_identity_after": "server-2",
                 "preexisting_sessions_before": [],
                 "created_by_spike": True,
-                "stop_command_ref": refs["server_restart_restore"],
+                "stop_command_ref": refs["server_restart_layout_restore"],
                 "cleanup_targets": ["ccb-herdr-spike"],
             },
             "restart_scope": "dedicated-disposable-server",
@@ -114,6 +114,12 @@ def _passing_evidence(tmp_path: Path) -> dict[str, object]:
             "output_history_restored": True,
             "agent_session_restored": None,
             "old_process_expected_to_survive": False,
+            "ui_detach_reattach_harness": {
+                "status": "follow-up",
+                "required_context": "HERDR_ENV=1 with Herdr UI client pane context",
+                "recorded_as": "herdr-ui-detach-reattach-harness",
+                "current_env": {"HERDR_ENV": False, "HERDR_PANE_ID": False, "HERDR_SESSION": False},
+            },
             "diagnostic": "restart restored layout and history",
         },
         "capability_projection": {
@@ -135,6 +141,82 @@ def _passing_evidence(tmp_path: Path) -> dict[str, object]:
     }
 
 
+def _restore_matrix_v2_evidence(tmp_path: Path) -> dict[str, object]:
+    evidence = _passing_evidence(tmp_path)
+    refs = evidence["artifact_refs"]
+    evidence["verdict"] = "partial"
+    evidence["failure_class"] = "windows-beta-gap"
+    evidence["adapter_recommendation"] = "continue-with-gaps"
+    evidence["operations"] = [
+        _passing_operation(name, refs["schema"])
+        for name in [
+            "schema",
+            "server_status",
+            "session_attach",
+            "pane_spawn",
+            "send_input",
+            "read_output",
+            "kill_pane",
+            "server_restart_layout_restore",
+        ]
+    ]
+    evidence["operations"].extend(
+        [
+            {
+                "operation": "server_restart_process_continuity",
+                "status": "blocked",
+                "command_ref": refs["schema"],
+                "elapsed_ms": None,
+                "evidence_ref": refs["schema"],
+                "failure_class": "windows-beta-gap",
+                "diagnostic": "fresh process after restart",
+            },
+            {
+                "operation": "server_restart_output_history",
+                "status": "blocked",
+                "command_ref": refs["schema"],
+                "elapsed_ms": None,
+                "evidence_ref": refs["schema"],
+                "failure_class": "windows-beta-gap",
+                "diagnostic": "output history not restored",
+            },
+            {
+                "operation": "ui_detach_reattach",
+                "status": "needs_harness",
+                "command_ref": "not-run",
+                "elapsed_ms": None,
+                "evidence_ref": None,
+                "failure_class": "needs-ui-harness",
+                "diagnostic": "requires Herdr UI harness",
+            },
+        ]
+    )
+    evidence["capability_projection"] = {
+        "command_status": {
+            **{name: "supported" for name in runner.CORE_OPERATIONS},
+            "server_restart_process_continuity": "unsupported",
+            "server_restart_output_history": "unsupported",
+            "ui_detach_reattach": "needs_harness",
+        },
+        "semantic_status": {
+            **{name: "supported" for name in runner.CORE_OPERATIONS},
+            "server_restart_process_continuity": "unsupported",
+            "server_restart_output_history": "unsupported",
+            "ui_detach_reattach": "needs_harness",
+        },
+        "windows_beta_gaps": [],
+        "blocking_gaps": [
+            "server_restart_process_continuity",
+            "server_restart_output_history",
+            "ui_detach_reattach",
+        ],
+    }
+    evidence["residual_risks"] = [
+        "process continuity and output history are unsupported; UI detach/reattach requires follow-up harness"
+    ]
+    return evidence
+
+
 def test_minimal_machine_check_accepts_platform_gate_blocked_evidence(tmp_path: Path) -> None:
     gate_ref = tmp_path / "platform-gate-summary.json"
     evidence = runner.build_blocked_evidence(
@@ -153,6 +235,10 @@ def test_minimal_machine_check_accepts_platform_gate_blocked_evidence(tmp_path: 
 
 def test_truth_table_accepts_full_continue_fixture(tmp_path: Path) -> None:
     runner.validate_evidence(_passing_evidence(tmp_path))
+
+
+def test_truth_table_accepts_restore_matrix_v2_continue_with_gaps(tmp_path: Path) -> None:
+    runner.validate_evidence(_restore_matrix_v2_evidence(tmp_path))
 
 
 def test_truth_table_rejects_blocked_continue(tmp_path: Path) -> None:

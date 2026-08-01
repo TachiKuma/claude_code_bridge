@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import re
 import shutil
@@ -22,8 +23,10 @@ CORE_OPERATIONS = [
     "send_input",
     "read_output",
     "kill_pane",
-    "detach_reattach",
-    "server_restart_restore",
+    "server_restart_layout_restore",
+    "server_restart_process_continuity",
+    "server_restart_output_history",
+    "ui_detach_reattach",
 ]
 SECRET_PATTERNS = [
     re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*[^;\s]+"),
@@ -279,6 +282,8 @@ def _capability_status(operation_status: Any) -> str:
         return "supported"
     if operation_status == "partial":
         return "partial"
+    if operation_status == "needs_harness":
+        return "needs_harness"
     return "unsupported"
 
 
@@ -724,9 +729,26 @@ def run_spike(args: argparse.Namespace) -> dict[str, Any]:
     restart_checked = False
     restart_layout_restored: bool | None = None
     restart_output_history_restored: bool | None = None
+    restart_process_continues: bool | None = None
     server_identity_after = None
     restart_stop_ref: str | None = None
+    process_info_before_ref: str | None = None
+    process_info_after_ref: str | None = None
+    process_id_before = None
+    process_id_after = None
     if workspace_id is not None and root_pane_id is not None and server_started_by_spike:
+        process_info_before_command = [herdr, *scope_args, "pane", "process-info", "--pane", root_pane_id]
+        process_info_before_result, _ = _run(process_info_before_command)
+        process_info_before_ref = _command_ref(
+            log_dir,
+            "herdr-pane-process-info-before-restart",
+            process_info_before_command,
+            process_info_before_result,
+        )
+        artifact_refs["restart_process_info_before"] = process_info_before_ref
+        process_info_before_payload = _json_object_output(process_info_before_result)
+        process_id_before = _json_path(process_info_before_payload, ["result", "process_info", "shell_pid"])
+
         restart_stop_command = [herdr, *scope_args, "server", "stop"]
         restart_stop_result, _ = _run(restart_stop_command)
         restart_stop_ref = _command_ref(log_dir, "herdr-server-restart-stop", restart_stop_command, restart_stop_result)
@@ -793,6 +815,22 @@ def run_spike(args: argparse.Namespace) -> dict[str, Any]:
             restart_read_result,
         )
         restart_output_history_restored = restart_read_result.returncode == 0 and marker in (restart_read_result.stdout or "")
+        process_info_after_command = [herdr, *scope_args, "pane", "process-info", "--pane", root_pane_id]
+        process_info_after_result, _ = _run(process_info_after_command)
+        process_info_after_ref = _command_ref(
+            log_dir,
+            "herdr-pane-process-info-after-restart",
+            process_info_after_command,
+            process_info_after_result,
+        )
+        artifact_refs["restart_process_info_after"] = process_info_after_ref
+        process_info_after_payload = _json_object_output(process_info_after_result)
+        process_id_after = _json_path(process_info_after_payload, ["result", "process_info", "shell_pid"])
+        restart_process_continues = (
+            process_id_before is not None
+            and process_id_after is not None
+            and process_id_before == process_id_after
+        )
         restart_checked = True
 
     if workspace_id is not None:
@@ -810,28 +848,68 @@ def run_spike(args: argparse.Namespace) -> dict[str, Any]:
         cleanup_refs["server_stop"] = _command_ref(log_dir, "herdr-server-stop", server_stop_command, server_stop_result)
 
     restore_diagnostic = (
-        "server restart restored workspace/pane identity but did not restore marker output history"
-        if restart_checked and restart_layout_restored and not restart_output_history_restored
-        else "server restart restore remains fail-closed until restart identity and output history can be proven"
+        "Restore Capability Matrix v2: server restart restores layout identity; process continuity and output history are not supported by this evidence; UI detach/reattach requires a Herdr UI harness"
+        if restart_checked and restart_layout_restored
+        else "Restore Capability Matrix v2: server restart layout restore remains fail-closed until restart identity can be proven"
     )
     operations.append(
         _operation(
-            "detach_reattach",
-            "blocked",
-            command_ref="not-run",
-            failure_class="unsupported-capability",
-            diagnostic="detach/reattach requires an attached Herdr UI client and is not exercised from this non-Herdr harness",
-        )
-    )
-    restart_status = "partial" if restart_checked and restart_layout_restored else "blocked"
-    operations.append(
-        _operation(
-            "server_restart_restore",
-            restart_status,
+            "server_restart_layout_restore",
+            "pass" if restart_checked and restart_layout_restored else "blocked",
             command_ref=artifact_refs.get("restart_workspace_list", "not-run"),
             evidence_ref=artifact_refs.get("restart_pane_list"),
-            failure_class="windows-beta-gap" if restart_status == "partial" else "unsupported-capability",
-            diagnostic=restore_diagnostic,
+            failure_class=None if restart_checked and restart_layout_restored else "unsupported-capability",
+            diagnostic=(
+                "server restart restored workspace/pane identity"
+                if restart_checked and restart_layout_restored
+                else "server restart did not prove workspace/pane identity restore"
+            ),
+        )
+    )
+    operations.append(
+        _operation(
+            "server_restart_process_continuity",
+            "blocked",
+            command_ref=process_info_after_ref or "not-run",
+            evidence_ref=process_info_after_ref,
+            failure_class="windows-beta-gap",
+            diagnostic=(
+                "server restart creates a fresh pane process; old process continuity is not supported"
+                if restart_checked and restart_process_continues is False
+                else "server restart process continuity was not proven"
+            ),
+        )
+    )
+    operations.append(
+        _operation(
+            "server_restart_output_history",
+            "blocked",
+            command_ref=artifact_refs.get("restart_read", "not-run"),
+            evidence_ref=artifact_refs.get("restart_read"),
+            failure_class="windows-beta-gap",
+            diagnostic=(
+                "server restart did not restore sentinel output history"
+                if restart_checked and restart_output_history_restored is False
+                else "server restart output history was not proven"
+            ),
+        )
+    )
+    ui_harness_env = {
+        "HERDR_ENV": bool(os.environ.get("HERDR_ENV")),
+        "HERDR_PANE_ID": bool(os.environ.get("HERDR_PANE_ID")),
+        "HERDR_SESSION": bool(os.environ.get("HERDR_SESSION")),
+    }
+    operations.append(
+        _operation(
+            "ui_detach_reattach",
+            "needs_harness",
+            command_ref="not-run",
+            failure_class="needs-ui-harness",
+            diagnostic=(
+                "UI detach/reattach requires running inside a Herdr UI client; current harness lacks HERDR_ENV context"
+                if not ui_harness_env["HERDR_ENV"]
+                else "UI detach/reattach requires a dedicated Herdr UI harness and is recorded as follow-up"
+            ),
         )
     )
     provider = {
@@ -849,7 +927,7 @@ def run_spike(args: argparse.Namespace) -> dict[str, Any]:
     restore = {
         "detach_reattach_checked": False,
         "detach_process_continues": None,
-        "server_restart_checked": False,
+        "server_restart_checked": restart_checked,
         "restart_isolation": {
             "server_ref_kind": "dedicated-disposable-server",
             "session_name": args.session,
@@ -865,11 +943,20 @@ def run_spike(args: argparse.Namespace) -> dict[str, Any]:
         "restart_scope": "isolated-socket" if args.isolated_socket_ref else "dedicated-disposable-server",
         "server_identity": None,
         "preexisting_sessions_checked": restart_checked,
-        "restart_authorized": False,
+        "restart_authorized": restart_checked,
         "layout_restored": restart_layout_restored,
         "output_history_restored": restart_output_history_restored,
+        "process_continuity_restored": restart_process_continues,
+        "process_id_before_restart": process_id_before,
+        "process_id_after_restart": process_id_after,
         "agent_session_restored": None,
         "old_process_expected_to_survive": False,
+        "ui_detach_reattach_harness": {
+            "status": "follow-up",
+            "required_context": "HERDR_ENV=1 with Herdr UI client pane context",
+            "recorded_as": "herdr-ui-detach-reattach-harness",
+            "current_env": ui_harness_env,
+        },
         "diagnostic": restore_diagnostic,
     }
     evidence = _base_evidence(
@@ -880,9 +967,9 @@ def run_spike(args: argparse.Namespace) -> dict[str, Any]:
         provider_cli_dry_run=provider,
         fallback_terminal_smoke=None,
         restore=restore,
-        verdict="blocked",
-        failure_class="unsupported-capability",
-        adapter_recommendation="needs-upstream-issue",
+        verdict="partial",
+        failure_class="windows-beta-gap",
+        adapter_recommendation="continue-with-gaps",
         residual_risks=[restore_diagnostic],
         artifact_refs=artifact_refs,
     )
@@ -926,6 +1013,7 @@ def validate_evidence(evidence: dict[str, Any]) -> None:
             "unsupported-capability",
             "windows-beta-gap",
             "provider-dry-run-unavailable",
+            "needs-ui-harness",
             "test-design-failure",
             "unknown",
         },
@@ -968,7 +1056,7 @@ def validate_evidence(evidence: dict[str, Any]) -> None:
     _require(not missing, f"missing core operations: {', '.join(missing)}")
     non_pass_operations: list[str] = []
     for op in operation_by_name.values():
-        _require(op.get("status") in {"pass", "partial", "blocked", "failed"}, "invalid operation status")
+        _require(op.get("status") in {"pass", "partial", "blocked", "failed", "needs_harness"}, "invalid operation status")
         if op.get("status") == "pass":
             _require(_trace_ref_exists(op.get("command_ref")), f"{op.get('operation')} pass requires command_ref")
             _require(_trace_ref_exists(op.get("evidence_ref")), f"{op.get('operation')} pass requires evidence_ref")

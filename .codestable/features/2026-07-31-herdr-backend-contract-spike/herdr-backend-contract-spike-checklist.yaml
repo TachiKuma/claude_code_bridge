@@ -17,11 +17,11 @@ steps:
   - action: "kill pane probe：kill 一个由 spike 创建的 pane，验证 pane 关闭可观察"
     exit_signal: "kill operation evidence 指向目标 pane，证明未误删 session 或其他 pane"
     status: done
-  - action: "detach/reattach identity probe：detach/reattach 独立 named session，验证 session/pane identity 与 live process continuity"
-    exit_signal: "detach evidence 与 server restart evidence 分离，进程持续只适用于 live detach"
+  - action: "UI detach/reattach harness gate：普通 CLI harness 只记录 HERDR_ENV 缺失和 follow-up，不用 server restart 替代 UI detach/reattach"
+    exit_signal: "ui_detach_reattach 为 needs_harness，并记录 follow-up herdr-ui-detach-reattach-harness"
     status: done
-  - action: "isolated server restart restore probe：只在 dedicated/disposable server 或 isolated socket/config 下执行 server restart restore 检查"
-    exit_signal: "restart_isolation 字段完整；未隔离时写 blocked evidence 而不是重启全局 server"
+  - action: "Restore Capability Matrix v2：只在 dedicated/disposable server 或 isolated socket/config 下分别验证 layout restore、process continuity、output history"
+    exit_signal: "server_restart_layout_restore 为 pass；process continuity 和 output history 明确记录为 unsupported/windows-beta-gap"
     status: done
   - action: "evidence verdict 与 route recommendation：汇总 herdr-contract-spike-evidence.json，给出 continue、continue-with-gaps、stop 或 needs-upstream-issue"
     exit_signal: "JSON 通过 validator；adapter_recommendation=continue 只在 host/platform、failure_class、核心 operation、restart isolation、provider_cli_dry_run 和 capability_projection truth table 全部通过时出现"
@@ -46,10 +46,10 @@ checks:
   - item: "kill pane 后关闭可观察，未误删 session 或其他 pane"
     source: design AC-006
     status: passed
-  - item: "detach/reattach 被单独记录，不夸大 server restart 后的进程存活"
+  - item: "UI detach/reattach 被单独记录为 needs_harness，并已落 follow-up；不夸大 server restart 后的进程存活"
     source: design AC-007 / DOD-IMPL-003
     status: passed
-  - item: "server restart 只能在 dedicated/disposable server 或 isolated socket/config 下执行；当前已证明 workspace/pane identity restore，但 output history 未恢复，因此 server_restart_restore 为 partial/windows-beta-gap"
+  - item: "server restart 只能在 dedicated/disposable server 或 isolated socket/config 下执行；当前 v2 矩阵已证明 layout restore，但 process continuity 与 output history 未恢复，因此二者为 unsupported/windows-beta-gap"
     source: design AC-008 / DOD-IMPL-003
     status: passed
   - item: "herdr-contract-spike-evidence.json 通过 schema/semantic validator，recommendation truth table 与 host、operation、provider、restart、capability 状态一致"

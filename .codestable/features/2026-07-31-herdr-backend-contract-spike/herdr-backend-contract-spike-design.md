@@ -152,10 +152,12 @@ class HerdrSpikeOperation(TypedDict):
         "send_input",
         "read_output",
         "kill_pane",
-        "detach_reattach",
-        "server_restart_restore",
+        "server_restart_layout_restore",
+        "server_restart_process_continuity",
+        "server_restart_output_history",
+        "ui_detach_reattach",
     ]
-    status: Literal["pass", "partial", "blocked", "failed"]
+    status: Literal["pass", "partial", "blocked", "failed", "needs_harness"]
     command_ref: str
     elapsed_ms: int | None
     evidence_ref: str | None
@@ -170,6 +172,7 @@ OperationFailureClass = Literal[
     "unsupported-capability",
     "windows-beta-gap",
     "provider-dry-run-unavailable",
+    "needs-ui-harness",
     "restart-not-isolated",
     "test-design-failure",
     "unknown",
@@ -208,8 +211,12 @@ class HerdrRestoreEvidence(TypedDict):
     restart_authorized: bool
     layout_restored: bool | None
     output_history_restored: bool | None
+    process_continuity_restored: bool | None
+    process_id_before_restart: int | None
+    process_id_after_restart: int | None
     agent_session_restored: bool | None
     old_process_expected_to_survive: Literal[False]
+    ui_detach_reattach_harness: dict[str, object] | None
     diagnostic: str
 
 class RestartIsolationEvidence(TypedDict):
@@ -239,7 +246,7 @@ class HerdrCapabilityProjection(TypedDict):
 - CLI 参数名为 `--platform-gate-ref`，对应 evidence 字段为 `host.platform_gate_ref`；两者必须指向同一 platform gate artifact。
 - `provider_cli_dry_run.dry_run_kind="provider_cli"` 才能作为 provider CLI dry-run evidence；fallback terminal smoke 必须写到 `fallback_terminal_smoke`，且只能支撑 terminal smoke，不得支撑 provider parity。
 - `fallback_terminal_smoke` 存在时，顶层 verdict 最高只能是 `partial`，除非 `provider_cli_dry_run` 同时真实通过；provider 命令不可用必须记录 `failure_class="provider-dry-run-unavailable"`。
-- `adapter_recommendation="continue"` 的 truth table：host/platform gate pass、`failure_class="none"`、schema/status/session/pane/send/read/kill/detach/server_restart_restore 核心 operation 全部 `pass`、`restart_isolation.created_by_spike=true`、`restart_scope!="blocked-not-isolated"`、`provider_cli_dry_run.dry_run_kind="provider_cli"` 且输出/退出或 kill 可观察、`public_provider_parity_claimed=false`、`capability_projection.blocking_gaps` 为空。任一条件不满足时只能是 `continue-with-gaps|stop|needs-upstream-issue`。
+- `adapter_recommendation="continue"` 的 truth table：host/platform gate pass、`failure_class="none"`、schema/status/session/pane/send/read/kill/server_restart_layout_restore/ui_detach_reattach 等核心 operation 全部 `pass`、`restart_isolation.created_by_spike=true`、`restart_scope!="blocked-not-isolated"`、`provider_cli_dry_run.dry_run_kind="provider_cli"` 且输出/退出或 kill 可观察、`public_provider_parity_claimed=false`、`capability_projection.blocking_gaps` 为空。Restore Capability Matrix v2 允许 `adapter_recommendation="continue-with-gaps"` 表达基础 adapter 可继续，但 `server_restart_process_continuity`、`server_restart_output_history` 或 `ui_detach_reattach` 未 pass 时不得声明 Windows supported。
 - validator 必须拒绝 blocked verdict 却 `adapter_recommendation="continue"`、非 blocked verdict 缺 host/platform gate、restart authorized 但缺 isolation proof、fallback terminal smoke 冒充 provider dry-run、top-level failure_class 与 operation/failure 状态不一致。
 
 ##### Interface 设计检查
