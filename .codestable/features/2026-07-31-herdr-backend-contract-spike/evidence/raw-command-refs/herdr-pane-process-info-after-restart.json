@@ -1,0 +1,14 @@
+{
+  "command": [
+    "<home>/AppData/Local/Programs/Herdr\\herdr.EXE",
+    "--session",
+    "ccb-herdr-spike",
+    "pane",
+    "process-info",
+    "--pane",
+    "w1:p1"
+  ],
+  "returncode": 0,
+  "stderr_excerpt": "",
+  "stdout_excerpt": "{\"id\":\"cli:pane:process_info\",\"result\":{\"process_info\":{\"foreground_process_group_id\":13680,\"foreground_processes\":[{\"argv\":[\"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\",\"-NoExit\",\"-Command\",\"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(& $global:__HerdrOriginalPrompt) -join ' '; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq 'FileSystem') { $esc = [string][char]27; $out += $esc + ']9;9;' + $loc.ProviderPath + $esc + '\\\\' }; $out } }\"],\"argv0\":\"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\",\"cmdline\":\"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe -NoExit -Command \\\"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(& $global:__HerdrOriginalPrompt) -join ' '; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq 'FileSystem') { $esc = [string][char]27; $out += $esc + ']9;9;' + $loc.ProviderPath + $esc + '\\\\' }; $out } }\\\"\",\"cwd\":\"E:\\\\GitHub\u5f00\u6e90\u9879\u76ee\\\\TachiKuma\\\\claude_code_bridge\\\\\",\"name\":\"powershell.exe\",\"pid\":13680}],\"pane_id\":\"w1:p1\",\"shell_pid\":13680},\"type\":\"pane_process_info\"}}\n"
+}

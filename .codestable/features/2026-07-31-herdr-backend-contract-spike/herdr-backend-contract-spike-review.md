@@ -60,7 +60,7 @@ lane_b_reason: "OCR 第三轮复扫无 blocking；medium 项已修复并验证"
 
 - 假设的生产 bug：fake pass evidence 通过 validator，导致 downstream adapter 误以为 Herdr 已 supported。
 - 主动攻击过的反例：pass + non-continue、pass + blocked operation、failure_class none + non-pass、blocking_gaps 不一致、pass operation 缺 command/evidence ref、artifact_refs 缺 schema/status/version、重复 core operation、unknown URI scheme、restart stop command ref 缺失、fallback smoke 冒充 provider dry-run。
-- 结果：以上均有负向测试或 validator gate；当前 machine evidence 正确停在 `blocked/unsupported-capability/needs-upstream-issue`。
+- 结果：以上均有负向测试或 validator gate；Restore Capability Matrix v2 后当前 machine evidence 正确停在 `partial/windows-beta-gap/continue-with-gaps`，并保留不支持项为显式 gaps。
 
 ## 4. Findings
 
@@ -83,7 +83,7 @@ none
 ### learning
 
 - DoD runner passed 表示 fail-closed blocked evidence 可生成且可验证，不表示 Herdr backend capability 已通过。
-- Post-handoff rerun 后 platform gate artifact 已不再记录 `ccb-version-mismatch`、`python-not-x64`、`herdr-missing` 或 `helper-missing`；v8.5.2 source admission 为 `strict-v8.5.2`，Python 为 64-bit，Herdr 与两个 CCB helper 均为 x64。当前 blocked 于 Herdr CLI primitive 语义：schema/status/session_attach/pane_spawn/send_input/read_output/kill_pane 已通过，server_restart_restore 为 partial（workspace/pane identity restore，output history 未恢复），detach_reattach 仍未在 Herdr UI client 内验证。
+- Post-handoff rerun 后 platform gate artifact 已不再记录 `ccb-version-mismatch`、`python-not-x64`、`herdr-missing` 或 `helper-missing`；v8.5.2 source admission 为 `strict-v8.5.2`，Python 为 64-bit，Herdr 与两个 CCB helper 均为 x64。Restore Capability Matrix v2 显示 schema/status/session_attach/pane_spawn/send_input/read_output/kill_pane/server_restart_layout_restore 已通过；server_restart_process_continuity 与 server_restart_output_history 明确 unsupported，ui_detach_reattach 需要 Herdr UI harness。
 
 ### praise
 
@@ -92,14 +92,14 @@ none
 
 ## 5. Test And QA Focus
 
-- QA 必须重点复核：machine evidence 的 `verdict=blocked`、`failure_class=unsupported-capability`、`adapter_recommendation=needs-upstream-issue` 是否被正确解释为 fail-closed。
+- QA 必须重点复核：machine evidence 的 `verdict=partial`、`failure_class=windows-beta-gap`、`adapter_recommendation=continue-with-gaps` 是否被正确解释为基础 adapter 可继续但不得宣称 process/output continuity 或 Windows supported。
 - Evidence pack residual risks / gate warnings：archguard/meta-cc disabled 已记录；residual risk 为 Herdr detach/reattach 与 restart output-history 语义缺口，不是 none。
 - 建议新增或加强的测试：none required for this stage。
 - 不能靠 review 完全确认的点：真实 Herdr CLI active-host 行为；当前平台 gate blocked，后续需在 supported platform gate + explicit isolated socket/config 下再跑。
 
 ## 6. Residual Risk
 
-- Herdr 能力本身仍未被证明；当前结果是安全停止证据，不是 support pass。
+- Herdr full support 能力本身仍未被证明；当前结果是带缺口继续证据，不是 support pass。
 
 ## 7. Verdict
 

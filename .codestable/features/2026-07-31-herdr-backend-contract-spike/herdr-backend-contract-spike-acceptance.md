@@ -20,16 +20,16 @@ round: 1
 
 - [x] 本 feature 只新增 spike runner、runbook、machine evidence、gate evidence、evidence pack 和 focused tests，未把 Herdr 注册进 production mux/backend resolver。
 - [x] `herdr-contract-spike-evidence.json` 是后续设计唯一可消费的机器证据，包含 host、platform gate、Herdr schema/status、operation、provider dry-run、restore isolation、capability projection 和 route recommendation。
-- [x] 当前 machine evidence 为 fail-closed blocked：`verdict=blocked`、`failure_class=unsupported-capability`、`adapter_recommendation=needs-upstream-issue`。
+- [x] 当前 machine evidence 已按 Restore Capability Matrix v2 重跑：`verdict=partial`、`failure_class=windows-beta-gap`、`adapter_recommendation=continue-with-gaps`。
 - [x] 前置 platform gate 已通过：`.codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json` 记录 v8.5.2 source admission、64-bit Python、Native Windows x64 Herdr 与 x64 CCB helper PE evidence 均满足；当前阻塞来自 Herdr CLI primitive 语义未全部证明。
 
 ## 2. 行为与决策核对
 
-- [x] platform gate 通过后只在 dedicated session `ccb-herdr-spike` 内执行 Herdr operation；schema/status/session_attach/pane_spawn/send_input/read_output/kill_pane 为 pass，server_restart_restore 为 partial，detach_reattach 为 blocked。
+- [x] platform gate 通过后只在 dedicated session `ccb-herdr-spike` 内执行 Herdr operation；schema/status/session_attach/pane_spawn/send_input/read_output/kill_pane/server_restart_layout_restore 为 pass，server_restart_process_continuity 与 server_restart_output_history 为 blocked/windows-beta-gap，ui_detach_reattach 为 needs_harness。
 - [x] validator 覆盖并拒绝 fake pass：blocked verdict 却 continue、pass operation 缺 trace refs、artifact refs 缺失、duplicate core operation、unknown URI、restart isolation 缺 socket/config/server identity/stop ref、fallback 冒充 provider dry-run。
 - [x] provider CLI dry-run 与 fallback terminal smoke 分离，`public_provider_parity_claimed=false`，fallback 不作为 completion authority。
-- [x] server restart restore 只允许 dedicated/disposable server 或 isolated session/socket/config；当前已有 server identity 与 stop-command trace，workspace/pane identity restore 通过，但 output history 未恢复，因此不判 pass。
-- [x] spike 结论是需要 Herdr upstream/API 语义澄清，不是 Herdr support pass。
+- [x] server restart restore 只允许 dedicated/disposable server 或 isolated session/socket/config；当前已有 server identity、stop-command trace、process-info trace，workspace/pane identity restore 通过，但旧 process 与 output history 未恢复。
+- [x] spike 结论是基础 adapter 可按 layout-only restart restore 继续，但不得宣称 Herdr restart process/output continuity 或 Windows supported。
 
 ## 3. 验收场景核对
 
@@ -38,10 +38,10 @@ round: 1
 - [x] AC-003/AC-004 session/pane I/O：session_attach、pane_spawn、send_input、read_output 均有 pass evidence，`pane wait-output` 观察到 sentinel。
 - [x] AC-005 provider dry-run：当前 blocked，provider dry-run 不被 fallback 替代。
 - [x] AC-006 kill pane：spike-created pane close 返回 ok，未误删 session。
-- [x] AC-007 detach/reattach：当前 blocked，未夸大 live detach 或 server restart 后存活。
-- [x] AC-008 restart isolation：当前 dedicated session 已记录，server identity / stop command trace 存在；workspace/pane identity restore 通过，output history 未恢复，restart 为 partial。
+- [x] AC-007 detach/reattach：当前记录为 needs_harness，已将 `herdr-ui-detach-reattach-harness` 作为后续步骤落盘，未用 server restart 结果替代 UI detach/reattach。
+- [x] AC-008 restart isolation：当前 dedicated session 已记录，server identity / stop command trace / process-info trace 存在；workspace/pane identity restore 通过，旧 process 与 output history 未恢复。
 - [x] AC-009 production no-change：scope gate 与 no-production-route tests 通过。
-- [x] AC-010 recommendation truth table：`adapter_recommendation=needs-upstream-issue` 与 host/platform、operation、provider、restart、capability 状态一致。
+- [x] AC-010 recommendation truth table：`adapter_recommendation=continue-with-gaps` 与 host/platform、operation、provider、restart、capability 状态一致。
 
 ## 4. Review / QA 复核
 
@@ -60,19 +60,19 @@ round: 1
 - [x] DOD-IMPL-006：production mux contract 不含 Herdr native route。
 - [x] DOD-REVIEW-001：code review passed。
 - [x] DOD-QA-001：QA passed。
-- [x] DOD-ACCEPT-001：roadmap item 已回写为 done，并给出后续 contract V2 的 route recommendation：needs-upstream-issue。
+- [x] DOD-ACCEPT-001：roadmap item 已回写为 done，并给出后续 contract V2 的 route recommendation：continue-with-gaps。
 
 ## 6. Roadmap / Requirement 回写
 
 - [x] `.codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml` 中 `herdr-backend-contract-spike` 已回写为 `done`。
 - [x] `.codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-roadmap.md` 子 feature 清单状态已回写为 `accepted`，并记录 fail-closed / stop 结论。
 - [x] `.codestable/roadmap/windows-native-herdr-ccb/goal-state.yaml` 中当前 feature 已回写为 `accepted`，`current_feature_index` 前进到 2。
-- [x] 因 `adapter_recommendation=needs-upstream-issue`，goal-state 顶层保持 `handoff`；当前下一步是确认 Herdr 0.7.5 detach/reattach 与 restart output-history 语义，不能继续把下游 Herdr adapter feature 当作 implementation-ready。
+- [x] 因 `adapter_recommendation=continue-with-gaps`，goal-state 顶层已恢复 `ready-to-dispatch`；下游 Herdr adapter 只能按 layout-only restart restore、`old_process_expected_to_survive=false`、`output_history_restored=false` 继续，UI detach/reattach 进入 follow-up。
 
 ## 7. 遗留
 
-- 真实 Herdr active-host 能力仅部分证明；detach/reattach 仍未在 Herdr UI client 内验证，restart restore 不恢复 sentinel 输出历史。
-- 后续不得把 `mux-backend-contract-herdr-v2`、`herdr-backend-client` 等正式 adapter feature 当作 implementation-ready supported path，除非先修复 Herdr detach/restore 语义缺口并重跑 spike，或由 owner 批准新的 epic route。
+- 真实 Herdr active-host 能力仍仅部分证明；UI detach/reattach 未在 Herdr UI client 内验证，restart restore 不恢复旧 process 或 sentinel 输出历史。
+- 后续可以推进 `mux-backend-contract-herdr-v2`、`herdr-backend-client` 等基础 adapter feature，但必须把 restore 能力声明为 layout-only + CCB-side recovery，不得声明 process/output continuity 或 Windows supported。
 - 本地 scoped commit 已获 `approval-report.md#goal-commits` 授权；该授权不包含 push、merge、release、publish、deploy 或 promotion。
 
 ## 8. 最终审计
@@ -82,5 +82,5 @@ round: 1
 - Checklist steps: done。
 - Checklist checks: passed。
 - Roadmap item: done。
-- Goal state: feature accepted，`current_feature_index` 前进到 2，top-level status 为 `handoff`。
-- 结论：通过；因 route recommendation 为 `needs-upstream-issue`，Goal driver 应停止并交回 epic 路线修订。
+- Goal state: feature accepted，`current_feature_index` 前进到 2，top-level status 为 `ready-to-dispatch`。
+- 结论：通过；route recommendation 已调整为 `continue-with-gaps`，Goal driver 可继续下游 adapter 工作，但必须保留 v2 restore 缺口与 follow-up。

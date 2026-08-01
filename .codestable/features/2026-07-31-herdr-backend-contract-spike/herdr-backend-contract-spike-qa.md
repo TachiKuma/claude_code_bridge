@@ -40,13 +40,13 @@ round: 1
 
 - `python -m pytest -q test/test_herdr_contract_spike_evidence.py test/test_mux_backend_contract.py test/test_terminal_runtime_backend_selection.py test/test_herdr_spike_no_production_route.py` -> exit 0：35 passed。
 - `python ".codestable/tools/validate-yaml.py" --file ".codestable/features/2026-07-31-herdr-backend-contract-spike/herdr-backend-contract-spike-checklist.yaml" --yaml-only` -> exit 0：validated 1 file。
-- DoD runner CMD-001 至 CMD-006 -> passed；CMD-003 记录 26 passed，CMD-004 记录 9 passed，CMD-005 写入 `verdict=blocked failure_class=unsupported-capability`。
+- DoD runner CMD-001 至 CMD-006 -> passed；CMD-003 当前记录 27 passed，CMD-004 记录 9 passed，CMD-005 写入 `verdict=partial failure_class=windows-beta-gap`。
 - JSON/YAML parse check -> passed：`goal-state.yaml`、checklist、machine evidence、scope gate、DoD results、evidence-pack gate 均可解析。
 
 ## 4. Scenario Results
 
 - [x] QA-001 Herdr primitive fail-closed：pass
-  - Evidence: `herdr-contract-spike-evidence.json` 为 `verdict=blocked`、`failure_class=unsupported-capability`、`adapter_recommendation=needs-upstream-issue`；schema/status/session_attach/pane_spawn/send_input/read_output/kill_pane 为 pass，server_restart_restore 为 partial，detach_reattach 保持 blocked。
+  - Evidence: `herdr-contract-spike-evidence.json` 为 `verdict=partial`、`failure_class=windows-beta-gap`、`adapter_recommendation=continue-with-gaps`；schema/status/session_attach/pane_spawn/send_input/read_output/kill_pane/server_restart_layout_restore 为 pass，server_restart_process_continuity 与 server_restart_output_history 为 blocked/windows-beta-gap，ui_detach_reattach 为 needs_harness。
 - [x] QA-002 fake pass rejected：pass
   - Evidence: validator tests 覆盖 pass/non-continue、pass/blocked operation、failure_class none/non-pass、artifact_refs 缺失、command/evidence ref 缺失、重复 operation、unknown URI。
 - [x] QA-003 provider/fallback split：pass
@@ -56,7 +56,7 @@ round: 1
 - [x] QA-005 production no-change：pass
   - Evidence: scope gate changed_files 无 `lib/terminal_runtime/`、`lib/ccbd/`、`lib/provider_backends/`、`bin/` 或 `package.json`；API 层 `get_backend("herdr")` 返回 None。
 - [x] QA-006 evidence interpretation：pass
-  - Evidence: evidence pack Residual Risks 明确写 `blocked/unsupported-capability/needs-upstream-issue`；v8.5.2 source admission、64-bit Python、Native Windows x64 Herdr 与 x64 helper PE evidence 已满足，剩余风险是 detach/reattach 未在 Herdr UI client 内验证，以及 restart 后输出历史未恢复。
+  - Evidence: evidence pack Residual Risks 明确写 Restore Capability Matrix v2 的 `partial/windows-beta-gap/continue-with-gaps`；v8.5.2 source admission、64-bit Python、Native Windows x64 Herdr 与 x64 helper PE evidence 已满足，剩余风险是 UI detach/reattach 未在 Herdr UI client 内验证，以及 restart 后旧 process/output history 未恢复。
 - [x] QA-007 cleanliness：pass
   - Evidence: 清洁度命中仅为测试中的 secret/redaction fixtures 与 `herdr-native` guard 字符串；无未解释生产 debug/TODO。
 
@@ -85,4 +85,4 @@ none
 ## 7. Verdict
 
 - Status: passed
-- Next: `cs-feat` acceptance 阶段。Acceptance 必须把 `adapter_recommendation=needs-upstream-issue` 回写给 roadmap/后续 goal flow，不得继续把下游 Herdr adapter feature 当作 implementation-ready supported path。
+- Next: 后续 goal flow 可继续下游 adapter，但必须消费 `adapter_recommendation=continue-with-gaps`、layout-only restart restore 与 `herdr-ui-detach-reattach-harness` follow-up，不得把当前证据解释为 Windows supported。

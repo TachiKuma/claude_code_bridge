@@ -1,5 +1,5 @@
 roadmap: "windows-native-herdr-ccb"
-status: handoff
+status: ready-to-dispatch
 baseline_ref: "3b11479a48fd8702403ca7fa6b10cd2e0688f573"
 driver_kind: none
 driver_id: ""
@@ -8,8 +8,8 @@ acceptance_authorization: approved
 acceptance_authorization_ref: "approval-report.md#goal-acceptance"
 commit_authorization: approved
 commit_authorization_ref: "approval-report.md#goal-commits"
-handoff_reason: "herdr-backend-contract-spike rerun after platform gate repair: verdict=blocked, failure_class=unsupported-capability, adapter_recommendation=needs-upstream-issue; v8.5.2 source admission, 64-bit Python, Native Windows x64 Herdr, and x64 CCB helper PE evidence are satisfied. Herdr CLI primitive evidence now passes schema/status/session_attach/pane_spawn/send_input/read_output/kill_pane; detach_reattach remains blocked from the non-Herdr harness, and server_restart_restore is partial because workspace/pane identity restores but marker output history does not."
-handoff_next: "Resolve Herdr detach/reattach and restart output-history semantics for session ccb-herdr-spike, or revise the epic route before continuing downstream adapter features; do not treat mux-backend-contract-herdr-v2 as implementation-ready supported path yet."
+handoff_reason: ""
+handoff_next: "Restore Capability Matrix v2 executed: verdict=partial, failure_class=windows-beta-gap, adapter_recommendation=continue-with-gaps. Continue downstream adapter work only with layout-only restart restore, old_process_expected_to_survive=false, output_history_restored=false, and herdr-ui-detach-reattach-harness tracked as follow-up."
 current_feature_index: 2
 features:
   - slug: "windows-x64-v852-baseline-gate"

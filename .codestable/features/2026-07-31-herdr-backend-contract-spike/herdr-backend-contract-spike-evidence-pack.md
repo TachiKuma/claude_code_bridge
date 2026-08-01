@@ -42,7 +42,7 @@ status: generated
     {
       "command": "python -m pytest -q test/test_herdr_contract_spike_evidence.py",
       "exit_code": 0,
-      "stdout": "..........................                                               [100%]\n26 passed in 0.91s\n",
+      "stdout": "...........................                                              [100%]\n27 passed in 0.94s\n",
       "stderr": "",
       "id": "CMD-003",
       "core": true,
@@ -60,7 +60,7 @@ status: generated
     {
       "command": "cmd /c \"set PATH=C:/Users/Administrator/AppData/Local/Programs/Herdr;%PATH% && C:/Users/Administrator/AppData/Local/Programs/Python/Python314/python.exe .codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-backend-contract-spike/run_spike.py --platform-gate-ref .codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json --session ccb-herdr-spike --isolated-server --isolation-created-by-spike --isolated-socket-ref ccb-herdr-spike --herdr-socket-arg=--session --out .codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json\"",
       "exit_code": 0,
-      "stdout": "wrote .codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json verdict=blocked failure_class=unsupported-capability\n",
+      "stdout": "wrote .codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json verdict=partial failure_class=windows-beta-gap\n",
       "stderr": "",
       "id": "CMD-005",
       "core": true,
@@ -69,7 +69,7 @@ status: generated
     {
       "command": "python -m pytest -q test/test_herdr_contract_spike_evidence.py -k \"minimal_machine_check or truth_table\"",
       "exit_code": 0,
-      "stdout": ".........                                                                [100%]\n9 passed, 17 deselected in 0.65s\n",
+      "stdout": "..........                                                               [100%]\n10 passed, 17 deselected in 0.64s\n",
       "stderr": "",
       "id": "CMD-006",
       "core": true,
@@ -98,13 +98,13 @@ Checklist bytes: 7442
 
 ## 5. Residual Risks
 
-- Machine evidence verdict: `blocked`
-- Failure class: `unsupported-capability`
-- Adapter recommendation: `needs-upstream-issue`
-- Residual risk: detach/reattach is not exercised from the non-Herdr harness; server restart restores workspace/pane identity but not marker output history.
-- Blocking gaps: `detach_reattach`, `server_restart_restore`
+- Machine evidence verdict: `partial`
+- Failure class: `windows-beta-gap`
+- Adapter recommendation: `continue-with-gaps`
+- Residual risk: Restore Capability Matrix v2 proves server restart layout identity restore, but old process continuity and sentinel output history are unsupported; UI detach/reattach requires a Herdr UI harness.
+- Blocking gaps: `server_restart_process_continuity`, `server_restart_output_history`, `ui_detach_reattach`
 
-This evidence pack passed implementation gates because the runner produced valid fail-closed evidence after the platform gate was repaired. v8.5.2 source admission, 64-bit Python, Native Windows x64 Herdr, and x64 CCB helper PE evidence are satisfied; current execution is blocked by incomplete Herdr detach/restart semantics. It does not prove Herdr backend capability support.
+This evidence pack passed implementation gates because the runner produced valid Restore Capability Matrix v2 evidence after the platform gate was repaired. v8.5.2 source admission, 64-bit Python, Native Windows x64 Herdr, and x64 CCB helper PE evidence are satisfied; downstream adapter work may continue with layout-only restart restore and CCB-owned recovery. It does not prove Herdr process/output continuity or Windows supported capability.
 
 ## 6. Provider Signals
 

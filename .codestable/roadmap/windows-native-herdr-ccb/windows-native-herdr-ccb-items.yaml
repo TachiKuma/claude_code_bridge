@@ -16,7 +16,7 @@ items:
     status: done
     feature: 2026-07-31-herdr-backend-contract-spike
     minimal_loop: true
-    notes: "只产出 spike 与 evidence；验收证据为 fail-closed blocked：v8.5.2 source admission、64-bit Python、Native Windows x64 Herdr 与两个 CCB native helper x64 PE evidence 已满足；machine evidence 为 verdict=blocked、failure_class=unsupported-capability、adapter_recommendation=needs-upstream-issue。schema/status/session_attach/pane_spawn/send_input/read_output/kill_pane 已通过，server_restart_restore 为 partial（workspace/pane identity restore，output history 未恢复），detach_reattach 未在 Herdr UI client 内验证；后续正式 adapter 路线必须停下，先确认 Herdr detach 与 restore 语义或调整 epic 路线。"
+    notes: "只产出 spike 与 evidence；Restore Capability Matrix v2 证据为 verdict=partial、failure_class=windows-beta-gap、adapter_recommendation=continue-with-gaps。v8.5.2 source admission、64-bit Python、Native Windows x64 Herdr 与两个 CCB native helper x64 PE evidence 已满足；schema/status/session_attach/pane_spawn/send_input/read_output/kill_pane/server_restart_layout_restore 已通过。server_restart_process_continuity 与 server_restart_output_history 明确 unsupported；ui_detach_reattach 需要 Herdr UI harness，已记录 follow-up herdr-ui-detach-reattach-harness。后续 adapter 可按 layout-only restart restore + CCB-side recovery 继续，不得宣称 process/output continuity 或 Windows supported。"
 
   - slug: mux-backend-contract-herdr-v2
     description: 将既有 mux 小协议升级为支持 tmux、rmux、herdr 共存的 backend contract v2
