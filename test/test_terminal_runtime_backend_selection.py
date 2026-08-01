@@ -301,6 +301,29 @@ def test_mux_backend_resolver_rejects_incomplete_herdr_capability_evidence() -> 
         assert result["effective_backend"] is None
 
 
+def test_mux_backend_resolver_rejects_contradictory_herdr_report_metadata() -> None:
+    capability_report = _supported_herdr_capabilities()
+    capability_report.update(
+        {
+            "adapter_recommendation": "stop",
+            "verdict": "failed",
+            "failure_class": "windows-beta-gap",
+        }
+    )
+
+    result = resolve_mux_backend_v2(
+        requested_backend="auto",
+        source="platform_default",
+        platform_gate=_windows_x64_platform_gate(),
+        capability_report=capability_report,
+        capability_report_ref="evidence/herdr-capabilities.json",
+    )
+
+    assert result["blocked"] is True
+    assert result["failure_reason"] == "unsupported-capability"
+    assert result["effective_backend"] is None
+
+
 def test_herdr_blocked_fixture_preserves_recognized_failure_class() -> None:
     result = build_herdr_capability_blocked_fixture(
         {"failure_class": "platform-gate-blocked"},
@@ -347,7 +370,7 @@ def _windows_x64_platform_gate() -> dict[str, object]:
 
 
 def _supported_herdr_capabilities() -> dict[str, object]:
-    return make_capabilities(
+    capabilities = make_capabilities(
         backend_impl="herdr",
         command_status={
             "session_attach": "supported",
@@ -365,3 +388,7 @@ def _supported_herdr_capabilities() -> dict[str, object]:
         },
         source_ref="evidence/herdr-capabilities.json",
     )
+    capabilities["adapter_recommendation"] = "continue"  # type: ignore[typeddict-unknown-key]
+    capabilities["verdict"] = "pass"  # type: ignore[typeddict-unknown-key]
+    capabilities["failure_class"] = "none"  # type: ignore[typeddict-unknown-key]
+    return capabilities

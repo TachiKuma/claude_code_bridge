@@ -29,10 +29,10 @@ items:
   - slug: herdr-backend-client
     description: 实现 Herdr socket client、schema/version gate、capability gate、structured error 与 operation evidence
     depends_on: [mux-backend-contract-herdr-v2]
-    status: in-progress
+    status: done
     feature: 2026-07-31-herdr-backend-client
     minimal_loop: false
-    notes: "Herdr API schema mismatch、Windows beta gap 或 x64 gate 失败时必须 fail closed。"
+    notes: "实现 terminal_runtime HerdrBackend、HerdrSocketClient、HerdrCliRequestAdapter、schema/capability fail-closed gate、operation evidence 与 resolver/factory 接线；explicit herdr 和 Native Windows auto 在 gate 失败时返回 V2 diagnostics，不 fallback tmux；非 Windows auto/default 保持 tmux。QA/acceptance 通过，真实 Herdr host smoke 因本机 PATH 无 herdr executable 留作后续集成 residual risk。"
 
   - slug: ccbd-herdr-namespace-lifecycle
     description: 将 Herdr backend 接入 ccbd project namespace、pane topology、foreground attach、kill、restart 和 reload

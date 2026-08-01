@@ -4,60 +4,60 @@ created: 2026-07-31
 steps:
   - action: "V2 implementation admission：检查前置 mux-backend-contract-herdr-v2 已实现并验收 V2 contract 单一来源"
     exit_signal: "focused test/import 证明 MuxNamespaceRefV2、MuxPaneRefV2、MuxCommandErrorV2、MuxCapabilitiesV2、herdr-native、herdr_socket、schema-mismatch 已存在；否则本 feature dependency-blocked"
-    status: pending
+    status: done
   - action: "dependency and evidence admission：读取 upstream spike evidence / blocked fixture，建立 Herdr capability gate 的输入规则"
     exit_signal: "缺 evidence、stop/needs-upstream-issue、blocked/failed verdict、failure_class 非 none、blocking gaps、unknown 或未归类 status 时 unit test 断言 Herdr construction/selection blocked"
-    status: pending
+    status: done
   - action: "schema/socket client：实现最小 Herdr socket client interface、server_info/schema parser、schema mismatch error mapping"
     exit_signal: "fake socket schema pass/mismatch tests 通过；mismatch 携带 schema/operation evidence"
-    status: pending
+    status: done
   - action: "HerdrBackend facade：实现 namespace/pane refs、create/restore session、create_pane、send_text、capture_pane、kill_pane 和 capabilities"
     exit_signal: "fake socket lifecycle/io tests 返回 herdr-native refs、herdr_socket ipc、restore token 和 operation evidence"
-    status: pending
+    status: done
   - action: "resolver/factory gated route：将 explicit herdr 与 Native Windows auto 接入 backend resolver/factory，保留非 Windows auto/default 不变"
     exit_signal: "explicit Herdr 或 Native Windows auto gate pass 时创建 HerdrBackend；not-windows/not-x64/platform-gate-blocked/capability/schema/socket gate fail 时返回 V2 failure diagnostics；非 Windows auto 无 evidence 不选 Herdr"
-    status: pending
+    status: done
   - action: "scope guard：确认未改 ccbd durable state、provider runtime、doctor/support、package/release surface、recovery"
     exit_signal: "diff guard 覆盖 forbidden path/content，只有 terminal_runtime adapter/resolver/api 和 focused tests 改动"
-    status: pending
+    status: done
   - action: "regression guard：运行 Herdr focused tests 与现有 tmux/rmux selection/contract tests"
     exit_signal: "Herdr tests 通过；现有 tmux/rmux contract/backend selection tests 不退化"
-    status: pending
+    status: done
 
 checks:
   - item: "前置 V2 contract 已在单一来源落地；未满足时 dependency-blocked，不重复定义 V2 类型"
     source: design V2 contract admission / DOD-IMPL-000
-    status: pending
+    status: passed
   - item: "缺 upstream spike evidence / blocked fixture 时 Herdr capability gate blocked，不构造 production Herdr backend"
     source: design AC-001 / DOD-IMPL-002
-    status: pending
+    status: passed
   - item: "adapter_recommendation=stop/needs-upstream-issue、blocked/failed verdict、failure_class 非 none、blocking gaps、unknown 或未归类 status 时 Herdr selection/construction fail closed"
     source: design AC-002 / DOD-IMPL-002
-    status: pending
+    status: passed
   - item: "Herdr server_info/schema 匹配时 client 通过 schema gate，并记录 server_info/socket ref"
     source: design AC-003 / DOD-IMPL-001
-    status: pending
+    status: passed
   - item: "Herdr schema/version 不匹配时输出 schema-mismatch structured error 和 schema/operation evidence"
     source: design AC-004 / DOD-IMPL-001
-    status: pending
+    status: passed
   - item: "create/restore session 返回 herdr-native、herdr、herdr_socket、restore token"
     source: design AC-005 / DOD-IMPL-003
-    status: pending
+    status: passed
   - item: "create pane / send / capture / kill 返回 Herdr pane refs 与 operation evidence，不要求 tmux %N pane id"
     source: design AC-006 / DOD-IMPL-003
-    status: pending
+    status: passed
   - item: "explicit herdr route gates pass 时 resolver/factory 创建 HerdrBackend，并带 capability_report_ref/platform_gate diagnostics"
     source: design AC-007 / DOD-IMPL-004
-    status: pending
+    status: passed
   - item: "explicit herdr route gates fail 时返回 V2 failure，区分 not-windows/not-x64/platform-gate-blocked/capability/schema/socket failure，不 fallback 假成功"
     source: design AC-008 / DOD-IMPL-004
-    status: pending
+    status: passed
   - item: "Native Windows x64 auto 直路由 Herdr，缺 Herdr evidence 时 blocked diagnostic；非 Windows / WSL auto 保持现有 tmux/rmux behavior，不产生 Herdr effective backend"
     source: design AC-009
-    status: pending
+    status: passed
   - item: "本 feature 不修改 ccbd durable state、provider runtime、doctor/support、package/release/recovery"
     source: design AC-010 / 明确不做
-    status: pending
+    status: passed
 
 dod:
   commands:

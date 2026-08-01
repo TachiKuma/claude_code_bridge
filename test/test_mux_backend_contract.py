@@ -30,7 +30,12 @@ def test_mux_backend_contract_only_selects_existing_tmux_backend(monkeypatch) ->
 
     assert isinstance(selection.get_backend(), _FakeTmuxBackend)
     monkeypatch.setattr(terminal_api, "_backend_cache", None)
-    assert terminal_api.get_backend("herdr") is None
+    monkeypatch.setattr(terminal_api, "_herdr_platform_gate", lambda: None)
+    monkeypatch.setattr(terminal_api, "_herdr_capability_report", lambda: None)
+    monkeypatch.setattr(terminal_api, "_herdr_capability_report_ref", lambda: None)
+    with pytest.raises(MuxCommandErrorV2) as exc_info:
+        terminal_api.get_backend("herdr")
+    assert exc_info.value.operation == "select_backend"
 
 
 def test_mux_backend_contract_v2_expresses_herdr_refs_capabilities_and_schema_errors() -> None:

@@ -459,9 +459,9 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
 4. **herdr-backend-client** — 实现 Herdr socket client、schema/version gate、capability/error/evidence 映射。
    - 所属模块：Herdr Backend Client
    - 依赖：`mux-backend-contract-herdr-v2`
-   - 状态：in-progress
+   - 状态：accepted
    - 对应 feature：`2026-07-31-herdr-backend-client`
-   - 备注：缺 schema 或 Windows beta gap 时 fail closed。
+   - 备注：交付 terminal_runtime Herdr backend/client、CLI adapter、schema/capability fail-closed gate、operation evidence 与 resolver/factory gated route；explicit herdr 和 Native Windows auto gate 失败均返回 V2 diagnostics，不 fallback tmux，非 Windows auto/default 不变。真实 Herdr host smoke 未在本机运行，留给后续集成验证。
 
 5. **ccbd-herdr-namespace-lifecycle** — 把 Herdr backend 接入 ccbd project namespace、layout、foreground attach、kill/restart/reload。
    - 所属模块：CCBD Namespace Integration

@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import json
 import os
+import platform
 import shutil
-from typing import Optional
+import sys
+from pathlib import Path
+from typing import Optional, cast
 
 from terminal_runtime.backend_types import TerminalBackend
 from terminal_runtime.detect import current_tty as _current_tty_impl
@@ -21,6 +25,12 @@ from terminal_runtime.pane_logs import maybe_trim_log as _maybe_trim_log_impl
 from terminal_runtime.pane_logs import pane_log_dir as _pane_log_dir_impl
 from terminal_runtime.pane_logs import pane_log_path_for as _pane_log_path_for_impl
 from terminal_runtime.pane_logs import pane_log_root as _pane_log_root_impl
+from terminal_runtime.herdr_backend import HerdrBackend
+from terminal_runtime.herdr_backend_runtime.capabilities import HerdrCapabilityGate
+from terminal_runtime.herdr_backend_runtime.capabilities import herdr_capability_report_supported
+from terminal_runtime.herdr_backend_runtime.cli import HerdrCliRequestAdapter
+from terminal_runtime.herdr_backend_runtime.client import HerdrSocketClient
+from terminal_runtime.mux_backend_contract import MuxCapabilitiesV2
 from terminal_runtime.tmux import default_detached_session_name as _default_detached_session_name_impl
 from terminal_runtime.tmux_backend import TmuxBackend
 
@@ -97,6 +107,8 @@ def get_shell_type() -> str:
 
 
 _backend_cache: Optional[TerminalBackend] = None
+_backend_cache_key: str | None = None
+_ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 def _inside_tmux() -> bool:
@@ -118,14 +130,29 @@ def detect_terminal() -> Optional[str]:
 
 
 def get_backend(terminal_type: Optional[str] = None) -> Optional[TerminalBackend]:
-    global _backend_cache
-    _backend_cache = _resolve_backend(
-        cached_backend=_backend_cache,
-        terminal_type=terminal_type,
-        detect_terminal_fn=detect_terminal,
-        tmux_backend_factory=TmuxBackend,
+    global _backend_cache, _backend_cache_key
+    detected_terminal = detect_terminal() if terminal_type is None else None
+    use_cache = (
+        terminal_type is None
+        and detected_terminal == "tmux"
+        and not _herdr_runtime_configured()
     )
-    return _backend_cache
+    if use_cache and _backend_cache is not None and _backend_cache_key == detected_terminal:
+        return _backend_cache
+    backend = _resolve_backend(
+        cached_backend=None,
+        terminal_type=terminal_type,
+        detect_terminal_fn=lambda: detected_terminal,
+        tmux_backend_factory=TmuxBackend,
+        herdr_backend_factory=_herdr_backend_factory,
+        platform_gate_fn=_herdr_platform_gate,
+        herdr_capability_report_fn=_herdr_capability_report,
+        herdr_capability_report_ref_fn=_herdr_capability_report_ref,
+    )
+    if use_cache:
+        _backend_cache = backend
+        _backend_cache_key = detected_terminal if backend is not None else None
+    return backend
 
 
 def get_backend_for_session(session_data: dict) -> Optional[TerminalBackend]:
@@ -164,10 +191,170 @@ def create_auto_layout(
     )
 
 
+def _herdr_backend_factory() -> HerdrBackend:
+    capabilities = _herdr_capability_report()
+    request_adapter = _herdr_request_adapter()
+    return HerdrBackend(
+        client=HerdrSocketClient(
+            request_fn=request_adapter,
+            socket_ref=request_adapter.socket_ref,
+            allow_session_scoped_ipc_refs=bool(
+                getattr(request_adapter, "allow_session_scoped_ipc_refs", False)
+            ),
+        ),
+        capability_gate=_herdr_capability_gate(capabilities),
+    )
+
+
+def _herdr_capability_gate(capabilities: dict[str, object] | None) -> HerdrCapabilityGate:
+    if not capabilities or capabilities.get("blocked") is True:
+        return HerdrCapabilityGate(
+            capabilities=None,
+            failure_reason=(
+                str(capabilities.get("failure_reason"))
+                if capabilities and capabilities.get("blocked") is True
+                else "herdr-capability-missing"
+            ),
+            diagnostic=(
+                str(capabilities.get("diagnostic"))
+                if capabilities and capabilities.get("blocked") is True
+                else "Herdr capability evidence is unavailable"
+            ),
+            capability_report_ref=_herdr_capability_report_ref(),
+    )
+    if not herdr_capability_report_supported(capabilities):
+        return HerdrCapabilityGate(
+            capabilities=None,
+            failure_reason="invalid-request",
+            diagnostic="Herdr capability evidence is malformed",
+            capability_report_ref=_herdr_capability_report_ref(),
+        )
+    return HerdrCapabilityGate(
+        capabilities=cast(MuxCapabilitiesV2, capabilities),
+        capability_report_ref=_herdr_capability_report_ref(),
+    )
+
+
+def _herdr_platform_gate() -> dict[str, object] | None:
+    return _live_herdr_platform_gate()
+
+
+def _herdr_capability_report() -> dict[str, object] | None:
+    path = _herdr_capability_report_path()
+    if path is None:
+        return None
+    if not path.exists():
+        return _invalid_herdr_capability_report()
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return _invalid_herdr_capability_report()
+    if not isinstance(payload, dict):
+        return _invalid_herdr_capability_report()
+    payload["source_ref"] = _herdr_capability_report_ref()
+    return payload
+
+
+def _herdr_capability_report_ref() -> str | None:
+    path = _herdr_capability_report_path()
+    if path is None:
+        return None
+    if not path.exists():
+        return None
+    try:
+        return path.relative_to(_ROOT_DIR).as_posix()
+    except ValueError:
+        return path.name
+
+
+def _herdr_capability_report_path() -> Path | None:
+    override = os.environ.get("CCB_HERDR_CAPABILITY_REPORT", "").strip()
+    if not override:
+        return None
+    try:
+        return Path(override).expanduser().resolve()
+    except (OSError, RuntimeError, ValueError):
+        return None
+
+
+def _herdr_socket_ref() -> str:
+    return os.environ.get("CCB_HERDR_SOCKET_REF", "").strip() or "herdr://local"
+
+
+def _herdr_request_adapter() -> HerdrCliRequestAdapter:
+    session_name = os.environ.get("CCB_HERDR_SESSION", "").strip() or "ccb-herdr"
+    executable = os.environ.get("CCB_HERDR_EXE", "").strip() or None
+    return HerdrCliRequestAdapter(
+        session_name=session_name,
+        herdr_executable=executable,
+        socket_ref=_herdr_socket_ref(),
+    )
+
+
+def _herdr_runtime_configured() -> bool:
+    return any(
+        os.environ.get(name, "").strip()
+        for name in (
+            "CCB_HERDR_CAPABILITY_REPORT",
+            "CCB_HERDR_SOCKET_REF",
+            "CCB_HERDR_SESSION",
+            "CCB_HERDR_EXE",
+        )
+    )
+
+
+def _live_herdr_platform_gate() -> dict[str, object]:
+    os_platform = _runtime_os_platform()
+    cpu_arch = _runtime_cpu_arch()
+    python_bitness = platform.architecture()[0]
+    is_wsl_runtime = _is_wsl_impl()
+    return {
+        "supported": os_platform == "win32"
+        and cpu_arch == "x64"
+        and python_bitness == "64bit"
+        and is_wsl_runtime is False,
+        "os_platform": os_platform,
+        "cpu_arch": cpu_arch,
+        "python_bitness": python_bitness,
+        "is_wsl": is_wsl_runtime,
+        "platform_gate_ref": "runtime",
+        "failure_reason": None,
+        "diagnostic": None,
+    }
+
+
+def _runtime_cpu_arch() -> str:
+    machine = platform.machine().lower()
+    if machine in {"amd64", "x86_64"}:
+        return "x64"
+    if machine in {"arm64", "aarch64"}:
+        return "arm64"
+    return machine
+
+
+def _runtime_os_platform() -> str:
+    if is_windows():
+        return "win32"
+    if sys.platform.startswith("linux"):
+        return "linux"
+    if sys.platform == "darwin":
+        return "darwin"
+    return sys.platform or os.name
+
+
+def _invalid_herdr_capability_report() -> dict[str, object]:
+    return {
+        "blocked": True,
+        "failure_reason": "invalid-request",
+        "diagnostic": "Herdr capability evidence is malformed",
+    }
+
+
 __all__ = [
     "LayoutResult",
     "TerminalBackend",
     "TmuxBackend",
+    "HerdrBackend",
     "create_auto_layout",
     "detect_terminal",
     "get_backend",

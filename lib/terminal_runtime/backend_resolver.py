@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Literal, Mapping, cast
 
+from terminal_runtime.herdr_backend_runtime.capabilities import herdr_capability_report_supported
 from terminal_runtime.mux_backend_contract import (
     BackendImplV2,
     HerdrFailureReasonV2,
@@ -10,7 +11,6 @@ from terminal_runtime.mux_backend_contract import (
     MuxCapabilitiesV2,
     MuxSelectionSourceV2,
     backend_family_for_impl,
-    capability_statuses_supported,
 )
 
 RequestedBackendV2 = Literal["tmux", "rmux", "herdr", "auto"]
@@ -265,7 +265,7 @@ def _has_supported_herdr_capabilities(
         and _HERDR_REQUIRED_CAPABILITIES.issubset(command_status)
         and _HERDR_REQUIRED_CAPABILITIES.issubset(semantic_status)
         and has_evidence_ref
-        and capability_statuses_supported(capability_report)
+        and herdr_capability_report_supported(capability_report)
     )
 
 

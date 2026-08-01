@@ -3,8 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 import terminal_runtime.api as terminal_api
 from terminal_runtime.backend_selection import TerminalBackendSelection
+from terminal_runtime.mux_backend_contract import MuxCommandErrorV2
 
 
 class _FakeBackend:
@@ -20,7 +23,9 @@ def test_herdr_terminal_type_is_not_registered_during_spike(monkeypatch) -> None
     assert selection.get_backend() is None
     assert selection.get_backend("herdr") is None
     monkeypatch.setattr(terminal_api, "_backend_cache", None)
-    assert terminal_api.get_backend("herdr") is None
+    with pytest.raises(MuxCommandErrorV2) as exc_info:
+        terminal_api.get_backend("herdr")
+    assert exc_info.value.operation == "select_backend"
 
 
 def test_production_runtime_limits_herdr_native_contract_to_v2_contract_modules() -> None:

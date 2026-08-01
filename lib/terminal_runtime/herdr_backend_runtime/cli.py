@@ -1,0 +1,508 @@
+from __future__ import annotations
+
+import json
+import platform
+import shlex
+import shutil
+import subprocess
+import sys
+from collections.abc import Callable, Mapping
+
+from terminal_runtime.mux_backend_contract import MuxCommandErrorV2
+
+
+class HerdrCliRequestAdapter:
+    def __init__(
+        self,
+        *,
+        session_name: str,
+        herdr_executable: str | None = None,
+        run_fn: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+        which_fn: Callable[[str], str | None] = shutil.which,
+        socket_ref: str | None = None,
+    ) -> None:
+        self._session_name = session_name
+        self._herdr_executable = herdr_executable
+        self._run_fn = run_fn
+        self._which_fn = which_fn
+        self._socket_ref = str(socket_ref or "").strip() or None
+
+    @property
+    def socket_ref(self) -> str:
+        return self._ipc_ref_for_session(self._session_name)
+
+    @property
+    def allow_session_scoped_ipc_refs(self) -> bool:
+        return self._socket_ref is None
+
+    def __call__(self, operation: str, payload: dict[str, object]) -> Mapping[str, object]:
+        if operation == "server_info":
+            return self._server_info()
+        if operation == "create_session":
+            return self._create_session(payload)
+        if operation == "restore_session":
+            return self._restore_session(payload)
+        if operation == "create_pane":
+            return self._create_pane(payload)
+        if operation == "send_text":
+            return self._send_text(payload)
+        if operation == "capture_pane":
+            return self._capture_pane(payload)
+        if operation == "kill_pane":
+            return self._kill_pane(payload)
+        if operation == "attach_namespace":
+            return self._attach_namespace(payload)
+        if operation == "is_alive":
+            return self._is_alive(payload)
+        raise MuxCommandErrorV2(
+            category="unsupported",
+            backend_impl="herdr",
+            operation=operation,
+            detail=f"unsupported Herdr operation {operation!r}",
+            ipc_ref=self.socket_ref,
+        )
+
+    def _server_info(self) -> Mapping[str, object]:
+        status = self._json_command("server_info", ["status", "--json"])
+        version_result = self._command("server_info", ["--version"], expect_json=False)
+        schema = self._json_command("server_info", ["api", "schema", "--json"])
+        client = status.get("client") if isinstance(status.get("client"), Mapping) else {}
+        return {
+            "version": str(client.get("version") or version_result.stdout or "").strip(),
+            "api_schema": str(schema.get("title") or ""),
+            "platform": _runtime_platform(),
+            "arch": _runtime_arch(),
+        }
+
+    def _create_session(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        title = str(payload.get("title") or payload.get("project_id") or "ccb-herdr")
+        cwd = str(payload.get("cwd") or "")
+        args = ["workspace", "create"]
+        if cwd:
+            args.extend(["--cwd", cwd])
+        args.extend(["--label", title, "--focus"])
+        result = self._json_command("create_session", args)
+        workspace = _mapping(result.get("workspace"))
+        root_pane = _mapping(result.get("root_pane"))
+        namespace_id = str(workspace.get("workspace_id") or root_pane.get("workspace_id") or "").strip()
+        if not namespace_id:
+            raise self._failed(
+                "create_session",
+                "Herdr workspace create response is missing workspace_id",
+            )
+        return {
+            "namespace_id": namespace_id,
+            "session_name": self._session_name,
+            "restore_token": _restore_token(self._session_name, namespace_id),
+            "ipc_ref": self.socket_ref,
+        }
+
+    def _restore_session(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        restore_token = str(payload.get("restore_token") or "")
+        try:
+            session_name, namespace_id = _split_restore_token(restore_token)
+        except ValueError as exc:
+            raise self._failed("restore_session", str(exc)) from exc
+        workspaces = self._workspaces(session_name=session_name)
+        for workspace in workspaces:
+            if workspace.get("workspace_id") == namespace_id:
+                return {
+                    "namespace_id": namespace_id,
+                    "session_name": session_name,
+                    "restore_token": _restore_token(session_name, namespace_id),
+                    "ipc_ref": self._ipc_ref_for_session(session_name),
+                }
+        raise self._failed(
+            "restore_session",
+            f"unknown Herdr restore token {namespace_id!r}",
+            session_name=session_name,
+        )
+
+    def _create_pane(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        namespace_id = str(payload.get("namespace_id") or "")
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        try:
+            command = _command_text(payload.get("command"))
+        except ValueError as exc:
+            raise self._failed("create_pane", str(exc), session_name=session_name) from exc
+        env = payload.get("env")
+        if isinstance(env, Mapping) and env:
+            raise self._failed(
+                "create_pane",
+                "Herdr CLI pane environment overrides are not supported by this adapter",
+                session_name=session_name,
+            )
+        parent = str(payload.get("parent_pane") or "").strip()
+        if parent:
+            self._require_pane_in_namespace(namespace_id, parent, session_name=session_name)
+        else:
+            parent = self._first_pane(namespace_id, session_name=session_name)
+        cwd = str(payload.get("cwd") or "")
+        args = [
+            "pane",
+            "split",
+            parent,
+            "--direction",
+            _split_direction(payload.get("direction")),
+            "--ratio",
+            _split_ratio(payload.get("percent")),
+        ]
+        if cwd:
+            args.extend(["--cwd", cwd])
+        args.append("--focus")
+        result = self._json_command("create_pane", args, session_name=session_name)
+        pane = _mapping(result.get("pane"))
+        pane_id = str(pane.get("pane_id") or "").strip()
+        if not pane_id:
+            raise self._failed(
+                "create_pane",
+                "Herdr pane split response is missing pane_id",
+                session_name=session_name,
+            )
+        if command:
+            self._command(
+                "create_pane",
+                ["pane", "run", pane_id, command],
+                expect_json=False,
+                session_name=session_name,
+            )
+        return {
+            "pane_id": pane_id,
+            "session_name": session_name,
+        }
+
+    def _send_text(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        pane_id = str(payload.get("pane_id") or "")
+        text = str(payload.get("text") or "")
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        self._command(
+            "send_text",
+            ["pane", "run", pane_id, text],
+            expect_json=False,
+            session_name=session_name,
+        )
+        return {"status": "ok", "pane_id": pane_id}
+
+    def _capture_pane(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        pane_id = str(payload.get("pane_id") or "")
+        lines = _line_count(payload.get("lines"))
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        result = self._command(
+            "capture_pane",
+            ["pane", "read", pane_id, "--lines", lines, "--format", "text"],
+            expect_json=False,
+            session_name=session_name,
+        )
+        return {"status": "ok", "pane_id": pane_id, "text": result.stdout}
+
+    def _kill_pane(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        pane_id = str(payload.get("pane_id") or "")
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        self._command(
+            "kill_pane",
+            ["pane", "close", pane_id],
+            expect_json=False,
+            session_name=session_name,
+        )
+        return {"status": "ok", "pane_id": pane_id}
+
+    def _attach_namespace(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        namespace_id = str(payload.get("namespace_id") or "").strip()
+        if not namespace_id:
+            raise self._failed("attach_namespace", "Herdr attach_namespace is missing namespace_id")
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        self._command(
+            "attach_namespace",
+            ["workspace", "focus", namespace_id],
+            expect_json=False,
+            session_name=session_name,
+        )
+        return {"status": "ok", "namespace_id": namespace_id, "session_name": session_name}
+
+    def _is_alive(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        try:
+            captured = self._capture_pane({**dict(payload), "lines": 1})
+        except MuxCommandErrorV2 as exc:
+            if exc.category == "not-found":
+                return {
+                    "status": "ok",
+                    "pane_id": str(payload.get("pane_id") or ""),
+                    "alive": False,
+                }
+            raise
+        return {"status": "ok", "pane_id": captured["pane_id"], "alive": True}
+
+    def _workspaces(self, *, session_name: str | None = None) -> list[Mapping[str, object]]:
+        result = self._json_command("restore_session", ["workspace", "list"], session_name=session_name)
+        workspaces = result.get("workspaces")
+        return [item for item in workspaces if isinstance(item, Mapping)] if isinstance(workspaces, list) else []
+
+    def _first_pane(self, namespace_id: str, *, session_name: str) -> str:
+        result = self._json_command("create_pane", ["pane", "list"], session_name=session_name)
+        panes = result.get("panes")
+        if isinstance(panes, list):
+            for pane in panes:
+                if isinstance(pane, Mapping) and pane.get("workspace_id") == namespace_id:
+                    pane_id = str(pane.get("pane_id") or "")
+                    if pane_id:
+                        return pane_id
+        raise self._failed(
+            "create_pane",
+            f"no Herdr pane found for workspace {namespace_id!r}",
+            session_name=session_name,
+        )
+
+    def _require_pane_in_namespace(
+        self,
+        namespace_id: str,
+        pane_id: str,
+        *,
+        session_name: str,
+    ) -> None:
+        result = self._json_command("create_pane", ["pane", "list"], session_name=session_name)
+        panes = result.get("panes")
+        if isinstance(panes, list):
+            for pane in panes:
+                if (
+                    isinstance(pane, Mapping)
+                    and pane.get("workspace_id") == namespace_id
+                    and pane.get("pane_id") == pane_id
+                ):
+                    return
+        raise self._failed(
+            "create_pane",
+            f"unknown Herdr parent pane {pane_id!r}",
+            session_name=session_name,
+        )
+
+    def _json_command(
+        self,
+        operation: str,
+        args: list[str],
+        *,
+        session_name: str | None = None,
+    ) -> Mapping[str, object]:
+        result = self._command(operation, args, expect_json=True, session_name=session_name)
+        try:
+            payload = json.loads(result.stdout or "{}")
+        except json.JSONDecodeError as exc:
+            raise self._failed(
+                operation,
+                "Herdr command did not return JSON",
+                session_name=session_name,
+            ) from exc
+        if not isinstance(payload, Mapping):
+            raise self._failed(
+                operation,
+                "Herdr command JSON response is not an object",
+                session_name=session_name,
+            )
+        outer_detail = _response_detail(payload)
+        self._require_ok_json_status(
+            operation,
+            payload,
+            detail=outer_detail,
+            session_name=session_name,
+        )
+        nested = payload.get("result")
+        if isinstance(nested, Mapping):
+            self._require_ok_json_status(
+                operation,
+                nested,
+                detail=_response_detail(nested) or outer_detail,
+                session_name=session_name,
+            )
+            return nested
+        return payload
+
+    def _command(
+        self,
+        operation: str,
+        args: list[str],
+        *,
+        expect_json: bool,
+        session_name: str | None = None,
+    ) -> subprocess.CompletedProcess:
+        executable = self._resolve_executable()
+        command = [executable, "--session", session_name or self._session_name, *args]
+        try:
+            return self._run_fn(
+                command,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=True,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            detail = f"Herdr command failed for {operation}"
+            if isinstance(exc, subprocess.CalledProcessError):
+                detail = (exc.stderr or exc.stdout or detail).strip() or detail
+            effective_session = session_name or self._session_name
+            raise MuxCommandErrorV2(
+                category=_command_error_category(detail, expect_json=expect_json),
+                backend_impl="herdr",
+                operation=operation,
+                detail=detail,
+                ipc_ref=self._ipc_ref_for_session(effective_session),
+                evidence=_command_evidence(operation, command),
+            ) from exc
+
+    def _resolve_executable(self) -> str:
+        executable = (self._herdr_executable or "").strip() or self._which_fn("herdr")
+        if executable:
+            return executable
+        raise MuxCommandErrorV2(
+            category="transient-unavailable",
+            backend_impl="herdr",
+            operation="resolve_executable",
+            detail="Herdr executable is not available",
+            ipc_ref=self.socket_ref,
+        )
+
+    def _failed(
+        self,
+        operation: str,
+        detail: str,
+        *,
+        session_name: str | None = None,
+    ) -> MuxCommandErrorV2:
+        effective_session = session_name or self._session_name
+        return MuxCommandErrorV2(
+            category="command-failed",
+            backend_impl="herdr",
+            operation=operation,
+            detail=detail,
+            ipc_ref=self._ipc_ref_for_session(effective_session),
+        )
+
+    def _require_ok_json_status(
+        self,
+        operation: str,
+        response: Mapping[str, object],
+        *,
+        detail: str,
+        session_name: str | None,
+    ) -> None:
+        status = str(response.get("status") or "").strip()
+        if status and status != "ok":
+            raise self._failed(
+                operation,
+                detail or f"Herdr command returned status {status}",
+                session_name=session_name,
+            )
+
+    def _ipc_ref_for_session(self, session_name: str) -> str:
+        return self._socket_ref or f"herdr://{session_name}"
+
+
+def _mapping(raw: object) -> Mapping[str, object]:
+    return raw if isinstance(raw, Mapping) else {}
+
+
+def _restore_token(session_name: str, namespace_id: str) -> str:
+    return f"{session_name}::{namespace_id}"
+
+
+def _split_restore_token(token: str) -> tuple[str, str]:
+    if token.count("::") != 1:
+        raise ValueError("Herdr restore_token must use session::workspace format")
+    session_name, namespace_id = token.split("::", 1)
+    session_name = session_name.strip()
+    namespace_id = namespace_id.strip()
+    if not session_name or not namespace_id:
+        raise ValueError("Herdr restore_token must include non-empty session and workspace")
+    return session_name, namespace_id
+
+
+def _response_detail(response: Mapping[str, object]) -> str:
+    return str(response.get("detail") or response.get("message") or "").strip()
+
+
+def _command_text(raw: object) -> str:
+    if raw is None:
+        return ""
+    if not isinstance(raw, list):
+        raise ValueError("Herdr command must be a list of argv parts")
+    argv = [str(part) for part in raw if str(part).strip()]
+    if sys.platform.startswith("win"):
+        return subprocess.list2cmdline(argv).strip()
+    return shlex.join(argv).strip()
+
+
+def _session_name_from_payload(
+    payload: Mapping[str, object],
+    *,
+    fallback_session_name: str,
+) -> str:
+    session_name = str(payload.get("session_name") or "").strip()
+    return session_name or fallback_session_name
+
+
+def _split_direction(raw: object) -> str:
+    direction = str(raw or "right").strip().lower()
+    return direction if direction in {"left", "right", "up", "down"} else "right"
+
+
+def _split_ratio(raw: object) -> str:
+    try:
+        percent = int(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        percent = 50
+    percent = min(max(percent, 1), 100)
+    return str(percent / 100).rstrip("0").rstrip(".")
+
+
+def _line_count(raw: object) -> str:
+    try:
+        line_count = int(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        line_count = 100
+    return str(max(line_count, 1))
+
+
+def _runtime_platform() -> str:
+    if sys.platform.startswith("win"):
+        return "windows"
+    if sys.platform.startswith("linux"):
+        return "linux"
+    if sys.platform == "darwin":
+        return "darwin"
+    return sys.platform
+
+
+def _runtime_arch() -> str:
+    machine = platform.machine().lower()
+    if machine in {"amd64", "x86_64"}:
+        return "x64"
+    if machine in {"arm64", "aarch64"}:
+        return "arm64"
+    return machine
+
+
+def _command_evidence(operation: str, command: list[str]) -> dict[str, object]:
+    return {
+        "operation": operation,
+        "executable": command[0] if command else "",
+        "arg_count": max(len(command) - 1, 0),
+        "argv": _redacted_argv(operation, command),
+    }
+
+
+def _command_error_category(detail: str, *, expect_json: bool) -> str:
+    lowered = detail.lower()
+    if "not found" in lowered or "unknown pane" in lowered or "unknown workspace" in lowered:
+        return "not-found"
+    return "transient-unavailable" if expect_json else "command-failed"
+
+
+def _redacted_argv(operation: str, command: list[str]) -> list[str]:
+    if operation != "send_text":
+        return list(command)
+    redacted = list(command)
+    if redacted:
+        redacted[-1] = "<redacted>"
+    return redacted
+
+
+__all__ = ["HerdrCliRequestAdapter"]
