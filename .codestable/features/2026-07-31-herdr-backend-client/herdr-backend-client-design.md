@@ -6,6 +6,7 @@ roadmap: windows-native-herdr-ccb
 roadmap_item: herdr-backend-client
 execution_lane: goal
 status: approved
+revision: v8.5.2-source-facts-alignment
 summary: 实现 Herdr socket client、schema/version gate、capability gate、structured error 与 operation evidence，并以 fail-closed 方式接入 terminal_runtime backend resolver/factory
 tags: [terminal-runtime, herdr, backend-client, socket-api, capability-gate, schema-mismatch, epic-child]
 ---
@@ -24,9 +25,9 @@ tags: [terminal-runtime, herdr, backend-client, socket-api, capability-gate, sch
 
 仓库事实：
 
-- `lib/terminal_runtime/mux_backend_contract.py` 当前是 tmux/rmux 小协议来源；前置 `mux-backend-contract-herdr-v2` design-review 已 passed，要求 Herdr 使用 `herdr-native` family、V2 refs、`schema-mismatch` 和 fail-closed capability。
-- `lib/terminal_runtime/rmux_backend.py` 与 `lib/terminal_runtime/rmux_backend_runtime/*` 已提供 production backend + capability gate + command client 的可复用结构样式。
-- `lib/terminal_runtime/backend_resolver.py` / `backend_selection.py` 当前只支持 `tmux|rmux|auto`；前置 V2 child 设计了 Herdr selection/failure diagnostics，但未实现 production Herdr client。
+- `lib/terminal_runtime/mux_backend_contract.py` 已实现并随 `mux-backend-contract-herdr-v2`（feature 3，accepted/committed）落地 V2 contract 单一来源：`MuxNamespaceRefV2`/`MuxPaneRefV2`/`MuxCapabilitiesV2`/`MuxCommandErrorV2`、`herdr-native` family、`herdr_socket` ipc、`schema-mismatch` 与 `capability_statuses_supported` fail-closed 判定；Herdr adapter 直接复用这些类型，不重复定义。
+- **仓库事实修正（分支 `codestable/windows-native-herdr-ccb-v852-source`）**：本树**没有** `lib/terminal_runtime/rmux_backend.py` 或 `rmux_backend_runtime/*` production 模块（仅遗留 stale `__pycache__/rmux_backend.pyc`），也没有 `test/test_rmux_backend_core.py`。可复用的结构 analog 是 `lib/terminal_runtime/tmux_backend.py` + `tmux_backend_runtime/*`（facade + runtime package 拆分），Herdr adapter 按同一 convention 新建，不镜像不存在的 rmux 模块。
+- `lib/terminal_runtime/backend_resolver.py` 已实现 `resolve_mux_backend_v2`（feature 3）：显式 `herdr`/Native Windows `auto` 的 platform-gate + capability fail-closed selection/failure diagnostics 已在位，但尚无 production Herdr client 与 backend 构造。terminal backend factory 是 `lib/terminal_runtime/api.py` → `lib/terminal_runtime/api_selection.py`（`resolve_backend` / `resolve_backend_for_session` / `create_layout`），当前只线程化 `tmux_backend_factory=TmuxBackend`，产出实现 `TerminalBackend` ABC 的 backend。`backend_selection.py` 的 `TerminalBackendSelection` 仅识别 `tmux`。
 - `lib/ccbd/services/project_namespace_state_runtime/models.py` 仍把 namespace backend family 固定为 `tmux-family`；本 feature 不迁移 durable state。
 - 上游 `herdr-backend-contract-spike` design-review 已 passed，但当前工作区尚无 `evidence/herdr-contract-spike-evidence.json`；实现阶段必须把缺 evidence 视为 blocked，而不是构造成功 Herdr backend。
 
@@ -86,10 +87,10 @@ tags: [terminal-runtime, herdr, backend-client, socket-api, capability-gate, sch
 
 #### 现状
 
-- `RmuxBackend` 已按 facade + runtime package 拆分：backend 类集中公开 MuxBackend 方法，runtime 子模块处理 capabilities、namespace、pane、io、presentation。
-- `RmuxCapabilityGate` 从 machine evidence 投影 command/semantic status，unsupported command 抛 `MuxCommandError`。
-- `backend_resolver.py` 负责 requested/effective/source/failure diagnostics，当前没有 Herdr route，也没有 Windows x64 platform gate provider。
-- `terminal_runtime.api` 暴露 `get_backend`、`get_backend_selection_diagnostics`、`get_backend_for_session`，目前 factory 只接 tmux/psmux/rmux。
+- `TmuxBackend` 已按 facade + runtime package 拆分（`tmux_backend.py` + `tmux_backend_runtime/*`）：backend 类集中实现 `TerminalBackend` ABC 方法（`send_text`/`is_alive`/`kill_pane`/`activate`/`create_pane` 等），runtime 子模块处理 panes、io、respawn 等；这是 Herdr adapter 的结构 analog。
+- 无 rmux capability gate 可复用；Herdr capability gate 从上游 spike evidence + runtime server_info 新建投影 command/semantic status，unsupported/blocking gap 抛 `MuxCommandErrorV2`。
+- `backend_resolver.py` 已负责 requested/effective/source/failure diagnostics 且已含 Herdr route 与 Windows x64 platform gate 判定（feature 3）；本 feature 复用它，只补 production client 构造与 factory 接线。
+- `terminal_runtime.api` 暴露 `get_backend`、`get_backend_for_session`、`create_auto_layout`；目前 factory（经 `api_selection.py` / `TerminalBackendSelection`）只接 `tmux`（`TmuxBackend`）。本 feature 需新增 Herdr 构造分支并（可选）暴露 selection 诊断入口。
 
 #### 变化
 
@@ -166,7 +167,7 @@ flowchart TD
   C --> D[HerdrBackend 构造 herdr-native refs]
   D --> E[session/pane/send/capture/kill/restore operations]
   E --> F[resolver/factory explicit herdr gated route]
-  F --> G[tmux/rmux/default regression 与 scope guard]
+  F --> G[tmux/default regression 与 scope guard]
 ```
 
 流程级约束：
@@ -201,8 +202,8 @@ flowchart TD
    退出信号：explicit Herdr 或 Native Windows auto gate pass 时创建 HerdrBackend；not-windows/not-x64/platform-gate-blocked/capability/schema/socket gate fail 时返回 V2 failure diagnostics；非 Windows auto 无 evidence 不选 Herdr。
 5. **scope guard**：确认未改 ccbd durable state、provider runtime、doctor/support、package/release surface、recovery。  
    退出信号：diff guard 覆盖 forbidden path/content，只有 terminal_runtime adapter/resolver/api 和 focused tests 改动。
-6. **regression guard**：运行 Herdr focused tests 与现有 tmux/rmux selection/contract tests。  
-   退出信号：Herdr tests 通过；现有 tmux/rmux contract/backend selection tests 不退化。
+6. **regression guard**：运行 Herdr focused tests 与现有 tmux selection/contract tests。  
+   退出信号：Herdr tests 通过；现有 `test_mux_backend_contract.py` / `test_tmux_backend.py` / `test_terminal_runtime_backend_selection.py` 不退化。
 
 ### 2.5 结构健康度与微重构
 
@@ -210,12 +211,12 @@ flowchart TD
 
 - 文件级：直接把 Herdr socket/schema/capability 全塞进 `backend_resolver.py` 会让 policy 与 external adapter 混杂，必须新建 `herdr_backend_runtime/*`。
 - 文件级：`terminal_runtime/api.py` 目前已有重复 `_extract_wsl_path_from_unc_like_path` 定义，但本 feature 不依赖它；不做无关重构。
-- 目录级：`terminal_runtime` 已有 `rmux_backend_runtime` 模式；新增 `herdr_backend_runtime` 符合现有 convention。
-- compound：当前未发现 Herdr backend client 相关沉淀；rmux backend features 是主要类比。
+- 目录级：`terminal_runtime` 已有 `tmux_backend_runtime` 模式；新增 `herdr_backend_runtime` 符合现有 convention。
+- compound：当前未发现 Herdr backend client 相关沉淀；tmux backend（`tmux_backend.py` + `tmux_backend_runtime/*`）是主要结构类比。
 
 ##### 结论：不做行为等价微重构
 
-不先拆现有 resolver/API。Herdr adapter 新代码按 `rmux_backend_runtime` 类似布局放入新目录；若实现发现 `backend_resolver.py` 因多 backend policy 继续膨胀，记录后续 `cs-refactor` 候选，不在本 feature 中扩范围。
+不先拆现有 resolver/API。Herdr adapter 新代码按 `tmux_backend_runtime` 类似布局放入新目录；factory 接线在 `api.py`/`api_selection.py` 新增 `herdr_backend_factory` 分支（与 `tmux_backend_factory` 并列，由 `resolve_mux_backend_v2` selection 决定构造哪个），不改写 tmux 默认路径；若实现发现 `backend_resolver.py` 因多 backend policy 继续膨胀，记录后续 `cs-refactor` 候选，不在本 feature 中扩范围。
 
 ## 3. 验收契约
 
@@ -281,7 +282,7 @@ Validation Commands:
 | CMD-002 | `python ".codestable/tools/validate-yaml.py" --file ".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml"` | roadmap items 回写合法性 | core | fix-or-block |
 | CMD-003 | `python -m pytest -q test/test_mux_backend_contract.py -k "V2 or herdr"` | V2 implementation admission；contract 单一来源必须已落地 | core | dependency-blocked |
 | CMD-004 | `python -m pytest -q test/test_herdr_backend_client.py test/test_terminal_runtime_backend_selection.py` | Herdr client/capability/resolver focused tests 与 selection regression | core | fix-or-block |
-| CMD-005 | `python -m pytest -q test/test_mux_backend_contract.py test/test_rmux_backend_core.py` | Mux contract 与 rmux backend 类比回归 | core | fix-or-block |
+| CMD-005 | `python -m pytest -q test/test_mux_backend_contract.py test/test_terminal_runtime_backend_selection.py` | Mux V2 contract 与 backend selection/resolver 回归（本分支无 rmux backend analog；tmux backend 另有预存 env 失败，不作基线） | core | fix-or-block |
 | CMD-006 | `python -c "import subprocess; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; forbidden_prefix=('lib/provider_backends/','lib/provider_runtime/','lib/ccbd/services/project_namespace_state_runtime/','lib/ccbd/services/project_namespace_runtime/','lib/cli/services/doctor_runtime/','lib/ccbd/services/dispatcher_runtime/lifecycle_start_runtime/recovery_runtime/'); forbidden_files={'package.json','package-lock.json','install.ps1','install.sh','install.cmd','README.md','docs/ccbd-diagnostics-contract.md','bin/ccb-npm-install.js','lib/cli/management_runtime/install.py','lib/cli/management_runtime/commands_runtime/install.py','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py','lib/terminal_runtime/rmux_packaging_support.py','lib/terminal_runtime/rmux_packaging_support_projection.json'}; bad=sorted(p for p in paths if p.startswith(forbidden_prefix) or p in forbidden_files); assert not bad, bad"` | ccbd/provider/doctor/package/installer/release/recovery scope guard，覆盖 modified、staged rename/copy 与 untracked 路径 | core | fix-or-block |
 | CMD-007 | `python -c "import pathlib, subprocess; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only','--','lib','test'],['git','diff','--cached','--name-only','--diff-filter=ACMR','--','lib','test'],['git','ls-files','--others','--exclude-standard','--','lib','test']) for p in run(a).splitlines() if p.strip()}; text=run(['git','diff','--','lib','test'])+run(['git','diff','--cached','--','lib','test'])+''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in paths if pathlib.Path(p).is_file() and p.endswith(('.py','.md','.yaml','.yml','.json'))); forbidden=('completion_source','HerdrProviderCompletionEvidence','support_tier','npm publish','release surface'); assert not any(term in text for term in forbidden)"` | provider completion/support/release content guard，覆盖 modified/staged/untracked lib/test 文件内容 | core | fix-or-block |
 

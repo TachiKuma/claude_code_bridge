@@ -9,7 +9,7 @@ acceptance_authorization_ref: "approval-report.md#goal-acceptance"
 commit_authorization: approved
 commit_authorization_ref: "approval-report.md#goal-commits"
 handoff_reason: ""
-handoff_next: "Restore Capability Matrix v2 executed: verdict=partial, failure_class=windows-beta-gap, adapter_recommendation=continue-with-gaps. Continue downstream adapter work only with layout-only restart restore, old_process_expected_to_survive=false, output_history_restored=false, and herdr-ui-detach-reattach-harness tracked as follow-up."
+handoff_next: ""
 current_feature_index: 3
 features:
   - slug: "windows-x64-v852-baseline-gate"

@@ -33,6 +33,8 @@ created_at: 2026-07-31
 - 2026-07-31：owner 回复“确认”，批准修订后的 `windows-native-herdr-ccb` roadmap，授权将 roadmap 从 `draft` 改回 `active`，并进入 child design-review 重审。
 - 2026-08-01：owner 回复“所有 child design统一确认batch-approved”，批准 `approval-report.md#all-feature-designs`，授权将 `windows-native-herdr-ccb` 下 11 个已审查通过的 child feature design 统一标记为 `status: approved`。
 - 2026-08-01：owner 通过 `/goal` 启动指令确认 Goal execution，批准 `approval_groups.goal-execution`，同一 confirmation id `goal-execution-2026-08-01-windows-native-herdr-ccb` 覆盖 `approval-report.md#goal-acceptance` 与 `approval-report.md#goal-commits`。
+- 2026-08-01：goal driver 执行到 feature 4 `herdr-backend-client` 时，发现其 design 的仓库事实假设在分支 `codestable/windows-native-herdr-ccb-v852-source` 不成立（rmux_backend analog 与 `test/test_rmux_backend_core.py` 不存在、factory 仅 tmux），触发 handoff。owner 指示经 cs-epic/cs-feat 修订该 child design + checklist（对齐真实树、修 CMD-005、明确 factory 接线），已由独立 Task agent design-review **round 4 passed**。该 design 已从 `approved` 重开为 `draft`，`all-feature-designs` 对 `herdr-backend-client` 一项待 owner 再确认；其余 10 个 child design 的 approved 不变。
+- 2026-08-01：owner 回复“确认”，批准修订后的 `herdr-backend-client` design + checklist，标记其 `status: approved`，授权清除 goal-state handoff 恢复 `ready-to-dispatch`，由 goal driver 从 `current_feature_index=3` 续跑 feature 4。既有 `goal-execution`/`goal-commits` 授权不变，仍不含 push。
 
 ## Decision Needed
 

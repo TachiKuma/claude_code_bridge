@@ -91,13 +91,13 @@ dod:
         - auto_default_unchanged
         - platform_gate_failure_diagnostics
     - id: CMD-005
-      command: "python -m pytest -q test/test_mux_backend_contract.py test/test_rmux_backend_core.py"
+      command: "python -m pytest -q test/test_mux_backend_contract.py test/test_terminal_runtime_backend_selection.py"
       core: true
       failure_handling: fix-or-block
       test_status: existing
       covers:
         - mux_contract_regression
-        - rmux_backend_regression
+        - backend_selection_regression
     - id: CMD-006
       command: >-
         python -c "import subprocess; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; forbidden_prefix=('lib/provider_backends/','lib/provider_runtime/','lib/ccbd/services/project_namespace_state_runtime/','lib/ccbd/services/project_namespace_runtime/','lib/cli/services/doctor_runtime/','lib/ccbd/services/dispatcher_runtime/lifecycle_start_runtime/recovery_runtime/'); forbidden_files={'package.json','package-lock.json','install.ps1','install.sh','install.cmd','README.md','docs/ccbd-diagnostics-contract.md','bin/ccb-npm-install.js','lib/cli/management_runtime/install.py','lib/cli/management_runtime/commands_runtime/install.py','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py','lib/terminal_runtime/rmux_packaging_support.py','lib/terminal_runtime/rmux_packaging_support_projection.json'}; bad=sorted(p for p in paths if p.startswith(forbidden_prefix) or p in forbidden_files); assert not bad, bad"
