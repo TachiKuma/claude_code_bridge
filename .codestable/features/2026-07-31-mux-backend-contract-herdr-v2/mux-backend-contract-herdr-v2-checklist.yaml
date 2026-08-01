@@ -4,54 +4,54 @@ created: 2026-07-31
 steps:
   - action: "V2 contract types：扩展 backend family、backend impl、ipc kind、error category 和 capabilities，同时保持 tmux/rmux 兼容"
     exit_signal: "contract tests 断言 tmux/psmux/rmux 仍可用，herdr-native/herdr/herdr_socket/schema-mismatch 可表达"
-    status: pending
+    status: done
   - action: "fake backend V2 fixture：让 FakeMuxBackend 可构造 herdr-native refs、capabilities 和 structured errors，不 mock Herdr JSON"
     exit_signal: "fake Herdr backend 可 create session、split pane、send/capture/kill，并返回 Herdr-shaped refs"
-    status: pending
+    status: done
   - action: "resolver diagnostics V2：扩展 requested/failure diagnostics 表达 herdr、auto_probe、platform_gate、capability_report_ref 和 Herdr failure reason"
     exit_signal: "显式 Herdr request 返回 structured blocked/failure；Native Windows auto/platform default 进入 Herdr selection，缺 evidence 时 blocked diagnostic；非 Windows 默认仍走 tmux/rmux 现有逻辑，不产生 Herdr effective backend"
-    status: pending
+    status: done
   - action: "capability projection from spike：定义上游 herdr-contract-spike-evidence.json 到 V2 capability fixture 的最小转换规则"
     exit_signal: "缺 evidence、adapter_recommendation=stop/needs-upstream-issue、verdict blocked/failed、failure_class 非 none、blocking_gaps 非空或 unknown 未归类时，Herdr selection/capability 必须 fail closed"
-    status: pending
+    status: done
   - action: "scope and upstream evidence guard：增加 core guard 检查 production Herdr client、provider runtime、ccbd durable state、package/doctor/support 越界，并检查上游 spike evidence 或 blocked fixture"
     exit_signal: "guard 能检测禁止路径/内容，包括 staged rename/copy 到 lib/terminal_runtime/herdr* 的 production client/adapter/schema parser 形态、untracked content，以及 installer、doctor/support tier 投影文件；缺上游 evidence、adapter_recommendation=stop/needs-upstream-issue、verdict blocked/failed、failure_class 非 none、blocking_gaps 非空、unknown 或未归类 status 时，必须有 Herdr blocked fixture/result，且不能 fallback 到 tmux/rmux success"
-    status: pending
+    status: done
   - action: "regression guard：运行现有 tmux/rmux contract、backend selection、project namespace backend focused tests"
     exit_signal: "现有 tests 通过；没有 provider runtime、ccbd state schema、package metadata 越界 diff"
-    status: pending
+    status: done
 
 checks:
   - item: "现有 tmux/rmux refs/tests 兼容，不因 V2 contract 退化"
     source: design AC-001 / DOD-IMPL-001
-    status: pending
+    status: passed
   - item: "Herdr namespace/pane refs 可表达 herdr-native、herdr、herdr_socket、restore_token 和非 tmux pane id"
     source: design AC-002
-    status: pending
+    status: passed
   - item: "MuxCapabilitiesV2 包含 windows_beta_gaps/blocking_gaps，blocking gaps fail closed"
     source: design AC-003 / DOD-IMPL-004
-    status: pending
+    status: passed
   - item: "MuxCommandErrorV2 支持 schema-mismatch 与 evidence"
     source: design AC-004
-    status: pending
+    status: passed
   - item: "Fake Herdr backend 可驱动 create/split/send/capture/kill，不依赖 Herdr JSON"
     source: design AC-005 / DOD-IMPL-002
-    status: pending
+    status: passed
   - item: "显式 Herdr request 在无 capability evidence 时 fail closed，failure_reason=herdr-capability-missing，不构造 production backend"
     source: design AC-006 / DOD-IMPL-003
-    status: pending
+    status: passed
   - item: "platform gate blocked、Herdr unavailable、schema mismatch 分别输出 platform-gate-blocked、herdr-unavailable、schema-mismatch，并携带 refs"
     source: design AC-007 / DOD-IMPL-003
-    status: pending
+    status: passed
   - item: "auto backend selection：Native Windows x64 直路由 Herdr，缺 evidence 时 blocked diagnostic；非 Windows / WSL 默认仍保持现有 tmux/rmux behavior，不产生 Herdr effective backend"
     source: design AC-008
-    status: pending
+    status: passed
   - item: "缺上游 spike evidence、adapter_recommendation=stop/needs-upstream-issue、verdict blocked/failed、failure_class 非 none、blocking_gaps 非空或 unknown 未归类时，Herdr capability/selection 必须 fail closed，并有 blocked fixture/result 可机器验证"
     source: design AC-009 / DOD-IMPL-004
-    status: pending
+    status: passed
   - item: "本 feature 不修改 provider runtime、ccbd durable state、package metadata、doctor support tier，不新增 production Herdr client"
     source: design AC-010 / 明确不做
-    status: pending
+    status: passed
 
 dod:
   commands:

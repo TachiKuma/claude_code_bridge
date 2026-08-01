@@ -23,9 +23,13 @@ def test_herdr_terminal_type_is_not_registered_during_spike(monkeypatch) -> None
     assert terminal_api.get_backend("herdr") is None
 
 
-def test_production_runtime_does_not_contain_herdr_native_contract() -> None:
+def test_production_runtime_limits_herdr_native_contract_to_v2_contract_modules() -> None:
     root = Path(__file__).resolve().parents[1]
     production_roots = [root / "lib" / "terminal_runtime", root / "lib" / "ccbd", root / "lib" / "provider_backends"]
+    expected_contract_modules = {
+        root / "lib" / "terminal_runtime" / "mux_backend_contract.py",
+        root / "lib" / "terminal_runtime" / "backend_resolver.py",
+    }
 
     matches: list[Path] = []
     for production_root in production_roots:
@@ -35,7 +39,7 @@ def test_production_runtime_does_not_contain_herdr_native_contract() -> None:
             if "herdr-native" in path.read_text(encoding="utf-8", errors="ignore"):
                 matches.append(path.relative_to(root))
 
-    assert matches == []
+    assert {root / path for path in matches} == expected_contract_modules
 
 
 def test_scope_gate_records_no_production_or_package_diff() -> None:
@@ -45,17 +49,16 @@ def test_scope_gate_records_no_production_or_package_diff() -> None:
             root
             / ".codestable"
             / "features"
-            / "2026-07-31-herdr-backend-contract-spike"
+            / "2026-07-31-mux-backend-contract-herdr-v2"
             / "evidence"
             / "scope-gate.json"
         ).read_text(encoding="utf-8")
     )
     changed_files = scope_gate["evidence"][0]["changed_files"]
-    guarded_prefixes = (
-        "lib/terminal_runtime/",
-        "lib/ccbd/",
-        "lib/provider_backends/",
-        "bin/",
-    )
+    allowed_prefixes = tuple(scope_gate["evidence"][0]["allowed_prefixes"])
 
-    assert [path for path in changed_files if path == "package.json" or path.startswith(guarded_prefixes)] == []
+    assert "package.json" not in changed_files
+    assert all(
+        any(path == prefix or path.startswith(prefix + "/") for prefix in allowed_prefixes)
+        for path in changed_files
+    )

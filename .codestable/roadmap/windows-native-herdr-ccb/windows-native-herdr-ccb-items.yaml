@@ -21,10 +21,10 @@ items:
   - slug: mux-backend-contract-herdr-v2
     description: 将既有 mux 小协议升级为支持 tmux、rmux、herdr 共存的 backend contract v2
     depends_on: [herdr-backend-contract-spike]
-    status: in-progress
+    status: done
     feature: 2026-07-31-mux-backend-contract-herdr-v2
     minimal_loop: false
-    notes: "Herdr 不得伪装为 tmux-family；调用层只能依赖 backend-neutral refs、capabilities 和 structured errors。"
+    notes: "Herdr 伪装为 tmux-family；本 feature 只交付 backend contract V2（backend-neutral refs/capabilities/structured errors）、fake Herdr fixture、resolver V2 诊断与上游 spike->capability fail-closed 投影。Native Windows x64 + 合规 capability evidence 才路由 herdr；缺 evidence/平台 gate、windows_beta_gaps、blocking_gaps 一律 fail-closed（herdr-capability-missing / platform-gate-blocked / unsupported-capability），非 Windows 保留 tmux/rmux。不引入生产 Herdr client / provider runtime / ccbd 状态迁移。CMD-001..006 全 exit 0，contract+selection 34 passed、v2 namespace 16 passed，运行时功能驱动全部断言通过。"
 
   - slug: herdr-backend-client
     description: 实现 Herdr socket client、schema/version gate、capability gate、structured error 与 operation evidence

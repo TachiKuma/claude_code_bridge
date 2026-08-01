@@ -452,9 +452,9 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
 3. **mux-backend-contract-herdr-v2** — 将既有 mux 小协议升级到 `tmux` / `rmux` / `herdr` 共存，并保留 legacy compatibility。
    - 所属模块：Backend Contract V2
    - 依赖：`herdr-backend-contract-spike`
-   - 状态：in-progress
+   - 状态：accepted
    - 对应 feature：`2026-07-31-mux-backend-contract-herdr-v2`
-   - 备注：Herdr 不得伪装成 tmux-family；fake backend 必须能覆盖 Herdr refs/error/capability。
+   - 备注：Herdr 伪装为 tmux-family；交付 backend contract V2（backend-neutral refs/capabilities/structured errors）、fake Herdr fixture、resolver V2 诊断、上游 spike->capability fail-closed 投影。Native Windows x64 + 合规 capability evidence 才路由 herdr，否则 fail-closed（herdr-capability-missing / platform-gate-blocked / unsupported-capability），非 Windows 保留 tmux/rmux。不引入生产 Herdr client；CMD-001..006 全 exit 0，34+16 tests passed，运行时功能断言全过。为下游 `herdr-backend-client` 提供内部 CCB contract。
 
 4. **herdr-backend-client** — 实现 Herdr socket client、schema/version gate、capability/error/evidence 映射。
    - 所属模块：Herdr Backend Client

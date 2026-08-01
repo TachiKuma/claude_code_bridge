@@ -1,0 +1,23 @@
+{
+  "blocked": true,
+  "backend_family": "herdr-native",
+  "backend_impl": "herdr",
+  "requested_backend": "auto",
+  "effective_backend": null,
+  "source": "auto_probe",
+  "platform_gate": {
+    "supported": true,
+    "os_platform": "win32",
+    "cpu_arch": "x64",
+    "python_bitness": "64bit",
+    "is_wsl": false,
+    "platform_gate_ref": ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json",
+    "failure_reason": null,
+    "diagnostic": null
+  },
+  "fallback_used": false,
+  "fallback_reason": null,
+  "capability_report_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json",
+  "failure_reason": "unsupported-capability",
+  "diagnostic": "Herdr selection is blocked by capability gaps: server_restart_process_continuity, server_restart_output_history, ui_detach_reattach"
+}

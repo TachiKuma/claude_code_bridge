@@ -10,7 +10,7 @@ commit_authorization: approved
 commit_authorization_ref: "approval-report.md#goal-commits"
 handoff_reason: ""
 handoff_next: "Restore Capability Matrix v2 executed: verdict=partial, failure_class=windows-beta-gap, adapter_recommendation=continue-with-gaps. Continue downstream adapter work only with layout-only restart restore, old_process_expected_to_survive=false, output_history_restored=false, and herdr-ui-detach-reattach-harness tracked as follow-up."
-current_feature_index: 2
+current_feature_index: 3
 features:
   - slug: "windows-x64-v852-baseline-gate"
     roadmap_item: "windows-x64-v852-baseline-gate"
@@ -38,7 +38,7 @@ features:
     review: ".codestable/features/2026-07-31-mux-backend-contract-herdr-v2/mux-backend-contract-herdr-v2-review.md"
     qa: ".codestable/features/2026-07-31-mux-backend-contract-herdr-v2/mux-backend-contract-herdr-v2-qa.md"
     acceptance: ".codestable/features/2026-07-31-mux-backend-contract-herdr-v2/mux-backend-contract-herdr-v2-acceptance.md"
-    status: pending
+    status: accepted
   - slug: "herdr-backend-client"
     roadmap_item: "herdr-backend-client"
     feature_dir: ".codestable/features/2026-07-31-herdr-backend-client"

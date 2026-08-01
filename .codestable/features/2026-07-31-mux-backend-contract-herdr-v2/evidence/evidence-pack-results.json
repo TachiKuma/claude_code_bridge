@@ -1,0 +1,40 @@
+{
+  "gate_id": "evidence-pack",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "out": ".codestable\\features\\2026-07-31-mux-backend-contract-herdr-v2\\mux-backend-contract-herdr-v2-evidence-pack.md",
+      "providers": {
+        "archguard": {
+          "status": "skipped",
+          "reason": "archguard collection disabled",
+          "warnings": []
+        },
+        "meta_cc": {
+          "status": "skipped",
+          "reason": "meta-cc collection disabled",
+          "warnings": []
+        }
+      }
+    }
+  ],
+  "providers": {},
+  "feature": "2026-07-31-mux-backend-contract-herdr-v2",
+  "inputs": {
+    "design": ".codestable/features/2026-07-31-mux-backend-contract-herdr-v2/mux-backend-contract-herdr-v2-design.md",
+    "checklist": ".codestable/features/2026-07-31-mux-backend-contract-herdr-v2/mux-backend-contract-herdr-v2-checklist.yaml",
+    "out": ".codestable/features/2026-07-31-mux-backend-contract-herdr-v2/mux-backend-contract-herdr-v2-evidence-pack.md",
+    "dod_results": ".codestable/features/2026-07-31-mux-backend-contract-herdr-v2/evidence/dod-results.json",
+    "gate_results": ".codestable/features/2026-07-31-mux-backend-contract-herdr-v2/evidence/scope-gate.json"
+  },
+  "input_digests": {
+    "design": "fd1c83257da14a162c936cf20b560cdedde280136e1a2b62867b8fbb4de0e759",
+    "checklist": "94bec113441a734dc04ee52f9e6f9dff7fb7bef54014ac081f96259ff705ac2d",
+    "dod_results": "bc993a177e7a03bce21b6a10700f43c8a2cb275f793dc69318937f6144aad7e1",
+    "gate_results": "c50ed6f19f9c289e8f69ab2e6144916c7b1b3310a8959767944a80391ba3f2cf",
+    "out": "95d9357905fbb4194434580c5c8e717ce34fde5c19ffa0293ae3088695a507e9"
+  }
+}

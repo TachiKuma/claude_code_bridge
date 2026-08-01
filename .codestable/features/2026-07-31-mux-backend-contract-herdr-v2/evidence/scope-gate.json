@@ -1,0 +1,38 @@
+{
+  "gate_id": "scope-gate",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "changed_files": [
+        ".codestable/features/2026-07-31-mux-backend-contract-herdr-v2/mux-backend-contract-herdr-v2-checklist.yaml",
+        "test/test_herdr_spike_no_production_route.py",
+        "test/test_mux_backend_contract.py",
+        "test/test_terminal_runtime_backend_selection.py",
+        ".codestable/features/2026-07-31-mux-backend-contract-herdr-v2/evidence/evidence-pack-results.json",
+        ".codestable/features/2026-07-31-mux-backend-contract-herdr-v2/evidence/herdr-capability-blocked-fixture.json",
+        ".codestable/features/2026-07-31-mux-backend-contract-herdr-v2/evidence/scope-gate.json",
+        ".codestable/features/2026-07-31-mux-backend-contract-herdr-v2/mux-backend-contract-herdr-v2-evidence-pack.md",
+        "lib/terminal_runtime/backend_resolver.py",
+        "lib/terminal_runtime/fake_mux_backend.py",
+        "lib/terminal_runtime/mux_backend_contract.py"
+      ],
+      "ignored_machine_artifacts": [],
+      "allowed_prefixes": [
+        ".codestable/features/2026-07-31-mux-backend-contract-herdr-v2",
+        "lib/terminal_runtime",
+        "test/test_mux_backend_contract.py",
+        "test/test_terminal_runtime_backend_selection.py",
+        "test/test_herdr_spike_no_production_route.py"
+      ]
+    }
+  ],
+  "providers": {},
+  "feature": "2026-07-31-mux-backend-contract-herdr-v2",
+  "inputs": {
+    "feature_dir": ".codestable/features/2026-07-31-mux-backend-contract-herdr-v2"
+  },
+  "input_digests": {}
+}
