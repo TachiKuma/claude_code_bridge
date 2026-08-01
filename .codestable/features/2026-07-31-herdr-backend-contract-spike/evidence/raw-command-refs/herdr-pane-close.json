@@ -1,0 +1,13 @@
+{
+  "command": [
+    "<home>/AppData/Local/Programs/Herdr\\herdr.EXE",
+    "--session",
+    "ccb-herdr-spike",
+    "pane",
+    "close",
+    "w1:p2"
+  ],
+  "returncode": 0,
+  "stderr_excerpt": "",
+  "stdout_excerpt": "{\"id\":\"cli:pane:close\",\"result\":{\"type\":\"ok\"}}\n"
+}

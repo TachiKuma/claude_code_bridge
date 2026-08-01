@@ -447,7 +447,7 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
    - 依赖：`windows-x64-v852-baseline-gate`
    - 状态：accepted
    - 对应 feature：`2026-07-31-herdr-backend-contract-spike`
-   - 备注：只写 spike 与 evidence，不改生产代码；当前验收结论为 fail-closed blocked：`platform-gate-summary.json` 显示 `ccb-version-mismatch`，spike evidence 为 `verdict=blocked`、`failure_class=platform-gate-blocked`、`adapter_recommendation=stop`。这通过了 spike 的安全停止验收，但未证明 Herdr 最小 backend 语义可用，后续 adapter 线必须回到 epic planning/update。
+   - 备注：只写 spike 与 evidence，不改生产代码；当前验收结论为 fail-closed blocked：`platform-gate-summary.json` 已修正为 `ccb_source_status=strict-v8.5.2`、Python 为 64-bit，`C:/Users/Administrator/AppData/Local/Programs/Herdr/herdr.exe` 为 x64，且两个 CCB native helper PE header 为 x64；spike evidence 为 `verdict=blocked`、`failure_class=unsupported-capability`、`adapter_recommendation=needs-upstream-issue`。schema/status/session_attach/pane_spawn/send_input/kill_pane 已通过，read_output、detach_reattach、server_restart_restore 未证明；后续 adapter 线必须先确认 Herdr input/read 与 restore 语义或调整 epic 路线。
 
 3. **mux-backend-contract-herdr-v2** — 将既有 mux 小协议升级到 `tmux` / `rmux` / `herdr` 共存，并保留 legacy compatibility。
    - 所属模块：Backend Contract V2
@@ -512,7 +512,7 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
     - 对应 feature：`2026-07-31-herdr-supportability-projection`
     - 备注：core workflows、所有公开 provider、Mobile/Config UI、Herdr auto restore disabled、strict `v8.5.2`、Windows npm install dry-run 未全 pass 前只能是 experimental/beta/unsupported，不得宣称 supported。
 
-**最小闭环**：第 2 条 `herdr-backend-contract-spike` 做完后，能够在 Native Windows x64 上通过 Herdr socket API 证明 CCB 最小 backend 语义可行；它不代表 public workflow parity 完成，只决定是否继续投入正式 adapter。当前验收结果未证明该语义可行，route recommendation 为 `stop`，因此 goal driver 应停在路线修订而不是继续实现正式 Herdr adapter。
+**最小闭环**：第 2 条 `herdr-backend-contract-spike` 做完后，能够在 Native Windows x64 上通过 Herdr socket/CLI API 证明 CCB 最小 backend 语义可行；它不代表 public workflow parity 完成，只决定是否继续投入正式 adapter。当前验收结果只证明部分 primitive，route recommendation 为 `needs-upstream-issue`，因此 goal driver 应停在路线修订而不是继续实现正式 Herdr adapter。
 
 ### Goal Coverage Matrix
 

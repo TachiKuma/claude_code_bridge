@@ -1,0 +1,14 @@
+{
+  "command": [
+    "<home>/AppData/Local/Programs/Herdr\\herdr.EXE",
+    "--session",
+    "ccb-herdr-spike",
+    "pane",
+    "send-text",
+    "w1:p2",
+    "cmd /c echo CCB_HERDR_SPIKE_OK"
+  ],
+  "returncode": 0,
+  "stderr_excerpt": "",
+  "stdout_excerpt": ""
+}

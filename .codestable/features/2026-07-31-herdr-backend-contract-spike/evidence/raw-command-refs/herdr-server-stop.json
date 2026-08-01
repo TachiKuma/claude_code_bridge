@@ -1,0 +1,12 @@
+{
+  "command": [
+    "<home>/AppData/Local/Programs/Herdr\\herdr.EXE",
+    "--session",
+    "ccb-herdr-spike",
+    "server",
+    "stop"
+  ],
+  "returncode": 0,
+  "stderr_excerpt": "",
+  "stdout_excerpt": ""
+}

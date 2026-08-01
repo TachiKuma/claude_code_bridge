@@ -1,0 +1,13 @@
+{
+  "command": [
+    "<home>/AppData/Local/Programs/Herdr\\herdr.EXE",
+    "--session",
+    "ccb-herdr-spike",
+    "workspace",
+    "close",
+    "w1"
+  ],
+  "returncode": 0,
+  "stderr_excerpt": "",
+  "stdout_excerpt": "{\"id\":\"cli:workspace:close\",\"result\":{\"type\":\"ok\"}}\n"
+}

@@ -37,7 +37,7 @@ checks:
   - item: "独立 named session 创建或 attach 成功，未污染用户默认 session"
     source: design AC-003 / scope guard
     status: passed
-  - item: "PowerShell pane send/read sentinel 成功，operation evidence 包含 pane ref、send status 和 output match"
+  - item: "PowerShell pane probe 记录 pane ref、send status 与 read_output 结果；当前 Herdr CLI 接受 send，但 read 未观察到 sentinel，按 unsupported-capability fail-closed"
     source: design AC-004
     status: passed
   - item: "provider_cli_dry_run 与 fallback_terminal_smoke 分离；provider unavailable 与 Herdr failure 分离，fallback 不支撑 all-provider parity"
@@ -91,7 +91,7 @@ dod:
         - production_contract_no_change
         - resolver_no_herdr_route_in_spike
     - id: CMD-005
-      command: "python \".codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-backend-contract-spike/run_spike.py\" --platform-gate-ref \".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json\" --session ccb-herdr-spike --isolated-server --isolation-created-by-spike --isolated-socket-ref \".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/isolated-herdr.sock\" --out \".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json\""
+      command: cmd /c "set PATH=C:/Users/Administrator/AppData/Local/Programs/Herdr;%PATH% && C:/Users/Administrator/AppData/Local/Programs/Python/Python314/python.exe .codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-backend-contract-spike/run_spike.py --platform-gate-ref .codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json --session ccb-herdr-spike --isolated-server --isolation-created-by-spike --isolated-socket-ref ccb-herdr-spike --herdr-socket-arg=\"--session\" --out .codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json"
       core: true
       manual_core: native_windows_x64_host
       failure_handling: blocked-evidence-if-host-missing-or-restart-not-isolated

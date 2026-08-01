@@ -1,0 +1,17 @@
+{
+  "command": [
+    "<home>/AppData/Local/Programs/Herdr\\herdr.EXE",
+    "--session",
+    "ccb-herdr-spike",
+    "pane",
+    "read",
+    "w1:p2",
+    "--lines",
+    "20",
+    "--format",
+    "text"
+  ],
+  "returncode": 0,
+  "stderr_excerpt": "",
+  "stdout_excerpt": "PS E:\\GitHub\u5f00\u6e90\u9879\u76ee\\TachiKuma\\claude_code_bridge>\n"
+}

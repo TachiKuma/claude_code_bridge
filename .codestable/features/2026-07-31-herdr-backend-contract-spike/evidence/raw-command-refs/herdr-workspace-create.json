@@ -1,0 +1,17 @@
+{
+  "command": [
+    "<home>/AppData/Local/Programs/Herdr\\herdr.EXE",
+    "\"--session\"",
+    "ccb-herdr-spike",
+    "workspace",
+    "create",
+    "--cwd",
+    "E:\\GitHub\u5f00\u6e90\u9879\u76ee\\TachiKuma\\claude_code_bridge",
+    "--label",
+    "ccb-herdr-spike",
+    "--focus"
+  ],
+  "returncode": 2,
+  "stderr_excerpt": "unknown command: \"--session\"\nrun 'herdr --help' for usage\n",
+  "stdout_excerpt": ""
+}

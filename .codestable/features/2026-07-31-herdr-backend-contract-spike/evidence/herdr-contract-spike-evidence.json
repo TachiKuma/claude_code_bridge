@@ -1,7 +1,11 @@
 {
-  "adapter_recommendation": "stop",
+  "adapter_recommendation": "needs-upstream-issue",
   "artifact_refs": {
-    "platform_gate": ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json"
+    "platform_gate": ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json",
+    "schema": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-api-schema.json",
+    "status": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-status.json",
+    "version": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-version.json",
+    "workspace_create": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-workspace-create.json"
   },
   "capability_projection": {
     "blocking_gaps": [
@@ -39,17 +43,17 @@
     },
     "windows_beta_gaps": []
   },
-  "failure_class": "platform-gate-blocked",
+  "failure_class": "unsupported-capability",
   "fallback_terminal_smoke": null,
   "feature": "2026-07-31-herdr-backend-contract-spike",
-  "generated_at": "2026-08-01T11:51:27+08:00",
+  "generated_at": "2026-08-01T13:29:18+08:00",
   "herdr": {
-    "api_schema_ref": null,
-    "executable": null,
+    "api_schema_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-api-schema.json",
+    "executable": "C:/Users/Administrator/AppData/Local/Programs/Herdr\\herdr.EXE",
     "server_identity": null,
     "socket_ref": null,
-    "status": "missing",
-    "version": null
+    "status": "available",
+    "version": "herdr 0.7.5-preview.2026-07-29-44b3adb12552"
   },
   "host": {
     "cpu_arch": "x64",
@@ -57,94 +61,94 @@
     "is_wsl": false,
     "os_platform": "win32",
     "platform_gate_cpu_arch": "x64",
-    "platform_gate_detail_reason": "ccb-version-mismatch",
-    "platform_gate_failure_reason": "unknown",
-    "platform_gate_host_label": "DESKTOP-Q8BCR5T",
+    "platform_gate_detail_reason": null,
+    "platform_gate_failure_reason": null,
+    "platform_gate_host_label": "Fdyl-002",
     "platform_gate_os_platform": "win32",
     "platform_gate_python_bitness": "64bit",
     "platform_gate_ref": ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json",
-    "platform_gate_supported": false,
-    "python_bitness": "32bit"
+    "platform_gate_supported": true,
+    "python_bitness": "64bit"
   },
   "operations": [
     {
-      "command_ref": "not-run",
-      "diagnostic": "ccb-version-mismatch",
-      "elapsed_ms": null,
-      "evidence_ref": null,
-      "failure_class": "platform-gate-blocked",
+      "command_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-api-schema.json",
+      "diagnostic": "schema command did not return JSON object output",
+      "elapsed_ms": 10,
+      "evidence_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-api-schema.json",
+      "failure_class": "schema-mismatch",
       "operation": "schema",
       "status": "blocked"
     },
     {
-      "command_ref": "not-run",
-      "diagnostic": "ccb-version-mismatch",
-      "elapsed_ms": null,
-      "evidence_ref": null,
-      "failure_class": "platform-gate-blocked",
+      "command_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-status.json",
+      "diagnostic": "status command did not return JSON object output",
+      "elapsed_ms": 9,
+      "evidence_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-status.json",
+      "failure_class": "unsupported-capability",
       "operation": "server_status",
       "status": "blocked"
     },
     {
-      "command_ref": "not-run",
-      "diagnostic": "ccb-version-mismatch",
-      "elapsed_ms": null,
-      "evidence_ref": null,
-      "failure_class": "platform-gate-blocked",
+      "command_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-workspace-create.json",
+      "diagnostic": "workspace create did not return workspace/root pane ids",
+      "elapsed_ms": 9,
+      "evidence_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-workspace-create.json",
+      "failure_class": "unsupported-capability",
       "operation": "session_attach",
       "status": "blocked"
     },
     {
       "command_ref": "not-run",
-      "diagnostic": "ccb-version-mismatch",
+      "diagnostic": "pane split did not return pane id",
       "elapsed_ms": null,
       "evidence_ref": null,
-      "failure_class": "platform-gate-blocked",
+      "failure_class": "unsupported-capability",
       "operation": "pane_spawn",
       "status": "blocked"
     },
     {
       "command_ref": "not-run",
-      "diagnostic": "ccb-version-mismatch",
+      "diagnostic": "send-text or Enter failed",
       "elapsed_ms": null,
       "evidence_ref": null,
-      "failure_class": "platform-gate-blocked",
+      "failure_class": "unsupported-capability",
       "operation": "send_input",
       "status": "blocked"
     },
     {
       "command_ref": "not-run",
-      "diagnostic": "ccb-version-mismatch",
+      "diagnostic": "pane read did not observe marker output",
       "elapsed_ms": null,
       "evidence_ref": null,
-      "failure_class": "platform-gate-blocked",
+      "failure_class": "unsupported-capability",
       "operation": "read_output",
       "status": "blocked"
     },
     {
       "command_ref": "not-run",
-      "diagnostic": "ccb-version-mismatch",
+      "diagnostic": "pane close failed",
       "elapsed_ms": null,
       "evidence_ref": null,
-      "failure_class": "platform-gate-blocked",
+      "failure_class": "unsupported-capability",
       "operation": "kill_pane",
       "status": "blocked"
     },
     {
       "command_ref": "not-run",
-      "diagnostic": "ccb-version-mismatch",
+      "diagnostic": "server restart restore remains fail-closed until restart identity and preexisting-session isolation can be proven",
       "elapsed_ms": null,
       "evidence_ref": null,
-      "failure_class": "platform-gate-blocked",
+      "failure_class": "unsupported-capability",
       "operation": "detach_reattach",
       "status": "blocked"
     },
     {
       "command_ref": "not-run",
-      "diagnostic": "ccb-version-mismatch",
+      "diagnostic": "server restart restore remains fail-closed until restart identity and preexisting-session isolation can be proven",
       "elapsed_ms": null,
       "evidence_ref": null,
-      "failure_class": "platform-gate-blocked",
+      "failure_class": "unsupported-capability",
       "operation": "server_restart_restore",
       "status": "blocked"
     }
@@ -153,7 +157,7 @@
     "command": [],
     "dry_run_kind": "provider_cli",
     "exit_observed": false,
-    "failure_class": "platform-gate-blocked",
+    "failure_class": "provider-dry-run-unavailable",
     "killed_by_spike": false,
     "output_match": false,
     "pane_ref": null,
@@ -162,31 +166,33 @@
     "treated_as_completion_authority": false
   },
   "residual_risks": [
-    "ccb-version-mismatch"
+    "server restart restore remains fail-closed until restart identity and preexisting-session isolation can be proven"
   ],
   "restore": {
     "agent_session_restored": null,
     "detach_process_continues": null,
     "detach_reattach_checked": false,
-    "diagnostic": "ccb-version-mismatch",
+    "diagnostic": "server restart restore remains fail-closed until restart identity and preexisting-session isolation can be proven",
     "layout_restored": null,
     "old_process_expected_to_survive": false,
     "output_history_restored": null,
     "preexisting_sessions_checked": false,
     "restart_authorized": false,
     "restart_isolation": {
-      "cleanup_targets": [],
-      "config_ref": null,
-      "created_by_spike": false,
+      "cleanup_targets": [
+        "ccb-herdr-spike"
+      ],
+      "config_ref": "",
+      "created_by_spike": true,
       "preexisting_sessions_before": [],
       "server_identity_after": null,
       "server_identity_before": null,
-      "server_ref_kind": "unknown",
-      "session_name": "",
-      "socket_ref": null,
+      "server_ref_kind": "dedicated-disposable-server",
+      "session_name": "ccb-herdr-spike",
+      "socket_ref": "ccb-herdr-spike",
       "stop_command_ref": null
     },
-    "restart_scope": "blocked-not-isolated",
+    "restart_scope": "isolated-socket",
     "server_identity": null,
     "server_restart_checked": false
   },

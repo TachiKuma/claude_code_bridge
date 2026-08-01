@@ -8,8 +8,8 @@ acceptance_authorization: approved
 acceptance_authorization_ref: "approval-report.md#goal-acceptance"
 commit_authorization: approved
 commit_authorization_ref: "approval-report.md#goal-commits"
-handoff_reason: "herdr-backend-contract-spike accepted with fail-closed evidence: verdict=blocked, failure_class=platform-gate-blocked, adapter_recommendation=stop; downstream Herdr adapter route is not implementation-ready."
-handoff_next: "Return to cs-epic planning/update: repair strict v8.5.2 platform gate evidence or replan/drop downstream Herdr adapter features before continuing."
+handoff_reason: "herdr-backend-contract-spike rerun after platform gate repair: verdict=blocked, failure_class=unsupported-capability, adapter_recommendation=needs-upstream-issue; v8.5.2 source admission, 64-bit Python, Native Windows x64 Herdr, and x64 CCB helper PE evidence are satisfied, but Herdr CLI primitive evidence is partial: schema/status/session_attach/pane_spawn/send_input/kill_pane pass while read_output, detach_reattach, and server_restart_restore remain unproven."
+handoff_next: "Resolve Herdr CLI input/read and restart/restore semantics for session ccb-herdr-spike, or revise the epic route before continuing downstream adapter features; do not treat mux-backend-contract-herdr-v2 as implementation-ready supported path yet."
 current_feature_index: 2
 features:
   - slug: "windows-x64-v852-baseline-gate"

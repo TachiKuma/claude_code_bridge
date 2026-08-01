@@ -1,0 +1,12 @@
+{
+  "command": [
+    "<home>/AppData/Local/Programs/Herdr\\herdr.EXE",
+    "\"--session\"",
+    "ccb-herdr-spike",
+    "status",
+    "--json"
+  ],
+  "returncode": 2,
+  "stderr_excerpt": "unknown command: \"--session\"\nrun 'herdr --help' for usage\n",
+  "stdout_excerpt": ""
+}

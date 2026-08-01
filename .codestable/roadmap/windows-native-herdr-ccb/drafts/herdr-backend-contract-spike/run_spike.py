@@ -147,6 +147,20 @@ def _command_ref(log_dir: Path, name: str, command: list[str], result: subproces
     return ref.as_posix()
 
 
+def _process_ref(log_dir: Path, name: str, command: list[str], process: subprocess.Popen[str]) -> str:
+    log_dir.mkdir(parents=True, exist_ok=True)
+    ref = log_dir / f"{name}.json"
+    payload = {
+        "command": _redact_command(command),
+        "pid": process.pid,
+        "returncode": process.poll(),
+        "stdout_excerpt": "",
+        "stderr_excerpt": "",
+    }
+    ref.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    return ref.as_posix()
+
+
 def _run(command: list[str], *, timeout: int = 20) -> tuple[subprocess.CompletedProcess[str], int]:
     start = time.perf_counter()
     try:
@@ -182,6 +196,48 @@ def _json_object_output_passed(result: subprocess.CompletedProcess[str]) -> bool
     except json.JSONDecodeError:
         return False
     return isinstance(payload, dict)
+
+
+def _json_object_output(result: subprocess.CompletedProcess[str]) -> dict[str, Any] | None:
+    if result.returncode != 0:
+        return None
+    try:
+        payload = json.loads(result.stdout or "")
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _json_path(payload: dict[str, Any] | None, path: list[str]) -> Any:
+    current: Any = payload
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
+def _first_pane_id(payload: dict[str, Any] | None) -> str | None:
+    pane_id = _json_path(payload, ["result", "pane", "pane_id"])
+    if isinstance(pane_id, str) and pane_id:
+        return pane_id
+    root_pane_id = _json_path(payload, ["result", "root_pane", "pane_id"])
+    if isinstance(root_pane_id, str) and root_pane_id:
+        return root_pane_id
+    return None
+
+
+def _first_workspace_id(payload: dict[str, Any] | None) -> str | None:
+    workspace_id = _json_path(payload, ["result", "workspace", "workspace_id"])
+    if isinstance(workspace_id, str) and workspace_id:
+        return workspace_id
+    pane_workspace_id = _json_path(payload, ["result", "pane", "workspace_id"])
+    if isinstance(pane_workspace_id, str) and pane_workspace_id:
+        return pane_workspace_id
+    root_workspace_id = _json_path(payload, ["result", "root_pane", "workspace_id"])
+    if isinstance(root_workspace_id, str) and root_workspace_id:
+        return root_workspace_id
+    return None
 
 
 def _operation(
@@ -430,6 +486,8 @@ def run_spike(args: argparse.Namespace) -> dict[str, Any]:
     log_dir = Path(args.out).parent / "raw-command-refs"
     operations: list[dict[str, Any]] = []
     artifact_refs: dict[str, str] = {"platform_gate": platform_gate_ref.as_posix()}
+    cleanup_targets: list[str] = [args.session]
+    cleanup_refs: dict[str, str] = {}
 
     version_command = [herdr, *scope_args, "--version"]
     version_result, _ = _run(version_command)
@@ -469,17 +527,211 @@ def run_spike(args: argparse.Namespace) -> dict[str, Any]:
             diagnostic="status command returned valid JSON" if status_pass else "status command did not return JSON object output",
         )
     )
+    status_payload = _json_object_output(status_result)
+    server_started_by_spike = False
+    server_running = _json_path(status_payload, ["server", "running"]) is True
+    server_identity_before = _json_path(status_payload, ["server", "socket"])
+    if status_pass and not server_running:
+        start_command = [herdr, *scope_args, "server"]
+        start_kwargs: dict[str, Any] = {
+            "stdout": subprocess.DEVNULL,
+            "stderr": subprocess.DEVNULL,
+            "text": True,
+        }
+        if sys.platform.startswith("win"):
+            start_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        server_process = subprocess.Popen(start_command, **start_kwargs)
+        cleanup_refs["server_start"] = _process_ref(log_dir, "herdr-server-start", start_command, server_process)
+        time.sleep(2)
+        status_after_start_command = [herdr, *scope_args, "status", "--json"]
+        status_after_start_result, _ = _run(status_after_start_command)
+        status_after_start_ref = _command_ref(
+            log_dir,
+            "herdr-status-after-start",
+            status_after_start_command,
+            status_after_start_result,
+        )
+        artifact_refs["status_after_start"] = status_after_start_ref
+        status_after_start_payload = _json_object_output(status_after_start_result)
+        server_running = _json_path(status_after_start_payload, ["server", "running"]) is True
+        server_identity_before = _json_path(status_after_start_payload, ["server", "socket"]) or server_identity_before
+        server_started_by_spike = server_running
 
-    blocked_reason = "Herdr session/pane operation runner is intentionally fail-closed until schema command names are confirmed"
+    workspace_command = [
+        herdr,
+        *scope_args,
+        "workspace",
+        "create",
+        "--cwd",
+        str(Path.cwd()),
+        "--label",
+        args.session,
+        "--focus",
+    ]
+    workspace_result, workspace_elapsed = _run(workspace_command)
+    workspace_ref = _command_ref(log_dir, "herdr-workspace-create", workspace_command, workspace_result)
+    artifact_refs["workspace_create"] = workspace_ref
+    workspace_payload = _json_object_output(workspace_result)
+    root_pane_id = _first_pane_id(workspace_payload)
+    workspace_id = _first_workspace_id(workspace_payload)
+    if workspace_id:
+        cleanup_targets.append(workspace_id)
+    session_attach_pass = root_pane_id is not None and workspace_id is not None
+    operations.append(
+        _operation(
+            "session_attach",
+            "pass" if session_attach_pass else "blocked",
+            command_ref=workspace_ref,
+            elapsed_ms=workspace_elapsed,
+            evidence_ref=workspace_ref,
+            failure_class=None if session_attach_pass else "unsupported-capability",
+            diagnostic=(
+                "workspace create returned workspace and root pane ids"
+                if session_attach_pass
+                else "workspace create did not return workspace/root pane ids"
+            ),
+        )
+    )
+
+    spawned_pane_id: str | None = None
+    if root_pane_id is not None:
+        pane_spawn_command = [
+            herdr,
+            *scope_args,
+            "pane",
+            "split",
+            root_pane_id,
+            "--direction",
+            "right",
+            "--ratio",
+            "0.5",
+            "--cwd",
+            str(Path.cwd()),
+            "--focus",
+        ]
+        pane_spawn_result, pane_spawn_elapsed = _run(pane_spawn_command)
+        pane_spawn_ref = _command_ref(log_dir, "herdr-pane-spawn", pane_spawn_command, pane_spawn_result)
+        artifact_refs["pane_spawn"] = pane_spawn_ref
+        pane_spawn_payload = _json_object_output(pane_spawn_result)
+        spawned_pane_id = _first_pane_id(pane_spawn_payload)
+        pane_spawn_pass = spawned_pane_id is not None
+    else:
+        pane_spawn_result = subprocess.CompletedProcess([], 1, stdout="", stderr="missing root pane id")
+        pane_spawn_elapsed = None
+        pane_spawn_ref = "not-run"
+        pane_spawn_pass = False
+    operations.append(
+        _operation(
+            "pane_spawn",
+            "pass" if pane_spawn_pass else "blocked",
+            command_ref=pane_spawn_ref,
+            elapsed_ms=pane_spawn_elapsed,
+            evidence_ref=pane_spawn_ref if pane_spawn_ref != "not-run" else None,
+            failure_class=None if pane_spawn_pass else "unsupported-capability",
+            diagnostic="pane split returned pane id" if pane_spawn_pass else "pane split did not return pane id",
+        )
+    )
+
+    marker = "CCB_HERDR_SPIKE_OK"
+    send_pass = False
+    read_pass = False
+    kill_pass = False
+    if spawned_pane_id is not None:
+        time.sleep(1)
+        send_text_command = [herdr, *scope_args, "pane", "send-text", spawned_pane_id, f"cmd /c echo {marker}"]
+        send_text_result, send_text_elapsed = _run(send_text_command)
+        send_text_ref = _command_ref(log_dir, "herdr-pane-send-text", send_text_command, send_text_result)
+        artifact_refs["send_text"] = send_text_ref
+        send_keys_command = [herdr, *scope_args, "pane", "send-keys", spawned_pane_id, "Enter"]
+        send_keys_result, send_keys_elapsed = _run(send_keys_command)
+        send_keys_ref = _command_ref(log_dir, "herdr-pane-send-keys", send_keys_command, send_keys_result)
+        artifact_refs["send_keys"] = send_keys_ref
+        send_pass = send_text_result.returncode == 0 and send_keys_result.returncode == 0
+        send_elapsed = send_text_elapsed + send_keys_elapsed
+        send_ref = send_keys_ref
+    else:
+        send_elapsed = None
+        send_ref = "not-run"
+    operations.append(
+        _operation(
+            "send_input",
+            "pass" if send_pass else "blocked",
+            command_ref=send_ref,
+            elapsed_ms=send_elapsed,
+            evidence_ref=send_ref if send_ref != "not-run" else None,
+            failure_class=None if send_pass else "unsupported-capability",
+            diagnostic="send-text plus Enter completed" if send_pass else "send-text or Enter failed",
+        )
+    )
+
+    if spawned_pane_id is not None and send_pass:
+        time.sleep(2)
+        read_command = [herdr, *scope_args, "pane", "read", spawned_pane_id, "--lines", "20", "--format", "text"]
+        read_result, read_elapsed = _run(read_command)
+        read_ref = _command_ref(log_dir, "herdr-pane-read", read_command, read_result)
+        artifact_refs["read_output"] = read_ref
+        read_pass = read_result.returncode == 0 and marker in (read_result.stdout or "")
+    else:
+        read_elapsed = None
+        read_ref = "not-run"
+    operations.append(
+        _operation(
+            "read_output",
+            "pass" if read_pass else "blocked",
+            command_ref=read_ref,
+            elapsed_ms=read_elapsed,
+            evidence_ref=read_ref if read_ref != "not-run" else None,
+            failure_class=None if read_pass else "unsupported-capability",
+            diagnostic="pane read observed marker output" if read_pass else "pane read did not observe marker output",
+        )
+    )
+
+    if spawned_pane_id is not None:
+        kill_command = [herdr, *scope_args, "pane", "close", spawned_pane_id]
+        kill_result, kill_elapsed = _run(kill_command)
+        kill_ref = _command_ref(log_dir, "herdr-pane-close", kill_command, kill_result)
+        artifact_refs["kill_pane"] = kill_ref
+        kill_payload = _json_object_output(kill_result)
+        kill_pass = kill_result.returncode == 0 and _json_path(kill_payload, ["result", "type"]) == "ok"
+    else:
+        kill_elapsed = None
+        kill_ref = "not-run"
+    operations.append(
+        _operation(
+            "kill_pane",
+            "pass" if kill_pass else "blocked",
+            command_ref=kill_ref,
+            elapsed_ms=kill_elapsed,
+            evidence_ref=kill_ref if kill_ref != "not-run" else None,
+            failure_class=None if kill_pass else "unsupported-capability",
+            diagnostic="pane close returned ok" if kill_pass else "pane close failed",
+        )
+    )
+
+    if workspace_id is not None:
+        workspace_close_command = [herdr, *scope_args, "workspace", "close", workspace_id]
+        workspace_close_result, _ = _run(workspace_close_command)
+        cleanup_refs["workspace_close"] = _command_ref(
+            log_dir,
+            "herdr-workspace-close",
+            workspace_close_command,
+            workspace_close_result,
+        )
+    if server_started_by_spike:
+        server_stop_command = [herdr, *scope_args, "server", "stop"]
+        server_stop_result, _ = _run(server_stop_command)
+        cleanup_refs["server_stop"] = _command_ref(log_dir, "herdr-server-stop", server_stop_command, server_stop_result)
+
+    restore_diagnostic = "server restart restore remains fail-closed until restart identity and preexisting-session isolation can be proven"
     operations.extend(
         _operation(
             operation,
             "blocked",
             command_ref="not-run",
             failure_class="unsupported-capability",
-            diagnostic=blocked_reason,
+            diagnostic=restore_diagnostic,
         )
-        for operation in CORE_OPERATIONS[2:]
+        for operation in ("detach_reattach", "server_restart_restore")
     )
     provider = {
         "provider_slug": None,
@@ -502,12 +754,12 @@ def run_spike(args: argparse.Namespace) -> dict[str, Any]:
             "session_name": args.session,
             "socket_ref": args.isolated_socket_ref,
             "config_ref": args.isolated_config_ref,
-            "server_identity_before": None,
+            "server_identity_before": server_identity_before,
             "server_identity_after": None,
             "preexisting_sessions_before": [],
             "created_by_spike": True,
-            "stop_command_ref": None,
-            "cleanup_targets": [args.session],
+            "stop_command_ref": cleanup_refs.get("server_stop"),
+            "cleanup_targets": cleanup_targets,
         },
         "restart_scope": "isolated-socket" if args.isolated_socket_ref else "dedicated-disposable-server",
         "server_identity": None,
@@ -517,7 +769,7 @@ def run_spike(args: argparse.Namespace) -> dict[str, Any]:
         "output_history_restored": None,
         "agent_session_restored": None,
         "old_process_expected_to_survive": False,
-        "diagnostic": blocked_reason,
+        "diagnostic": restore_diagnostic,
     }
     evidence = _base_evidence(
         platform_gate_ref=platform_gate_ref,
@@ -530,7 +782,7 @@ def run_spike(args: argparse.Namespace) -> dict[str, Any]:
         verdict="blocked",
         failure_class="unsupported-capability",
         adapter_recommendation="needs-upstream-issue",
-        residual_risks=[blocked_reason],
+        residual_risks=[restore_diagnostic],
         artifact_refs=artifact_refs,
     )
     evidence["herdr"]["version"] = (version_result.stdout or version_result.stderr or "").strip() or None
