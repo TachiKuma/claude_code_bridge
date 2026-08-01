@@ -42,7 +42,7 @@ round: 1
 - [x] AC-007 doctor payload/render：doctor tests 覆盖。
 - [x] AC-008 startup baseline projection：startup baseline tests 覆盖。
 - [x] AC-009 package metadata no-change：package no-change guard 覆盖。
-- [x] AC-010 当前工作区 blocked/default evidence：`platform-gate-summary.json` 记录 `supported=false`、`detail_reason=ccb-version-mismatch`。
+- [x] AC-010 当前工作区 evidence：post-handoff 重新生成的 `platform-gate-summary.json` 记录 `ccb_source_status=strict-v8.5.2`、Python 为 64-bit，Herdr 为 x64，两个 CCB native helper 为 x64；当前 `supported=true`。
 
 ## 4. Review / QA 复核
 

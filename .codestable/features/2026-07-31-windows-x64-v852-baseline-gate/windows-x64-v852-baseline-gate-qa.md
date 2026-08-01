@@ -34,7 +34,7 @@ round: 1
 | QA-006 | AC-009 | core | 本 feature 不启用 package Windows artifact route | guard | `python -m pytest -q test/test_windows_x64_package_no_change_guard.py` | exit 0 | pass |
 | QA-007 | AC-004, AC-006, AC-010 | core | installation summary、PE arch evidence、git source/branch refs | unit | `python -m pytest -q test/test_doctor_runtime_system_windows_x64_platform_gate.py test/test_cli_versioning_local.py` | exit 0 | pass |
 | QA-008 | CMD-007 | conditional-core | package dry-run 在 touched install/versioning 范围内可运行 | dry-run | `npm run pack:check` | exit 0 | pass |
-| QA-009 | review QA focus | supporting | 当前本机 blocked/default platform evidence 不误报 supported | evidence review | 读取 `platform-gate-summary.json` | `supported=false`，version mismatch 可见 | pass |
+| QA-009 | review QA focus | supporting | 当前本机 supported platform evidence 不误报 missing helper | evidence review | 读取 `platform-gate-summary.json` | `supported=true`，x64 helper PE evidence 可见 | pass |
 
 ## 3. Command Results
 
@@ -57,7 +57,7 @@ round: 1
 - [x] QA-006 package no-change guard: pass，未声明 Windows npm artifact support。
 - [x] QA-007 runtime/versioning admission: pass，覆盖 installation refs、helper PE arch evidence 与 `v8.5.2` tag ancestor source ref。
 - [x] QA-008 npm pack dry-run: pass。
-- [x] QA-009 current host evidence: pass，当前 Windows x64 主机因 CCB `8.2.1`、Herdr/helper missing 保持 `supported=false`。
+- [x] QA-009 current host evidence: pass，post-handoff 重新生成的 evidence 显示当前 Windows x64 主机已满足 CCB `8.5.2` source admission、64-bit Python、x64 Herdr 与两个 CCB native helper x64 PE header evidence，因此 `supported=true`。
 
 ## 5. Findings
 

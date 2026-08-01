@@ -62,7 +62,7 @@ none
 
 - `version_sources` 不一致已经 fail closed：`failure_reason="unknown"`、`detail_reason="ccb-version-source-mismatch"`，且 `platform_ready` 同时要求版本源一致。
 - `source_ref` 不依赖 HEAD exact tag：feature branch ahead of `v8.5.2` tag ancestor 时，versioning 能投影 `refs/tags/v8.5.2`，`install.sh` 同步持久化 `source_ref` / `branch_ref`。
-- 当前本机 evidence 正确保持 blocked/default：Windows x64、Node x64、Python 64-bit 均满足，但仓库版本仍是 `8.2.1`，Herdr/helper missing，`supported=false`。
+- Post-handoff 重新生成的当前本机 evidence 已通过：Windows x64、Node x64、Python 64-bit、CCB `8.5.2` source admission、x64 Herdr 与两个 CCB native helper x64 PE header evidence 均满足，`supported=true`。
 
 ## 5. Test And QA Focus
 
@@ -73,7 +73,7 @@ none
 ## 6. Residual Risk
 
 - 未执行真实 Herdr socket/API 能力验证；这属于后续 `herdr-backend-contract-spike`。
-- 当前工作区不是 strict CCB `v8.5.2` source branch，platform evidence 必须保持 blocked/default；这是设计要求，不是失败。
+- 当前工作区已是基于 CCB `v8.5.2` tag ancestor 的实现分支；platform evidence 仍因 helper evidence 缺失保持 blocked/default，这是环境准入要求，不是版本失败。
 - 完整 doctor 邻域测试存在既有 Windows path baseline 问题，本 feature 仅以目标测试和 gate evidence 作为验收证据。
 
 ## 7. Verdict
