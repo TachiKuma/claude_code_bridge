@@ -1,0 +1,81 @@
+{
+  "command_id": "CMD-003",
+  "command": "manual capability report and artifacts review",
+  "status": "passed",
+  "reviewed_at": "2026-07-22",
+  "reviewer": "parent cs-epic read-only verifier",
+  "reports": [
+    {
+      "label": "selected",
+      "path": ".codestable/goals/2026-07-21-windows-rmux-full-backend/evidence/rmux-full-gate/run-20260721T144322Z-15036/capability-report.json",
+      "sha256": "6abb86655af5ac61d69f4e2e06cd6f22feae526d4af3fa9b6fc67dea9af9296d",
+      "version": "rmux 0.9.0",
+      "platform": "windows",
+      "probe_status": "completed",
+      "blocking_gaps_count": 0,
+      "artifact_index_source": "embedded capability-report.json artifact_index",
+      "artifact_index_count": 67,
+      "artifact_files_checked": 67,
+      "artifact_files_missing": [],
+      "artifact_hash_mismatches": [],
+      "accepted_required_workarounds": [
+        {
+          "kind": "command",
+          "name": "attach-session",
+          "status": "unsupported",
+          "workaround_id": "live-foreground-attach-evidence",
+          "evidence": ".codestable/goals/2026-07-21-windows-rmux-full-backend/evidence/live-foreground-attach/run-20260721T135851Z-13120/live-foreground-attach.json"
+        },
+        {
+          "kind": "command",
+          "name": "kill-server",
+          "status": "partial",
+          "workaround_id": "live-server-kill-evidence",
+          "evidence": ".codestable/goals/2026-07-21-windows-rmux-full-backend/evidence/live-client-commands/run-20260721T140028Z-18276/live-client-commands.json"
+        },
+        {
+          "kind": "command",
+          "name": "refresh-client",
+          "status": "partial",
+          "workaround_id": "live-client-refresh-evidence",
+          "evidence": ".codestable/goals/2026-07-21-windows-rmux-full-backend/evidence/live-client-commands/run-20260721T140028Z-18276/live-client-commands.json"
+        },
+        {
+          "kind": "semantic",
+          "name": "attach_reattach",
+          "status": "unsupported",
+          "workaround_id": "live-foreground-attach-evidence",
+          "evidence": ".codestable/goals/2026-07-21-windows-rmux-full-backend/evidence/live-foreground-attach/run-20260721T135851Z-13120/live-foreground-attach.json"
+        }
+      ]
+    },
+    {
+      "label": "superseded",
+      "path": ".codestable/roadmap/windows-rmux-native-backend/drafts/rmux-capability-gate/run-20260720T094438Z-4728/capability-report.json",
+      "sha256": "912675c22835a067f5a62d43537f3c0fc8ba80891be16e998d304d34b9da0b42",
+      "version": "rmux 0.8.0",
+      "platform": "windows",
+      "probe_status": "completed",
+      "blocking_gaps_count": 7,
+      "artifact_index_source": "embedded capability-report.json artifact_index",
+      "artifact_index_count": 53,
+      "artifact_files_checked": 53,
+      "artifact_files_missing": [],
+      "artifact_hash_mismatches": []
+    }
+  ],
+  "external_live_evidence": [
+    {
+      "name": "foreground_attach",
+      "path": ".codestable/goals/2026-07-21-windows-rmux-full-backend/evidence/live-foreground-attach/run-20260721T135851Z-13120/live-foreground-attach.json",
+      "exists": true,
+      "sha256": "b5a408b00ea5ec167a22f61dbf13e4b5eb89aeedb2de6136fa8a957af169087d"
+    },
+    {
+      "name": "live_client_commands",
+      "path": ".codestable/goals/2026-07-21-windows-rmux-full-backend/evidence/live-client-commands/run-20260721T140028Z-18276/live-client-commands.json",
+      "exists": true,
+      "sha256": "4419ff69437b73d6d9a19c0656f8ad17ed8314cd5f323c41edbe90047b6d2cbe"
+    }
+  ]
+}

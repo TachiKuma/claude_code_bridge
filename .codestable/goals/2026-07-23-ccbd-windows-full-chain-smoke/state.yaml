@@ -1,0 +1,31 @@
+schema_version: 2
+goal: "ccbd-windows-full-chain-smoke"
+status: complete
+objective: "在 native Windows 真机通过可解析 transcript 证明 ccb -> ccbd -> rmux 的 start、ping、ask、kill 最小全链路跑通，且不经 probe 旁路。"
+start_point: "Feature design/design-review/checklist 已存在并批准；前置 ccbd-rmux-namespace-lifecycle、accelerator-transport-windows-guard、ccbd-windows-process-liveness、rmux-supervision-recovery 已 accepted。ccbd-windows-tcp-loopback-transport acceptance 已 passed，但 roadmap items.yaml 当前显示 in-progress，需在本 goal 中用证据修正该恢复漂移。"
+acceptance:
+  - "transcript schema/parser fail closed，强制 host_kind=native_windows、control_plane=ccbd、backend_impl=rmux、probe_bypass=false、backend_selection_source、ccbd_transport=tcp_loopback、verdict、failure_class、ask_case_kind。"
+  - "PowerShell runner 记录 start/ping/ask/kill command records、artifact paths、redaction summary，并在 finally 中尝试 kill/cleanup。"
+  - "dependency_status 覆盖四个前置 item；前置未 ready 时 transcript verdict=blocked 且 failure_class=dependency_pending。"
+  - "native Windows transcript 证明 start/ping/doctor 走 ccbd 控制面、Rmux backend、TCP loopback transport。"
+  - "ccb ask 至少一个 provider 有可接受 evidence；provider failure 分类清楚，fake_provider 只允许仓库认可测试入口。"
+  - "ccb kill -f 后 endpoint/token/Rmux namespace/session/owned process residue 有清理证据或 bounded retained reason。"
+  - "probe/fake backend/WSL/direct rmux negative fixtures 不得 pass；scope guard 禁止 production runtime、packaging/docs、provider parser 越界。"
+  - "独立 Task agent code review passed，独立 Task agent 功能验收 passed，feature review/QA/acceptance/roadmap/final iteration 全部回写。"
+non_goals:
+  - "不实现 Rmux backend、ccbd transport、accelerator guard、process liveness 或 provider parser。"
+  - "不覆盖 supervision recovery、multi-project、多 agent 矩阵、restart replay 或 packaging/docs supported 收口。"
+  - "不发布 npm、不 push/tag/release。"
+  - "不把 WSL、probe、fake backend、direct rmux CLI 作为 full-chain pass。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 4
+next_action: "Goal complete; no further action for ccbd-windows-full-chain-smoke in this goal."
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: resolved
+  reason: "ScopeBoundaryChange"
+  decision: "approved approval-report.md#expand-scope-windows-runtime-fix and approval-report.md#restore-rmux-090-dependency"
+updated_at: "2026-07-23"

@@ -1,0 +1,18 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-1384-20260720t093008z",
+    "list-windows",
+    "-t",
+    "ccb-rmux-probe"
+  ],
+  "classification": "supported",
+  "notes": "",
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "0: cmd.exe* (1 panes) [80x24] [layout b25d,80x24,0,0,0] @0 (active)\n",
+  "stdout_raw_sha256": "43cf1dd4eaba0f86a1f60159c03a5b88b07ddddcc0807a2f546726b93181d5d8",
+  "stdout_raw_size": 68,
+  "timeout": 8.0
+}

@@ -1,0 +1,145 @@
+feature: 2026-07-31-herdr-backend-client
+created: 2026-07-31
+
+steps:
+  - action: "V2 implementation admission：检查前置 mux-backend-contract-herdr-v2 已实现并验收 V2 contract 单一来源"
+    exit_signal: "focused test/import 证明 MuxNamespaceRefV2、MuxPaneRefV2、MuxCommandErrorV2、MuxCapabilitiesV2、herdr-native、herdr_socket、schema-mismatch 已存在；否则本 feature dependency-blocked"
+    status: pending
+  - action: "dependency and evidence admission：读取 upstream spike evidence / blocked fixture，建立 Herdr capability gate 的输入规则"
+    exit_signal: "缺 evidence、stop/needs-upstream-issue、blocked/failed verdict、failure_class 非 none、blocking gaps、unknown 或未归类 status 时 unit test 断言 Herdr construction/selection blocked"
+    status: pending
+  - action: "schema/socket client：实现最小 Herdr socket client interface、server_info/schema parser、schema mismatch error mapping"
+    exit_signal: "fake socket schema pass/mismatch tests 通过；mismatch 携带 schema/operation evidence"
+    status: pending
+  - action: "HerdrBackend facade：实现 namespace/pane refs、create/restore session、create_pane、send_text、capture_pane、kill_pane 和 capabilities"
+    exit_signal: "fake socket lifecycle/io tests 返回 herdr-native refs、herdr_socket ipc、restore token 和 operation evidence"
+    status: pending
+  - action: "resolver/factory gated route：将 explicit herdr 与 Native Windows auto 接入 backend resolver/factory，保留非 Windows auto/default 不变"
+    exit_signal: "explicit Herdr 或 Native Windows auto gate pass 时创建 HerdrBackend；not-windows/not-x64/platform-gate-blocked/capability/schema/socket gate fail 时返回 V2 failure diagnostics；非 Windows auto 无 evidence 不选 Herdr"
+    status: pending
+  - action: "scope guard：确认未改 ccbd durable state、provider runtime、doctor/support、package/release surface、recovery"
+    exit_signal: "diff guard 覆盖 forbidden path/content，只有 terminal_runtime adapter/resolver/api 和 focused tests 改动"
+    status: pending
+  - action: "regression guard：运行 Herdr focused tests 与现有 tmux/rmux selection/contract tests"
+    exit_signal: "Herdr tests 通过；现有 tmux/rmux contract/backend selection tests 不退化"
+    status: pending
+
+checks:
+  - item: "前置 V2 contract 已在单一来源落地；未满足时 dependency-blocked，不重复定义 V2 类型"
+    source: design V2 contract admission / DOD-IMPL-000
+    status: pending
+  - item: "缺 upstream spike evidence / blocked fixture 时 Herdr capability gate blocked，不构造 production Herdr backend"
+    source: design AC-001 / DOD-IMPL-002
+    status: pending
+  - item: "adapter_recommendation=stop/needs-upstream-issue、blocked/failed verdict、failure_class 非 none、blocking gaps、unknown 或未归类 status 时 Herdr selection/construction fail closed"
+    source: design AC-002 / DOD-IMPL-002
+    status: pending
+  - item: "Herdr server_info/schema 匹配时 client 通过 schema gate，并记录 server_info/socket ref"
+    source: design AC-003 / DOD-IMPL-001
+    status: pending
+  - item: "Herdr schema/version 不匹配时输出 schema-mismatch structured error 和 schema/operation evidence"
+    source: design AC-004 / DOD-IMPL-001
+    status: pending
+  - item: "create/restore session 返回 herdr-native、herdr、herdr_socket、restore token"
+    source: design AC-005 / DOD-IMPL-003
+    status: pending
+  - item: "create pane / send / capture / kill 返回 Herdr pane refs 与 operation evidence，不要求 tmux %N pane id"
+    source: design AC-006 / DOD-IMPL-003
+    status: pending
+  - item: "explicit herdr route gates pass 时 resolver/factory 创建 HerdrBackend，并带 capability_report_ref/platform_gate diagnostics"
+    source: design AC-007 / DOD-IMPL-004
+    status: pending
+  - item: "explicit herdr route gates fail 时返回 V2 failure，区分 not-windows/not-x64/platform-gate-blocked/capability/schema/socket failure，不 fallback 假成功"
+    source: design AC-008 / DOD-IMPL-004
+    status: pending
+  - item: "Native Windows x64 auto 直路由 Herdr，缺 Herdr evidence 时 blocked diagnostic；非 Windows / WSL auto 保持现有 tmux/rmux behavior，不产生 Herdr effective backend"
+    source: design AC-009
+    status: pending
+  - item: "本 feature 不修改 ccbd durable state、provider runtime、doctor/support、package/release/recovery"
+    source: design AC-010 / 明确不做
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-31-herdr-backend-client/herdr-backend-client-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_mux_backend_contract.py -k \"V2 or herdr\""
+      core: true
+      failure_handling: dependency-blocked
+      test_status: existing-or-new
+      covers:
+        - v2_contract_admission
+        - mux_namespace_ref_v2
+        - mux_command_error_v2
+        - herdr_native_contract_literals
+    - id: CMD-004
+      command: "python -m pytest -q test/test_herdr_backend_client.py test/test_terminal_runtime_backend_selection.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new-and-existing
+      covers:
+        - herdr_client_schema_gate
+        - herdr_capability_gate
+        - herdr_resolver_route
+        - auto_default_unchanged
+        - platform_gate_failure_diagnostics
+    - id: CMD-005
+      command: "python -m pytest -q test/test_mux_backend_contract.py test/test_rmux_backend_core.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: existing
+      covers:
+        - mux_contract_regression
+        - rmux_backend_regression
+    - id: CMD-006
+      command: >-
+        python -c "import subprocess; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; forbidden_prefix=('lib/provider_backends/','lib/provider_runtime/','lib/ccbd/services/project_namespace_state_runtime/','lib/ccbd/services/project_namespace_runtime/','lib/cli/services/doctor_runtime/','lib/ccbd/services/dispatcher_runtime/lifecycle_start_runtime/recovery_runtime/'); forbidden_files={'package.json','package-lock.json','install.ps1','install.sh','install.cmd','README.md','docs/ccbd-diagnostics-contract.md','bin/ccb-npm-install.js','lib/cli/management_runtime/install.py','lib/cli/management_runtime/commands_runtime/install.py','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py','lib/terminal_runtime/rmux_packaging_support.py','lib/terminal_runtime/rmux_packaging_support_projection.json'}; bad=sorted(p for p in paths if p.startswith(forbidden_prefix) or p in forbidden_files); assert not bad, bad"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - no_ccbd_state_or_lifecycle_scope_guard
+        - no_provider_runtime_scope_guard
+        - no_doctor_support_tier_scope_guard
+        - no_package_release_scope_guard
+        - no_installer_scope_guard
+        - install_cmd_scope_guard
+        - npm_postinstall_scope_guard
+        - cli_install_management_scope_guard
+        - no_recovery_scope_guard
+    - id: CMD-007
+      command: >-
+        python -c "import pathlib, subprocess; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only','--','lib','test'],['git','diff','--cached','--name-only','--diff-filter=ACMR','--','lib','test'],['git','ls-files','--others','--exclude-standard','--','lib','test']) for p in run(a).splitlines() if p.strip()}; text=run(['git','diff','--','lib','test'])+run(['git','diff','--cached','--','lib','test'])+''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in paths if pathlib.Path(p).is_file() and p.endswith(('.py','.md','.yaml','.yml','.json'))); forbidden=('completion_source','HerdrProviderCompletionEvidence','support_tier','npm publish','release surface'); assert not any(term in text for term in forbidden)"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - no_provider_completion_authority_scope_guard
+        - no_support_projection_scope_guard
+        - no_release_surface_scope_guard
+  evidence_required:
+    - v2_implementation_admission_evidence
+    - herdr_backend_client_diff
+    - herdr_capability_gate_tests
+    - herdr_schema_mismatch_tests
+    - herdr_operation_evidence_tests
+    - resolver_factory_tests
+    - scope_guard
+    - epic_roadmap_owner_items_yaml_acceptance
+  cleanliness:
+    provider_runtime_changes: forbidden
+    ccbd_state_or_lifecycle_changes: forbidden
+    doctor_support_tier_changes: forbidden
+    package_metadata_changes: forbidden
+    recovery_owner_changes: forbidden
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden

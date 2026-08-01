@@ -1,0 +1,40 @@
+{
+  "gate_id": "scope-gate",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "changed_files": [
+        ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-checklist.yaml",
+        ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-design.md",
+        "lib/cli/services/tmux_ui_runtime/service.py",
+        "test/test_v2_tmux_ui.py",
+        ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/live-binding-snapshot.txt",
+        ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/manual-wezterm-runbook.md",
+        ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/windows-rmux-ux-parity-evidence.json",
+        ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-evidence-pack.md",
+        ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-implementation.md",
+        ".codestable/roadmap/windows-rmux-ux-parity-hardening/goal-state.yaml"
+      ],
+      "ignored_machine_artifacts": [
+        ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-evidence-pack-results.json",
+        ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-gate-results.json"
+      ],
+      "allowed_prefixes": [
+        ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity",
+        "lib/cli/services/tmux_ui_runtime/service.py",
+        "test/test_v2_tmux_ui.py",
+        ".codestable/roadmap/windows-rmux-ux-parity-hardening/goal-state.yaml",
+        ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity"
+      ]
+    }
+  ],
+  "providers": {},
+  "feature": "2026-07-25-windows-rmux-wezterm-native-interaction-parity",
+  "inputs": {
+    "feature_dir": ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity"
+  },
+  "input_digests": {}
+}

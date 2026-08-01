@@ -1,0 +1,17 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-4476-20260720t041533z",
+    "capture-pane",
+    "-t",
+    "ccb-rmux-probe:0.0",
+    "-p",
+    "-S",
+    "-20"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "",
+  "timeout": 8.0
+}

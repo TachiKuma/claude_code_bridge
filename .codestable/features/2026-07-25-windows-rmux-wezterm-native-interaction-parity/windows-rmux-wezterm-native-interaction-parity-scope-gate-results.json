@@ -1,0 +1,20 @@
+{
+  "gate_id": "scope-gate",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "changed_files": [],
+      "ignored_machine_artifacts": [],
+      "allowed_prefixes": [
+        ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity",
+        ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity",
+        "lib/cli/services/tmux_ui_runtime/service.py",
+        "test/test_v2_tmux_ui.py"
+      ]
+    }
+  ],
+  "providers": {}
+}

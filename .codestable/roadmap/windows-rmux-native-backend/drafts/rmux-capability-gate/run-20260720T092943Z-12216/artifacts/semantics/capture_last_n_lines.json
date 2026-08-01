@@ -1,0 +1,24 @@
+{
+  "assertions": [
+    {
+      "kind": "prerequisite",
+      "name": "capture-pane succeeded",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "capture-pane produced stdout",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "last-N capture contains the tail marker without the earlier marker",
+      "passed": false
+    }
+  ],
+  "dependencies": [
+    "capture-pane"
+  ],
+  "notes": "one or more scenario assertions failed despite at least one prerequisite passing",
+  "status": "partial"
+}

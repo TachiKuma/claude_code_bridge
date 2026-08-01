@@ -1,0 +1,16 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-15036-20260721t144322z",
+    "list-windows",
+    "-t",
+    "ccb-rmux-probe"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "0: probe-main* (1 panes) [80x24] [layout b25d,80x24,0,0,0] @0 (active)\n",
+  "stdout_raw_sha256": "0109d436070bf83b0e8090dcba196e70fb4b5dcea079999d1388c577b74456fe",
+  "stdout_raw_size": 71,
+  "timeout": 5.0
+}

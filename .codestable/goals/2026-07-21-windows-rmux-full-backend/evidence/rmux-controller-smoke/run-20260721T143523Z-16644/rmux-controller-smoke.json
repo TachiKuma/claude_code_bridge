@@ -1,0 +1,34 @@
+{
+  "project_root": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\ccb-rmux-controller-smoke-2y3umy7k\\repo",
+  "env_terminal_backend": "rmux",
+  "namespace_backend_impl": "rmux",
+  "namespace_id": "ccb-repo-49ece309",
+  "namespace_session_name": "ccb-repo-49ece309",
+  "namespace_ipc_kind": "named_pipe",
+  "namespace_ipc_ref": "ccb-repo-49ece309",
+  "state_summary": {
+    "namespace_epoch": 1,
+    "namespace_backend_impl": "rmux",
+    "namespace_id": "ccb-repo-49ece309",
+    "namespace_session_name": "ccb-repo-49ece309",
+    "namespace_ipc_kind": "named_pipe",
+    "namespace_ipc_ref": "ccb-repo-49ece309",
+    "namespace_tmux_socket_path": "\\tmp\\ccb-runtime\\tmux-49ece309dc96.sock",
+    "namespace_tmux_session_name": "ccb-repo-49ece309",
+    "namespace_layout_version": 3,
+    "namespace_control_window_name": "__ccb_ctl",
+    "namespace_control_window_id": "@0",
+    "namespace_workspace_window_name": "ccb",
+    "namespace_workspace_window_id": "@1",
+    "namespace_workspace_epoch": 1,
+    "namespace_ui_attachable": true,
+    "namespace_last_started_at": "2026-07-21T14:25:00Z",
+    "namespace_last_destroyed_at": null,
+    "namespace_last_destroy_reason": null
+  },
+  "ensure_verdict": "pass",
+  "destroy_return": {
+    "destroyed": true,
+    "reason": "rmux-controller-smoke"
+  }
+}

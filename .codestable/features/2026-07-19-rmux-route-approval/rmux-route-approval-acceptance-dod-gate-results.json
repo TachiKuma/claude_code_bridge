@@ -1,0 +1,35 @@
+{
+  "gate_id": "dod-contract-gate",
+  "stage": "acceptance",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "design": ".codestable\\features\\2026-07-19-rmux-route-approval\\rmux-route-approval-design.md",
+      "checked_block": "DoD Contract",
+      "structure_checks": {
+        "validation command id": [
+          "CMD-"
+        ],
+        "command core marker": [
+          "core",
+          "核心性"
+        ],
+        "failure handling marker": [
+          "failure_handling",
+          "失败处理"
+        ]
+      },
+      "strength": "minimal DoD Contract section check"
+    }
+  ],
+  "providers": {},
+  "feature": "2026-07-19-rmux-route-approval",
+  "inputs": {
+    "design": ".codestable/features/2026-07-19-rmux-route-approval/rmux-route-approval-design.md"
+  },
+  "input_digests": {
+    "design": "0f1e85a19342a076a30a422977cc5ee7cadd21a3166e1637c3e95041df618c8e"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "assertions": [
+    {
+      "kind": "prerequisite",
+      "name": "list-windows succeeded",
+      "passed": true
+    },
+    {
+      "kind": "prerequisite",
+      "name": "new-window succeeded",
+      "passed": true
+    },
+    {
+      "kind": "prerequisite",
+      "name": "rename-window succeeded",
+      "passed": true
+    },
+    {
+      "kind": "prerequisite",
+      "name": "select-window succeeded",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "window listing observed renamed probe windows",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "list-windows",
+    "new-window",
+    "rename-window",
+    "select-window",
+    "kill-window"
+  ],
+  "notes": "",
+  "status": "supported",
+  "workaround": null
+}

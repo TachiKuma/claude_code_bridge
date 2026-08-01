@@ -1,0 +1,178 @@
+feature: 2026-07-31-herdr-supportability-projection
+created: 2026-07-31
+
+steps:
+  - id: S1
+    action: "projection schema and fail-closed loader：新增 Herdr supportability projection owner、default packaged projection 和 matrix loader"
+    exit_signal: "缺 matrix、缺 parent acceptance、版本不是 strict v8.5.2、Herdr auto restore 非 disabled、platform 非 win32/x64、provider freeze 缺失或 provider freeze 与 current catalog 不一致时不会 supported，输出 deterministic default/blocked projection"
+    status: pending
+  - id: S2
+    action: "tier rule：实现 unsupported/experimental/beta/supported 纯规则"
+    exit_signal: "required workflows、所有公开 provider ask/pend/completion/cancel、provider catalog freshness、Mobile terminal、Config UI、Windows npm install dry-run 全 pass/fresh + strict v8.5.2 + Herdr auto restore disabled + 无 beta gaps + release surface pass + install/update/package gate pass + docs/doctor evidence 才能 supported；status 聚合按 missing > blocked/failed/not-run > partial > pass 折叠，partial/blocked/failed/not-run 均降级并进入 non_pass_workflows"
+    status: pending
+  - id: S3
+    action: "doctor projection：把 Herdr projection 接入 doctor --output payload/render"
+    exit_signal: "doctor render test 能看到 Herdr tier、required workflows status、provider workflows status、validation/release/docs/doctor refs、release surface status、install entry、Windows npm enabled、beta gaps、non-pass workflows、fallback guidance、residual risks，且不影响 rmux 字段"
+    status: pending
+  - id: S4
+    action: "docs and README projection：同步 README/docs contract"
+    exit_signal: "docs 只引用 projection，不保留当前公开 doctor --bundle；不出现 final supported claim 越界"
+    status: pending
+  - id: S5
+    action: "consistency and scope guards：补 docs/doctor/support consistency、publish/push/owner scope guard"
+    exit_signal: "projection tests、doctor render tests、docs guard、scope guard 均通过"
+    status: pending
+
+checks:
+  - item: "matrix acceptance ref 缺失、provider freeze 缺失或 provider freeze 与 current catalog 不一致时 projection fail closed，support_tier 不为 supported"
+    source: design AC-001 / DOD-IMPL-001 / S1
+    status: pending
+  - item: "partial/blocked/failed/not-run workflow、provider row、Mobile/Config 或 npm dry-run 进入 non_pass_workflows 且不会 supported；同一集合混合状态按 missing > blocked/failed/not-run > partial > pass 折叠；non_pass_workflows key 固定为 workflow:<workflow> 与 provider:<provider>:<workflow>，doctor/docs render 按 key 字典序输出"
+    source: design AC-002 / DOD-IMPL-002 / S2
+    status: pending
+  - item: "全 pass 但 docs/doctor evidence 缺失时最高为 beta"
+    source: design AC-003 / S2
+    status: pending
+  - item: "supported 只在 full workflow pass、all-provider ask/pend/completion/cancel pass、current provider catalog / parent freeze freshness 为 fresh、Mobile terminal pass、Config UI pass、Windows npm install dry-run pass、strict v8.5.2、Herdr auto restore disabled、无 beta gaps、parent release_surface_ref artifact status pass、install/update/package gate pass、install_entry 非 diagnostic_only、windows_npm_enabled true、当前 docs/doctor artifact schema_version=1、ok=true、projection_hash 绑定当前 projection 且 tier 匹配时出现"
+    source: design AC-004 / DOD-IMPL-002 / S2 / S5
+    status: pending
+  - item: "matrix 字段到 projection 字段映射固定：candidate support_tier 不直接发布，support_tier_source 由 parent acceptance 状态和 artifact kind 显式决定；support_projection_allowed、required key set、current provider catalog / parent freeze freshness、provider key set、workflow status/reason、strict v8.5.2、Herdr auto restore mode、Mobile/Config/npm dry-run status 必须重新校验；validation_ref 必须绑定 parent passed acceptance 的 matrix JSON path，release_surface_ref/release_surface_status 来自 parent release surface artifact，docs_consistency_ref/doctor_render_ref 来自绑定当前 projection_hash 的当前 feature artifacts"
+    source: design 2.1 / S1 / S2
+    status: pending
+  - item: "版本非 8.5.2 或 platform 非 win32/x64 时 fail closed"
+    source: design AC-005 / S1 / S2
+    status: pending
+  - item: "doctor --output payload/render 展示 Herdr support tier、required workflows status、provider workflows status、validation/release/docs/doctor refs、release surface status、install entry、Windows npm enabled、beta gaps、non-pass workflows、fallback guidance、residual risks"
+    source: design AC-006 / DOD-IMPL-003 / S3
+    status: pending
+  - item: "README/docs 只引用 projection，不把 blocked/partial/not-run 写成 supported"
+    source: design AC-007 / DOD-IMPL-004 / S4
+    status: pending
+  - item: "docs contract 清理当前公开 doctor --bundle 口径，使用 doctor --output"
+    source: design AC-008 / DOD-IMPL-005 / S4
+    status: pending
+  - item: "不修改 provider completion、recovery owner、publish/promotion"
+    source: design AC-009 / DOD-IMPL-006 / S5
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-31-herdr-supportability-projection/herdr-supportability-projection-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+      test_status: existing
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+      test_status: existing
+    - id: CMD-003
+      command: "python -m pytest -q test/test_herdr_supportability_projection.py test/test_cli_doctor_herdr_supportability.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - projection_loader
+        - projection_hash_canonicalization
+        - projection_hash_excludes_self_referential_refs
+        - docs_doctor_two_phase_fixed_point
+        - final_downgrade_recomputes_projection_hash
+        - matrix_to_projection_mapping
+        - candidate_tier_not_published_directly
+        - support_tier_source_from_parent_acceptance_and_artifact_kind
+        - tier_rule
+        - status_folding_priority_missing_over_blocked_over_partial_over_pass
+        - mixed_partial_and_blocked_fold_to_blocked
+        - fail_closed_missing_matrix
+        - fail_closed_missing_provider_freeze
+        - provider_freeze_matches_current_catalog
+        - stale_provider_freeze_downgrades
+        - explicit_matrix_path_cannot_bypass_parent_acceptance
+        - parent_acceptance_doc_type_required
+        - parent_acceptance_status_passed_required
+        - parent_acceptance_matrix_artifact_bound
+        - release_surface_status_pass_required
+        - release_surface_schema_version_1_required
+        - release_surface_implementation_admission_admitted_required
+        - release_surface_surface_state_available_required
+        - release_surface_artifact_status_ready_required
+        - release_surface_package_metadata_policy_win32_enabled_required
+        - release_surface_release_install_entry_not_diagnostic_only
+        - release_surface_update_entry_not_diagnostic_only
+        - failed_release_surface_ref_downgrades
+        - stale_release_surface_ref_downgrades
+        - install_entry_diagnostic_only_downgrades
+        - windows_npm_enabled_required_for_supported
+        - required_workflows_status
+        - provider_workflows_status
+        - non_pass_workflows
+        - non_pass_workflows_key_namespace
+        - non_pass_workflows_sorted_render
+        - partial_workflow_render
+        - doctor_render
+        - doctor_payload_key_herdr_supportability_projection
+        - herdr_support_tier_render
+        - herdr_required_workflows_status_render
+        - herdr_provider_workflows_status_render
+        - herdr_validation_ref_render
+        - herdr_release_surface_ref_render
+        - herdr_release_surface_status_render
+        - herdr_docs_consistency_ref_render
+        - herdr_doctor_render_ref_render
+        - docs_consistency_schema_version_1_required
+        - doctor_render_schema_version_1_required
+        - docs_consistency_projection_hash_matches_projection
+        - doctor_render_projection_hash_matches_projection
+        - docs_consistency_support_tier_matches_projection
+        - doctor_render_support_tier_matches_projection
+        - stale_docs_consistency_ref_downgrades
+        - stale_doctor_render_ref_downgrades
+        - herdr_install_entry_render
+        - herdr_windows_npm_enabled_render
+        - herdr_beta_gaps_render
+        - herdr_non_pass_workflows_render
+        - herdr_fallback_guidance_render
+        - herdr_residual_risks_render
+    - id: CMD-004
+      command: "python -c \"import pathlib,re; p=pathlib.Path('docs/ccbd-diagnostics-contract.md'); bad=[(i+1,line.rstrip()) for i,line in enumerate(p.read_text(encoding='utf-8').splitlines()) if 'doctor --bundle' in line.lower() and not re.search(r'deprecated|unsupported|no longer supported|not supported|rejected|intentionally rejected', line, re.I)]; assert not bad,bad\""
+      core: true
+      failure_handling: fix-or-block
+      test_status: existing
+      covers:
+        - doctor_bundle_docs_guard
+    - id: CMD-005
+      command: "python -m pytest -q test/test_herdr_supportability_scope_guard.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - scope_guard
+        - scope_guard_regex_self_check
+        - scope_guard_negative_fixtures
+        - code_tokenized_publish_push_tag_guard
+        - untracked_file_scope_guard
+        - codestable_artifact_scope_guard
+        - owner_boundary
+        - unsupported_claim_guard
+        - explicit_negation_allowlist
+  evidence_required:
+    - herdr_supportability_projection_owner
+    - packaged_default_projection
+    - projection_tier_rule_tests
+    - provider_catalog_freshness_tests
+    - support_tier_source_tests
+    - status_folding_priority_tests
+    - doctor_render_tests
+    - docs_readme_contract_delta
+    - herdr_docs_consistency_json_artifact
+    - herdr_doctor_render_json_artifact
+    - docs_guard
+    - scope_guard
+    - roadmap_items_yaml_update
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
+    publish_or_push_action: forbidden

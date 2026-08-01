@@ -1,0 +1,27 @@
+schema_version: 2
+goal: sidebar-settings-rmux-mouse-routing
+status: complete
+objective: "完成 sidebar-settings-rmux-mouse-routing 的 QA 后终端功能验收与 goal 终态记录，确保该 child 以 evidence-complete 的 unsupported_capability 结论交回 epic，而不是误宣称 settings mouse parity passed。"
+start_point: "feature 2026-07-27-sidebar-settings-rmux-mouse-routing 已有 approved design、passed design-review、passed code review、passed QA；epic windows-rmux-ux-parity-hardening 仍处于 handoff。"
+acceptance:
+  - "功能验收确认 feature 产物链完整：design approved、design-review passed、code review passed、QA passed。"
+  - "功能验收确认 UX JSON 精确投影为 evidence_status=blocked、failure_class=unsupported_capability、selected_route=unsupported_capability、runtime_behavior_changed=false、broad_fallback_added=false。"
+  - "功能验收确认没有新增 broad sidebar-left-click settings fallback，direct c 只作为诊断证据，不计为 mouse click parity pass。"
+  - "功能验收确认本 goal 的 final iteration 与 functional-acceptance.md 双向引用，state.yaml 可恢复为 complete。"
+non_goals:
+  - "不实现新的 rmux 或 WezTerm settings-only mouse route。"
+  - "不继续原 windows-rmux-wezterm-native-interaction-parity acceptance。"
+  - "不修改用户无关 dirty 文件，例如 笔记.md。"
+  - "不执行 git commit、push、merge、release 或 deploy。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 1
+next_action: "Goal complete; sidebar-settings-rmux-mouse-routing 已作为 evidence-complete unsupported_capability child 完成终端功能验收。"
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-30"

@@ -1,0 +1,21 @@
+{
+  "gate_id": "scope-gate",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "changed_files": [],
+      "ignored_machine_artifacts": [],
+      "allowed_prefixes": [
+        ".codestable/features/2026-07-06-rmux-capability-gate",
+        "scripts/probe_rmux_capability.py",
+        "test/test_rmux_capability_probe.py",
+        ".codestable/roadmap/windows-rmux-native-backend",
+        ".codestable/reference/agent-conventions.md"
+      ]
+    }
+  ],
+  "providers": {}
+}

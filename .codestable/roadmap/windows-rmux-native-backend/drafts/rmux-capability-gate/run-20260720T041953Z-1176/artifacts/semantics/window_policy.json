@@ -1,0 +1,11 @@
+{
+  "dependencies": [
+    "list-windows",
+    "new-window",
+    "rename-window",
+    "select-window",
+    "kill-window"
+  ],
+  "missing": [],
+  "status": "supported"
+}

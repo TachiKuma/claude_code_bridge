@@ -1,0 +1,17 @@
+{
+  "assertions": [
+    {
+      "name": "capture-pane succeeded",
+      "passed": true
+    },
+    {
+      "name": "capture-pane produced stdout",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "capture-pane"
+  ],
+  "notes": "",
+  "status": "supported"
+}

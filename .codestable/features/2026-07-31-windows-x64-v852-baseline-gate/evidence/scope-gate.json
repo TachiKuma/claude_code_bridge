@@ -1,0 +1,52 @@
+{
+  "gate_id": "scope-gate",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "changed_files": [
+        ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/dod-results.json",
+        ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/evidence-pack-gate.json",
+        ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json",
+        ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/scope-gate.json",
+        ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/windows-x64-v852-baseline-gate-checklist.yaml",
+        ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/windows-x64-v852-baseline-gate-evidence-pack.md",
+        ".codestable/roadmap/windows-native-herdr-ccb/approval-report.md",
+        ".codestable/roadmap/windows-native-herdr-ccb/goal-state.yaml",
+        "install.sh",
+        "lib/cli/management_runtime/versioning_runtime/local.py",
+        "lib/cli/render_runtime/ops_views_doctor.py",
+        "lib/cli/services/doctor.py",
+        "lib/cli/services/doctor_runtime/system.py",
+        "lib/terminal_runtime/windows_x64_platform_gate.py",
+        "test/test_cli_doctor_windows_x64_platform_gate.py",
+        "test/test_cli_versioning_local.py",
+        "test/test_doctor_runtime_system_windows_x64_platform_gate.py",
+        "test/test_doctor_startup_baseline_windows_x64_platform_gate.py",
+        "test/test_windows_x64_package_no_change_guard.py",
+        "test/test_windows_x64_platform_gate.py"
+      ],
+      "ignored_machine_artifacts": [],
+      "allowed_prefixes": [
+        ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate",
+        ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/",
+        ".codestable/roadmap/windows-native-herdr-ccb/",
+        "install.sh",
+        "lib/cli/management_runtime/versioning_runtime/local.py",
+        "lib/terminal_runtime/windows_x64_platform_gate.py",
+        "lib/cli/services/doctor.py",
+        "lib/cli/services/doctor_runtime/system.py",
+        "lib/cli/render_runtime/ops_views_doctor.py",
+        "test/test_windows_x64_platform_gate.py",
+        "test/test_cli_doctor_windows_x64_platform_gate.py",
+        "test/test_cli_versioning_local.py",
+        "test/test_doctor_runtime_system_windows_x64_platform_gate.py",
+        "test/test_doctor_startup_baseline_windows_x64_platform_gate.py",
+        "test/test_windows_x64_package_no_change_guard.py"
+      ]
+    }
+  ],
+  "providers": {}
+}

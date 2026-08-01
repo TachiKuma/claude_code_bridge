@@ -1,0 +1,28 @@
+schema_version: 2
+goal: "windows-rmux-full-backend"
+status: complete
+objective: "重做 rmux stdio-aware lifecycle runner、foreground attach runner、logical EOF 映射，并重跑完整 capability gate，使 rmux 能作为 ccb Windows native backend 完整基座进入可验收状态。"
+start_point: "前置验证已确认 rmux 0.9.0 在 capture stdout/stderr 的 runner 下 start-server/new-session 会超时；DEVNULL 或继承 console stdio 可快速返回；即使 stdio-aware probe 绕过 daemon 启动问题，full gate 仍有 8 个 gaps。参考 v8.0.16 已有 rmux runner/backend/IO 分层经验。"
+acceptance:
+  - "仓库内 rmux lifecycle runner 对 daemon/session 管理采用 stdio-aware 策略，避免 start-server/new-session 在 Windows capture 模式下挂起。"
+  - "仓库内 rmux foreground attach runner 对交互 attach 继承终端 stdio，且不污染普通命令 runner。"
+  - "仓库内 logical EOF 在 Windows rmux 路径映射为可工作的 EOF 发送方式，并有测试或 probe 证据覆盖。"
+  - "完整 rmux capability gate 使用更新后的 runner/adapter 重跑并落盘 fresh report，报告明确 pass/fail 和剩余 gaps。"
+  - "聚焦测试通过；Task agent 对实现和 gate 结果做功能验收并给出 pass/fail/inconclusive。"
+non_goals:
+  - "不修改全局 PATH、不全局升级或安装 rmux。"
+  - "不执行 git commit/git push。"
+  - "不在 capability gate 未通过时宣称 rmux 已完整胜任。"
+  - "不引入 psmux 作为本 goal 的主实现路径。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 3
+next_action: "Goal complete."
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-21"

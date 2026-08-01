@@ -1,0 +1,78 @@
+{
+  "gate_id": "scope-gate",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "changed_files": [
+        ".codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-checklist.yaml",
+        ".codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-design.md",
+        ".codestable/reference/agent-conventions.md",
+        ".codestable/roadmap/windows-rmux-native-backend/goal-state.yaml",
+        "lib/agents/config_loader_runtime/common.py",
+        "lib/agents/config_loader_runtime/dynamic_agent_overlays.py",
+        "lib/agents/config_loader_runtime/io_runtime/documents.py",
+        "lib/agents/config_loader_runtime/loop_overlays.py",
+        "lib/agents/config_loader_runtime/parsing_runtime/validation.py",
+        "lib/agents/config_loader_runtime/parsing_runtime/workflow_v3.py",
+        "lib/agents/models.py",
+        "lib/agents/models_runtime/__init__.py",
+        "lib/agents/models_runtime/config.py",
+        "lib/agents/models_runtime/config_runtime/__init__.py",
+        "lib/agents/models_runtime/config_runtime/project.py",
+        "lib/ccbd/app_runtime/bootstrap.py",
+        "lib/ccbd/app_runtime/handlers.py",
+        "lib/ccbd/app_runtime/service_graph.py",
+        "lib/ccbd/handlers/ping_runtime/handler.py",
+        "lib/ccbd/handlers/ping_runtime/payloads.py",
+        "lib/ccbd/handlers/project_reload.py",
+        "lib/ccbd/reload_apply_service.py",
+        "lib/ccbd/services/project_namespace_runtime/controller.py",
+        "lib/cli/render_runtime/ops_views_doctor.py",
+        "lib/cli/services/doctor.py",
+        "lib/cli/services/ping.py",
+        "lib/cli/services/start_foreground.py",
+        "lib/storage/path_helpers.py",
+        "lib/terminal_runtime/api.py",
+        "lib/terminal_runtime/api_selection.py",
+        "lib/terminal_runtime/backend_selection.py",
+        "test/test_ccbd_reload_apply.py",
+        "test/test_ccbd_reload_dry_run.py",
+        "test/test_ccbd_service_graph.py",
+        "test/test_terminal_runtime_backend_selection.py",
+        "test/test_v2_ccbd_ping_runtime.py",
+        "test/test_v2_ccbd_start_flow.py",
+        "test/test_v2_config_loader.py",
+        "test/test_v2_storage_paths.py",
+        "test/test_v3_config_loader.py",
+        ".codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-dod-contract-results.json",
+        ".codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-evidence-pack.md",
+        ".codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-review-packet.md",
+        ".codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-review.md",
+        "lib/agents/config_loader_runtime/parsing_runtime/runtime_mux.py",
+        "lib/cli/services/backend_selection_diagnostics.py",
+        "lib/terminal_runtime/backend_resolver.py",
+        "test/test_backend_selection_diagnostics.py"
+      ],
+      "ignored_machine_artifacts": [
+        ".codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-evidence-pack-results.json",
+        ".codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-scope-gate-results.json"
+      ],
+      "allowed_prefixes": [
+        ".codestable/features/2026-07-19-backend-resolver-opt-in-contract",
+        "lib",
+        "test",
+        ".codestable/roadmap/windows-rmux-native-backend",
+        ".codestable/reference"
+      ]
+    }
+  ],
+  "providers": {},
+  "feature": "2026-07-19-backend-resolver-opt-in-contract",
+  "inputs": {
+    "feature_dir": ".codestable/features/2026-07-19-backend-resolver-opt-in-contract"
+  },
+  "input_digests": {}
+}

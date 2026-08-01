@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "feature": "2026-07-27-sidebar-settings-rmux-mouse-routing",
+  "selected_route": "unsupported_capability",
+  "route_candidates": {
+    "rmux_precise_route": {
+      "supported": false,
+      "reason": "rmux 0.9.0 keeps mouse target/event internally but ordinary root binding formats do not expose mouse_x/mouse_y or an equivalent settings-only predicate."
+    },
+    "wezterm_precise_route": {
+      "supported": false,
+      "reason": "WezTerm mouse binding schema can match mouse_reporting state but cannot declare a CCB sidebar settings-cell region; pane-wide interception would be a broad fallback."
+    },
+    "unsupported_capability": {
+      "supported": true,
+      "reason": "No approved precise channel exists; runtime click behavior must remain unchanged."
+    }
+  },
+  "rmux_capability": {
+    "version": "rmux 0.9.0",
+    "source_commit": "9f007bf635a3904322737d90fc86dc7bf9224aa5",
+    "mouse_target_equals_supported": true,
+    "coordinates_or_equivalent_supported": false,
+    "send_keys_dash_m_passthrough_supported": false,
+    "ordinary_mouse_event_pipeline_supported": true,
+    "settings_only_route_supported": false,
+    "evidence_ref": "evidence/rmux-mouse-capability.md"
+  },
+  "wezterm_capability": {
+    "version": "wezterm 20251201-075747-d3b0fdad",
+    "mouse_reporting_assignment_supported": true,
+    "mouse_reporting_assignment_precise": false,
+    "coordinate_or_region_predicate_supported": false,
+    "accepted_as_settings_only_channel": false,
+    "evidence_ref": "evidence/wezterm-settings-only-channel.md"
+  },
+  "explicitly_rejected_routes": [
+    {
+      "name": "broad_sidebar_left_click_settings_fallback",
+      "reason": "Owner rejected broad sidebar fallback; it would open settings for x and ordinary sidebar clicks."
+    },
+    {
+      "name": "wezterm_pane_wide_mouse_reporting_binding",
+      "reason": "Pane-wide mouse_reporting=true binding cannot prove settings-only hit-test and would intercept application mouse events."
+    }
+  ]
+}

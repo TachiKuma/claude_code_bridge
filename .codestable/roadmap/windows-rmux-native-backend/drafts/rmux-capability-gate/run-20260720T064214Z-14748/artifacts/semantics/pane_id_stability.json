@@ -1,0 +1,17 @@
+{
+  "assertions": [
+    {
+      "name": "list-panes succeeded",
+      "passed": true
+    },
+    {
+      "name": "list-panes returned a pane identity",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "list-panes"
+  ],
+  "notes": "",
+  "status": "supported"
+}

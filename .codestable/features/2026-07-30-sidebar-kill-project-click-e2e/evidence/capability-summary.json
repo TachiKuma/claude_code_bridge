@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "feature": "2026-07-30-sidebar-kill-project-click-e2e",
+  "selected_route": "unsupported_capability",
+  "route_candidates": {
+    "rmux_precise_route": {
+      "supported": false,
+      "reason": "Current rmux foreground evidence shows root binding can target the sidebar pane, but ordinary root binding formats do not expose mouse_x/mouse_y or an equivalent x-control predicate."
+    },
+    "send_keys_dash_m_passthrough": {
+      "supported": false,
+      "reason": "Parent sidebar foreground probes recorded send-keys -M did not reach Rust/crossterm Event::Mouse in the live Windows + WezTerm + rmux path."
+    },
+    "broad_sidebar_left_click_kill_fallback": {
+      "supported": false,
+      "reason": "Pane-wide sidebar left click cannot distinguish settings, x, ordinary sidebar rows, or comms actions; mapping it to KillProject would be destructive and is explicitly out of scope."
+    },
+    "unsupported_capability": {
+      "supported": true,
+      "reason": "Internal Rust KillProject path is covered, but no approved precise foreground mouse route exists for x click."
+    }
+  },
+  "internal_path_evidence": {
+    "header_hit_test": "tools/ccb-agent-sidebar/src/tui.rs::header_action_at",
+    "mouse_dispatch": "tools/ccb-agent-sidebar/src/tui.rs::SidebarApp::handle_mouse_down",
+    "exit_action": "tools/ccb-agent-sidebar/src/tui.rs::ExitAction::KillProject",
+    "kill_command": "tools/ccb-agent-sidebar/src/tui.rs::run_ccb_kill_with_program",
+    "tests": [
+      "header_buttons_are_right_aligned_and_kill_project",
+      "shifted_q_is_project_kill_across_terminal_key_encodings",
+      "project_kill_runs_ccb_kill_from_project_root (unix-only)"
+    ]
+  }
+}

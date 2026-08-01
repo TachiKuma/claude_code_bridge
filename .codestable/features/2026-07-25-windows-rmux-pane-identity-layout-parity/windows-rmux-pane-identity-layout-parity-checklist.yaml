@@ -1,0 +1,93 @@
+feature: 2026-07-25-windows-rmux-pane-identity-layout-parity
+created: 2026-07-25
+
+steps:
+  - action: "baseline inventory：复用 rmux-backend-core、ccbd-rmux-namespace-lifecycle 和现有 canonicalization tests"
+    exit_signal: "pane-identity-layout-report.json 的 baseline_refs 指向已存在的 acceptance、code、test 文件，且没有声明基础 split/list/canonicalization 未完成"
+    status: pending
+  - action: "snapshot schema/report：建立 pane-identity-layout-report.json 的 snapshot、binding_recovery、conflicts 和 residual_risks 校验"
+    exit_signal: "report JSON 可解析，snapshot required fields、canonicalization_source enum、agent/pane refs、conflict verdict、residual risk 规则通过"
+    status: pending
+  - action: "canonicalization matrix：覆盖 exact pane id、window/session/global index alias fallback、多匹配和无匹配"
+    exit_signal: "exact-first、unique index fallback、ambiguous alias fail-closed 都有 test/report case"
+    status: pending
+  - action: "binding recovery matrix：覆盖 split、respawn、reattach_reprojection 后 agent-pane binding 恢复"
+    exit_signal: "每个 BindingRecoveryCase 记录 scenario、expected_agent、expected_pane、observed_pane、canonicalization_source、diagnostics_ref、verdict；reattach_reprojection 只覆盖非 crash 绑定重投影；parent 未 accepted 时 live GUI lane partial/blocked"
+    status: pending
+  - action: "conflict diagnostics：覆盖 agent_multi_pane、pane_multi_agent、duplicate_canonical_identity"
+    exit_signal: "conflict report 有 diagnostics_ref，verdict=fail_closed 时系统不会继续写入错误 binding"
+    status: pending
+  - action: "UX parity evidence integration：生成 windows-rmux-ux-parity-evidence.json"
+    exit_signal: "UX evidence JSON 满足 schema_version=1、host_kind=native_windows、terminal_host=wezterm、backend_impl=rmux、control_plane=ccbd、parity_dimension=pane_identity_layout、evidence_status/failure_class enum、artifact refs 和 partial/blocked/failed residual_risks 规则"
+    status: pending
+  - action: "drift closure / minimal implementation：证据证明 canonicalization 分叉时才做最小收敛，否则保持 evidence-only"
+    exit_signal: "相关 pytest、YAML/JSON 校验和 py_compile 通过；未触发 drift 时没有 production canonicalization 重构"
+    status: pending
+
+checks:
+  - item: "design 引用 confirmed feature brainstorm，且 owner 已批准进入 design"
+    source: "design frontmatter / §0"
+    status: pending
+  - item: "复用 rmux-backend-core 与 ccbd-rmux-namespace-lifecycle accepted baseline，不默认重写 layout authority"
+    source: "design §1 / Baseline reuse / delta"
+    status: pending
+  - item: "WindowsRmuxPaneIdentitySnapshot 覆盖 pane_id、pane_index、ccb_role、ccb_agent_id、canonicalization_source"
+    source: "design §2.1 / S2"
+    status: pending
+  - item: "exact pane id 优先，index alias 只能作为 fallback 且必须记录 source"
+    source: "AC-001 / AC-002 / S3"
+    status: pending
+  - item: "ambiguous index alias 和 identity conflict 必须 fail closed"
+    source: "AC-003 / AC-007 / S3 / S5"
+    status: pending
+  - item: "split、respawn、reattach_reprojection 后 agent-pane binding recovery 有 BindingRecoveryCase 证据"
+    source: "AC-004 / AC-005 / AC-006 / S4"
+    status: pending
+  - item: "reattach 边界限定为非 crash、已有 namespace/layout/runtime state 的重新读取与绑定重投影"
+    source: "design §0 / §1 / AC-006"
+    status: pending
+  - item: "windows-rmux-ux-parity-evidence.json 固定 parity_dimension=pane_identity_layout"
+    source: "AC-008 / S6"
+    status: pending
+  - item: "不把 lifecycle crash recovery 或 GUI mouse policy 纳入本 item"
+    source: "design §1 / 明确不做 / AC-009"
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-25-windows-rmux-pane-identity-layout-parity/windows-rmux-pane-identity-layout-parity-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-ux-parity-hardening/windows-rmux-ux-parity-hardening-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_windows_rmux_pane_identity_layout_parity.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-004
+      command: "python -m pytest -q test/test_v2_project_namespace_backend.py -k \"canonicalizes_rmux_index_alias or prefers_exact_pane_id or respawn_adapter_canonicalizes\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-005
+      command: "python -m pytest -q test/test_rmux_backend_core.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-006
+      command: "python -m py_compile \"lib/terminal_runtime/rmux_backend_runtime/targets.py\" \"lib/terminal_runtime/rmux_backend_runtime/panes.py\" \"lib/ccbd/services/project_namespace_runtime/backend.py\""
+      core: true
+      failure_handling: fix-or-block
+  evidence_required:
+    - pane_identity_layout_report_json
+    - ux_parity_evidence_json
+    - binding_recovery_matrix
+    - conflict_diagnostics
+    - command_output
+    - diff_summary
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_import: forbidden

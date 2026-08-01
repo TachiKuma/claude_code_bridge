@@ -1,0 +1,40 @@
+{
+  "gate_id": "evidence-pack",
+  "stage": "acceptance",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "out": ".codestable\\features\\2026-07-20-ccbd-windows-process-liveness\\ccbd-windows-process-liveness-evidence-pack.md",
+      "providers": {
+        "archguard": {
+          "status": "skipped",
+          "reason": "archguard collection disabled",
+          "warnings": []
+        },
+        "meta_cc": {
+          "status": "skipped",
+          "reason": "meta-cc collection disabled",
+          "warnings": []
+        }
+      }
+    }
+  ],
+  "providers": {},
+  "feature": "2026-07-20-ccbd-windows-process-liveness",
+  "inputs": {
+    "design": ".codestable/features/2026-07-20-ccbd-windows-process-liveness/ccbd-windows-process-liveness-design.md",
+    "checklist": ".codestable/features/2026-07-20-ccbd-windows-process-liveness/ccbd-windows-process-liveness-checklist.yaml",
+    "out": ".codestable/features/2026-07-20-ccbd-windows-process-liveness/ccbd-windows-process-liveness-evidence-pack.md",
+    "dod_results": ".codestable/features/2026-07-20-ccbd-windows-process-liveness/dod-results.json",
+    "gate_results": ".codestable/features/2026-07-20-ccbd-windows-process-liveness/scope-gate-results.json"
+  },
+  "input_digests": {
+    "design": "c8eba1c7760a7663e1e084523f5a14059b2f3ff42cd81ca986e5fb2cc3b5337a",
+    "checklist": "c55c3df97a41d7927ddbb4b06d3db257262212677f695a27766e42127aa1ef88",
+    "dod_results": "992c35d64af778112e19413269379ce4a81dfb24f1982d01f96c8271c589e488",
+    "gate_results": "cafe7d894de6a05dc1e6da6ed14a62af3ce32e8c8b189471b1174bdb90c6b6f8",
+    "out": "25cfdf909cd319e151d6c15ebfed07603ed6bc67857778e905936c470c7287c7"
+  }
+}

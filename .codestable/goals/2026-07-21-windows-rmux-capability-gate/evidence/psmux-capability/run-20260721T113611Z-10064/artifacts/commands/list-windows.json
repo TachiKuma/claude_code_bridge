@@ -1,0 +1,18 @@
+{
+  "args": [
+    "psmux",
+    "-L",
+    "ccb-rmux-probe-10064-20260721t113611z",
+    "list-windows",
+    "-t",
+    "ccb-rmux-probe"
+  ],
+  "classification": "supported",
+  "notes": "",
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "0: pwsh* (1 panes) [120x30]\n",
+  "stdout_raw_sha256": "aef9c984912e3de9f3f6652c13be5b5cfa552574b33299e455008d018706e2d9",
+  "stdout_raw_size": 28,
+  "timeout": 8.0
+}

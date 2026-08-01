@@ -1,0 +1,14 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-12280-20260720t041712z",
+    "kill-session",
+    "-t",
+    "ccb-rmux-probe"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "",
+  "timeout": 8.0
+}

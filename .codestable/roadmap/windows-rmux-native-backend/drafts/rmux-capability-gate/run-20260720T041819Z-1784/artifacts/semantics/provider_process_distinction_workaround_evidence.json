@@ -1,0 +1,8 @@
+{
+  "dependencies": [
+    "list-panes",
+    "capture-pane"
+  ],
+  "missing": [],
+  "status": "supported"
+}

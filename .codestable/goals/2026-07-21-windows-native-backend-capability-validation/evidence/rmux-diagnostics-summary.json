@@ -1,0 +1,27 @@
+{
+  "generated_at": "2026-07-21",
+  "backend": "rmux",
+  "installed_version": "rmux 0.9.0",
+  "latest_known_version": "v0.9.0",
+  "winget_package": "Helvesec.RMUX 0.9.0",
+  "fresh_reports": [
+    "evidence/rmux-current/run-20260721T122234Z-16304/capability-report.json",
+    "evidence/rmux-disable-tiny-cli/run-20260721T122234Z-17648/capability-report.json",
+    "evidence/rmux-with-libexec-path/run-20260721T122744Z-17132/capability-report.json",
+    "evidence/rmux-with-libexec-path-disable-tiny-cli/run-20260721T122744Z-600/capability-report.json"
+  ],
+  "layout_observation": {
+    "rmux_exe": "present",
+    "rmux_daemon_exe": "present",
+    "libexec_rmux_exe": "present",
+    "rmux_daemon_help": "rmux-daemon is internal; launch it through rmux, not directly"
+  },
+  "start_server_observation": {
+    "probe_with_captured_pipes": "times out with returncode 124",
+    "python_subprocess_popen_stdout_pipe": "times out at 10 seconds",
+    "python_subprocess_run_without_capture": "returns 0 quickly",
+    "RMUX_DISABLE_TINY_CLI": "does not change probe timeout result"
+  },
+  "cleanup_observation": "Temporary rmux daemons created during manual diagnostics were cleaned by namespace-specific kill-server after reading their command lines.",
+  "overall_current_rmux_conclusion": "rmux 0.9.0 cannot be used as-is by a backend that captures stdout/stderr for lifecycle commands; start-server behavior is invocation-shape sensitive and must be wrapped specially or fixed upstream before it can be a ccb backend base."
+}

@@ -1,0 +1,61 @@
+{
+  "gate_id": "scope-gate",
+  "stage": "acceptance",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "changed_files": [
+        ".codestable/features/2026-07-20-ccbd-windows-process-liveness/ccbd-windows-process-liveness-checklist.yaml",
+        ".codestable/roadmap/windows-rmux-native-backend/goal-state.yaml",
+        ".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml",
+        ".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-roadmap.md",
+        "lib/ccbd/system.py",
+        "lib/cli/kill_runtime/processes.py",
+        "lib/cli/services/mobile_host.py",
+        "lib/provider_core/runtime_lock.py",
+        "lib/provider_core/session_binding_evidence_runtime/fields.py",
+        "lib/terminal_runtime/tmux.py",
+        "test/test_cli_kill_runtime_zombies.py",
+        "test/test_mobile_host_service.py",
+        "test/test_provider_core_session_binding_fields.py",
+        "test/test_terminal_runtime_tmux.py",
+        "test/test_v2_ccbd_mount_ownership.py",
+        ".codestable/features/2026-07-20-ccbd-windows-process-liveness/ccbd-windows-process-liveness-acceptance.md",
+        ".codestable/features/2026-07-20-ccbd-windows-process-liveness/ccbd-windows-process-liveness-evidence-pack.md",
+        ".codestable/features/2026-07-20-ccbd-windows-process-liveness/ccbd-windows-process-liveness-qa.md",
+        ".codestable/features/2026-07-20-ccbd-windows-process-liveness/ccbd-windows-process-liveness-review.md",
+        ".codestable/features/2026-07-20-ccbd-windows-process-liveness/dod-results.json",
+        ".codestable/features/2026-07-20-ccbd-windows-process-liveness/evidence-pack-results.json",
+        ".codestable/features/2026-07-20-ccbd-windows-process-liveness/scope-min.json",
+        "lib/process_liveness.py",
+        "test/test_process_liveness.py"
+      ],
+      "ignored_machine_artifacts": [
+        ".codestable/features/2026-07-20-ccbd-windows-process-liveness/scope-gate-results.json"
+      ],
+      "allowed_prefixes": [
+        ".codestable/features/2026-07-20-ccbd-windows-process-liveness",
+        ".codestable/features/2026-07-20-ccbd-windows-process-liveness",
+        ".codestable/roadmap/windows-rmux-native-backend/goal-state.yaml",
+        ".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml",
+        ".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-roadmap.md",
+        "lib/ccbd",
+        "lib/cli/kill_runtime",
+        "lib/cli/services/mobile_host.py",
+        "lib/provider_core/runtime_lock.py",
+        "lib/provider_core/session_binding_evidence_runtime/fields.py",
+        "lib/terminal_runtime/tmux.py",
+        "lib/process_liveness.py",
+        "test"
+      ]
+    }
+  ],
+  "providers": {},
+  "feature": "2026-07-20-ccbd-windows-process-liveness",
+  "inputs": {
+    "feature_dir": ".codestable/features/2026-07-20-ccbd-windows-process-liveness"
+  },
+  "input_digests": {}
+}

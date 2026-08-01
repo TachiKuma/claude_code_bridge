@@ -1,0 +1,15 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-12280-20260720t041712z",
+    "resize-pane",
+    "-t",
+    "ccb-rmux-probe:0.0",
+    "-Z"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "",
+  "timeout": 8.0
+}

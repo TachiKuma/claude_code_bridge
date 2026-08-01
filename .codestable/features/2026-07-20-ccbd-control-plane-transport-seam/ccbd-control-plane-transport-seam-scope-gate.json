@@ -1,0 +1,80 @@
+{
+  "gate_id": "scope-gate",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "changed_files": [
+        ".codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-checklist.yaml",
+        ".codestable/roadmap/windows-rmux-native-backend/goal-state.yaml",
+        "lib/ccbd/handlers/ping_runtime/payloads.py",
+        "lib/ccbd/models_runtime/mount.py",
+        "lib/ccbd/services/lifecycle.py",
+        "lib/ccbd/services/mount.py",
+        "lib/ccbd/services/ownership.py",
+        "lib/ccbd/services/project_inspection.py",
+        "lib/ccbd/socket_client_runtime/transport.py",
+        "lib/ccbd/socket_server_runtime/bootstrap_probe.py",
+        "lib/ccbd/socket_server_runtime/lifecycle.py",
+        "lib/ccbd/socket_server_runtime/loop.py",
+        "lib/ccbd/socket_server_runtime/server.py",
+        "lib/cli/services/doctor_runtime/ccbd.py",
+        "test/test_ccbd_bootstrap_probe.py",
+        "test/test_ccbd_socket_client.py",
+        "test/test_ccbd_socket_lifecycle.py",
+        "test/test_ccbd_socket_server_loop.py",
+        "test/test_v2_ccbd_socket.py",
+        ".codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-dod-results.raw.json",
+        ".codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-evidence-pack.md",
+        ".codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-review.md",
+        ".codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-scope-gate.json",
+        "lib/ccbd/control_plane_transport/__init__.py",
+        "lib/ccbd/control_plane_transport/endpoint.py",
+        "lib/ccbd/control_plane_transport/factory.py",
+        "lib/ccbd/control_plane_transport/fake.py",
+        "lib/ccbd/control_plane_transport/interface.py",
+        "lib/ccbd/control_plane_transport/unix.py",
+        "test/test_ccbd_control_plane_transport_fake.py",
+        "test/test_ccbd_control_plane_transport_import_guard.py",
+        "test/test_ccbd_control_plane_transport_unix.py",
+        "test/test_ccbd_socket_server.py"
+      ],
+      "ignored_machine_artifacts": [
+        ".codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-dod-results.json",
+        ".codestable/features/2026-07-20-ccbd-control-plane-transport-seam/ccbd-control-plane-transport-seam-evidence-pack-results.json"
+      ],
+      "allowed_prefixes": [
+        ".codestable/features/2026-07-20-ccbd-control-plane-transport-seam",
+        ".codestable/features/2026-07-20-ccbd-control-plane-transport-seam",
+        ".codestable/roadmap/windows-rmux-native-backend",
+        "lib/ccbd/control_plane_transport",
+        "lib/ccbd/socket_client_runtime/transport.py",
+        "lib/ccbd/socket_server_runtime",
+        "lib/ccbd/handlers/ping_runtime/payloads.py",
+        "lib/ccbd/models_runtime/mount.py",
+        "lib/ccbd/services/lifecycle.py",
+        "lib/ccbd/services/mount.py",
+        "lib/ccbd/services/project_inspection.py",
+        "lib/ccbd/services/ownership.py",
+        "lib/cli/services/doctor_runtime/ccbd.py",
+        "test/test_ccbd_control_plane_transport_unix.py",
+        "test/test_ccbd_control_plane_transport_fake.py",
+        "test/test_ccbd_control_plane_transport_import_guard.py",
+        "test/test_ccbd_bootstrap_probe.py",
+        "test/test_ccbd_socket_server.py",
+        "test/test_ccbd_socket_client.py",
+        "test/test_ccbd_socket_lifecycle.py",
+        "test/test_ccbd_socket_server_loop.py",
+        "test/test_v2_ccbd_socket.py"
+      ]
+    }
+  ],
+  "providers": {},
+  "feature": "2026-07-20-ccbd-control-plane-transport-seam",
+  "inputs": {
+    "feature_dir": ".codestable/features/2026-07-20-ccbd-control-plane-transport-seam"
+  },
+  "input_digests": {}
+}

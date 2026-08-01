@@ -1,0 +1,19 @@
+{
+  "args": [
+    "psmux",
+    "-L",
+    "ccb-rmux-probe-14668-20260721t122234z",
+    "capture-pane",
+    "-t",
+    "ccb-rmux-probe:0.0",
+    "-p",
+    "-S",
+    "-2"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "PS D:\\Python\\GitHub\\claude_code_bridge> echo CCB_RMUX_TRAIL\nING & echo CCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGH\nIJKLMNOPQRSTUVWXYZ0123456789_abcdefghijklmnopqrstuvwxyzABCD\nEFGHIJKLMNOPQRSTUVWXYZ0123456789 & echo CCB_RMUX_WIDE_宽字\n符 & echo CCB_RMUX_LASTN\n\nId     Name            PSJobTypeName   State         HasMo\n                                                     reDat\n                                                     a\n--     ---- -------------   -----         -----\n1      Job1            BackgroundJob   Running       True\n3      Job3            BackgroundJob   Running       True\n5      Job5            BackgroundJob   Running       True\nCCB_RMUX_LASTN\n\nPS D:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+  "stdout_raw_sha256": "a35d31f8bbc8f1488a3232d46abcfb5c9a6c8b3f71c745ce62908747303b3e16",
+  "stdout_raw_size": 733,
+  "timeout": 5.0
+}

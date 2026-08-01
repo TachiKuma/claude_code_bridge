@@ -1,0 +1,12 @@
+{
+  "args": [
+    "powershell",
+    "-NoProfile",
+    "-Command",
+    "cleanup rmux/psmux daemon by probe namespace"
+  ],
+  "namespace": "ccb-rmux-probe-600-20260721t122744z",
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "16596\n"
+}

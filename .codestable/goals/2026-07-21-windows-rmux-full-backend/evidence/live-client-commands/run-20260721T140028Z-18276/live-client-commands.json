@@ -1,0 +1,50 @@
+{
+  "namespace": "ccb-rmux-livecmd-18276",
+  "session": "ccb-rmux-livecmd",
+  "polls": [
+    {
+      "i": 0,
+      "rc": 0,
+      "stdout": "",
+      "stderr": "",
+      "attach_poll": null
+    },
+    {
+      "i": 1,
+      "rc": 0,
+      "stdout": "",
+      "stderr": "",
+      "attach_poll": null
+    },
+    {
+      "i": 2,
+      "rc": 0,
+      "stdout": "18408: ccb-rmux-livecmd [120x50 xterm-256color] (attached,focused)\n",
+      "stderr": "",
+      "attach_poll": null
+    }
+  ],
+  "attach_process_id": 5640,
+  "client_id": "18408",
+  "list_clients_returncode": 0,
+  "list_clients_stdout": "18408: ccb-rmux-livecmd [120x50 xterm-256color] (attached,focused)\n",
+  "list_clients_stderr": "",
+  "refresh_client_args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-livecmd-18276",
+    "refresh-client",
+    "-S",
+    "-t",
+    "18408"
+  ],
+  "refresh_client_returncode": 0,
+  "refresh_client_stdout": "",
+  "refresh_client_stderr": "",
+  "kill_server_returncode": 0,
+  "kill_server_stdout": "",
+  "kill_server_stderr": "",
+  "attach_exit_code_after_kill_server": "0",
+  "attach_process_returncode_after_cleanup": 0,
+  "verdict": "pass"
+}

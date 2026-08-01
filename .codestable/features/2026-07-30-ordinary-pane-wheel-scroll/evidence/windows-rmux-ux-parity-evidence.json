@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "host_kind": "native_windows",
+  "terminal_host": "wezterm",
+  "backend_impl": "rmux",
+  "control_plane": "ccbd",
+  "parity_dimension": "foreground_interaction",
+  "evidence_status": "blocked",
+  "failure_class": "unsupported_capability",
+  "artifacts": {
+    "diagnosis": "evidence/diagnosis.md",
+    "capability_summary": "evidence/capability-summary.json",
+    "parent_root_cause": "../2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/root-cause-review-and-feature-split.md",
+    "parent_qa": "../2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-qa.md"
+  },
+  "residual_risks": [
+    "Ordinary pane wheel scroll remains failed in native Windows + WezTerm + rmux foreground retest.",
+    "Current mouse on policy routes pane wheel events through application mouse reporting, so WezTerm GUI-native scroll is not proven by rmux binding snapshots or negative scroll assertions.",
+    "Changing the result from blocked to pass requires an approved strategy and fresh foreground validation: tmux/rmux-like copy-mode scroll, host terminal native scroll with mouse reporting off or modifier bypass, or a clearly scoped pane-app passthrough route."
+  ],
+  "details": {
+    "ordinary_pane_wheel_scroll": {
+      "selected_route": "unsupported_capability",
+      "failure_detail": "No approved default route currently lets ordinary pane wheel produce visible scroll while keeping existing Windows/rmux policy unchanged.",
+      "runtime_behavior_changed": false,
+      "mouse_on_policy_changed": false,
+      "copy_mode_scroll_implemented": false,
+      "host_native_scroll_claimed": false,
+      "pane_app_passthrough_claimed": false,
+      "negative_binding_assertion_counted_as_pass": false,
+      "foreground_scroll_observed": false
+    }
+  }
+}

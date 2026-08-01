@@ -1,0 +1,9 @@
+{
+  "dependencies": [
+    "load-buffer",
+    "paste-buffer",
+    "delete-buffer"
+  ],
+  "missing": [],
+  "status": "supported"
+}

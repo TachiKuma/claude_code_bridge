@@ -1,0 +1,91 @@
+feature: 2026-07-25-windows-rmux-wezterm-native-interaction-parity
+created: 2026-07-25
+
+steps:
+  - action: "普通 pane 左键改用 select-pane -t = 修正单击 focus，并收紧 wheel/right-click"
+    exit_signal: "fake backend calls 中普通 pane left-click 绑定为 select-pane -t =（不再出现无 -t 的 select-pane -M），不裸透传 send-keys -M；普通 pane wheel/right-click 不含 copy-mode、scroll-up/down、paste-buffer"
+    status: done
+  - action: "sidebar header 点击透传修复：⚙ settings / x KillProject 改无条件 send-keys -t = -M 透传给 Rust header_action_at，并补运行时派发断言"
+    exit_signal: "sidebar header 绑定为透传 send-keys -t = -M（不再是漏 -t 的 if-shell settings/kill 条件）；测试断言绑定内容正确、覆盖点击派发盲区；Rust header_action_at 对 ⚙(pane_width-4)/x(pane_width-2) 命中单测通过；Q/Shift+Q 回归通过"
+    status: done
+  - action: "live binding snapshot：在 rmux 可用时验证 root mouse bindings"
+    exit_signal: ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/live-binding-snapshot.txt 或 QA 同名小节证明普通 pane left-click 为 select-pane -t =、不被 copy-mode/paste-buffer 劫持，sidebar 分流为透传；rmux 不可用时记录 blocked: rmux-unavailable"
+    status: done
+  - action: "前台手工 runbook：记录 native Windows + WezTerm GUI 操作结果"
+    exit_signal: ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/manual-wezterm-runbook.md 或 QA 同名小节记录单击聚焦、sidebar ⚙/x 为 pass；右键粘贴、滚轮、拖选起点行 off-by-one 记录为已知残留；GUI 不可用时记录 partial"
+    status: done
+  - action: "回归收口：运行 tmux UI 与 sidebar TUI 相关测试"
+    exit_signal: "核心 pytest、py_compile、cargo 回归通过或既有红灯被明确归因"
+    status: done
+
+checks:
+  - item: "普通 pane 采用 GUI-native parity，不追求 tmux-like mouse parity"
+    source: "design §1 / decision-1"
+    status: done
+  - item: "Windows/rmux fallback 普通 pane wheel 不进入 copy-mode"
+    source: "AC-001 / S1"
+    status: done
+  - item: "Windows/rmux fallback 普通 pane right-click 不绑定 paste-buffer"
+    source: "AC-002 / S1"
+    status: done
+  - item: "Windows/rmux fallback 普通 pane left-click 绑定 select-pane -t =（单击 focus），不裸透传 send-keys -M，无无 -t 的 select-pane -M"
+    source: "AC-003 / S1"
+    status: done
+  - item: "sidebar pane 全接管 mouse/header 交互；header ⚙/x 点击运行时实际触发（透传 send-keys -t = -M + Rust header_action_at），x 保持 KillProject"
+    source: "AC-004 / S2"
+    status: done
+  - item: "sidebar header 点击有运行时派发断言，覆盖“点击时动作是否真执行”而非仅绑定注册"
+    source: "AC-008 / S2"
+    status: done
+  - item: "不新增交互模式配置开关"
+    source: "design §1 / 明确不做"
+    status: done
+  - item: "不新增显式 history viewer 或 copy-mode 快捷入口"
+    source: "design §1 / 明确不做"
+    status: done
+  - item: "不修改 provider capture / completion parser"
+    source: "design §1 / 明确不做"
+    status: done
+  - item: "tmux/Linux/macOS project UI 行为不回退"
+    source: "AC-006 / S5"
+    status: done
+  - item: "native Windows + WezTerm 手工交互结果被记录"
+    source: "AC-007 / S4"
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python -m pytest -q test/test_v2_tmux_ui.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "cargo test --manifest-path \"tools/ccb-agent-sidebar/Cargo.toml\" shifted_q_is_project_kill_across_terminal_key_encodings --quiet"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-004
+      command: "cargo test --manifest-path \"tools/ccb-agent-sidebar/Cargo.toml\" --quiet"
+      core: false
+      failure_handling: fix-or-block-if-touched
+    - id: CMD-005
+      command: "python -m py_compile \"lib/cli/services/tmux_ui_runtime/service.py\" \"test/test_v2_tmux_ui.py\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-006
+      command: "python -m pytest -q -rs test/test_v2_tmux_ui.py -k rmux_accepts_mouse_context_project_ui_bindings"
+      core: true
+      failure_handling: attach-transcript-or-block-pass
+  evidence_required:
+    - command_output
+    - live_binding_snapshot
+    - manual_wezterm_runbook
+    - diff_summary
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_import: forbidden

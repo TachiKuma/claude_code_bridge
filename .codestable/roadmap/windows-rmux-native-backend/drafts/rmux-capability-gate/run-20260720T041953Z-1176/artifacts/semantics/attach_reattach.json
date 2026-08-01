@@ -1,0 +1,9 @@
+{
+  "dependencies": [
+    "attach-session"
+  ],
+  "missing": [
+    "attach-session"
+  ],
+  "status": "unsupported"
+}

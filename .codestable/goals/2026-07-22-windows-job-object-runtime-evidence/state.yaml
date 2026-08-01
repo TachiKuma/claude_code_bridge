@@ -1,0 +1,30 @@
+schema_version: 2
+goal: "windows-job-object-runtime-evidence"
+status: complete
+objective: "继续 windows-rmux-native-backend epic 中的 windows-job-object-runtime-evidence，增加 Windows Job Object 进程树 evidence、runtime authority 字段和 kill/recovery 判定输入，并保持现有 tmux / POSIX 路径不漂移。"
+start_point: "feature design/checklist/design-review 已批准；AgentRuntime、ProviderRuntimeFacts、helper manifest、health 和 runtime_pid_cleanup 仍缺少 canonical process_ref evidence，Windows pid_matches_project 仍可无条件放行。"
+acceptance:
+  - "AgentRuntime 和 ProviderRuntimeFacts 能承载 process_ref，旧 runtime 记录缺失 process_ref 时仍可加载。"
+  - "新增 provider_runtime/process_ref.py 作为 builder、normalizer、destructive cleanup eligibility 的唯一 seam。"
+  - "process_ref 区分 windows_job_object、process_tree、legacy_pid，且 evidence_state 不退化成单一布尔值。"
+  - "runtime_health 在 pane success 短路前读取 process_ref；pane alive 但 process evidence stale/missing/degraded 时不能返回 healthy。"
+  - "Windows kill/cleanup 不再把任意 pid 当作项目内 evidence；taskkill 只作为降级 primitive。"
+  - "focused pytest、rg guard、checklist 与 roadmap/items 回写通过，并经可见 Task agent 功能验收。"
+non_goals:
+  - "不把 ccbd runtime authority 改成 Job Object authority。"
+  - "不持久化 Job Object handle、socket handle 或进程 handle。"
+  - "不实现 Rmux daemon lifecycle、provider session contract 重写或 Windows process_exists pid probe。"
+  - "不改变 ccb kill 的用户语义，只补强 evidence 输入。"
+  - "不执行 git push、merge、release、deploy 或生产变更。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 2
+next_action: "Goal complete; continue windows-rmux-native-backend at provider-runtime-backend-session-contract."
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-22"

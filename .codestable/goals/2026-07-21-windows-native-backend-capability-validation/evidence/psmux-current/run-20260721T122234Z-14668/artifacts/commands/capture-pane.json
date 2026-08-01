@@ -1,0 +1,21 @@
+{
+  "args": [
+    "psmux",
+    "-L",
+    "ccb-rmux-probe-14668-20260721t122234z",
+    "capture-pane",
+    "-t",
+    "ccb-rmux-probe:0.0",
+    "-p",
+    "-S",
+    "-20"
+  ],
+  "classification": "supported",
+  "notes": "",
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+  "stdout_raw_sha256": "f9796f10051646d52c962c89fde70b27fbcf561d9a8bdf45a5661cc7ba111833",
+  "stdout_raw_size": 14,
+  "timeout": 8.0
+}

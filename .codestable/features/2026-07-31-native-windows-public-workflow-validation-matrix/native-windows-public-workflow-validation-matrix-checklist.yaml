@@ -1,0 +1,168 @@
+feature: 2026-07-31-native-windows-public-workflow-validation-matrix
+created: 2026-07-31
+
+steps:
+  - id: S1
+    action: "schema and required keys：落地 WindowsHerdrPublicWorkflowEvidence schema、required workflow key set、all-provider workflow rows 和 deterministic JSON writer"
+    exit_signal: "unit test 证明 required key 全覆盖；缺 key、未知状态、partial/blocked/failed/not-run 缺 reason 均 fail closed；required_workflows 使用 roadmap key set 的 Literal list；required_workflows/workflows/workflow_rows key set 等价且 row.workflow 与 dict key 一致；public_providers × ask/pend/completion/cancel rows 完整；保留 roadmap 4.7 顶层字段 backend_impl/os_platform/cpu_arch/ccb_version/ccb_source_status/herdr_version/herdr_auto_restore_mode/workflows/artifacts/support_tier；provider_workflow_rows 保持 provider->workflow->status summary 形状，provider_workflow_detail_rows 与 summary key/status 一致；用 support_tier_is_candidate 标明非最终支持宣称"
+    status: pending
+  - id: S2
+    action: "parent admission and blocked skeleton：读取 parent item/acceptance refs，缺失时生成 blocked/not-run skeleton"
+    exit_signal: "从 roadmap depends_on -> feature -> {slug}-acceptance.md 恢复 parent refs；只有 parent acceptance frontmatter doc_type=feature-acceptance 且 status=passed 并记录 artifact refs 时才允许执行 pass claim，否则只输出 blocked evidence"
+    status: pending
+  - id: S3
+    action: "workflow row adapters：为 roadmap 4.7 required workflows 建 row 填充边界，并为所有公开 provider 的 ask/pend/completion/cancel 建 provider row"
+    exit_signal: "每个 key 都能从命令/transcript/ref 或 blocked reason 生成一行；每个公开 provider × ask/pend/completion/cancel 都有 row；mounted 使用 ccb ping all 为 canonical command，project view / doctor mounted-state 仅作补充 artifact；watch 使用 ccb pend --watch <target> 为 canonical transcript，ccb watch <target> 为 compatibility evidence"
+    status: pending
+  - id: S4
+    action: "support tier candidate rule：保留 roadmap support_tier 字段，并实现 support_tier_is_candidate / support_projection_allowed 纯规则"
+    exit_signal: "required workflows、所有 provider workflow rows、Mobile terminal、Config UI、Windows npm install dry-run、ccb_source_status=strict-v8.5.2、herdr_auto_restore_mode=disabled 全部 pass/满足且无 beta gap 才能 candidate support_tier=supported；partial/blocked/failed/not-run、source blocked/unknown 或 auto restore 非 disabled 不会被升级；matrix 明确 support_tier_is_candidate=true，不产生 README/doctor final support claim"
+    status: pending
+  - id: S5
+    action: "Native Windows transcript plan：定义专用真机 transcript 捕获格式和 artifact refs"
+    exit_signal: "manual command list、必填字段、pass/blocked 编码与 evidence copy path 固定；当前项目机器作为专用 Native Windows x64 主机；matrix JSON、provider freeze、native transcript、provider transcript 与 blocked evidence 归档到本 feature evidence/ 目录；缺 host、Herdr 或任一公开 provider 时 acceptance 只能写 blocked evidence"
+    status: pending
+  - id: S6
+    action: "docs/diagnostics contract delta：只记录 matrix 字段与 artifact 读取方式，不发布 supported 文案"
+    exit_signal: "docs contract 能解释 matrix JSON 和 doctor --output 如何展示 blocked/beta evidence，但不宣称 full support；docs/ccbd-diagnostics-contract.md 不再把 doctor --bundle 作为当前公开命令"
+    status: pending
+  - id: S7
+    action: "regression and scope guard：确认非 Windows/WSL、release surface、user surfaces、provider completion/recovery owner 不被改写"
+    exit_signal: "scope guard 与相关 regression 通过"
+    status: pending
+
+checks:
+  - item: "required_workflows 使用 roadmap 4.7 的 Literal key set list，至少包含全部 key，缺 key fail closed"
+    source: design AC-001 / DOD-IMPL-001 / S1
+    status: pending
+  - item: "partial、blocked、failed、not-run 的 reason / artifact_ref / evidence_class 可追踪；not-run 不得无 reason 通过 schema"
+    source: design AC-002 / DOD-IMPL-002 / S1 / S3
+    status: pending
+  - item: "parent acceptance refs 缺失时只能生成 blocked/not-run skeleton，不宣称 pass；parent refs 必须从 roadmap depends_on -> feature -> {slug}-acceptance.md 的 passed frontmatter 与 artifact refs 恢复"
+    source: design AC-003 / DOD-IMPL-003 / S2
+    status: pending
+  - item: "support tier candidate rule 保留 roadmap support_tier 字段，不把 workflow/provider/Mobile/Config/npm dry-run 的 partial/blocked/failed/not-run 升级为 supported，并用 support_tier_is_candidate 标明非最终宣称"
+    source: design AC-004 / AC-005 / DOD-IMPL-004 / S4
+    status: pending
+  - item: "support tier candidate rule 必须同时要求 ccb_source_status=strict-v8.5.2 与 herdr_auto_restore_mode=disabled；source blocked/unknown 或 auto restore 非 disabled 时 support_projection_allowed=false"
+    source: design AC-014 / DOD-IMPL-004 / S1 / S4
+    status: pending
+  - item: "专用 Native Windows x64 transcript 与 WSL/Linux regression evidence 分离，WSL/Linux 不得替代 pass"
+    source: design AC-006 / AC-007 / DOD-IMPL-005 / S5
+    status: pending
+  - item: "public_providers × ask/pend/completion/cancel rows 完整，任一缺失或非 pass 时 support_projection_allowed=false"
+    source: design AC-012 / DOD-IMPL-009 / S1 / S3 / S4
+    status: pending
+  - item: "public_providers 必须从 build_default_provider_manifests(include_optional=True, include_test_doubles=False) 或 CORE_PROVIDER_NAMES + OPTIONAL_PROVIDER_NAMES 恢复，并归档冻结清单，不能只手写 Codex/Claude/Gemini/Opencode"
+    source: design provider catalog rule / DOD-IMPL-011 / S3
+    status: pending
+  - item: "provider_workflow_rows 保持 roadmap summary 形状 provider->workflow->status；provider_workflow_detail_rows 使用 {provider}:{workflow} 详细行，二者 key/status 一致"
+    source: design AC-015 / DOD-IMPL-009 / S1 / S3
+    status: pending
+  - item: "Mobile terminal、Config UI 与 Windows npm install dry-run 均为 supported hard gate，partial/degraded/blocked 不得 candidate supported"
+    source: design AC-013 / DOD-IMPL-010 / S3 / S4
+    status: pending
+  - item: "docs/doctor contract 只说明 matrix/artifact，不宣称 full support"
+    source: design AC-008 / S6
+    status: pending
+  - item: "mounted workflow 不新增 ccb mounted；canonical command 使用 ccb ping all，project view / doctor mounted-state projection 只作补充 artifact"
+    source: design AC-010 / DOD-IMPL-007 / S3
+    status: pending
+  - item: "docs contract 更新必须清理旧 doctor --bundle 口径，当前公开命令使用 doctor --output"
+    source: design AC-011 / CMD-007 / S6
+    status: pending
+  - item: "不修改 provider completion、recovery owner、publish/promotion 或 final support claim"
+    source: design AC-009 / DOD-IMPL-006 / S7
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+      test_status: existing
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+      test_status: existing
+    - id: CMD-003
+      command: "python -m pytest -q test/test_windows_herdr_public_workflow_matrix.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - matrix_schema
+        - required_workflow_keys
+        - key_set_equality
+        - row_key_consistency
+        - provider_workflow_summary_detail_shape
+        - public_provider_catalog_freeze
+        - candidate_rule
+        - ccb_source_status_hard_gate
+        - herdr_auto_restore_mode_hard_gate
+        - blocked_skeleton
+        - mounted_workflow_row
+    - id: CMD-004
+      command: "python -m pytest -q test/test_windows_herdr_public_workflow_matrix.py -k \"parent_admission or blocked_skeleton\""
+      core: true
+      failure_handling: fix-or-block
+      test_status: conditional
+      covers:
+        - parent_admission_verifier
+        - blocked_skeleton_without_parent_refs
+    - id: CMD-005
+      command: >-
+        python -c 'import pathlib,re,subprocess; roots=("lib","test","docs","README.md"); run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; text=run(["git","diff","--",*roots])+run(["git","diff","--cached","--",*roots]); untracked=run(["git","ls-files","--others","--exclude-standard","--",*roots]).splitlines(); text+="".join(pathlib.Path(p).read_text(encoding="utf-8",errors="ignore") for p in untracked if pathlib.Path(p).is_file()); lower=text.lower(); forbidden=(r"npm\s+publish",r"git\s+push",r"git\s+tag",r"windows\s+x64\s+(is\s+)?(fully\s+|stable\s+)?supported",r"provider[\s_-]+completion",r"recovery[\s_-]+owner"); hits=[p for p in forbidden if re.search(p,lower)]; docs_claim=[line for line in lower.splitlines() if re.search(r"support_tier\s*[:=].*supported",line) and "support_tier_is_candidate" not in line and "candidate" not in line]; assert not hits and not docs_claim, {"forbidden": hits, "docs_claim": docs_claim[:5], "untracked": untracked[:10]}'
+      core: true
+      failure_handling: fix-or-block
+      test_status: existing
+      covers:
+        - scope_guard
+        - untracked_file_scope_guard
+        - legal_candidate_evidence_allowlist
+        - provider_completion_owner_boundary
+        - recovery_owner_boundary
+    - id: CMD-006
+      command: "MANUAL-ACTION .codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/native-windows-transcript.md and provider-workflows-transcript.md: capture ccb/watch/ping/mounted/kill/restart/reload/foreground attach/Mobile terminal/Config UI/doctor/update transcript, code-level npm install dry-run evidence, and per-public-provider ask/pend/completion/cancel transcripts; archive matrix refs in evidence/windows-herdr-public-workflow-matrix.json"
+      core: true
+      failure_handling: blocked-if-no-host-or-herdr-or-any-provider-missing
+      test_status: manual
+      covers:
+        - native_windows_public_workflow_transcript
+        - provider_workflow_transcript
+        - public_provider_freeze_artifact
+    - id: CMD-007
+      command: "python -c \"import pathlib,re; p=pathlib.Path('docs/ccbd-diagnostics-contract.md'); bad=[(i+1,line.rstrip()) for i,line in enumerate(p.read_text(encoding='utf-8').splitlines()) if 'doctor --bundle' in line.lower() and not re.search(r'deprecated|unsupported|no longer supported|not supported', line, re.I)]; assert not bad,bad\""
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - doctor_bundle_docs_guard
+        - doctor_output_public_command
+  evidence_required:
+    - windows_herdr_public_workflow_matrix_schema
+    - required_workflow_key_tests
+    - all_provider_workflow_row_tests
+    - mobile_config_hard_gate_tests
+    - source_status_and_herdr_auto_restore_hard_gate_tests
+    - provider_workflow_summary_detail_shape_tests
+    - public_provider_catalog_freeze_artifact
+    - windows_npm_install_dry_run_evidence
+    - support_candidate_rule_tests
+    - blocked_skeleton_tests
+    - mounted_workflow_row_adapter_tests
+    - .codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/windows-herdr-public-workflow-matrix.json
+    - .codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/native-windows-transcript.md
+    - .codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/blocked-evidence.md
+    - .codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/provider-workflows-transcript.md
+    - docs_diagnostics_contract_delta
+    - doctor_bundle_docs_guard
+    - roadmap_items_yaml_update
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
+    publish_or_push_action: forbidden

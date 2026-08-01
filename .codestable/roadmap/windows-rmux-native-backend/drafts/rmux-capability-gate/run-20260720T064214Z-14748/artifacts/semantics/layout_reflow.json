@@ -1,0 +1,28 @@
+{
+  "assertions": [
+    {
+      "name": "resize-pane succeeded",
+      "passed": true
+    },
+    {
+      "name": "select-layout succeeded",
+      "passed": true
+    },
+    {
+      "name": "swap-pane succeeded with distinct pane targets",
+      "passed": true
+    },
+    {
+      "name": "move-pane succeeded with distinct window target",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "resize-pane",
+    "select-layout",
+    "swap-pane",
+    "move-pane"
+  ],
+  "notes": "",
+  "status": "supported"
+}

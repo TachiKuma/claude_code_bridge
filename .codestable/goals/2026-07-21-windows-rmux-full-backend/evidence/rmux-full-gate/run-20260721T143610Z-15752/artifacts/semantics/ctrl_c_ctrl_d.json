@@ -1,0 +1,30 @@
+{
+  "assertions": [
+    {
+      "kind": "prerequisite",
+      "name": "send-keys accepted input path",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "probe captures text sent through send-keys",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "logical EOF uses C-z Enter and returns control",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "Ctrl-C interrupt returns control to shell",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "send-keys"
+  ],
+  "notes": "",
+  "status": "supported",
+  "workaround": null
+}

@@ -1,0 +1,91 @@
+feature: 2026-07-27-sidebar-settings-rmux-mouse-routing
+slug: sidebar-settings-rmux-mouse-routing
+status: draft
+steps:
+  - id: S1
+    action: "完成 rmux mouse capability audit：版本、坐标/等价 settings-only 条件、= target、send-keys -M 透传"
+    status: done
+    exit_signal: "evidence/rmux-mouse-capability.md 记录 source/live probe，并给出 coordinates_or_equivalent_supported 与 dash_m_passthrough_supported 的 yes/no 结论；-M 不透传不单独阻塞 settings-only 坐标 route"
+    verification: "command transcript / source review"
+    deliverables: ["evidence"]
+  - id: S2
+    action: "完成 WezTerm settings-only route audit"
+    status: done
+    exit_signal: "evidence/wezterm-settings-only-channel.md 记录 mouse reporting 下是否存在精确 settings-only 绑定；不能精确时有否决原因"
+    verification: "docs/source review / manual probe"
+    deliverables: ["evidence"]
+  - id: S3
+    action: "选择终态 route：rmux_precise_route、wezterm_precise_route 或 unsupported_capability"
+    status: done
+    exit_signal: "capability summary 明确 selected_route，且没有第四种隐式 fallback"
+    verification: "diff review / evidence review"
+    deliverables: ["evidence"]
+  - id: S4
+    action: "按 route 做最小接入或 blocked 投影"
+    status: done
+    exit_signal: "可实现路线有最小 runtime 接入和测试；不可实现路线只更新 evidence/UX projection，不改变点击行为"
+    verification: "pytest / cargo / JSON validator"
+    deliverables: ["code", "tests", "evidence"]
+  - id: S5
+    action: "unsupported 路径下的前台证据复用与无 runtime diff scope guard"
+    status: done
+    exit_signal: "foreground-reverse-validation.md 明确复用父前台失败证据，且只声明本 feature 未新增 runtime route / broad fallback；不宣称 x、普通 sidebar、普通 pane 已重新实测通过"
+    verification: "parent foreground transcript / diff review"
+    deliverables: ["evidence"]
+  - id: S6
+    action: "清洁度与 schema 验证"
+    status: done
+    exit_signal: "items/checklist/UX JSON 校验通过；无 broad fallback、token 泄露、默认 debug 输出"
+    verification: "validate-yaml / JSON validator / rg / diff review"
+    deliverables: ["evidence/windows-rmux-ux-parity-evidence.json", "evidence/validation-summary.md"]
+checks:
+  - id: AC-001
+    item: "rmux mouse capability 有可复现证据"
+    source: "design §3 AC-001"
+    status: pending
+  - id: AC-002
+    item: "WezTerm precise settings-only route 已审查并有结论"
+    source: "design §3 AC-002"
+    status: pending
+  - id: AC-003
+    item: "可实现路线下真实 settings 点击打开 config UI"
+    source: "design §3 AC-003"
+    status: pending
+  - id: AC-004
+    item: "x 与普通 sidebar 区域不被 settings fallback 覆盖"
+    source: "design §3 AC-004"
+    status: pending
+  - id: AC-005
+    item: "普通 pane drag/right/wheel 不被本 feature 修改"
+    source: "design §3 AC-005"
+    status: pending
+  - id: AC-006
+    item: "不可实现路径投影为 unsupported_capability"
+    source: "design §3 AC-006"
+    status: pending
+  - id: AC-007
+    item: "无 token 泄露、无默认 debug、无 broad fallback"
+    source: "design §3 AC-007"
+    status: pending
+dod:
+  commands:
+    - id: CMD-001
+      command: "$env:PYTHONDONTWRITEBYTECODE='1'; python \"C:/Users/Administrator/.codex/plugins/cache/codestable/codestable/1.0.4/skills/cs-onboard/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-ux-parity-hardening/windows-rmux-ux-parity-hardening-items.yaml\""
+      core: true
+      failure_handling: "fix-or-block"
+    - id: CMD-002
+      command: "$env:PYTHONDONTWRITEBYTECODE='1'; python \"C:/Users/Administrator/.codex/plugins/cache/codestable/codestable/1.0.4/skills/cs-onboard/tools/validate-yaml.py\" --file \".codestable/features/2026-07-27-sidebar-settings-rmux-mouse-routing/sidebar-settings-rmux-mouse-routing-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: "fix-or-block"
+    - id: CMD-003
+      command: "$env:PYTHONPATH='lib'; python -m pytest -q -rs test/test_v2_tmux_ui.py"
+      core: true
+      failure_handling: "fix-or-block"
+    - id: CMD-004
+      command: "cargo test --manifest-path tools/ccb-agent-sidebar/Cargo.toml --quiet"
+      core: true
+      failure_handling: "fix-or-block"
+    - id: CMD-005
+      command: "python -c \"import json, pathlib; p=pathlib.Path('.codestable/features/2026-07-27-sidebar-settings-rmux-mouse-routing/evidence/windows-rmux-ux-parity-evidence.json'); d=json.loads(p.read_text(encoding='utf-8')); req={'schema_version','host_kind','terminal_host','backend_impl','control_plane','parity_dimension','evidence_status','failure_class','artifacts','residual_risks'}; assert req <= d.keys(); assert d['schema_version']==1; assert d['host_kind']=='native_windows'; assert d['terminal_host']=='wezterm'; assert d['backend_impl']=='rmux'; assert d['control_plane']=='ccbd'; assert d['parity_dimension']=='foreground_interaction'; assert d['evidence_status'] in {'pass','partial','blocked','failed'}; assert d['failure_class'] in {'none','rmux_unavailable','wezterm_gui_unavailable','provider_failure','system_failure','test_design_failure','unsupported_capability'}; assert isinstance(d['artifacts'], dict) and d['artifacts']; base=p.parents[1]; assert all(isinstance(v,str) and v.strip() and ((pathlib.Path(v) if pathlib.Path(v).is_absolute() else base/pathlib.Path(v)).exists()) for v in d['artifacts'].values()); assert isinstance(d['residual_risks'], list); detail=d.get('failure_detail') or d.get('details',{}).get('failure_detail') or d.get('details',{}).get('sidebar_settings_routing',{}).get('failure_detail'); assert d['evidence_status']=='pass' or d['residual_risks'] or detail; assert d['evidence_status'] not in {'blocked','failed'} or d['failure_class']!='none'\""
+      core: true
+      failure_handling: "fix-or-block"

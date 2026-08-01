@@ -1,0 +1,103 @@
+feature: 2026-07-26-windows-rmux-supportability-parity-contract
+created: 2026-07-26
+
+steps:
+  - action: "Input inventory：读取 base packaging projection 和 upstream 5 个 roadmap item / feature evidence refs"
+    exit_signal: "supportability-inputs.json 记录 base projection、5 个 upstream dimensions 的 expected/ref/status；缺失为 missing"
+    status: pending
+  - action: "Projection schema + tier rule：建立 WindowsRmuxUxSupportProjection builder/validator"
+    exit_signal: "schema、dimension enum、base tier cap、missing/partial/blocked/failed/pass 规则可由 pytest 验证"
+    status: pending
+  - action: "Supportability evidence JSON：生成 parity_dimension=supportability 的 roadmap §4.1 evidence"
+    exit_signal: "supportability evidence 引用 support projection 和 base projection；non-pass 有具体 failure_class / residual_risks"
+    status: pending
+  - action: "Doctor / diagnostics consistency：接入或验证 rmux_supportability doctor/bundle seam，不让 doctor/diagnostics/docs 绕开 projection 宣称更高支持档"
+    exit_signal: "real-path snapshot / parser test 证明 doctor_summary、render_doctor、diagnostics bundle 和 docs 文案来自 projection 或与 projection 一致"
+    status: pending
+  - action: "Docs / support handoff：生成或更新 runbook/contract 摘要，只说明 current effective tier、missing dimensions、fallback"
+    exit_signal: "README/docs 不推荐 Windows npm Rmux 入口，除非 base projection windows_npm_enabled=true"
+    status: pending
+  - action: "Scope guard：检查不改 npm、release guard、installer owner、provider parser 和 upstream feature evidence"
+    exit_signal: "diff review / guard 测试证明无 package.json.os win32、publish/tag/release 相关变更，除非另有 owner 授权"
+    status: pending
+  - action: "Acceptance evidence pack：汇总 support projection、supportability evidence、validator output、docs/doctor consistency 和 roadmap writeback"
+    exit_signal: "acceptance 可从机器 JSON 和测试输出反查最终 effective support tier"
+    status: pending
+
+checks:
+  - item: "supportability 输入只包含 foreground_interaction、output_capture、pane_identity_layout、visual_no_popup、lifecycle_recovery 五个 upstream UX dimensions，不把 supportability 自身 evidence 当输入"
+    source: 名词契约
+    status: pending
+  - item: "roadmap items.yaml 的 supportability depends_on 必须包含上述五个 upstream feature，尤其包含 windows-rmux-wezterm-native-interaction-parity"
+    source: roadmap DAG
+    status: pending
+  - item: "WindowsRmuxUxSupportProjection 必须保留 canonical support_tier 作为唯一对外支持档字段；base_support_tier/ux_overlay_tier 只能作为解释性 detail"
+    source: roadmap contract
+    status: pending
+  - item: "缺失 upstream evidence JSON 时必须投影为 missing，不能用 design-review passed、Markdown 或 QA 摘要替代"
+    source: 流程级约束
+    status: pending
+  - item: "任一 upstream dimension 为 failed 或 blocked 时 canonical support_tier 不得为 supported/beta"
+    source: tier rule
+    status: pending
+  - item: "任一 upstream dimension 为 partial 时 canonical support_tier 最高为 beta，且 residual_risks 非空"
+    source: tier rule
+    status: pending
+  - item: "upstream 全 pass 但 base packaging tier 为 beta 时，canonical support_tier 仍不得高于 beta"
+    source: base tier cap
+    status: pending
+  - item: "base projection windows_npm_enabled=false 时 install_entry 不得为 npm，README/docs 不推荐 native Windows npm Rmux 入口；blocked/experimental 时 install_entry 必须为 diagnostic_only"
+    source: base owner boundary
+    status: pending
+  - item: "supportability evidence JSON 必须符合 roadmap §4.1，且 parity_dimension=supportability"
+    source: roadmap contract
+    status: pending
+  - item: "doctor_summary payload 必须包含 rmux_supportability；render_doctor 和 diagnostics bundle 必须展示/保留该 seam，visible state 不得高于 UX support projection 的 support_tier"
+    source: visible consistency
+    status: pending
+  - item: "不修改 release guard、npm publish、package win32、provider parser 或 upstream child evidence，除非另有 owner 授权"
+    source: scope guard
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-26-windows-rmux-supportability-parity-contract/windows-rmux-supportability-parity-contract-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-ux-parity-hardening/windows-rmux-ux-parity-hardening-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_windows_rmux_supportability_parity_contract.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-004
+      command: "python -m pytest -q test/test_rmux_packaging_docs_contracts.py test/test_cli_doctor_rmux_packaging.py test/test_ccbd_diagnostics_bundle_rmux.py test/test_rmux_docs_consistency_gate.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-005
+      command: "python -m py_compile \"scripts/windows_rmux_supportability_projection.py\" \"lib/terminal_runtime/rmux_packaging_support.py\" \"lib/cli/services/doctor.py\" \"lib/cli/render_runtime/ops_views_doctor.py\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-006
+      command: "npm run pack:check"
+      core: false
+      failure_handling: fix-or-block-if-package-touched
+  evidence_required:
+    - supportability_inputs
+    - windows_rmux_ux_support_projection
+    - windows_rmux_ux_parity_evidence
+    - feature_local_builder_validator
+    - projection_tests
+    - doctor_docs_consistency_evidence
+    - rmux_supportability_doctor_payload
+    - scope_diff_review
+    - validation_commands
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_out_code: forbidden
+    unused_imports: forbidden
+    secrets_or_tokens: forbidden

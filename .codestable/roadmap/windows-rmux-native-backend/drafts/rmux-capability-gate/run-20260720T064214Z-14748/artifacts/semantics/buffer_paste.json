@@ -1,0 +1,23 @@
+{
+  "assertions": [
+    {
+      "name": "load-buffer succeeded",
+      "passed": true
+    },
+    {
+      "name": "paste-buffer succeeded",
+      "passed": true
+    },
+    {
+      "name": "delete-buffer succeeded",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "load-buffer",
+    "paste-buffer",
+    "delete-buffer"
+  ],
+  "notes": "",
+  "status": "supported"
+}

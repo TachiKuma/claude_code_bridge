@@ -1,0 +1,30 @@
+{
+  "gate_id": "qa-evidence-gate",
+  "feature": "2026-07-25-windows-rmux-wezterm-native-interaction-parity",
+  "inputs": {
+    "design": ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-design.md",
+    "checklist": ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-checklist.yaml",
+    "review": ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-review.md",
+    "qa": ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-qa.md",
+    "evidence_pack": ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-evidence-pack.md",
+    "manual_runbook": ".codestable/features/2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/manual-wezterm-runbook.md"
+  },
+  "input_digests": {},
+  "stage": "qa.before_acceptance",
+  "kind": "protocol-only",
+  "status": "blocked",
+  "blocking": [
+    {
+      "id": "QA-005",
+      "reason": "native Windows + WezTerm foreground manual UX path was not executed"
+    }
+  ],
+  "warnings": [],
+  "evidence": [
+    "python -m pytest -q test/test_v2_tmux_ui.py passed",
+    "python -m pytest -q -rs test/test_v2_tmux_ui.py -k rmux_accepts_mouse_context_project_ui_bindings passed",
+    "cargo sidebar tests passed",
+    "manual WezTerm runbook remains partial"
+  ],
+  "providers": {}
+}

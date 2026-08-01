@@ -1,0 +1,26 @@
+{
+  "assertions": [
+    {
+      "kind": "prerequisite",
+      "name": "new-session returned success",
+      "passed": true
+    },
+    {
+      "kind": "prerequisite",
+      "name": "has-session confirmed target session",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "display-message read back the probe session name",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "new-session",
+    "has-session"
+  ],
+  "notes": "",
+  "status": "supported",
+  "workaround": null
+}

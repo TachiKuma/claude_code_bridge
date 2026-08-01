@@ -1,0 +1,20 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-13452-20260720t063953z",
+    "display-message",
+    "-p",
+    "-t",
+    "ccb-rmux-probe",
+    "#{session_name}"
+  ],
+  "classification": "supported",
+  "notes": "",
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "ccb-rmux-probe\n",
+  "stdout_raw_sha256": "37c1c3ed17224c03405a5784042750e4292a11d0f1e32043fb82d258eef73100",
+  "stdout_raw_size": 15,
+  "timeout": 8.0
+}

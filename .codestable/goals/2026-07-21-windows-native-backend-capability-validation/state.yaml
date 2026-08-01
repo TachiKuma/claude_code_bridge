@@ -1,0 +1,31 @@
+schema_version: 2
+goal: "windows-native-backend-capability-validation"
+status: complete
+objective: "验证三条 Windows native backend 基座建议：升级/重跑 psmux capability gate、逐项验证 psmux required gaps 的可解性或可接受 workaround、诊断 rmux 入口超时原因，并给出候选 backend 是否足以支撑 ccb Windows 运行需求的证据化结论。"
+start_point: "前置 capability gate 已完成但业务结论未通过：rmux 0.9.0 start-server 超时；psmux 3.3.3 多数 tmux-family 命令可用但有 6 个 required gaps。"
+acceptance:
+  - "记录本机 rmux/psmux 安装来源、版本、可升级状态，并在可行时对最新版 psmux 重跑 capability probe。"
+  - "对 psmux 6 个 required gaps 逐项给出 fresh evidence、可解性判断、workaround 接受条件和对 ccb Windows 运行需求的影响。"
+  - "诊断 rmux start-server 超时的安装布局、daemon 可执行文件、环境开关和直接启动行为。"
+  - "形成候选 Windows native backend 基座是否胜任 ccb 完整运行需求的明确结论，且不把未证明能力伪装为通过。"
+  - "Task agent 对本轮证据和结论做功能验收并给出 pass/fail/inconclusive。"
+non_goals:
+  - "不在 capability gap 未闭合时接入完整 ccbd namespace lifecycle。"
+  - "不修改生产环境配置、不执行 git commit/git push。"
+  - "不把 psmux 或 rmux 的外部项目事实写成未经验证的内部契约。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 5
+next_action: "Goal complete; 后续应以 psmux 3.3.7 为首选候选进入明确 workaround contract 的设计，rmux 0.9.0 仅作为需要 runner/lifecycle 重做的备选研究路线。"
+acceptance_report: "functional-acceptance.md"
+acceptance_final_iteration: "iterations/005.md"
+final_iteration_report: "iterations/005.md"
+final_acceptance_report: "functional-acceptance.md"
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-21"

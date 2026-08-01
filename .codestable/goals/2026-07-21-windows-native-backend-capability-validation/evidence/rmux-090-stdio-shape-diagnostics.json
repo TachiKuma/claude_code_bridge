@@ -1,0 +1,178 @@
+{
+  "generated_at": "2026-07-21T20:48:37",
+  "rmux_version": "rmux 0.9.0",
+  "base_namespace": "ccb-rmux090-stdio-17740-1784638110",
+  "results": [
+    {
+      "name": "new-session",
+      "namespace": "ccb-rmux090-stdio-17740-1784638110-capture",
+      "mode": "capture",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-stdio-17740-1784638110-capture",
+        "new-session",
+        "-d",
+        "-s",
+        "ccb-rmux090-stdio-17740-1784638110-capture",
+        "-n",
+        "main",
+        "cmd.exe"
+      ],
+      "returncode": 124,
+      "elapsed_s": 6.062,
+      "stdout": "",
+      "stderr": "timeout"
+    },
+    {
+      "name": "has-session-capture",
+      "namespace": "ccb-rmux090-stdio-17740-1784638110-capture",
+      "mode": "capture",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-stdio-17740-1784638110-capture",
+        "has-session",
+        "-t",
+        "ccb-rmux090-stdio-17740-1784638110-capture"
+      ],
+      "returncode": 0,
+      "elapsed_s": 0.003,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "list-panes-capture",
+      "namespace": "ccb-rmux090-stdio-17740-1784638110-capture",
+      "mode": "capture",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-stdio-17740-1784638110-capture",
+        "list-panes",
+        "-t",
+        "ccb-rmux090-stdio-17740-1784638110-capture",
+        "-F",
+        "#{pane_id}"
+      ],
+      "returncode": 0,
+      "elapsed_s": 0.006,
+      "stdout": "%0\n",
+      "stderr": ""
+    },
+    {
+      "name": "new-session",
+      "namespace": "ccb-rmux090-stdio-17740-1784638110-devnull",
+      "mode": "devnull",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-stdio-17740-1784638110-devnull",
+        "new-session",
+        "-d",
+        "-s",
+        "ccb-rmux090-stdio-17740-1784638110-devnull",
+        "-n",
+        "main",
+        "cmd.exe"
+      ],
+      "returncode": 0,
+      "elapsed_s": 0.012,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "has-session-capture",
+      "namespace": "ccb-rmux090-stdio-17740-1784638110-devnull",
+      "mode": "capture",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-stdio-17740-1784638110-devnull",
+        "has-session",
+        "-t",
+        "ccb-rmux090-stdio-17740-1784638110-devnull"
+      ],
+      "returncode": 0,
+      "elapsed_s": 0.033,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "list-panes-capture",
+      "namespace": "ccb-rmux090-stdio-17740-1784638110-devnull",
+      "mode": "capture",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-stdio-17740-1784638110-devnull",
+        "list-panes",
+        "-t",
+        "ccb-rmux090-stdio-17740-1784638110-devnull",
+        "-F",
+        "#{pane_id}"
+      ],
+      "returncode": 0,
+      "elapsed_s": 0.007,
+      "stdout": "%0\n",
+      "stderr": ""
+    },
+    {
+      "name": "new-session",
+      "namespace": "ccb-rmux090-stdio-17740-1784638110-inherit",
+      "mode": "inherit",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-stdio-17740-1784638110-inherit",
+        "new-session",
+        "-d",
+        "-s",
+        "ccb-rmux090-stdio-17740-1784638110-inherit",
+        "-n",
+        "main",
+        "cmd.exe"
+      ],
+      "returncode": 0,
+      "elapsed_s": 0.012,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "has-session-capture",
+      "namespace": "ccb-rmux090-stdio-17740-1784638110-inherit",
+      "mode": "capture",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-stdio-17740-1784638110-inherit",
+        "has-session",
+        "-t",
+        "ccb-rmux090-stdio-17740-1784638110-inherit"
+      ],
+      "returncode": 0,
+      "elapsed_s": 0.029,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "list-panes-capture",
+      "namespace": "ccb-rmux090-stdio-17740-1784638110-inherit",
+      "mode": "capture",
+      "command": [
+        "rmux",
+        "-L",
+        "ccb-rmux090-stdio-17740-1784638110-inherit",
+        "list-panes",
+        "-t",
+        "ccb-rmux090-stdio-17740-1784638110-inherit",
+        "-F",
+        "#{pane_id}"
+      ],
+      "returncode": 0,
+      "elapsed_s": 0.006,
+      "stdout": "%0\n",
+      "stderr": ""
+    }
+  ]
+}

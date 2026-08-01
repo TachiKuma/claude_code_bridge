@@ -1,0 +1,234 @@
+feature: 2026-07-31-ccbd-herdr-namespace-lifecycle
+created: 2026-07-31
+
+steps:
+  - id: S0
+    action: "[S0] implementation admission：确认前置 V2 contract 与 HerdrBackend client 已 implementation/acceptance ready"
+    exit_signal: "import/focused tests 证明 V2 refs/errors/capabilities、HerdrBackend、HerdrBackend.attach_namespace、herdr-native、herdr_socket、schema/capability gate、foreground presentation/layout capability 已落地；否则 dependency-blocked"
+    status: pending
+  - id: S1
+    action: "[S1] durable state projection and public redaction：additive 扩展 ProjectNamespaceState/Event/DTO/summary，支持 Herdr internal namespace_ref、restore token 与 public redacted payload"
+    exit_signal: "旧 tmux/rmux record 读取不变；Herdr record round-trip 得到 herdr-native/herdr/herdr_socket，tmux_socket_path 可为空；ping、event summary、lib/ccbd/project_view/service.py project view、foreground summary、日志只消费 redacted projection helper，只输出 namespace_restore_token_present，不输出 raw token"
+    status: pending
+  - id: S2
+    action: "[S2] V2 backend helper path：把 project namespace helper 的 mux 判断改为 per-operation V2 capability/protocol gate，消除 tmux-family-only 分支"
+    exit_signal: "fake Herdr V2 backend 通过 create/list/window/root/split/respawn/identity/kill helper tests；每个 helper 缺 required method/capability 时结构化 fail closed；没有 _tmux_run 依赖"
+    status: pending
+  - id: S3
+    action: "[S3] ensure/layout/reflow lifecycle and presentation guard：让 controller ensure、materialize topology、workspace reflow 在 Herdr backend 下按 V2 capability 执行，并隔离 tmux UI presentation path"
+    exit_signal: "fake Herdr namespace 创建/刷新/reflow tests 通过；unsupported layout 或 tmux-compatible presentation capability 不保存成功 state，或跳过 tmux UI 并记录 degraded evidence；错误含 backend/capability/evidence"
+    status: pending
+  - id: S4
+    action: "[S4] foreground attach builder seam：增加 Herdr attach ready check、可注入 attach backend builder 与 attach path"
+    exit_signal: "ccbd ping payload 为 Herdr 时不查 tmux binary、不跑 tmux subprocess；builder 收到 redacted namespace_ref + backend_selection；调用 attach_namespace；unsupported/missing attachable 输出 actionable error"
+    status: pending
+  - id: S5
+    action: "[S5] kill/restart/reload boundary：确认 kill/restart/reload handlers 继续由 ccbd 编排，Herdr 只执行 namespace/window/pane primitive"
+    exit_signal: "destroy 只杀 current Herdr namespace；additive_patch_apply.py 从 current namespace V2 ref 建 backend context；add/remove/move/reflow patch modules 使用 V2 refs 调用 kill/ensure/reflow/patch primitive，缺 required capability 时 patch result blocked/failed 且不 published/noop 成功；project_restart.py agent/panes handlers 在 Herdr 下返回 unsupported/deferred evidence，不改 provider completion，不走静默 scheduled success"
+    status: pending
+  - id: S6
+    action: "[S6] scope/content guard：禁止 provider runtime、recovery owner、Mobile/Config UI、doctor/support/package/release/update/installer/public validation matrix 越界"
+    exit_signal: "guard 覆盖 modified、staged、rename/copy、untracked path 和 staged/untracked content"
+    status: pending
+  - id: S7
+    action: "[S7] regression guard + Windows foreground/manual evidence：运行 Herdr focused tests、现有 tmux/rmux namespace/foreground regression，并收集 Native Windows x64 foreground/manual transcript"
+    exit_signal: "Herdr tests 通过；tmux/rmux project namespace、rmux attach、start foreground tests 不退化；Windows x64 transcript 记录 ccb namespace create、foreground attach、kill、reload 和 restart unsupported/deferred evidence"
+    status: pending
+
+checks:
+  - item: "前置 V2 contract、HerdrBackend 与 HerdrBackend.attach_namespace/presentation capability 未落地时，本 feature implementation dependency-blocked，不重复定义 V2 contract 或 socket client"
+    source: design AC-001 / DOD-IMPL-000
+    status: pending
+  - item: "旧 tmux/rmux namespace state record 的 from_record/to_record/summary 行为不退化"
+    source: design AC-002 / DOD-IMPL-001
+    status: pending
+  - item: "Herdr namespace state round-trip 保留 herdr-native、herdr、herdr_socket、ipc_ref、opaque restore token，tmux_socket_path 可为空"
+    source: design AC-003 / DOD-IMPL-001
+    status: pending
+  - item: "ping、event summary、project view、foreground summary、日志只包含 redacted namespace payload 和 namespace_restore_token_present，不包含 raw restore_token"
+    source: design AC-004 / DOD-IMPL-001
+    status: pending
+  - item: "ProjectNamespaceState.summary_fields、ProjectNamespaceEvent.summary_fields 与 log capture 只消费 redacted projection helper；namespace_ref internal raw restore_token 不进入 public/event/log payload"
+    source: design AC-004 / CMD-012
+    status: pending
+  - item: "lib/ccbd/project_view/service.py::_namespace_view 使用 redacted namespace projection；Herdr project view 不通过 tmux_session_name 或 tmux facts path 泄露 restore_token"
+    source: design AC-004 / CMD-010
+    status: pending
+  - item: "Herdr backend 进入 namespace helper 时按 operation 走 V2 capability gate，不调用 tmux _tmux_run fallback，不要求 pane id 以 % 开头，缺 required method/capability 时结构化 fail closed"
+    source: design AC-005 / DOD-IMPL-002
+    status: pending
+  - item: "Herdr ensure/layout materialization 后 state/event/ping payload 含 redacted Herdr namespace_ref，ccbd epoch 仍为 authority"
+    source: design AC-006 / DOD-IMPL-003
+    status: pending
+  - item: "Herdr layout/reflow/presentation capability unsupported 时 fail closed 或跳过 tmux UI 并记录 degraded evidence，不保存错误的 attachable success state，error 含 capability gap"
+    source: design AC-007 / DOD-IMPL-003
+    status: pending
+  - item: "Herdr foreground attach 不要求 tmux binary，builder seam 收到 redacted namespace_ref + selection diagnostics，调用 Herdr attach_namespace，summary 显示 backend/ipc 且不泄露 restore token"
+    source: design AC-008 / DOD-IMPL-004
+    status: pending
+  - item: "Herdr foreground attach unsupported 或 payload 缺失时返回 actionable ForegroundAttachError，包含 backend selection/ipc/capability context，不 fallback tmux"
+    source: design AC-009 / DOD-IMPL-004
+    status: pending
+  - item: "kill/reload 仍由 ccbd handler/supervisor 编排，backend 只收到 current namespace/window/pane primitive；build_project_restart_agent_handler 与 build_project_restart_panes_handler 在 Herdr 下返回 unsupported/deferred evidence，不改 provider completion，不走静默 scheduled success"
+    source: design AC-010 / DOD-IMPL-005
+    status: pending
+  - item: "reload patch 真实执行模块 additive_patch_apply/additive_patch_windows/additive_patch_agents/move_patch_agents/remove_patch_agents/agent_window_reflow 使用 V2 refs/primitives；Herdr 缺 required primitive 时 patch result blocked/failed，不进入 published/noop 成功态"
+    source: design AC-010 / CMD-011
+    status: pending
+  - item: "Native Windows x64 foreground/manual transcript 覆盖 ccb namespace create、foreground attach、kill、reload 和 restart unsupported/deferred evidence；缺 host/Herdr 时 blocked"
+    source: design AC-011 / CMD-013
+    status: pending
+  - item: "现有 tmux/rmux namespace、rmux foreground attach、reload tests 不退化"
+    source: design AC-012
+    status: pending
+  - item: "本 feature 不修改 provider runtime、recovery、Mobile/Config UI、doctor/support、package/release/update/installer、public validation matrix"
+    source: design AC-013 / 明确不做
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-31-ccbd-herdr-namespace-lifecycle/ccbd-herdr-namespace-lifecycle-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_mux_backend_contract.py test/test_herdr_backend_client.py -k \"V2 or HerdrBackend or attach_namespace or presentation or herdr\""
+      core: true
+      failure_handling: dependency-blocked
+      test_status: existing-or-new
+      covers:
+        - v2_contract_admission
+        - herdr_backend_admission
+        - herdr_attach_capability_admission
+    - id: CMD-004
+      command: "python -m pytest -q test/test_v2_project_namespace_state.py test/test_v2_project_namespace_backend.py -k \"namespace or mux or herdr or restore_token or redacted or presentation or capability\""
+      core: true
+      failure_handling: fix-or-block
+      test_status: new-and-existing
+      covers:
+        - herdr_state_round_trip
+        - legacy_state_compatibility
+        - v2_helper_path
+        - per_operation_capability_gate
+        - herdr_ensure_layout_reflow
+    - id: CMD-005
+      command: "python -m pytest -q test/test_v2_start_foreground.py -k \"foreground or attach or herdr or rmux or restore_token or redacted\""
+      core: true
+      failure_handling: fix-or-block
+      test_status: new-and-existing
+      covers:
+        - herdr_foreground_attach
+        - herdr_attach_blocked_error
+        - rmux_foreground_regression
+    - id: CMD-006
+      command: "python -m pytest -q test/test_agent_lifecycle_cli.py -k \"reload or restart or kill\""
+      core: true
+      failure_handling: fix-or-block
+      test_status: existing-or-new
+      covers:
+        - reload_restart_kill_boundary
+        - restart_agent_handler_unsupported_deferred
+        - restart_panes_handler_no_scheduled_silent_success
+        - provider_completion_unchanged
+    - id: CMD-007
+      command: >-
+        python -c "import subprocess; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only'],['git','diff','--cached','--name-only','--diff-filter=ACMR'],['git','ls-files','--others','--exclude-standard']) for p in run(a).splitlines() if p.strip()}; forbidden_prefix=('lib/provider_backends/','lib/provider_runtime/','lib/ccbd/services/dispatcher_runtime/lifecycle_start_runtime/recovery_runtime/','lib/cli/services/doctor_runtime/','lib/mobile/','mobile/','config-ui/','lib/config_ui/'); forbidden_files={'package.json','package-lock.json','install.ps1','install.sh','install.cmd','README.md','docs/ccbd-diagnostics-contract.md','bin/ccb-npm-install.js','lib/cli/management_runtime/install.py','lib/cli/management_runtime/commands_runtime/install.py','lib/cli/services/doctor.py','lib/cli/render_runtime/ops_views_doctor.py','lib/terminal_runtime/rmux_packaging_support.py','lib/terminal_runtime/rmux_packaging_support_projection.json'}; bad=sorted(p for p in paths if p.startswith(forbidden_prefix) or p in forbidden_files); assert not bad, bad"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - no_provider_runtime_scope_guard
+        - no_recovery_owner_scope_guard
+        - no_doctor_support_scope_guard
+        - no_mobile_config_ui_scope_guard
+        - no_package_release_scope_guard
+        - no_update_installer_scope_guard
+        - install_cmd_scope_guard
+        - npm_postinstall_scope_guard
+        - cli_install_management_scope_guard
+    - id: CMD-008
+      command: >-
+        python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only','--','lib','test'],['git','diff','--cached','--name-only','--diff-filter=ACMR','--','lib','test'],['git','ls-files','--others','--exclude-standard','--','lib','test']) for p in run(a).splitlines() if p.strip()}; text=run(['git','diff','--','lib','test'])+run(['git','diff','--cached','--','lib','test'])+''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in paths if pathlib.Path(p).is_file() and p.endswith(('.py','.md','.yaml','.yml','.json'))); forbidden=re.compile(r'(HerdrProviderCompletionEvidence|completion_source|probation_seconds|circuit_threshold|support_tier|npm publish|release surface|public workflow validation|Mobile terminal|Config UI)', re.I); assert not forbidden.search(text)"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - no_provider_completion_content
+        - no_recovery_content
+        - no_support_release_user_surface_content
+    - id: CMD-009
+      command: >-
+        python -c "import pathlib, subprocess, re; run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; paths={p.replace(chr(92),'/') for a in (['git','diff','--name-only','--','lib/ccbd','lib/cli','test'],['git','diff','--cached','--name-only','--diff-filter=ACMR','--','lib/ccbd','lib/cli','test'],['git','ls-files','--others','--exclude-standard','--','lib/ccbd','lib/cli','test']) for p in run(a).splitlines() if p.strip()}; text=run(['git','diff','--','lib/ccbd','lib/cli','test'])+run(['git','diff','--cached','--','lib/ccbd','lib/cli','test'])+''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in paths if pathlib.Path(p).is_file() and p.endswith('.py')); assert 'namespace_restore_token_present' in text; assert not re.search(r\"(build_ccbd_payload|ForegroundAttachSummary|project_view|render_mapping)[\\s\\S]{0,500}restore_token['\\\"]\\s*:\", text)"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new
+      covers:
+        - public_payload_restore_token_redaction
+        - restore_token_presence_projection
+    - id: CMD-010
+      command: "python -m pytest -q test/test_ccbd_project_view.py -k \"namespace or herdr or restore_token or redacted or project_view\""
+      core: true
+      failure_handling: fix-or-block
+      test_status: new-and-existing
+      covers:
+        - project_view_namespace_redaction
+        - herdr_project_view_backend_facts_degraded
+        - tmux_project_view_regression
+    - id: CMD-011
+      command: "python -m pytest -q test/test_ccbd_namespace_additive_patch.py -k \"herdr or mux or namespace_ref or reload or move or reflow\""
+      core: true
+      failure_handling: fix-or-block
+      test_status: new-and-existing
+      covers:
+        - reload_patch_namespace_ref
+        - herdr_additive_patch_primitives
+        - herdr_move_reflow_fail_closed
+        - no_reload_patch_published_noop_success_on_missing_required_primitive
+    - id: CMD-012
+      command: "python -m pytest -q test/test_v2_project_namespace_state.py -k \"event or summary_fields or log or restore_token or redacted\""
+      core: true
+      failure_handling: fix-or-block
+      test_status: new-and-existing
+      covers:
+        - state_summary_redaction
+        - event_summary_redaction
+        - log_capture_restore_token_redaction
+    - id: CMD-013
+      command: "MANUAL Native Windows x64: capture transcript for ccb namespace create, foreground attach, kill, reload, and restart unsupported/deferred evidence on Herdr backend"
+      core: true
+      failure_handling: blocked-if-no-host-or-herdr
+      test_status: manual
+      covers:
+        - windows_foreground_namespace_create
+        - windows_foreground_attach
+        - windows_kill_reload
+        - windows_restart_unsupported_deferred_evidence
+  evidence_required:
+    - v2_and_herdr_backend_implementation_admission_evidence
+    - herdr_namespace_state_migration_tests
+    - state_event_log_redaction_tests
+    - public_namespace_payload_redaction_tests
+    - project_view_redaction_tests
+    - fake_herdr_namespace_backend_tests
+    - herdr_foreground_attach_tests
+    - reload_additive_patch_primitive_tests
+    - kill_restart_reload_boundary_tests
+    - native_windows_x64_foreground_manual_transcript
+    - scope_content_guard
+    - epic_roadmap_owner_items_yaml_acceptance
+  cleanliness:
+    herdr_socket_client_changes: forbidden
+    provider_runtime_changes: forbidden
+    recovery_owner_changes: forbidden
+    doctor_support_tier_changes: forbidden
+    mobile_config_ui_changes: forbidden
+    package_release_changes: forbidden
+    public_validation_matrix_changes: forbidden
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden

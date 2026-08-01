@@ -1,0 +1,20 @@
+{
+  "args": [
+    "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-native-backend-capability-validation\\evidence\\psmux-337-download\\extracted-20260721204319\\psmux.exe",
+    "-L",
+    "ccb-rmux-probe-6984-20260721t124326z",
+    "list-panes",
+    "-t",
+    "ccb-rmux-probe",
+    "-F",
+    "#{pane_id}"
+  ],
+  "classification": "supported",
+  "notes": "",
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "%1\n%3\n",
+  "stdout_raw_sha256": "a50233010c783514401d3fb4602639715745f2eda7caea4c56f563e9fe0cc425",
+  "stdout_raw_size": 6,
+  "timeout": 8.0
+}

@@ -1,0 +1,97 @@
+feature: 2026-07-25-windows-rmux-output-capture-parity
+created: 2026-07-25
+
+steps:
+  - action: "baseline inventory：复用 rmux-send-capture-logging accepted evidence，并记录当前 RmuxCaptureResult 与 completion fixtures"
+    exit_signal: "output-capture-parity-report.json 的 baseline_refs 指向已存在的 design、acceptance、test 文件，且没有声明 production Rmux IO 未完成"
+    status: pending
+  - action: "capture parity schema/report：建立 output-capture-parity-report.json 的 case、delta、provider_projection 和 user_visible_history 校验"
+    exit_signal: "report JSON 可解析，required fields、enum、hash、raw artifact ref、normalized artifact ref、partial/blocked residual risk 校验通过"
+    status: pending
+  - action: "machine capture matrix：覆盖 plain、ANSI、wide char、wrapped line、provider_completion 五类 input_kind"
+    exit_signal: "每个 core case 都有 raw_artifact、normalized_artifact、expected_text_sha256、normalized_output_sha256、capture_command、verdict 和 delta classification"
+    status: pending
+  - action: "provider completion projection：把 rmux capture/log fixture 投影到代表性 completion detectors"
+    exit_signal: "Codex、Claude、AGY、DeepSeek/session snapshot 或等价 family 有 pass/partial/failed/blocked 结果、detector ref、artifact ref、failure_class，provider failure 不污染 rmux lane"
+    status: pending
+  - action: "user-visible history runbook：记录 native Windows + WezTerm 前台回看 supporting evidence 或 GUI unavailable 归因"
+    exit_signal: "user-visible-history-runbook.md 或 QA 同名小节写明 host、terminal、backend、操作、observable、verdict，且 supporting-only 口径明确"
+    status: pending
+  - action: "UX parity evidence integration：生成 windows-rmux-ux-parity-evidence.json"
+    exit_signal: "UX evidence JSON 满足 roadmap §4.1 required fields、enum、schema_version=1、parity_dimension=output_capture、artifact refs 和 residual_risks 规则"
+    status: pending
+  - action: "guard and delta closure：防止 parser workaround、重复 capture_pane 实现和 scrollback 替代 machine capture"
+    exit_signal: "相关 pytest、YAML/JSON 校验和 py_compile 通过；缺 live GUI 时 evidence_status 不能为 pass"
+    status: pending
+
+checks:
+  - item: "design 引用 confirmed feature brainstorm，且 owner 已批准进入 design"
+    source: "design frontmatter / §0"
+    status: pending
+  - item: "复用 rmux-send-capture-logging accepted baseline，不默认重写 Rmux IO"
+    source: "design §1 / Baseline reuse / delta"
+    status: pending
+  - item: "machine capture、provider completion、user-visible history 三条 evidence lane 互不替代"
+    source: "design §1 / 需求摘要"
+    status: pending
+  - item: "用户滚轮或 WezTerm scrollback 不能替代 machine capture / provider completion pass"
+    source: "AC-005 / S5 / S7"
+    status: pending
+  - item: "documented delta 使用枚举分类，不用自由文本掩盖差异"
+    source: "AC-004 / S3 / S7"
+    status: pending
+  - item: "windows-rmux-ux-parity-evidence.json 固定 parity_dimension=output_capture"
+    source: "AC-006 / S6"
+    status: pending
+  - item: "provider completion parser 不因本 feature 被修改来适配不稳定 capture"
+    source: "AC-003 / AC-007 / S4 / S7"
+    status: pending
+  - item: "native Windows + WezTerm GUI 不可用时只能记录 blocked/partial，不伪造 pass"
+    source: "AC-005 / S5 / S6"
+    status: pending
+  - item: "如果 parent interaction feature 尚未 accepted，本 feature implementation 只能推进 headless machine/provider lanes，GUI lane 必须 blocked/partial"
+    source: "AC-008 / design §1 / S5"
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-25-windows-rmux-output-capture-parity/windows-rmux-output-capture-parity-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-ux-parity-hardening/windows-rmux-ux-parity-hardening-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_windows_rmux_output_capture_parity_evidence.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-004
+      command: "python -m pytest -q test/test_rmux_send_capture_logging.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-005
+      command: "python -m pytest -q test/test_rmux_completion_capture_fixtures.py"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-006
+      command: "python -m py_compile \"lib/terminal_runtime/rmux_backend.py\" \"lib/terminal_runtime/rmux_backend_runtime/io.py\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-007
+      command: "python -m pytest -q test/test_rmux_send_capture_logging_import_guard.py"
+      core: true
+      failure_handling: fix-or-block
+  evidence_required:
+    - output_capture_parity_report_json
+    - ux_parity_evidence_json
+    - user_visible_history_runbook
+    - provider_completion_projection
+    - command_output
+    - diff_summary
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_import: forbidden

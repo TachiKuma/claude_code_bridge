@@ -1,0 +1,16 @@
+{
+  "args": [
+    "psmux",
+    "-L",
+    "ccb-rmux-probe-13484-20260721t113657z",
+    "list-windows",
+    "-t",
+    "ccb-rmux-probe"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "0: probe-main* (2 panes) [59x30]\n",
+  "stdout_raw_sha256": "9e2920919f171f91604d19c4374fe0d4b691bd0cfc526db1f4e419fbc963eda7",
+  "stdout_raw_size": 33,
+  "timeout": 5.0
+}

@@ -1,0 +1,13 @@
+{
+  "assertions": [
+    {
+      "name": "attach-session accepted non-interactive attach probe",
+      "passed": false
+    }
+  ],
+  "dependencies": [
+    "attach-session"
+  ],
+  "notes": "scenario assertions failed",
+  "status": "unsupported"
+}

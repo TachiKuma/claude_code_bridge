@@ -1,0 +1,13 @@
+{
+  "assertions": [
+    {
+      "name": "kill-session cleanup succeeded",
+      "passed": false
+    }
+  ],
+  "dependencies": [
+    "kill-session"
+  ],
+  "notes": "scenario assertions failed",
+  "status": "unsupported"
+}

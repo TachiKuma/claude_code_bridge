@@ -1,0 +1,20 @@
+{
+  "args": [
+    "psmux",
+    "-L",
+    "ccb-rmux-probe-13484-20260721t113657z",
+    "attach-session",
+    "-t",
+    "ccb-rmux-probe",
+    "-d",
+    "-E"
+  ],
+  "classification": "supported",
+  "notes": "",
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "psmux 3.3.3\n",
+  "stdout_raw_sha256": "0bd546ba418218a959c982848723e4532f50c5ff0eabdc2a60e950f78c29f534",
+  "stdout_raw_size": 12,
+  "timeout": 8.0
+}

@@ -1,0 +1,17 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-8816-20260720t041602z",
+    "capture-pane",
+    "-t",
+    "ccb-rmux-probe:0.0",
+    "-p",
+    "-S",
+    "-20"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>echo ccb-rmux-probe\nccb-rmux-probe\n\nE:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>ccb-rmux-probe\\r\n系统找不到指定的路径。\n\nE:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>\n\n\n\n\n\n",
+  "timeout": 8.0
+}

@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "host_kind": "native_windows",
+  "terminal_host": "wezterm",
+  "backend_impl": "rmux",
+  "control_plane": "ccbd",
+  "parity_dimension": "foreground_interaction",
+  "evidence_status": "blocked",
+  "failure_class": "unsupported_capability",
+  "artifacts": {
+    "capability_summary": "evidence/capability-summary.json",
+    "parent_root_cause": "../2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/root-cause-review-and-feature-split.md",
+    "settings_click_review": "../2026-07-27-sidebar-settings-click-e2e/sidebar-settings-click-e2e-review.md",
+    "settings_routing_capability": "../2026-07-27-sidebar-settings-rmux-mouse-routing/evidence/windows-rmux-ux-parity-evidence.json"
+  },
+  "residual_risks": [
+    "Sidebar x KillProject click remains blocked in native Windows + WezTerm + rmux because the live mouse route does not deliver a precise x-control click to Rust/crossterm.",
+    "Rust keyboard KillProject and internal header hit-test evidence do not prove foreground mouse click parity.",
+    "A broad sidebar-left-click KillProject fallback would be destructive and is not an acceptable substitute for x-only hit-test."
+  ],
+  "details": {
+    "sidebar_kill_project_click": {
+      "selected_route": "unsupported_capability",
+      "runtime_behavior_changed": false,
+      "broad_fallback_added": false,
+      "real_project_kill_executed": false,
+      "internal_kill_path_covered": true,
+      "failure_detail": "No approved x-only foreground mouse route exists for native Windows + WezTerm + rmux. Existing evidence covers Rust hit-test and ccb kill subprocess behavior, but not live x click delivery."
+    }
+  }
+}

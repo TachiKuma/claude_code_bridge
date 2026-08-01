@@ -1,0 +1,19 @@
+{
+  "assertions": [
+    {
+      "kind": "semantic",
+      "name": "attach-session opened an interactive TUI",
+      "passed": false
+    },
+    {
+      "kind": "semantic",
+      "name": "attach-session can complete in this non-interactive probe",
+      "passed": false
+    }
+  ],
+  "dependencies": [
+    "attach-session"
+  ],
+  "notes": "scenario assertions failed",
+  "status": "unsupported"
+}

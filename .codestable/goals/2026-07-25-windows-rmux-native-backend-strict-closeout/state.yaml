@@ -1,0 +1,29 @@
+schema_version: 2
+goal: "windows-rmux-native-backend-strict-closeout"
+status: complete
+objective: "根据整体核验报告严格完成 windows-rmux-native-backend 的收口：修复 roadmap/goal-state/feature 报告状态漂移，补齐缺失验收产物和可解析证据，运行验证，并通过可见 Task agent 功能验收。"
+start_point: "核验报告确认代码与主要验证已经通过，但 CodeStable 产物仍有漂移：roadmap/goal-state 未同步完成，ccbd-windows-full-chain-smoke 与 windows-namespace-ipc-schema 缺 feature 报告，full-chain smoke 引用的 transcript 路径当前不可解析。"
+acceptance:
+  - "windows-rmux-native-backend 的 roadmap、items.yaml、goal-state.yaml 与 goal-features 状态一致，不再把已完成项标为 pending/planned/handoff。"
+  - "ccbd-windows-full-chain-smoke 缺失的 review、QA、acceptance feature 报告已补齐，且只引用当前存在并可解析的证据。"
+  - "windows-namespace-ipc-schema 缺失的 feature acceptance 报告已补齐，并与既有 goal functional acceptance、review、QA 一致。"
+  - "最终报告引用的 native Windows rmux 证据均可由本仓库 parser fresh 验证，不引用不存在的 transcript 作为 pass 依据。"
+  - "YAML/frontmatter、相关 parser、scope guard 与 targeted pytest fresh 通过。"
+  - "写入 functional-acceptance.md，记录可见 Task agent 对 strict closeout 的功能验收 pass。"
+non_goals:
+  - "不新增 Windows npm supported 发布入口；当前 packaging 结论仍为 beta。"
+  - "不重跑真实外部 provider 凭证链路；fake_provider 证据只用于 backend/control-plane 链路。"
+  - "不执行 git commit、git push、release、publish。"
+  - "不扩大到 windows-rmux-ux-parity-hardening 后续 UX parity roadmap。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 1
+next_action: "Goal complete; no further strict closeout action."
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-25"

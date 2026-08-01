@@ -1,0 +1,15 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-4476-20260720t041533z",
+    "attach-session",
+    "-t",
+    "ccb-rmux-probe",
+    "-d"
+  ],
+  "returncode": 124,
+  "stderr": "timeout",
+  "stdout": "",
+  "timeout": 8.0
+}

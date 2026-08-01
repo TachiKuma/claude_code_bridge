@@ -1,0 +1,20 @@
+{
+  "assertions": [
+    {
+      "kind": "prerequisite",
+      "name": "start-server evidence recorded",
+      "passed": true
+    },
+    {
+      "kind": "prerequisite",
+      "name": "kill-server evidence recorded",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "start-server",
+    "kill-server"
+  ],
+  "notes": "one or more scenario assertions failed despite at least one prerequisite passing",
+  "status": "partial"
+}

@@ -1,0 +1,18 @@
+{
+  "assertions": [
+    {
+      "name": "list-panes returned pane identity",
+      "passed": true
+    },
+    {
+      "name": "capture-pane produced pane text",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "list-panes",
+    "capture-pane"
+  ],
+  "notes": "",
+  "status": "supported"
+}

@@ -1,0 +1,15 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-13128-20260720t041927z",
+    "respawn-pane",
+    "-k",
+    "-t",
+    "ccb-rmux-probe:0.0"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "",
+  "timeout": 8.0
+}

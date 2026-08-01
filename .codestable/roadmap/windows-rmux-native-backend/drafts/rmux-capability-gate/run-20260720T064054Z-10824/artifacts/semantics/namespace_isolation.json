@@ -1,0 +1,18 @@
+{
+  "assertions": [
+    {
+      "name": "new-session used probe namespace",
+      "passed": true
+    },
+    {
+      "name": "has-session lookup stayed inside probe namespace",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "new-session",
+    "has-session"
+  ],
+  "notes": "",
+  "status": "supported"
+}

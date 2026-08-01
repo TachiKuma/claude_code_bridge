@@ -1,0 +1,19 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-17828-20260721t134124z",
+    "capture-pane",
+    "-t",
+    "ccb-rmux-probe:0.0",
+    "-p",
+    "-S",
+    "-20"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "D:\\Python\\GitHub\\claude_code_bridge>echo CCB_RMUX_TRAILING   & echo CCB_RMUX_WRA\nP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcdefghijklmno\npqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 & echo CCB_RMUX_WIDE_宽字符 & ec\nho CCB_RMUX_LASTN\nCCB_RMUX_TRAILING\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nD:\\Python\\GitHub\\claude_code_bridge>echo CCB_RMUX_BUFFER_PASTE_OK\nCCB_RMUX_BUFFER_PASTE_OK\n\nD:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n",
+  "stdout_raw_sha256": "4644ffb4f8a7aabfd8b83bacb8b94ad3d7066a73abcd76233e596c0af0e9718e",
+  "stdout_raw_size": 601,
+  "timeout": 5.0
+}

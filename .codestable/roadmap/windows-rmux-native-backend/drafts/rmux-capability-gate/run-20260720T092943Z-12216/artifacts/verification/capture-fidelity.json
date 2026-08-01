@@ -1,0 +1,19 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-12216-20260720t092943z",
+    "capture-pane",
+    "-t",
+    "ccb-rmux-probe:0.0",
+    "-p",
+    "-S",
+    "-12"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>echo CCB_RMUX_TRAILING   & echo C\nCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcd\nefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 & echo CCB_RMUX_WIDE_\n宽字符 & echo CCB_RMUX_LASTN\nCCB_RMUX_TRAILING\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nE:\\GitHub开源项目\\TachiKuma\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+  "stdout_raw_sha256": "07014292c10d3fbb1c74f2f884fc7c090a049f841875d7f9297d843e05243c99",
+  "stdout_raw_size": 543,
+  "timeout": 5.0
+}

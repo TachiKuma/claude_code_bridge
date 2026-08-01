@@ -1,0 +1,64 @@
+{
+  "gate_id": "dod-runner",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "command": "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-20-ccbd-windows-tcp-loopback-transport/ccbd-windows-tcp-loopback-transport-checklist.yaml\" --yaml-only",
+      "exit_code": 0,
+      "stdout": "Validated 1 file(s): 1 passed, 0 failed.\n\n  ✓ .codestable\\features\\2026-07-20-ccbd-windows-tcp-loopback-transport\\ccbd-windows-tcp-loopback-transport-checklist.yaml\n\nAll files valid.\n",
+      "stderr": "",
+      "id": "CMD-001",
+      "core": true,
+      "failure_handling": "fix-or-block"
+    },
+    {
+      "command": "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-rmux-native-backend/windows-rmux-native-backend-items.yaml\"",
+      "exit_code": 0,
+      "stdout": "Validated 1 file(s): 1 passed, 0 failed.\n\n  ✓ .codestable\\roadmap\\windows-rmux-native-backend\\windows-rmux-native-backend-items.yaml\n\nAll files valid.\n",
+      "stderr": "",
+      "id": "CMD-002",
+      "core": true,
+      "failure_handling": "fix-or-block"
+    },
+    {
+      "command": "python -m pytest -q test/test_ccbd_windows_tcp_loopback_transport.py",
+      "exit_code": 0,
+      "stdout": ".......                                                                  [100%]\n7 passed in 0.31s\n",
+      "stderr": "",
+      "id": "CMD-003",
+      "core": true,
+      "failure_handling": "fix-or-block"
+    },
+    {
+      "command": "python -m pytest -q test/test_ccbd_bootstrap_probe.py test/test_ccbd_control_plane_transport_fake.py",
+      "exit_code": 0,
+      "stdout": "sssss......                                                              [100%]\n6 passed, 5 skipped in 0.50s\n",
+      "stderr": "",
+      "id": "CMD-004",
+      "core": true,
+      "failure_handling": "fix-or-block"
+    },
+    {
+      "command": "python -m pytest -q test/test_v2_start_service.py -k \"ccbd or endpoint or ping or socket\"",
+      "exit_code": 0,
+      "stdout": "..                                                                       [100%]\n2 passed, 18 deselected in 0.27s\n",
+      "stderr": "",
+      "id": "CMD-005",
+      "core": true,
+      "failure_handling": "document-baseline"
+    },
+    {
+      "command": "python -m pytest -q test/test_ccbd_windows_tcp_loopback_import_guard.py",
+      "exit_code": 0,
+      "stdout": "..                                                                       [100%]\n2 passed in 0.06s\n",
+      "stderr": "",
+      "id": "CMD-006",
+      "core": true,
+      "failure_handling": "fix-or-block"
+    }
+  ],
+  "providers": {}
+}

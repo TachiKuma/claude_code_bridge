@@ -1,0 +1,29 @@
+schema_version: 2
+goal: ordinary-pane-right-click-paste
+status: complete
+objective: "完成 ordinary-pane-right-click-paste 的诊断闭环与终端验收，确认当前 Windows + WezTerm + rmux 下普通 pane 右键粘贴不能作为 GUI-native mouse parity pass，并给出可聚合的 UX parity evidence。"
+start_point: "root-cause-review-and-feature-split.md 将 ordinary-pane-right-click-paste 标为 failed / choose_clipboard_strategy_before_fix；owner 前台复测记录普通 pane 右键没有反应，即使先在其他软件复制也无法粘贴。"
+acceptance:
+  - "功能验收确认当前默认 CCB/rmux/tmux policy 多处启用 mouse on，普通 pane right-click paste 在应用 mouse reporting 路径下不能被负向绑定断言证明为 WezTerm GUI-native 粘贴行为。"
+  - "功能验收确认 rmux fallback 未重绑 MouseDown3Pane / paste-buffer 是必要回归保护，但不足以宣称真实前台右键可把系统剪贴板文本送入 shell input。"
+  - "功能验收确认本 goal 未修改运行时代码，未实现 host clipboard paste bridge，未恢复 paste-buffer，未把 WezTerm 配置层 binding 宣称为 CCB 默认生产能力。"
+  - "功能验收确认 evidence JSON 投影为 evidence_status=blocked、failure_class=unsupported_capability、parity_dimension=foreground_interaction。"
+  - "功能验收确认本 goal complete 只代表 ordinary-pane-right-click-paste 诊断闭环完成，不代表 epic 其他 child 完成。"
+non_goals:
+  - "不实现新的 host clipboard paste bridge。"
+  - "不恢复 rmux/tmux paste-buffer 右键绑定。"
+  - "不修改 WezTerm 用户配置或把配置层 binding 作为默认生产能力。"
+  - "不修改运行时代码或测试代码。"
+  - "不执行 git commit、push、merge、release 或 deploy。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 1
+next_action: "Goal complete; ordinary-pane-right-click-paste 已完成诊断闭环并投影为 blocked/unsupported_capability。"
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-30"

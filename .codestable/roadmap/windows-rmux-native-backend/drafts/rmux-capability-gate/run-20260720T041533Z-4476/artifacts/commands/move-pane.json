@@ -1,0 +1,16 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-4476-20260720t041533z",
+    "move-pane",
+    "-s",
+    "ccb-rmux-probe:0.0",
+    "-t",
+    "ccb-rmux-probe:0.0"
+  ],
+  "returncode": 1,
+  "stderr": "source and target panes must be different\n",
+  "stdout": "",
+  "timeout": 8.0
+}

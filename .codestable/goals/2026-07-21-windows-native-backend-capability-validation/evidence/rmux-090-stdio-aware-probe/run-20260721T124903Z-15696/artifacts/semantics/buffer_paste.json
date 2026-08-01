@@ -1,0 +1,31 @@
+{
+  "assertions": [
+    {
+      "kind": "prerequisite",
+      "name": "load-buffer succeeded",
+      "passed": true
+    },
+    {
+      "kind": "prerequisite",
+      "name": "paste-buffer succeeded",
+      "passed": true
+    },
+    {
+      "kind": "prerequisite",
+      "name": "delete-buffer succeeded",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "capture contains the pasted probe marker",
+      "passed": false
+    }
+  ],
+  "dependencies": [
+    "load-buffer",
+    "paste-buffer",
+    "delete-buffer"
+  ],
+  "notes": "one or more scenario assertions failed despite at least one prerequisite passing",
+  "status": "partial"
+}

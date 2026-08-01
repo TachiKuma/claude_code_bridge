@@ -1,0 +1,16 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-1176-20260720t041953z",
+    "swap-pane",
+    "-s",
+    "ccb-rmux-probe:0.0",
+    "-t",
+    "ccb-rmux-probe:0.0"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "",
+  "timeout": 8.0
+}

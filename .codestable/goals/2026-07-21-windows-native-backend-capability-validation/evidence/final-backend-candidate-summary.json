@@ -1,0 +1,50 @@
+{
+  "generated_at": "2026-07-21",
+  "objective": "Validate Windows native backend candidates for full ccb runtime needs.",
+  "candidates": [
+    {
+      "backend_impl": "psmux",
+      "version": "3.3.7",
+      "source": "temporary portable zip under goal evidence",
+      "sha256_verified": true,
+      "full_gate_report": "evidence/psmux-337/run-20260721T124326Z-6984/capability-report.json",
+      "blocking_gaps_count": 4,
+      "blocking_gaps": [
+        "attach_reattach",
+        "capture_format_fidelity_for_provider_completion",
+        "buffer_paste",
+        "ctrl_c_ctrl_d"
+      ],
+      "improvements_over_3_3_3": [
+        "set-window-option is supported",
+        "user_options_title semantic passes in the full gate"
+      ],
+      "gap_specific_observations": {
+        "attach_reattach": "Dedicated attach-survival probe saw session survival, but attach process did not remain running in non-interactive pipe mode; real foreground terminal acceptance remains required.",
+        "capture_format_fidelity_for_provider_completion": "Capture command works, but real evidence still lacks parser fidelity for OSC, wrapping, and wide-character dimensions.",
+        "buffer_paste": "Manual probe proves load-buffer + paste-buffer + explicit Enter can execute text in a PowerShell pane; provider-pane acceptance is still required.",
+        "ctrl_c_ctrl_d": "C-c interrupts a long-running Python process; C-d is not Windows EOF. Logical EOF must use a Windows/provider-specific mapping such as C-z Enter where applicable."
+      },
+      "fitness": "best_candidate_with_required_workarounds",
+      "recommended": true
+    },
+    {
+      "backend_impl": "rmux",
+      "version": "0.9.0",
+      "source": "Winget Helvesec.RMUX",
+      "full_gate_report": "evidence/rmux-current/run-20260721T122234Z-16304/capability-report.json",
+      "stdio_aware_probe_report": "evidence/rmux-090-stdio-aware-probe/run-20260721T124903Z-15696/capability-report.json",
+      "blocking_gaps_count_with_default_runner": 1,
+      "blocking_gaps_count_with_stdio_aware_runner": 8,
+      "critical_observations": [
+        "start-server and new-session time out when stdout/stderr are captured through pipes",
+        "the same lifecycle commands return quickly when stdout/stderr go to DEVNULL or inherited console",
+        "reference v8.0.16 implementation already fixed foreground attach by inheriting console stdio",
+        "reference RmuxRunner still uses capture_output=True for ordinary commands and does not directly satisfy rmux 0.9.0 daemon-start behavior"
+      ],
+      "fitness": "not_recommended_as_current_base",
+      "recommended": false
+    }
+  ],
+  "overall_verdict": "No candidate passes the full ccb Windows native backend gate without product workarounds. psmux 3.3.7 is the preferred base for the next design slice; rmux 0.9.0 remains a research fallback requiring runner and lifecycle changes before it can be reconsidered."
+}

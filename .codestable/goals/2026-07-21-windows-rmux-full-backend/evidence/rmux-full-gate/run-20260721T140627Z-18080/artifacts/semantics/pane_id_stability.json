@@ -1,0 +1,25 @@
+{
+  "assertions": [
+    {
+      "kind": "prerequisite",
+      "name": "list-panes succeeded",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "initial list-panes returned pane identity",
+      "passed": true
+    },
+    {
+      "kind": "semantic",
+      "name": "follow-up list-panes preserved at least one pane identity",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "list-panes"
+  ],
+  "notes": "",
+  "status": "supported",
+  "workaround": null
+}

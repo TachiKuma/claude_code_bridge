@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "feature": "2026-07-31-windows-x64-v852-baseline-gate",
+  "generated_at": "2026-08-01T05:53:33+08:00",
+  "host_label": "DESKTOP-Q8BCR5T",
+  "gate": {
+    "os_platform": "win32",
+    "cpu_arch": "x64",
+    "node_arch": "x64",
+    "python_bitness": "64bit",
+    "ccb_version_source": "package_json",
+    "ccb_source_ref": null,
+    "ccb_branch_ref": null,
+    "ccb_source_status": "not-v8.5.2",
+    "detected_ccb_version": "8.2.1",
+    "package_json_version": "8.2.1",
+    "version_file_version": "8.2.1",
+    "installation_version": null,
+    "expected_ccb_version": "8.5.2",
+    "herdr_arch": "missing",
+    "helper_arch": {
+      "ccb-rs-helper": "missing",
+      "ccb-agent-sidebar": "missing"
+    },
+    "platform_ready": false,
+    "native_helpers_ready": false,
+    "herdr_executable_ready": false,
+    "supported": false,
+    "failure_reason": "unknown",
+    "detail_reason": "ccb-version-mismatch",
+    "diagnostic": "Expected CCB 8.5.2, detected 8.2.1."
+  },
+  "raw_probes": {
+    "node": {
+      "platform": "win32",
+      "arch": "x64",
+      "version": "v24.13.1"
+    },
+    "python": {
+      "machine": "AMD64",
+      "architecture": "64bit",
+      "maxsize": 9223372036854775807
+    },
+    "herdr": {
+      "path": null,
+      "arch": "missing"
+    },
+    "helpers": {
+      "ccb-rs-helper": {
+        "path": null,
+        "arch": "missing"
+      },
+      "ccb-agent-sidebar": {
+        "path": null,
+        "arch": "missing"
+      }
+    }
+  },
+  "version_sources": {
+    "package_json": "8.2.1",
+    "version_file": "8.2.1",
+    "installation": null,
+    "expected": "8.5.2",
+    "git_head": "dbed2905173201dba98ea25833ec62348d0de488",
+    "git_branch": "codestable/main",
+    "git_remotes": {
+      "origin": "https://github.com/TachiKuma/claude_code_bridge.git",
+      "upstream": "https://github.com/SeemSeam/claude_codex_bridge.git"
+    }
+  },
+  "artifact_refs": {
+    "ccb_source_ref": null,
+    "ccb_branch_ref": null,
+    "herdr": null,
+    "ccb-rs-helper": null,
+    "ccb-agent-sidebar": null
+  }
+}

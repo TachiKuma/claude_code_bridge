@@ -1,0 +1,33 @@
+schema_version: 2
+goal: "rmux-packaging-docs-contracts"
+status: complete
+objective: "将 Windows Rmux 后端的安装、打包、诊断和文档契约收口为证据驱动的 blocked/experimental/beta/supported 支持档，并让 package/install/doctor/docs/roadmap 状态一致。"
+start_point: "Feature design、design-review、checklist 与 roadmap goal-feature 已存在；design-review passed。当前无 goal 目录，前置 rmux-windows-validation-matrix 仍需作为输入 fail-closed 消费，不能绕过 gate 宣布 supported。"
+acceptance:
+  - "support projection owner/classifier 绑定 route approval、capability gate、validation matrix 机器字段、local install smoke、可选 npm gate，并在证据不足时 fail closed。"
+  - "validation matrix 未满足 full pass 与 true-host/manual core rows 前不得声明 supported；support_tier 枚举 blocked/experimental/beta/supported 被 doctor/docs/tests 统一消费。"
+  - "install.ps1 rmux 行为明确为 detect_only/warn/fail_fast，默认不自动下载 rmux。"
+  - "npm win32 gate 与 package.json/os、artifactForHost win32、artifact/checksum strategy、postinstall、package files/docs strategy、README 文案一致；未启用时有 no-change rationale。"
+  - "doctor/diagnostics bundle 输出 rmux support/version/capability/validation/install_entry/fallback 字段。"
+  - "README/docs/support contract 通过 parser/snapshot gate，无 beta/supported/experimental、入口映射、release note 未来承诺冲突。"
+  - "troubleshooting 覆盖 route/capability/rmux missing/provider auth/validation incomplete。"
+  - "release guard 证明没有发布、tag、push、npm publish、release upload。"
+  - "核心 DoD 命令通过；独立 Task agent code review passed；独立 Task agent 功能验收 passed；feature review/QA/acceptance 和 roadmap item 回写完成。"
+non_goals:
+  - "不重新实现 Rmux backend、Windows validation matrix、ccbd transport、provider parser 或 supervision recovery。"
+  - "不自动下载或安装 rmux。"
+  - "不发布 npm、不 push、不 tag、不上传 release artifact。"
+  - "不把 Windows Rmux 设为全平台默认 backend。"
+  - "不把未完成 full validation 的路线描述为 supported。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 2
+next_action: "Goal complete; no further action required for rmux-packaging-docs-contracts."
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-25"

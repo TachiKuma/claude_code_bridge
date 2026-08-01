@@ -1,0 +1,23 @@
+{
+  "assertions": [
+    {
+      "name": "set-option succeeded",
+      "passed": true
+    },
+    {
+      "name": "set-window-option succeeded",
+      "passed": true
+    },
+    {
+      "name": "rename-window succeeded",
+      "passed": true
+    }
+  ],
+  "dependencies": [
+    "set-option",
+    "set-window-option",
+    "rename-window"
+  ],
+  "notes": "",
+  "status": "supported"
+}

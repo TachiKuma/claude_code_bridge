@@ -1,0 +1,31 @@
+schema_version: 2
+goal: "windows-rmux-native-backend"
+status: complete
+objective: "完成仓库内 Windows rmux/psmux native backend 首个可验收实现切片：提供真实 tmux-family PsmuxBackend，保持现有 tmux 默认路径兼容，并记录无法在当前环境完成的 Windows 真机闸门。"
+start_point: "仓库没有既有 CodeStable goal；已有 rmux capability probe 与 Windows psmux 设计文档，但 terminal_runtime 只暴露 TmuxBackend。"
+acceptance:
+  - "terminal_runtime 暴露 PsmuxBackend，backend_family/backend_impl 能区分 tmux family 与 psmux 实现。"
+  - "显式 terminal_backend/mux backend/session 字段能选择 psmux/rmux，现有 tmux 默认选择不变。"
+  - "rmux backend 使用 rmux 命令与 -L namespace，不泄漏 CCB_TMUX_CONFIG。"
+  - "聚焦测试通过，并记录当前环境无法完成 Windows 真机 psmux capability gate。"
+  - "Task agent 对本轮产物做功能验收并给出 pass/fail/inconclusive。"
+non_goals:
+  - "不在缺少 Windows 真机 capability report 的情况下接入完整 ccbd namespace lifecycle。"
+  - "不实现 Windows named pipe、Job Object 和 provider 进程树治理。"
+  - "不把 WezTerm 作为本 goal 的主路径。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 2
+next_action: "Goal complete; 后续 Windows 真机 psmux capability gate、named pipe、Job Object 和 ccbd namespace lifecycle 作为后续阶段推进。"
+acceptance_report: "functional-acceptance.md"
+acceptance_final_iteration: "iterations/002.md"
+final_iteration_report: "iterations/002.md"
+final_acceptance_report: "functional-acceptance.md"
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-21"

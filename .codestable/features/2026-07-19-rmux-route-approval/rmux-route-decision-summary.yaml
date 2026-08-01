@@ -1,0 +1,8 @@
+decision_id: rmux-route
+status: approved
+decision_status: approved
+capability_report: .codestable/features/2026-07-19-rmux-route-approval/rmux-capability-report.json
+report_facts:
+  blocking_gaps_count: 0
+parent_handoff:
+  route_approved: true

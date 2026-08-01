@@ -1,0 +1,28 @@
+schema_version: 2
+goal: "windows-rmux-audit-fixes"
+status: complete
+objective: "根据 Windows Rmux Native Backend 审计报告修复 4 条发现问题，补充回归测试并完成功能验收。"
+start_point: "审计报告 .codestable/audits/2026-07-25-windows-rmux-native-backend/index.md 已完成，包含 4 条 open finding：additive patch pane id、ccbd 客户端响应上限、backend cache 命中、PowerShell export 转译。"
+acceptance:
+  - "finding-01 的 Windows additive patch rmux respawn replacement pane id 被正确传播，并有回归测试覆盖。"
+  - "finding-02 的 ccbd 客户端响应读取存在最大字节上限，并有回归测试覆盖。"
+  - "finding-03 的 terminal API backend cache 能跨 get_backend 调用命中或等价移除误导缓存状态，并有回归测试覆盖。"
+  - "finding-04 的 PowerShell export/unset 转译不再按裸分号切坏 quoted semicolon，并有回归测试覆盖。"
+  - "相关 pytest 子集通过。"
+  - "写入 functional-acceptance.md，记录可见 Task agent 功能验收 pass。"
+non_goals:
+  - "不处理 arch-drift 审计维度。"
+  - "不发布包、不 git commit、不 git push。"
+  - "不重构与 4 条 finding 无关的 Windows Rmux 模块。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 1
+next_action: "Goal complete; no further action."
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-25"

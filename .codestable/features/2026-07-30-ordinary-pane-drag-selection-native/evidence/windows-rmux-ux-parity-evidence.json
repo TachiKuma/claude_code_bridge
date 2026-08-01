@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "host_kind": "native_windows",
+  "terminal_host": "wezterm",
+  "backend_impl": "rmux",
+  "control_plane": "ccbd",
+  "parity_dimension": "foreground_interaction",
+  "evidence_status": "blocked",
+  "failure_class": "unsupported_capability",
+  "artifacts": {
+    "diagnosis": "evidence/diagnosis.md",
+    "capability_summary": "evidence/capability-summary.json",
+    "parent_root_cause": "../2026-07-25-windows-rmux-wezterm-native-interaction-parity/evidence/root-cause-review-and-feature-split.md",
+    "parent_qa": "../2026-07-25-windows-rmux-wezterm-native-interaction-parity/windows-rmux-wezterm-native-interaction-parity-qa.md"
+  },
+  "residual_risks": [
+    "Ordinary pane drag selection remains failed in native Windows + WezTerm + rmux foreground retest.",
+    "Current mouse on policy routes pane mouse events through application mouse reporting, so WezTerm GUI-native selection is not proven by rmux binding snapshots.",
+    "Changing the result from blocked to pass requires an approved strategy and fresh foreground validation: mouse reporting off, explicit modifier bypass, or a non-native copy-mode alternative."
+  ],
+  "details": {
+    "ordinary_pane_drag_selection": {
+      "selected_route": "unsupported_capability",
+      "failure_detail": "No approved default route currently lets ordinary pane left-drag select text through WezTerm GUI-native behavior while keeping existing Windows/rmux policy unchanged.",
+      "runtime_behavior_changed": false,
+      "mouse_on_policy_changed": false,
+      "shift_bypass_claimed_as_default": false,
+      "copy_mode_claimed_as_gui_native": false,
+      "negative_binding_assertion_counted_as_pass": false,
+      "foreground_selection_observed": false
+    }
+  }
+}

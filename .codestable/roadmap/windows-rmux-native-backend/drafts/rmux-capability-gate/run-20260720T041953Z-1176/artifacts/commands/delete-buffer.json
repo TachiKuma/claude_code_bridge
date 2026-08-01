@@ -1,0 +1,12 @@
+{
+  "args": [
+    "rmux",
+    "-L",
+    "ccb-rmux-probe-1176-20260720t041953z",
+    "delete-buffer"
+  ],
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "",
+  "timeout": 8.0
+}

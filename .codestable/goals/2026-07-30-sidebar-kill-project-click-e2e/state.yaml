@@ -1,0 +1,28 @@
+schema_version: 2
+goal: sidebar-kill-project-click-e2e
+status: complete
+objective: "完成 sidebar-kill-project-click-e2e 的诊断闭环与终端验收，确认当前 Windows + WezTerm + rmux 下 sidebar x KillProject 点击不能作为 mouse parity pass，且内部 KillProject 路径已有可复核证据。"
+start_point: "root-cause-review-and-feature-split.md 将 sidebar-kill-project-click-e2e 标为 failed / design_diagnostic_feature；settings e2e 诊断已证明 rmux root binding 可触发但无坐标且 send-keys -M 不进入 Rust mouse event。"
+acceptance:
+  - "功能验收确认 Rust sidebar 内部 x hit-test 会返回 ExitAction::KillProject，且 ccb kill 子进程路径已有测试证据。"
+  - "功能验收确认真实前台 click e2e 仍不能宣称通过，因为 rmux send-keys -M 未进入 Rust/crossterm mouse event，且普通 root binding 没有 settings/x 所需坐标或等价谓词。"
+  - "功能验收确认本 goal 未新增 broad sidebar-left-click fallback，未把 x click 映射为不精确 kill 行为，也未执行真实项目 kill。"
+  - "功能验收确认 evidence JSON 投影为 evidence_status=blocked、failure_class=unsupported_capability、parity_dimension=foreground_interaction。"
+  - "功能验收确认本 goal complete 只代表 sidebar-kill-project-click-e2e 诊断闭环完成，不代表 epic 其他 child 完成。"
+non_goals:
+  - "不实现新的 rmux 或 WezTerm precise x-click route。"
+  - "不执行真实 ccb kill 或关闭当前项目。"
+  - "不修改运行时代码或测试代码。"
+  - "不执行 git commit、push、merge、release 或 deploy。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 1
+next_action: "Goal complete; sidebar-kill-project-click-e2e 已完成诊断闭环并投影为 blocked/unsupported_capability。"
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-30"

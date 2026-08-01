@@ -1,0 +1,188 @@
+{
+  "cases": [
+    {
+      "absorbed": true,
+      "consumer_strip": {
+        "claude_normalized": "• Working (1s • esc to interrupt)",
+        "codex_normalized": "• Working (1s • esc to interrupt)"
+      },
+      "dimension": "trailing_whitespace",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      },
+      "raw": "• Working (1s • esc to interrupt)   \n"
+    },
+    {
+      "absorbed": true,
+      "consumer_strip": {
+        "claude_normalized": "• Working (1s • esc to interrupt)",
+        "codex_normalized": "• Working (1s • esc to interrupt)"
+      },
+      "dimension": "csi",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      },
+      "raw": "\u001b[31m• Working (1s • esc to interrupt)\u001b[0m\n"
+    },
+    {
+      "absorbed": false,
+      "consumer_strip": {
+        "claude_normalized": "• Working (1s • esc to interrupt)",
+        "codex_normalized": "• Working (1s • esc to interrupt)"
+      },
+      "dimension": "osc",
+      "direct_stdout": {
+        "claude_reason": "no_known_status_pattern",
+        "claude_state": "unknown",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      },
+      "raw": "\u001b]0;title\u0007• Working (1s • esc to interrupt)\n"
+    },
+    {
+      "absorbed": false,
+      "consumer_strip": {
+        "claude_normalized": "• Working (1s • esc to interrupt)\nwrapped-body-without-logical-line-rebuild",
+        "codex_normalized": "• Working (1s • esc to interrupt)\nwrapped-body-without-logical-line-rebuild"
+      },
+      "dimension": "wrapping",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      },
+      "raw": "• Working (1s • esc to interrupt)\nwrapped-body-without-logical-line-rebuild\n"
+    },
+    {
+      "absorbed": false,
+      "consumer_strip": {
+        "claude_normalized": "• Working (1s • esc to interrupt)\n宽字符列宽需要 Rmux/tmux 输出平价证明",
+        "codex_normalized": "• Working (1s • esc to interrupt)\n宽字符列宽需要 Rmux/tmux 输出平价证明"
+      },
+      "dimension": "wide_char",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      },
+      "raw": "• Working (1s • esc to interrupt)\n宽字符列宽需要 Rmux/tmux 输出平价证明\n"
+    },
+    {
+      "absorbed": false,
+      "consumer_strip": {
+        "claude_normalized": "old\n• Working (1s • esc to interrupt)",
+        "codex_normalized": "old\n• Working (1s • esc to interrupt)"
+      },
+      "dimension": "last_n_tail",
+      "direct_stdout": {
+        "claude_reason": "claude_pane_spinner_active",
+        "claude_state": "working",
+        "codex_reason": "codex_working_status_line",
+        "codex_state": "working"
+      },
+      "raw": "old\n• Working (1s • esc to interrupt)\n"
+    }
+  ],
+  "normalization_responsibility": {
+    "csi": "current strip_ansi handles CSI sequences",
+    "last_n_tail": "must be proven by rmux/tmux capture tail equivalence",
+    "osc": "current strip_ansi does not remove OSC/non-CSI sequences",
+    "trailing_whitespace": "parser normalize_screen strips line tails",
+    "wide_char": "current parser does not correct display width",
+    "wrapping": "current parser does not rebuild logical lines"
+  },
+  "parser_paths": [
+    "consumer_strip",
+    "direct_stdout"
+  ],
+  "providers": [
+    "codex",
+    "claude"
+  ],
+  "real_dimension_checks": {
+    "last_n_tail": true,
+    "osc": false,
+    "trailing_whitespace": false,
+    "wide_char": true,
+    "wrapping": false
+  },
+  "rmux_capture_fixture_observation": {
+    "available": true,
+    "consumer_strip": {
+      "claude_normalized": "D:\\Python\\GitHub\\claude_code_bridge>echo CCB_RMUX_TRAILING   & echo CCB_RMUX_WRA\nP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcdefghijklmno\npqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 & echo CCB_RMUX_WIDE_宽字符 & ec\nho CCB_RMUX_LASTN\nCCB_RMUX_TRAILING\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nD:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n",
+      "codex_normalized": "D:\\Python\\GitHub\\claude_code_bridge>echo CCB_RMUX_TRAILING   & echo CCB_RMUX_WRA\nP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcdefghijklmno\npqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 & echo CCB_RMUX_WIDE_宽字符 & ec\nho CCB_RMUX_LASTN\nCCB_RMUX_TRAILING\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nD:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n"
+    },
+    "decoded_text": "D:\\Python\\GitHub\\claude_code_bridge>echo CCB_RMUX_TRAILING   & echo CCB_RMUX_WRA\nP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcdefghijklmno\npqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 & echo CCB_RMUX_WIDE_宽字符 & ec\nho CCB_RMUX_LASTN\nCCB_RMUX_TRAILING\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nD:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n\n",
+    "direct_stdout": {
+      "claude_reason": "no_known_status_pattern",
+      "claude_state": "unknown",
+      "codex_reason": "no_known_status_pattern",
+      "codex_state": "unknown"
+    },
+    "observed_dimensions": {
+      "contains_csi": false,
+      "contains_osc": false,
+      "line_count": 23
+    },
+    "raw_bytes_sha256": "53bb9be8f3a1cfe52c54f7dc7fe19c99c8c753283fcb5f41ae69243da714227a",
+    "raw_bytes_size": 512,
+    "returncode": 0
+  },
+  "rmux_capture_observation": {
+    "available": true,
+    "consumer_strip": {
+      "claude_normalized": "D:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n",
+      "codex_normalized": "D:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n"
+    },
+    "decoded_text": "D:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n",
+    "direct_stdout": {
+      "claude_reason": "no_known_status_pattern",
+      "claude_state": "unknown",
+      "codex_reason": "no_known_status_pattern",
+      "codex_state": "unknown"
+    },
+    "observed_dimensions": {
+      "contains_csi": false,
+      "contains_osc": false,
+      "line_count": 11
+    },
+    "raw_bytes_sha256": "6288f274703e6bbebecfc4d236a0dd42e08b26d3260fe040441062afbb86f62d",
+    "raw_bytes_size": 47,
+    "returncode": 0
+  },
+  "rmux_client_tail_observation": {
+    "decoded_text": "CCB_RMUX_LASTN\nD:\\Python\\GitHub\\claude_code_bridge>",
+    "lines": 2,
+    "strategy": "backend client-side tail of non-empty capture lines"
+  },
+  "rmux_last_n_observation": {
+    "available": true,
+    "consumer_strip": {
+      "claude_normalized": "D:\\Python\\GitHub\\claude_code_bridge>echo CCB_RMUX_TRAILING   & echo CCB_RMUX_WRA\nP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcdefghijklmno\npqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 & echo CCB_RMUX_WIDE_宽字符 & ec\nho CCB_RMUX_LASTN\nCCB_RMUX_TRAILING\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nD:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n",
+      "codex_normalized": "D:\\Python\\GitHub\\claude_code_bridge>echo CCB_RMUX_TRAILING   & echo CCB_RMUX_WRA\nP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcdefghijklmno\npqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 & echo CCB_RMUX_WIDE_宽字符 & ec\nho CCB_RMUX_LASTN\nCCB_RMUX_TRAILING\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nD:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n"
+    },
+    "decoded_text": "D:\\Python\\GitHub\\claude_code_bridge>echo CCB_RMUX_TRAILING   & echo CCB_RMUX_WRA\nP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcdefghijklmno\npqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 & echo CCB_RMUX_WIDE_宽字符 & ec\nho CCB_RMUX_LASTN\nCCB_RMUX_TRAILING\nCCB_RMUX_WRAP_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abc\ndefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\nCCB_RMUX_WIDE_宽字符\nCCB_RMUX_LASTN\n\nD:\\Python\\GitHub\\claude_code_bridge>\n\n\n\n\n\n\n\n\n\n\n\n\n",
+    "direct_stdout": {
+      "claude_reason": "no_known_status_pattern",
+      "claude_state": "unknown",
+      "codex_reason": "no_known_status_pattern",
+      "codex_state": "unknown"
+    },
+    "observed_dimensions": {
+      "contains_csi": false,
+      "contains_osc": false,
+      "line_count": 23
+    },
+    "raw_bytes_sha256": "53bb9be8f3a1cfe52c54f7dc7fe19c99c8c753283fcb5f41ae69243da714227a",
+    "raw_bytes_size": 512,
+    "returncode": 0
+  }
+}

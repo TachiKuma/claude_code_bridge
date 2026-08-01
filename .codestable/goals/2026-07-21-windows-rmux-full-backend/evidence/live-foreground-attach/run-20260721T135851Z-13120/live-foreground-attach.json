@@ -1,0 +1,36 @@
+{
+  "namespace": "ccb-rmux-live-13120",
+  "session": "ccb-rmux-live",
+  "lifecycle": [
+    {
+      "args": [
+        "rmux",
+        "-L",
+        "ccb-rmux-live-13120",
+        "start-server"
+      ],
+      "returncode": 0
+    },
+    {
+      "args": [
+        "rmux",
+        "-L",
+        "ccb-rmux-live-13120",
+        "new-session",
+        "-d",
+        "-s",
+        "ccb-rmux-live"
+      ],
+      "returncode": 0
+    }
+  ],
+  "attach_process_id": 4596,
+  "list_clients_returncode": 0,
+  "list_clients_stdout": "13324: ccb-rmux-live [120x50 xterm-256color] (attached,focused)\n",
+  "list_clients_stderr": "",
+  "has_live_client": true,
+  "kill_session_returncode": 0,
+  "attach_exit_code_after_kill_session": "﻿0",
+  "attach_process_returncode_after_cleanup": 0,
+  "verdict": "pass"
+}

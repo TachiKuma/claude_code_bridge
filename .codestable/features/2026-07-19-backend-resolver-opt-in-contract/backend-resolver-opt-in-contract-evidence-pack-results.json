@@ -1,0 +1,40 @@
+{
+  "gate_id": "evidence-pack",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "out": ".codestable\\features\\2026-07-19-backend-resolver-opt-in-contract\\backend-resolver-opt-in-contract-evidence-pack.md",
+      "providers": {
+        "archguard": {
+          "status": "skipped",
+          "reason": "archguard collection disabled",
+          "warnings": []
+        },
+        "meta_cc": {
+          "status": "skipped",
+          "reason": "meta-cc collection disabled",
+          "warnings": []
+        }
+      }
+    }
+  ],
+  "providers": {},
+  "feature": "2026-07-19-backend-resolver-opt-in-contract",
+  "inputs": {
+    "design": ".codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-design.md",
+    "checklist": ".codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-checklist.yaml",
+    "out": ".codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-evidence-pack.md",
+    "dod_results": ".codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-dod-results.json",
+    "gate_results": ".codestable/features/2026-07-19-backend-resolver-opt-in-contract/backend-resolver-opt-in-contract-scope-gate-results.json"
+  },
+  "input_digests": {
+    "design": "7cbd4c39cf526cb050659f988bf2136236c9a2b030f52b98c5052d7e6f51d934",
+    "checklist": "8e2acb10259d3ac82562863a458b2c1209dd426fa03e12047e34f68da9bd623d",
+    "dod_results": "08ed248834f4cd2786b32d91eaae2595b4f54daf6522698ab4d8148283cf8734",
+    "gate_results": "52100d0c8d5844ac8f18e1682d1a17576e53665d0c9a1de3259bb996da06be50",
+    "out": "380d1b839cd181ac5b6656940ef9257103a1d06f62cd6d833e7568c621b7ff08"
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "artifact_index": [
+    {
+      "kind": "preflight",
+      "name": "daemon-pre-state",
+      "path": "artifacts/preflight/daemon-pre-state.json",
+      "probe": "daemon-pre-state",
+      "redacted": true,
+      "sha256": "246ff85708c99df63e2991a5ad1b12219ee9cb32e584a4b4c48c6ac8104b35c2",
+      "size_bytes": 213
+    },
+    {
+      "kind": "command",
+      "name": "start-server",
+      "path": "artifacts/commands/start-server.json",
+      "probe": "start-server",
+      "redacted": true,
+      "sha256": "c133d030b1bde78402e4b68ace524bf5e49d1f1346d1898b9b01667e3083da2f",
+      "size_bytes": 364
+    },
+    {
+      "kind": "cleanup",
+      "name": "orphan-daemons",
+      "path": "artifacts/cleanup/orphan-daemons.json",
+      "probe": "orphan-daemons",
+      "redacted": true,
+      "sha256": "191c88e2e0e1dd32f1c5684a296c761ff30377f8edd9505dae175b8ad7571a77",
+      "size_bytes": 643
+    }
+  ],
+  "backend_impl": "rmux",
+  "blocking_gaps": [
+    {
+      "consequence": "无法建立 mux server",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/commands/start-server.json",
+      "kind": "command",
+      "name": "start-server",
+      "reason": "required unsupported without accepted workaround",
+      "required": true,
+      "status": "unsupported"
+    }
+  ],
+  "commands": {
+    "start-server": {
+      "consequence": "无法建立 mux server",
+      "degrade_impact": "core-lifecycle",
+      "evidence": "artifacts/commands/start-server.json",
+      "notes": "",
+      "required": true,
+      "returncode": 124,
+      "status": "unsupported",
+      "workaround": null
+    }
+  },
+  "early_stop": {
+    "cleanup_evidence": "artifacts/cleanup/orphan-daemons.json",
+    "command": "start-server",
+    "evidence": "artifacts/commands/start-server.json",
+    "reason": "required core command start-server is unsupported; dependent checks skipped"
+  },
+  "generated_at": "2026-07-21T11:34:49.935457Z",
+  "platform": "windows",
+  "preflight": {
+    "daemon_pre_state": {
+      "detected": false,
+      "evidence": "artifacts/preflight/daemon-pre-state.json",
+      "returncode": 1
+    },
+    "failure_reason": null,
+    "platform": "windows",
+    "probe_status": "completed",
+    "rmux_executable": "C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64\\rmux.EXE",
+    "rmux_executable_found": true,
+    "run_id": "run-20260721T113441Z-2856",
+    "shell": "C:\\Windows\\system32\\cmd.exe",
+    "version": "rmux 0.9.0",
+    "version_returncode": 0,
+    "windows_release": "10"
+  },
+  "probe_status": "completed",
+  "run_dir": "D:\\Python\\GitHub\\claude_code_bridge\\.codestable\\goals\\2026-07-21-windows-rmux-capability-gate\\evidence\\rmux-capability\\run-20260721T113441Z-2856",
+  "semantics": {},
+  "version": "rmux 0.9.0"
+}

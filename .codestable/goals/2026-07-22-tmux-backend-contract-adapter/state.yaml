@@ -1,0 +1,33 @@
+schema_version: 2
+goal: "tmux-backend-contract-adapter"
+status: complete
+objective: "继续 windows-rmux-native-backend epic 中的 tmux-backend-contract-adapter，交付现有 TmuxBackend 到 MuxBackend 契约的生产 adapter、错误映射、代表性调用方迁移和泄漏 inventory，保持 tmux 平台行为不漂移。"
+start_point: "backend-resolver-opt-in-contract 和 mux-backend-contract 已验收通过并提交；feature design 已 approved，checklist 仍为 pending；roadmap item 已标记 in-progress。"
+acceptance:
+  - "implementation admission 确认 mux-backend-contract item done，contract module、fake backend、MuxCommandError 与 capability protocols 可导入。"
+  - "新增 tmux adapter 暴露 backend_impl=tmux、MuxNamespaceRef/MuxPaneRef、MuxCapabilities，并稳定映射 socket path/name/default ipc evidence。"
+  - "TmuxCommandError、transient、permission、unsupported、subprocess failure 和 returncode failure 归一为 MuxCommandError.category，且保留诊断 evidence。"
+  - "旧 TmuxBackend public methods 保持兼容，代表性 namespace/layout/runtime launch/reflow seam 迁移到 mux-facing adapter，不扩大 _tmux_run 泄漏面。"
+  - "运行 checklist 核心验证命令，更新 feature/epic 状态产物，并通过可见 Task agent 功能验收。"
+non_goals:
+  - "不实现 RmuxBackend 或调用 Rmux CLI/SDK。"
+  - "不迁移 provider session payload、namespace_tmux_* 或 tmux_* 兼容字段。"
+  - "不修改 ccbd control-plane transport、AF_UNIX/TCP loopback、accelerator guard 或 Windows process liveness。"
+  - "不改 shell/log builder 的 Windows 语义，不新增 sh -lc、PowerShell/cmd、tee/log builder 平台分支。"
+  - "不执行 git commit、git push、merge、release、deploy 或生产变更。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 3
+next_action: "Goal complete; continue windows-rmux-native-backend at windows-namespace-ipc-schema."
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+acceptance_report: "functional-acceptance.md"
+acceptance_final_iteration: "iterations/003.md"
+final_iteration_report: "iterations/003.md"
+final_acceptance_report: "functional-acceptance.md"
+updated_at: "2026-07-22"
