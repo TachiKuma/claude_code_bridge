@@ -1,0 +1,195 @@
+{
+  "adapter_recommendation": "stop",
+  "artifact_refs": {
+    "platform_gate": ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json"
+  },
+  "capability_projection": {
+    "blocking_gaps": [
+      "schema",
+      "server_status",
+      "session_attach",
+      "pane_spawn",
+      "send_input",
+      "read_output",
+      "kill_pane",
+      "detach_reattach",
+      "server_restart_restore"
+    ],
+    "command_status": {
+      "detach_reattach": "unsupported",
+      "kill_pane": "unsupported",
+      "pane_spawn": "unsupported",
+      "read_output": "unsupported",
+      "schema": "unsupported",
+      "send_input": "unsupported",
+      "server_restart_restore": "unsupported",
+      "server_status": "unsupported",
+      "session_attach": "unsupported"
+    },
+    "semantic_status": {
+      "detach_reattach": "unsupported",
+      "kill_pane": "unsupported",
+      "pane_spawn": "unsupported",
+      "read_output": "unsupported",
+      "schema": "unsupported",
+      "send_input": "unsupported",
+      "server_restart_restore": "unsupported",
+      "server_status": "unsupported",
+      "session_attach": "unsupported"
+    },
+    "windows_beta_gaps": []
+  },
+  "failure_class": "platform-gate-blocked",
+  "fallback_terminal_smoke": null,
+  "feature": "2026-07-31-herdr-backend-contract-spike",
+  "generated_at": "2026-08-01T11:51:27+08:00",
+  "herdr": {
+    "api_schema_ref": null,
+    "executable": null,
+    "server_identity": null,
+    "socket_ref": null,
+    "status": "missing",
+    "version": null
+  },
+  "host": {
+    "cpu_arch": "x64",
+    "dedicated_host_label": "Fdyl-002",
+    "is_wsl": false,
+    "os_platform": "win32",
+    "platform_gate_cpu_arch": "x64",
+    "platform_gate_detail_reason": "ccb-version-mismatch",
+    "platform_gate_failure_reason": "unknown",
+    "platform_gate_host_label": "DESKTOP-Q8BCR5T",
+    "platform_gate_os_platform": "win32",
+    "platform_gate_python_bitness": "64bit",
+    "platform_gate_ref": ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json",
+    "platform_gate_supported": false,
+    "python_bitness": "32bit"
+  },
+  "operations": [
+    {
+      "command_ref": "not-run",
+      "diagnostic": "ccb-version-mismatch",
+      "elapsed_ms": null,
+      "evidence_ref": null,
+      "failure_class": "platform-gate-blocked",
+      "operation": "schema",
+      "status": "blocked"
+    },
+    {
+      "command_ref": "not-run",
+      "diagnostic": "ccb-version-mismatch",
+      "elapsed_ms": null,
+      "evidence_ref": null,
+      "failure_class": "platform-gate-blocked",
+      "operation": "server_status",
+      "status": "blocked"
+    },
+    {
+      "command_ref": "not-run",
+      "diagnostic": "ccb-version-mismatch",
+      "elapsed_ms": null,
+      "evidence_ref": null,
+      "failure_class": "platform-gate-blocked",
+      "operation": "session_attach",
+      "status": "blocked"
+    },
+    {
+      "command_ref": "not-run",
+      "diagnostic": "ccb-version-mismatch",
+      "elapsed_ms": null,
+      "evidence_ref": null,
+      "failure_class": "platform-gate-blocked",
+      "operation": "pane_spawn",
+      "status": "blocked"
+    },
+    {
+      "command_ref": "not-run",
+      "diagnostic": "ccb-version-mismatch",
+      "elapsed_ms": null,
+      "evidence_ref": null,
+      "failure_class": "platform-gate-blocked",
+      "operation": "send_input",
+      "status": "blocked"
+    },
+    {
+      "command_ref": "not-run",
+      "diagnostic": "ccb-version-mismatch",
+      "elapsed_ms": null,
+      "evidence_ref": null,
+      "failure_class": "platform-gate-blocked",
+      "operation": "read_output",
+      "status": "blocked"
+    },
+    {
+      "command_ref": "not-run",
+      "diagnostic": "ccb-version-mismatch",
+      "elapsed_ms": null,
+      "evidence_ref": null,
+      "failure_class": "platform-gate-blocked",
+      "operation": "kill_pane",
+      "status": "blocked"
+    },
+    {
+      "command_ref": "not-run",
+      "diagnostic": "ccb-version-mismatch",
+      "elapsed_ms": null,
+      "evidence_ref": null,
+      "failure_class": "platform-gate-blocked",
+      "operation": "detach_reattach",
+      "status": "blocked"
+    },
+    {
+      "command_ref": "not-run",
+      "diagnostic": "ccb-version-mismatch",
+      "elapsed_ms": null,
+      "evidence_ref": null,
+      "failure_class": "platform-gate-blocked",
+      "operation": "server_restart_restore",
+      "status": "blocked"
+    }
+  ],
+  "provider_cli_dry_run": {
+    "command": [],
+    "dry_run_kind": "provider_cli",
+    "exit_observed": false,
+    "failure_class": "platform-gate-blocked",
+    "killed_by_spike": false,
+    "output_match": false,
+    "pane_ref": null,
+    "provider_slug": null,
+    "public_provider_parity_claimed": false,
+    "treated_as_completion_authority": false
+  },
+  "residual_risks": [
+    "ccb-version-mismatch"
+  ],
+  "restore": {
+    "agent_session_restored": null,
+    "detach_process_continues": null,
+    "detach_reattach_checked": false,
+    "diagnostic": "ccb-version-mismatch",
+    "layout_restored": null,
+    "old_process_expected_to_survive": false,
+    "output_history_restored": null,
+    "preexisting_sessions_checked": false,
+    "restart_authorized": false,
+    "restart_isolation": {
+      "cleanup_targets": [],
+      "config_ref": null,
+      "created_by_spike": false,
+      "preexisting_sessions_before": [],
+      "server_identity_after": null,
+      "server_identity_before": null,
+      "server_ref_kind": "unknown",
+      "session_name": "",
+      "socket_ref": null,
+      "stop_command_ref": null
+    },
+    "restart_scope": "blocked-not-isolated",
+    "server_identity": null,
+    "server_restart_checked": false
+  },
+  "schema_version": 1,
+  "verdict": "blocked"
+}

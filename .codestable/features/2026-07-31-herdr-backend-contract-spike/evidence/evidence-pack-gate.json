@@ -1,0 +1,40 @@
+{
+  "gate_id": "evidence-pack",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "out": ".codestable\\features\\2026-07-31-herdr-backend-contract-spike\\herdr-backend-contract-spike-evidence-pack.md",
+      "providers": {
+        "archguard": {
+          "status": "skipped",
+          "reason": "archguard collection disabled",
+          "warnings": []
+        },
+        "meta_cc": {
+          "status": "skipped",
+          "reason": "meta-cc collection disabled",
+          "warnings": []
+        }
+      }
+    }
+  ],
+  "providers": {},
+  "feature": "2026-07-31-herdr-backend-contract-spike",
+  "inputs": {
+    "design": ".codestable/features/2026-07-31-herdr-backend-contract-spike/herdr-backend-contract-spike-design.md",
+    "checklist": ".codestable/features/2026-07-31-herdr-backend-contract-spike/herdr-backend-contract-spike-checklist.yaml",
+    "out": ".codestable/features/2026-07-31-herdr-backend-contract-spike/herdr-backend-contract-spike-evidence-pack.md",
+    "dod_results": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/dod-results.json",
+    "gate_results": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/scope-gate.json"
+  },
+  "input_digests": {
+    "design": "0b26e3972abe042e3e34b7e45b5b1c3eb6b61c7cbd3649020b54749d8135869c",
+    "checklist": "b79fe85f64d5497d49c1ff073736e44e176cc5cf350b830d5fe31407dc67223a",
+    "dod_results": "126ff85c09f449e5f7b2112ab498708cba25c0f33761a1cb364066183427c936",
+    "gate_results": "654d30adcfb919211d6e53e58819e4ec74760c07a9f367d0d11bd1c7ebf14871",
+    "out": "ecac8f924505c97c3701f77efd67ced47ea9173f48d5e4bd52e2581418528c05"
+  }
+}

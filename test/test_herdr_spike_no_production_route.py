@@ -1,0 +1,61 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import terminal_runtime.api as terminal_api
+from terminal_runtime.backend_selection import TerminalBackendSelection
+
+
+class _FakeBackend:
+    pass
+
+
+def test_herdr_terminal_type_is_not_registered_during_spike(monkeypatch) -> None:
+    selection = TerminalBackendSelection(
+        detect_terminal_fn=lambda: "herdr",
+        tmux_backend_factory=lambda: _FakeBackend(),
+    )
+
+    assert selection.get_backend() is None
+    assert selection.get_backend("herdr") is None
+    monkeypatch.setattr(terminal_api, "_backend_cache", None)
+    assert terminal_api.get_backend("herdr") is None
+
+
+def test_production_runtime_does_not_contain_herdr_native_contract() -> None:
+    root = Path(__file__).resolve().parents[1]
+    production_roots = [root / "lib" / "terminal_runtime", root / "lib" / "ccbd", root / "lib" / "provider_backends"]
+
+    matches: list[Path] = []
+    for production_root in production_roots:
+        if not production_root.exists():
+            continue
+        for path in production_root.rglob("*.py"):
+            if "herdr-native" in path.read_text(encoding="utf-8", errors="ignore"):
+                matches.append(path.relative_to(root))
+
+    assert matches == []
+
+
+def test_scope_gate_records_no_production_or_package_diff() -> None:
+    root = Path(__file__).resolve().parents[1]
+    scope_gate = json.loads(
+        (
+            root
+            / ".codestable"
+            / "features"
+            / "2026-07-31-herdr-backend-contract-spike"
+            / "evidence"
+            / "scope-gate.json"
+        ).read_text(encoding="utf-8")
+    )
+    changed_files = scope_gate["evidence"][0]["changed_files"]
+    guarded_prefixes = (
+        "lib/terminal_runtime/",
+        "lib/ccbd/",
+        "lib/provider_backends/",
+        "bin/",
+    )
+
+    assert [path for path in changed_files if path == "package.json" or path.startswith(guarded_prefixes)] == []

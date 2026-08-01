@@ -1,5 +1,5 @@
 roadmap: "windows-native-herdr-ccb"
-status: ready-to-dispatch
+status: handoff
 baseline_ref: "3b11479a48fd8702403ca7fa6b10cd2e0688f573"
 driver_kind: none
 driver_id: ""
@@ -8,9 +8,9 @@ acceptance_authorization: approved
 acceptance_authorization_ref: "approval-report.md#goal-acceptance"
 commit_authorization: approved
 commit_authorization_ref: "approval-report.md#goal-commits"
-handoff_reason: ""
-handoff_next: ""
-current_feature_index: 1
+handoff_reason: "herdr-backend-contract-spike accepted with fail-closed evidence: verdict=blocked, failure_class=platform-gate-blocked, adapter_recommendation=stop; downstream Herdr adapter route is not implementation-ready."
+handoff_next: "Return to cs-epic planning/update: repair strict v8.5.2 platform gate evidence or replan/drop downstream Herdr adapter features before continuing."
+current_feature_index: 2
 features:
   - slug: "windows-x64-v852-baseline-gate"
     roadmap_item: "windows-x64-v852-baseline-gate"
@@ -29,7 +29,7 @@ features:
     review: ".codestable/features/2026-07-31-herdr-backend-contract-spike/herdr-backend-contract-spike-review.md"
     qa: ".codestable/features/2026-07-31-herdr-backend-contract-spike/herdr-backend-contract-spike-qa.md"
     acceptance: ".codestable/features/2026-07-31-herdr-backend-contract-spike/herdr-backend-contract-spike-acceptance.md"
-    status: pending
+    status: accepted
   - slug: "mux-backend-contract-herdr-v2"
     roadmap_item: "mux-backend-contract-herdr-v2"
     feature_dir: ".codestable/features/2026-07-31-mux-backend-contract-herdr-v2"

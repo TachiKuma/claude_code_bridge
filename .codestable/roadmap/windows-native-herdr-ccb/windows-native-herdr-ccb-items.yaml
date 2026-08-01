@@ -13,10 +13,10 @@ items:
   - slug: herdr-backend-contract-spike
     description: 用 Herdr socket API 在 Native Windows x64 上验证 session、pane、send、capture、kill、restore 和 provider dry-run 最小语义
     depends_on: [windows-x64-v852-baseline-gate]
-    status: in-progress
+    status: done
     feature: 2026-07-31-herdr-backend-contract-spike
     minimal_loop: true
-    notes: "只产出 spike 与 evidence；必须覆盖 kill_pane 和一个 provider CLI dry-run pane，但不代表完整 all-provider parity；若 Herdr socket API 无法覆盖最小语义，停止正式 adapter 路线并回写缺口。"
+    notes: "只产出 spike 与 evidence；验收证据为 fail-closed blocked：platform gate 显示 ccb-version-mismatch，machine evidence 为 verdict=blocked、failure_class=platform-gate-blocked、adapter_recommendation=stop；未证明 Herdr 最小语义可用，后续正式 adapter 路线必须停下并回到 epic planning/update 修复 platform gate 或重规划。"
 
   - slug: mux-backend-contract-herdr-v2
     description: 将既有 mux 小协议升级为支持 tmux、rmux、herdr 共存的 backend contract v2
