@@ -447,7 +447,7 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
    - 依赖：`windows-x64-v852-baseline-gate`
    - 状态：accepted
    - 对应 feature：`2026-07-31-herdr-backend-contract-spike`
-   - 备注：只写 spike 与 evidence，不改生产代码；当前验收结论为 fail-closed blocked：`platform-gate-summary.json` 已修正为 `ccb_source_status=strict-v8.5.2`、Python 为 64-bit，`C:/Users/Administrator/AppData/Local/Programs/Herdr/herdr.exe` 为 x64，且两个 CCB native helper PE header 为 x64；spike evidence 为 `verdict=blocked`、`failure_class=unsupported-capability`、`adapter_recommendation=needs-upstream-issue`。schema/status/session_attach/pane_spawn/send_input/kill_pane 已通过，read_output、detach_reattach、server_restart_restore 未证明；后续 adapter 线必须先确认 Herdr input/read 与 restore 语义或调整 epic 路线。
+   - 备注：只写 spike 与 evidence，不改生产代码；当前验收结论为 fail-closed blocked：`platform-gate-summary.json` 已修正为 `ccb_source_status=strict-v8.5.2`、Python 为 64-bit，`C:/Users/Administrator/AppData/Local/Programs/Herdr/herdr.exe` 为 x64，且两个 CCB native helper PE header 为 x64；spike evidence 为 `verdict=blocked`、`failure_class=unsupported-capability`、`adapter_recommendation=needs-upstream-issue`。schema/status/session_attach/pane_spawn/send_input/read_output/kill_pane 已通过，server_restart_restore 为 partial（workspace/pane identity restore，output history 未恢复），detach_reattach 未在 Herdr UI client 内验证；后续 adapter 线必须先确认 Herdr detach 与 restore 语义或调整 epic 路线。
 
 3. **mux-backend-contract-herdr-v2** — 将既有 mux 小协议升级到 `tmux` / `rmux` / `herdr` 共存，并保留 legacy compatibility。
    - 所属模块：Backend Contract V2

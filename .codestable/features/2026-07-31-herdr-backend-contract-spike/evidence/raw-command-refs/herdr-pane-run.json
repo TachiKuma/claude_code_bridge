@@ -3,9 +3,12 @@
     "<home>/AppData/Local/Programs/Herdr\\herdr.EXE",
     "--session",
     "ccb-herdr-spike",
-    "--version"
+    "pane",
+    "run",
+    "w1:p2",
+    "cmd /c echo CCB_HERDR_SPIKE_OK"
   ],
   "returncode": 0,
   "stderr_excerpt": "",
-  "stdout_excerpt": "herdr 0.7.5-preview.2026-07-29-44b3adb12552\n"
+  "stdout_excerpt": ""
 }

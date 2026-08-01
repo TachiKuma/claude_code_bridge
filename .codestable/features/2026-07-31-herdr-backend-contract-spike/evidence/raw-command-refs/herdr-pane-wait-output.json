@@ -1,0 +1,17 @@
+{
+  "command": [
+    "<home>/AppData/Local/Programs/Herdr\\herdr.EXE",
+    "--session",
+    "ccb-herdr-spike",
+    "pane",
+    "wait-output",
+    "w1:p2",
+    "--match",
+    "CCB_HERDR_SPIKE_OK",
+    "--timeout",
+    "5000"
+  ],
+  "returncode": 0,
+  "stderr_excerpt": "",
+  "stdout_excerpt": "{\"id\":\"cli:pane:wait-output\",\"result\":{\"matched_line\":\"PS E:\\\\GitHub\u5f00\u6e90\u9879\u76ee\\\\TachiKuma\\\\claude_code_bridge> cmd /c echo CCB_HERDR_SPIKE_OK\",\"pane_id\":\"w1:p2\",\"read\":{\"format\":\"text\",\"pane_id\":\"w1:p2\",\"revision\":0,\"source\":\"recent_unwrapped\",\"tab_id\":\"w1:t1\",\"text\":\"PS E:\\\\GitHub\u5f00\u6e90\u9879\u76ee\\\\TachiKuma\\\\claude_code_bridge> cmd /c echo CCB_HERDR_SPIKE_OK\\nCCB_HERDR_SPIKE_OK\\nPS E:\\\\GitHub\u5f00\u6e90\u9879\u76ee\\\\TachiKuma\\\\claude_code_bridge>\",\"truncated\":false,\"workspace_id\":\"w1\"},\"revision\":0,\"type\":\"output_matched\"}}\n"
+}

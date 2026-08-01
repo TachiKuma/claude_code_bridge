@@ -1,52 +1,56 @@
 {
   "adapter_recommendation": "needs-upstream-issue",
   "artifact_refs": {
+    "kill_pane": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-close.json",
+    "pane_spawn": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-spawn.json",
     "platform_gate": ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json",
+    "read_output": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-wait-output.json",
+    "restart_pane_list": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-list-after-restart.json",
+    "restart_read": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-read-after-restart.json",
+    "restart_start": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-server-restart-start.json",
+    "restart_status": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-status-after-restart.json",
+    "restart_stop": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-server-restart-stop.json",
+    "restart_workspace_list": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-workspace-list-after-restart.json",
     "schema": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-api-schema.json",
+    "send_input": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-run.json",
     "status": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-status.json",
+    "status_after_start": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-status-after-start.json",
     "version": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-version.json",
     "workspace_create": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-workspace-create.json"
   },
   "capability_projection": {
     "blocking_gaps": [
-      "schema",
-      "server_status",
-      "session_attach",
-      "pane_spawn",
-      "send_input",
-      "read_output",
-      "kill_pane",
       "detach_reattach",
       "server_restart_restore"
     ],
     "command_status": {
       "detach_reattach": "unsupported",
-      "kill_pane": "unsupported",
-      "pane_spawn": "unsupported",
-      "read_output": "unsupported",
-      "schema": "unsupported",
-      "send_input": "unsupported",
-      "server_restart_restore": "unsupported",
-      "server_status": "unsupported",
-      "session_attach": "unsupported"
+      "kill_pane": "supported",
+      "pane_spawn": "supported",
+      "read_output": "supported",
+      "schema": "supported",
+      "send_input": "supported",
+      "server_restart_restore": "partial",
+      "server_status": "supported",
+      "session_attach": "supported"
     },
     "semantic_status": {
       "detach_reattach": "unsupported",
-      "kill_pane": "unsupported",
-      "pane_spawn": "unsupported",
-      "read_output": "unsupported",
-      "schema": "unsupported",
-      "send_input": "unsupported",
-      "server_restart_restore": "unsupported",
-      "server_status": "unsupported",
-      "session_attach": "unsupported"
+      "kill_pane": "supported",
+      "pane_spawn": "supported",
+      "read_output": "supported",
+      "schema": "supported",
+      "send_input": "supported",
+      "server_restart_restore": "partial",
+      "server_status": "supported",
+      "session_attach": "supported"
     },
     "windows_beta_gaps": []
   },
   "failure_class": "unsupported-capability",
   "fallback_terminal_smoke": null,
   "feature": "2026-07-31-herdr-backend-contract-spike",
-  "generated_at": "2026-08-01T13:29:18+08:00",
+  "generated_at": "2026-08-01T14:06:02+08:00",
   "herdr": {
     "api_schema_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-api-schema.json",
     "executable": "C:/Users/Administrator/AppData/Local/Programs/Herdr\\herdr.EXE",
@@ -73,70 +77,70 @@
   "operations": [
     {
       "command_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-api-schema.json",
-      "diagnostic": "schema command did not return JSON object output",
-      "elapsed_ms": 10,
+      "diagnostic": "schema command returned valid JSON",
+      "elapsed_ms": 12,
       "evidence_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-api-schema.json",
-      "failure_class": "schema-mismatch",
+      "failure_class": null,
       "operation": "schema",
-      "status": "blocked"
+      "status": "pass"
     },
     {
       "command_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-status.json",
-      "diagnostic": "status command did not return JSON object output",
-      "elapsed_ms": 9,
+      "diagnostic": "status command returned valid JSON",
+      "elapsed_ms": 11,
       "evidence_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-status.json",
-      "failure_class": "unsupported-capability",
+      "failure_class": null,
       "operation": "server_status",
-      "status": "blocked"
+      "status": "pass"
     },
     {
       "command_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-workspace-create.json",
-      "diagnostic": "workspace create did not return workspace/root pane ids",
-      "elapsed_ms": 9,
+      "diagnostic": "workspace create returned workspace and root pane ids",
+      "elapsed_ms": 50,
       "evidence_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-workspace-create.json",
-      "failure_class": "unsupported-capability",
+      "failure_class": null,
       "operation": "session_attach",
-      "status": "blocked"
+      "status": "pass"
     },
     {
-      "command_ref": "not-run",
-      "diagnostic": "pane split did not return pane id",
-      "elapsed_ms": null,
-      "evidence_ref": null,
-      "failure_class": "unsupported-capability",
+      "command_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-spawn.json",
+      "diagnostic": "pane split returned pane id",
+      "elapsed_ms": 24,
+      "evidence_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-spawn.json",
+      "failure_class": null,
       "operation": "pane_spawn",
-      "status": "blocked"
+      "status": "pass"
     },
     {
-      "command_ref": "not-run",
-      "diagnostic": "send-text or Enter failed",
-      "elapsed_ms": null,
-      "evidence_ref": null,
-      "failure_class": "unsupported-capability",
+      "command_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-run.json",
+      "diagnostic": "pane run completed",
+      "elapsed_ms": 18,
+      "evidence_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-run.json",
+      "failure_class": null,
       "operation": "send_input",
-      "status": "blocked"
+      "status": "pass"
     },
     {
-      "command_ref": "not-run",
-      "diagnostic": "pane read did not observe marker output",
-      "elapsed_ms": null,
-      "evidence_ref": null,
-      "failure_class": "unsupported-capability",
+      "command_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-wait-output.json",
+      "diagnostic": "pane wait-output observed marker output",
+      "elapsed_ms": 121,
+      "evidence_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-wait-output.json",
+      "failure_class": null,
       "operation": "read_output",
-      "status": "blocked"
+      "status": "pass"
     },
     {
-      "command_ref": "not-run",
-      "diagnostic": "pane close failed",
-      "elapsed_ms": null,
-      "evidence_ref": null,
-      "failure_class": "unsupported-capability",
+      "command_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-close.json",
+      "diagnostic": "pane close returned ok",
+      "elapsed_ms": 30,
+      "evidence_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-close.json",
+      "failure_class": null,
       "operation": "kill_pane",
-      "status": "blocked"
+      "status": "pass"
     },
     {
       "command_ref": "not-run",
-      "diagnostic": "server restart restore remains fail-closed until restart identity and preexisting-session isolation can be proven",
+      "diagnostic": "detach/reattach requires an attached Herdr UI client and is not exercised from this non-Herdr harness",
       "elapsed_ms": null,
       "evidence_ref": null,
       "failure_class": "unsupported-capability",
@@ -144,13 +148,13 @@
       "status": "blocked"
     },
     {
-      "command_ref": "not-run",
-      "diagnostic": "server restart restore remains fail-closed until restart identity and preexisting-session isolation can be proven",
+      "command_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-workspace-list-after-restart.json",
+      "diagnostic": "server restart restored workspace/pane identity but did not restore marker output history",
       "elapsed_ms": null,
-      "evidence_ref": null,
-      "failure_class": "unsupported-capability",
+      "evidence_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-list-after-restart.json",
+      "failure_class": "windows-beta-gap",
       "operation": "server_restart_restore",
-      "status": "blocked"
+      "status": "partial"
     }
   ],
   "provider_cli_dry_run": {
@@ -166,31 +170,32 @@
     "treated_as_completion_authority": false
   },
   "residual_risks": [
-    "server restart restore remains fail-closed until restart identity and preexisting-session isolation can be proven"
+    "server restart restored workspace/pane identity but did not restore marker output history"
   ],
   "restore": {
     "agent_session_restored": null,
     "detach_process_continues": null,
     "detach_reattach_checked": false,
-    "diagnostic": "server restart restore remains fail-closed until restart identity and preexisting-session isolation can be proven",
-    "layout_restored": null,
+    "diagnostic": "server restart restored workspace/pane identity but did not restore marker output history",
+    "layout_restored": true,
     "old_process_expected_to_survive": false,
-    "output_history_restored": null,
-    "preexisting_sessions_checked": false,
+    "output_history_restored": false,
+    "preexisting_sessions_checked": true,
     "restart_authorized": false,
     "restart_isolation": {
       "cleanup_targets": [
-        "ccb-herdr-spike"
+        "ccb-herdr-spike",
+        "w1"
       ],
       "config_ref": "",
       "created_by_spike": true,
       "preexisting_sessions_before": [],
-      "server_identity_after": null,
-      "server_identity_before": null,
+      "server_identity_after": "C:\\Users\\Administrator\\AppData\\Roaming\\herdr\\sessions\\ccb-herdr-spike\\herdr.sock",
+      "server_identity_before": "C:\\Users\\Administrator\\AppData\\Roaming\\herdr\\sessions\\ccb-herdr-spike\\herdr.sock",
       "server_ref_kind": "dedicated-disposable-server",
       "session_name": "ccb-herdr-spike",
       "socket_ref": "ccb-herdr-spike",
-      "stop_command_ref": null
+      "stop_command_ref": ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-server-restart-stop.json"
     },
     "restart_scope": "isolated-socket",
     "server_identity": null,

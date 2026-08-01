@@ -37,7 +37,7 @@ checks:
   - item: "独立 named session 创建或 attach 成功，未污染用户默认 session"
     source: design AC-003 / scope guard
     status: passed
-  - item: "PowerShell pane probe 记录 pane ref、send status 与 read_output 结果；当前 Herdr CLI 接受 send，但 read 未观察到 sentinel，按 unsupported-capability fail-closed"
+  - item: "PowerShell pane probe 记录 pane ref、send status 与 read_output 结果；当前 Herdr CLI pane run + wait-output 已观察到 sentinel"
     source: design AC-004
     status: passed
   - item: "provider_cli_dry_run 与 fallback_terminal_smoke 分离；provider unavailable 与 Herdr failure 分离，fallback 不支撑 all-provider parity"
@@ -49,7 +49,7 @@ checks:
   - item: "detach/reattach 被单独记录，不夸大 server restart 后的进程存活"
     source: design AC-007 / DOD-IMPL-003
     status: passed
-  - item: "server restart 只能在 dedicated/disposable server 或 isolated socket/config 下执行；restart_isolation 包含 server_ref_kind、session_name、socket/config ref、server_identity_before/after、preexisting_sessions_before、created_by_spike、stop_command_ref、cleanup_targets"
+  - item: "server restart 只能在 dedicated/disposable server 或 isolated socket/config 下执行；当前已证明 workspace/pane identity restore，但 output history 未恢复，因此 server_restart_restore 为 partial/windows-beta-gap"
     source: design AC-008 / DOD-IMPL-003
     status: passed
   - item: "herdr-contract-spike-evidence.json 通过 schema/semantic validator，recommendation truth table 与 host、operation、provider、restart、capability 状态一致"
@@ -91,7 +91,7 @@ dod:
         - production_contract_no_change
         - resolver_no_herdr_route_in_spike
     - id: CMD-005
-      command: cmd /c "set PATH=C:/Users/Administrator/AppData/Local/Programs/Herdr;%PATH% && C:/Users/Administrator/AppData/Local/Programs/Python/Python314/python.exe .codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-backend-contract-spike/run_spike.py --platform-gate-ref .codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json --session ccb-herdr-spike --isolated-server --isolation-created-by-spike --isolated-socket-ref ccb-herdr-spike --herdr-socket-arg=\"--session\" --out .codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json"
+      command: cmd /c "set PATH=C:/Users/Administrator/AppData/Local/Programs/Herdr;%PATH% && C:/Users/Administrator/AppData/Local/Programs/Python/Python314/python.exe .codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-backend-contract-spike/run_spike.py --platform-gate-ref .codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json --session ccb-herdr-spike --isolated-server --isolation-created-by-spike --isolated-socket-ref ccb-herdr-spike --herdr-socket-arg=--session --out .codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json"
       core: true
       manual_core: native_windows_x64_host
       failure_handling: blocked-evidence-if-host-missing-or-restart-not-isolated

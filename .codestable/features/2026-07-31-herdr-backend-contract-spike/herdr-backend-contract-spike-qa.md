@@ -46,7 +46,7 @@ round: 1
 ## 4. Scenario Results
 
 - [x] QA-001 Herdr primitive fail-closed：pass
-  - Evidence: `herdr-contract-spike-evidence.json` 为 `verdict=blocked`、`failure_class=unsupported-capability`、`adapter_recommendation=needs-upstream-issue`；schema/status/session_attach/pane_spawn/send_input/kill_pane 为 pass，read_output、detach_reattach、server_restart_restore 保持 blocked。
+  - Evidence: `herdr-contract-spike-evidence.json` 为 `verdict=blocked`、`failure_class=unsupported-capability`、`adapter_recommendation=needs-upstream-issue`；schema/status/session_attach/pane_spawn/send_input/read_output/kill_pane 为 pass，server_restart_restore 为 partial，detach_reattach 保持 blocked。
 - [x] QA-002 fake pass rejected：pass
   - Evidence: validator tests 覆盖 pass/non-continue、pass/blocked operation、failure_class none/non-pass、artifact_refs 缺失、command/evidence ref 缺失、重复 operation、unknown URI。
 - [x] QA-003 provider/fallback split：pass
@@ -56,7 +56,7 @@ round: 1
 - [x] QA-005 production no-change：pass
   - Evidence: scope gate changed_files 无 `lib/terminal_runtime/`、`lib/ccbd/`、`lib/provider_backends/`、`bin/` 或 `package.json`；API 层 `get_backend("herdr")` 返回 None。
 - [x] QA-006 evidence interpretation：pass
-  - Evidence: evidence pack Residual Risks 明确写 `blocked/unsupported-capability/needs-upstream-issue`；v8.5.2 source admission、64-bit Python、Native Windows x64 Herdr 与 x64 helper PE evidence 已满足，剩余风险是 Herdr input/read 和 restart/restore 语义未证明。
+  - Evidence: evidence pack Residual Risks 明确写 `blocked/unsupported-capability/needs-upstream-issue`；v8.5.2 source admission、64-bit Python、Native Windows x64 Herdr 与 x64 helper PE evidence 已满足，剩余风险是 detach/reattach 未在 Herdr UI client 内验证，以及 restart 后输出历史未恢复。
 - [x] QA-007 cleanliness：pass
   - Evidence: 清洁度命中仅为测试中的 secret/redaction fixtures 与 `herdr-native` guard 字符串；无未解释生产 debug/TODO。
 
@@ -72,7 +72,7 @@ none
 
 ### residual-risk
 
-- Herdr active-host 能力仅部分证明；read_output 未观察到 send sentinel，detach/reattach 与 server restart restore 未证明。后续若要继续 Herdr adapter，必须先确认 Herdr 0.7.5 的 input/read 和 restore API 语义，或调整 epic 路线。
+- Herdr active-host 能力仅部分证明；detach/reattach 未在 Herdr UI client 内验证，server restart restore 只恢复 workspace/pane identity，不恢复 sentinel 输出历史。后续若要继续 Herdr adapter，必须先确认 Herdr 0.7.5 的 detach 与 restore API 语义，或调整 epic 路线。
 
 ## 6. Cleanliness
 

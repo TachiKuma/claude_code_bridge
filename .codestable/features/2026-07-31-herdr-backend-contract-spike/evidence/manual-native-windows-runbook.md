@@ -13,7 +13,7 @@ Run the Herdr contract spike on a dedicated Native Windows x64 host and write ma
 ## Command
 
 ```powershell
-cmd /c "set PATH=C:/Users/Administrator/AppData/Local/Programs/Herdr;%PATH% && C:/Users/Administrator/AppData/Local/Programs/Python/Python314/python.exe .codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-backend-contract-spike/run_spike.py --platform-gate-ref .codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json --session ccb-herdr-spike --isolated-server --isolation-created-by-spike --isolated-socket-ref ccb-herdr-spike --herdr-socket-arg=\"--session\" --out .codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json"
+cmd /c "set PATH=C:/Users/Administrator/AppData/Local/Programs/Herdr;%PATH% && C:/Users/Administrator/AppData/Local/Programs/Python/Python314/python.exe .codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-backend-contract-spike/run_spike.py --platform-gate-ref .codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json --session ccb-herdr-spike --isolated-server --isolation-created-by-spike --isolated-socket-ref ccb-herdr-spike --herdr-socket-arg=--session --out .codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json"
 ```
 
 ## Safety Rules
@@ -27,4 +27,4 @@ cmd /c "set PATH=C:/Users/Administrator/AppData/Local/Programs/Herdr;%PATH% && C
 ## Current Run Notes
 
 - The checked platform gate artifact currently reports `supported=true`: v8.5.2 source admission, 64-bit Python, x64 Herdr, and x64 helper PE evidence are satisfied.
-- The current runner reaches Herdr CLI schema/status/workspace/pane commands, but `read_output` does not observe the sentinel after send, and detach/restart restore remain unproven. Blocked evidence is valid spike output for this feature; it prevents downstream adapter work from treating partial Herdr behavior as supported.
+- The current runner reaches Herdr CLI schema/status/workspace/pane commands. `pane run` plus `pane wait-output` observes the sentinel, while detach/reattach remains unexercised from the non-Herdr harness and server restart restore is only partial: workspace/pane identity returns, but marker output history does not. Blocked evidence is valid spike output for this feature; it prevents downstream adapter work from treating partial Herdr behavior as supported.

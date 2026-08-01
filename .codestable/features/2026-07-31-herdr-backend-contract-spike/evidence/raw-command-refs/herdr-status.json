@@ -1,12 +1,12 @@
 {
   "command": [
     "<home>/AppData/Local/Programs/Herdr\\herdr.EXE",
-    "\"--session\"",
+    "--session",
     "ccb-herdr-spike",
     "status",
     "--json"
   ],
-  "returncode": 2,
-  "stderr_excerpt": "unknown command: \"--session\"\nrun 'herdr --help' for usage\n",
-  "stdout_excerpt": ""
+  "returncode": 0,
+  "stderr_excerpt": "",
+  "stdout_excerpt": "{\"client\":{\"version\":\"0.7.5-preview.2026-07-29-44b3adb12552\",\"channel\":\"preview\",\"protocol\":18,\"binary\":\"C:\\\\Users\\\\Administrator\\\\AppData\\\\Local\\\\Programs\\\\Herdr\\\\herdr.EXE\",\"session\":\"ccb-herdr-spike\"},\"server\":{\"status\":\"not_running\",\"running\":false,\"version\":null,\"protocol\":null,\"capabilities\":null,\"compatible\":null,\"socket\":\"C:\\\\Users\\\\Administrator\\\\AppData\\\\Roaming\\\\herdr\\\\sessions\\\\ccb-herdr-spike\\\\herdr.sock\",\"session\":\"ccb-herdr-spike\",\"restart_needed\":false},\"update\":{\"restart_needed\":false}}\n"
 }

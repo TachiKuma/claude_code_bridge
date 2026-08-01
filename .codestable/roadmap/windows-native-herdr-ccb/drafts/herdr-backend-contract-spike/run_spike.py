@@ -274,6 +274,14 @@ def _blocked_operations(failure_class: str, diagnostic: str) -> list[dict[str, A
     ]
 
 
+def _capability_status(operation_status: Any) -> str:
+    if operation_status == "pass":
+        return "supported"
+    if operation_status == "partial":
+        return "partial"
+    return "unsupported"
+
+
 def _host_evidence(platform_gate_ref: Path | None, platform_payload: dict[str, Any] | None) -> dict[str, Any]:
     gate = platform_payload.get("gate", {}) if isinstance(platform_payload, dict) else {}
     return {
@@ -344,11 +352,11 @@ def _base_evidence(
         "restore": restore,
         "capability_projection": {
             "command_status": {
-                op["operation"]: "supported" if op["status"] == "pass" else "unsupported"
+                op["operation"]: _capability_status(op["status"])
                 for op in operations
             },
             "semantic_status": {
-                op["operation"]: "supported" if op["status"] == "pass" else "unsupported"
+                op["operation"]: _capability_status(op["status"])
                 for op in operations
             },
             "windows_beta_gaps": [],
@@ -638,17 +646,13 @@ def run_spike(args: argparse.Namespace) -> dict[str, Any]:
     kill_pass = False
     if spawned_pane_id is not None:
         time.sleep(1)
-        send_text_command = [herdr, *scope_args, "pane", "send-text", spawned_pane_id, f"cmd /c echo {marker}"]
-        send_text_result, send_text_elapsed = _run(send_text_command)
-        send_text_ref = _command_ref(log_dir, "herdr-pane-send-text", send_text_command, send_text_result)
-        artifact_refs["send_text"] = send_text_ref
-        send_keys_command = [herdr, *scope_args, "pane", "send-keys", spawned_pane_id, "Enter"]
-        send_keys_result, send_keys_elapsed = _run(send_keys_command)
-        send_keys_ref = _command_ref(log_dir, "herdr-pane-send-keys", send_keys_command, send_keys_result)
-        artifact_refs["send_keys"] = send_keys_ref
-        send_pass = send_text_result.returncode == 0 and send_keys_result.returncode == 0
-        send_elapsed = send_text_elapsed + send_keys_elapsed
-        send_ref = send_keys_ref
+        run_command = [herdr, *scope_args, "pane", "run", spawned_pane_id, f"cmd /c echo {marker}"]
+        run_result, run_elapsed = _run(run_command)
+        run_ref = _command_ref(log_dir, "herdr-pane-run", run_command, run_result)
+        artifact_refs["send_input"] = run_ref
+        send_pass = run_result.returncode == 0
+        send_elapsed = run_elapsed
+        send_ref = run_ref
     else:
         send_elapsed = None
         send_ref = "not-run"
@@ -660,17 +664,26 @@ def run_spike(args: argparse.Namespace) -> dict[str, Any]:
             elapsed_ms=send_elapsed,
             evidence_ref=send_ref if send_ref != "not-run" else None,
             failure_class=None if send_pass else "unsupported-capability",
-            diagnostic="send-text plus Enter completed" if send_pass else "send-text or Enter failed",
+            diagnostic="pane run completed" if send_pass else "pane run failed",
         )
     )
 
     if spawned_pane_id is not None and send_pass:
-        time.sleep(2)
-        read_command = [herdr, *scope_args, "pane", "read", spawned_pane_id, "--lines", "20", "--format", "text"]
-        read_result, read_elapsed = _run(read_command)
-        read_ref = _command_ref(log_dir, "herdr-pane-read", read_command, read_result)
+        wait_command = [
+            herdr,
+            *scope_args,
+            "pane",
+            "wait-output",
+            spawned_pane_id,
+            "--match",
+            marker,
+            "--timeout",
+            "5000",
+        ]
+        wait_result, read_elapsed = _run(wait_command, timeout=8)
+        read_ref = _command_ref(log_dir, "herdr-pane-wait-output", wait_command, wait_result)
         artifact_refs["read_output"] = read_ref
-        read_pass = read_result.returncode == 0 and marker in (read_result.stdout or "")
+        read_pass = wait_result.returncode == 0 and marker in (wait_result.stdout or "")
     else:
         read_elapsed = None
         read_ref = "not-run"
@@ -682,7 +695,7 @@ def run_spike(args: argparse.Namespace) -> dict[str, Any]:
             elapsed_ms=read_elapsed,
             evidence_ref=read_ref if read_ref != "not-run" else None,
             failure_class=None if read_pass else "unsupported-capability",
-            diagnostic="pane read observed marker output" if read_pass else "pane read did not observe marker output",
+            diagnostic="pane wait-output observed marker output" if read_pass else "pane wait-output did not observe marker output",
         )
     )
 
@@ -708,6 +721,80 @@ def run_spike(args: argparse.Namespace) -> dict[str, Any]:
         )
     )
 
+    restart_checked = False
+    restart_layout_restored: bool | None = None
+    restart_output_history_restored: bool | None = None
+    server_identity_after = None
+    restart_stop_ref: str | None = None
+    if workspace_id is not None and root_pane_id is not None and server_started_by_spike:
+        restart_stop_command = [herdr, *scope_args, "server", "stop"]
+        restart_stop_result, _ = _run(restart_stop_command)
+        restart_stop_ref = _command_ref(log_dir, "herdr-server-restart-stop", restart_stop_command, restart_stop_result)
+        artifact_refs["restart_stop"] = restart_stop_ref
+        time.sleep(1)
+        restart_start_command = [herdr, *scope_args, "server"]
+        restart_start_kwargs: dict[str, Any] = {
+            "stdout": subprocess.DEVNULL,
+            "stderr": subprocess.DEVNULL,
+            "text": True,
+        }
+        if sys.platform.startswith("win"):
+            restart_start_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        restart_process = subprocess.Popen(restart_start_command, **restart_start_kwargs)
+        artifact_refs["restart_start"] = _process_ref(
+            log_dir,
+            "herdr-server-restart-start",
+            restart_start_command,
+            restart_process,
+        )
+        time.sleep(2)
+        restart_status_command = [herdr, *scope_args, "status", "--json"]
+        restart_status_result, _ = _run(restart_status_command)
+        artifact_refs["restart_status"] = _command_ref(
+            log_dir,
+            "herdr-status-after-restart",
+            restart_status_command,
+            restart_status_result,
+        )
+        restart_status_payload = _json_object_output(restart_status_result)
+        server_identity_after = _json_path(restart_status_payload, ["server", "socket"])
+        workspace_list_command = [herdr, *scope_args, "workspace", "list"]
+        workspace_list_result, _ = _run(workspace_list_command)
+        workspace_list_ref = _command_ref(
+            log_dir,
+            "herdr-workspace-list-after-restart",
+            workspace_list_command,
+            workspace_list_result,
+        )
+        artifact_refs["restart_workspace_list"] = workspace_list_ref
+        workspace_list_payload = _json_object_output(workspace_list_result)
+        restored_workspaces = _json_path(workspace_list_payload, ["result", "workspaces"])
+        workspace_restored = isinstance(restored_workspaces, list) and any(
+            isinstance(workspace, dict) and workspace.get("workspace_id") == workspace_id
+            for workspace in restored_workspaces
+        )
+        pane_list_command = [herdr, *scope_args, "pane", "list"]
+        pane_list_result, _ = _run(pane_list_command)
+        pane_list_ref = _command_ref(log_dir, "herdr-pane-list-after-restart", pane_list_command, pane_list_result)
+        artifact_refs["restart_pane_list"] = pane_list_ref
+        pane_list_payload = _json_object_output(pane_list_result)
+        restored_panes = _json_path(pane_list_payload, ["result", "panes"])
+        pane_restored = isinstance(restored_panes, list) and any(
+            isinstance(pane, dict) and pane.get("pane_id") == root_pane_id
+            for pane in restored_panes
+        )
+        restart_layout_restored = workspace_restored and pane_restored
+        restart_read_command = [herdr, *scope_args, "pane", "read", root_pane_id, "--lines", "20", "--format", "text"]
+        restart_read_result, _ = _run(restart_read_command)
+        artifact_refs["restart_read"] = _command_ref(
+            log_dir,
+            "herdr-pane-read-after-restart",
+            restart_read_command,
+            restart_read_result,
+        )
+        restart_output_history_restored = restart_read_result.returncode == 0 and marker in (restart_read_result.stdout or "")
+        restart_checked = True
+
     if workspace_id is not None:
         workspace_close_command = [herdr, *scope_args, "workspace", "close", workspace_id]
         workspace_close_result, _ = _run(workspace_close_command)
@@ -722,16 +809,30 @@ def run_spike(args: argparse.Namespace) -> dict[str, Any]:
         server_stop_result, _ = _run(server_stop_command)
         cleanup_refs["server_stop"] = _command_ref(log_dir, "herdr-server-stop", server_stop_command, server_stop_result)
 
-    restore_diagnostic = "server restart restore remains fail-closed until restart identity and preexisting-session isolation can be proven"
-    operations.extend(
+    restore_diagnostic = (
+        "server restart restored workspace/pane identity but did not restore marker output history"
+        if restart_checked and restart_layout_restored and not restart_output_history_restored
+        else "server restart restore remains fail-closed until restart identity and output history can be proven"
+    )
+    operations.append(
         _operation(
-            operation,
+            "detach_reattach",
             "blocked",
             command_ref="not-run",
             failure_class="unsupported-capability",
+            diagnostic="detach/reattach requires an attached Herdr UI client and is not exercised from this non-Herdr harness",
+        )
+    )
+    restart_status = "partial" if restart_checked and restart_layout_restored else "blocked"
+    operations.append(
+        _operation(
+            "server_restart_restore",
+            restart_status,
+            command_ref=artifact_refs.get("restart_workspace_list", "not-run"),
+            evidence_ref=artifact_refs.get("restart_pane_list"),
+            failure_class="windows-beta-gap" if restart_status == "partial" else "unsupported-capability",
             diagnostic=restore_diagnostic,
         )
-        for operation in ("detach_reattach", "server_restart_restore")
     )
     provider = {
         "provider_slug": None,
@@ -755,18 +856,18 @@ def run_spike(args: argparse.Namespace) -> dict[str, Any]:
             "socket_ref": args.isolated_socket_ref,
             "config_ref": args.isolated_config_ref,
             "server_identity_before": server_identity_before,
-            "server_identity_after": None,
+            "server_identity_after": server_identity_after,
             "preexisting_sessions_before": [],
             "created_by_spike": True,
-            "stop_command_ref": cleanup_refs.get("server_stop"),
+            "stop_command_ref": restart_stop_ref or cleanup_refs.get("server_stop"),
             "cleanup_targets": cleanup_targets,
         },
         "restart_scope": "isolated-socket" if args.isolated_socket_ref else "dedicated-disposable-server",
         "server_identity": None,
-        "preexisting_sessions_checked": False,
+        "preexisting_sessions_checked": restart_checked,
         "restart_authorized": False,
-        "layout_restored": None,
-        "output_history_restored": None,
+        "layout_restored": restart_layout_restored,
+        "output_history_restored": restart_output_history_restored,
         "agent_session_restored": None,
         "old_process_expected_to_survive": False,
         "diagnostic": restore_diagnostic,

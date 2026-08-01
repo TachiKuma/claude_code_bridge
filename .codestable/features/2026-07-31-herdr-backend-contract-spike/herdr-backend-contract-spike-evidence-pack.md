@@ -42,7 +42,7 @@ status: generated
     {
       "command": "python -m pytest -q test/test_herdr_contract_spike_evidence.py",
       "exit_code": 0,
-      "stdout": "..........................                                               [100%]\n26 passed in 1.04s\n",
+      "stdout": "..........................                                               [100%]\n26 passed in 0.91s\n",
       "stderr": "",
       "id": "CMD-003",
       "core": true,
@@ -51,14 +51,14 @@ status: generated
     {
       "command": "python -m pytest -q test/test_mux_backend_contract.py test/test_terminal_runtime_backend_selection.py test/test_herdr_spike_no_production_route.py",
       "exit_code": 0,
-      "stdout": ".........                                                                [100%]\n9 passed in 1.67s\n",
+      "stdout": ".........                                                                [100%]\n9 passed in 1.53s\n",
       "stderr": "",
       "id": "CMD-004",
       "core": true,
       "failure_handling": "fix-or-block"
     },
     {
-      "command": "cmd /c \"set PATH=C:/Users/Administrator/AppData/Local/Programs/Herdr;%PATH% && C:/Users/Administrator/AppData/Local/Programs/Python/Python314/python.exe .codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-backend-contract-spike/run_spike.py --platform-gate-ref .codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json --session ccb-herdr-spike --isolated-server --isolation-created-by-spike --isolated-socket-ref ccb-herdr-spike --herdr-socket-arg=\\\"--session\\\" --out .codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json\"",
+      "command": "cmd /c \"set PATH=C:/Users/Administrator/AppData/Local/Programs/Herdr;%PATH% && C:/Users/Administrator/AppData/Local/Programs/Python/Python314/python.exe .codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-backend-contract-spike/run_spike.py --platform-gate-ref .codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json --session ccb-herdr-spike --isolated-server --isolation-created-by-spike --isolated-socket-ref ccb-herdr-spike --herdr-socket-arg=--session --out .codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json\"",
       "exit_code": 0,
       "stdout": "wrote .codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json verdict=blocked failure_class=unsupported-capability\n",
       "stderr": "",
@@ -82,7 +82,7 @@ status: generated
     "checklist": ".codestable/features/2026-07-31-herdr-backend-contract-spike/herdr-backend-contract-spike-checklist.yaml"
   },
   "input_digests": {
-    "checklist": "8dfeed868d6fc4dcfc57202172f49fed31b9fd9bb8bbd0264b840044e281324f"
+    "checklist": "25409d97048feff180aa773383124e966771ed7d06540faa01bf53e1200edd56"
   }
 }
 ```
@@ -94,17 +94,17 @@ Extracted from checklist `dod.commands`; see DoD Results for command status.
 ## 4. Scope And Cleanliness
 
 Design bytes: 25588
-Checklist bytes: 7538
+Checklist bytes: 7442
 
 ## 5. Residual Risks
 
 - Machine evidence verdict: `blocked`
 - Failure class: `unsupported-capability`
 - Adapter recommendation: `needs-upstream-issue`
-- Residual risk: Herdr read_output did not observe the send sentinel; detach/reattach and server_restart_restore remain unproven.
-- Blocking gaps: `read_output`, `detach_reattach`, `server_restart_restore`
+- Residual risk: detach/reattach is not exercised from the non-Herdr harness; server restart restores workspace/pane identity but not marker output history.
+- Blocking gaps: `detach_reattach`, `server_restart_restore`
 
-This evidence pack passed implementation gates because the runner produced valid fail-closed evidence after the platform gate was repaired. v8.5.2 source admission, 64-bit Python, Native Windows x64 Herdr, and x64 CCB helper PE evidence are satisfied; current execution is blocked by incomplete Herdr CLI primitive semantics. It does not prove Herdr backend capability support.
+This evidence pack passed implementation gates because the runner produced valid fail-closed evidence after the platform gate was repaired. v8.5.2 source admission, 64-bit Python, Native Windows x64 Herdr, and x64 CCB helper PE evidence are satisfied; current execution is blocked by incomplete Herdr detach/restart semantics. It does not prove Herdr backend capability support.
 
 ## 6. Provider Signals
 
@@ -139,42 +139,35 @@ This evidence pack passed implementation gates because the runner produced valid
         ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/evidence-pack-gate.json",
         ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json",
         ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/manual-native-windows-runbook.md",
+        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-api-schema.json",
+        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-spawn.json",
+        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-server-start.json",
+        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-status.json",
+        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-version.json",
+        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-workspace-create.json",
         ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/scope-gate.json",
         ".codestable/features/2026-07-31-herdr-backend-contract-spike/herdr-backend-contract-spike-acceptance.md",
         ".codestable/features/2026-07-31-herdr-backend-contract-spike/herdr-backend-contract-spike-checklist.yaml",
         ".codestable/features/2026-07-31-herdr-backend-contract-spike/herdr-backend-contract-spike-evidence-pack.md",
         ".codestable/features/2026-07-31-herdr-backend-contract-spike/herdr-backend-contract-spike-qa.md",
         ".codestable/features/2026-07-31-herdr-backend-contract-spike/herdr-backend-contract-spike-review.md",
-        ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json",
-        ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/windows-x64-v852-baseline-gate-acceptance.md",
-        ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/windows-x64-v852-baseline-gate-qa.md",
-        ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/windows-x64-v852-baseline-gate-review.md",
         ".codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-backend-contract-spike/run_spike.py",
         ".codestable/roadmap/windows-native-herdr-ccb/goal-state.yaml",
         ".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml",
         ".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-roadmap.md",
-        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-api-schema.json",
-        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-close.json",
-        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-read.json",
-        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-send-keys.json",
-        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-send-text.json",
-        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-spawn.json",
-        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-server-start.json",
-        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-server-stop.json",
-        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-status-after-start.json",
-        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-status.json",
-        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-version.json",
-        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-workspace-close.json",
-        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-workspace-create.json"
+        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-list-after-restart.json",
+        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-read-after-restart.json",
+        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-run.json",
+        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-pane-wait-output.json",
+        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-server-restart-start.json",
+        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-server-restart-stop.json",
+        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-status-after-restart.json",
+        ".codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/raw-command-refs/herdr-workspace-list-after-restart.json"
       ],
       "ignored_machine_artifacts": [],
       "allowed_prefixes": [
         ".codestable/features/2026-07-31-herdr-backend-contract-spike",
         ".codestable/features/2026-07-31-herdr-backend-contract-spike",
-        ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json",
-        ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/windows-x64-v852-baseline-gate-acceptance.md",
-        ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/windows-x64-v852-baseline-gate-qa.md",
-        ".codestable/features/2026-07-31-windows-x64-v852-baseline-gate/windows-x64-v852-baseline-gate-review.md",
         ".codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-backend-contract-spike",
         ".codestable/roadmap/windows-native-herdr-ccb/goal-state.yaml",
         ".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml",

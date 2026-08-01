@@ -16,5 +16,5 @@
   ],
   "returncode": 0,
   "stderr_excerpt": "",
-  "stdout_excerpt": "{\"id\":\"cli:pane:split\",\"result\":{\"pane\":{\"agent_status\":\"unknown\",\"cwd\":\"E:\\\\GitHub\u5f00\u6e90\u9879\u76ee\\\\TachiKuma\\\\claude_code_bridge\\\\\",\"focused\":true,\"pane_id\":\"w1:p2\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":23},\"tab_id\":\"w1:t1\",\"terminal_id\":\"term_657f591b52f082\",\"workspace_id\":\"w1\"},\"type\":\"pane_info\"}}\n"
+  "stdout_excerpt": "{\"id\":\"cli:pane:split\",\"result\":{\"pane\":{\"agent_status\":\"unknown\",\"cwd\":\"E:\\\\GitHub\u5f00\u6e90\u9879\u76ee\\\\TachiKuma\\\\claude_code_bridge\\\\\",\"focused\":true,\"pane_id\":\"w1:p2\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":23},\"tab_id\":\"w1:t1\",\"terminal_id\":\"term_657f61945b6502\",\"workspace_id\":\"w1\"},\"type\":\"pane_info\"}}\n"
 }

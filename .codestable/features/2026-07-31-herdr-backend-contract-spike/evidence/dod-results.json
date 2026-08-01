@@ -26,7 +26,7 @@
     {
       "command": "python -m pytest -q test/test_herdr_contract_spike_evidence.py",
       "exit_code": 0,
-      "stdout": "..........................                                               [100%]\n26 passed in 1.04s\n",
+      "stdout": "..........................                                               [100%]\n26 passed in 0.91s\n",
       "stderr": "",
       "id": "CMD-003",
       "core": true,
@@ -35,14 +35,14 @@
     {
       "command": "python -m pytest -q test/test_mux_backend_contract.py test/test_terminal_runtime_backend_selection.py test/test_herdr_spike_no_production_route.py",
       "exit_code": 0,
-      "stdout": ".........                                                                [100%]\n9 passed in 1.67s\n",
+      "stdout": ".........                                                                [100%]\n9 passed in 1.53s\n",
       "stderr": "",
       "id": "CMD-004",
       "core": true,
       "failure_handling": "fix-or-block"
     },
     {
-      "command": "cmd /c \"set PATH=C:/Users/Administrator/AppData/Local/Programs/Herdr;%PATH% && C:/Users/Administrator/AppData/Local/Programs/Python/Python314/python.exe .codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-backend-contract-spike/run_spike.py --platform-gate-ref .codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json --session ccb-herdr-spike --isolated-server --isolation-created-by-spike --isolated-socket-ref ccb-herdr-spike --herdr-socket-arg=\\\"--session\\\" --out .codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json\"",
+      "command": "cmd /c \"set PATH=C:/Users/Administrator/AppData/Local/Programs/Herdr;%PATH% && C:/Users/Administrator/AppData/Local/Programs/Python/Python314/python.exe .codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-backend-contract-spike/run_spike.py --platform-gate-ref .codestable/features/2026-07-31-windows-x64-v852-baseline-gate/evidence/platform-gate-summary.json --session ccb-herdr-spike --isolated-server --isolation-created-by-spike --isolated-socket-ref ccb-herdr-spike --herdr-socket-arg=--session --out .codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json\"",
       "exit_code": 0,
       "stdout": "wrote .codestable/features/2026-07-31-herdr-backend-contract-spike/evidence/herdr-contract-spike-evidence.json verdict=blocked failure_class=unsupported-capability\n",
       "stderr": "",
@@ -66,6 +66,6 @@
     "checklist": ".codestable/features/2026-07-31-herdr-backend-contract-spike/herdr-backend-contract-spike-checklist.yaml"
   },
   "input_digests": {
-    "checklist": "8dfeed868d6fc4dcfc57202172f49fed31b9fd9bb8bbd0264b840044e281324f"
+    "checklist": "25409d97048feff180aa773383124e966771ed7d06540faa01bf53e1200edd56"
   }
 }

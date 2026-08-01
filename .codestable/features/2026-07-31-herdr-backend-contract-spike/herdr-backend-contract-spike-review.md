@@ -83,7 +83,7 @@ none
 ### learning
 
 - DoD runner passed 表示 fail-closed blocked evidence 可生成且可验证，不表示 Herdr backend capability 已通过。
-- Post-handoff rerun 后 platform gate artifact 已不再记录 `ccb-version-mismatch`、`python-not-x64`、`herdr-missing` 或 `helper-missing`；v8.5.2 source admission 为 `strict-v8.5.2`，Python 为 64-bit，Herdr 与两个 CCB helper 均为 x64。当前 blocked 于 Herdr CLI primitive 语义：schema/status/session_attach/pane_spawn/send_input/kill_pane 已通过，read_output、detach_reattach、server_restart_restore 仍未证明。
+- Post-handoff rerun 后 platform gate artifact 已不再记录 `ccb-version-mismatch`、`python-not-x64`、`herdr-missing` 或 `helper-missing`；v8.5.2 source admission 为 `strict-v8.5.2`，Python 为 64-bit，Herdr 与两个 CCB helper 均为 x64。当前 blocked 于 Herdr CLI primitive 语义：schema/status/session_attach/pane_spawn/send_input/read_output/kill_pane 已通过，server_restart_restore 为 partial（workspace/pane identity restore，output history 未恢复），detach_reattach 仍未在 Herdr UI client 内验证。
 
 ### praise
 
@@ -93,7 +93,7 @@ none
 ## 5. Test And QA Focus
 
 - QA 必须重点复核：machine evidence 的 `verdict=blocked`、`failure_class=unsupported-capability`、`adapter_recommendation=needs-upstream-issue` 是否被正确解释为 fail-closed。
-- Evidence pack residual risks / gate warnings：archguard/meta-cc disabled 已记录；residual risk 为 Herdr read_output / detach / restart restore 语义缺口，不是 none。
+- Evidence pack residual risks / gate warnings：archguard/meta-cc disabled 已记录；residual risk 为 Herdr detach/reattach 与 restart output-history 语义缺口，不是 none。
 - 建议新增或加强的测试：none required for this stage。
 - 不能靠 review 完全确认的点：真实 Herdr CLI active-host 行为；当前平台 gate blocked，后续需在 supported platform gate + explicit isolated socket/config 下再跑。
 

@@ -25,21 +25,21 @@ round: 1
 
 ## 2. 行为与决策核对
 
-- [x] platform gate 通过后只在 dedicated session `ccb-herdr-spike` 内执行 Herdr operation；schema/status/session_attach/pane_spawn/send_input/kill_pane 为 pass，read_output、detach_reattach、server_restart_restore 为 blocked。
+- [x] platform gate 通过后只在 dedicated session `ccb-herdr-spike` 内执行 Herdr operation；schema/status/session_attach/pane_spawn/send_input/read_output/kill_pane 为 pass，server_restart_restore 为 partial，detach_reattach 为 blocked。
 - [x] validator 覆盖并拒绝 fake pass：blocked verdict 却 continue、pass operation 缺 trace refs、artifact refs 缺失、duplicate core operation、unknown URI、restart isolation 缺 socket/config/server identity/stop ref、fallback 冒充 provider dry-run。
 - [x] provider CLI dry-run 与 fallback terminal smoke 分离，`public_provider_parity_claimed=false`，fallback 不作为 completion authority。
-- [x] server restart restore 只允许 dedicated/disposable server 或 isolated session/socket/config；当前缺 server identity 与 stop-command trace，未执行 restart pass。
+- [x] server restart restore 只允许 dedicated/disposable server 或 isolated session/socket/config；当前已有 server identity 与 stop-command trace，workspace/pane identity restore 通过，但 output history 未恢复，因此不判 pass。
 - [x] spike 结论是需要 Herdr upstream/API 语义澄清，不是 Herdr support pass。
 
 ## 3. 验收场景核对
 
 - [x] AC-001 host admission：machine evidence 在 Native Windows x64 + supported platform gate 下运行，只使用 dedicated session。
 - [x] AC-002 schema/status：Herdr `api schema --json` 与 `status --json` 均采集并通过。
-- [x] AC-003/AC-004 session/pane I/O：session_attach、pane_spawn、send_input 有 pass evidence；read_output 未观察到 sentinel，保持 blocked。
+- [x] AC-003/AC-004 session/pane I/O：session_attach、pane_spawn、send_input、read_output 均有 pass evidence，`pane wait-output` 观察到 sentinel。
 - [x] AC-005 provider dry-run：当前 blocked，provider dry-run 不被 fallback 替代。
 - [x] AC-006 kill pane：spike-created pane close 返回 ok，未误删 session。
 - [x] AC-007 detach/reattach：当前 blocked，未夸大 live detach 或 server restart 后存活。
-- [x] AC-008 restart isolation：当前 dedicated session 已记录，但缺 server identity / stop command trace，restart 未授权为 pass。
+- [x] AC-008 restart isolation：当前 dedicated session 已记录，server identity / stop command trace 存在；workspace/pane identity restore 通过，output history 未恢复，restart 为 partial。
 - [x] AC-009 production no-change：scope gate 与 no-production-route tests 通过。
 - [x] AC-010 recommendation truth table：`adapter_recommendation=needs-upstream-issue` 与 host/platform、operation、provider、restart、capability 状态一致。
 
@@ -67,12 +67,12 @@ round: 1
 - [x] `.codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml` 中 `herdr-backend-contract-spike` 已回写为 `done`。
 - [x] `.codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-roadmap.md` 子 feature 清单状态已回写为 `accepted`，并记录 fail-closed / stop 结论。
 - [x] `.codestable/roadmap/windows-native-herdr-ccb/goal-state.yaml` 中当前 feature 已回写为 `accepted`，`current_feature_index` 前进到 2。
-- [x] 因 `adapter_recommendation=needs-upstream-issue`，goal-state 顶层保持 `handoff`；当前下一步是确认 Herdr 0.7.5 input/read 与 restart/restore 语义，不能继续把下游 Herdr adapter feature 当作 implementation-ready。
+- [x] 因 `adapter_recommendation=needs-upstream-issue`，goal-state 顶层保持 `handoff`；当前下一步是确认 Herdr 0.7.5 detach/reattach 与 restart output-history 语义，不能继续把下游 Herdr adapter feature 当作 implementation-ready。
 
 ## 7. 遗留
 
-- 真实 Herdr active-host 能力仅部分证明；read_output、detach/reattach 与 restart/restore 仍未证明。
-- 后续不得把 `mux-backend-contract-herdr-v2`、`herdr-backend-client` 等正式 adapter feature 当作 implementation-ready supported path，除非先修复 Herdr input/read 与 restore 语义缺口并重跑 spike，或由 owner 批准新的 epic route。
+- 真实 Herdr active-host 能力仅部分证明；detach/reattach 仍未在 Herdr UI client 内验证，restart restore 不恢复 sentinel 输出历史。
+- 后续不得把 `mux-backend-contract-herdr-v2`、`herdr-backend-client` 等正式 adapter feature 当作 implementation-ready supported path，除非先修复 Herdr detach/restore 语义缺口并重跑 spike，或由 owner 批准新的 epic route。
 - 本地 scoped commit 已获 `approval-report.md#goal-commits` 授权；该授权不包含 push、merge、release、publish、deploy 或 promotion。
 
 ## 8. 最终审计
