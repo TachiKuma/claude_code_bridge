@@ -5,7 +5,7 @@ import errno
 import pytest
 
 from ccbd.socket_client import CcbdClient, CcbdClientError
-from ccbd.socket_client_runtime.transport import connect_socket
+from ccbd.socket_client_runtime.transport import connect_socket, recv_response_line
 
 
 def test_ccbd_client_uses_stable_default_timeout(tmp_path) -> None:
@@ -156,6 +156,15 @@ def test_ccbd_client_request_wraps_socket_connect_errors(monkeypatch, tmp_path) 
 
     with pytest.raises(CcbdClientError, match='Connection refused'):
         client.request('ping', {})
+
+
+def test_recv_response_line_returns_only_first_frame() -> None:
+    class _Socket:
+        def recv(self, size: int) -> bytes:
+            del size
+            return b'{"ok": true, "payload": {}}\n' + (b'x' * (2 * 1024 * 1024))
+
+    assert recv_response_line(_Socket()) == b'{"ok": true, "payload": {}}\n'
 
 
 def test_connect_socket_retries_transient_connect_errors_within_timeout(monkeypatch, tmp_path) -> None:

@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Literal, TypedDict
 
 
-class EndpointRef(TypedDict):
+class EndpointRef(TypedDict, total=False):
     kind: Literal['unix_socket', 'tcp_loopback']
     address: str
     display: str

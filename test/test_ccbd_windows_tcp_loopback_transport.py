@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 import json
+import re
 import socket
 import threading
 import time
@@ -11,10 +12,17 @@ import pytest
 
 from ccbd.api_models import RpcRequest
 from ccbd.control_plane_transport.endpoint import endpoint_from_record, endpoint_to_record
-from ccbd.control_plane_transport.endpoint_store import endpoint_store_path, read_endpoint, unlink_endpoint, write_endpoint
+from ccbd.control_plane_transport.endpoint_store import (
+    endpoint_store_path,
+    read_endpoint,
+    token_store_path,
+    unlink_endpoint,
+    write_endpoint,
+)
 from ccbd.control_plane_transport.factory import connect_endpoint, transport_for_legacy_socket_path
 from ccbd.control_plane_transport.token_auth import RpcTransportAuthError, create_token_file, load_token_file, _current_windows_user
 from ccbd.control_plane_transport.windows_tcp import WindowsTcpControlPlaneTransport
+from ccbd.socket_client import CcbdClient, CcbdClientError
 from ccbd.socket_client_runtime import decode_response, recv_response_line, send_request
 from ccbd.socket_server import CcbdSocketServer
 from ccbd.socket_server_runtime.loop import enqueue_connection, start_worker, stop_worker
@@ -23,6 +31,12 @@ from ccbd.socket_server_runtime.loop import enqueue_connection, start_worker, st
 def _ok_runner(command, **kwargs):
     del kwargs
     if command[:3] == ['powershell', '-NoProfile', '-Command']:
+        if 'FileStream' in command[3]:
+            Path(_ps_literal_value(command[3], 'path')).write_text(
+                _ps_literal_value(command[3], 'payload') + '\n',
+                encoding='utf-8',
+            )
+            return SimpleNamespace(returncode=0, stdout='ok', stderr='')
         owner = _current_windows_user() or 'DESKTOP\\User'
         owner_sid = 'S-1-5-21-1'
         if 'WindowsIdentity' in command[3]:
@@ -49,14 +63,26 @@ def _failing_runner(command, **kwargs):
     return SimpleNamespace(returncode=1, stdout='', stderr='access denied')
 
 
-def _windows_acl_runner(*, owner: str, owner_sid: str, access: list[dict]):
+def _windows_acl_runner(
+    *,
+    owner: str,
+    owner_sid: str,
+    access: list[dict],
+    current_sid: str | None = None,
+):
+    writes: list[tuple[str, str]] = []
+
     def runner(command, **kwargs):
         del kwargs
+        if command[:3] == ['powershell', '-NoProfile', '-Command'] and 'FileStream' in command[3]:
+            path = _ps_literal_value(command[3], 'path')
+            payload = _ps_literal_value(command[3], 'payload')
+            Path(path).write_text(payload + '\n', encoding='utf-8')
+            writes.append((path, payload))
+            return SimpleNamespace(returncode=0, stdout='ok', stderr='')
         if command[:3] == ['powershell', '-NoProfile', '-Command'] and 'WindowsIdentity' in command[3]:
-            return SimpleNamespace(returncode=0, stdout=owner_sid, stderr='')
-        if command[:3] == ['powershell', '-NoProfile', '-Command'] and (
-            'Get-Acl' in command[3] or 'GetAccessControl' in command[3]
-        ):
+            return SimpleNamespace(returncode=0, stdout=current_sid or owner_sid, stderr='')
+        if command[:3] == ['powershell', '-NoProfile', '-Command'] and 'GetAccessControl' in command[3]:
             payload = {
                 'owner': owner,
                 'sddl': f'O:{owner_sid}G:{owner_sid}D:',
@@ -65,7 +91,14 @@ def _windows_acl_runner(*, owner: str, owner_sid: str, access: list[dict]):
             return SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr='')
         return SimpleNamespace(returncode=0, stdout='ok', stderr='')
 
+    runner.writes = writes
     return runner
+
+
+def _ps_literal_value(script: str, name: str) -> str:
+    match = re.search(rf'\${re.escape(name)} = \'((?:\'\'|[^\'])*)\'', script)
+    assert match is not None
+    return match.group(1).replace("''", "'")
 
 
 def test_factory_selects_windows_tcp_for_legacy_socket_path(monkeypatch, tmp_path: Path) -> None:
@@ -88,6 +121,18 @@ def test_factory_selects_windows_tcp_for_legacy_socket_path(monkeypatch, tmp_pat
     transport = transport_for_legacy_socket_path(tmp_path / 'ccbd.sock')
 
     assert isinstance(transport, WindowsTcpControlPlaneTransport)
+
+
+def test_windows_client_without_endpoint_fails_with_endpoint_error_not_af_unix(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr('ccbd.control_plane_transport.factory.os.name', 'nt')
+    client = CcbdClient(tmp_path / 'ccbd.sock', timeout_s=0.1)
+
+    with pytest.raises(CcbdClientError) as error:
+        client.request('ping', {})
+
+    message = str(error.value)
+    assert 'endpoint' in message
+    assert 'unix domain sockets are not supported' not in message
 
 
 def test_socket_server_prefers_windows_tcp_without_endpoint_descriptor(monkeypatch, tmp_path: Path) -> None:
@@ -161,6 +206,35 @@ def test_create_token_file_proves_acl_convergence(tmp_path: Path, monkeypatch) -
 
     assert token_file.acl_status == 'windows-icacls-user-read'
     assert load_token_file(token_path).generation == token_file.generation
+    assert runner.writes
+
+
+def test_create_token_file_fails_when_acl_owner_is_not_current_user(tmp_path: Path, monkeypatch) -> None:
+    token_path = tmp_path / 'token.json'
+    runner = _windows_acl_runner(
+        owner='DESKTOP\\OtherUser',
+        owner_sid='S-1-5-21-other',
+        current_sid='S-1-5-21-current',
+        access=[
+            {
+                'identity': 'DESKTOP\\User',
+                'rights': 'Read',
+                'access_type': 'Allow',
+                'inherited': False,
+            }
+        ],
+    )
+    monkeypatch.setattr('ccbd.control_plane_transport.token_auth._current_windows_user', lambda: 'DESKTOP\\User')
+
+    with pytest.raises(RpcTransportAuthError) as error:
+        create_token_file(
+            token_path,
+            command_runner=runner,
+            os_name='nt',
+        )
+
+    assert error.value.category == 'token-unprotectable'
+    assert not token_path.exists()
 
 
 def test_load_token_file_maps_unreadable_token(monkeypatch, tmp_path: Path) -> None:
@@ -369,6 +443,44 @@ def test_tcp_bootstrap_probe_ignores_slow_preauth_connection(tmp_path: Path) -> 
         server.shutdown()
 
 
+def test_tcp_bootstrap_probe_rejects_deferred_bad_token_before_handler(tmp_path: Path) -> None:
+    transport = WindowsTcpControlPlaneTransport(
+        None,
+        legacy_socket_path=tmp_path / 'ccbd.sock',
+        command_runner=_ok_runner,
+    )
+    server = CcbdSocketServer(tmp_path / 'ccbd.sock', control_plane_transport=transport)
+    handled = 0
+
+    def _handle_ping(payload):
+        nonlocal handled
+        handled += 1
+        return {'bootstrap_probe_nonce': payload.get('bootstrap_probe_nonce'), 'identity': 'tcp-loopback'}
+
+    server.register_handler('ping', _handle_ping)
+    server.listen()
+    bad_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        bad_client.connect(('127.0.0.1', int(server.control_plane_endpoint['port'])))
+        bad_client.sendall(
+            json.dumps(
+                {
+                    'schema': 'ccbd-control-plane-token-v1',
+                    'token': 'wrong-token',
+                }
+            ).encode('utf-8')
+            + b'\n'
+        )
+
+        with server.bootstrap_readiness_probe(timeout_s=1.0) as payload:
+            assert payload['identity'] == 'tcp-loopback'
+
+        assert handled == 1
+    finally:
+        bad_client.close()
+        server.shutdown()
+
+
 def test_shutdown_removes_only_current_endpoint_generation(tmp_path: Path) -> None:
     legacy_socket_path = tmp_path / 'ccbd.sock'
     transport = WindowsTcpControlPlaneTransport(
@@ -418,6 +530,14 @@ def test_unlink_endpoint_skips_when_generation_is_missing(tmp_path: Path) -> Non
 
     assert unlink_endpoint(legacy_socket_path=legacy_socket_path, expected_generation='gen-1') is True
     assert not endpoint_store_path_value.exists()
+
+
+def test_token_store_path_rejects_generation_path_traversal(tmp_path: Path) -> None:
+    with pytest.raises(ValueError):
+        token_store_path(tmp_path / 'ccbd.sock', '../escape')
+
+    with pytest.raises(ValueError):
+        token_store_path(tmp_path / 'ccbd.sock', 'nested/token')
 
 
 def _wait_for_response(client):

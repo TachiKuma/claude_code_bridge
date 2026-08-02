@@ -172,5 +172,4 @@ class FakeControlPlaneTransport:
             server._stop_event.set()
             raise
         finally:
-            if completed:
-                server._bootstrap_probe_active = False
+            server._bootstrap_probe_active = False

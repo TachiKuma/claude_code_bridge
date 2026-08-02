@@ -384,8 +384,7 @@ def tcp_bootstrap_readiness_probe(server, *, timeout_s: float):
         server._stop_event.set()
         raise
     finally:
-        if completed:
-            server._bootstrap_probe_active = False
+        server._bootstrap_probe_active = False
         if client is not None:
             try:
                 client.close()

@@ -64,7 +64,7 @@ def test_runtime_bootstrap_gate_rejects_non_ping_without_calling_handler(tmp_pat
         server.shutdown()
 
 
-def test_probe_failure_freezes_gate_until_shutdown(tmp_path: Path) -> None:
+def test_probe_failure_stops_server_without_latching_active_flag(tmp_path: Path) -> None:
     server = _server(tmp_path)
     server.register_handler(
         'ping',
@@ -77,7 +77,7 @@ def test_probe_failure_freezes_gate_until_shutdown(tmp_path: Path) -> None:
             raise RuntimeError('planned identity rejection')
 
     assert server._stop_event.is_set() is True
-    assert server._bootstrap_probe_active is True
+    assert server._bootstrap_probe_active is False
     server.shutdown()
     assert server._bootstrap_probe_active is False
     assert server._runtime_bootstrap_active is False

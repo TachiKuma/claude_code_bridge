@@ -42,6 +42,8 @@ def create_token_file(
 ) -> TokenFile:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
+    platform = os.name if os_name is None else os_name
+    runner = command_runner or subprocess.run
     generation = secrets.token_hex(8)
     token = secrets.token_urlsafe(32)
     payload = {
@@ -49,9 +51,15 @@ def create_token_file(
         'generation': generation,
         'token': token,
     }
-    target.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True) + '\n', encoding='utf-8')
     try:
-        acl_status = converge_token_acl(target, command_runner=command_runner, os_name=os_name)
+        if platform == 'nt':
+            user = _current_windows_user()
+            if not user:
+                raise RpcTransportAuthError('token-unprotectable', 'current Windows user is unavailable')
+            _write_windows_token_file_secure(target, payload, current_user=user, command_runner=runner)
+        else:
+            target.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True) + '\n', encoding='utf-8')
+        acl_status = converge_token_acl(target, command_runner=runner, os_name=platform)
     except Exception:
         try:
             target.unlink()
@@ -185,22 +193,88 @@ def _recv_auth_ack(sock) -> None:
 def _recv_line(sock, *, timeout_s: float | None = None) -> tuple[bytes, bytes]:
     raw = b''
     deadline = None
+    original_timeout = None
     if timeout_s is not None:
         deadline = time.monotonic() + max(0.0, float(timeout_s))
-    while b'\n' not in raw:
+        gettimeout = getattr(sock, 'gettimeout', None)
+        if callable(gettimeout):
+            original_timeout = gettimeout()
+    try:
+        while b'\n' not in raw:
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RpcTransportAuthError('handshake-failed', 'auth handshake timed out')
+                sock.settimeout(remaining)
+            chunk = sock.recv(1024)
+            if not chunk:
+                raise RpcTransportAuthError('handshake-failed', 'empty auth handshake')
+            raw += chunk
+            if len(raw) > _MAX_AUTH_LINE_BYTES:
+                raise RpcTransportAuthError('handshake-failed', 'auth handshake is too large')
+        line, remainder = raw.split(b'\n', 1)
+        return line, remainder
+    finally:
         if deadline is not None:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise RpcTransportAuthError('handshake-failed', 'auth handshake timed out')
-            sock.settimeout(remaining)
-        chunk = sock.recv(1024)
-        if not chunk:
-            raise RpcTransportAuthError('handshake-failed', 'empty auth handshake')
-        raw += chunk
-        if len(raw) > _MAX_AUTH_LINE_BYTES:
-            raise RpcTransportAuthError('handshake-failed', 'auth handshake is too large')
-    line, remainder = raw.split(b'\n', 1)
-    return line, remainder
+            sock.settimeout(original_timeout)
+
+
+def _write_windows_token_file_secure(
+    target: Path,
+    payload: dict,
+    *,
+    current_user: str,
+    command_runner,
+) -> None:
+    serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    script = (
+        "$ErrorActionPreference = 'Stop'\n"
+        + '$path = '
+        + _powershell_literal(str(target))
+        + "\n$payload = "
+        + _powershell_literal(serialized)
+        + "\n$user = "
+        + _powershell_literal(current_user)
+        + r"""
+$identity = New-Object System.Security.Principal.NTAccount($user)
+$security = New-Object System.Security.AccessControl.FileSecurity
+$security.SetOwner($identity)
+$security.SetAccessRuleProtection($true, $false)
+$readRule = New-Object System.Security.AccessControl.FileSystemAccessRule($identity, 'Read', 'Allow')
+$writeRule = New-Object System.Security.AccessControl.FileSystemAccessRule($identity, 'Write', 'Allow')
+$security.AddAccessRule($readRule)
+$security.AddAccessRule($writeRule)
+$encoding = New-Object System.Text.UTF8Encoding($false)
+$bytes = $encoding.GetBytes($payload + "`n")
+$fs = New-Object System.IO.FileStream(
+    $path,
+    [System.IO.FileMode]::CreateNew,
+    [System.Security.AccessControl.FileSystemRights]::Write,
+    [System.IO.FileShare]::None,
+    4096,
+    [System.IO.FileOptions]::None,
+    $security
+)
+try {
+    $fs.Write($bytes, 0, $bytes.Length)
+}
+finally {
+    $fs.Dispose()
+}
+"""
+    )
+    result = command_runner(
+        ['powershell', '-NoProfile', '-Command', script],
+        capture_output=True,
+        text=True,
+        encoding='utf-8',
+        errors='replace',
+    )
+    if int(getattr(result, 'returncode', 1) or 0) != 0:
+        stderr = str(getattr(result, 'stderr', '') or '').strip()
+        stdout = str(getattr(result, 'stdout', '') or '').strip()
+        detail = stderr or stdout or 'unable to create protected Windows token file'
+        raise RpcTransportAuthError('token-unprotectable', detail)
 
 
 def _decode_auth_payload(raw: bytes) -> dict:
@@ -270,9 +344,9 @@ def _current_windows_sid(command_runner) -> str:
 def _read_windows_acl_proof(path: Path, *, command_runner) -> dict:
     script = (
         "$ErrorActionPreference = 'Stop'; "
-        + '$acl = Get-Acl -LiteralPath '
+        + '$acl = [System.IO.File]::GetAccessControl('
         + _powershell_literal(str(path))
-        + '; '
+        + '); '
         + '$payload = [pscustomobject]@{'
         + 'owner = $acl.GetOwner([System.Security.Principal.NTAccount]).Value; '
         + 'sddl = $acl.GetSecurityDescriptorSddlForm([System.Security.AccessControl.AccessControlSections]::All); '
@@ -312,6 +386,8 @@ def _read_windows_acl_proof(path: Path, *, command_runner) -> dict:
 
 
 def _assert_windows_acl_proof(proof: dict, *, current_user: str, current_sid: str) -> None:
+    if not _windows_acl_owner_matches(proof, current_user=current_user, current_sid=current_sid):
+        raise RpcTransportAuthError('token-unprotectable', 'Windows token owner is not the current user')
     access = proof.get('access') or []
     if isinstance(access, dict):
         access = [access]
@@ -335,6 +411,16 @@ def _assert_windows_acl_proof(proof: dict, *, current_user: str, current_sid: st
         seen_identity = True
     if not seen_identity:
         raise RpcTransportAuthError('token-unprotectable', 'Windows token ACL proof is incomplete')
+
+
+def _windows_acl_owner_matches(proof: dict, *, current_user: str, current_sid: str) -> bool:
+    owner = str(proof.get('owner') or '').strip().casefold()
+    user = str(current_user or '').strip().casefold()
+    sid = str(current_sid or '').strip().casefold()
+    if owner and owner in {user, sid}:
+        return True
+    sddl = str(proof.get('sddl') or '').strip().casefold()
+    return bool(sid and f'o:{sid}' in sddl)
 
 
 def _windows_acl_rights_prove_read(rights: str) -> bool:

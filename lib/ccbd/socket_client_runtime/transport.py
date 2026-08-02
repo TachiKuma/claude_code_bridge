@@ -34,9 +34,10 @@ def recv_response_line(sock) -> bytes:
         raw.extend(chunk)
         newline_at = raw.find(b'\n')
         if newline_at >= 0:
-            if newline_at + 1 > _MAX_RESPONSE_BYTES:
+            frame_end = newline_at + 1
+            if frame_end > _MAX_RESPONSE_BYTES:
                 raise CcbdClientError('ccbd response exceeds maximum size')
-            break
+            return bytes(raw[:frame_end])
         if len(raw) > _MAX_RESPONSE_BYTES:
             raise CcbdClientError('ccbd response exceeds maximum size')
     return bytes(raw)

@@ -43,11 +43,10 @@ def transport_for_legacy_socket_path(socket_path: str | Path, *, prefer_windows:
         transport = WindowsTcpControlPlaneTransport.from_legacy_socket_path(socket_path)
         if getattr(transport, '_endpoint_error', None) is not None:
             return transport
-        if prefer_windows:
-            endpoint = getattr(transport, 'endpoint', None)
-            if endpoint is None or endpoint.get('kind') == 'tcp_loopback':
-                return transport
-            return WindowsTcpControlPlaneTransport(None, legacy_socket_path=socket_path)
-        if transport.endpoint is not None:
+        endpoint = getattr(transport, 'endpoint', None)
+        if endpoint is None or endpoint.get('kind') == 'tcp_loopback':
             return transport
+        if prefer_windows:
+            return WindowsTcpControlPlaneTransport(None, legacy_socket_path=socket_path)
+        return transport
     return UnixControlPlaneTransport(endpoint_from_legacy_socket_path(socket_path))
