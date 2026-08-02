@@ -82,7 +82,11 @@ def load_namespace_context(
         )
     )
     current = controller._state_store.load()
-    backend = build_backend(controller._backend_factory, socket_path=desired_socket_path)
+    backend = build_backend(
+        controller._backend_factory,
+        socket_path=desired_socket_path,
+        namespace_state=current,
+    )
     remember_namespace_state_ref(backend, current)
     return NamespaceEnsureContext(
         current=current,
@@ -116,8 +120,12 @@ def refresh_session_liveness(
     )
 
 
-def rebuild_namespace_backend(controller, *, socket_path: str):
-    return build_backend(controller._backend_factory, socket_path=socket_path)
+def rebuild_namespace_backend(controller, *, socket_path: str, namespace_state=None):
+    return build_backend(
+        controller._backend_factory,
+        socket_path=socket_path,
+        namespace_state=namespace_state,
+    )
 
 
 __all__ = [

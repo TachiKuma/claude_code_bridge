@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import time
+from typing import Mapping
 
 from cli.context import CliContext
 from ccbd.socket_client import CcbdClient, CcbdClientError
@@ -268,10 +269,48 @@ def _payload_backend_impl(payload: dict[str, object]) -> str:
 
 
 def _build_herdr_attach_backend(*, namespace_ref: dict[str, object], backend_selection: dict[str, object]):
-    del namespace_ref, backend_selection
     from terminal_runtime import api as terminal_api
 
-    return terminal_api.get_backend('herdr')
+    backend = terminal_api.get_backend('herdr')
+    if backend is None:
+        raise ForegroundAttachError(
+            'foreground attach failed: Herdr backend is unavailable '
+            f'(backend_impl={backend_selection.get("backend_impl")}, ipc_kind={namespace_ref.get("ipc_kind")})'
+        )
+    namespace_builder = getattr(backend, 'namespace_ref', None)
+    if not callable(namespace_builder):
+        raise ForegroundAttachError(
+            'foreground attach failed: Herdr backend cannot validate namespace ref '
+            f'(backend_impl={backend_selection.get("backend_impl")}, ipc_kind={namespace_ref.get("ipc_kind")})'
+        )
+    try:
+        resolved_ref = namespace_builder(
+            str(namespace_ref.get('session_name') or ''),
+            str(namespace_ref.get('namespace_id') or ''),
+        )
+    except Exception as exc:
+        raise ForegroundAttachError(
+            'foreground attach failed: Herdr backend namespace validation failed '
+            f'(backend_impl={backend_selection.get("backend_impl")}, ipc_kind={namespace_ref.get("ipc_kind")}, '
+            f'ipc_ref_present={bool(namespace_ref.get("ipc_ref"))}, detail={exc})'
+        ) from exc
+    if not isinstance(resolved_ref, Mapping):
+        raise ForegroundAttachError(
+            'foreground attach failed: Herdr backend namespace validation returned an invalid ref '
+            f'(backend_impl={backend_selection.get("backend_impl")}, ipc_kind={namespace_ref.get("ipc_kind")})'
+        )
+    mismatched_fields = [
+        field
+        for field in ('backend_impl', 'namespace_id', 'session_name', 'ipc_kind', 'ipc_ref')
+        if _clean_optional_payload_text(resolved_ref.get(field)) != _clean_optional_payload_text(namespace_ref.get(field))
+    ]
+    if mismatched_fields:
+        raise ForegroundAttachError(
+            'foreground attach failed: Herdr backend namespace ref mismatch '
+            f'(backend_impl={backend_selection.get("backend_impl")}, ipc_kind={namespace_ref.get("ipc_kind")}, '
+            f'ipc_ref_present={bool(namespace_ref.get("ipc_ref"))}, fields={",".join(mismatched_fields)})'
+        )
+    return backend
 
 
 def _client_for_attach_attempt(client, *, timeout_s: float):

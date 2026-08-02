@@ -27,6 +27,7 @@ def force_recreate_namespace(controller, context):
         backend=rebuild_namespace_backend(
             controller,
             socket_path=context.desired_socket_path,
+            namespace_state=context.current,
         ),
         session_is_alive=False,
         recreate_cause=context.recreate_cause or 'forced_recreate',
@@ -60,6 +61,7 @@ def recreate_for_layout_change(controller, context):
         backend=rebuild_namespace_backend(
             controller,
             socket_path=context.desired_socket_path,
+            namespace_state=context.current,
         ),
         session_is_alive=False,
         recreate_cause=reason,

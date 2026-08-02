@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from storage.paths import PathLayout
-from terminal_runtime import TmuxBackend
+from terminal_runtime import TmuxBackend, get_backend as resolve_terminal_backend
 
 from ccbd.system import utc_now
 
@@ -15,6 +15,20 @@ from .reflow import reflow_project_workspace
 from .records import namespace_from_state
 from ..project_namespace_state import ProjectNamespaceEventStore, ProjectNamespaceStateStore
 from ..project_namespace_pane import snapshot_project_namespace_panes
+
+
+def default_project_namespace_backend(*, socket_path: str | None = None, namespace_state=None):
+    backend_impl = str(getattr(namespace_state, 'backend_impl', '') or '').strip()
+    backend_family = str(getattr(namespace_state, 'namespace_backend_family', '') or '').strip()
+    if namespace_state is not None and backend_family != 'herdr-native' and backend_impl != 'herdr':
+        return TmuxBackend(socket_path=socket_path)
+    requested_backend = backend_impl if backend_impl in {'tmux', 'herdr'} else None
+    if namespace_state is not None and backend_family == 'herdr-native':
+        requested_backend = 'herdr'
+    backend = resolve_terminal_backend(requested_backend)
+    if backend is not None:
+        return backend
+    return TmuxBackend(socket_path=socket_path)
 
 
 class ProjectNamespaceController(ProjectNamespaceControllerStateMixin):
@@ -39,7 +53,7 @@ class ProjectNamespaceController(ProjectNamespaceControllerStateMixin):
             layout=layout,
             project_id=resolved_project_id,
             clock=clock,
-            backend_factory=backend_factory or TmuxBackend,
+            backend_factory=backend_factory or default_project_namespace_backend,
             state_store=state_store or ProjectNamespaceStateStore(layout),
             event_store=event_store or ProjectNamespaceEventStore(layout),
             layout_version=resolved_layout_version,
@@ -130,7 +144,11 @@ class ProjectNamespaceController(ProjectNamespaceControllerStateMixin):
         current = namespace or self.load()
         if current is None:
             raise RuntimeError('project namespace is not available')
-        backend = build_backend(self._backend_factory, socket_path=current.tmux_socket_path)
+        backend = build_backend(
+            self._backend_factory,
+            socket_path=current.tmux_socket_path,
+            namespace_state=current,
+        )
         workspace_window_name = str(current.workspace_window_name or '').strip()
         pane_records = snapshot_project_namespace_panes(backend)
         if pane_records is not None:
@@ -160,4 +178,4 @@ class ProjectNamespaceController(ProjectNamespaceControllerStateMixin):
         return session_root_pane(backend, current.tmux_session_name, timeout_s=timeout_s)
 
 
-__all__ = ['ProjectNamespaceController']
+__all__ = ['ProjectNamespaceController', 'default_project_namespace_backend']

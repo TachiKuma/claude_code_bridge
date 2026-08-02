@@ -128,12 +128,13 @@ def materialize_topology(
             timeout_s=timeout_s,
         )
     ensure_server_policy(context.backend, timeout_s=timeout_s)
-    apply_project_tmux_ui(
-        tmux_socket_path=context.desired_socket_path,
-        ccbd_socket_path=str(controller._layout.ccbd_socket_path),
-        tmux_session_name=context.desired_session_name,
-        backend=context.backend,
-    )
+    if callable(getattr(context.backend, '_tmux_run', None)):
+        apply_project_tmux_ui(
+            tmux_socket_path=context.desired_socket_path,
+            ccbd_socket_path=str(controller._layout.ccbd_socket_path),
+            tmux_session_name=context.desired_session_name,
+            backend=context.backend,
+        )
     _rename_legacy_workspace_if_needed(controller, context, first_window_name=first_window.name, timeout_s=timeout_s)
 
     agent_panes: dict[str, str] = {}

@@ -79,11 +79,14 @@ class TmuxWindowRecord:
     active: bool = False
 
 
-def build_backend(backend_factory, *, socket_path: str):
+def build_backend(backend_factory, *, socket_path: str, namespace_state=None):
     try:
-        return backend_factory(socket_path=socket_path)
+        return backend_factory(socket_path=socket_path, namespace_state=namespace_state)
     except TypeError:
-        return backend_factory()
+        try:
+            return backend_factory(socket_path=socket_path)
+        except TypeError:
+            return backend_factory()
 
 
 def remember_namespace_state_ref(backend, state) -> None:
@@ -804,23 +807,37 @@ def _capability_keys_for_operation(operation: str) -> tuple[str, ...]:
     return {
         'prepare_server': ('session_attach',),
         'ensure_server_policy': ('session_attach',),
-        'create_session': ('session_attach',),
-        'session_alive': ('session_attach',),
-        'list_windows': ('pane_spawn',),
-        'create_window': ('pane_spawn',),
-        'ensure_window': ('pane_spawn',),
-        'window_root_pane': ('pane_spawn',),
-        'split_pane': ('pane_spawn',),
-        'kill_window': ('kill_pane',),
-        'rename_window': ('pane_spawn',),
-        'select_window': ('pane_spawn',),
-        'kill_server': ('kill_pane',),
-        'destroy_namespace': ('kill_pane',),
+        'create_session': ('session_attach', 'workspace_create', 'workspace_metadata', 'pane_metadata'),
+        'session_alive': ('session_attach', 'pane_list'),
+        'list_windows': ('workspace_list', 'pane_list'),
+        'create_window': (
+            'workspace_list',
+            'workspace_create',
+            'workspace_focus',
+            'pane_list',
+            'workspace_metadata',
+            'pane_metadata',
+        ),
+        'ensure_window': (
+            'workspace_list',
+            'workspace_create',
+            'workspace_focus',
+            'pane_list',
+            'workspace_metadata',
+            'pane_metadata',
+        ),
+        'window_root_pane': ('workspace_list', 'pane_list'),
+        'split_pane': ('pane_list', 'pane_split', 'pane_run'),
+        'kill_window': ('workspace_list', 'pane_list', 'workspace_close'),
+        'rename_window': ('workspace_list', 'pane_list', 'workspace_metadata', 'pane_metadata'),
+        'select_window': ('workspace_list', 'pane_list', 'workspace_focus'),
+        'kill_server': ('workspace_list', 'pane_list', 'workspace_close'),
+        'destroy_namespace': ('workspace_list', 'pane_list', 'workspace_close'),
         'kill_pane': ('kill_pane',),
-        'move_pane': ('pane_spawn',),
-        'reflow_window': ('pane_spawn',),
-        'respawn_pane': ('pane_spawn',),
-        'set_pane_identity': ('pane_spawn',),
+        'move_pane': ('pane_list', 'pane_split'),
+        'reflow_window': ('workspace_list', 'pane_list'),
+        'respawn_pane': ('pane_list', 'pane_run'),
+        'set_pane_identity': ('pane_list', 'pane_metadata'),
     }.get(operation, (operation,))
 
 

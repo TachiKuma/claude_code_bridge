@@ -94,7 +94,11 @@ def apply_reload_patch(
     if unsupported is not None:
         return _blocked(*unsupported)
 
-    backend = build_backend(controller._backend_factory, socket_path=current.tmux_socket_path)
+    backend = build_backend(
+        controller._backend_factory,
+        socket_path=current.tmux_socket_path,
+        namespace_state=current,
+    )
     remember_namespace_state_ref(backend, current)
     if not session_alive(backend, current.tmux_session_name, timeout_s=timeout_s):
         return _blocked('session_unavailable', 'project namespace tmux session is not alive')
