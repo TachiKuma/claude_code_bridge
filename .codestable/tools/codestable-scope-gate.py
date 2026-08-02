@@ -39,7 +39,7 @@ def is_under(path: str, prefix: str) -> bool:
 
 
 def changed_files(root: Path, paths: list[str]) -> list[str]:
-    quoted = " ".join(f"'{path}'" for path in paths)
+    quoted = " ".join('"' + path.replace('"', '\\"') + '"' for path in paths)
     command = "git status --porcelain -uall"
     if quoted:
         command = f"{command} -- {quoted}"

@@ -60,6 +60,7 @@ windows-native-herdr-ccb
 ├── Herdr Contract Spike：Herdr socket API 与 CCB 最小 mux 语义验证
 ├── Backend Contract V2：把既有 tmux/rmux MuxBackend 扩展到 Herdr native backend
 ├── Herdr Backend Client：Herdr socket client、capability gate、error/evidence 归一
+├── CCBD Control Plane Transport：Native Windows 下 `ccb` 到 `ccbd` 的控制面 TCP loopback 前置
 ├── CCBD Namespace Integration：project session、pane topology、foreground attach 与 lifecycle
 ├── Provider Runtime Integration：provider 私有状态、启动、ask/pend/completion 在 Herdr pane 上运行
 ├── Recovery Boundary：CCB bounded recovery 与 Herdr restore 的单一 owner 规则
@@ -95,6 +96,14 @@ windows-native-herdr-ccb
 - **承载的子 feature**：`herdr-backend-client`
 - **触碰的现有代码 / 模块**：新增 `lib/terminal_runtime/herdr_*`，backend resolver/factory，unit tests。
 - **Depth 判断**：deep。Herdr 是 true external/local service；adapter 必须隔离 API 漂移和 Windows beta 缺口。
+
+### CCBD Control Plane Transport · Windows `ccb -> ccbd` 控制面前置
+
+- **职责**：恢复 ccbd control-plane transport seam，并在 Native Windows 下使用 TCP loopback + same-user token，使 public `ccb` 命令能够启动并连接 `ccbd`。
+- **承载的子 feature**：`ccbd-windows-control-plane-transport`
+- **触碰的现有代码 / 模块**：`lib/ccbd/socket_client_runtime/*`、`lib/ccbd/socket_server_runtime/*`、新增/恢复 `lib/ccbd/control_plane_transport/*`、control-plane endpoint diagnostics、focused tests。
+- **Depth 判断**：deep。控制面 transport 是跨平台 authority 边界；Unix AF_UNIX、Windows TCP/token、bootstrap 和 endpoint store 需要封装在 adapter seam 内，不能散落在 Herdr namespace 或 CLI 调用层。
+- **边界**：只恢复 `ccb<->ccbd` 控制面可连接性；不改 Herdr namespace lifecycle、provider runtime、recovery、Mobile/Config UI、package/release/update。
 
 ### CCBD Namespace Integration · 项目 session 与 pane 拓扑
 
@@ -463,49 +472,56 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
    - 对应 feature：`2026-07-31-herdr-backend-client`
    - 备注：交付 terminal_runtime Herdr backend/client、CLI adapter、schema/capability fail-closed gate、operation evidence 与 resolver/factory gated route；explicit herdr 和 Native Windows auto gate 失败均返回 V2 diagnostics，不 fallback tmux，非 Windows auto/default 不变。真实 Herdr host smoke 未在本机运行，留给后续集成验证。
 
-5. **ccbd-herdr-namespace-lifecycle** — 把 Herdr backend 接入 ccbd project namespace、layout、foreground attach、kill/restart/reload。
-   - 所属模块：CCBD Namespace Integration
+5. **ccbd-windows-control-plane-transport** — 恢复 ccbd control-plane transport seam 与 Windows TCP loopback adapter，使 Native Windows `ccb->ccbd` 控制面可启动。
+   - 所属模块：CCBD Control Plane Transport
    - 依赖：`herdr-backend-client`
    - 状态：in-progress
-   - 对应 feature：`2026-07-31-ccbd-herdr-namespace-lifecycle`
-   - 备注：ccbd 仍是 authority；Herdr session/pane 是 terminal backend evidence。
+   - 对应 feature：`2026-08-02-ccbd-windows-control-plane-transport`
+   - 备注：owner 选择新增独立子项，参考旧 `windows-rmux-native-backend` 已验收的 `ccbd-control-plane-transport-seam` 与 `ccbd-windows-tcp-loopback-transport`；本 Herdr roadmap 中重新走 design/review/QA/acceptance。只恢复 `ccb<->ccbd` 控制面 seam、Unix adapter 不漂移、Windows TCP loopback + same-user token、endpoint store/bootstrap/diagnostics redaction；不修改 Herdr namespace lifecycle、provider runtime、recovery、Mobile/Config UI、package/release/update。
 
-6. **provider-runtime-on-herdr** — 让所有公开 provider 的启动、`ask`、`pend`、completion、cancel 在 Herdr pane 中按 CCB 语义工作。
+6. **ccbd-herdr-namespace-lifecycle** — 把 Herdr backend 接入 ccbd project namespace、layout、foreground attach、kill/restart/reload。
+   - 所属模块：CCBD Namespace Integration
+   - 依赖：`ccbd-windows-control-plane-transport`
+   - 状态：in-progress
+   - 对应 feature：`2026-07-31-ccbd-herdr-namespace-lifecycle`
+   - 备注：ccbd 仍是 authority；Herdr session/pane 是 terminal backend evidence；control-plane transport 已拆到前置 `ccbd-windows-control-plane-transport`。
+
+7. **provider-runtime-on-herdr** — 让所有公开 provider 的启动、`ask`、`pend`、completion、cancel 在 Herdr pane 中按 CCB 语义工作。
    - 所属模块：Provider Runtime Integration
    - 依赖：`ccbd-herdr-namespace-lifecycle`
    - 状态：in-progress
    - 对应 feature：`2026-07-31-provider-runtime-on-herdr`
    - 备注：Codex/Claude/Gemini/Opencode 等当前公开 provider set 都必须覆盖；任一 provider 未通过或未给 blocked evidence 时不得进入 supported。
 
-7. **herdr-bounded-recovery-boundary** — 对齐 CCB v8.5.2 bounded recovery 与 Herdr restore，避免双重恢复。
+8. **herdr-bounded-recovery-boundary** — 对齐 CCB v8.5.2 bounded recovery 与 Herdr restore，避免双重恢复。
    - 所属模块：Recovery Boundary
    - 依赖：`provider-runtime-on-herdr`
    - 状态：in-progress
    - 对应 feature：`2026-07-31-herdr-bounded-recovery-boundary`
    - 备注：保留 90 秒 probation、backoff、crash record bound、durable circuit；Herdr auto restore 不能关闭或不能证明 disabled 时直接阻塞 recovery-capable/supported。
 
-8. **herdr-user-surfaces-parity** — 将 Herdr evidence 投影到 foreground attach、Mobile terminal、Config UI、doctor、ping、mounted、project view。
+9. **herdr-user-surfaces-parity** — 将 Herdr evidence 投影到 foreground attach、Mobile terminal、Config UI、doctor、ping、mounted、project view。
    - 所属模块：User Surfaces
    - 依赖：`provider-runtime-on-herdr`, `herdr-bounded-recovery-boundary`
    - 状态：in-progress
    - 对应 feature：`2026-07-31-herdr-user-surfaces-parity`
    - 备注：用户可见面必须展示 beta gaps 和 actionable diagnostics；Mobile terminal 与 Config UI degraded/partial 时不得进入 supported。
 
-9. **windows-x64-release-surface** — 补齐 npm `os=win32,cpu=x64`、managed Python、native helper、install/update/doctor gate。
+10. **windows-x64-release-surface** — 补齐 npm `os=win32,cpu=x64`、managed Python、native helper、install/update/doctor gate。
    - 所属模块：Validation & Support
    - 依赖：`windows-x64-v852-baseline-gate`, `herdr-user-surfaces-parity`
    - 状态：in-progress
    - 对应 feature：`2026-07-31-windows-x64-release-surface`
    - 备注：消费 `windows-x64-v852-baseline-gate` 的 platform gate，不重新实现位宽探测；不发布、不 promotion；只建立 release surface 和 code-level Windows `npm install` dry-run gate。
 
-10. **native-windows-public-workflow-validation-matrix** — 覆盖 CCB public workflow parity 的 Native Windows x64 真机验证矩阵。
+11. **native-windows-public-workflow-validation-matrix** — 覆盖 CCB public workflow parity 的 Native Windows x64 真机验证矩阵。
     - 所属模块：Validation & Support
     - 依赖：`windows-x64-release-surface`, `herdr-user-surfaces-parity`
     - 状态：in-progress
     - 对应 feature：`2026-07-31-native-windows-public-workflow-validation-matrix`
     - 备注：必须覆盖 `ccb`、`watch`、`ping`、`mounted`、`kill`、`restart`、`reload`、foreground attach、Mobile terminal、Config UI、doctor/update，以及所有公开 provider 在 Herdr pane 下的 `ask`、`pend`、completion、cancel。
 
-11. **herdr-supportability-projection** — 将 validation evidence 汇总到 support tier、README/docs、doctor 和 residual risk。
+12. **herdr-supportability-projection** — 将 validation evidence 汇总到 support tier、README/docs、doctor 和 residual risk。
     - 所属模块：Validation & Support
     - 依赖：`native-windows-public-workflow-validation-matrix`
     - 状态：in-progress
@@ -522,6 +538,7 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
 | Herdr socket API 能创建 session/pane、发送输入、捕获输出、kill pane、恢复 identity，并启动一个 provider dry-run pane | `herdr-backend-contract-spike` | spike script on Native Windows x64 | spike evidence JSON | yes |
 | Herdr backend 不伪装 tmux-family，调用层只依赖小协议 | `mux-backend-contract-herdr-v2` | contract/fake backend tests | unit/diff review | yes |
 | Herdr socket schema/version/capability 缺口 fail closed | `herdr-backend-client` | client tests + schema mismatch fixture | unit evidence | yes |
+| Native Windows 下 public `ccb` 命令能启动并连接 `ccbd` 控制面 | `ccbd-windows-control-plane-transport` | Windows TCP loopback transport tests + CMD-013 retry | unit/manual transcript | yes |
 | `ccb` project namespace 能由 Herdr backend 创建、attach、kill、restart、reload | `ccbd-herdr-namespace-lifecycle` | Windows foreground/manual + focused pytest | command/manual transcript | yes |
 | 所有公开 provider 的 `ask` / `pend` / completion / cancel 在 Herdr pane 中保持 CCB provider authority | `provider-runtime-on-herdr`, `native-windows-public-workflow-validation-matrix` | provider-specific focused tests + per-provider Native Windows transcript matrix | pytest/runtime/manual evidence | yes |
 | `watch` 能在 Herdr pane 工作流中持续显示 streaming/output/cancellation 状态，且不会把 Herdr agent state 当 completion authority | `provider-runtime-on-herdr`, `herdr-user-surfaces-parity`, `native-windows-public-workflow-validation-matrix` | watch transcript on Native Windows x64 | streaming transcript / runtime evidence | yes |

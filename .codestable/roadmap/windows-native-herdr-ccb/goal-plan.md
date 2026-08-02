@@ -13,13 +13,14 @@
 2. `herdr-backend-contract-spike` - mixed - Herdr session/pane/send/capture/kill/restore spike evidence.
 3. `mux-backend-contract-herdr-v2` - mixed - tmux/rmux/herdr backend contract V2.
 4. `herdr-backend-client` - mixed - Herdr socket client, schema/version gate and capability evidence.
-5. `ccbd-herdr-namespace-lifecycle` - functional - ccbd namespace lifecycle on Herdr backend.
-6. `provider-runtime-on-herdr` - functional - all public providers ask/pend/completion/cancel on Herdr panes.
-7. `herdr-bounded-recovery-boundary` - mixed - CCB-only bounded recovery with Herdr restore evidence.
-8. `herdr-user-surfaces-parity` - mixed - foreground, Mobile, Config UI, doctor/ping/mounted/project view projection.
-9. `windows-x64-release-surface` - mixed - npm/install/update/native helper/managed Python release surface gate.
-10. `native-windows-public-workflow-validation-matrix` - mixed - Native Windows x64 public workflow evidence matrix.
-11. `herdr-supportability-projection` - mixed - evidence-driven support tier, docs, doctor and residual risk projection.
+5. `ccbd-windows-control-plane-transport` - mixed - ccbd control-plane transport seam plus Windows TCP loopback/token adapter.
+6. `ccbd-herdr-namespace-lifecycle` - functional - ccbd namespace lifecycle on Herdr backend.
+7. `provider-runtime-on-herdr` - functional - all public providers ask/pend/completion/cancel on Herdr panes.
+8. `herdr-bounded-recovery-boundary` - mixed - CCB-only bounded recovery with Herdr restore evidence.
+9. `herdr-user-surfaces-parity` - mixed - foreground, Mobile, Config UI, doctor/ping/mounted/project view projection.
+10. `windows-x64-release-surface` - mixed - npm/install/update/native helper/managed Python release surface gate.
+11. `native-windows-public-workflow-validation-matrix` - mixed - Native Windows x64 public workflow evidence matrix.
+12. `herdr-supportability-projection` - mixed - evidence-driven support tier, docs, doctor and residual risk projection.
 
 Implementation entry for each item requires all `depends_on` items to be `done`; design-review passed is not implementation-ready.
 
@@ -27,6 +28,7 @@ Implementation entry for each item requires all `depends_on` items to be `done`;
 
 - Native Windows x64 platform gate and strict `v8.5.2` source/new branch evidence.
 - User-provided Herdr detection, capability/schema validation and direct Native Windows auto-route to Herdr.
+- Native Windows `ccb` process can start and connect to `ccbd` control plane through TCP loopback + same-user token, without regressing Unix AF_UNIX behavior.
 - `ccb` project namespace lifecycle, foreground attach, kill/restart/reload and pane IO on Herdr.
 - All public providers under Herdr pane through ask, pend, completion and cancel.
 - Mobile terminal and Config UI parity on Herdr.

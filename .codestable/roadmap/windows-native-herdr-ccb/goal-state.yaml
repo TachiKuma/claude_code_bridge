@@ -1,16 +1,16 @@
 roadmap: "windows-native-herdr-ccb"
-status: ready-to-dispatch
+status: handoff
 baseline_ref: "3b11479a48fd8702403ca7fa6b10cd2e0688f573"
-driver_kind: none
-driver_id: ""
+driver_kind: host-agent
+driver_id: "019fc004-f10e-79a0-ade1-148c5d22ffc8"
 execution_confirmation_id: "goal-execution-2026-08-01-windows-native-herdr-ccb"
 acceptance_authorization: approved
 acceptance_authorization_ref: "approval-report.md#goal-acceptance"
 commit_authorization: approved
 commit_authorization_ref: "approval-report.md#goal-commits"
-handoff_reason: ""
-handoff_next: ""
-current_feature_index: 3
+handoff_reason: "IndependentReviewUnavailable: ccbd-windows-control-plane-transport implementation and before_review gates completed, but the current host exposes no visible independent Task agent for the required cs-code-review lane A. OCR is available but cannot replace lane A, and workspace dirty scope prevents safe bare OCR review."
+handoff_next: "Provide a visible independent reviewer result for .codestable/features/2026-08-02-ccbd-windows-control-plane-transport, or explicitly approve CodeStable local-only review fallback with a matching ApprovalRef; then resume at current_feature_index=4 review stage before QA."
+current_feature_index: 4
 features:
   - slug: "windows-x64-v852-baseline-gate"
     roadmap_item: "windows-x64-v852-baseline-gate"
@@ -47,7 +47,16 @@ features:
     review: ".codestable/features/2026-07-31-herdr-backend-client/herdr-backend-client-review.md"
     qa: ".codestable/features/2026-07-31-herdr-backend-client/herdr-backend-client-qa.md"
     acceptance: ".codestable/features/2026-07-31-herdr-backend-client/herdr-backend-client-acceptance.md"
-    status: pending
+    status: accepted
+  - slug: "ccbd-windows-control-plane-transport"
+    roadmap_item: "ccbd-windows-control-plane-transport"
+    feature_dir: ".codestable/features/2026-08-02-ccbd-windows-control-plane-transport"
+    design: ".codestable/features/2026-08-02-ccbd-windows-control-plane-transport/ccbd-windows-control-plane-transport-design.md"
+    checklist: ".codestable/features/2026-08-02-ccbd-windows-control-plane-transport/ccbd-windows-control-plane-transport-checklist.yaml"
+    review: ".codestable/features/2026-08-02-ccbd-windows-control-plane-transport/ccbd-windows-control-plane-transport-review.md"
+    qa: ".codestable/features/2026-08-02-ccbd-windows-control-plane-transport/ccbd-windows-control-plane-transport-qa.md"
+    acceptance: ".codestable/features/2026-08-02-ccbd-windows-control-plane-transport/ccbd-windows-control-plane-transport-acceptance.md"
+    status: approved
   - slug: "ccbd-herdr-namespace-lifecycle"
     roadmap_item: "ccbd-herdr-namespace-lifecycle"
     feature_dir: ".codestable/features/2026-07-31-ccbd-herdr-namespace-lifecycle"
@@ -56,7 +65,7 @@ features:
     review: ".codestable/features/2026-07-31-ccbd-herdr-namespace-lifecycle/ccbd-herdr-namespace-lifecycle-review.md"
     qa: ".codestable/features/2026-07-31-ccbd-herdr-namespace-lifecycle/ccbd-herdr-namespace-lifecycle-qa.md"
     acceptance: ".codestable/features/2026-07-31-ccbd-herdr-namespace-lifecycle/ccbd-herdr-namespace-lifecycle-acceptance.md"
-    status: pending
+    status: implementing
   - slug: "provider-runtime-on-herdr"
     roadmap_item: "provider-runtime-on-herdr"
     feature_dir: ".codestable/features/2026-07-31-provider-runtime-on-herdr"

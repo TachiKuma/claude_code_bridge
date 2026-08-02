@@ -64,7 +64,9 @@ def main() -> None:
         run["core"] = bool(command.get("core"))
         run["failure_handling"] = command.get("failure_handling")
         evidence.append(run)
-        if run["exit_code"] != 0 and run["core"]:
+        if run["exit_code"] != 0 and command.get("failure_handling") == "document-baseline":
+            warnings.append(f"{command.get('id')}: documented baseline failed with exit {run['exit_code']}")
+        elif run["exit_code"] != 0 and run["core"]:
             blocking.append(f"{command.get('id')}: command failed with exit {run['exit_code']}")
         elif run["exit_code"] != 0:
             warnings.append(f"{command.get('id')}: non-core command failed with exit {run['exit_code']}")

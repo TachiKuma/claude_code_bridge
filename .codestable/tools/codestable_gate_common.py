@@ -11,6 +11,10 @@ from pathlib import Path
 from typing import Any
 
 sys.dont_write_bytecode = True
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 
 
 def repo_root() -> Path:
@@ -70,6 +74,8 @@ def run_command(command: str, cwd: Path) -> dict[str, Any]:
         cwd=cwd,
         shell=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=False,

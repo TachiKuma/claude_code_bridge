@@ -32,15 +32,23 @@ items:
     status: done
     feature: 2026-07-31-herdr-backend-client
     minimal_loop: false
-    notes: "实现 terminal_runtime HerdrBackend、HerdrSocketClient、HerdrCliRequestAdapter、schema/capability fail-closed gate、operation evidence 与 resolver/factory 接线；explicit herdr 和 Native Windows auto 在 gate 失败时返回 V2 diagnostics，不 fallback tmux；非 Windows auto/default 保持 tmux。QA/acceptance 通过，真实 Herdr host smoke 因本机 PATH 无 herdr executable 留作后续集成 residual risk。"
+    notes: "实现 terminal_runtime HerdrBackend、HerdrSocketClient、HerdrCliRequestAdapter、schema/capability fail-closed gate、operation evidence 与 resolver/factory 接线；explicit herdr 和 Native Windows auto 在 gate 失败时返回 V2 diagnostics，不 fallback tmux；非 Windows auto/default 保持 tmux。重开修复真实 Herdr server lifecycle 启动 seam 与 bottom->down split direction 归一；真实 Herdr smoke 通过。send_text/pane run 语义留给后续用户输入面 feature。"
+
+  - slug: ccbd-windows-control-plane-transport
+    description: 恢复 ccbd control-plane transport seam 与 Windows TCP loopback adapter，使 Native Windows ccb->ccbd 控制面可启动
+    depends_on: [herdr-backend-client]
+    status: in-progress
+    feature: 2026-08-02-ccbd-windows-control-plane-transport
+    minimal_loop: false
+    notes: "owner 选择新增独立子项，参考旧 windows-rmux-native-backend 已验收的 ccbd-control-plane-transport-seam 与 ccbd-windows-tcp-loopback-transport；本 Herdr roadmap 中重新走 design/review/QA/acceptance。只恢复 ccb<->ccbd 控制面 seam、Unix adapter 不漂移、Windows TCP loopback + same-user token、endpoint store/bootstrap/diagnostics redaction；不修改 Herdr namespace lifecycle、provider runtime、recovery、Mobile/Config UI、package/release/update。"
 
   - slug: ccbd-herdr-namespace-lifecycle
     description: 将 Herdr backend 接入 ccbd project namespace、pane topology、foreground attach、kill、restart 和 reload
-    depends_on: [herdr-backend-client]
+    depends_on: [ccbd-windows-control-plane-transport]
     status: in-progress
     feature: 2026-07-31-ccbd-herdr-namespace-lifecycle
     minimal_loop: false
-    notes: "ccbd 仍是 project authority；Herdr session 和 pane 只作为 terminal backend evidence。"
+    notes: "ccbd 仍是 project authority；Herdr session 和 pane 只作为 terminal backend evidence。实现前置现由 ccbd-windows-control-plane-transport 提供 Native Windows ccb->ccbd 控制面可启动性；本 feature 不承接 control-plane transport 代码。"
 
   - slug: provider-runtime-on-herdr
     description: 让所有公开 provider 在 Herdr pane 中完成启动、ask、pend、completion、cancel 和 provider state 绑定
