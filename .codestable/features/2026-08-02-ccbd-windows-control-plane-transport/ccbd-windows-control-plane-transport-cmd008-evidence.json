@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "doc_type": "manual-evidence-manifest",
+  "feature": "2026-08-02-ccbd-windows-control-plane-transport",
+  "command_id": "CMD-008",
+  "status": "passed",
+  "scope": "control-plane-transport",
+  "source_ref": ".codestable/features/2026-07-31-ccbd-herdr-namespace-lifecycle/evidence/cmd-013-native-windows-herdr-transcript.md",
+  "host": {
+    "platform": "win32",
+    "machine": "AMD64",
+    "python_bits": "64bit",
+    "is_wsl": false
+  },
+  "observations": {
+    "transport_blocker": "resolved",
+    "forbidden_error": "unix domain sockets are not supported on this platform",
+    "forbidden_error_observed": false,
+    "downstream_namespace_lifecycle_status": "blocked",
+    "downstream_owner": "ccbd-herdr-namespace-lifecycle"
+  },
+  "verdict": "control-plane transport blocker removed; downstream namespace lifecycle remains blocked"
+}

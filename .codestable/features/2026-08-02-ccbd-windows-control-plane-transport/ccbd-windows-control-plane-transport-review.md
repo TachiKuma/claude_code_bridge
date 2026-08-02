@@ -1,15 +1,16 @@
 ---
 doc_type: feature-review
 feature: 2026-08-02-ccbd-windows-control-plane-transport
-status: blocked
+status: passed
+reviewer: subagent
 reviewed: 2026-08-02
-round: 1
-lane_a_state: unavailable
-lane_a_ref: ""
-lane_a_reason: "当前 Codex 宿主未暴露可见独立 Task agent；按 CodeStable review gate，首次完整审查不能由主 agent 自审放行。"
+round: 4
+lane_a_state: completed
+lane_a_ref: "019fc043-d458-7cc0-86bd-d3cfa486b6bd"
+lane_a_reason: "第二轮完整复审通过；第四轮针对 DoD manual evidence 语义校验提出 important，已按 focused closure 关闭。"
 lane_b_state: skipped
 lane_b_ref: ""
-lane_b_reason: "OCR CLI 可用，但当前工作区混有其它 feature 的 dirty/untracked 改动，ocr review 只有 workspace/range 模式且无 include-only 文件列表；裸跑会越过本 feature scope。"
+lane_b_reason: "当前 workspace 含范围外 dirty 文件 笔记.md；不裸跑 workspace OCR，改为独立 Task agent + 本地行级 focused closure。"
 ---
 
 # ccbd-windows-control-plane-transport 代码审查报告
@@ -21,42 +22,36 @@ lane_b_reason: "OCR CLI 可用，但当前工作区混有其它 feature 的 dirt
 - Evidence pack: `.codestable/features/2026-08-02-ccbd-windows-control-plane-transport/ccbd-windows-control-plane-transport-evidence-pack.md`
 - Gate results: `.codestable/features/2026-08-02-ccbd-windows-control-plane-transport/ccbd-windows-control-plane-transport-scope-gate-results.json`
 - DoD results: `.codestable/features/2026-08-02-ccbd-windows-control-plane-transport/ccbd-windows-control-plane-transport-dod-results.json`
-- Implementation evidence: 当前 goal run 的 implementation gate 与 fresh command 输出。
-- Diff basis: 工作区 diff，限定到 control-plane transport、socket client/server seam、诊断投影、focused tests、当前 feature 产物和 gate runner Windows 兼容修复。
-- Review mode: initial。
-- Baseline dirty files: 工作区存在其它 feature/roadmap 历史改动，本报告未审查且不得计入本 feature verdict。
+- Implementation evidence: transport diff、focused tests、DoD runner manual evidence gate、CMD-008 manifest。
+- Diff basis: 当前 working tree 中本 feature 相关文件；范围外 `笔记.md` 未纳入 verdict。
+- Review mode: full-rereview + focused-closure。
+- Baseline dirty files: `笔记.md` 为范围外用户改动。
 
 ### Independent Review
 
-- Detection: 当前宿主没有原生 Task agent 工具；`ocr llm test` 通过，provider 为 OpenAI 兼容端点。
-- 环节 A 独立隔离 Task agent: local-only + unavailable。
-- 环节 B OCR CLI: skipped。
-- OCR severity mapping: High -> blocking/important, Medium -> nit/suggestion, Low -> discarded。
-- Merge policy: 环节 A 未完成，不能写 `reviewer: subagent`，不能定稿 `passed`。
-- Gate effect: blocks final verdict until an independent Task agent review is supplied or owner explicitly approves local-only fallback.
+- 环节 A 独立隔离 Task agent: completed，agent id `019fc043-d458-7cc0-86bd-d3cfa486b6bd`。
+- 环节 B OCR CLI: skipped，原因见 frontmatter。
+- Merge policy: 独立 reviewer findings 经本地事实核验后合并；第四轮 important 已用 focused closure 关闭。
+- Gate effect: none；`reviewer: subagent` 放行 Goal lane QA。
 
 ## 2. Diff Summary
 
-- 新增：`lib/ccbd/control_plane_transport/*`，`test/test_ccbd_control_plane_transport_*`，`test/test_ccbd_windows_tcp_loopback_*`，当前 feature gate/evidence 产物。
-- 修改：`lib/ccbd/socket_client_runtime/transport.py`，`lib/ccbd/socket_server_runtime/*`，ccbd endpoint diagnostics 投影，focused bootstrap/server/client tests，CodeStable gate runner Windows 兼容性。
+- 新增：`ccbd-windows-control-plane-transport-cmd008-evidence.json`、`test/test_codestable_dod_runner.py`。
+- 修改：`lib/ccbd/control_plane_transport/*`、`lib/ccbd/socket_client_runtime/transport.py`、focused transport/bootstrap/client tests、DoD runner、checklist/evidence/review artifacts。
 - 删除：none。
-- 未跟踪 / staged：当前 feature 新增目录与测试文件为 untracked；未 staged。
-- 风险热点：Windows token ACL 权限证明、handler 前认证、bootstrap 自探测时序、scope boundary。
+- 风险热点：Windows token ACL、handler 前认证、endpoint generation cleanup、manual evidence fail-closed。
 
 ## 3. Adversarial Pass
 
-- 假设的生产 bug：Windows token ACL proof 或 listener accept 时序存在漏判，导致 endpoint 发布但 client 连接不可用或坏 token 进入 handler。
-- 主动攻击过的反例：bad token、missing/unreadable token、ACL proof 不可解析、slow preauth client、stale endpoint、Unix AF_UNIX regression、diagnostics token redaction。
-- 结果：这些场景已有 focused tests 和 DoD evidence；但缺独立 reviewer 复核，不能升级为 review passed。
+- 假设的生产 bug：Native Windows 仍绕回 AF_UNIX，或 bad token 进入 JSON-line handler。
+- 主动攻击过的反例：无 endpoint client、bad token、owner mismatch ACL proof、generation path traversal、response frame trailing data、bootstrap probe failure、endpoint write/unlink 交错、manual transcript blocked 被误包装成 passed。
+- 结果：transport blocking 均有 focused tests；manual evidence 现在要求 JSON manifest、feature/command/status/source_ref/scope/observations 语义匹配。
 
 ## 4. Findings
 
 ### blocking
 
-- [ ] REV-001 `review gate` 缺少必需的独立 Task agent review。
-  - Evidence: 当前宿主未暴露可见 Task agent 工具；`cs-code-review` / `independent-review` 要求首次完整审查的环节 A 为 gate 必需。
-  - Impact: Goal feature 不能进入 QA；否则会跳过 CodeStable 独立审查硬门。
-  - Expected fix scope: 提供可见独立 reviewer run/result，或由 owner 按 approval conventions 显式批准 local-only fallback 后重跑 review gate。
+none
 
 ### important
 
@@ -68,33 +63,44 @@ none
 
 ### suggestion
 
-none
+- [ ] REV-S1 `lib/ccbd/control_plane_transport/token_auth.py` Windows secure token create 仍通过 PowerShell command text 传递 token payload。
+  - Evidence: 独立 reviewer 指出 token 不会先明文落盘，但同一用户可见的 PowerShell 子进程命令行可能短暂包含 token。
+  - Impact: 不违反本 feature 的文件保护边界；属于后续 hardening。
 
 ### learning
 
-- `codestable-dod-runner.py` 在 Windows 上需要固定 UTF-8/replace 输出处理，否则 pytest 中的非 ASCII 输出会让 gate 自身崩溃。
-- `codestable-scope-gate.py` 在 Windows shell 下不能用单引号拼 pathspec；会导致 changed files 被漏检。
+- 手工 DoD 不能只验证 artifact 存在；必须有机器可读 manifest 绑定 feature、command 与关键语义。
+- CMD-013 原始 transcript 的 namespace lifecycle 失败归属后续 `ccbd-herdr-namespace-lifecycle`，本 feature 只声明 control-plane blocker removed。
 
 ### praise
 
-none
+- transport seam 保持在 adapter 边界，未扩散到 RPC handler。
+- focused tests 覆盖 Unix regression、Windows TCP/token、bootstrap auth path 和 DoD runner gate 语义。
 
 ## 5. Test And QA Focus
 
-- QA 必须重点复核：Windows TCP listener valid/bad token、ACL fail-fast、不发布 unprotectable endpoint、bootstrap self-ping 走同一 transport、diagnostics token redaction、Unix AF_UNIX regression。
-- Evidence pack residual risks / gate warnings：CMD-006 是既有 Windows `fcntl` collection baseline；scope-gate 中 `.codestable` 文档/工具的 `TODO/FIXME/XXX` 命中是规则文本 false positive，不是新增临时标记。
-- 建议新增或加强的测试：独立 reviewer 返回前不新增。
-- 不能靠 review 完全确认的点：Native Windows CMD-013 已不再失败于 AF_UNIX unsupported，但当前 transcript 进入后续 namespace/reset 确认或 lifecycle 层失败，需要后续 feature 继续处理。
+- QA 必须重点复核：Unix regression、Windows TCP endpoint publish、ACL 失败不 publish、bad token 不触发 handler、bootstrap self-ping 走 authenticated listener、shutdown 只清理当前 generation、CMD-008 manifest 不掩盖 downstream blocked。
+- Gate warnings：CMD-006 是 Windows `fcntl` collection baseline，按 checklist `document-baseline` 处理。
+- 不能靠 review 完全确认的点：Native Windows namespace create / foreground attach / reload apply 仍在后续 lifecycle feature 中 blocked。
 
 ## 6. Residual Risk
 
-- 独立审查未完成；本 feature 当前只能停在 review gate。
+- CMD-006 Windows `fcntl` collection baseline 未由本 feature 修复。
+- token payload 在 PowerShell 子进程命令行中短暂可见，建议后续改 stdin/ctypes DACL 创建。
 
 ## 7. Verdict
 
-- Status: blocked
-- Next: 提供独立 Task agent reviewer 结果后重跑 `cs-code-review`；或 owner 明确批准 local-only fallback，再由主流程按协议消费该 approval。
+- Status: passed
+- Next: Goal lane 进入 QA。
 
 ## 8. Focused Closure
 
-none
+- Closed findings: REV-3-001、REV-3-002、REV-4-001。
+- Attributed delta: `.codestable/tools/codestable-dod-runner.py`、`test/test_codestable_dod_runner.py`、checklist CMD-008、`ccbd-windows-control-plane-transport-cmd008-evidence.json`。
+- Targeted verification:
+  - `python -m pytest -q test/test_codestable_dod_runner.py` -> 9 passed。
+  - `python .codestable/tools/validate-yaml.py --file ...checklist.yaml --yaml-only` -> passed。
+  - `python .codestable/tools/codestable-dod-runner.py ... --stage qa` -> passed，CMD-008 evidence includes `transport_blocker=resolved` and `downstream_namespace_lifecycle_status=blocked`。
+  - `python -m compileall -q .codestable/tools/codestable-dod-runner.py test/test_codestable_dod_runner.py` -> passed。
+  - `git diff --check` scoped to touched runner/feature files -> passed。
+- Classification: gate/test/artifact closure only；未改变 production transport 行为、RPC schema、安全边界或 Herdr lifecycle。

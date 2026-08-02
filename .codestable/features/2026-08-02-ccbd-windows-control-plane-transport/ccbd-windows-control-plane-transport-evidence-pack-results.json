@@ -1,6 +1,6 @@
 {
   "gate_id": "evidence-pack",
-  "stage": "implementation.before_review",
+  "stage": "acceptance",
   "status": "passed",
   "blocking": [],
   "warnings": [],

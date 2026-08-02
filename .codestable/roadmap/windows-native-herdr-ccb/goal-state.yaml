@@ -8,9 +8,9 @@ acceptance_authorization: approved
 acceptance_authorization_ref: "approval-report.md#goal-acceptance"
 commit_authorization: approved
 commit_authorization_ref: "approval-report.md#goal-commits"
-handoff_reason: "IndependentReviewUnavailable: ccbd-windows-control-plane-transport implementation and before_review gates completed, but the current host exposes no visible independent Task agent for the required cs-code-review lane A. OCR is available but cannot replace lane A, and workspace dirty scope prevents safe bare OCR review."
-handoff_next: "Provide a visible independent reviewer result for .codestable/features/2026-08-02-ccbd-windows-control-plane-transport, or explicitly approve CodeStable local-only review fallback with a matching ApprovalRef; then resume at current_feature_index=4 review stage before QA."
-current_feature_index: 4
+handoff_reason: "ccbd-windows-control-plane-transport accepted on 2026-08-02; control-plane AF_UNIX blocker removed. Downstream CMD-013 namespace lifecycle remains blocked and belongs to ccbd-herdr-namespace-lifecycle."
+handoff_next: "Resume goal driver at current_feature_index=5 for ccbd-herdr-namespace-lifecycle using the refreshed CMD-013 source transcript and the accepted control-plane transport evidence."
+current_feature_index: 5
 features:
   - slug: "windows-x64-v852-baseline-gate"
     roadmap_item: "windows-x64-v852-baseline-gate"
@@ -56,7 +56,7 @@ features:
     review: ".codestable/features/2026-08-02-ccbd-windows-control-plane-transport/ccbd-windows-control-plane-transport-review.md"
     qa: ".codestable/features/2026-08-02-ccbd-windows-control-plane-transport/ccbd-windows-control-plane-transport-qa.md"
     acceptance: ".codestable/features/2026-08-02-ccbd-windows-control-plane-transport/ccbd-windows-control-plane-transport-acceptance.md"
-    status: approved
+    status: accepted
   - slug: "ccbd-herdr-namespace-lifecycle"
     roadmap_item: "ccbd-herdr-namespace-lifecycle"
     feature_dir: ".codestable/features/2026-07-31-ccbd-herdr-namespace-lifecycle"

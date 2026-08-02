@@ -34,31 +34,31 @@ steps:
 checks:
   - item: "Unix 平台 client/server/bootstrap 的 AF_UNIX path、stale cleanup、bootstrap self-ping、shutdown unlink identity 不退化"
     source: design AC-001 / DOD-IMPL-002
-    status: pending
+    status: passed
   - item: "Windows server listen 绑定 127.0.0.1:0，endpoint descriptor 含 host、port、token_ref、generation"
     source: design AC-002 / DOD-IMPL-001
-    status: pending
+    status: passed
   - item: "token ACL/权限只有在当前用户 runtime root、当前用户可读、非当前用户 read 权限不存在且 evidence 可解析时才算 pass；无法证明时 fail-fast，不 publish endpoint，不 fallback 无鉴权 TCP"
     source: design AC-003 / DOD-IMPL-004
-    status: pending
+    status: passed
   - item: "Windows client valid token handshake 成功后 JSON-line ping 正常"
     source: design AC-004 / DOD-IMPL-003
-    status: pending
+    status: passed
   - item: "missing/bad/unreadable token 不触发 handler，连接关闭，错误脱敏可诊断"
     source: design AC-005 / DOD-IMPL-003
-    status: pending
+    status: passed
   - item: "bootstrap self-ping 使用同一 transport connect + token handshake + nonce ping"
     source: design AC-006 / DOD-IMPL-005
-    status: pending
+    status: passed
   - item: "log、doctor、ping、mounted、startup、error、artifact 不含 token 明文，只允许 token_ref、acl_status 或 fingerprint；ping/doctor/startup/mounted payload 保留 legacy socket_path 兼容字段，Unix 为原 path，Windows 为 null/empty"
     source: design AC-007 / DOD-IMPL-006
-    status: pending
+    status: passed
   - item: "本 feature 不修改 RPC schema/handler，不实现 named pipe，不改 Herdr namespace/provider/recovery/user-surface/release"
     source: design AC-008 / DOD-IMPL-007
-    status: pending
+    status: passed
   - item: "Native Windows CMD-013 不再因 AF_UNIX unsupported 退出，进入 Herdr namespace lifecycle 真实验证"
     source: design AC-009 / DOD-ACCEPT-001
-    status: pending
+    status: passed
 
 dod:
   commands:
@@ -121,6 +121,12 @@ dod:
       core: true
       failure_handling: blocked-if-no-host-or-herdr
       test_status: manual
+      evidence_ref: ".codestable/features/2026-08-02-ccbd-windows-control-plane-transport/ccbd-windows-control-plane-transport-cmd008-evidence.json"
+      evidence_scope: control-plane-transport
+      evidence_observations:
+        transport_blocker: resolved
+        forbidden_error_observed: false
+        downstream_namespace_lifecycle_status: blocked
       covers:
         - native_windows_control_plane_start
         - herdr_namespace_lifecycle_reentry

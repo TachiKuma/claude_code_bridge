@@ -475,9 +475,9 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
 5. **ccbd-windows-control-plane-transport** — 恢复 ccbd control-plane transport seam 与 Windows TCP loopback adapter，使 Native Windows `ccb->ccbd` 控制面可启动。
    - 所属模块：CCBD Control Plane Transport
    - 依赖：`herdr-backend-client`
-   - 状态：in-progress
+   - 状态：accepted
    - 对应 feature：`2026-08-02-ccbd-windows-control-plane-transport`
-   - 备注：owner 选择新增独立子项，参考旧 `windows-rmux-native-backend` 已验收的 `ccbd-control-plane-transport-seam` 与 `ccbd-windows-tcp-loopback-transport`；本 Herdr roadmap 中重新走 design/review/QA/acceptance。只恢复 `ccb<->ccbd` 控制面 seam、Unix adapter 不漂移、Windows TCP loopback + same-user token、endpoint store/bootstrap/diagnostics redaction；不修改 Herdr namespace lifecycle、provider runtime、recovery、Mobile/Config UI、package/release/update。
+   - 备注：accepted 2026-08-02；只恢复 `ccb<->ccbd` 控制面 seam、Unix adapter 不漂移、Windows TCP loopback + same-user token、endpoint store/bootstrap/diagnostics redaction。CMD-008 manifest 证明 control-plane transport blocker removed；原始 transcript 中 namespace create、foreground attach、reload apply 仍 blocked，归属后续 `ccbd-herdr-namespace-lifecycle`。
 
 6. **ccbd-herdr-namespace-lifecycle** — 把 Herdr backend 接入 ccbd project namespace、layout、foreground attach、kill/restart/reload。
    - 所属模块：CCBD Namespace Integration
