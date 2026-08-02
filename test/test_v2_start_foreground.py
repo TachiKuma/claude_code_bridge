@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 
@@ -9,7 +10,7 @@ import cli.services.start_foreground as start_foreground_service
 from ccbd.socket_client import CcbdClientError
 from cli.context import CliContextBuilder
 from cli.models import ParsedStartCommand
-from cli.services.start_foreground import ForegroundAttachError, attach_started_project_namespace
+from cli.services.start_foreground import ForegroundAttachError, ForegroundAttachSummary, attach_started_project_namespace
 from project.resolver import bootstrap_project
 
 
@@ -35,6 +36,132 @@ def _assert_call_subsequence(actual: list[list[str]], expected: list[list[str]])
 
 def _tmux_cmd(context, *args: str) -> list[str]:
     return ['tmux', '-f', '/dev/null', '-S', str(context.paths.ccbd_tmux_socket_path), *args]
+
+
+def test_foreground_attach_summary_exposes_restore_token_presence_only() -> None:
+    summary = ForegroundAttachSummary(
+        project_id='proj-herdr',
+        tmux_socket_path='',
+        tmux_session_name='ccb-herdr',
+        backend_impl='herdr',
+        namespace_id='workspace-1',
+        session_name='ccb-herdr',
+        ipc_kind='herdr_socket',
+        ipc_ref='herdr://ccb-herdr',
+        namespace_restore_token_present=True,
+    )
+
+    assert summary.backend_impl == 'herdr'
+    assert summary.namespace_restore_token_present is True
+    assert not hasattr(summary, 'namespace_restore_token')
+    assert 'ccb-herdr::workspace-1' not in str(summary)
+
+
+def test_start_foreground_herdr_attach_uses_builder_without_tmux_binary(monkeypatch) -> None:
+    context = SimpleNamespace(project=SimpleNamespace(project_id='proj-herdr'))
+    payload = {
+        'namespace_backend_family': 'herdr-native',
+        'namespace_backend_impl': 'herdr',
+        'namespace_id': 'workspace-1',
+        'namespace_session_name': 'ccb-herdr',
+        'namespace_ipc_kind': 'herdr_socket',
+        'namespace_ipc_ref': 'herdr://workspace-1',
+        'namespace_restore_token_present': True,
+        'namespace_workspace_window_name': 'main',
+        'namespace_ui_attachable': True,
+    }
+    builder_calls: list[dict[str, object]] = []
+    attach_calls: list[tuple[dict[str, object], str | None]] = []
+
+    class _FakeClient:
+        def ping(self, target: str) -> dict[str, object]:
+            assert target == 'ccbd'
+            return payload
+
+    class _FakeHerdrAttachBackend:
+        def attach_namespace(self, namespace_ref: dict[str, object], *, window_name: str | None = None) -> None:
+            attach_calls.append((dict(namespace_ref), window_name))
+
+    def _build_herdr_attach_backend(*, namespace_ref, backend_selection):
+        builder_calls.append(
+            {
+                'namespace_ref': dict(namespace_ref),
+                'backend_selection': dict(backend_selection),
+            }
+        )
+        return _FakeHerdrAttachBackend()
+
+    monkeypatch.setattr(start_foreground_service, '_foreground_attach_client', lambda _context: _FakeClient())
+    monkeypatch.setattr(start_foreground_service, '_attach_env', lambda: {})
+    monkeypatch.setattr(
+        start_foreground_service.shutil,
+        'which',
+        lambda _name: (_ for _ in ()).throw(AssertionError('tmux should not be queried')),
+    )
+    monkeypatch.setattr(
+        start_foreground_service.subprocess,
+        'Popen',
+        lambda *_, **__: (_ for _ in ()).throw(AssertionError('tmux subprocess should not run')),
+    )
+    monkeypatch.setattr(start_foreground_service, '_build_herdr_attach_backend', _build_herdr_attach_backend)
+
+    summary = attach_started_project_namespace(context)  # type: ignore[arg-type]
+
+    assert summary.backend_impl == 'herdr'
+    assert summary.namespace_id == 'workspace-1'
+    assert summary.session_name == 'ccb-herdr'
+    assert summary.ipc_kind == 'herdr_socket'
+    assert summary.namespace_restore_token_present is True
+    assert builder_calls == [
+        {
+            'namespace_ref': {
+                'backend_family': 'herdr-native',
+                'backend_impl': 'herdr',
+                'namespace_id': 'workspace-1',
+                'session_name': 'ccb-herdr',
+                'ipc_kind': 'herdr_socket',
+                'ipc_ref': 'herdr://workspace-1',
+                'restore_token': None,
+            },
+            'backend_selection': {
+                'backend_family': 'herdr-native',
+                'backend_impl': 'herdr',
+                'ipc_kind': 'herdr_socket',
+                'ipc_ref_present': True,
+                'namespace_restore_token_present': True,
+            },
+        }
+    ]
+    assert attach_calls == [
+        (
+            {
+                'backend_family': 'herdr-native',
+                'backend_impl': 'herdr',
+                'namespace_id': 'workspace-1',
+                'session_name': 'ccb-herdr',
+                'ipc_kind': 'herdr_socket',
+                'ipc_ref': 'herdr://workspace-1',
+                'restore_token': None,
+            },
+            'main',
+        )
+    ]
+    assert 'restore-token' not in str(builder_calls)
+
+
+def test_start_foreground_herdr_attach_rejects_missing_payload_without_tmux_fallback(monkeypatch) -> None:
+    payload = {
+        'namespace_backend_impl': 'herdr',
+        'namespace_id': 'workspace-1',
+        'namespace_session_name': 'ccb-herdr',
+        'namespace_ipc_kind': 'herdr_socket',
+        'namespace_ui_attachable': True,
+    }
+
+    ready, error = start_foreground_service._attach_target_ready(payload, env={})
+
+    assert ready is False
+    assert 'ipc_ref_present=False' in error
 
 
 class _FakeAttachProcess:
@@ -72,6 +199,12 @@ def test_start_foreground_attaches_to_namespace_tmux_session(tmp_path: Path, mon
             return {
                 'namespace_tmux_socket_path': str(context.paths.ccbd_tmux_socket_path),
                 'namespace_tmux_session_name': context.paths.ccbd_tmux_session_name,
+                'namespace_backend_impl': 'tmux',
+                'namespace_id': context.paths.ccbd_tmux_session_name,
+                'namespace_session_name': context.paths.ccbd_tmux_session_name,
+                'namespace_ipc_kind': 'socket_path',
+                'namespace_ipc_ref': str(context.paths.ccbd_tmux_socket_path),
+                'namespace_restore_token_present': False,
                 'namespace_workspace_window_name': context.paths.ccbd_tmux_workspace_window_name,
                 'namespace_ui_attachable': True,
             }
@@ -104,6 +237,12 @@ def test_start_foreground_attaches_to_namespace_tmux_session(tmp_path: Path, mon
     assert summary.project_id == context.project.project_id
     assert summary.tmux_socket_path == str(context.paths.ccbd_tmux_socket_path)
     assert summary.tmux_session_name == context.paths.ccbd_tmux_session_name
+    assert summary.backend_impl == 'tmux'
+    assert summary.namespace_id == context.paths.ccbd_tmux_session_name
+    assert summary.session_name == context.paths.ccbd_tmux_session_name
+    assert summary.ipc_kind == 'socket_path'
+    assert summary.ipc_ref == str(context.paths.ccbd_tmux_socket_path)
+    assert summary.namespace_restore_token_present is False
     assert client_timeouts == [start_foreground_service.FOREGROUND_ATTACH_RPC_TIMEOUT_S]
     assert 'CONTROL_PLANE_RPC_TIMEOUT_S' not in start_foreground_service.__dict__
     _assert_call_subsequence(run_calls, [

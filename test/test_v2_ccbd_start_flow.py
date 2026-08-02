@@ -228,6 +228,56 @@ def test_project_restart_panes_handler_schedules_in_place_pane_restart(monkeypat
     assert restarts == [(app, ('agent1', 'agent2'))]
 
 
+def test_project_restart_panes_handler_defers_herdr_without_scheduled_success(monkeypatch) -> None:
+    restarts: list[tuple[object, tuple[str, ...]]] = []
+
+    app = SimpleNamespace(
+        config=SimpleNamespace(agents={'agent1': object(), 'agent2': object()}),
+        start_maintenance_lock=threading.Lock(),
+        project_namespace=SimpleNamespace(
+            load=lambda: SimpleNamespace(
+                namespace_backend_family='herdr-native',
+                backend_impl='herdr',
+                tmux_socket_path='',
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        project_restart,
+        'restart_project_agent_panes_in_place',
+        lambda app_arg, *, agent_names: restarts.append((app_arg, agent_names)),
+    )
+    handler = build_project_restart_panes_handler(app)
+
+    payload, after_response = handler({})
+    after_response()
+
+    assert payload['status'] == 'unsupported'
+    assert payload['restart_status'] == 'deferred'
+    assert payload['reason'] == 'deferred_to_provider_runtime_on_herdr'
+    assert payload['restart_mode'] == 'provider_runtime_required'
+    assert payload['backend_impl'] == 'herdr'
+    assert payload['results'] == [
+        {
+            'agent': 'agent1',
+            'status': 'deferred',
+            'reason': 'deferred_to_provider_runtime_on_herdr',
+            'backend_impl': 'herdr',
+            'namespace_backend_family': 'herdr-native',
+            'restart_mode': 'provider_runtime_required',
+        },
+        {
+            'agent': 'agent2',
+            'status': 'deferred',
+            'reason': 'deferred_to_provider_runtime_on_herdr',
+            'backend_impl': 'herdr',
+            'namespace_backend_family': 'herdr-native',
+            'restart_mode': 'provider_runtime_required',
+        },
+    ]
+    assert restarts == []
+
+
 def test_ccbd_start_flow_writes_runtime_authority_via_rpc(tmp_path: Path, monkeypatch) -> None:
     project_root = tmp_path / 'repo-ccbd-start'
     (project_root / '.ccb').mkdir(parents=True, exist_ok=True)

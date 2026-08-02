@@ -4,7 +4,7 @@ feature: 2026-07-31-herdr-backend-client
 status: passed
 reviewer: subagent+ocr
 reviewed: 2026-08-02
-round: 8
+round: 9
 lane_a_state: completed
 lane_a_ref: "019fbe88-00f9-7f63-bafe-502106c380b2"
 lane_a_reason: "独立 reviewer 初始 verdict 为 changes-requested；唯一 blocking 已按本轮 closure evidence 修复并验证。"
@@ -14,6 +14,38 @@ lane_b_reason: "ocr review 已完成；剩余 send_text/pane run 评论与已确
 ---
 
 # herdr-backend-client 代码审查报告
+
+## 0. Reopen Review 2026-08-02
+
+Scope: owner approved `ReopenBackendClient` to fix real Herdr server lifecycle and split direction defects found by CMD-013 probing.
+
+Independent reviewer: Task agent `019fbf9d-af8d-7ae3-b1f9-24ff45881bd0`.
+
+### Findings Closure
+
+blocking:
+
+- [x] REV-REAL-001 `cli.py` `_start_server()` originally reused a session marker without checking whether the saved `Popen` was still alive. Fixed by checking `poll() is None`; exited or missing process records are cleared and respawned on the next NotFound retry.
+- [x] REV-REAL-002 process state contradiction: `approval-report.md` now records owner approval as resolved, and `goal-state.yaml` no longer stays at the old owner-stop handoff. It records an active reopened backend-client repair state.
+
+important:
+
+- [x] REV-REAL-003 unsupported split direction is now validated before parent pane lookup or any Herdr command, so invalid directions fail closed without external side effects.
+
+nit:
+
+- [x] Error text kept behavior-focused; accepted aliases are test-covered.
+
+### Fresh Verification
+
+- `python -m py_compile "lib/terminal_runtime/herdr_backend_runtime/cli.py" "test/test_herdr_backend_client.py"` -> exit 0
+- `python -m pytest -q "test/test_herdr_backend_client.py" -k "server or split_direction or bottom or unrepresentable or cli_request_adapter"` -> 39 passed, 105 deselected
+- `python -m pytest -q "test/test_herdr_backend_client.py" "test/test_terminal_runtime_backend_selection.py"` -> 159 passed
+- `python -m pytest -q "test/test_mux_backend_contract.py" -k "V2 or herdr"` -> 8 passed, 12 deselected
+- `python -m pytest -q "test/test_mux_backend_contract.py" "test/test_terminal_runtime_backend_selection.py" "test/test_herdr_backend_client.py"` -> 179 passed
+- Real Herdr smoke with `C:/Users/Administrator/AppData/Local/Programs/Herdr/herdr.exe` -> passed; returned version `0.7.5-preview.2026-07-29-44b3adb12552`, schema `Herdr API`, namespace `w1`, pane `w1:p2`, kill `ok`.
+
+Verdict: passed. No unresolved blocking for the reopened backend-client fix.
 
 ## 1. Scope And Inputs
 

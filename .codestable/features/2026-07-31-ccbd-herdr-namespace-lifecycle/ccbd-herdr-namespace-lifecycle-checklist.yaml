@@ -5,31 +5,31 @@ steps:
   - id: S0
     action: "[S0] implementation admission：确认前置 V2 contract 与 HerdrBackend client 已 implementation/acceptance ready"
     exit_signal: "import/focused tests 证明 V2 refs/errors/capabilities、HerdrBackend、HerdrBackend.attach_namespace、herdr-native、herdr_socket、schema/capability gate、foreground presentation/layout capability 已落地；否则 dependency-blocked"
-    status: pending
+    status: done
   - id: S1
     action: "[S1] durable state projection and public redaction：additive 扩展 ProjectNamespaceState/Event/DTO/summary，支持 Herdr internal namespace_ref、restore token 与 public redacted payload"
     exit_signal: "旧 tmux/rmux record 读取不变；Herdr record round-trip 得到 herdr-native/herdr/herdr_socket，tmux_socket_path 可为空；ping、event summary、lib/ccbd/project_view/service.py project view、foreground summary、日志只消费 redacted projection helper，只输出 namespace_restore_token_present，不输出 raw token"
-    status: pending
+    status: done
   - id: S2
     action: "[S2] V2 backend helper path：把 project namespace helper 的 mux 判断改为 per-operation V2 capability/protocol gate，消除 tmux-family-only 分支"
     exit_signal: "fake Herdr V2 backend 通过 create/list/window/root/split/respawn/identity/kill helper tests；每个 helper 缺 required method/capability 时结构化 fail closed；没有 _tmux_run 依赖"
-    status: pending
+    status: done
   - id: S3
     action: "[S3] ensure/layout/reflow lifecycle and presentation guard：让 controller ensure、materialize topology、workspace reflow 在 Herdr backend 下按 V2 capability 执行，并隔离 tmux UI presentation path"
     exit_signal: "fake Herdr namespace 创建/刷新/reflow tests 通过；unsupported layout 或 tmux-compatible presentation capability 不保存成功 state，或跳过 tmux UI 并记录 degraded evidence；错误含 backend/capability/evidence"
-    status: pending
+    status: done
   - id: S4
     action: "[S4] foreground attach builder seam：增加 Herdr attach ready check、可注入 attach backend builder 与 attach path"
     exit_signal: "ccbd ping payload 为 Herdr 时不查 tmux binary、不跑 tmux subprocess；builder 收到 redacted namespace_ref + backend_selection；调用 attach_namespace；unsupported/missing attachable 输出 actionable error"
-    status: pending
+    status: done
   - id: S5
     action: "[S5] kill/restart/reload boundary：确认 kill/restart/reload handlers 继续由 ccbd 编排，Herdr 只执行 namespace/window/pane primitive"
     exit_signal: "destroy 只杀 current Herdr namespace；additive_patch_apply.py 从 current namespace V2 ref 建 backend context；add/remove/move/reflow patch modules 使用 V2 refs 调用 kill/ensure/reflow/patch primitive，缺 required capability 时 patch result blocked/failed 且不 published/noop 成功；project_restart.py agent/panes handlers 在 Herdr 下返回 unsupported/deferred evidence，不改 provider completion，不走静默 scheduled success"
-    status: pending
+    status: done
   - id: S6
     action: "[S6] scope/content guard：禁止 provider runtime、recovery owner、Mobile/Config UI、doctor/support/package/release/update/installer/public validation matrix 越界"
     exit_signal: "guard 覆盖 modified、staged、rename/copy、untracked path 和 staged/untracked content"
-    status: pending
+    status: done
   - id: S7
     action: "[S7] regression guard + Windows foreground/manual evidence：运行 Herdr focused tests、现有 tmux/rmux namespace/foreground regression，并收集 Native Windows x64 foreground/manual transcript"
     exit_signal: "Herdr tests 通过；tmux/rmux project namespace、rmux attach、start foreground tests 不退化；Windows x64 transcript 记录 ccb namespace create、foreground attach、kill、reload 和 restart unsupported/deferred evidence"

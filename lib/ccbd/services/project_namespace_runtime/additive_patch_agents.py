@@ -4,9 +4,8 @@ from types import SimpleNamespace
 
 from agents.models import LayoutNode, parse_layout_spec
 from ccbd.reload_additive_agents import append_agent_plan_for_window, append_agent_windows, window_agent_names, window_map
-from terminal_runtime.tmux_identity import apply_ccb_pane_identity
 
-from .backend import session_window_target, split_pane
+from .backend import apply_pane_identity, reflow_window, split_pane
 from .remove_patch_agents import reflow_window_after_agent_change
 
 
@@ -117,18 +116,12 @@ def _prepare_window_for_next_append(
     window_name: str,
     timeout_s: float | None,
 ) -> None:
-    runner = getattr(backend, '_tmux_run', None)
-    if not callable(runner):
-        return
-    completed = runner(
-        ['select-layout', '-E', '-t', session_window_target(session_name, window_name)],
-        check=False,
-        capture=True,
-        timeout=timeout_s,
+    reflow_window(
+        backend,
+        session_name=session_name,
+        window_name=window_name,
+        timeout_s=timeout_s,
     )
-    if int(getattr(completed, 'returncode', 1) or 0) != 0:
-        detail = str(getattr(completed, 'stderr', '') or getattr(completed, 'stdout', '') or '').strip()
-        raise RuntimeError(detail or f'failed to prepare window {window_name!r} for another appended pane')
 
 
 def _anchor_pane(existing_agent_panes: dict[str, str], anchor_agent: str) -> str:
@@ -159,9 +152,9 @@ def _append_single_agent_pane(
         timeout_s=timeout_s,
     )
     _append_unique(created_panes, pane_id)
-    apply_ccb_pane_identity(
+    apply_pane_identity(
         backend,
-        pane_id,
+        pane_id=pane_id,
         title=appended.agent,
         agent_label=appended.agent,
         project_id=controller._project_id,

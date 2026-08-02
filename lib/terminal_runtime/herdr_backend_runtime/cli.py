@@ -6,6 +6,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 from collections.abc import Callable, Mapping
 
 from terminal_runtime.mux_backend_contract import MuxCommandErrorV2
@@ -18,14 +19,20 @@ class HerdrCliRequestAdapter:
         session_name: str,
         herdr_executable: str | None = None,
         run_fn: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+        popen_fn: Callable[..., subprocess.Popen] = subprocess.Popen,
         which_fn: Callable[[str], str | None] = shutil.which,
         socket_ref: str | None = None,
+        sleep_fn: Callable[[float], None] = time.sleep,
     ) -> None:
         self._session_name = session_name
         self._herdr_executable = herdr_executable
         self._run_fn = run_fn
+        self._popen_fn = popen_fn
         self._which_fn = which_fn
         self._socket_ref = str(socket_ref or "").strip() or None
+        self._sleep_fn = sleep_fn
+        self._server_sessions: set[str] = set()
+        self._server_processes: dict[str, subprocess.Popen] = {}
 
     @property
     def socket_ref(self) -> str:
@@ -63,9 +70,9 @@ class HerdrCliRequestAdapter:
         )
 
     def _server_info(self) -> Mapping[str, object]:
-        status = self._json_command("server_info", ["status", "--json"])
-        version_result = self._command("server_info", ["--version"], expect_json=False)
-        schema = self._json_command("server_info", ["api", "schema", "--json"])
+        status = self._json_command("server_info", ["status", "--json"], ensure_server=False)
+        version_result = self._command("server_info", ["--version"], expect_json=False, ensure_server=False)
+        schema = self._json_command("server_info", ["api", "schema", "--json"], ensure_server=False)
         client = status.get("client") if isinstance(status.get("client"), Mapping) else {}
         return {
             "version": str(client.get("version") or version_result.stdout or "").strip(),
@@ -123,6 +130,7 @@ class HerdrCliRequestAdapter:
         session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
         try:
             command = _command_text(payload.get("command"))
+            split_direction = _split_direction(payload.get("direction"))
         except ValueError as exc:
             raise self._failed("create_pane", str(exc), session_name=session_name) from exc
         env = payload.get("env")
@@ -143,7 +151,7 @@ class HerdrCliRequestAdapter:
             "split",
             parent,
             "--direction",
-            _split_direction(payload.get("direction")),
+            split_direction,
             "--ratio",
             _split_ratio(payload.get("percent")),
         ]
@@ -281,8 +289,15 @@ class HerdrCliRequestAdapter:
         args: list[str],
         *,
         session_name: str | None = None,
+        ensure_server: bool = True,
     ) -> Mapping[str, object]:
-        result = self._command(operation, args, expect_json=True, session_name=session_name)
+        result = self._command(
+            operation,
+            args,
+            expect_json=True,
+            session_name=session_name,
+            ensure_server=ensure_server,
+        )
         try:
             payload = json.loads(result.stdout or "{}")
         except json.JSONDecodeError as exc:
@@ -322,9 +337,47 @@ class HerdrCliRequestAdapter:
         *,
         expect_json: bool,
         session_name: str | None = None,
+        ensure_server: bool = True,
     ) -> subprocess.CompletedProcess:
         executable = self._resolve_executable()
-        command = [executable, "--session", session_name or self._session_name, *args]
+        effective_session = session_name or self._session_name
+        command = [executable, "--session", effective_session, *args]
+        try:
+            return self._run_command_once(
+                operation,
+                command,
+                expect_json=expect_json,
+                session_name=effective_session,
+            )
+        except MuxCommandErrorV2 as exc:
+            if not ensure_server or not _looks_like_missing_server(exc.detail):
+                raise
+            self._start_server(effective_session, executable=executable)
+        last_error: MuxCommandErrorV2 | None = None
+        for _ in range(10):
+            try:
+                return self._run_command_once(
+                    operation,
+                    command,
+                    expect_json=expect_json,
+                    session_name=effective_session,
+                )
+            except MuxCommandErrorV2 as exc:
+                if not _looks_like_missing_server(exc.detail):
+                    raise
+                last_error = exc
+                self._sleep_fn(0.1)
+        assert last_error is not None
+        raise last_error
+
+    def _run_command_once(
+        self,
+        operation: str,
+        command: list[str],
+        *,
+        expect_json: bool,
+        session_name: str,
+    ) -> subprocess.CompletedProcess:
         try:
             return self._run_fn(
                 command,
@@ -338,15 +391,42 @@ class HerdrCliRequestAdapter:
             detail = f"Herdr command failed for {operation}"
             if isinstance(exc, subprocess.CalledProcessError):
                 detail = (exc.stderr or exc.stdout or detail).strip() or detail
-            effective_session = session_name or self._session_name
             raise MuxCommandErrorV2(
                 category=_command_error_category(detail, expect_json=expect_json),
                 backend_impl="herdr",
                 operation=operation,
                 detail=detail,
-                ipc_ref=self._ipc_ref_for_session(effective_session),
+                ipc_ref=self._ipc_ref_for_session(session_name),
                 evidence=_command_evidence(operation, command),
             ) from exc
+
+    def _start_server(self, session_name: str, *, executable: str) -> None:
+        existing = self._server_processes.get(session_name)
+        if existing is not None and existing.poll() is None:
+            return
+        self._server_sessions.discard(session_name)
+        self._server_processes.pop(session_name, None)
+        command = [executable, "--session", session_name, "server"]
+        kwargs: dict[str, object] = {
+            "stdin": subprocess.DEVNULL,
+            "stdout": subprocess.DEVNULL,
+            "stderr": subprocess.DEVNULL,
+        }
+        if sys.platform.startswith("win"):
+            kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        try:
+            process = self._popen_fn(command, **kwargs)
+        except OSError as exc:
+            raise MuxCommandErrorV2(
+                category="transient-unavailable",
+                backend_impl="herdr",
+                operation="start_server",
+                detail=f"Herdr server failed to start: {exc}",
+                ipc_ref=self._ipc_ref_for_session(session_name),
+                evidence=_command_evidence("start_server", command),
+            ) from exc
+        self._server_sessions.add(session_name)
+        self._server_processes[session_name] = process
 
     def _resolve_executable(self) -> str:
         executable = (self._herdr_executable or "").strip() or self._which_fn("herdr")
@@ -441,7 +521,11 @@ def _session_name_from_payload(
 
 def _split_direction(raw: object) -> str:
     direction = str(raw or "right").strip().lower()
-    return direction if direction in {"left", "right", "up", "down"} else "right"
+    if direction in {"right", "horizontal"}:
+        return "right"
+    if direction in {"down", "bottom", "vertical"}:
+        return "down"
+    raise ValueError(f"unsupported Herdr split direction {direction!r}; expected right or bottom/down")
 
 
 def _split_ratio(raw: object) -> str:
@@ -491,9 +575,23 @@ def _command_evidence(operation: str, command: list[str]) -> dict[str, object]:
 
 def _command_error_category(detail: str, *, expect_json: bool) -> str:
     lowered = detail.lower()
-    if "not found" in lowered or "unknown pane" in lowered or "unknown workspace" in lowered:
+    if (
+        "not found" in lowered
+        or "notfound" in lowered
+        or "unknown pane" in lowered
+        or "unknown workspace" in lowered
+    ):
         return "not-found"
     return "transient-unavailable" if expect_json else "command-failed"
+
+
+def _looks_like_missing_server(detail: str) -> bool:
+    lowered = detail.lower()
+    return (
+        "kind: notfound" in lowered
+        or "kind: not found" in lowered
+        or "os { code: 2" in lowered
+    )
 
 
 def _redacted_argv(operation: str, command: list[str]) -> list[str]:

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from cli.services.tmux_ui import apply_project_tmux_ui
-from terminal_runtime.tmux_identity import apply_ccb_pane_identity
 
 from .backend import (
+    apply_pane_identity,
     create_session,
     ensure_server_policy,
     ensure_window,
@@ -73,9 +73,9 @@ def apply_namespace_identity(
     tmux_socket_path: str,
     tmux_session_name: str,
 ) -> None:
-    apply_ccb_pane_identity(
+    apply_pane_identity(
         backend,
-        pane_id,
+        pane_id=pane_id,
         title='cmd',
         agent_label='cmd',
         project_id=controller._project_id,
@@ -84,12 +84,13 @@ def apply_namespace_identity(
         namespace_epoch=namespace_epoch,
         managed_by='ccbd',
     )
-    apply_project_tmux_ui(
-        tmux_socket_path=tmux_socket_path,
-        ccbd_socket_path=str(controller._layout.ccbd_socket_path),
-        tmux_session_name=tmux_session_name,
-        backend=backend,
-    )
+    if callable(getattr(backend, '_tmux_run', None)):
+        apply_project_tmux_ui(
+            tmux_socket_path=tmux_socket_path,
+            ccbd_socket_path=str(controller._layout.ccbd_socket_path),
+            tmux_session_name=tmux_session_name,
+            backend=backend,
+        )
 
 
 __all__ = ['apply_namespace_identity', 'prepare_namespace_root_pane']

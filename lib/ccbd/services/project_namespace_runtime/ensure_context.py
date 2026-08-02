@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from .backend import build_backend, session_alive
+from .backend import build_backend, remember_namespace_state_ref, session_alive
 from .records import normalized_layout_signature
 
 
@@ -83,6 +83,7 @@ def load_namespace_context(
     )
     current = controller._state_store.load()
     backend = build_backend(controller._backend_factory, socket_path=desired_socket_path)
+    remember_namespace_state_ref(backend, current)
     return NamespaceEnsureContext(
         current=current,
         backend=backend,

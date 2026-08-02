@@ -1815,6 +1815,127 @@ def test_herdr_cli_request_adapter_maps_server_info_and_core_operations() -> Non
     assert commands
 
 
+def test_herdr_cli_request_adapter_starts_server_and_retries_server_backed_command() -> None:
+    commands: list[list[str]] = []
+    popen_commands: list[list[str]] = []
+    workspace_create_calls = 0
+
+    def run_fn(command, **kwargs):
+        nonlocal workspace_create_calls
+        commands.append(command)
+        joined = " ".join(command)
+        if "workspace create" in joined:
+            workspace_create_calls += 1
+            if workspace_create_calls == 1:
+                raise subprocess.CalledProcessError(
+                    1,
+                    command,
+                    stderr="Error: Os { code: 2, kind: NotFound, message: \"No such file or directory\" }",
+                )
+            return _completed(
+                '{"result":{"workspace":{"workspace_id":"w1"},"root_pane":{"pane_id":"w1:p1","workspace_id":"w1"}}}'
+            )
+        raise AssertionError(joined)
+
+    def popen_fn(command, **kwargs):
+        popen_commands.append(command)
+        return object()
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        popen_fn=popen_fn,
+        which_fn=lambda name: "herdr",
+        sleep_fn=lambda seconds: None,
+    )
+
+    namespace = adapter("create_session", {"project_id": "demo", "cwd": "D:/demo", "title": "demo"})
+
+    assert namespace["namespace_id"] == "w1"
+    assert workspace_create_calls == 2
+    assert popen_commands == [["herdr", "--session", "ccb-demo", "server"]]
+    assert commands[0] == commands[1]
+
+
+def test_herdr_cli_request_adapter_restarts_recorded_server_process_after_exit() -> None:
+    commands: list[list[str]] = []
+    popen_commands: list[list[str]] = []
+    workspace_create_calls = 0
+
+    class _ExitedProcess:
+        def poll(self) -> int:
+            return 1
+
+    def run_fn(command, **kwargs):
+        nonlocal workspace_create_calls
+        commands.append(command)
+        joined = " ".join(command)
+        if "workspace create" in joined:
+            workspace_create_calls += 1
+            if workspace_create_calls in {1, 3}:
+                raise subprocess.CalledProcessError(
+                    1,
+                    command,
+                    stderr="Error: Os { code: 2, kind: NotFound, message: \"No such file or directory\" }",
+                )
+            return _completed(
+                '{"result":{"workspace":{"workspace_id":"w1"},"root_pane":{"pane_id":"w1:p1","workspace_id":"w1"}}}'
+            )
+        raise AssertionError(joined)
+
+    def popen_fn(command, **kwargs):
+        popen_commands.append(command)
+        return _ExitedProcess()
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        popen_fn=popen_fn,
+        which_fn=lambda name: "herdr",
+        sleep_fn=lambda seconds: None,
+    )
+
+    adapter("create_session", {"project_id": "demo", "cwd": "D:/demo", "title": "demo"})
+    adapter("create_session", {"project_id": "demo", "cwd": "D:/demo", "title": "demo"})
+
+    assert workspace_create_calls == 4
+    assert popen_commands == [
+        ["herdr", "--session", "ccb-demo", "server"],
+        ["herdr", "--session", "ccb-demo", "server"],
+    ]
+
+
+def test_herdr_cli_request_adapter_does_not_start_server_for_server_info() -> None:
+    popen_commands: list[list[str]] = []
+
+    def run_fn(command, **kwargs):
+        joined = " ".join(command)
+        if "status --json" in joined:
+            raise subprocess.CalledProcessError(
+                1,
+                command,
+                stderr="Error: Os { code: 2, kind: NotFound, message: \"No such file or directory\" }",
+            )
+        raise AssertionError(joined)
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        popen_fn=lambda command, **kwargs: popen_commands.append(command) or object(),
+        which_fn=lambda name: "herdr",
+        sleep_fn=lambda seconds: None,
+    )
+
+    with pytest.raises(MuxCommandErrorV2) as exc_info:
+        adapter("server_info", {})
+
+    assert exc_info.value.operation == "server_info"
+    assert popen_commands == []
+
+
 def test_herdr_backend_uses_cli_adapter_envelope_contract_for_core_operations() -> None:
     commands: list[list[str]] = []
 
@@ -2126,6 +2247,65 @@ def test_herdr_cli_request_adapter_threads_session_scope_and_split_geometry() ->
     assert "--direction" in split_commands[0]
     assert split_commands[0][split_commands[0].index("--direction") + 1] == "down"
     assert split_commands[0][split_commands[0].index("--ratio") + 1] == "0.25"
+
+
+def test_herdr_cli_request_adapter_maps_ccbd_bottom_direction_to_herdr_down() -> None:
+    split_commands: list[list[str]] = []
+
+    def run_fn(command, **kwargs):
+        joined = " ".join(command)
+        if "pane list" in joined:
+            return _completed('{"result":{"panes":[{"pane_id":"w1:p1","workspace_id":"w1"}]}}')
+        if "pane split" in joined:
+            split_commands.append(command)
+            return _completed('{"result":{"pane":{"pane_id":"w1:p2","workspace_id":"w1"}}}')
+        raise AssertionError(joined)
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        which_fn=lambda name: "herdr",
+    )
+
+    adapter(
+        "create_pane",
+        {
+            "namespace_id": "w1",
+            "session_name": "ccb-demo",
+            "direction": "bottom",
+            "parent_pane": "w1:p1",
+        },
+    )
+
+    assert split_commands[0][split_commands[0].index("--direction") + 1] == "down"
+
+
+@pytest.mark.parametrize("direction", ["left", "up", "sideways"])
+def test_herdr_cli_request_adapter_rejects_unrepresentable_split_direction(direction: str) -> None:
+    def run_fn(command, **kwargs):
+        raise AssertionError(f"Herdr command must not execute for {direction}: {' '.join(command)}")
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        which_fn=lambda name: "herdr",
+    )
+
+    with pytest.raises(MuxCommandErrorV2) as exc_info:
+        adapter(
+            "create_pane",
+            {
+                "namespace_id": "w1",
+                "session_name": "ccb-demo",
+                "direction": direction,
+                "parent_pane": "w1:p1",
+            },
+        )
+
+    assert exc_info.value.category == "command-failed"
+    assert "unsupported Herdr split direction" in exc_info.value.detail
 
 
 def test_herdr_cli_request_adapter_rejects_parent_pane_outside_namespace() -> None:

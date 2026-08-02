@@ -4,8 +4,11 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from ccbd.services.project_namespace import ProjectNamespaceController
 from ccbd.services.project_namespace_runtime import build_namespace_topology_plan
+from ccbd.services.project_namespace_runtime.models import ProjectNamespace
 from ccbd.services.project_namespace_runtime.backend import prepare_server
 from ccbd.services.project_namespace_state import (
     ProjectNamespaceEvent,
@@ -81,6 +84,458 @@ def test_project_namespace_state_store_round_trip(tmp_path: Path) -> None:
     assert loaded.summary_fields()['namespace_tmux_socket_path'] == str(layout.ccbd_tmux_socket_path)
     assert second_stat.st_ino == first_stat.st_ino
     assert second_stat.st_mtime_ns == first_stat.st_mtime_ns
+
+
+def test_project_namespace_state_round_trips_herdr_namespace_without_public_restore_token(
+    tmp_path: Path,
+) -> None:
+    del tmp_path
+    state = ProjectNamespaceState(
+        project_id='proj-herdr',
+        namespace_epoch=5,
+        tmux_socket_path='',
+        tmux_session_name='ccb-herdr',
+        namespace_backend_family='herdr-native',
+        backend_impl='herdr',
+        namespace_id='workspace-1',
+        namespace_session_name='ccb-herdr',
+        namespace_ipc_kind='herdr_socket',
+        namespace_ipc_ref='herdr://ccb-herdr',
+        namespace_restore_token='ccb-herdr::workspace-1',
+        layout_version=3,
+        workspace_window_name='workspace',
+        ui_attachable=True,
+    )
+
+    loaded = ProjectNamespaceState.from_record(state.to_record())
+
+    assert loaded == state
+    assert loaded is not None
+    record = loaded.to_record()
+    summary = loaded.summary_fields()
+    internal_ref = loaded.namespace_ref()
+
+    assert record['namespace_restore_token'] == 'ccb-herdr::workspace-1'
+    assert internal_ref['restore_token'] == 'ccb-herdr::workspace-1'
+    assert summary['namespace_backend_family'] == 'herdr-native'
+    assert summary['namespace_backend_impl'] == 'herdr'
+    assert summary['namespace_ipc_kind'] == 'herdr_socket'
+    assert summary['namespace_restore_token_present'] is True
+    assert 'namespace_restore_token' not in summary
+    assert 'ccb-herdr::workspace-1' not in str(summary)
+
+
+def test_project_namespace_event_summary_redacts_herdr_restore_token() -> None:
+    event = ProjectNamespaceEvent(
+        event_kind='namespace_created',
+        project_id='proj-herdr',
+        occurred_at='2026-08-02T00:00:00Z',
+        namespace_epoch=5,
+        tmux_socket_path=None,
+        tmux_session_name='ccb-herdr',
+        namespace_backend_family='herdr-native',
+        backend_impl='herdr',
+        namespace_id='workspace-1',
+        namespace_session_name='ccb-herdr',
+        namespace_ipc_kind='herdr_socket',
+        namespace_ipc_ref='herdr://ccb-herdr',
+        namespace_restore_token='ccb-herdr::workspace-1',
+        details={'restore_token': 'ccb-herdr::workspace-1', 'reason': 'initial_create'},
+    )
+
+    record = event.to_record()
+    summary = event.summary_fields()
+
+    assert record['namespace_restore_token'] == 'ccb-herdr::workspace-1'
+    assert record['details']['restore_token'] == 'ccb-herdr::workspace-1'
+    assert summary['namespace_last_event_backend_impl'] == 'herdr'
+    assert summary['namespace_last_event_restore_token_present'] is True
+    assert 'namespace_restore_token' not in summary
+    assert 'ccb-herdr::workspace-1' not in str(summary)
+
+
+def test_project_namespace_runtime_dto_preserves_internal_herdr_namespace_ref() -> None:
+    state = ProjectNamespaceState(
+        project_id='proj-herdr',
+        namespace_epoch=5,
+        tmux_socket_path='',
+        tmux_session_name='ccb-herdr',
+        namespace_backend_family='herdr-native',
+        backend_impl='herdr',
+        namespace_id='workspace-1',
+        namespace_session_name='ccb-herdr',
+        namespace_ipc_kind='herdr_socket',
+        namespace_ipc_ref='herdr://ccb-herdr',
+        namespace_restore_token='ccb-herdr::workspace-1',
+        layout_version=3,
+        workspace_window_name='workspace',
+        ui_attachable=True,
+    )
+
+    namespace = ProjectNamespace.from_state(state)
+
+    assert namespace.namespace_backend_family == 'herdr-native'
+    assert namespace.backend_impl == 'herdr'
+    assert namespace.namespace_ref() == {
+        'backend_family': 'herdr-native',
+        'backend_impl': 'herdr',
+        'namespace_id': 'workspace-1',
+        'session_name': 'ccb-herdr',
+        'ipc_kind': 'herdr_socket',
+        'ipc_ref': 'herdr://ccb-herdr',
+        'restore_token': 'ccb-herdr::workspace-1',
+    }
+
+
+def test_project_namespace_state_reads_legacy_tmux_record_without_namespace_fields() -> None:
+    payload = {
+        'schema_version': 2,
+        'record_type': 'ccbd_project_namespace_state',
+        'project_id': 'proj-legacy',
+        'namespace_epoch': 2,
+        'tmux_socket_path': '/tmp/ccb.sock',
+        'tmux_session_name': 'ccb-legacy',
+        'layout_version': 1,
+        'workspace_epoch': 1,
+        'ui_attachable': True,
+    }
+
+    state = ProjectNamespaceState.from_record(payload)
+
+    assert state.namespace_backend_family == 'tmux-family'
+    assert state.backend_impl == 'tmux'
+    assert state.namespace_ref() == {
+        'backend_family': 'tmux-family',
+        'backend_impl': 'tmux',
+        'namespace_id': 'ccb-legacy',
+        'session_name': 'ccb-legacy',
+        'ipc_kind': 'socket_path',
+        'ipc_ref': '/tmp/ccb.sock',
+        'restore_token': None,
+    }
+
+
+class _MemoryProjectNamespaceStateStore:
+    def __init__(self) -> None:
+        self.state = None
+
+    def load(self):
+        return self.state
+
+    def save(self, state) -> None:
+        self.state = state
+
+
+class _MemoryProjectNamespaceEventStore:
+    def __init__(self) -> None:
+        self.events = []
+
+    def append(self, event) -> None:
+        self.events.append(event)
+
+    def load_latest(self):
+        return self.events[-1] if self.events else None
+
+
+class _FakeHerdrProjectNamespaceBackend:
+    backend_impl = 'herdr'
+
+    def __init__(self, *, pane_spawn_status: str = 'supported') -> None:
+        self.calls: list[tuple[str, object]] = []
+        self.namespace: dict[str, object] | None = None
+        self.windows: dict[str, dict[str, object]] = {}
+        self.panes: dict[str, dict[str, object]] = {}
+        self.pane_spawn_status = pane_spawn_status
+
+    def capabilities(self) -> dict[str, object]:
+        from terminal_runtime.mux_backend_contract import make_capabilities
+
+        return make_capabilities(
+            backend_impl='herdr',
+            command_status={
+                'session_attach': 'supported',
+                'pane_spawn': self.pane_spawn_status,  # type: ignore[arg-type]
+                'send_input': 'supported',
+                'read_output': 'supported',
+                'kill_pane': 'supported',
+            },
+            semantic_status={
+                'session_attach': 'supported',
+                'pane_spawn': self.pane_spawn_status,  # type: ignore[arg-type]
+                'send_input': 'supported',
+                'read_output': 'supported',
+                'kill_pane': 'supported',
+            },
+        )
+
+    def prepare_server(self) -> None:
+        self.calls.append(('prepare_server', None))
+
+    def ensure_server_policy(self) -> None:
+        self.calls.append(('ensure_server_policy', None))
+
+    def create_session(self, *, project_id: str, cwd: str, title: str) -> dict[str, object]:
+        from terminal_runtime.mux_backend_contract import make_namespace_ref
+
+        self.calls.append(('create_session', {'project_id': project_id, 'cwd': cwd, 'title': title}))
+        self.namespace = make_namespace_ref(
+            backend_impl='herdr',
+            namespace_id='workspace-1',
+            session_name=title,
+            ipc_kind='herdr_socket',
+            ipc_ref='herdr://workspace-1',
+            restore_token='restore-token-1',
+        )
+        return self.namespace
+
+    def namespace_alive(self, namespace: dict[str, object]) -> bool:
+        self.calls.append(('namespace_alive', namespace))
+        return True
+
+    def list_windows(self, namespace: dict[str, object]) -> list[dict[str, object]]:
+        self.calls.append(('list_windows', namespace))
+        return list(self.windows.values())
+
+    def ensure_window(
+        self,
+        namespace: dict[str, object],
+        *,
+        window_name: str,
+        cwd: str,
+        select: bool,
+    ) -> dict[str, object]:
+        self.calls.append(('ensure_window', {'namespace': namespace, 'window_name': window_name, 'cwd': cwd, 'select': select}))
+        record = self.windows.setdefault(
+            window_name,
+            {'window_id': f'window-{len(self.windows) + 1}', 'window_name': window_name, 'active': False},
+        )
+        record['active'] = bool(select)
+        return record
+
+    def create_window(
+        self,
+        namespace: dict[str, object],
+        *,
+        window_name: str,
+        cwd: str,
+        select: bool,
+    ) -> dict[str, object]:
+        return self.ensure_window(namespace, window_name=window_name, cwd=cwd, select=select)
+
+    def window_root_pane(self, namespace: dict[str, object], *, window_name: str) -> dict[str, object]:
+        from terminal_runtime.mux_backend_contract import make_pane_ref
+
+        self.calls.append(('window_root_pane', {'namespace': namespace, 'window_name': window_name}))
+        pane = make_pane_ref(
+            backend_impl='herdr',
+            pane_id=f'herdr-pane-{len(self.panes) + 1}',
+            session_name=str(namespace['session_name']),
+            window_name=window_name,
+        )
+        self.panes[pane['pane_id']] = pane
+        return pane
+
+    def split_pane(
+        self,
+        pane: dict[str, object],
+        *,
+        direction: str = 'right',
+        percent: int = 50,
+        command: list[str] | None = None,
+        cwd: str = '',
+        env: dict[str, str] | None = None,
+        title: str = '',
+    ) -> dict[str, object]:
+        from terminal_runtime.mux_backend_contract import make_pane_ref
+
+        self.calls.append(('split_pane', {'pane': pane, 'direction': direction, 'percent': percent, 'command': command, 'cwd': cwd, 'env': env, 'title': title}))
+        child = make_pane_ref(
+            backend_impl='herdr',
+            pane_id=f'herdr-pane-{len(self.panes) + 1}',
+            session_name=str(pane['session_name']),
+            window_name=pane.get('window_name'),  # type: ignore[arg-type]
+        )
+        self.panes[child['pane_id']] = child
+        return child
+
+    def respawn_pane(
+        self,
+        pane: dict[str, object],
+        *,
+        command: list[str],
+        cwd: str,
+        env: dict[str, str],
+    ) -> None:
+        self.calls.append(('respawn_pane', {'pane': pane, 'command': command, 'cwd': cwd, 'env': env}))
+
+    def set_pane_identity(self, pane: dict[str, object], **kwargs) -> None:
+        self.calls.append(('set_pane_identity', {'pane': pane, **kwargs}))
+
+    def kill_window(self, namespace: dict[str, object], *, window_id: str | None, target: str) -> None:
+        self.calls.append(('kill_window', {'namespace': namespace, 'window_id': window_id, 'target': target}))
+        if window_id:
+            for name, record in tuple(self.windows.items()):
+                if record.get('window_id') == window_id or name == window_id:
+                    self.windows.pop(name, None)
+
+    def rename_window(
+        self,
+        namespace: dict[str, object],
+        *,
+        window_id: str | None,
+        target: str,
+        new_name: str,
+    ) -> None:
+        self.calls.append(('rename_window', {'namespace': namespace, 'window_id': window_id, 'target': target, 'new_name': new_name}))
+        for name, record in tuple(self.windows.items()):
+            if record.get('window_id') == window_id or name == window_id:
+                self.windows.pop(name, None)
+                record['window_name'] = new_name
+                self.windows[new_name] = record
+                return
+
+    def select_window(self, namespace: dict[str, object], *, window_id: str | None, target: str) -> None:
+        self.calls.append(('select_window', {'namespace': namespace, 'window_id': window_id, 'target': target}))
+        for record in self.windows.values():
+            record['active'] = record.get('window_id') == window_id or record.get('window_name') == window_id
+
+
+def test_project_namespace_controller_creates_herdr_state_and_redacted_event(tmp_path: Path) -> None:
+    layout = PathLayout(tmp_path / 'repo-herdr-ensure')
+    backend = _FakeHerdrProjectNamespaceBackend()
+    state_store = _MemoryProjectNamespaceStateStore()
+    event_store = _MemoryProjectNamespaceEventStore()
+    controller = ProjectNamespaceController(
+        layout,
+        'proj-herdr',
+        clock=lambda: '2026-08-02T00:00:00Z',
+        backend_factory=lambda socket_path=None: backend,
+        state_store=state_store,
+        event_store=event_store,
+    )
+
+    namespace = controller.ensure()
+    state = state_store.load()
+    event = event_store.load_latest()
+
+    assert state is not None
+    assert event is not None
+    assert namespace.namespace_backend_family == 'herdr-native'
+    assert namespace.backend_impl == 'herdr'
+    assert namespace.namespace_ref()['restore_token'] == 'restore-token-1'
+    assert state.tmux_socket_path == ''
+    assert state.namespace_ipc_kind == 'herdr_socket'
+    assert state.namespace_restore_token == 'restore-token-1'
+    assert event.summary_fields()['namespace_last_event_restore_token_present'] is True
+    assert 'restore-token-1' not in str(event.summary_fields())
+    assert not hasattr(backend, '_tmux_run')
+    assert 'set_pane_identity' in [call[0] for call in backend.calls]
+
+
+def test_project_namespace_controller_reflows_herdr_workspace_with_v2_helpers(tmp_path: Path) -> None:
+    layout = PathLayout(tmp_path / 'repo-herdr-reflow')
+    backend = _FakeHerdrProjectNamespaceBackend()
+    state_store = _MemoryProjectNamespaceStateStore()
+    event_store = _MemoryProjectNamespaceEventStore()
+    controller = ProjectNamespaceController(
+        layout,
+        'proj-herdr',
+        clock=lambda: '2026-08-02T00:00:00Z',
+        backend_factory=lambda socket_path=None: backend,
+        state_store=state_store,
+        event_store=event_store,
+    )
+    controller.ensure()
+    backend.calls.clear()
+
+    namespace = controller.reflow_workspace(reason='pane_recovery:agent1')
+    state = state_store.load()
+    event = event_store.load_latest()
+
+    assert state is not None
+    assert event is not None
+    assert namespace.workspace_epoch == 2
+    assert namespace.namespace_backend_family == 'herdr-native'
+    assert state.namespace_restore_token == 'restore-token-1'
+    assert event.event_kind == 'workspace_reflowed'
+    assert event.summary_fields()['namespace_last_event_restore_token_present'] is True
+    assert 'kill_window' in [call[0] for call in backend.calls]
+    assert 'rename_window' in [call[0] for call in backend.calls]
+    assert 'select_window' in [call[0] for call in backend.calls]
+    assert not hasattr(backend, '_tmux_run')
+
+
+def test_project_namespace_controller_materializes_herdr_topology_with_v2_helpers(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-herdr-topology'
+    (project_root / '.ccb').mkdir(parents=True)
+    (project_root / '.ccb' / 'ccb.config').write_text(
+        """version = 2
+entry_window = "main"
+
+[windows]
+main = "agent1:codex"
+""",
+        encoding='utf-8',
+    )
+    config = load_project_config(project_root).config
+    layout = PathLayout(project_root)
+    backend = _FakeHerdrProjectNamespaceBackend()
+    state_store = _MemoryProjectNamespaceStateStore()
+    event_store = _MemoryProjectNamespaceEventStore()
+    controller = ProjectNamespaceController(
+        layout,
+        'proj-herdr',
+        clock=lambda: '2026-08-02T00:00:00Z',
+        backend_factory=lambda socket_path=None: backend,
+        state_store=state_store,
+        event_store=event_store,
+    )
+    topology_plan = build_namespace_topology_plan(
+        config,
+        ccbd_socket_path=str(layout.ccbd_socket_path),
+        project_root=str(project_root),
+    )
+
+    namespace = controller.ensure(topology_plan=topology_plan)
+    state = state_store.load()
+    event = event_store.load_latest()
+    call_names = [call[0] for call in backend.calls]
+
+    assert state is not None
+    assert event is not None
+    assert namespace.namespace_backend_family == 'herdr-native'
+    assert namespace.workspace_window_name == 'main'
+    assert state.workspace_window_name == 'main'
+    assert state.namespace_restore_token == 'restore-token-1'
+    assert 'ensure_window' in call_names
+    assert 'window_root_pane' in call_names
+    assert 'split_pane' in call_names
+    assert call_names.count('set_pane_identity') >= 2
+    assert not hasattr(backend, '_tmux_run')
+
+
+def test_project_namespace_controller_herdr_layout_capability_gap_does_not_save_state(tmp_path: Path) -> None:
+    layout = PathLayout(tmp_path / 'repo-herdr-capability-gap')
+    backend = _FakeHerdrProjectNamespaceBackend(pane_spawn_status='unsupported')
+    state_store = _MemoryProjectNamespaceStateStore()
+    event_store = _MemoryProjectNamespaceEventStore()
+    controller = ProjectNamespaceController(
+        layout,
+        'proj-herdr',
+        clock=lambda: '2026-08-02T00:00:00Z',
+        backend_factory=lambda socket_path=None: backend,
+        state_store=state_store,
+        event_store=event_store,
+    )
+
+    with pytest.raises(Exception) as exc_info:
+        controller.ensure()
+
+    assert type(exc_info.value).__name__ == 'MuxCommandErrorV2'
+    assert getattr(exc_info.value, 'operation', None) == 'ensure_window'
+    assert state_store.load() is None
+    assert event_store.load_latest() is None
+    assert not hasattr(backend, '_tmux_run')
 
 
 def test_path_layout_normalizes_tmux_session_name_for_tmux_targets(tmp_path: Path) -> None:

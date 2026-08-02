@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 
-from .backend import build_backend, session_alive
+from .backend import build_backend, remember_namespace_state_ref, session_alive
 from .additive_patch_agents import append_agent_panes
 from .additive_patch_namespace import ready_namespace_or_blocked
 from .additive_patch_preservation import assert_preserved_agent_panes, snapshot_preserved_agent_panes
@@ -95,6 +95,7 @@ def apply_reload_patch(
         return _blocked(*unsupported)
 
     backend = build_backend(controller._backend_factory, socket_path=current.tmux_socket_path)
+    remember_namespace_state_ref(backend, current)
     if not session_alive(backend, current.tmux_session_name, timeout_s=timeout_s):
         return _blocked('session_unavailable', 'project namespace tmux session is not alive')
 

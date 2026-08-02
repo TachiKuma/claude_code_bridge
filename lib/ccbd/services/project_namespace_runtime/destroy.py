@@ -40,6 +40,13 @@ def destroy_project_namespace(controller, *, reason: str):
             namespace_epoch=next_state.namespace_epoch,
             tmux_socket_path=tmux_socket_path,
             tmux_session_name=tmux_session_name,
+            namespace_backend_family=next_state.namespace_backend_family,
+            backend_impl=next_state.backend_impl,
+            namespace_id=next_state.namespace_id,
+            namespace_session_name=next_state.namespace_session_name,
+            namespace_ipc_kind=next_state.namespace_ipc_kind,
+            namespace_ipc_ref=next_state.namespace_ipc_ref,
+            namespace_restore_token=next_state.namespace_restore_token,
             destroyed=destroyed,
             reason=normalized_reason,
         )

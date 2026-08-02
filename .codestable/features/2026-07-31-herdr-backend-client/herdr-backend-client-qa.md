@@ -6,10 +6,51 @@ runner_state: not-started
 runner_reason: ""
 runner_id: ""
 tested: 2026-08-02
-round: 1
+round: 2
 ---
 
 # herdr-backend-client QA 报告
+
+## 0. Reopen QA 2026-08-02
+
+Scope: `ReopenBackendClient` owner decision; verify real Herdr server lifecycle startup/retry and split direction normalization.
+
+### Verification Matrix Delta
+
+| ID | 场景 | 证据 | 结果 |
+|---|---|---|---|
+| RQA-001 | server-backed command 初次 NotFound 后启动 `herdr --session <name> server` 并重试 | focused unit | pass |
+| RQA-002 | 已记录 server process 退出后，下一次 NotFound 重新 spawn server | focused unit | pass |
+| RQA-003 | `server_info` 不触发 server 启动 | focused unit | pass |
+| RQA-004 | `bottom` 映射为 Herdr `down` | focused unit + real smoke | pass |
+| RQA-005 | `left/up/sideways` 这类 Herdr 不可表达方向在任何 Herdr command 前 fail closed | focused unit | pass |
+| RQA-006 | 真实 Herdr executable adapter smoke | real Herdr | pass |
+
+### Fresh Command Results
+
+- `python -m py_compile "lib/terminal_runtime/herdr_backend_runtime/cli.py" "test/test_herdr_backend_client.py"` -> exit 0
+- `python -m pytest -q "test/test_herdr_backend_client.py" -k "server or split_direction or bottom or unrepresentable or cli_request_adapter"` -> 39 passed, 105 deselected
+- `python -m pytest -q "test/test_herdr_backend_client.py" "test/test_terminal_runtime_backend_selection.py"` -> 159 passed
+- `python -m pytest -q "test/test_mux_backend_contract.py" -k "V2 or herdr"` -> 8 passed, 12 deselected
+- `python -m pytest -q "test/test_mux_backend_contract.py" "test/test_terminal_runtime_backend_selection.py" "test/test_herdr_backend_client.py"` -> 179 passed
+- `python ".codestable/tools/validate-yaml.py" --file ".codestable/features/2026-07-31-herdr-backend-client/herdr-backend-client-checklist.yaml" --yaml-only` -> 1 passed
+- `python ".codestable/tools/validate-yaml.py" --file ".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml"` -> 1 passed
+- Full-worktree CMD-006 scope guard -> failed because the worktree already contains `ccbd-herdr-namespace-lifecycle` changes under `lib/ccbd/services/project_namespace_runtime/` and `lib/ccbd/services/project_namespace_state_runtime/`; these are outside the reopened backend-client diff and were not reverted.
+- Reopen-scope path guard over `lib/terminal_runtime/herdr_backend_runtime/cli.py`, `test/test_herdr_backend_client.py`, backend-client reports/evidence, and roadmap state files -> passed.
+- Reopen-scope forbidden content guard over `lib/terminal_runtime/herdr_backend_runtime/cli.py` and `test/test_herdr_backend_client.py` -> passed.
+- Real Herdr smoke with `C:/Users/Administrator/AppData/Local/Programs/Herdr/herdr.exe` -> passed; version `0.7.5-preview.2026-07-29-44b3adb12552`, schema `Herdr API`, namespace `w1`, pane `w1:p2`, kill `ok`.
+
+### Findings
+
+failed: none
+
+blocked: none
+
+residual-risk:
+
+- `send_text` still uses `pane run`; this was explicitly not part of the owner-approved reopen fix and remains assigned to a later user-input surface/protocol feature.
+
+Verdict: passed.
 
 ## 1. Scope And Inputs
 

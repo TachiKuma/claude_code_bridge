@@ -341,6 +341,71 @@ def _project_view_service(
     )
 
 
+def test_project_view_namespace_view_redacts_herdr_restore_token() -> None:
+    config = _config()
+    namespace = ProjectNamespaceState(
+        project_id='proj-herdr',
+        namespace_epoch=5,
+        tmux_socket_path='',
+        tmux_session_name='ccb-herdr',
+        namespace_backend_family='herdr-native',
+        backend_impl='herdr',
+        namespace_id='workspace-1',
+        namespace_session_name='ccb-herdr',
+        namespace_ipc_kind='herdr_socket',
+        namespace_ipc_ref='herdr://ccb-herdr',
+        namespace_restore_token='ccb-herdr::workspace-1',
+        layout_version=3,
+        workspace_window_name='workspace',
+        ui_attachable=True,
+    )
+
+    view = project_view_service._namespace_view(
+        config=config,
+        sidebar_view_result=(config.sidebar_view, None),
+        namespace=namespace,
+        focus={},
+    )
+
+    assert view['namespace_backend_family'] == 'herdr-native'
+    assert view['namespace_backend_impl'] == 'herdr'
+    assert view['namespace_ipc_kind'] == 'herdr_socket'
+    assert view['namespace_restore_token_present'] is True
+    assert 'namespace_restore_token' not in view
+    assert 'ccb-herdr::workspace-1' not in str(view)
+
+
+def test_project_view_herdr_namespace_skips_tmux_project_view_facts() -> None:
+    namespace = ProjectNamespaceState(
+        project_id='proj-herdr',
+        namespace_epoch=5,
+        tmux_socket_path='',
+        tmux_session_name='ccb-herdr',
+        namespace_backend_family='herdr-native',
+        backend_impl='herdr',
+        namespace_id='workspace-1',
+        namespace_session_name='ccb-herdr',
+        namespace_ipc_kind='herdr_socket',
+        namespace_ipc_ref='herdr://ccb-herdr',
+        namespace_restore_token='ccb-herdr::workspace-1',
+        layout_version=3,
+        workspace_window_name='workspace',
+        ui_attachable=True,
+    )
+    context = project_view_service._ProjectViewBuildContext(
+        deps=SimpleNamespace(
+            namespace_controller=SimpleNamespace(
+                _backend_factory=lambda **_: (_ for _ in ()).throw(
+                    AssertionError('tmux backend should not load')
+                )
+            )
+        ),
+        namespace=namespace,
+    )
+
+    assert project_view_service._collect_tmux_project_view_facts(context) == ({}, {})
+
+
 def _write_active_unload_drain(layout: PathLayout, agent_name: str):
     store = DrainQueueStore(layout)
     intent = DrainIntent(

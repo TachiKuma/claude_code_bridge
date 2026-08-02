@@ -6,10 +6,9 @@ from typing import Any
 
 from agents.models import layout_tool_alias_command, layout_tool_alias_label, parse_layout_spec
 from terminal_runtime.placeholders import pane_placeholder_cmd
-from terminal_runtime.tmux_identity import apply_ccb_pane_identity
 from terminal_runtime.tmux_theme import tmux_theme_profile
 
-from .backend import create_window, session_window_target, split_pane, window_root_pane
+from .backend import apply_pane_identity, create_window, respawn_pane, session_window_target, split_pane, window_root_pane
 from .sidebar_helper import SIDEBAR_HELPER_ID_OPTION, sidebar_helper_fingerprint
 
 
@@ -130,10 +129,10 @@ def _maybe_create_sidebar(
         timeout_s=timeout_s,
     )
     _append_unique(result.created_panes, user_root)
-    _respawn_sidebar(backend, root_pane, getattr(sidebar, 'launch_args', ()), cwd=str(controller._layout.project_root))
-    apply_ccb_pane_identity(
+    _respawn_sidebar(backend, root_pane, getattr(sidebar, 'launch_args', ()), cwd=str(controller._layout.project_root), timeout_s=timeout_s)
+    apply_pane_identity(
         backend,
-        root_pane,
+        pane_id=root_pane,
         title='sidebar',
         agent_label='sidebar',
         project_id=controller._project_id,
@@ -145,8 +144,9 @@ def _maybe_create_sidebar(
         managed_by='ccbd',
     )
     helper_identity = sidebar_helper_fingerprint()
-    if helper_identity:
-        backend.set_pane_user_option(root_pane, SIDEBAR_HELPER_ID_OPTION, helper_identity)
+    setter = getattr(backend, 'set_pane_user_option', None)
+    if helper_identity and callable(setter):
+        setter(root_pane, SIDEBAR_HELPER_ID_OPTION, helper_identity)
     result.sidebar_panes[window_name] = root_pane
     return user_root
 
@@ -202,9 +202,9 @@ def _materialize_new_window_agents(
             return
         _append_unique(created_panes, pane_id)
         agent_panes[item] = pane_id
-        apply_ccb_pane_identity(
+        apply_pane_identity(
             backend,
-            pane_id,
+            pane_id=pane_id,
             title=item,
             agent_label=item,
             project_id=controller._project_id,
@@ -271,17 +271,16 @@ def _materialize_new_tool_pane(
     result: WindowPatchResult | None,
 ) -> None:
     command = str(command or '').strip() or pane_placeholder_cmd()
-    respawn = getattr(backend, 'respawn_pane', None)
-    if callable(respawn):
-        respawn(pane_id, cmd=command, cwd=str(controller._layout.project_root), remain_on_exit=True)
-    else:
-        runner = getattr(backend, '_tmux_run', None)
-        if callable(runner):
-            runner(['respawn-pane', '-k', '-t', pane_id, 'sh', '-lc', command], check=False)
-    _append_unique(created_panes, pane_id)
-    apply_ccb_pane_identity(
+    respawn_pane(
         backend,
-        pane_id,
+        pane_id=pane_id,
+        command=command,
+        cwd=str(controller._layout.project_root),
+    )
+    _append_unique(created_panes, pane_id)
+    apply_pane_identity(
+        backend,
+        pane_id=pane_id,
         title=label,
         agent_label=label,
         project_id=controller._project_id,
@@ -358,17 +357,11 @@ def _user_pane_percent_for_sidebar(width: object) -> int:
     return 85
 
 
-def _respawn_sidebar(backend, pane_id: str, launch_args: tuple[str, ...], *, cwd: str) -> None:
+def _respawn_sidebar(backend, pane_id: str, launch_args: tuple[str, ...], *, cwd: str, timeout_s: float | None) -> None:
     args = tuple(launch_args or ())
     command = ' '.join(shlex.quote(str(part)) for part in args) if args else pane_placeholder_cmd()
     command = f'CCB_SIDEBAR_THEME_PROFILE={shlex.quote(tmux_theme_profile())} {command}'
-    respawn = getattr(backend, 'respawn_pane', None)
-    if callable(respawn):
-        respawn(pane_id, cmd=command, cwd=cwd, remain_on_exit=True)
-        return
-    runner = getattr(backend, '_tmux_run', None)
-    if callable(runner):
-        runner(['respawn-pane', '-k', '-t', pane_id, 'sh', '-lc', command], check=False)
+    respawn_pane(backend, pane_id=pane_id, command=command, cwd=cwd, timeout_s=timeout_s)
 
 
 def _append_unique(values: list[str], value: str) -> None:

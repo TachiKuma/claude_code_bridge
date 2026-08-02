@@ -27,6 +27,12 @@ class ForegroundAttachSummary:
     project_id: str
     tmux_socket_path: str
     tmux_session_name: str
+    backend_impl: str = 'tmux'
+    namespace_id: str | None = None
+    session_name: str | None = None
+    ipc_kind: str | None = None
+    ipc_ref: str | None = None
+    namespace_restore_token_present: bool = False
 
 
 class ForegroundAttachError(RuntimeError):
@@ -34,17 +40,25 @@ class ForegroundAttachError(RuntimeError):
 
 
 def attach_started_project_namespace(context: CliContext) -> ForegroundAttachSummary:
-    if shutil.which('tmux') is None:
-        raise ForegroundAttachError('tmux is required for interactive `ccb`')
     client = _foreground_attach_client(context)
     env = _attach_env()
     payload = _wait_for_attach_target(client, env=env)
+    if _payload_backend_impl(payload) == 'herdr':
+        return _attach_herdr_project_namespace(context, payload)
+    if shutil.which('tmux') is None:
+        raise ForegroundAttachError('tmux is required for interactive `ccb`')
     tmux_socket_path = str(payload.get('namespace_tmux_socket_path') or '').strip()
     tmux_session_name = str(payload.get('namespace_tmux_session_name') or '').strip()
     summary = ForegroundAttachSummary(
         project_id=context.project.project_id,
         tmux_socket_path=tmux_socket_path,
         tmux_session_name=tmux_session_name,
+        backend_impl=str(payload.get('namespace_backend_impl') or 'tmux').strip() or 'tmux',
+        namespace_id=_clean_optional_payload_text(payload.get('namespace_id')),
+        session_name=_clean_optional_payload_text(payload.get('namespace_session_name')) or tmux_session_name,
+        ipc_kind=_clean_optional_payload_text(payload.get('namespace_ipc_kind')),
+        ipc_ref=_clean_optional_payload_text(payload.get('namespace_ipc_ref')) or tmux_socket_path,
+        namespace_restore_token_present=bool(payload.get('namespace_restore_token_present')),
     )
     attach = subprocess.Popen(
         _tmux_cmd(tmux_socket_path, 'attach-session', '-t', tmux_session_name),
@@ -148,6 +162,8 @@ def _wait_for_attach_target(client, *, env: dict[str, str]) -> dict[str, object]
 
 
 def _attach_target_ready(payload: dict[str, object], *, env: dict[str, str]) -> tuple[bool, str]:
+    if _payload_backend_impl(payload) == 'herdr':
+        return _herdr_attach_target_ready(payload)
     tmux_socket_path = str(payload.get('namespace_tmux_socket_path') or '').strip()
     tmux_session_name = str(payload.get('namespace_tmux_session_name') or '').strip()
     workspace_window_name = str(payload.get('namespace_workspace_window_name') or '').strip()
@@ -165,11 +181,109 @@ def _attach_target_ready(payload: dict[str, object], *, env: dict[str, str]) -> 
     return True, ''
 
 
+def _attach_herdr_project_namespace(context: CliContext, payload: dict[str, object]) -> ForegroundAttachSummary:
+    namespace_ref = _herdr_namespace_ref_from_payload(payload)
+    backend_selection = _herdr_backend_selection_from_payload(payload)
+    backend = _build_herdr_attach_backend(
+        namespace_ref=namespace_ref,
+        backend_selection=backend_selection,
+    )
+    attach = getattr(backend, 'attach_namespace', None)
+    if not callable(attach):
+        raise ForegroundAttachError(
+            'foreground attach failed: Herdr backend does not support attach_namespace '
+            f'(backend_impl={backend_selection.get("backend_impl")}, ipc_kind={namespace_ref.get("ipc_kind")})'
+        )
+    try:
+        attach(namespace_ref, window_name=_clean_optional_payload_text(payload.get('namespace_workspace_window_name')))
+    except Exception as exc:
+        raise ForegroundAttachError(
+            'foreground attach failed: Herdr attach_namespace failed '
+            f'(backend_impl={backend_selection.get("backend_impl")}, ipc_kind={namespace_ref.get("ipc_kind")}, '
+            f'ipc_ref_present={bool(namespace_ref.get("ipc_ref"))}, detail={exc})'
+        ) from exc
+    return _foreground_attach_summary_from_payload(context, payload)
+
+
+def _herdr_attach_target_ready(payload: dict[str, object]) -> tuple[bool, str]:
+    if not bool(payload.get('namespace_ui_attachable')):
+        return False, 'Herdr project namespace is not attachable after successful `ccb` start'
+    try:
+        _herdr_namespace_ref_from_payload(payload)
+    except ForegroundAttachError as exc:
+        return False, str(exc)
+    return True, ''
+
+
+def _herdr_namespace_ref_from_payload(payload: dict[str, object]) -> dict[str, object]:
+    namespace_id = _clean_optional_payload_text(payload.get('namespace_id'))
+    session_name = _clean_optional_payload_text(payload.get('namespace_session_name'))
+    ipc_kind = _clean_optional_payload_text(payload.get('namespace_ipc_kind'))
+    ipc_ref = _clean_optional_payload_text(payload.get('namespace_ipc_ref'))
+    if not namespace_id or not session_name or ipc_kind != 'herdr_socket' or not ipc_ref:
+        raise ForegroundAttachError(
+            'foreground attach failed: Herdr namespace payload is incomplete '
+            f'(namespace_id_present={bool(namespace_id)}, session_name_present={bool(session_name)}, '
+            f'ipc_kind={ipc_kind}, ipc_ref_present={bool(ipc_ref)})'
+        )
+    return {
+        'backend_family': 'herdr-native',
+        'backend_impl': 'herdr',
+        'namespace_id': namespace_id,
+        'session_name': session_name,
+        'ipc_kind': ipc_kind,
+        'ipc_ref': ipc_ref,
+        'restore_token': None,
+    }
+
+
+def _herdr_backend_selection_from_payload(payload: dict[str, object]) -> dict[str, object]:
+    return {
+        'backend_family': payload.get('namespace_backend_family') or 'herdr-native',
+        'backend_impl': 'herdr',
+        'ipc_kind': payload.get('namespace_ipc_kind'),
+        'ipc_ref_present': bool(_clean_optional_payload_text(payload.get('namespace_ipc_ref'))),
+        'namespace_restore_token_present': bool(payload.get('namespace_restore_token_present')),
+    }
+
+
+def _foreground_attach_summary_from_payload(context: CliContext, payload: dict[str, object]) -> ForegroundAttachSummary:
+    tmux_socket_path = str(payload.get('namespace_tmux_socket_path') or '').strip()
+    tmux_session_name = str(payload.get('namespace_tmux_session_name') or '').strip()
+    return ForegroundAttachSummary(
+        project_id=context.project.project_id,
+        tmux_socket_path=tmux_socket_path,
+        tmux_session_name=tmux_session_name,
+        backend_impl=_payload_backend_impl(payload),
+        namespace_id=_clean_optional_payload_text(payload.get('namespace_id')),
+        session_name=_clean_optional_payload_text(payload.get('namespace_session_name')) or tmux_session_name,
+        ipc_kind=_clean_optional_payload_text(payload.get('namespace_ipc_kind')),
+        ipc_ref=_clean_optional_payload_text(payload.get('namespace_ipc_ref')) or tmux_socket_path,
+        namespace_restore_token_present=bool(payload.get('namespace_restore_token_present')),
+    )
+
+
+def _payload_backend_impl(payload: dict[str, object]) -> str:
+    return str(payload.get('namespace_backend_impl') or 'tmux').strip() or 'tmux'
+
+
+def _build_herdr_attach_backend(*, namespace_ref: dict[str, object], backend_selection: dict[str, object]):
+    del namespace_ref, backend_selection
+    from terminal_runtime import api as terminal_api
+
+    return terminal_api.get_backend('herdr')
+
+
 def _client_for_attach_attempt(client, *, timeout_s: float):
     with_timeout = getattr(client, 'with_timeout', None)
     if callable(with_timeout):
         return with_timeout(timeout_s)
     return client
+
+
+def _clean_optional_payload_text(value: object) -> str | None:
+    text = str(value or '').strip()
+    return text or None
 
 
 def _attach_target_unavailable_error(*, attempts: int, timeout_s: float) -> str:

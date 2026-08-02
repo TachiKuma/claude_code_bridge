@@ -7,10 +7,35 @@ audit_reason: ""
 auditor_id: ""
 acceptance_authorization_ref: approval-report.md#goal-acceptance
 accepted: 2026-08-02
-round: 1
+round: 2
 ---
 
 # herdr-backend-client 验收报告
+
+## 0. Reopen Acceptance 2026-08-02
+
+Scope: owner approved `ReopenBackendClient` to fix real Herdr server lifecycle and split direction defects discovered during `ccbd-herdr-namespace-lifecycle` CMD-013 probing.
+
+### Acceptance Delta
+
+- [x] Herdr CLI adapter owns server lifecycle startup for server-backed commands: on real Herdr NotFound it starts `herdr --session <name> server` and retries the original command.
+- [x] Existing recorded server process is checked with `poll()`; exited process records are cleared and respawned on the next NotFound.
+- [x] `server_info` remains read-only and does not start Herdr server.
+- [x] `bottom` maps to Herdr `down`, preventing CMD-013 vertical layout from collapsing into horizontal layout.
+- [x] `left/up/unknown` directions fail closed before any Herdr command, avoiding external side effects and silent topology corruption.
+- [x] Real Herdr smoke passed on `C:/Users/Administrator/AppData/Local/Programs/Herdr/herdr.exe`.
+
+### Evidence
+
+- Evidence file: `.codestable/features/2026-07-31-herdr-backend-client/evidence/real-herdr-server-lifecycle-direction-fix.md`
+- Review closure: `.codestable/features/2026-07-31-herdr-backend-client/herdr-backend-client-review.md#0-reopen-review-2026-08-02`
+- QA delta: `.codestable/features/2026-07-31-herdr-backend-client/herdr-backend-client-qa.md#0-reopen-qa-2026-08-02`
+
+### Verdict
+
+passed. The previous acceptance residual risk "real Herdr host smoke not run" is resolved for server lifecycle and split direction. Remaining `send_text` / `pane run` semantic risk is explicitly out of this reopen scope.
+
+Note: full-worktree scope guard is currently polluted by pre-existing `ccbd-herdr-namespace-lifecycle` diffs. Reopen-scoped guard for backend-client files and reports passed; no provider/runtime/recovery/doctor/package/release files are attributable to this backend-client reopen.
 
 > 阶段：Goal feature acceptance
 > 验收日期：2026-08-02

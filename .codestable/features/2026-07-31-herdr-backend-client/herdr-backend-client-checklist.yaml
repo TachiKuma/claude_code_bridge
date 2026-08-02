@@ -23,6 +23,9 @@ steps:
   - action: "regression guard：运行 Herdr focused tests 与现有 tmux/rmux selection/contract tests"
     exit_signal: "Herdr tests 通过；现有 tmux/rmux contract/backend selection tests 不退化"
     status: done
+  - action: "reopen fix：真实 Herdr server lifecycle 与 split direction 归一"
+    exit_signal: "Herdr CLI adapter 在 server-backed command 遇到 NotFound 时启动 headless herdr server 并重试；bottom 映射为 down，left/up/unknown 不再静默 fallback right；真实 Herdr smoke 通过"
+    status: done
 
 checks:
   - item: "前置 V2 contract 已在单一来源落地；未满足时 dependency-blocked，不重复定义 V2 类型"
@@ -57,6 +60,12 @@ checks:
     status: passed
   - item: "本 feature 不修改 ccbd durable state、provider runtime、doctor/support、package/release/recovery"
     source: design AC-010 / 明确不做
+    status: passed
+  - item: "真实 Herdr server-backed command 未运行 server 时，adapter 启动 `herdr --session <name> server` 并重试原命令；server_info 不触发 server 启动"
+    source: approval-report.md#decision-needed / real-herdr-server-lifecycle-direction-fix
+    status: passed
+  - item: "ccbd `bottom` split direction 映射到 Herdr `down`；Herdr 不可表达方向 fail closed，不污染 CMD-013 reload transcript"
+    source: approval-report.md#decision-needed / real-herdr-server-lifecycle-direction-fix
     status: passed
 
 dod:
@@ -131,6 +140,7 @@ dod:
     - herdr_schema_mismatch_tests
     - herdr_operation_evidence_tests
     - resolver_factory_tests
+    - real_herdr_server_lifecycle_direction_fix
     - scope_guard
     - epic_roadmap_owner_items_yaml_acceptance
   cleanliness:
