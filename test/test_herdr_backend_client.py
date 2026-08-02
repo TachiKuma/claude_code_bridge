@@ -1731,6 +1731,10 @@ def test_terminal_api_capability_report_normalizes_spike_projection(monkeypatch,
 
     assert report["backend_impl"] == "herdr"
     assert report["command_status"]["session_attach"] == "supported"
+    assert report["command_status"]["workspace_create"] == "supported"
+    assert report["command_status"]["pane_split"] == "supported"
+    assert report["semantic_status"]["workspace_focus"] == "supported"
+    assert report["semantic_status"]["pane_metadata"] == "supported"
     assert report["blocking_gaps"] == ["server_restart_process_continuity"]
     assert report["source_ref"] == "evidence/herdr-spike.json"
 
@@ -2665,6 +2669,19 @@ def test_default_project_namespace_backend_uses_auto_selection(monkeypatch) -> N
 
     assert namespace_controller.default_project_namespace_backend() == "auto-backend"
     assert calls == [None]
+
+
+def test_default_project_namespace_backend_retries_explicit_herdr_when_auto_returns_none(monkeypatch) -> None:
+    calls: list[object] = []
+
+    def resolve(terminal_type=None):
+        calls.append(terminal_type)
+        return "herdr-backend" if terminal_type == "herdr" else None
+
+    monkeypatch.setattr(namespace_controller, "resolve_terminal_backend", resolve)
+
+    assert namespace_controller.default_project_namespace_backend() == "herdr-backend"
+    assert calls == [None, "herdr"]
 
 
 def test_herdr_socket_client_rejects_window_root_pane_session_mismatch() -> None:

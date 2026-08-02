@@ -18,6 +18,8 @@ from terminal_runtime.mux_backend_contract import (
 
 
 class HerdrBackend(TerminalBackend):
+    backend_impl = "herdr"
+
     def __init__(
         self,
         *,
@@ -461,6 +463,57 @@ class HerdrBackend(TerminalBackend):
             direction=direction,
             percent=percent,
             parent_pane=pane_id,
+        )
+
+    def respawn_pane(
+        self,
+        pane: MuxPaneRefV2,
+        *,
+        command: list[str],
+        cwd: str,
+        env: dict[str, str] | None = None,
+    ) -> MuxOperationEvidenceV2:
+        pane_ref = self._pane_ref(pane, operation="respawn_pane")
+        self._capability_gate.require_supported("respawn_pane")
+        self._client.server_info()
+        return self._client.respawn_pane(
+            pane_ref,
+            command=command,
+            cwd=cwd,
+            env=env or {},
+        )
+
+    def move_pane(
+        self,
+        source_pane: MuxPaneRefV2,
+        anchor_pane: MuxPaneRefV2,
+        *,
+        direction: str,
+    ) -> MuxOperationEvidenceV2:
+        source_ref = self._pane_ref(source_pane, operation="move_pane")
+        anchor_ref = self._pane_ref(anchor_pane, operation="move_pane")
+        self._capability_gate.require_supported("move_pane")
+        self._client.server_info()
+        return self._client.move_pane(source_ref, anchor_ref, direction=direction)
+
+    def reflow_window(
+        self,
+        namespace: MuxNamespaceRefV2,
+        *,
+        window_name: str,
+        window_id: str | None,
+        target: str,
+        prefer_topology_layout: bool = False,
+    ) -> MuxOperationEvidenceV2:
+        namespace_ref = self._namespace_ref_from_mapping(namespace, operation="reflow_window")
+        self._capability_gate.require_supported("reflow_window")
+        self._client.server_info()
+        return self._client.reflow_window(
+            namespace_ref,
+            window_name=window_name,
+            window_id=window_id,
+            target=target,
+            prefer_topology_layout=prefer_topology_layout,
         )
 
     def _create_v2_pane(

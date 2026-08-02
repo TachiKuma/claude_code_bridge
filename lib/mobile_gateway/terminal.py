@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-import fcntl
 import os
-import pty
 import re
-import select
 import struct
 import subprocess
-import termios
 import threading
 import time
 import unicodedata
 from typing import Mapping
+
+try:
+    import fcntl  # type: ignore
+    import termios  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - exercised on native Windows
+    fcntl = None
+    termios = None
 
 
 MOBILE_TERMINAL_INITIAL_HISTORY_LINES = 1000
@@ -268,6 +271,8 @@ class TmuxTerminalSession:
             self._closed = True
 
     def _resize(self, geometry: TerminalGeometry) -> None:
+        if fcntl is None or termios is None:
+            raise RuntimeError('terminal resize ioctl is not available on this platform')
         rows = max(1, int(geometry.rows))
         columns = max(1, int(geometry.columns))
         pixels_y = max(0, int(geometry.pixel_height))

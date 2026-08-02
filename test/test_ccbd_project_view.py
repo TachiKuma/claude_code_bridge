@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 import json
+import os
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -58,6 +60,10 @@ def _write(path: Path, text: str) -> None:
 def _write_helper(path: Path, body: str) -> Path:
     path.write_text('#!/usr/bin/env python3\n' + body, encoding='utf-8')
     path.chmod(0o755)
+    if os.name == 'nt':
+        wrapper = path.with_suffix(path.suffix + '.cmd')
+        wrapper.write_text(f'@echo off\r\n"{sys.executable}" "{path}" %*\r\n', encoding='utf-8')
+        return wrapper
     return path
 
 
@@ -436,8 +442,9 @@ def test_project_view_correlates_anchored_provider_activity_by_exact_pane(
     expected_phase: str,
     expected_reason: str,
 ) -> None:
+    path_time = activity_updated_at[11:19].replace(':', '-')
     project_root = tmp_path / (
-        f'repo-execution-phase-{activity_pane.removeprefix("%")}-{activity_updated_at[11:19]}'
+        f'repo-execution-phase-{activity_pane.removeprefix("%")}-{path_time}'
     )
     project_root.mkdir()
     layout = PathLayout(project_root)

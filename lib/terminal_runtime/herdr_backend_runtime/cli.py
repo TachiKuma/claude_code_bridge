@@ -71,6 +71,12 @@ class HerdrCliRequestAdapter:
             return self._create_pane(payload)
         if operation == "set_pane_identity":
             return self._set_pane_identity(payload)
+        if operation == "respawn_pane":
+            return self._respawn_pane(payload)
+        if operation == "move_pane":
+            return self._move_pane(payload)
+        if operation == "reflow_window":
+            return self._reflow_window(payload)
         if operation == "select_window":
             return self._select_window(payload)
         if operation == "kill_window":
@@ -489,6 +495,55 @@ class HerdrCliRequestAdapter:
             tokens=tokens,
         )
         return {"status": "ok", "pane_id": pane_id}
+
+    def _respawn_pane(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        pane_id = str(payload.get("pane_id") or "").strip()
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        try:
+            command = _command_text(payload.get("command"))
+        except ValueError as exc:
+            raise self._failed("respawn_pane", str(exc), session_name=session_name) from exc
+        if not pane_id:
+            raise self._failed("respawn_pane", "Herdr respawn_pane requires pane_id", session_name=session_name)
+        if command:
+            self._command(
+                "respawn_pane",
+                ["pane", "run", pane_id, command],
+                expect_json=False,
+                session_name=session_name,
+            )
+        return {"status": "ok", "pane_id": pane_id}
+
+    def _move_pane(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        source_pane_id = str(payload.get("source_pane_id") or "").strip()
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        if not source_pane_id:
+            raise self._failed("move_pane", "Herdr move_pane requires source_pane_id", session_name=session_name)
+        if self._pane_by_id(source_pane_id, session_name=session_name) is None:
+            raise self._not_found(
+                "move_pane",
+                f"unknown Herdr source pane {source_pane_id!r}",
+                session_name=session_name,
+            )
+        return {"status": "ok", "pane_id": source_pane_id}
+
+    def _reflow_window(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        namespace_id = str(payload.get("namespace_id") or "").strip()
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        requested_window = str(payload.get("window_id") or payload.get("window_name") or "").strip()
+        workspace = self._resolve_logical_workspace(
+            namespace_id=namespace_id,
+            requested_window=requested_window,
+            session_name=session_name,
+        )
+        workspace_id = str((workspace or {}).get("workspace_id") or "").strip()
+        if not workspace_id:
+            raise self._not_found(
+                "reflow_window",
+                f"unknown Herdr logical window {requested_window!r}",
+                session_name=session_name,
+            )
+        return {"status": "ok", "window_id": workspace_id}
 
     def _select_window(self, payload: Mapping[str, object]) -> Mapping[str, object]:
         namespace_id = str(payload.get("namespace_id") or "").strip()

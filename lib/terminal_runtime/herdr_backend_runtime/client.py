@@ -349,6 +349,76 @@ class HerdrSocketClient:
                 evidence={"socket_ref": self._socket_ref},
             ) from exc
 
+    def respawn_pane(
+        self,
+        pane: MuxPaneRefV2,
+        *,
+        command: list[str],
+        cwd: str,
+        env: dict[str, str],
+    ) -> MuxOperationEvidenceV2:
+        response = self._request(
+            "respawn_pane",
+            {
+                "pane_id": pane["pane_id"],
+                "session_name": pane["session_name"],
+                "command": list(command),
+                "cwd": cwd,
+                "env": dict(env),
+            },
+            require_status=True,
+        )
+        return _operation_evidence("respawn_pane", pane, response, detail="pane command respawned")
+
+    def reflow_window(
+        self,
+        namespace: MuxNamespaceRefV2,
+        *,
+        window_name: str,
+        window_id: str | None,
+        target: str,
+        prefer_topology_layout: bool,
+    ) -> MuxOperationEvidenceV2:
+        response = self._request(
+            "reflow_window",
+            {
+                "namespace_id": namespace["namespace_id"],
+                "session_name": namespace["session_name"],
+                "ipc_ref": self._socket_ref,
+                "window_name": window_name,
+                "window_id": window_id,
+                "target": target,
+                "prefer_topology_layout": prefer_topology_layout,
+            },
+            require_status=True,
+        )
+        return make_operation_evidence(
+            operation="reflow_window",
+            backend_impl="herdr",
+            pane_id=str(response.get("window_id") or window_id or "").strip() or None,
+            status="ok" if str(response.get("status") or "ok") == "ok" else "failed",
+            detail="logical workspace reflow observed",
+        )
+
+    def move_pane(
+        self,
+        source_pane: MuxPaneRefV2,
+        anchor_pane: MuxPaneRefV2,
+        *,
+        direction: str,
+    ) -> MuxOperationEvidenceV2:
+        response = self._request(
+            "move_pane",
+            {
+                "source_pane_id": source_pane["pane_id"],
+                "anchor_pane_id": anchor_pane["pane_id"],
+                "session_name": source_pane["session_name"],
+                "direction": direction,
+            },
+            require_status=True,
+        )
+        return _operation_evidence("move_pane", source_pane, response, detail="pane moved")
+
     def send_text(self, pane: MuxPaneRefV2, text: str) -> MuxOperationEvidenceV2:
         response = self._request(
             "send_text",

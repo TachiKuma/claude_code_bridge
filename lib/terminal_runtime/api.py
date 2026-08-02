@@ -286,6 +286,38 @@ def _normalize_herdr_capability_projection(payload: dict[str, object]) -> None:
     for key in ("command_status", "semantic_status", "windows_beta_gaps", "blocking_gaps"):
         if key not in payload and key in projection:
             payload[key] = projection[key]
+    _derive_herdr_facade_capabilities(payload)
+
+
+_DERIVED_HERDR_FACADE_CAPABILITIES = {
+    "workspace_create": ("session_attach",),
+    "workspace_list": ("session_attach",),
+    "workspace_focus": ("session_attach",),
+    "workspace_metadata": ("session_attach",),
+    "workspace_close": ("session_attach", "kill_pane"),
+    "pane_list": ("session_attach", "pane_spawn"),
+    "pane_split": ("pane_spawn",),
+    "pane_run": ("send_input",),
+    "pane_metadata": ("session_attach", "pane_spawn"),
+}
+
+
+def _derive_herdr_facade_capabilities(payload: dict[str, object]) -> None:
+    if payload.get("backend_impl") != "herdr":
+        return
+    command_status = payload.get("command_status")
+    semantic_status = payload.get("semantic_status")
+    if not isinstance(command_status, dict) or not isinstance(semantic_status, dict):
+        return
+    for facade_capability, prerequisites in _DERIVED_HERDR_FACADE_CAPABILITIES.items():
+        if _all_capabilities_supported(command_status, prerequisites):
+            command_status.setdefault(facade_capability, "supported")
+        if _all_capabilities_supported(semantic_status, prerequisites):
+            semantic_status.setdefault(facade_capability, "supported")
+
+
+def _all_capabilities_supported(statuses: dict[object, object], names: tuple[str, ...]) -> bool:
+    return all(statuses.get(name) == "supported" for name in names)
 
 
 def _herdr_socket_ref() -> str:

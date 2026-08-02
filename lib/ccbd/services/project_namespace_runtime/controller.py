@@ -26,6 +26,8 @@ def default_project_namespace_backend(*, socket_path: str | None = None, namespa
     if namespace_state is not None and backend_family == 'herdr-native':
         requested_backend = 'herdr'
     backend = resolve_terminal_backend(requested_backend)
+    if backend is None and namespace_state is None:
+        backend = resolve_terminal_backend('herdr')
     if backend is not None:
         return backend
     return TmuxBackend(socket_path=socket_path)
