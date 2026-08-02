@@ -52,6 +52,11 @@ def build_ccbd_payload(
     socket_path = inspection.socket_path if hasattr(inspection, 'socket_path') else None
     if socket_path is None and inspection.lease is not None:
         socket_path = inspection.lease.socket_path
+    control_plane_endpoint = (
+        inspection.control_plane_endpoint
+        if hasattr(inspection, 'control_plane_endpoint')
+        else None
+    )
     process_metrics = _process_metrics(control_plane_metrics)
     serving = dict(serving_identity or {})
     return {
@@ -61,6 +66,7 @@ def build_ccbd_payload(
         'health': inspection.health.value,
         'generation': inspection.generation,
         'socket_path': socket_path,
+        'control_plane_endpoint': control_plane_endpoint,
         'tmux_socket_path': str(paths.ccbd_tmux_socket_placement.effective_path),
         **(paths.runtime_state_payload() if hasattr(paths, 'runtime_state_payload') else {}),
         **socket_placement_payload(paths.ccbd_socket_placement),

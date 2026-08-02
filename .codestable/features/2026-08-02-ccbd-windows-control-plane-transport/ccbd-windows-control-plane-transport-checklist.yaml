@@ -1,0 +1,151 @@
+feature: 2026-08-02-ccbd-windows-control-plane-transport
+created: 2026-08-02
+
+steps:
+  - id: S1
+    action: "[S1] endpoint contract + factory selection：定义 endpoint descriptor、legacy socket_path projection、platform default selection"
+    exit_signal: "Windows 选择 tcp_loopback，Unix 选择 unix_socket；旧 socket_path 仍能投影为 Unix endpoint；items/checklist YAML 校验通过"
+    status: done
+  - id: S2
+    action: "[S2] Unix adapter extraction：把现有 AF_UNIX connect/listen/stale/bootstrap 行为迁入 Unix adapter"
+    exit_signal: "Unix socket client/server/bootstrap focused tests 不退化，stale cleanup 与 shutdown unlink identity 保持"
+    status: done
+  - id: S3
+    action: "[S3] token auth + ACL convergence：实现 token generation、ACL/权限证明、fingerprint/redaction 与 auth error"
+    exit_signal: "ACL success/failure、token missing、bad token、token unreadable、token redaction tests 通过；ACL pass 证明当前用户可读且非当前用户 read 权限不存在；ACL 无法证明或 token 不可读时不 publish endpoint"
+    status: done
+  - id: S4
+    action: "[S4] Windows TCP listener/connector：实现 bind 127.0.0.1:0、endpoint publish、client connect、valid token handshake、shutdown cleanup"
+    exit_signal: "valid token ping 成功；stale endpoint、bad port、missing token 均返回脱敏可诊断错误"
+    status: done
+  - id: S5
+    action: "[S5] bootstrap self-ping through seam：bootstrap readiness 走同一 endpoint discovery、connect 和 token handshake"
+    exit_signal: "nonce ping、auth failure、deferred external connection、deferred overflow close 语义可验证"
+    status: done
+  - id: S6
+    action: "[S6] diagnostics and scope guard：start/ping/mounted/doctor 只输出 endpoint/token_ref/acl_status，禁止 handler/schema/Herdr/provider 越界"
+    exit_signal: "redaction/import/scope guard 通过；ping/doctor/startup/mounted payload 保留 legacy socket_path 兼容字段，Unix 为原 path，Windows 为 null/empty；RPC schema/handler、Herdr namespace/provider/recovery/user-surface/release 未改"
+    status: done
+  - id: S7
+    action: "[S7] Native Windows CMD-013 retry：在目标 Windows x64 + Herdr host 上复跑 CMD-013"
+    exit_signal: "transcript 不再失败于 unix domain sockets unsupported，并进入 Herdr namespace lifecycle 真实结果"
+    status: done
+
+checks:
+  - item: "Unix 平台 client/server/bootstrap 的 AF_UNIX path、stale cleanup、bootstrap self-ping、shutdown unlink identity 不退化"
+    source: design AC-001 / DOD-IMPL-002
+    status: pending
+  - item: "Windows server listen 绑定 127.0.0.1:0，endpoint descriptor 含 host、port、token_ref、generation"
+    source: design AC-002 / DOD-IMPL-001
+    status: pending
+  - item: "token ACL/权限只有在当前用户 runtime root、当前用户可读、非当前用户 read 权限不存在且 evidence 可解析时才算 pass；无法证明时 fail-fast，不 publish endpoint，不 fallback 无鉴权 TCP"
+    source: design AC-003 / DOD-IMPL-004
+    status: pending
+  - item: "Windows client valid token handshake 成功后 JSON-line ping 正常"
+    source: design AC-004 / DOD-IMPL-003
+    status: pending
+  - item: "missing/bad/unreadable token 不触发 handler，连接关闭，错误脱敏可诊断"
+    source: design AC-005 / DOD-IMPL-003
+    status: pending
+  - item: "bootstrap self-ping 使用同一 transport connect + token handshake + nonce ping"
+    source: design AC-006 / DOD-IMPL-005
+    status: pending
+  - item: "log、doctor、ping、mounted、startup、error、artifact 不含 token 明文，只允许 token_ref、acl_status 或 fingerprint；ping/doctor/startup/mounted payload 保留 legacy socket_path 兼容字段，Unix 为原 path，Windows 为 null/empty"
+    source: design AC-007 / DOD-IMPL-006
+    status: pending
+  - item: "本 feature 不修改 RPC schema/handler，不实现 named pipe，不改 Herdr namespace/provider/recovery/user-surface/release"
+    source: design AC-008 / DOD-IMPL-007
+    status: pending
+  - item: "Native Windows CMD-013 不再因 AF_UNIX unsupported 退出，进入 Herdr namespace lifecycle 真实验证"
+    source: design AC-009 / DOD-ACCEPT-001
+    status: pending
+
+dod:
+  commands:
+    - id: CMD-001
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-08-02-ccbd-windows-control-plane-transport/ccbd-windows-control-plane-transport-checklist.yaml\" --yaml-only"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml\""
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: "python -m pytest -q test/test_ccbd_control_plane_transport_unix.py test/test_ccbd_control_plane_transport_fake.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new-and-existing
+      covers:
+        - control_plane_transport_seam
+        - unix_adapter_regression
+        - fake_transport_lifecycle
+    - id: CMD-004
+      command: "python -m pytest -q test/test_ccbd_windows_tcp_loopback_transport.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new-and-existing
+      covers:
+        - tcp_loopback_endpoint
+        - token_acl
+        - token_handshake
+        - endpoint_store
+    - id: CMD-005
+      command: "python -m pytest -q test/test_ccbd_bootstrap_probe.py test/test_ccbd_socket_server_loop.py test/test_ccbd_socket_client.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: existing-or-new
+      covers:
+        - bootstrap_probe
+        - socket_server_regression
+        - socket_client_regression
+    - id: CMD-006
+      command: "python -m pytest -q test/test_v2_start_service.py -k \"ccbd or endpoint or ping or socket\""
+      core: true
+      failure_handling: document-baseline
+      test_status: existing-or-new
+      covers:
+        - start_service_endpoint_projection
+        - ping_endpoint_projection
+    - id: CMD-007
+      command: "python -m pytest -q test/test_ccbd_windows_tcp_loopback_import_guard.py"
+      core: true
+      failure_handling: fix-or-block
+      test_status: new-and-existing
+      covers:
+        - token_redaction_guard
+        - no_named_pipe_adapter
+        - no_rpc_schema_handler_change
+        - scope_guard
+    - id: CMD-008
+      command: "MANUAL Native Windows x64: rerun CMD-013 ccb namespace create, foreground attach, kill, reload, and restart unsupported/deferred evidence on Herdr backend"
+      core: true
+      failure_handling: blocked-if-no-host-or-herdr
+      test_status: manual
+      covers:
+        - native_windows_control_plane_start
+        - herdr_namespace_lifecycle_reentry
+  evidence_required:
+    - transport_seam_diff
+    - windows_tcp_loopback_adapter
+    - token_auth_acl_tests
+    - endpoint_store_tests
+    - unix_transport_regression
+    - bootstrap_probe_regression
+    - diagnostics_redaction_guard
+    - scope_guard
+    - native_windows_cmd013_retry_transcript
+    - epic_roadmap_owner_items_yaml_acceptance
+  cleanliness:
+    token_plaintext_logging: forbidden
+    unauthenticated_tcp_listener: forbidden
+    named_pipe_production_adapter: forbidden
+    rpc_schema_handler_changes: forbidden
+    herdr_namespace_lifecycle_changes: forbidden
+    provider_runtime_changes: forbidden
+    recovery_owner_changes: forbidden
+    mobile_config_ui_changes: forbidden
+    package_release_changes: forbidden
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_code: forbidden
+    dead_imports: forbidden
