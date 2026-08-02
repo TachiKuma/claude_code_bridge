@@ -149,6 +149,80 @@ def test_start_foreground_herdr_attach_uses_builder_without_tmux_binary(monkeypa
     assert 'restore-token' not in str(builder_calls)
 
 
+def test_start_foreground_herdr_attach_real_builder_accepts_matching_backend_ref(monkeypatch) -> None:
+    context = SimpleNamespace(project=SimpleNamespace(project_id='proj-herdr'))
+    payload = {
+        'namespace_backend_family': 'herdr-native',
+        'namespace_backend_impl': 'herdr',
+        'namespace_id': 'workspace-1',
+        'namespace_session_name': 'ccb-herdr',
+        'namespace_ipc_kind': 'herdr_socket',
+        'namespace_ipc_ref': 'herdr://workspace-1',
+        'namespace_restore_token_present': True,
+        'namespace_workspace_window_name': 'main',
+        'namespace_ui_attachable': True,
+    }
+    attach_calls: list[tuple[dict[str, object], str | None]] = []
+
+    class _FakeClient:
+        def ping(self, target: str) -> dict[str, object]:
+            assert target == 'ccbd'
+            return payload
+
+    backend_calls: list[object] = []
+
+    class _MatchingHerdrBackend:
+        def namespace_ref(self, session_name: str, namespace_id: str) -> dict[str, object]:
+            return {
+                'backend_family': 'herdr-native',
+                'backend_impl': 'herdr',
+                'namespace_id': namespace_id,
+                'session_name': session_name,
+                'ipc_kind': 'herdr_socket',
+                'ipc_ref': 'herdr://workspace-1',
+                'restore_token': None,
+            }
+
+        def attach_namespace(self, namespace_ref: dict[str, object], *, window_name: str | None = None) -> None:
+            attach_calls.append((dict(namespace_ref), window_name))
+
+    monkeypatch.setattr(start_foreground_service, '_foreground_attach_client', lambda _context: _FakeClient())
+    monkeypatch.setattr(start_foreground_service, '_attach_env', lambda: {})
+    monkeypatch.setattr(
+        start_foreground_service.shutil,
+        'which',
+        lambda _name: (_ for _ in ()).throw(AssertionError('tmux should not be queried')),
+    )
+    monkeypatch.setattr(
+        start_foreground_service.subprocess,
+        'Popen',
+        lambda *_, **__: (_ for _ in ()).throw(AssertionError('tmux subprocess should not run')),
+    )
+    monkeypatch.setattr(
+        'terminal_runtime.api.get_backend',
+        lambda terminal_type=None: backend_calls.append(terminal_type) or _MatchingHerdrBackend(),
+    )
+
+    summary = attach_started_project_namespace(context)  # type: ignore[arg-type]
+
+    assert summary.backend_impl == 'herdr'
+    assert backend_calls == ['herdr']
+    assert attach_calls == [
+        (
+            {
+                'backend_family': 'herdr-native',
+                'backend_impl': 'herdr',
+                'namespace_id': 'workspace-1',
+                'session_name': 'ccb-herdr',
+                'ipc_kind': 'herdr_socket',
+                'ipc_ref': 'herdr://workspace-1',
+                'restore_token': None,
+            },
+            'main',
+        )
+    ]
+
+
 def test_start_foreground_herdr_attach_rejects_missing_payload_without_tmux_fallback(monkeypatch) -> None:
     payload = {
         'namespace_backend_impl': 'herdr',
@@ -162,6 +236,48 @@ def test_start_foreground_herdr_attach_rejects_missing_payload_without_tmux_fall
 
     assert ready is False
     assert 'ipc_ref_present=False' in error
+
+
+def test_start_foreground_herdr_attach_builder_rejects_backend_ipc_ref_mismatch(monkeypatch) -> None:
+    namespace_ref = {
+        'backend_family': 'herdr-native',
+        'backend_impl': 'herdr',
+        'namespace_id': 'workspace-1',
+        'session_name': 'ccb-herdr',
+        'ipc_kind': 'herdr_socket',
+        'ipc_ref': 'herdr://workspace-1',
+        'restore_token': None,
+    }
+    backend_selection = {
+        'backend_family': 'herdr-native',
+        'backend_impl': 'herdr',
+        'ipc_kind': 'herdr_socket',
+        'ipc_ref_present': True,
+        'namespace_restore_token_present': True,
+    }
+
+    class _MismatchedHerdrBackend:
+        def namespace_ref(self, session_name: str, namespace_id: str) -> dict[str, object]:
+            return {
+                'backend_family': 'herdr-native',
+                'backend_impl': 'herdr',
+                'namespace_id': namespace_id,
+                'session_name': session_name,
+                'ipc_kind': 'herdr_socket',
+                'ipc_ref': 'herdr://other-session',
+                'restore_token': None,
+            }
+
+    monkeypatch.setattr(
+        'terminal_runtime.api.get_backend',
+        lambda terminal_type=None: _MismatchedHerdrBackend(),
+    )
+
+    with pytest.raises(ForegroundAttachError, match='namespace ref mismatch'):
+        start_foreground_service._build_herdr_attach_backend(
+            namespace_ref=namespace_ref,
+            backend_selection=backend_selection,
+        )
 
 
 class _FakeAttachProcess:

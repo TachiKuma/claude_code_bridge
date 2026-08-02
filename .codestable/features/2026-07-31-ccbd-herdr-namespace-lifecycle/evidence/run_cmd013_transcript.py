@@ -295,6 +295,10 @@ if "--cmd013-confirm-stdin" in sys.argv:
 
 import ccb
 
+if 'ConfirmStdin' in globals():
+    import cli.phase2 as _phase2
+    _phase2.sys.stdin = ConfirmStdin("y\n")
+
 sys.argv = [str(repo / "ccb.py"), *sys.argv[1:]]
 raise SystemExit(ccb.main())
 '''

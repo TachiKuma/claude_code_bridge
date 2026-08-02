@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import shlex
 import sys
@@ -8,6 +9,7 @@ import pytest
 
 import terminal_runtime.api as terminal_api
 import terminal_runtime.herdr_backend_runtime.cli as herdr_cli
+from ccbd.services.project_namespace_runtime import controller as namespace_controller
 from terminal_runtime.backend_selection import TerminalBackendSelection
 from terminal_runtime.herdr_backend import HerdrBackend
 from terminal_runtime.herdr_backend_runtime.capabilities import HerdrCapabilityGate
@@ -95,6 +97,42 @@ def test_herdr_capability_gate_allows_supported_spike_projection() -> None:
     assert capabilities["backend_impl"] == "herdr"
     assert capabilities["blocking_gaps"] == []
     assert capabilities["source_ref"] == "evidence/herdr-contract-spike-evidence.json"
+
+
+def test_herdr_capability_gate_allows_nonrequired_windows_beta_gaps() -> None:
+    gate = HerdrCapabilityGate.from_spike_evidence(
+        {
+            "adapter_recommendation": "continue-with-gaps",
+            "verdict": "partial",
+            "failure_class": "windows-beta-gap",
+            "capability_projection": {
+                "command_status": {
+                    "session_attach": "supported",
+                    "pane_spawn": "supported",
+                    "send_input": "supported",
+                    "read_output": "supported",
+                    "kill_pane": "supported",
+                    "server_restart_process_continuity": "unsupported",
+                },
+                "semantic_status": {
+                    "session_attach": "supported",
+                    "pane_spawn": "supported",
+                    "send_input": "supported",
+                    "read_output": "supported",
+                    "kill_pane": "supported",
+                    "server_restart_process_continuity": "unsupported",
+                },
+                "windows_beta_gaps": [],
+                "blocking_gaps": ["server_restart_process_continuity"],
+            },
+        },
+        capability_report_ref="evidence/herdr-contract-spike-evidence.json",
+    )
+
+    capabilities = gate.require_supported("prepare_server")
+
+    assert capabilities["backend_impl"] == "herdr"
+    assert capabilities["blocking_gaps"] == ["server_restart_process_continuity"]
 
 
 @pytest.mark.parametrize(
@@ -1679,6 +1717,24 @@ def test_terminal_api_capability_report_can_use_runtime_override(monkeypatch, tm
     assert terminal_api._herdr_capability_report_ref() == "evidence/herdr-capabilities.json"
 
 
+def test_terminal_api_capability_report_normalizes_spike_projection(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(terminal_api, "_ROOT_DIR", tmp_path)
+    report_path = tmp_path / "evidence" / "herdr-spike.json"
+    report_path.parent.mkdir()
+    report_path.write_text(
+        '{"adapter_recommendation":"continue-with-gaps","verdict":"partial","failure_class":"windows-beta-gap","capability_projection":{"command_status":{"session_attach":"supported","pane_spawn":"supported","send_input":"supported","read_output":"supported","kill_pane":"supported","server_restart_process_continuity":"unsupported"},"semantic_status":{"session_attach":"supported","pane_spawn":"supported","send_input":"supported","read_output":"supported","kill_pane":"supported","server_restart_process_continuity":"unsupported"},"windows_beta_gaps":[],"blocking_gaps":["server_restart_process_continuity"]}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CCB_HERDR_CAPABILITY_REPORT", str(report_path))
+
+    report = terminal_api._herdr_capability_report()
+
+    assert report["backend_impl"] == "herdr"
+    assert report["command_status"]["session_attach"] == "supported"
+    assert report["blocking_gaps"] == ["server_restart_process_continuity"]
+    assert report["source_ref"] == "evidence/herdr-spike.json"
+
+
 def test_terminal_api_malformed_capability_report_is_invalid_request(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(terminal_api, "_ROOT_DIR", tmp_path)
     report_path = tmp_path / "evidence" / "herdr-capabilities.json"
@@ -1767,6 +1823,8 @@ def test_herdr_cli_request_adapter_maps_server_info_and_core_operations() -> Non
             return _completed("herdr 0.7.5-preview\n")
         if "api schema --json" in joined:
             return _completed('{"title":"Herdr API"}')
+        if "report-metadata" in joined:
+            return _completed("")
         if "workspace create" in joined:
             return _completed(
                 '{"result":{"workspace":{"workspace_id":"w1"},"root_pane":{"pane_id":"w1:p1","workspace_id":"w1"}}}'
@@ -1824,6 +1882,8 @@ def test_herdr_cli_request_adapter_starts_server_and_retries_server_backed_comma
         nonlocal workspace_create_calls
         commands.append(command)
         joined = " ".join(command)
+        if "report-metadata" in joined:
+            return _completed("")
         if "workspace create" in joined:
             workspace_create_calls += 1
             if workspace_create_calls == 1:
@@ -1871,6 +1931,8 @@ def test_herdr_cli_request_adapter_restarts_recorded_server_process_after_exit()
         nonlocal workspace_create_calls
         commands.append(command)
         joined = " ".join(command)
+        if "report-metadata" in joined:
+            return _completed("")
         if "workspace create" in joined:
             workspace_create_calls += 1
             if workspace_create_calls in {1, 3}:
@@ -1948,6 +2010,8 @@ def test_herdr_backend_uses_cli_adapter_envelope_contract_for_core_operations() 
             return _completed("herdr 0.7.5-preview\n")
         if "api schema --json" in joined:
             return _completed('{"title":"Herdr API"}')
+        if "report-metadata" in joined:
+            return _completed("")
         if "workspace create" in joined:
             return _completed(
                 '{"result":{"workspace":{"workspace_id":"w1"},"root_pane":{"pane_id":"w1:p1","workspace_id":"w1"}}}'
@@ -1995,6 +2059,638 @@ def test_herdr_backend_uses_cli_adapter_envelope_contract_for_core_operations() 
     assert capture["status"] == "ok"
     assert killed["status"] == "ok"
     assert any("pane run" in " ".join(command) for command in commands)
+
+
+def test_herdr_backend_logical_window_facade_restores_from_root_pane_metadata() -> None:
+    state: dict[str, object] = {
+        "workspaces": {},
+        "panes": {},
+        "focused_workspaces": [],
+        "closed_workspaces": [],
+    }
+
+    def tokens_from_command(command: list[str]) -> dict[str, str]:
+        tokens: dict[str, str] = {}
+        for index, value in enumerate(command):
+            if value == "--token" and index + 1 < len(command):
+                name, token_value = command[index + 1].split("=", 1)
+                tokens[name] = token_value
+        return tokens
+
+    def run_fn(command, **kwargs):
+        joined = " ".join(command)
+        workspaces: dict[str, dict[str, object]] = state["workspaces"]  # type: ignore[assignment]
+        panes: dict[str, dict[str, object]] = state["panes"]  # type: ignore[assignment]
+        if "status --json" in joined:
+            return _completed('{"client":{"version":"0.7.5-preview"}}')
+        if "--version" in joined:
+            return _completed("herdr 0.7.5-preview\n")
+        if "api schema --json" in joined:
+            return _completed('{"title":"Herdr API"}')
+        if "workspace create" in joined:
+            workspace_id = f"w{len(workspaces) + 1}"
+            pane_id = f"{workspace_id}:p1"
+            workspaces[workspace_id] = {
+                "workspace_id": workspace_id,
+                "label": command[command.index("--label") + 1],
+                "focused": "--focus" in command,
+                "tokens": {},
+            }
+            panes[pane_id] = {
+                "pane_id": pane_id,
+                "workspace_id": workspace_id,
+                "tokens": {},
+            }
+            return _completed(
+                json.dumps(
+                    {
+                        "result": {
+                            "workspace": {"workspace_id": workspace_id},
+                            "root_pane": {
+                                "pane_id": pane_id,
+                                "workspace_id": workspace_id,
+                            },
+                        }
+                    }
+                )
+            )
+        if "workspace report-metadata" in joined:
+            workspace_id = command[command.index("report-metadata") + 1]
+            workspaces[workspace_id]["tokens"].update(tokens_from_command(command))
+            return _completed("")
+        if "pane report-metadata" in joined:
+            pane_id = command[command.index("report-metadata") + 1]
+            panes[pane_id]["tokens"].update(tokens_from_command(command))
+            return _completed("")
+        if "workspace list" in joined:
+            return _completed(json.dumps({"result": {"workspaces": list(workspaces.values())}}))
+        if "pane list" in joined:
+            selected = list(panes.values())
+            if "--workspace" in command:
+                workspace_id = command[command.index("--workspace") + 1]
+                selected = [pane for pane in selected if pane["workspace_id"] == workspace_id]
+            return _completed(json.dumps({"result": {"panes": selected}}))
+        if "pane split" in joined:
+            parent_id = command[command.index("split") + 1]
+            workspace_id = str(panes[parent_id]["workspace_id"])
+            pane_id = f"{workspace_id}:p{sum(pane['workspace_id'] == workspace_id for pane in panes.values()) + 1}"
+            panes[pane_id] = {
+                "pane_id": pane_id,
+                "workspace_id": workspace_id,
+                "tokens": {},
+            }
+            return _completed(
+                json.dumps({"result": {"pane": {"pane_id": pane_id, "workspace_id": workspace_id}}})
+            )
+        if "workspace focus" in joined:
+            state["focused_workspaces"].append(command[-1])  # type: ignore[union-attr]
+            return _completed("")
+        if "workspace close" in joined:
+            workspace_id = command[-1]
+            state["closed_workspaces"].append(workspace_id)  # type: ignore[union-attr]
+            workspaces.pop(workspace_id)
+            for pane_id in [pane_id for pane_id, pane in panes.items() if pane["workspace_id"] == workspace_id]:
+                panes.pop(pane_id)
+            return _completed("")
+        raise AssertionError(joined)
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        which_fn=lambda name: "herdr",
+    )
+    backend = HerdrBackend(
+        client=HerdrSocketClient(
+            request_fn=adapter,
+            socket_ref=adapter.socket_ref,
+            allow_session_scoped_ipc_refs=adapter.allow_session_scoped_ipc_refs,
+        ),
+        capability_gate=_supported_gate(),
+    )
+
+    namespace = backend.create_session(project_id="demo", cwd="D:/demo", title="ccb-demo")
+    control = backend.ensure_window(
+        namespace,
+        window_name="__ccb_ctl",
+        cwd="D:/demo",
+        select=False,
+    )
+    workspace = backend.ensure_window(
+        namespace,
+        window_name="ccb",
+        cwd="D:/demo",
+        select=True,
+    )
+    root = backend.window_root_pane(namespace, window_name="ccb")
+    backend.set_pane_identity(
+        root,
+        title="cmd",
+        agent_label="cmd",
+        project_id="demo",
+        is_cmd=True,
+        slot_key="cmd",
+        window_name="ccb",
+        managed_by="ccbd",
+    )
+
+    assert control["window_id"] == "w1"
+    assert workspace["window_id"] == "w2"
+    assert root["pane_id"] == "w2:p1"
+    assert state["panes"]["w2:p1"]["tokens"]["ccb_root_pane"] == "1"  # type: ignore[index]
+    assert state["panes"]["w2:p1"]["tokens"]["ccb_window"] == "ccb"  # type: ignore[index]
+
+    for workspace_record in state["workspaces"].values():  # type: ignore[union-attr]
+        workspace_record["tokens"] = {}
+
+    restored_adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        which_fn=lambda name: "herdr",
+    )
+    restored_backend = HerdrBackend(
+        client=HerdrSocketClient(
+            request_fn=restored_adapter,
+            socket_ref=restored_adapter.socket_ref,
+            allow_session_scoped_ipc_refs=restored_adapter.allow_session_scoped_ipc_refs,
+        ),
+        capability_gate=_supported_gate(),
+    )
+    restored_namespace = restored_backend.namespace_ref("ccb-demo", "w1")
+
+    restored_workspace = restored_backend.ensure_window(
+        restored_namespace,
+        window_name="ccb",
+        cwd="D:/demo",
+        select=False,
+    )
+    assert restored_workspace["window_id"] == "w2"
+    assert len(state["workspaces"]) == 2  # type: ignore[arg-type]
+    restored_windows = restored_backend.list_windows(restored_namespace)
+    restored_root = restored_backend.window_root_pane(restored_namespace, window_name="ccb")
+    child = restored_backend.split_pane(
+        restored_root,
+        direction="right",
+        percent=50,
+        command=[],
+        cwd="D:/demo",
+        env={},
+        title="agent",
+    )
+    restored_backend.select_window(
+        restored_namespace,
+        window_id="ccb",
+        target="ccb-demo:ccb",
+    )
+    restored_backend.rename_window(
+        restored_namespace,
+        window_id="w2",
+        target="ccb-demo:w2",
+        new_name="ccb-renamed",
+    )
+    restored_backend.select_window(
+        restored_namespace,
+        window_id="ccb-renamed",
+        target="ccb-demo:ccb-renamed",
+    )
+    restored_backend.kill_window(
+        restored_namespace,
+        window_id="__ccb_ctl",
+        target="ccb-demo:__ccb_ctl",
+    )
+
+    assert {(item["window_id"], item["window_name"]) for item in restored_windows} == {
+        ("w1", "__ccb_ctl"),
+        ("w2", "ccb"),
+    }
+    assert restored_root["pane_id"] == "w2:p1"
+    assert child["pane_id"] == "w2:p2"
+    assert state["panes"]["w2:p1"]["tokens"]["ccb_window"] == "ccb-renamed"  # type: ignore[index]
+    assert state["focused_workspaces"][-1] == "w2"  # type: ignore[index]
+    assert state["closed_workspaces"] == ["w1"]
+    assert [item["window_name"] for item in restored_backend.list_windows(restored_namespace)] == ["ccb-renamed"]
+    assert not callable(getattr(restored_backend, "_tmux_run", None))
+
+
+def test_herdr_cli_logical_windows_accept_workspace_ids_and_isolate_namespace_groups() -> None:
+    state: dict[str, object] = {
+        "workspaces": {
+            "w1": {"workspace_id": "w1", "focused": False},
+            "w2": {"workspace_id": "w2", "focused": False},
+            "w3": {"workspace_id": "w3", "focused": False},
+            "w4": {"workspace_id": "w4", "focused": False},
+        },
+        "panes": {
+            "w1:p1": {
+                "pane_id": "w1:p1",
+                "workspace_id": "w1",
+                "tokens": {
+                    "ccb_namespace_id": "w1",
+                    "ccb_root_pane": "1",
+                    "ccb_window": "__ccb_ctl",
+                },
+            },
+            "w2:p1": {
+                "pane_id": "w2:p1",
+                "workspace_id": "w2",
+                "tokens": {
+                    "ccb_namespace_id": "w1",
+                    "ccb_root_pane": "1",
+                    "ccb_window": "ccb",
+                },
+            },
+            "w3:p1": {
+                "pane_id": "w3:p1",
+                "workspace_id": "w3",
+                "tokens": {
+                    "ccb_namespace_id": "w3",
+                    "ccb_root_pane": "1",
+                    "ccb_window": "ccb",
+                },
+            },
+            "w4:p1": {
+                "pane_id": "w4:p1",
+                "workspace_id": "w4",
+                "tokens": {"ccb_namespace_id": "w1", "ccb_window": "broken"},
+            },
+            "w4:p2": {
+                "pane_id": "w4:p2",
+                "workspace_id": "w4",
+                "tokens": {"ccb_namespace_id": "w1", "ccb_window": "broken"},
+            },
+        },
+        "focused": [],
+        "closed": [],
+    }
+
+    def run_fn(command, **kwargs):
+        joined = " ".join(command)
+        workspaces: dict[str, dict[str, object]] = state["workspaces"]  # type: ignore[assignment]
+        panes: dict[str, dict[str, object]] = state["panes"]  # type: ignore[assignment]
+        if "workspace list" in joined:
+            return _completed(json.dumps({"result": {"workspaces": list(workspaces.values())}}))
+        if "pane list" in joined:
+            selected = list(panes.values())
+            if "--workspace" in command:
+                workspace_id = command[command.index("--workspace") + 1]
+                selected = [pane for pane in selected if pane["workspace_id"] == workspace_id]
+            return _completed(json.dumps({"result": {"panes": selected}}))
+        if "workspace focus" in joined:
+            state["focused"].append(command[-1])  # type: ignore[union-attr]
+            return _completed("")
+        if "workspace close" in joined:
+            workspace_id = command[-1]
+            state["closed"].append(workspace_id)  # type: ignore[union-attr]
+            workspaces.pop(workspace_id)
+            for pane_id in [
+                pane_id
+                for pane_id, pane in panes.items()
+                if pane["workspace_id"] == workspace_id
+            ]:
+                panes.pop(pane_id)
+            return _completed("")
+        raise AssertionError(joined)
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        which_fn=lambda name: "herdr",
+    )
+    payload = {"namespace_id": "w1", "session_name": "ccb-demo"}
+
+    root = adapter("window_root_pane", {**payload, "window_name": "w2"})
+    adapter("select_window", {**payload, "window_id": "w2"})
+
+    assert root["pane_id"] == "w2:p1"
+    assert state["focused"] == ["w2"]
+
+    for operation, request in (
+        ("window_root_pane", {**payload, "window_name": "w3"}),
+        ("select_window", {**payload, "window_id": "w3"}),
+        ("kill_window", {**payload, "window_id": "w3"}),
+        (
+            "create_pane",
+            {
+                **payload,
+                "parent_pane": "w3:p1",
+                "command": [],
+                "cwd": "D:/demo",
+            },
+        ),
+        ("window_root_pane", {**payload, "window_name": "w4"}),
+    ):
+        with pytest.raises(MuxCommandErrorV2):
+            adapter(operation, request)
+
+    adapter("kill_window", {**payload, "window_id": "w2"})
+
+    assert state["closed"] == ["w2"]
+    adapter("destroy_namespace", payload)
+
+    assert state["closed"] == ["w2", "w1"]
+    assert set(state["workspaces"]) == {"w3", "w4"}
+
+
+def test_herdr_backend_destroy_namespace_and_kill_server_delegate_and_drop_namespace_refs() -> None:
+    operations: list[tuple[str, dict[str, object]]] = []
+
+    def request(operation: str, payload: dict[str, object]) -> dict[str, object]:
+        operations.append((operation, dict(payload)))
+        if operation == "server_info":
+            return {
+                "status": "ok",
+                "result": {
+                    "api_schema": "Herdr API",
+                    "version": "0.7.5-preview",
+                    "platform": "windows",
+                    "arch": "x64",
+                },
+            }
+        if operation in {"destroy_namespace", "kill_server"}:
+            return {"status": "ok", "closed_workspace_ids": ["w1"]}
+        raise AssertionError(operation)
+
+    backend = HerdrBackend(
+        client=HerdrSocketClient(request_fn=request, socket_ref="herdr://local"),
+        capability_gate=_supported_gate(),
+    )
+    namespace = backend.namespace_ref("ccb-demo", "w1")
+    backend._logical_windows[("ccb-demo", "w1", "ccb")] = {  # type: ignore[attr-defined]
+        "window_id": "w1",
+        "window_name": "ccb",
+        "root_pane_id": "w1:p1",
+    }
+    backend._panes["w1:p1"] = {  # type: ignore[attr-defined]
+        "pane_id": "w1:p1",
+        "session_name": "ccb-demo",
+        "window_name": "ccb",
+    }
+    backend._pane_namespaces["w1:p1"] = namespace  # type: ignore[attr-defined]
+
+    destroy = backend.destroy_namespace(namespace)
+    namespace = backend.namespace_ref("ccb-demo", "w1")
+    kill = backend.kill_server(namespace)
+
+    assert destroy["status"] == "ok"
+    assert kill["status"] == "ok"
+    assert [operation for operation, _payload in operations] == [
+        "server_info",
+        "destroy_namespace",
+        "server_info",
+        "kill_server",
+    ]
+    assert operations[1][1]["namespace_id"] == "w1"
+    assert operations[3][1]["namespace_id"] == "w1"
+    assert backend._logical_windows == {}  # type: ignore[attr-defined]
+    assert backend._panes == {}  # type: ignore[attr-defined]
+    assert backend._pane_namespaces == {}  # type: ignore[attr-defined]
+
+
+def test_herdr_backend_kill_window_drops_only_current_namespace_cache() -> None:
+    def request(operation: str, payload: dict[str, object]) -> dict[str, object]:
+        if operation == "server_info":
+            return {
+                "status": "ok",
+                "result": {
+                    "api_schema": "Herdr API",
+                    "version": "0.7.5-preview",
+                    "platform": "windows",
+                    "arch": "x64",
+                },
+            }
+        if operation == "kill_window":
+            return {"status": "ok"}
+        raise AssertionError(operation)
+
+    backend = HerdrBackend(
+        client=HerdrSocketClient(request_fn=request, socket_ref="herdr://local"),
+        capability_gate=_supported_gate(),
+    )
+    first = backend.namespace_ref("ccb-demo", "w1")
+    second = backend.namespace_ref("ccb-demo", "w2")
+    backend._logical_windows[("ccb-demo", "w1", "ccb")] = {  # type: ignore[attr-defined]
+        "window_id": "w1",
+        "window_name": "ccb",
+        "root_pane_id": "w1:p1",
+    }
+    backend._logical_windows[("ccb-demo", "w2", "ccb")] = {  # type: ignore[attr-defined]
+        "window_id": "w2",
+        "window_name": "ccb",
+        "root_pane_id": "w2:p1",
+    }
+    backend._panes["w1:p1"] = {"pane_id": "w1:p1"}  # type: ignore[attr-defined]
+    backend._panes["w2:p1"] = {"pane_id": "w2:p1"}  # type: ignore[attr-defined]
+    backend._pane_namespaces["w1:p1"] = first  # type: ignore[attr-defined]
+    backend._pane_namespaces["w2:p1"] = second  # type: ignore[attr-defined]
+
+    backend.kill_window(first, window_id="w1", target="ccb-demo:ccb")
+
+    assert ("ccb-demo", "w1", "ccb") not in backend._logical_windows  # type: ignore[attr-defined]
+    assert ("ccb-demo", "w2", "ccb") in backend._logical_windows  # type: ignore[attr-defined]
+    assert "w1:p1" not in backend._panes  # type: ignore[attr-defined]
+    assert "w2:p1" in backend._panes  # type: ignore[attr-defined]
+
+
+def test_herdr_backend_identity_update_clears_removed_tokens_and_preserves_root_group() -> None:
+    state: dict[str, object] = {
+        "workspaces": [{"workspace_id": "w1", "focused": False}],
+        "panes": {
+            "w1:p1": {
+                "pane_id": "w1:p1",
+                "workspace_id": "w1",
+                "tokens": {
+                    "ccb_namespace_id": "w1",
+                    "ccb_root_pane": "1",
+                    "ccb_window": "ccb",
+                },
+            }
+        },
+    }
+
+    def tokens_from_command(command: list[str]) -> dict[str, str]:
+        tokens: dict[str, str] = {}
+        for index, value in enumerate(command):
+            if value == "--token" and index + 1 < len(command):
+                name, token_value = command[index + 1].split("=", 1)
+                tokens[name] = token_value
+        return tokens
+
+    def run_fn(command, **kwargs):
+        joined = " ".join(command)
+        panes: dict[str, dict[str, object]] = state["panes"]  # type: ignore[assignment]
+        if "status --json" in joined:
+            return _completed('{"client":{"version":"0.7.5-preview"}}')
+        if "--version" in joined:
+            return _completed("herdr 0.7.5-preview\n")
+        if "api schema --json" in joined:
+            return _completed('{"title":"Herdr API"}')
+        if "workspace list" in joined:
+            return _completed(json.dumps({"result": {"workspaces": state["workspaces"]}}))
+        if "pane list" in joined:
+            return _completed(json.dumps({"result": {"panes": list(panes.values())}}))
+        if "pane report-metadata" in joined:
+            pane_id = command[command.index("report-metadata") + 1]
+            panes[pane_id]["tokens"].update(tokens_from_command(command))
+            return _completed("")
+        raise AssertionError(joined)
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        which_fn=lambda name: "herdr",
+    )
+    backend = HerdrBackend(
+        client=HerdrSocketClient(
+            request_fn=adapter,
+            socket_ref=adapter.socket_ref,
+            allow_session_scoped_ipc_refs=adapter.allow_session_scoped_ipc_refs,
+        ),
+        capability_gate=_supported_gate(),
+    )
+    namespace = backend.namespace_ref("ccb-demo", "w1")
+    root = backend.window_root_pane(namespace, window_name="ccb")
+
+    backend.set_pane_identity(
+        root,
+        title="agent",
+        agent_label="agent",
+        project_id="demo",
+        role="agent",
+        slot_key="worker",
+        window_name="ccb",
+        sidebar_instance="sidebar",
+        managed_by="ccbd",
+    )
+    assert backend.list_panes_by_user_options({"@ccb_role": "agent"}) == ["w1:p1"]
+
+    backend.set_pane_identity(
+        root,
+        title="agent",
+        agent_label="",
+        project_id="demo",
+        role=None,
+        slot_key=None,
+        window_name="ccb",
+        sidebar_instance=None,
+        managed_by=None,
+    )
+
+    tokens = state["panes"]["w1:p1"]["tokens"]  # type: ignore[index]
+    assert backend.list_panes_by_user_options({"@ccb_role": "agent"}) == []
+    assert tokens["ccb_namespace_id"] == "w1"
+    assert tokens["ccb_root_pane"] == "1"
+    assert tokens["ccb_role"] == ""
+    assert tokens["ccb_slot"] == ""
+    assert tokens["ccb_sidebar_instance"] == ""
+
+
+def test_herdr_backend_window_root_pane_fallback_rejects_foreign_namespace_root() -> None:
+    def request(operation: str, payload: dict[str, object]) -> dict[str, object]:
+        if operation == "server_info":
+            return {
+                "result": {
+                    "version": "0.7.5-preview",
+                    "api_schema": "Herdr API",
+                    "platform": "windows",
+                    "arch": "x64",
+                }
+            }
+        if operation == "window_root_pane":
+            return {"status": "not-found", "detail": "missing root"}
+        if operation == "list_panes":
+            return {
+                "status": "ok",
+                "panes": [
+                    {
+                        "pane_id": "w2:p1",
+                        "workspace_id": "w2",
+                        "tokens": {
+                            "ccb_namespace_id": "w2",
+                            "ccb_root_pane": "1",
+                            "ccb_window": "ccb",
+                        },
+                    }
+                ],
+            }
+        raise AssertionError(operation)
+
+    backend = HerdrBackend(
+        client=HerdrSocketClient(request_fn=request, socket_ref="herdr://local"),
+        capability_gate=_supported_gate(),
+    )
+    namespace = backend.namespace_ref("ccb-demo", "w1")
+
+    with pytest.raises(MuxCommandErrorV2) as exc_info:
+        backend.window_root_pane(namespace, window_name="ccb")
+
+    assert exc_info.value.category == "not-found"
+
+
+def test_herdr_capability_gate_requires_facade_specific_primitives() -> None:
+    supported = dict((_supported_gate().capabilities or {})["command_status"])
+    supported.pop("workspace_focus")
+    gate = HerdrCapabilityGate.from_spike_evidence(
+        {
+            "adapter_recommendation": "continue",
+            "verdict": "pass",
+            "failure_class": "none",
+            "capability_projection": {
+                "command_status": supported,
+                "semantic_status": supported,
+                "windows_beta_gaps": [],
+                "blocking_gaps": [],
+            },
+        },
+        capability_report_ref="evidence/herdr-capabilities.json",
+    )
+
+    with pytest.raises(MuxCommandErrorV2) as exc_info:
+        gate.require_supported("attach_namespace")
+
+    assert exc_info.value.category == "unsupported"
+    assert "workspace_focus" in exc_info.value.evidence["unsupported_capabilities"]
+
+
+def test_default_project_namespace_backend_uses_auto_selection(monkeypatch) -> None:
+    calls: list[object] = []
+
+    def resolve(terminal_type=None):
+        calls.append(terminal_type)
+        return "auto-backend"
+
+    monkeypatch.setattr(namespace_controller, "resolve_terminal_backend", resolve)
+
+    assert namespace_controller.default_project_namespace_backend() == "auto-backend"
+    assert calls == [None]
+
+
+def test_herdr_socket_client_rejects_window_root_pane_session_mismatch() -> None:
+    client = HerdrSocketClient(
+        request_fn=lambda operation, payload: {
+            "status": "ok",
+            "result": {"pane_id": "pane-1", "session_name": "other-session"},
+        },
+        socket_ref="herdr://local",
+    )
+    namespace = {
+        "backend_family": "herdr-native",
+        "backend_impl": "herdr",
+        "namespace_id": "workspace-1",
+        "session_name": "ccb-demo",
+        "ipc_kind": "herdr_socket",
+        "ipc_ref": "herdr://local",
+        "restore_token": "ccb-demo::workspace-1",
+    }
+
+    with pytest.raises(MuxCommandErrorV2) as exc_info:
+        client.window_root_pane(namespace, window_name="ccb")
+
+    assert exc_info.value.category == "command-failed"
+    assert exc_info.value.evidence["expected_session_name"] == "ccb-demo"
+    assert exc_info.value.evidence["actual_session_name"] == "other-session"
 
 
 def test_herdr_cli_request_adapter_rejects_exit_zero_failed_json_status() -> None:
@@ -2171,6 +2867,18 @@ def test_herdr_cli_request_adapter_focuses_workspace_for_attach_namespace() -> N
 
     def run_fn(command, **kwargs):
         commands.append(command)
+        joined = " ".join(command)
+        if "workspace list" in joined:
+            return _completed(
+                '{"result":{"workspaces":[{"workspace_id":"w1"},{"workspace_id":"w2"}]}}'
+            )
+        if "pane list" in joined:
+            return _completed(
+                '{"result":{"panes":['
+                '{"pane_id":"w1:p1","workspace_id":"w1","tokens":{"ccb_namespace_id":"w1","ccb_root_pane":"1","ccb_window":"__ccb_ctl"}},'
+                '{"pane_id":"w2:p1","workspace_id":"w2","tokens":{"ccb_namespace_id":"w1","ccb_root_pane":"1","ccb_window":"ccb"}}'
+                ']}}'
+            )
         return _completed("")
 
     adapter = HerdrCliRequestAdapter(
@@ -2182,12 +2890,17 @@ def test_herdr_cli_request_adapter_focuses_workspace_for_attach_namespace() -> N
 
     attached = adapter(
         "attach_namespace",
-        {"namespace_id": "w1", "session_name": "restored-session", "restore_token": "secret"},
+        {
+            "namespace_id": "w1",
+            "session_name": "restored-session",
+            "window_name": "ccb",
+            "restore_token": "secret",
+        },
     )
 
     assert attached["status"] == "ok"
     assert attached["namespace_id"] == "w1"
-    assert commands == [["herdr", "--session", "restored-session", "workspace", "focus", "w1"]]
+    assert commands[-1] == ["herdr", "--session", "restored-session", "workspace", "focus", "w2"]
     assert "secret" not in str(commands)
 
 
@@ -2313,6 +3026,8 @@ def test_herdr_cli_request_adapter_rejects_parent_pane_outside_namespace() -> No
         joined = " ".join(command)
         if "pane list" in joined:
             return _completed('{"result":{"panes":[{"pane_id":"other:p1","workspace_id":"other"}]}}')
+        if "workspace list" in joined:
+            return _completed('{"result":{"workspaces":[]}}')
         raise AssertionError(joined)
 
     adapter = HerdrCliRequestAdapter(
@@ -2332,13 +3047,15 @@ def test_herdr_cli_request_adapter_rejects_parent_pane_outside_namespace() -> No
             },
         )
 
-    assert exc_info.value.category == "command-failed"
+    assert exc_info.value.category == "not-found"
     assert "unknown Herdr parent pane" in exc_info.value.detail
 
 
 def test_herdr_cli_request_adapter_preserves_socket_ref_override_in_namespace() -> None:
     def run_fn(command, **kwargs):
         joined = " ".join(command)
+        if "report-metadata" in joined:
+            return _completed("")
         if "workspace create" in joined:
             return _completed(
                 '{"result":{"workspace":{"workspace_id":"w1"},"root_pane":{"pane_id":"w1:p1","workspace_id":"w1"}}}'
@@ -2588,6 +3305,8 @@ def test_herdr_cli_request_adapter_omits_empty_cwd_arguments() -> None:
     def run_fn(command, **kwargs):
         commands.append(command)
         joined = " ".join(command)
+        if "report-metadata" in joined:
+            return _completed("")
         if "workspace create" in joined:
             assert "--cwd" not in command
             return _completed(
@@ -2616,26 +3335,30 @@ def test_herdr_cli_request_adapter_omits_empty_cwd_arguments() -> None:
 
 
 def _supported_gate() -> HerdrCapabilityGate:
+    supported = {
+        "session_attach": "supported",
+        "pane_spawn": "supported",
+        "send_input": "supported",
+        "read_output": "supported",
+        "kill_pane": "supported",
+        "workspace_create": "supported",
+        "workspace_list": "supported",
+        "workspace_focus": "supported",
+        "workspace_close": "supported",
+        "workspace_metadata": "supported",
+        "pane_metadata": "supported",
+        "pane_list": "supported",
+        "pane_split": "supported",
+        "pane_run": "supported",
+    }
     return HerdrCapabilityGate.from_spike_evidence(
         {
             "adapter_recommendation": "continue",
             "verdict": "pass",
             "failure_class": "none",
             "capability_projection": {
-                "command_status": {
-                    "session_attach": "supported",
-                    "pane_spawn": "supported",
-                    "send_input": "supported",
-                    "read_output": "supported",
-                    "kill_pane": "supported",
-                },
-                "semantic_status": {
-                    "session_attach": "supported",
-                    "pane_spawn": "supported",
-                    "send_input": "supported",
-                    "read_output": "supported",
-                    "kill_pane": "supported",
-                },
+                "command_status": supported,
+                "semantic_status": supported,
                 "windows_beta_gaps": [],
                 "blocking_gaps": [],
             },

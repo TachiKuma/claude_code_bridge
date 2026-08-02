@@ -370,22 +370,26 @@ def _windows_x64_platform_gate() -> dict[str, object]:
 
 
 def _supported_herdr_capabilities() -> dict[str, object]:
+    supported = {
+        "session_attach": "supported",
+        "pane_spawn": "supported",
+        "send_input": "supported",
+        "read_output": "supported",
+        "kill_pane": "supported",
+        "workspace_create": "supported",
+        "workspace_list": "supported",
+        "workspace_focus": "supported",
+        "workspace_close": "supported",
+        "workspace_metadata": "supported",
+        "pane_metadata": "supported",
+        "pane_list": "supported",
+        "pane_split": "supported",
+        "pane_run": "supported",
+    }
     capabilities = make_capabilities(
         backend_impl="herdr",
-        command_status={
-            "session_attach": "supported",
-            "pane_spawn": "supported",
-            "send_input": "supported",
-            "read_output": "supported",
-            "kill_pane": "supported",
-        },
-        semantic_status={
-            "session_attach": "supported",
-            "pane_spawn": "supported",
-            "send_input": "supported",
-            "read_output": "supported",
-            "kill_pane": "supported",
-        },
+        command_status=supported,
+        semantic_status=supported,
         source_ref="evidence/herdr-capabilities.json",
     )
     capabilities["adapter_recommendation"] = "continue"  # type: ignore[typeddict-unknown-key]

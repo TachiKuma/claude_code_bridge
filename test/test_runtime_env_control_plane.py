@@ -101,6 +101,20 @@ def test_control_plane_env_keeps_mobile_host_state_override(monkeypatch) -> None
     assert env['CCB_MOBILE_HOST_STATE_HOME'] == '/tmp/ccb-mobile-state'
 
 
+def test_control_plane_env_keeps_herdr_runtime_selection(monkeypatch) -> None:
+    monkeypatch.setenv('CCB_HERDR_EXE', '/opt/herdr/herdr')
+    monkeypatch.setenv('CCB_HERDR_SOCKET_REF', 'herdr://cmd-013-local')
+    monkeypatch.setenv('CCB_HERDR_CAPABILITY_REPORT', '/tmp/herdr-capabilities.json')
+    monkeypatch.setenv('CCB_HERDR_SESSION', 'cmd-013-session')
+
+    env = control_plane_env()
+
+    assert env['CCB_HERDR_EXE'] == '/opt/herdr/herdr'
+    assert env['CCB_HERDR_SOCKET_REF'] == 'herdr://cmd-013-local'
+    assert env['CCB_HERDR_CAPABILITY_REPORT'] == '/tmp/herdr-capabilities.json'
+    assert env['CCB_HERDR_SESSION'] == 'cmd-013-session'
+
+
 def test_control_plane_env_keeps_user_session_transport_for_cmd_shell(monkeypatch) -> None:
     monkeypatch.setenv('DISPLAY', ':0')
     monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-0')

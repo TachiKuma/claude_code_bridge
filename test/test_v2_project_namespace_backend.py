@@ -126,22 +126,26 @@ class _FakeHerdrNamespaceBackend:
         self.pane_spawn_status = pane_spawn_status
 
     def capabilities(self) -> dict[str, object]:
+        status = {
+            'session_attach': 'supported',
+            'pane_spawn': self.pane_spawn_status,
+            'send_input': 'supported',
+            'read_output': 'supported',
+            'kill_pane': 'supported',
+            'workspace_create': 'supported',
+            'workspace_list': 'supported',
+            'workspace_focus': self.pane_spawn_status,
+            'workspace_close': 'supported',
+            'workspace_metadata': 'supported',
+            'pane_metadata': 'supported',
+            'pane_list': 'supported',
+            'pane_split': 'supported',
+            'pane_run': 'supported',
+        }
         return make_capabilities(
             backend_impl='herdr',
-            command_status={
-                'session_attach': 'supported',
-                'pane_spawn': self.pane_spawn_status,  # type: ignore[arg-type]
-                'send_input': 'supported',
-                'read_output': 'supported',
-                'kill_pane': 'supported',
-            },
-            semantic_status={
-                'session_attach': 'supported',
-                'pane_spawn': self.pane_spawn_status,  # type: ignore[arg-type]
-                'send_input': 'supported',
-                'read_output': 'supported',
-                'kill_pane': 'supported',
-            },
+            command_status=status,  # type: ignore[arg-type]
+            semantic_status=status,  # type: ignore[arg-type]
         )
 
     def prepare_server(self) -> None:
@@ -266,6 +270,9 @@ class _FakeHerdrNamespaceBackend:
     def kill_window(self, namespace: dict[str, object], *, window_id: str | None, target: str) -> None:
         self.calls.append(('kill_window', {'namespace': namespace, 'window_id': window_id, 'target': target}))
 
+    def destroy_namespace(self, namespace: dict[str, object]) -> None:
+        self.calls.append(('destroy_namespace', namespace))
+
     def kill_server(self, namespace: dict[str, object]) -> None:
         self.calls.append(('kill_server', namespace))
 
@@ -327,7 +334,7 @@ def test_v2_mux_backend_helpers_use_namespace_refs_without_tmux_fallback(tmp_pat
         'respawn_pane',
         'set_pane_identity',
         'kill_window',
-        'kill_server',
+        'destroy_namespace',
     ]
 
 
@@ -346,7 +353,7 @@ def test_v2_mux_backend_helper_capability_gap_fails_closed(tmp_path: Path) -> No
 
     assert exc_info.value.category == 'unsupported'
     assert exc_info.value.operation == 'ensure_window'
-    assert exc_info.value.evidence['unsupported_capabilities'] == ['pane_spawn']
+    assert exc_info.value.evidence['unsupported_capabilities'] == ['workspace_focus']
     assert [call[0] for call in backend.calls] == ['create_session']
 
 

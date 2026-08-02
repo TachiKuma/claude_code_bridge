@@ -8,10 +8,10 @@ updated_at: 2026-08-02
 
 # CMD-013 Native Windows Herdr Transcript
 
-- workdir: `C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-093112`
+- workdir: `C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044`
 - repo: `D:\Python\GitHub\claude_code_bridge`
 - herdr_exe: `C:\Users\Administrator\AppData\Local\Programs\Herdr\herdr.exe`
-- herdr_session: `ccb-cmd-013-20260802-093112`
+- herdr_session: `ccb-cmd-013-20260802-144044`
 - capability_report: `D:\Python\GitHub\claude_code_bridge\.codestable\features\2026-07-31-herdr-backend-contract-spike\evidence\herdr-contract-spike-evidence.json`
 - shim: POSIX-only Mobile imports, Windows directory fsync baseline, PYTHONPATH and CCB_HERDR_* control-plane allowlist are scoped to this transcript.
 
@@ -72,20 +72,105 @@ herdr 0.7.5-preview.2026-07-29-44b3adb12552
 $ C:\Users\Administrator\AppData\Local\Programs\Python\Python314\python.exe -c <cmd013-wrapper> --cmd013-confirm-stdin -n
 exit_code: 1
 --- stdout ---
-Refresh project memory/context under C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-093112\.ccb? [y/N]
+Refresh project memory/context under C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb? [y/N]
 --- stderr ---
 command_status: failed
-error: timed out
+error: mux backend lacks required method for ensure_window
 ```
 
 ## ccbd ping namespace payload
 
 ```text
 $ C:\Users\Administrator\AppData\Local\Programs\Python\Python314\python.exe -c <cmd013-wrapper> ping ccbd
-exit_code: 1
---- stderr ---
-command_status: failed
-error: timed out
+exit_code: 0
+--- stdout ---
+project_id: 8f09d3952cdf370344d90e05b9745c6905ec9e2dd2334c0f1ad9012b100573bd
+mount_state: mounted
+desired_state: running
+health: healthy
+generation: 1
+socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb\ccbd\ccbd.sock
+control_plane_endpoint: {'kind': 'tcp_loopback', 'address': '127.0.0.1:57027', 'display': '127.0.0.1:57027', 'legacy_socket_path': None, 'auth_ref': 'C:\\Users\\Administrator\\AppData\\Local\\Temp\\ccb-herdr-cmd-013-20260802-144044\\.ccb\\ccbd\\control-plane-token-a9cd44a3b391444d.json', 'fingerprint': 'b8cd74f31326fcd1', 'socket_path': None, 'host': '127.0.0.1', 'port': 57027, 'token_ref': 'C:\\Users\\Administrator\\AppData\\Local\\Temp\\ccb-herdr-cmd-013-20260802-144044\\.ccb\\ccbd\\control-plane-token-a9cd44a3b391444d.json', 'generation': '504788a545563270', 'acl_status': 'windows-icacls-user-read'}
+tmux_socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb\ccbd\tmux.sock
+project_anchor_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb
+runtime_state_root: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb
+runtime_root_kind: project
+runtime_relocation_reason: None
+runtime_filesystem_hint: None
+runtime_marker_status: not_required
+runtime_root_marker_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb\runtime-root.json
+runtime_root_ref_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb\runtime-root-ref.json
+preferred_socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb\ccbd\ccbd.sock
+effective_socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb\ccbd\ccbd.sock
+socket_root_kind: project
+socket_fallback_reason: None
+socket_filesystem_hint: None
+tmux_preferred_socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb\ccbd\tmux.sock
+tmux_effective_socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb\ccbd\tmux.sock
+tmux_socket_root_kind: project
+tmux_socket_fallback_reason: None
+tmux_socket_filesystem_hint: None
+known_agents: ['agent1']
+config_signature: 34e1f57f208c3e9c5e28816bd930f6fffcb4a29648cedf72004ce9fe7cef7e3e
+serving_pid: 17216
+serving_daemon_instance_id: 566b3a061d814fe3a79ec932a6245f8a
+serving_lease_generation: 1
+serving_startup_generation: 1
+accepted_startup_id: 8759047fac7c4702b1c0c7483f7e9db2
+pid_alive: True
+socket_connectable: True
+heartbeat_fresh: True
+takeover_allowed: False
+reason: healthy
+startup_id: 8759047fac7c4702b1c0c7483f7e9db2
+startup_stage: mounted
+last_progress_at: 2026-08-02T06:40:46.276047Z
+startup_deadline_at: None
+last_failure_reason: None
+shutdown_intent: None
+last_request_queue_wait_s: 3.300000389572233e-05
+last_submit_duration_s: None
+last_ping_duration_s: 0.000647599998046644
+last_handler_latency_s_by_op: {'ping': 0.0006563000060850754, 'start': 0.15460750000784174}
+last_maintenance_duration_s: 0.001479700003983453
+last_heartbeat_duration_s: 0.001479700003983453
+heartbeat_step_duration_s: {'health_monitor': 3.2199997804127634e-05, 'runtime_supervision': 9.600000339560211e-05, 'dispatcher_runtime_views': 2.0099992980249226e-05, 'dispatcher_tick': 0.00010829999519046396, 'dispatcher_poll_completions': 2.339998900424689e-05, 'reload_drain_auto_retry': 2.920000406447798e-05, 'job_heartbeat': 8.850000449456275e-05}
+last_heartbeat_agents_inspected: 1
+last_heartbeat_runtime_store_writes: 0
+pending_maintenance_ticks: 0
+last_project_view_response_duration_s: None
+last_project_view_build_duration_s: None
+project_view_cache_hits: 0
+project_view_cache_misses: 0
+last_project_view_tmux_command_count: None
+last_project_view_capture_pane_count: None
+last_project_view_store_scan_count: None
+rss_bytes: None
+virtual_memory_bytes: None
+fd_count: None
+thread_count: 3
+service_graph_version: 1
+service_graph_created_at: 2026-08-02T06:40:45.723228Z
+service_graph_retained_count: 1
+service_graph_retained_count_scope: published_graph_count_not_inflight_retention
+last_reload_duration_s: None
+last_reload_plan_class: None
+last_reload_error: None
+active_execution_count: 0
+recoverable_execution_count: 0
+nonrecoverable_execution_count: 0
+pending_items_count: 0
+terminal_pending_count: 0
+recoverable_execution_providers: []
+nonrecoverable_execution_providers: []
+last_restore_at: 2026-08-02T06:40:46.271337Z
+last_restore_running_job_count: 0
+last_restore_restored_execution_count: 0
+last_restore_replay_pending_count: 0
+last_restore_terminal_pending_count: 0
+last_restore_abandoned_execution_count: 0
+last_restore_already_active_count: 0
+last_restore_results_text: none
 ```
 
 ## foreground attach
@@ -95,7 +180,7 @@ $ C:\Users\Administrator\AppData\Local\Programs\Python\Python314\python.exe -c <
 exit_code: 1
 --- stderr ---
 command_status: failed
-error: [WinError 10054] 远程主机强迫关闭了一个现有的连接。
+error: mux backend lacks required method for ensure_window
 ```
 
 ## Config Changed For Reload
@@ -184,9 +269,9 @@ $ C:\Users\Administrator\AppData\Local\Programs\Python\Python314\python.exe -c <
 exit_code: 0
 --- stdout ---
 kill_status: ok
-project_id: a09f5681b4cb720858d154ef8e462de8ec2ce55af39bf2e920fe74b0eeec2766
+project_id: 8f09d3952cdf370344d90e05b9745c6905ec9e2dd2334c0f1ad9012b100573bd
 state: unmounted
-socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-093112\.ccb\ccbd\ccbd.sock
+socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb\ccbd\ccbd.sock
 forced: false
 ```
 
@@ -196,37 +281,37 @@ forced: false
 $ C:\Users\Administrator\AppData\Local\Programs\Python\Python314\python.exe -c <cmd013-wrapper> ping ccbd
 exit_code: 0
 --- stdout ---
-project_id: a09f5681b4cb720858d154ef8e462de8ec2ce55af39bf2e920fe74b0eeec2766
+project_id: 8f09d3952cdf370344d90e05b9745c6905ec9e2dd2334c0f1ad9012b100573bd
 mount_state: unmounted
-health: stale
+health: unmounted
 generation: 1
-project_anchor_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-093112\.ccb
-runtime_state_root: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-093112\.ccb
+project_anchor_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb
+runtime_state_root: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb
 runtime_root_kind: project
 runtime_relocation_reason: None
 runtime_filesystem_hint: None
 runtime_marker_status: not_required
-socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-093112\.ccb\ccbd\ccbd.sock
-preferred_socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-093112\.ccb\ccbd\ccbd.sock
-effective_socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-093112\.ccb\ccbd\ccbd.sock
+socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb\ccbd\ccbd.sock
+preferred_socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb\ccbd\ccbd.sock
+effective_socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb\ccbd\ccbd.sock
 socket_root_kind: project
 socket_fallback_reason: None
 socket_filesystem_hint: None
-tmux_socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-093112\.ccb\ccbd\tmux.sock
-tmux_preferred_socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-093112\.ccb\ccbd\tmux.sock
-tmux_effective_socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-093112\.ccb\ccbd\tmux.sock
+tmux_socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb\ccbd\tmux.sock
+tmux_preferred_socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb\ccbd\tmux.sock
+tmux_effective_socket_path: C:\Users\Administrator\AppData\Local\Temp\ccb-herdr-cmd-013-20260802-144044\.ccb\ccbd\tmux.sock
 tmux_socket_root_kind: project
 tmux_socket_fallback_reason: None
 tmux_socket_filesystem_hint: None
-last_heartbeat_at: 2026-08-02T01:32:04.078303Z
+last_heartbeat_at: 2026-08-02T06:40:50.282230Z
 pid_alive: False
 socket_connectable: False
 heartbeat_fresh: True
 takeover_allowed: True
-reason: pid_missing,socket_unreachable
-startup_id: aafae792638b4964b66e3df73a5fc259
+reason: lease_unmounted
+startup_id: 8759047fac7c4702b1c0c7483f7e9db2
 startup_stage: None
-last_progress_at: 2026-08-02T01:32:06.573272Z
+last_progress_at: 2026-08-02T06:40:50.334361Z
 startup_deadline_at: None
 last_failure_reason: None
 shutdown_intent: stop_all
@@ -245,12 +330,12 @@ service_graph_retained_count_scope: None
 ## herdr server stop cleanup
 
 ```text
-$ C:\Users\Administrator\AppData\Local\Programs\Herdr\herdr.exe --session ccb-cmd-013-20260802-093112 server stop
+$ C:\Users\Administrator\AppData\Local\Programs\Herdr\herdr.exe --session ccb-cmd-013-20260802-144044 server stop
 exit_code: 1
 --- stderr ---
-server is not running or cannot be reached at C:\Users\Administrator\AppData\Roaming\herdr\sessions\ccb-cmd-013-20260802-093112\herdr.sock: 系统找不到指定的文件。 (os error 2)
+server is not running or cannot be reached at C:\Users\Administrator\AppData\Roaming\herdr\sessions\ccb-cmd-013-20260802-144044\herdr.sock: 系统找不到指定的文件。 (os error 2)
 ```
 
 ## Verdict
 
-blocked: namespace create, ccbd ping, foreground attach, reload apply
+blocked: namespace create, foreground attach, reload apply
