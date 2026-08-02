@@ -17,9 +17,12 @@ def resolve_runtime_binding_state(
     raw_binding,
     stale_binding: bool,
     assigned_pane_id: str | None,
+    assigned_pane_ref: dict[str, object] | None = None,
+    namespace_ref: dict[str, object] | None = None,
     style_index: int,
     project_id: str,
     tmux_socket_path: str | None,
+    namespace_backend_impl: str | None = None,
     namespace_epoch: int | None,
     window_name: str | None = None,
     ensure_agent_runtime_fn,
@@ -42,8 +45,11 @@ def resolve_runtime_binding_state(
             raw_binding=raw_binding,
             stale_binding=stale_binding,
             assigned_pane_id=assigned_pane_id,
+            assigned_pane_ref=assigned_pane_ref,
+            namespace_ref=namespace_ref,
             style_index=style_index,
             tmux_socket_path=tmux_socket_path,
+            namespace_backend_impl=namespace_backend_impl,
             ensure_agent_runtime_fn=ensure_agent_runtime_fn,
             launch_binding_hint_fn=launch_binding_hint_fn,
             provider_prepared=provider_prepared,
@@ -116,8 +122,11 @@ def launch_or_reuse_binding(
     raw_binding,
     stale_binding: bool,
     assigned_pane_id: str | None,
+    assigned_pane_ref: dict[str, object] | None = None,
+    namespace_ref: dict[str, object] | None = None,
     style_index: int,
     tmux_socket_path: str | None,
+    namespace_backend_impl: str | None = None,
     ensure_agent_runtime_fn,
     launch_binding_hint_fn,
     provider_prepared: bool = False,
@@ -132,6 +141,12 @@ def launch_or_reuse_binding(
         tmux_socket_path=tmux_socket_path,
         provider_prepared=provider_prepared,
     )
+    if assigned_pane_ref is not None:
+        launch_kwargs['assigned_pane_ref'] = assigned_pane_ref
+    if namespace_ref is not None:
+        launch_kwargs['namespace_ref'] = namespace_ref
+    if namespace_backend_impl is not None:
+        launch_kwargs['namespace_backend_impl'] = namespace_backend_impl
     if effective_command is not None:
         launch_kwargs['effective_command'] = effective_command
     launch = ensure_agent_runtime_fn(

@@ -504,6 +504,33 @@ def test_shutdown_removes_only_current_endpoint_generation(tmp_path: Path) -> No
     assert not legacy_socket_path.exists()
 
 
+def test_shutdown_tolerates_locked_token_cleanup(monkeypatch, tmp_path: Path) -> None:
+    legacy_socket_path = tmp_path / 'ccbd.sock'
+    transport = WindowsTcpControlPlaneTransport(
+        None,
+        legacy_socket_path=legacy_socket_path,
+        command_runner=_ok_runner,
+    )
+    listener = transport.listen()
+    path = endpoint_store_path(legacy_socket_path)
+    token_ref = listener.bound_socket_stat[1]
+    original_unlink = Path.unlink
+
+    def locked_token_once(self):
+        if self == Path(token_ref):
+            raise PermissionError('token still open')
+        return original_unlink(self)
+
+    monkeypatch.setattr(Path, 'unlink', locked_token_once)
+
+    listener.close()
+    transport.unlink_bound_endpoint(bound_identity=listener.bound_socket_stat)
+
+    assert not path.exists()
+    assert not legacy_socket_path.exists()
+    assert Path(token_ref).exists()
+
+
 def test_unlink_endpoint_skips_when_generation_is_missing(tmp_path: Path) -> None:
     legacy_socket_path = tmp_path / 'ccbd.sock'
     endpoint = endpoint_from_record(

@@ -56,9 +56,12 @@ def start_agent_runtime(
     raw_binding,
     stale_binding: bool,
     assigned_pane_id: str | None,
+    assigned_pane_ref: dict[str, object] | None = None,
+    namespace_ref: dict[str, object] | None = None,
     style_index: int,
     project_id: str,
     tmux_socket_path: str | None,
+    namespace_backend_impl: str | None = None,
     namespace_epoch: int | None,
     ensure_agent_runtime_fn,
     launch_binding_hint_fn,
@@ -99,9 +102,12 @@ def start_agent_runtime(
             raw_binding=raw_binding,
             stale_binding=stale_binding,
             assigned_pane_id=assigned_pane_id,
+            assigned_pane_ref=assigned_pane_ref,
+            namespace_ref=namespace_ref,
             style_index=style_index,
             project_id=project_id,
             tmux_socket_path=tmux_socket_path,
+            namespace_backend_impl=namespace_backend_impl,
             namespace_epoch=namespace_epoch,
             window_name=window_name,
             ensure_agent_runtime_fn=ensure_agent_runtime_fn,
@@ -209,7 +215,15 @@ def start_agent_runtime(
 
     attach_started_ns = monotonic_ns()
     try:
-        if attempt_id and getattr(existing, 'reconcile_state', None) == 'starting':
+        warm_reuse_without_store_write = (
+            reused_existing_binding
+            and preserve_existing_success_health
+            and existing is not None
+            and _existing_runtime_matches_attach(existing, attach_kwargs)
+        )
+        if warm_reuse_without_store_write:
+            runtime = existing
+        elif attempt_id and getattr(existing, 'reconcile_state', None) == 'starting':
             runtime, applied = runtime_service.attach_mount_attempt_authority(
                 attempt_id=attempt_id,
                 **attach_kwargs,
@@ -373,6 +387,43 @@ def _pane_identity_is_current(
 def _record_elapsed_ms(timings_ms: dict[str, float], field_name: str, started_ns: int) -> None:
     elapsed_ms = max(0.0, (monotonic_ns() - started_ns) / 1_000_000)
     timings_ms[field_name] = timings_ms.get(field_name, 0.0) + elapsed_ms
+
+
+def _existing_runtime_matches_attach(existing, attach_kwargs: dict[str, object]) -> bool:
+    comparable_fields = (
+        'agent_name',
+        'workspace_path',
+        'backend_type',
+        'runtime_ref',
+        'session_ref',
+        'provider',
+        'runtime_root',
+        'runtime_pid',
+        'terminal_backend',
+        'pane_id',
+        'active_pane_id',
+        'pane_title_marker',
+        'pane_state',
+        'tmux_socket_name',
+        'tmux_socket_path',
+        'tmux_window_name',
+        'tmux_window_id',
+        'session_file',
+        'session_id',
+        'slot_key',
+        'window_id',
+        'workspace_epoch',
+        'lifecycle_state',
+        'managed_by',
+    )
+    for field_name in comparable_fields:
+        if _attach_compare_text(getattr(existing, field_name, None)) != _attach_compare_text(attach_kwargs.get(field_name)):
+            return False
+    return True
+
+
+def _attach_compare_text(value: object) -> str:
+    return str(value or '').replace('\\', '/')
 
 
 def _finish_agent_timings(timings_ms: dict[str, float], *, duration_ms: float) -> None:

@@ -6,6 +6,7 @@ from time import monotonic_ns
 from terminal_runtime.tmux_identity import apply_ccb_pane_identity
 
 from .tmux_backend import prepared_state, run_cwd, tmux_backend
+from .pane_runtime import launch_runtime_pane, pane_runtime_id
 from .tmux_panes import (
     best_effort_kill_tmux_pane,
     create_detached_tmux_pane,
@@ -30,8 +31,11 @@ def launch_tmux_runtime(
     best_effort_kill_tmux_pane_fn,
     write_session_file_fn,
     assigned_pane_id: str | None = None,
+    assigned_pane_ref: dict[str, object] | None = None,
+    namespace_ref: dict[str, object] | None = None,
     style_index: int = 0,
     tmux_socket_path: str | None = None,
+    namespace_backend_impl: str | None = None,
     allow_detached_fallback: bool = True,
 ) -> dict[str, float]:
     launch_started_ns = monotonic_ns()
@@ -76,10 +80,11 @@ def launch_tmux_runtime(
 
         stage_started_ns = monotonic_ns()
         try:
-            pane_id = launch_pane(
+            pane = launch_runtime_pane(
                 backend,
                 spec_name=spec.name,
                 assigned_pane_id=assigned_pane_id,
+                assigned_pane_ref=assigned_pane_ref,
                 start_cmd=start_cmd,
                 run_cwd=runtime_cwd,
                 create_detached_tmux_pane_fn=create_detached_tmux_pane_fn,
@@ -87,14 +92,15 @@ def launch_tmux_runtime(
                 best_effort_kill_tmux_pane_fn=best_effort_kill_tmux_pane_fn,
                 allow_detached_fallback=allow_detached_fallback,
             )
+            pane_id = pane_runtime_id(pane)
         finally:
             _record_elapsed_ms(timings_ms, 'tmux_respawn', stage_started_ns)
 
         stage_started_ns = monotonic_ns()
         try:
-            apply_ccb_pane_identity(
+            _apply_runtime_pane_identity(
                 backend,
-                pane_id,
+                pane,
                 title=spec.name,
                 agent_label=spec.name,
                 project_id=context.project.project_id,
@@ -132,6 +138,10 @@ def launch_tmux_runtime(
                 start_cmd=start_cmd,
                 launch_session_id=launch_session_id,
                 provider_payload=provider_payload,
+                backend_family=_runtime_backend_family(pane, namespace_ref),
+                backend_impl=_runtime_backend_impl(pane, namespace_backend_impl),
+                namespace_ref=namespace_ref,
+                pane_ref=dict(pane) if isinstance(pane, dict) else None,
             )
         finally:
             _record_elapsed_ms(timings_ms, 'session_write', stage_started_ns)
@@ -158,6 +168,62 @@ def launch_tmux_runtime(
 def _record_elapsed_ms(timings_ms: dict[str, float], field_name: str, started_ns: int) -> None:
     elapsed_ms = max(0.0, (monotonic_ns() - started_ns) / 1_000_000)
     timings_ms[field_name] = timings_ms.get(field_name, 0.0) + elapsed_ms
+
+
+def _apply_runtime_pane_identity(
+    backend,
+    pane,
+    *,
+    title: str,
+    agent_label: str,
+    project_id: str,
+    order_index: int | None,
+    slot_key: str,
+    session_id: str,
+) -> None:
+    if isinstance(pane, dict) and str(pane.get('backend_impl') or '').strip() == 'herdr':
+        backend.set_pane_identity(
+            dict(pane),
+            title=title,
+            agent_label=agent_label,
+            project_id=project_id,
+            order_index=order_index,
+            slot_key=slot_key,
+            session_id=session_id,
+            managed_by='ccbd',
+        )
+        return
+    apply_ccb_pane_identity(
+        backend,
+        pane_runtime_id(pane),
+        title=title,
+        agent_label=agent_label,
+        project_id=project_id,
+        order_index=order_index,
+        slot_key=slot_key,
+        session_id=session_id,
+    )
+
+
+def _runtime_backend_family(pane, namespace_ref: dict[str, object] | None) -> str:
+    if isinstance(pane, dict):
+        value = str(pane.get('backend_family') or '').strip()
+        if value:
+            return value
+    if isinstance(namespace_ref, dict):
+        value = str(namespace_ref.get('backend_family') or '').strip()
+        if value:
+            return value
+    return 'tmux-family'
+
+
+def _runtime_backend_impl(pane, namespace_backend_impl: str | None) -> str:
+    if isinstance(pane, dict):
+        value = str(pane.get('backend_impl') or '').strip()
+        if value:
+            return value
+    value = str(namespace_backend_impl or '').strip()
+    return value or 'tmux'
 
 
 def _finish_launch_timings(timings_ms: dict[str, float], launch_started_ns: int) -> None:

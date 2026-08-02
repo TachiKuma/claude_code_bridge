@@ -93,7 +93,12 @@ def start_supervisor(
             interactive_tmux_layout=interactive_tmux_layout,
             tmux_socket_path=namespace.tmux_socket_path if namespace is not None else None,
             tmux_session_name=namespace.tmux_session_name if namespace is not None else None,
+            namespace_session_name=getattr(namespace, 'namespace_session_name', None) if namespace is not None else None,
             tmux_workspace_window_name=getattr(namespace, 'workspace_window_name', None) if namespace is not None else None,
+            namespace_id=getattr(namespace, 'namespace_id', None) if namespace is not None else None,
+            namespace_ipc_kind=getattr(namespace, 'namespace_ipc_kind', None) if namespace is not None else None,
+            namespace_ipc_ref=getattr(namespace, 'namespace_ipc_ref', None) if namespace is not None else None,
+            namespace_restore_token=getattr(namespace, 'namespace_restore_token', None) if namespace is not None else None,
             namespace_epoch=namespace.namespace_epoch if namespace is not None else None,
             workspace_window_id=getattr(namespace, 'workspace_window_id', None) if namespace is not None else None,
             workspace_epoch=getattr(namespace, 'workspace_epoch', None) if namespace is not None else None,
@@ -105,6 +110,10 @@ def start_supervisor(
                 topology_plan is not None
                 and hasattr(supervisor._project_namespace, '_last_materialized_cmd_pane')
             ),
+            namespace_backend_family=(
+                getattr(namespace, 'namespace_backend_family', None) if namespace is not None else None
+            ),
+            namespace_backend_impl=getattr(namespace, 'backend_impl', None) if namespace is not None else None,
             fresh_namespace=bool(getattr(namespace, 'created_this_call', False)),
             fresh_workspace=bool(getattr(namespace, 'workspace_recreated_this_call', False)),
             restart_agent_panes=restart_agent_panes,

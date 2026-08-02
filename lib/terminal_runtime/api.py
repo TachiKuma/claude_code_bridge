@@ -368,6 +368,11 @@ def _live_herdr_platform_gate() -> dict[str, object]:
 
 def _runtime_cpu_arch() -> str:
     machine = platform.machine().lower()
+    if not machine:
+        machine = (
+            os.environ.get("PROCESSOR_ARCHITEW6432", "")
+            or os.environ.get("PROCESSOR_ARCHITECTURE", "")
+        ).lower()
     if machine in {"amd64", "x86_64"}:
         return "x64"
     if machine in {"arm64", "aarch64"}:

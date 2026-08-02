@@ -84,8 +84,9 @@ def _append_window_agent_panes(
     agent_panes: dict[str, str] = {}
     appended_sequence = tuple(appended_agents)
     for index, appended in enumerate(appended_sequence):
-        if appended.agent in excluded_agents:
-            target = _anchor_pane(existing_agent_panes, appended.agent)
+        agent_name = str(appended.agent)
+        if agent_name in excluded_agents:
+            target = _anchor_pane(existing_agent_panes, agent_name)
             continue
         target = _append_single_agent_pane(
             controller,
@@ -93,13 +94,13 @@ def _append_window_agent_panes(
             appended=appended,
             target=target,
             window_name=window_name,
-            order_index=style_index_by_agent.get(appended.agent),
+            order_index=style_index_by_agent.get(agent_name),
             namespace_epoch=namespace_epoch,
             created_panes=created_panes,
             timeout_s=timeout_s,
         )
-        agent_panes[appended.agent] = target
-        if any(item.agent not in excluded_agents for item in appended_sequence[index + 1 :]):
+        agent_panes[agent_name] = target
+        if any(str(item.agent) not in excluded_agents for item in appended_sequence[index + 1 :]):
             _prepare_window_for_next_append(
                 backend,
                 session_name=current.tmux_session_name,

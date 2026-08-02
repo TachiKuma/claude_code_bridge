@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 import terminal_runtime.backend_selection as backend_selection_module
 from terminal_runtime.backend_selection import TerminalBackendSelection, TerminalLayoutService
 from terminal_runtime.backend_resolver import build_herdr_capability_blocked_fixture, resolve_mux_backend_v2
@@ -49,6 +51,94 @@ def test_backend_selection_uses_session_terminal_field() -> None:
     assert captured['socket_path'] == '/tmp/ccb.sock'
     assert selection.get_pane_id_from_session({'pane_id': '%1', 'tmux_session': '%old'}) == '%1'
     assert selection.get_pane_id_from_session({'tmux_session': '%old'}) == '%old'
+
+
+def test_backend_selection_uses_herdr_session_payload_without_tmux_fallback() -> None:
+    tmux_calls: list[str] = []
+    namespace_ref = {
+        'backend_family': 'herdr-native',
+        'backend_impl': 'herdr',
+        'namespace_id': 'ns-1',
+        'session_name': 'ccb-demo',
+        'ipc_kind': 'herdr_socket',
+        'ipc_ref': '127.0.0.1:54321',
+    }
+
+    def _tmux_backend_factory():
+        tmux_calls.append('tmux')
+        return _FakeBackend('tmux')
+
+    selection = TerminalBackendSelection(
+        detect_terminal_fn=lambda: None,
+        tmux_backend_factory=_tmux_backend_factory,
+        herdr_backend_factory=lambda: _FakeBackend('herdr'),
+    )
+
+    backend = selection.get_backend_for_session(
+        {
+            'terminal': 'mux',
+            'backend_impl': 'herdr',
+            'namespace_ref': namespace_ref,
+            'pane_ref': {
+                'backend_family': 'herdr-native',
+                'backend_impl': 'herdr',
+                'pane_id': 'pane-1',
+            },
+        }
+    )
+
+    assert isinstance(backend, _FakeBackend)
+    assert backend.name == 'herdr'
+    assert getattr(backend, '_ccb_project_namespace_ref') == namespace_ref
+    assert tmux_calls == []
+
+
+def test_backend_selection_uses_provider_runtime_backend_ref_for_herdr_session() -> None:
+    namespace_ref = {
+        'backend_family': 'herdr-native',
+        'backend_impl': 'herdr',
+        'namespace_id': 'ns-1',
+        'session_name': 'ccb-demo',
+        'ipc_kind': 'herdr_socket',
+        'ipc_ref': '127.0.0.1:54321',
+    }
+    selection = TerminalBackendSelection(
+        detect_terminal_fn=lambda: None,
+        tmux_backend_factory=lambda: _FakeBackend('tmux'),
+        herdr_backend_factory=lambda: _FakeBackend('herdr'),
+    )
+
+    backend = selection.get_backend_for_session(
+        {
+            'provider_runtime_backend_ref': {
+                'backend_impl': 'herdr',
+                'namespace_ref': namespace_ref,
+                'pane_ref': {'backend_impl': 'herdr', 'pane_id': 'pane-2'},
+            }
+        }
+    )
+
+    assert isinstance(backend, _FakeBackend)
+    assert backend.name == 'herdr'
+    assert getattr(backend, '_ccb_project_namespace_ref') == namespace_ref
+    assert selection.get_pane_id_from_session(
+        {
+            'pane_id': '%old',
+            'provider_runtime_backend_ref': {
+                'pane_ref': {'backend_impl': 'herdr', 'pane_id': 'pane-2'},
+            },
+        }
+    ) == 'pane-2'
+
+
+def test_backend_selection_rejects_unknown_session_backend_impl() -> None:
+    selection = TerminalBackendSelection(
+        detect_terminal_fn=lambda: None,
+        tmux_backend_factory=lambda: _FakeBackend('tmux'),
+    )
+
+    with pytest.raises(ValueError, match='unsupported session backend_impl'):
+        selection.get_backend_for_session({'terminal': 'mux', 'backend_impl': 'mystery'})
 
 
 def test_terminal_layout_service_delegates_to_runtime_layout() -> None:

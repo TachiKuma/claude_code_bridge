@@ -29,8 +29,11 @@ def ensure_agent_runtime(
     launch_tmux_runtime_fn,
     resolve_agent_binding_fn,
     assigned_pane_id: str | None = None,
+    assigned_pane_ref: dict[str, object] | None = None,
+    namespace_ref: dict[str, object] | None = None,
     style_index: int = 0,
     tmux_socket_path: str | None = None,
+    namespace_backend_impl: str | None = None,
 ):
     launcher = _pane_backed_launcher(spec)
     if launcher is None:
@@ -44,21 +47,34 @@ def ensure_agent_runtime(
     _require_runtime_launch_tools(
         spec.provider,
         provider_executable_fn=provider_executable_fn,
+        require_tmux=not _is_herdr_runtime_launch(
+            namespace_backend_impl=namespace_backend_impl,
+            assigned_pane_ref=assigned_pane_ref,
+        ),
     )
     cleanup_stale_tmux_binding_fn(binding)
 
     timings_ms: dict[str, float] = {}
     launch_started_ns = monotonic_ns()
     try:
+        launch_kwargs = {
+            'assigned_pane_id': assigned_pane_id,
+            'style_index': style_index,
+            'tmux_socket_path': tmux_socket_path,
+        }
+        if assigned_pane_ref is not None:
+            launch_kwargs['assigned_pane_ref'] = assigned_pane_ref
+        if namespace_ref is not None:
+            launch_kwargs['namespace_ref'] = namespace_ref
+        if namespace_backend_impl is not None:
+            launch_kwargs['namespace_backend_impl'] = namespace_backend_impl
         launch_timings = launch_tmux_runtime_fn(
             context,
             command,
             spec,
             plan,
             launcher,
-            assigned_pane_id=assigned_pane_id,
-            style_index=style_index,
-            tmux_socket_path=tmux_socket_path,
+            **launch_kwargs,
         )
     except Exception as exc:
         launch_elapsed_ms = _elapsed_ms(launch_started_ns)
@@ -118,11 +134,27 @@ def _binding_is_reusable(
     return bool(binding_runtime_alive_fn(binding))
 
 
-def _require_runtime_launch_tools(provider: str, *, provider_executable_fn) -> None:
-    if shutil.which('tmux') is None:
+def _require_runtime_launch_tools(
+    provider: str,
+    *,
+    provider_executable_fn,
+    require_tmux: bool = True,
+) -> None:
+    if require_tmux and shutil.which('tmux') is None:
         raise RuntimeError(f'tmux is required for pane-backed {provider} launch')
     if shutil.which(provider_executable_fn(provider)) is None:
         raise RuntimeError(f'{provider} executable not found in PATH')
+
+
+def _is_herdr_runtime_launch(
+    *,
+    namespace_backend_impl: str | None,
+    assigned_pane_ref,
+) -> bool:
+    del namespace_backend_impl
+    if not isinstance(assigned_pane_ref, dict):
+        return False
+    return str(assigned_pane_ref.get('backend_impl') or '').strip() == 'herdr'
 
 
 def _resolve_refreshed_binding(*, context, spec, plan, resolve_agent_binding_fn):

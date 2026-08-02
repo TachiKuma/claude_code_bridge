@@ -118,6 +118,7 @@ def build_project_restart_panes_handler(app):
         namespace = _load_project_namespace_or_none(app)
         if _namespace_is_herdr(namespace):
             results = _herdr_restart_deferred_results(agent_names, namespace=namespace)
+            restart_evidence = _herdr_restart_deferred_evidence(namespace, result_count=len(results))
             return {
                 'status': 'unsupported',
                 'restart_status': 'deferred',
@@ -126,6 +127,7 @@ def build_project_restart_panes_handler(app):
                 'reason': 'deferred_to_provider_runtime_on_herdr',
                 'backend_impl': 'herdr',
                 'namespace_backend_family': getattr(namespace, 'namespace_backend_family', 'herdr-native'),
+                'restart_evidence': restart_evidence,
                 'results': list(results),
                 'recreate_reason': RESTART_PANES_REASON,
             }, lambda: None
@@ -336,9 +338,32 @@ def _herdr_restart_deferred_results(agent_names: tuple[str, ...], *, namespace) 
             'backend_impl': 'herdr',
             'namespace_backend_family': getattr(namespace, 'namespace_backend_family', 'herdr-native'),
             'restart_mode': 'provider_runtime_required',
+            'restart_evidence': _herdr_restart_deferred_evidence(namespace, agent_name=str(agent_name)),
         }
         for agent_name in agent_names
     )
+
+
+def _herdr_restart_deferred_evidence(
+    namespace,
+    *,
+    agent_name: str | None = None,
+    result_count: int | None = None,
+) -> dict[str, object]:
+    evidence: dict[str, object] = {
+        'backend_impl': 'herdr',
+        'namespace_backend_family': getattr(namespace, 'namespace_backend_family', 'herdr-native'),
+        'restart_surface': 'provider_runtime_required',
+        'restart_status': 'deferred',
+        'reason': 'deferred_to_provider_runtime_on_herdr',
+        'respawn_evidence': 'not_attempted',
+        'session_binding_evidence': 'not_attempted',
+    }
+    if agent_name is not None:
+        evidence['agent'] = agent_name
+    if result_count is not None:
+        evidence['result_count'] = result_count
+    return evidence
 
 
 def _restart_agent_pane(app, *, backend, agent_name: str) -> dict[str, object]:

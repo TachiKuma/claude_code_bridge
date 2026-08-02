@@ -17,7 +17,7 @@ from provider_core.runtime_shared import (
     provider_start_parts as resolve_provider_start_parts,
 )
 from runtime_observability import record_startup_operation, startup_operation_scope
-from terminal_runtime import TmuxBackend
+from terminal_runtime import TmuxBackend, get_backend as get_terminal_backend
 from workspace.models import WorkspacePlan
 
 from .provider_hooks import prepare_provider_workspace, provider_workspace_path_for_prepare
@@ -63,8 +63,11 @@ def ensure_agent_runtime(
     binding: AgentBinding | None,
     *,
     assigned_pane_id: str | None = None,
+    assigned_pane_ref: dict[str, object] | None = None,
+    namespace_ref: dict[str, object] | None = None,
     style_index: int = 0,
     tmux_socket_path: str | None = None,
+    namespace_backend_impl: str | None = None,
     provider_prepared: bool = False,
     effective_command: ParsedStartCommand | None = None,
 ) -> RuntimeLaunchResult:
@@ -107,8 +110,11 @@ def ensure_agent_runtime(
         launch_tmux_runtime_fn=_launch_tmux_runtime,
         resolve_agent_binding_fn=resolve_agent_binding,
         assigned_pane_id=assigned_pane_id,
+        assigned_pane_ref=assigned_pane_ref,
+        namespace_ref=namespace_ref,
         style_index=style_index,
         tmux_socket_path=tmux_socket_path,
+        namespace_backend_impl=namespace_backend_impl,
     )
 
 
@@ -128,8 +134,11 @@ def _launch_tmux_runtime(
     launcher: ProviderRuntimeLauncher,
     *,
     assigned_pane_id: str | None = None,
+    assigned_pane_ref: dict[str, object] | None = None,
+    namespace_ref: dict[str, object] | None = None,
     style_index: int = 0,
     tmux_socket_path: str | None = None,
+    namespace_backend_impl: str | None = None,
 ) -> dict[str, float]:
     return _launch_tmux_runtime_impl(
         context,
@@ -137,7 +146,10 @@ def _launch_tmux_runtime(
         spec,
         plan,
         launcher,
-        backend_factory=TmuxBackend,
+        backend_factory=_runtime_backend_factory(
+            namespace_backend_impl=namespace_backend_impl,
+            namespace_ref=namespace_ref,
+        ),
         pane_title_marker_fn=_pane_title_marker,
         launch_session_id_fn=_launch_session_id,
         create_detached_tmux_pane_fn=_create_detached_tmux_pane,
@@ -145,10 +157,34 @@ def _launch_tmux_runtime(
         best_effort_kill_tmux_pane_fn=_best_effort_kill_tmux_pane,
         write_session_file_fn=_write_session_file,
         assigned_pane_id=assigned_pane_id,
+        assigned_pane_ref=assigned_pane_ref,
+        namespace_ref=namespace_ref,
         style_index=style_index,
         tmux_socket_path=tmux_socket_path,
+        namespace_backend_impl=namespace_backend_impl,
         allow_detached_fallback=tmux_socket_path is None,
     )
+
+
+def _runtime_backend_factory(
+    *,
+    namespace_backend_impl: str | None,
+    namespace_ref: dict[str, object] | None,
+):
+    if str(namespace_backend_impl or '').strip() != 'herdr':
+        return TmuxBackend
+    if not isinstance(namespace_ref, dict):
+        return TmuxBackend
+
+    def factory(**kwargs):
+        del kwargs
+        backend = get_terminal_backend('herdr')
+        if backend is None:
+            raise RuntimeError('Herdr backend is not available for provider runtime launch')
+        setattr(backend, '_ccb_project_namespace_ref', dict(namespace_ref))
+        return backend
+
+    return factory
 
 
 def _clean_runtime_launch_timings(value: object) -> dict[str, float]:
@@ -180,6 +216,10 @@ def _write_session_file(
     start_cmd: str,
     launch_session_id: str,
     provider_payload: dict[str, object],
+    backend_family: str = 'tmux-family',
+    backend_impl: str = 'tmux',
+    namespace_ref: dict[str, object] | None = None,
+    pane_ref: dict[str, object] | None = None,
 ) -> Path:
     return _write_session_file_impl(
         context=context,
@@ -194,6 +234,10 @@ def _write_session_file(
         start_cmd=start_cmd,
         launch_session_id=launch_session_id,
         provider_payload=provider_payload,
+        backend_family=backend_family,
+        backend_impl=backend_impl,
+        namespace_ref=namespace_ref,
+        pane_ref=pane_ref,
     )
 
 

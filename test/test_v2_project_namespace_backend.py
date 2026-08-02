@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -15,7 +16,9 @@ from ccbd.services.project_namespace_runtime.backend import (
     ensure_window,
     find_window,
     list_windows,
+    namespace_state_fields,
     prepare_server,
+    remember_namespace_state_ref,
     respawn_pane,
     session_alive,
     split_pane,
@@ -166,6 +169,17 @@ class _FakeHerdrNamespaceBackend:
         )
         self.windows[title] = {'window_id': 'window-control', 'window_name': title, 'active': False}
         return self.namespace
+
+    def namespace_ref(self, session_name: str, namespace_id: str) -> dict[str, object]:
+        self.calls.append(('namespace_ref', {'session_name': session_name, 'namespace_id': namespace_id}))
+        return make_namespace_ref(
+            backend_impl='herdr',
+            namespace_id=namespace_id,
+            session_name=session_name,
+            ipc_kind='herdr_socket',
+            ipc_ref=f'herdr://{namespace_id}',
+            restore_token=f'restore-{session_name}',
+        )
 
     def list_windows(self, namespace: dict[str, object]) -> list[dict[str, object]]:
         self.calls.append(('list_windows', namespace))
@@ -336,6 +350,89 @@ def test_v2_mux_backend_helpers_use_namespace_refs_without_tmux_fallback(tmp_pat
         'kill_window',
         'destroy_namespace',
     ]
+
+
+def test_v2_mux_backend_helpers_rebuild_namespace_ref_for_requested_session(tmp_path: Path) -> None:
+    backend = _FakeHerdrNamespaceBackend()
+    create_session(backend, session_name='ccb-old', project_root=tmp_path, window_name='cmd')
+
+    ensure_window(
+        backend,
+        session_name='ccb-new',
+        window_name='workspace',
+        project_root=tmp_path,
+        select=True,
+    )
+
+    ensure_call = backend.calls[-1]
+    assert ensure_call[0] == 'ensure_window'
+    assert ensure_call[1]['namespace']['session_name'] == 'ccb-new'  # type: ignore[index]
+    assert ('namespace_ref', {'session_name': 'ccb-new', 'namespace_id': 'ccb-new'}) in backend.calls
+
+
+def test_namespace_state_fields_rejects_cached_namespace_ref_for_different_session(tmp_path: Path) -> None:
+    backend = _FakeHerdrNamespaceBackend()
+    create_session(backend, session_name='ccb-old', project_root=tmp_path, window_name='cmd')
+
+    fields = namespace_state_fields(
+        backend,
+        session_name='ccb-new',
+        tmux_socket_path='',
+    )
+
+    assert fields['namespace_backend_family'] == 'tmux-family'
+    assert fields['namespace_session_name'] is None
+    assert fields['namespace_restore_token'] is None
+
+
+def test_namespace_ref_aliases_do_not_retain_replaced_session(tmp_path: Path) -> None:
+    backend = _FakeHerdrNamespaceBackend()
+    create_session(backend, session_name='ccb-old', project_root=tmp_path, window_name='cmd')
+    create_session(backend, session_name='ccb-new', project_root=tmp_path, window_name='cmd')
+
+    old_fields = namespace_state_fields(
+        backend,
+        session_name='ccb-old',
+        tmux_socket_path='',
+    )
+    new_fields = namespace_state_fields(
+        backend,
+        session_name='ccb-new',
+        tmux_socket_path='',
+    )
+
+    assert old_fields['namespace_restore_token'] is None
+    assert new_fields['namespace_session_name'] == 'ccb-new'
+    assert new_fields['namespace_restore_token'] == 'restore-1'
+
+
+def test_blank_namespace_ref_clears_previous_aliases(tmp_path: Path) -> None:
+    backend = _FakeHerdrNamespaceBackend()
+    create_session(backend, session_name='ccb-old', project_root=tmp_path, window_name='cmd')
+
+    remember_namespace_state_ref(
+        backend,
+        SimpleNamespace(
+            tmux_session_name='',
+            namespace_ref=lambda: {
+                'backend_family': 'herdr-native',
+                'backend_impl': 'herdr',
+                'namespace_id': 'w-blank',
+                'session_name': '',
+                'ipc_kind': 'herdr_socket',
+                'ipc_ref': 'herdr://blank',
+                'restore_token': 'blank-token',
+            },
+        ),
+    )
+    fields = namespace_state_fields(
+        backend,
+        session_name='ccb-old',
+        tmux_socket_path='',
+    )
+
+    assert fields['namespace_session_name'] is None
+    assert fields['namespace_restore_token'] is None
 
 
 def test_v2_mux_backend_helper_capability_gap_fails_closed(tmp_path: Path) -> None:

@@ -108,7 +108,11 @@ def _refresh_running_sidebar_helpers(context) -> dict[str, object]:
         topology_plan = build_namespace_topology_plan(
             load_project_config(context.project.project_root).config
         )
-        backend = build_backend(controller._backend_factory, socket_path=namespace.tmux_socket_path)
+        backend = build_backend(
+            controller._backend_factory,
+            socket_path=namespace.tmux_socket_path,
+            namespace_state=namespace,
+        )
         refreshed = refresh_topology_sidebar_helpers(
             controller,
             backend,

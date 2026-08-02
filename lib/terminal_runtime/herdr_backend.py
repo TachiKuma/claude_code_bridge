@@ -169,6 +169,8 @@ class HerdrBackend(TerminalBackend):
                 detail=f"unknown Herdr namespace for pane {pane_ref['pane_id']!r}",
                 evidence={"pane_id": pane_ref["pane_id"]},
             )
+        self._panes[pane_ref["pane_id"]] = pane_ref
+        self._pane_namespaces[pane_ref["pane_id"]] = namespace
         tokens = {
             "ccb_project_id": project_id,
             "ccb_order": str(order_index) if order_index is not None else "",
@@ -199,16 +201,22 @@ class HerdrBackend(TerminalBackend):
             return None
         self._capability_gate.require_supported("describe_pane")
         self._client.server_info()
-        panes = self._client.list_panes()
+        namespace = getattr(self, "_ccb_project_namespace_ref", None)
+        namespace_ref = namespace if isinstance(namespace, dict) else None
+        panes = self._client.list_panes(namespace_ref)
         for pane in panes:
             if str(pane.get("pane_id") or "").strip() != pane_text:
                 continue
             tokens = pane.get("tokens") if isinstance(pane.get("tokens"), Mapping) else {}
+            session_name = str(
+                (namespace_ref or {}).get("session_name")
+                or pane.get("session_name")
+                or self._client.session_name
+                or ""
+            ).strip()
             details: dict[str, object] = {
                 "pane_id": pane_text,
-                "session_name": self._client.session_name or str(
-                    pane.get("session_name") or ""
-                ).strip(),
+                "session_name": session_name,
                 "window_id": pane.get("workspace_id"),
                 "window_name": _token_value(tokens, "ccb_window")
                 or _token_value(tokens, "ccb_logical_window"),
@@ -238,7 +246,8 @@ class HerdrBackend(TerminalBackend):
     def list_panes_by_user_options(self, expected: dict[str, str]) -> list[str]:
         self._capability_gate.require_supported("list_panes_by_user_options")
         self._client.server_info()
-        panes = self._client.list_panes()
+        namespace = getattr(self, "_ccb_project_namespace_ref", None)
+        panes = self._client.list_panes(namespace if isinstance(namespace, dict) else None)
         normalized = {str(key).lstrip("@"): str(value) for key, value in expected.items()}
         return [
             str(pane.get("pane_id") or "").strip()
@@ -712,11 +721,21 @@ class HerdrBackend(TerminalBackend):
         operation: str,
         pane_id: str,
     ) -> MuxNamespaceRefV2 | None:
+        current = getattr(self, "_ccb_project_namespace_ref", None)
         matches = [
             namespace
             for (known_session, _), namespace in self._known_namespaces.items()
             if known_session == session_name
         ]
+        if (
+            isinstance(current, dict)
+            and str(current.get("session_name") or "").strip() == session_name
+        ):
+            matches.append(current)  # type: ignore[arg-type]
+        unique: dict[tuple[str, str], MuxNamespaceRefV2] = {}
+        for namespace in matches:
+            unique[(namespace["session_name"], namespace["namespace_id"])] = namespace
+        matches = list(unique.values())
         if len(matches) <= 1:
             return matches[0] if matches else None
         raise MuxCommandErrorV2(

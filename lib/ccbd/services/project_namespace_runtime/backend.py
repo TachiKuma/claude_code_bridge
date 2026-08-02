@@ -20,6 +20,7 @@ from terminal_runtime.tmux_readiness import (
 )
 
 _MUX_NAMESPACE_REF_ATTR = '_ccb_project_namespace_ref'
+_MUX_NAMESPACE_REF_ALIASES_ATTR = '_ccb_project_namespace_ref_aliases'
 _MUX_PANE_REFS_ATTR = '_ccb_project_pane_refs'
 
 _TMUX_ENVIRONMENT_KEYS = (
@@ -94,7 +95,11 @@ def remember_namespace_state_ref(backend, state) -> None:
         return
     namespace_ref = getattr(state, 'namespace_ref', None)
     if callable(namespace_ref):
-        _remember_mux_namespace_ref(backend, namespace_ref())
+        _remember_mux_namespace_ref(
+            backend,
+            namespace_ref(),
+            requested_session_name=getattr(state, 'tmux_session_name', None),
+        )
 
 
 def namespace_state_fields(backend, *, session_name: str, tmux_socket_path: str) -> dict[str, object | None]:
@@ -260,7 +265,7 @@ def create_session(
             cwd=str(project_root),
             title=session_name,
         )
-        _remember_mux_namespace_ref(backend, namespace)
+        _remember_mux_namespace_ref(backend, namespace, requested_session_name=session_name)
         return
     width, height = _resolved_session_size(terminal_size)
     args = [
@@ -857,11 +862,26 @@ def _raise_mux_unsupported(
     )
 
 
-def _remember_mux_namespace_ref(backend, namespace) -> dict[str, object]:
+def _remember_mux_namespace_ref(
+    backend,
+    namespace,
+    *,
+    requested_session_name: str | None = None,
+) -> dict[str, object]:
     if not isinstance(namespace, dict):
         _raise_mux_unsupported(backend, operation='create_session', detail='mux create_session returned invalid namespace ref')
-    setattr(backend, _MUX_NAMESPACE_REF_ATTR, dict(namespace))
-    return dict(namespace)
+    ref = dict(namespace)
+    setattr(backend, _MUX_NAMESPACE_REF_ATTR, ref)
+    aliases: dict[str, dict[str, object]] = {}
+    for name in (requested_session_name, ref.get('session_name')):
+        clean_name = str(name or '').strip()
+        if clean_name:
+            aliases[clean_name] = dict(ref)
+    if aliases:
+        setattr(backend, _MUX_NAMESPACE_REF_ALIASES_ATTR, aliases)
+    elif hasattr(backend, _MUX_NAMESPACE_REF_ALIASES_ATTR):
+        delattr(backend, _MUX_NAMESPACE_REF_ALIASES_ATTR)
+    return dict(ref)
 
 
 def _mux_namespace_ref(backend, *, session_name: str) -> dict[str, object]:
@@ -871,7 +891,7 @@ def _mux_namespace_ref(backend, *, session_name: str) -> dict[str, object]:
     namespace_builder = getattr(backend, 'namespace_ref', None)
     if callable(namespace_builder):
         namespace = namespace_builder(session_name, session_name)
-        return _remember_mux_namespace_ref(backend, namespace)
+        return _remember_mux_namespace_ref(backend, namespace, requested_session_name=session_name)
     _raise_mux_unsupported(
         backend,
         operation='namespace_ref',
@@ -881,6 +901,12 @@ def _mux_namespace_ref(backend, *, session_name: str) -> dict[str, object]:
 
 
 def _mux_namespace_ref_if_present(backend, *, session_name: str | None) -> dict[str, object] | None:
+    if session_name is not None:
+        aliases = getattr(backend, _MUX_NAMESPACE_REF_ALIASES_ATTR, None)
+        if isinstance(aliases, dict):
+            alias = aliases.get(str(session_name or '').strip())
+            if isinstance(alias, dict):
+                return dict(alias)
     ref = getattr(backend, _MUX_NAMESPACE_REF_ATTR, None)
     if not isinstance(ref, dict):
         return None

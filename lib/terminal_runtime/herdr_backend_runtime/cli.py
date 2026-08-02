@@ -119,12 +119,15 @@ class HerdrCliRequestAdapter:
 
     def _create_session(self, payload: Mapping[str, object]) -> Mapping[str, object]:
         title = str(payload.get("title") or payload.get("project_id") or "ccb-herdr")
+        session_name = _create_session_scope(title, fallback_session_name=self._session_name)
+        if str(title or "").strip().startswith("ccb-"):
+            self._ensure_server_ready(session_name)
         cwd = str(payload.get("cwd") or "")
         args = ["workspace", "create"]
         if cwd:
             args.extend(["--cwd", cwd])
         args.extend(["--label", title, "--focus"])
-        result = self._json_command("create_session", args)
+        result = self._json_command("create_session", args, session_name=session_name)
         workspace = _mapping(result.get("workspace"))
         root_pane = _mapping(result.get("root_pane"))
         namespace_id = str(workspace.get("workspace_id") or root_pane.get("workspace_id") or "").strip()
@@ -140,11 +143,11 @@ class HerdrCliRequestAdapter:
                 project_id=str(payload.get("project_id") or "").strip(),
                 namespace_id=namespace_id,
                 window_name=title,
-                session_name=self._session_name,
+                session_name=session_name,
             )
             self._report_pane_metadata(
                 root_pane_id,
-                session_name=self._session_name,
+                session_name=session_name,
                 title=title,
                 tokens={
                     "ccb_project_id": str(payload.get("project_id") or "").strip(),
@@ -156,9 +159,9 @@ class HerdrCliRequestAdapter:
             )
         return {
             "namespace_id": namespace_id,
-            "session_name": self._session_name,
-            "restore_token": _restore_token(self._session_name, namespace_id),
-            "ipc_ref": self.socket_ref,
+            "session_name": session_name,
+            "restore_token": _restore_token(session_name, namespace_id),
+            "ipc_ref": self._ipc_ref_for_session(session_name),
         }
 
     def _restore_session(self, payload: Mapping[str, object]) -> Mapping[str, object]:
@@ -420,6 +423,13 @@ class HerdrCliRequestAdapter:
                         f"unknown Herdr parent pane {parent!r}",
                         session_name=session_name,
                     )
+            if str(_pane_tokens(parent_record).get(_ROOT_PANE_TOKEN) or "").strip() != "1":
+                root_parent = self._root_pane_for_workspace(
+                    parent_workspace_id or namespace_id,
+                    session_name=session_name,
+                )
+                if root_parent:
+                    parent = root_parent
         else:
             parent = self._first_pane(namespace_id, session_name=session_name)
             parent_record = self._pane_by_id(parent, session_name=session_name)
@@ -487,6 +497,7 @@ class HerdrCliRequestAdapter:
         agent_label = str(payload.get("agent_label") or "").strip()
         if agent_label:
             tokens.setdefault("ccb_agent_label", agent_label)
+        self._wait_for_pane(pane_id, session_name=session_name)
         self._report_pane_metadata(
             pane_id,
             session_name=session_name,
@@ -829,6 +840,14 @@ class HerdrCliRequestAdapter:
                 return pane
         return None
 
+    def _wait_for_pane(self, pane_id: str, *, session_name: str) -> Mapping[str, object] | None:
+        for _ in range(10):
+            pane = self._pane_by_id(pane_id, session_name=session_name)
+            if pane is not None:
+                return pane
+            self._sleep_fn(0.1)
+        return None
+
     def _panes(self, namespace_id: str, *, session_name: str) -> list[Mapping[str, object]]:
         args = ["pane", "list"]
         if namespace_id:
@@ -851,6 +870,17 @@ class HerdrCliRequestAdapter:
             f"no Herdr pane found for workspace {namespace_id!r}",
             session_name=session_name,
         )
+
+    def _root_pane_for_workspace(self, workspace_id: str, *, session_name: str) -> str | None:
+        workspace_text = str(workspace_id or "").strip()
+        if not workspace_text:
+            return None
+        for pane in self._panes(workspace_text, session_name=session_name):
+            if str(_pane_tokens(pane).get(_ROOT_PANE_TOKEN) or "").strip() == "1":
+                pane_id = str(pane.get("pane_id") or "").strip()
+                if pane_id:
+                    return pane_id
+        return None
 
     def _report_workspace_metadata(
         self,
@@ -1045,8 +1075,59 @@ class HerdrCliRequestAdapter:
                 ipc_ref=self._ipc_ref_for_session(session_name),
                 evidence=_command_evidence("start_server", command),
             ) from exc
-        self._server_sessions.add(session_name)
-        self._server_processes[session_name] = process
+        poll = getattr(process, "poll", None)
+        for _ in range(20):
+            self._sleep_fn(0.1)
+            if callable(poll):
+                exit_code = poll()
+                if exit_code is not None:
+                    raise MuxCommandErrorV2(
+                        category="transient-unavailable",
+                        backend_impl="herdr",
+                        operation="start_server",
+                        detail=f"Herdr server exited immediately with code {exit_code}",
+                        ipc_ref=self._ipc_ref_for_session(session_name),
+                        evidence={
+                            **_command_evidence("start_server", command),
+                            "exit_code": exit_code,
+                        },
+                    )
+            if self._server_status_running(executable, session_name=session_name):
+                self._server_sessions.add(session_name)
+                self._server_processes[session_name] = process
+                return
+        raise MuxCommandErrorV2(
+            category="transient-unavailable",
+            backend_impl="herdr",
+            operation="start_server",
+            detail="Herdr server did not become ready",
+            ipc_ref=self._ipc_ref_for_session(session_name),
+            evidence=_command_evidence("start_server", command),
+        )
+
+    def _ensure_server_ready(self, session_name: str) -> None:
+        executable = self._resolve_executable()
+        if self._server_status_running(executable, session_name=session_name):
+            return
+        self._start_server(session_name, executable=executable)
+
+    def _server_status_running(self, executable: str, *, session_name: str) -> bool:
+        command = [executable, "--session", session_name, "status", "server", "--json"]
+        try:
+            result = self._run_fn(
+                command,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=True,
+            )
+            payload = json.loads(result.stdout or "{}")
+        except Exception:
+            return False
+        if not isinstance(payload, Mapping):
+            return False
+        return bool(payload.get("running") is True or payload.get("status") == "running")
 
     def _resolve_executable(self) -> str:
         executable = (self._herdr_executable or "").strip() or self._which_fn("herdr")
@@ -1170,6 +1251,13 @@ def _session_name_from_payload(
 ) -> str:
     session_name = str(payload.get("session_name") or "").strip()
     return session_name or fallback_session_name
+
+
+def _create_session_scope(title: str, *, fallback_session_name: str) -> str:
+    title_text = str(title or "").strip()
+    if title_text.startswith("ccb-"):
+        return title_text
+    return str(fallback_session_name or "").strip() or title_text or "ccb-herdr"
 
 
 def _split_direction(raw: object) -> str:

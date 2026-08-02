@@ -9,6 +9,7 @@ import pytest
 
 import terminal_runtime.api as terminal_api
 import terminal_runtime.herdr_backend_runtime.cli as herdr_cli
+from ccbd.services.project_namespace_pane import inspect_project_namespace_pane
 from ccbd.services.project_namespace_runtime import controller as namespace_controller
 from terminal_runtime.backend_selection import TerminalBackendSelection
 from terminal_runtime.herdr_backend import HerdrBackend
@@ -1255,6 +1256,49 @@ def test_herdr_backend_split_accepts_v2_pane_ref_with_known_namespace() -> None:
     assert create_pane_payloads[0]["session_name"] == "restored-session"
 
 
+def test_herdr_backend_split_accepts_project_namespace_ref_without_known_namespace_cache() -> None:
+    create_pane_payloads: list[dict[str, object]] = []
+
+    def request(operation: str, payload: dict[str, object]) -> dict[str, object]:
+        if operation == "create_pane":
+            create_pane_payloads.append(payload)
+        return _fake_herdr_request()(operation, payload)
+
+    backend = HerdrBackend(
+        client=HerdrSocketClient(request_fn=request, socket_ref="herdr://local"),
+        capability_gate=_supported_gate(),
+    )
+    backend._ccb_project_namespace_ref = {  # type: ignore[attr-defined]
+        "backend_impl": "herdr",
+        "backend_family": "herdr-native",
+        "namespace_id": "workspace-1",
+        "session_name": "restored-session",
+        "ipc_kind": "herdr_socket",
+        "ipc_ref": "herdr://local",
+        "restore_token": "restored-session::workspace-1",
+    }
+
+    pane = backend.split_pane(
+        {
+            "backend_impl": "herdr",
+            "pane_id": "restored-pane",
+            "session_name": "restored-session",
+            "window_name": None,
+            "agent_slug": None,
+        },
+        direction="down",
+        percent=25,
+        command=[],
+        cwd="D:/demo",
+        env={},
+        title="child",
+    )
+
+    assert pane["pane_id"] == "pane-1"
+    assert create_pane_payloads[0]["namespace_id"] == "workspace-1"
+    assert create_pane_payloads[0]["parent_pane"] == "restored-pane"
+
+
 def test_herdr_backend_split_rejects_ambiguous_known_namespace() -> None:
     create_pane_payloads: list[dict[str, object]] = []
 
@@ -1703,6 +1747,19 @@ def test_terminal_api_platform_gate_uses_live_wsl_runtime(monkeypatch) -> None:
     assert gate["platform_gate_ref"] == "runtime"
 
 
+def test_terminal_api_platform_gate_uses_windows_arch_env_when_machine_empty(monkeypatch) -> None:
+    monkeypatch.setattr(terminal_api, "is_windows", lambda: True)
+    monkeypatch.setattr(terminal_api, "_is_wsl_impl", lambda: False)
+    monkeypatch.setattr(terminal_api.platform, "machine", lambda: "")
+    monkeypatch.setattr(terminal_api.platform, "architecture", lambda: ("64bit", "WindowsPE"))
+    monkeypatch.setenv("PROCESSOR_ARCHITECTURE", "AMD64")
+
+    gate = terminal_api._herdr_platform_gate()
+
+    assert gate["supported"] is True
+    assert gate["cpu_arch"] == "x64"
+
+
 def test_terminal_api_capability_report_can_use_runtime_override(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(terminal_api, "_ROOT_DIR", tmp_path)
     report_path = tmp_path / "evidence" / "herdr-capabilities.json"
@@ -1888,6 +1945,8 @@ def test_herdr_cli_request_adapter_starts_server_and_retries_server_backed_comma
         joined = " ".join(command)
         if "report-metadata" in joined:
             return _completed("")
+        if "status server --json" in joined:
+            return _completed('{"status":"running","running":true}')
         if "workspace create" in joined:
             workspace_create_calls += 1
             if workspace_create_calls == 1:
@@ -1901,9 +1960,13 @@ def test_herdr_cli_request_adapter_starts_server_and_retries_server_backed_comma
             )
         raise AssertionError(joined)
 
+    class _RunningProcess:
+        def poll(self):
+            return None
+
     def popen_fn(command, **kwargs):
         popen_commands.append(command)
-        return object()
+        return _RunningProcess()
 
     adapter = HerdrCliRequestAdapter(
         session_name="ccb-demo",
@@ -1919,10 +1982,11 @@ def test_herdr_cli_request_adapter_starts_server_and_retries_server_backed_comma
     assert namespace["namespace_id"] == "w1"
     assert workspace_create_calls == 2
     assert popen_commands == [["herdr", "--session", "ccb-demo", "server"]]
-    assert commands[0] == commands[1]
+    workspace_commands = [command for command in commands if "workspace create" in " ".join(command)]
+    assert workspace_commands[0] == workspace_commands[1]
 
 
-def test_herdr_cli_request_adapter_restarts_recorded_server_process_after_exit() -> None:
+def test_herdr_cli_request_adapter_fails_closed_when_server_exits_immediately() -> None:
     commands: list[list[str]] = []
     popen_commands: list[list[str]] = []
     workspace_create_calls = 0
@@ -1963,14 +2027,59 @@ def test_herdr_cli_request_adapter_restarts_recorded_server_process_after_exit()
         sleep_fn=lambda seconds: None,
     )
 
-    adapter("create_session", {"project_id": "demo", "cwd": "D:/demo", "title": "demo"})
-    adapter("create_session", {"project_id": "demo", "cwd": "D:/demo", "title": "demo"})
+    with pytest.raises(MuxCommandErrorV2) as exc_info:
+        adapter("create_session", {"project_id": "demo", "cwd": "D:/demo", "title": "demo"})
 
-    assert workspace_create_calls == 4
-    assert popen_commands == [
-        ["herdr", "--session", "ccb-demo", "server"],
-        ["herdr", "--session", "ccb-demo", "server"],
-    ]
+    assert exc_info.value.operation == "start_server"
+    assert exc_info.value.category == "transient-unavailable"
+    assert "exited immediately" in exc_info.value.detail
+    assert workspace_create_calls == 1
+    assert popen_commands == [["herdr", "--session", "ccb-demo", "server"]]
+
+
+def test_herdr_cli_request_adapter_fails_closed_when_started_server_is_not_running() -> None:
+    popen_commands: list[list[str]] = []
+    workspace_create_calls = 0
+
+    class _RunningProcess:
+        def poll(self):
+            return None
+
+    def run_fn(command, **kwargs):
+        nonlocal workspace_create_calls
+        joined = " ".join(command)
+        if "workspace create" in joined:
+            workspace_create_calls += 1
+            raise subprocess.CalledProcessError(
+                1,
+                command,
+                stderr="Error: Os { code: 2, kind: NotFound, message: \"No such file or directory\" }",
+            )
+        if "status server --json" in joined:
+            return _completed('{"status":"not_running","running":false}')
+        raise AssertionError(joined)
+
+    def popen_fn(command, **kwargs):
+        popen_commands.append(command)
+        return _RunningProcess()
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        popen_fn=popen_fn,
+        which_fn=lambda name: "herdr",
+        sleep_fn=lambda seconds: None,
+    )
+
+    with pytest.raises(MuxCommandErrorV2) as exc_info:
+        adapter("create_session", {"project_id": "demo", "cwd": "D:/demo", "title": "demo"})
+
+    assert exc_info.value.operation == "start_server"
+    assert exc_info.value.category == "transient-unavailable"
+    assert "did not become ready" in exc_info.value.detail
+    assert workspace_create_calls == 1
+    assert popen_commands == [["herdr", "--session", "ccb-demo", "server"]]
 
 
 def test_herdr_cli_request_adapter_does_not_start_server_for_server_info() -> None:
@@ -2091,6 +2200,8 @@ def test_herdr_backend_logical_window_facade_restores_from_root_pane_metadata() 
             return _completed("herdr 0.7.5-preview\n")
         if "api schema --json" in joined:
             return _completed('{"title":"Herdr API"}')
+        if "status server --json" in joined:
+            return _completed('{"status":"running","running":true}')
         if "workspace create" in joined:
             workspace_id = f"w{len(workspaces) + 1}"
             pane_id = f"{workspace_id}:p1"
@@ -2446,12 +2557,183 @@ def test_herdr_backend_destroy_namespace_and_kill_server_delegate_and_drop_names
         "kill_server",
     ]
     assert operations[1][1]["namespace_id"] == "w1"
-    assert operations[3][1]["namespace_id"] == "w1"
     assert backend._logical_windows == {}  # type: ignore[attr-defined]
     assert backend._panes == {}  # type: ignore[attr-defined]
     assert backend._pane_namespaces == {}  # type: ignore[attr-defined]
 
 
+def test_herdr_backend_list_panes_by_user_options_uses_current_namespace_ref() -> None:
+    requests: list[tuple[str, dict[str, object]]] = []
+
+    def request(operation: str, payload: dict[str, object]):
+        requests.append((operation, payload))
+        if operation == "server_info":
+            return {
+                "version": "0.7.5-preview",
+                "api_schema": "Herdr API",
+                "platform": "windows",
+                "arch": "x64",
+            }
+        if operation == "list_panes":
+            return {
+                "status": "ok",
+                "panes": [
+                    {
+                        "pane_id": "w1:p1",
+                        "session_name": "ccb-herdr",
+                        "workspace_id": "w1",
+                        "tokens": {"ccb_slot": "agent1"},
+                    }
+                ]
+            }
+        raise AssertionError(operation)
+
+    backend = HerdrBackend(
+        client=HerdrSocketClient(request_fn=request, socket_ref="herdr://local"),
+        capability_gate=_supported_gate(),
+    )
+    namespace = backend.namespace_ref("ccb-herdr", "w1")
+    backend._ccb_project_namespace_ref = namespace  # type: ignore[attr-defined]
+
+    assert backend.list_panes_by_user_options({"@ccb_slot": "agent1"}) == ["w1:p1"]
+    assert requests[-1] == (
+        "list_panes",
+        {
+            "namespace_id": "w1",
+            "session_name": "ccb-herdr",
+            "ipc_ref": "herdr://local",
+        },
+    )
+
+
+def test_herdr_backend_describe_pane_uses_current_namespace_ref_for_topology_inspection() -> None:
+    requests: list[tuple[str, dict[str, object]]] = []
+
+    def request(operation: str, payload: dict[str, object]):
+        requests.append((operation, payload))
+        if operation == "server_info":
+            return {
+                "version": "0.7.5-preview",
+                "api_schema": "Herdr API",
+                "platform": "windows",
+                "arch": "x64",
+            }
+        if operation == "list_panes":
+            if not payload.get("namespace_id"):
+                return {"status": "ok", "panes": []}
+            return {
+                "status": "ok",
+                "panes": [
+                    {
+                        "pane_id": "w1:p1",
+                        "workspace_id": "w1",
+                        "tokens": {
+                            "ccb_project_id": "project-1",
+                            "ccb_role": "agent",
+                            "ccb_slot": "agent1",
+                            "ccb_window": "main",
+                            "ccb_managed_by": "ccbd",
+                            "ccb_namespace_epoch": "1",
+                        },
+                    }
+                ],
+            }
+        raise AssertionError(operation)
+
+    backend = HerdrBackend(
+        client=HerdrSocketClient(request_fn=request, socket_ref="herdr://local"),
+        capability_gate=_supported_gate(),
+    )
+    namespace = backend.namespace_ref("ccb-herdr", "w1")
+    backend._ccb_project_namespace_ref = namespace  # type: ignore[attr-defined]
+
+    record = inspect_project_namespace_pane(backend, "w1:p1")
+
+    assert record is not None
+    assert record.session_name == "ccb-herdr"
+    assert record.project_id == "project-1"
+    assert record.role == "agent"
+    assert record.slot_key == "agent1"
+    assert record.matches_authoritative_topology(
+        tmux_session_name="ccb-herdr",
+        project_id="project-1",
+        role="agent",
+        slot_key="agent1",
+        window_name="main",
+        managed_by="ccbd",
+        namespace_epoch=1,
+    )
+    assert requests[-1] == (
+        "list_panes",
+        {
+            "namespace_id": "w1",
+            "session_name": "ccb-herdr",
+            "ipc_ref": "herdr://local",
+        },
+    )
+
+
+def test_herdr_backend_set_pane_identity_rehydrates_pane_namespace_from_known_namespace() -> None:
+    requests: list[tuple[str, dict[str, object]]] = []
+
+    def request(operation: str, payload: dict[str, object]):
+        requests.append((operation, payload))
+        if operation == "server_info":
+            return {
+                "version": "0.7.5-preview",
+                "api_schema": "Herdr API",
+                "platform": "windows",
+                "arch": "x64",
+            }
+        if operation == "set_pane_identity":
+            return {"status": "ok", "pane_id": payload["pane_id"]}
+        raise AssertionError(operation)
+
+    backend = HerdrBackend(
+        client=HerdrSocketClient(request_fn=request, socket_ref="herdr://local"),
+        capability_gate=_supported_gate(),
+    )
+    namespace = backend.namespace_ref("ccb-herdr", "w1")
+    pane = {
+        "backend_impl": "herdr",
+        "pane_id": "w1:p2",
+        "session_name": "ccb-herdr",
+    }
+
+    backend.set_pane_identity(
+        pane,
+        title="agent2",
+        agent_label="agent2",
+        project_id="project-1",
+        role="agent",
+        slot_key="agent2",
+        window_name="main",
+        namespace_epoch=2,
+        managed_by="ccbd",
+    )
+
+    assert backend._pane_namespaces["w1:p2"] == namespace  # type: ignore[attr-defined]
+    assert requests[-1] == (
+        "set_pane_identity",
+        {
+            "pane_id": "w1:p2",
+            "session_name": "ccb-herdr",
+            "title": "agent2",
+            "agent_label": "agent2",
+            "tokens": {
+                "ccb_project_id": "project-1",
+                "ccb_order": "",
+                "ccb_is_cmd": "0",
+                "ccb_role": "agent",
+                "ccb_slot": "agent2",
+                "ccb_window": "main",
+                "ccb_sidebar_instance": "",
+                "ccb_session_id": "",
+                "ccb_namespace_epoch": "2",
+                "ccb_managed_by": "ccbd",
+            },
+        },
+    )
 def test_herdr_backend_kill_window_drops_only_current_namespace_cache() -> None:
     def request(operation: str, payload: dict[str, object]) -> dict[str, object]:
         if operation == "server_info":
@@ -2684,6 +2966,23 @@ def test_default_project_namespace_backend_retries_explicit_herdr_when_auto_retu
     assert calls == [None, "herdr"]
 
 
+def test_default_project_namespace_backend_retries_explicit_herdr_when_runtime_configured(monkeypatch) -> None:
+    calls: list[object] = []
+
+    class LegacyBackend:
+        backend_impl = "tmux"
+
+    def resolve(terminal_type=None):
+        calls.append(terminal_type)
+        return "herdr-backend" if terminal_type == "herdr" else LegacyBackend()
+
+    monkeypatch.setenv("CCB_HERDR_CAPABILITY_REPORT", "evidence/herdr.json")
+    monkeypatch.setattr(namespace_controller, "resolve_terminal_backend", resolve)
+
+    assert namespace_controller.default_project_namespace_backend() == "herdr-backend"
+    assert calls == [None, "herdr"]
+
+
 def test_herdr_socket_client_rejects_window_root_pane_session_mismatch() -> None:
     client = HerdrSocketClient(
         request_fn=lambda operation, payload: {
@@ -2877,6 +3176,93 @@ def test_herdr_cli_request_adapter_runs_command_after_create_pane_split() -> Non
 
     assert pane["pane_id"] == "w1:p2"
     assert any("pane run" in " ".join(command) for command in commands)
+
+
+def test_herdr_cli_request_adapter_waits_for_pane_before_metadata_report() -> None:
+    commands: list[list[str]] = []
+    pane_list_calls = 0
+
+    def run_fn(command, **kwargs):
+        nonlocal pane_list_calls
+        commands.append(command)
+        joined = " ".join(command)
+        if "pane list" in joined:
+            pane_list_calls += 1
+            if pane_list_calls == 1:
+                return _completed('{"result":{"panes":[{"pane_id":"w1:p1","workspace_id":"w1"}]}}')
+            return _completed(
+                '{"result":{"panes":[{"pane_id":"w1:p1","workspace_id":"w1"},'
+                '{"pane_id":"w1:p2","workspace_id":"w1"}]}}'
+            )
+        if "pane report-metadata" in joined:
+            assert pane_list_calls >= 2
+            return _completed("")
+        if "status --json" in joined:
+            return _completed('{"client":{"version":"0.7.5-preview"}}')
+        if "--version" in joined:
+            return _completed("herdr 0.7.5-preview\n")
+        if "api schema --json" in joined:
+            return _completed('{"title":"Herdr API"}')
+        raise AssertionError(joined)
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        which_fn=lambda name: "herdr",
+        sleep_fn=lambda _seconds: None,
+    )
+
+    result = adapter(
+        "set_pane_identity",
+        {
+            "pane_id": "w1:p2",
+            "session_name": "ccb-demo",
+            "title": "agent2",
+            "agent_label": "agent2",
+            "tokens": {"ccb_role": "agent"},
+        },
+    )
+
+    assert result == {"status": "ok", "pane_id": "w1:p2"}
+    assert pane_list_calls == 2
+
+
+def test_herdr_cli_request_adapter_splits_from_workspace_root_when_parent_is_non_root() -> None:
+    split_commands: list[list[str]] = []
+
+    def run_fn(command, **kwargs):
+        joined = " ".join(command)
+        if "pane list" in joined:
+            return _completed(
+                '{"result":{"panes":['
+                '{"pane_id":"w1:p1","workspace_id":"w1","tokens":{"ccb_root_pane":"1"}},'
+                '{"pane_id":"w1:p2","workspace_id":"w1","tokens":{"ccb_role":"agent"}}'
+                ']}}'
+            )
+        if "pane split" in joined:
+            split_commands.append(command)
+            return _completed('{"result":{"pane":{"pane_id":"w1:p3","workspace_id":"w1"}}}')
+        raise AssertionError(joined)
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        which_fn=lambda name: "herdr",
+    )
+
+    pane = adapter(
+        "create_pane",
+        {
+            "namespace_id": "w1",
+            "session_name": "ccb-demo",
+            "parent_pane": "w1:p2",
+        },
+    )
+
+    assert pane["pane_id"] == "w1:p3"
+    assert split_commands[0][split_commands[0].index("split") + 1] == "w1:p1"
 
 
 def test_herdr_cli_request_adapter_focuses_workspace_for_attach_namespace() -> None:
@@ -3096,6 +3482,41 @@ def test_herdr_cli_request_adapter_preserves_socket_ref_override_in_namespace() 
     assert namespace["ipc_ref"] == "herdr://override"
     assert restored["session_name"] == "ccb-demo"
     assert restored["ipc_ref"] == "herdr://override"
+
+
+def test_herdr_cli_request_adapter_create_session_uses_project_namespace_title_as_session_scope() -> None:
+    commands: list[list[str]] = []
+
+    def run_fn(command, **kwargs):
+        commands.append(command)
+        assert command[1:3] == ["--session", "ccb-project-12345678"]
+        joined = " ".join(command)
+        if "status server --json" in joined:
+            return _completed('{"status":"running","running":true}')
+        if "report-metadata" in joined:
+            return _completed("")
+        if "workspace create" in joined:
+            return _completed(
+                '{"result":{"workspace":{"workspace_id":"w1"},"root_pane":{"pane_id":"w1:p1","workspace_id":"w1"}}}'
+            )
+        raise AssertionError(joined)
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-bootstrap",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        which_fn=lambda name: "herdr",
+    )
+
+    namespace = adapter(
+        "create_session",
+        {"project_id": "demo", "cwd": "D:/demo", "title": "ccb-project-12345678"},
+    )
+
+    assert namespace["session_name"] == "ccb-project-12345678"
+    assert namespace["restore_token"] == "ccb-project-12345678::w1"
+    assert namespace["ipc_ref"] == "herdr://ccb-project-12345678"
+    assert len(commands) == 4
 
 
 def test_herdr_cli_request_adapter_restore_uses_restored_session_ipc_ref() -> None:

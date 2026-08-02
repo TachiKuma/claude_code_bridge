@@ -22,6 +22,7 @@ from cli.services.runtime_launch import RuntimeLaunchResult
 from cli.services.tmux_project_cleanup import ProjectTmuxCleanupSummary
 from project.resolver import bootstrap_project
 from provider_runtime.helper_manifest import load_helper_manifest
+from runtime_observability import StartupReadinessRecorder
 import pytest
 
 
@@ -257,6 +258,16 @@ def test_project_restart_panes_handler_defers_herdr_without_scheduled_success(mo
     assert payload['reason'] == 'deferred_to_provider_runtime_on_herdr'
     assert payload['restart_mode'] == 'provider_runtime_required'
     assert payload['backend_impl'] == 'herdr'
+    assert payload['restart_evidence'] == {
+        'backend_impl': 'herdr',
+        'namespace_backend_family': 'herdr-native',
+        'restart_surface': 'provider_runtime_required',
+        'restart_status': 'deferred',
+        'reason': 'deferred_to_provider_runtime_on_herdr',
+        'respawn_evidence': 'not_attempted',
+        'session_binding_evidence': 'not_attempted',
+        'result_count': 2,
+    }
     assert payload['results'] == [
         {
             'agent': 'agent1',
@@ -265,6 +276,16 @@ def test_project_restart_panes_handler_defers_herdr_without_scheduled_success(mo
             'backend_impl': 'herdr',
             'namespace_backend_family': 'herdr-native',
             'restart_mode': 'provider_runtime_required',
+            'restart_evidence': {
+                'backend_impl': 'herdr',
+                'namespace_backend_family': 'herdr-native',
+                'restart_surface': 'provider_runtime_required',
+                'restart_status': 'deferred',
+                'reason': 'deferred_to_provider_runtime_on_herdr',
+                'respawn_evidence': 'not_attempted',
+                'session_binding_evidence': 'not_attempted',
+                'agent': 'agent1',
+            },
         },
         {
             'agent': 'agent2',
@@ -273,6 +294,16 @@ def test_project_restart_panes_handler_defers_herdr_without_scheduled_success(mo
             'backend_impl': 'herdr',
             'namespace_backend_family': 'herdr-native',
             'restart_mode': 'provider_runtime_required',
+            'restart_evidence': {
+                'backend_impl': 'herdr',
+                'namespace_backend_family': 'herdr-native',
+                'restart_surface': 'provider_runtime_required',
+                'restart_status': 'deferred',
+                'reason': 'deferred_to_provider_runtime_on_herdr',
+                'respawn_evidence': 'not_attempted',
+                'session_binding_evidence': 'not_attempted',
+                'agent': 'agent2',
+            },
         },
     ]
     assert restarts == []
@@ -582,6 +613,234 @@ def test_runtime_supervisor_start_persists_startup_report(tmp_path: Path, monkey
     assert report.timings_ms['agent_runtime_unattributed'] >= 0
     assert report.timings_ms['agent_runtime_loop_overhead'] >= 0
     assert report.timings_ms['supervisor_total'] >= 0
+
+
+def test_runtime_supervisor_start_defers_provider_runtime_for_herdr_namespace(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project_root = tmp_path / 'repo-ccbd-start-herdr-deferred'
+    (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
+    (project_root / '.ccb' / 'ccb.config').write_text('cmd; demo:codex\n', encoding='utf-8')
+    bootstrap_project(project_root)
+    app = CcbdApp(project_root)
+    app.lease = app.mount_manager.mark_mounted(
+        project_id=app.project_id,
+        pid=4321,
+        socket_path=app.paths.ccbd_socket_path,
+        generation=4,
+        config_signature=str(app.config_identity['config_signature']),
+    )
+    monkeypatch.setattr(
+        app.project_namespace,
+        'ensure',
+        lambda **kwargs: SimpleNamespace(
+            tmux_socket_path='',
+            tmux_session_name='ccb-herdr-session',
+            namespace_epoch=11,
+            workspace_window_name='main',
+            workspace_window_id='win-herdr-main',
+            workspace_epoch=2,
+            ui_attachable=True,
+            namespace_backend_family='herdr-native',
+            backend_impl='herdr',
+            created_this_call=False,
+            workspace_recreated_this_call=False,
+        ),
+    )
+    monkeypatch.setattr('ccbd.start_flow.TmuxBackend', _FakeNamespaceTmuxBackend)
+    monkeypatch.setattr('ccbd.start_flow.set_tmux_ui_active', lambda active: None)
+    monkeypatch.setattr(
+        'ccbd.start_flow.prepare_tmux_start_layout',
+        lambda context, config, targets, **kwargs: SimpleNamespace(cmd_pane_id=None, agent_panes={}),
+    )
+    monkeypatch.setattr('ccbd.start_flow.cleanup_project_tmux_orphans_by_socket', lambda **kwargs: ())
+    monkeypatch.setattr(
+        'ccbd.start_flow.TmuxCleanupHistoryStore',
+        lambda paths: SimpleNamespace(append=lambda event: None),
+    )
+    monkeypatch.setattr('ccbd.start_flow.resolve_agent_binding', lambda **kwargs: None)
+
+    def fail_if_provider_runtime_starts(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError('provider runtime should be deferred for Herdr namespace')
+
+    monkeypatch.setattr('ccbd.start_flow.ensure_agent_runtime', fail_if_provider_runtime_starts)
+    rpc_accepted_ns = time.perf_counter_ns()
+    readiness_recorder = StartupReadinessRecorder.from_rpc_payload(
+        {
+            'schema_version': 1,
+            'trace_id': 'trace_' + 'b' * 32,
+            'origin_monotonic_ns': rpc_accepted_ns - 5_000_000,
+            'attach_mode': 'no_attach',
+            'expected_daemon_generation': int(app.lease.generation),
+            'keeper_startup_id': None,
+            'T1_lifecycle_intent': {
+                'status': 'not_required_already_mounted',
+                'elapsed_ms': None,
+                'source': 'test_existing_generation',
+            },
+            'T2_control_plane_ready': {
+                'status': 'reached',
+                'elapsed_ms': 1.0,
+                'source': 'test_control_plane',
+            },
+        },
+        now_ns=rpc_accepted_ns,
+    )
+    assert readiness_recorder is not None
+    readiness_recorder.mark(
+        'rpc_accepted',
+        source='test_start_handler',
+        now_ns=rpc_accepted_ns,
+    )
+
+    summary = app.runtime_supervisor.start(
+        agent_names=('demo',),
+        restore=False,
+        auto_permission=False,
+        cleanup_tmux_orphans=False,
+        interactive_tmux_layout=False,
+        startup_run_id='start_' + 'h' * 32,
+        daemon_started=True,
+        readiness_recorder=readiness_recorder,
+    )
+    report = CcbdStartupReportStore(app.paths).load()
+
+    assert summary.started == ('demo',)
+    assert 'provider_runtime_deferred_on_herdr:demo' in summary.actions_taken
+    assert len(summary.agent_results) == 1
+    deferred = summary.agent_results[0]
+    assert deferred.agent_name == 'demo'
+    assert deferred.provider == 'codex'
+    assert deferred.action == 'deferred'
+    assert deferred.health == 'deferred'
+    assert deferred.terminal_backend == 'herdr'
+    assert deferred.failure_reason == 'deferred_to_provider_runtime_on_herdr'
+    assert deferred.workspace_path == str(project_root)
+    assert report is not None
+    assert report.status == 'ok'
+    assert report.readiness_timeline['timeline_complete'] is False
+    assert report.readiness_timeline['points']['T4_requested_agents_ready']['status'] == 'not_reached_at_rpc_return'
+    assert report.readiness_timeline['points']['T4_requested_agents_ready']['source'] == 'ccbd_start_flow_provider_runtime_deferred_on_herdr'
+    assert report.readiness_timeline['points']['T6_fully_warm']['status'] == 'not_reached_at_rpc_return'
+    assert report.readiness_timeline['points']['T6_fully_warm']['source'] == 'ccbd_start_flow_provider_runtime_deferred_on_herdr'
+    assert report.agent_results[0].action == 'deferred'
+    assert report.agent_results[0].terminal_backend == 'herdr'
+    assert report.agent_results[0].failure_reason == 'deferred_to_provider_runtime_on_herdr'
+
+
+def test_runtime_supervisor_starts_provider_runtime_for_herdr_assigned_pane(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project_root = tmp_path / 'repo-ccbd-start-herdr-provider'
+    (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
+    (project_root / '.ccb' / 'ccb.config').write_text('demo:codex\n', encoding='utf-8')
+    bootstrap_project(project_root)
+    app = CcbdApp(project_root)
+    app.lease = app.mount_manager.mark_mounted(
+        project_id=app.project_id,
+        pid=4321,
+        socket_path=app.paths.ccbd_socket_path,
+        generation=4,
+        config_signature=str(app.config_identity['config_signature']),
+    )
+    app.project_namespace._last_materialized_agent_panes = {'demo': 'herdr-pane-1'}
+    app.project_namespace._last_topology_pane_records = {
+        'herdr-pane-1': SimpleNamespace(
+            pane_id='herdr-pane-1',
+            session_name='ccb-herdr-session',
+            ccb_window='main',
+            window_name='main',
+        )
+    }
+    app.project_namespace._last_topology_active_panes = ('herdr-pane-1',)
+    monkeypatch.setattr(
+        app.project_namespace,
+        'ensure',
+        lambda **kwargs: SimpleNamespace(
+            tmux_socket_path='',
+            tmux_session_name='ccb-herdr-session',
+            namespace_session_name='ccb-herdr-session',
+            namespace_id='workspace-1',
+            namespace_ipc_kind='herdr_socket',
+            namespace_ipc_ref='herdr://local',
+            namespace_restore_token='ccb-herdr-session::workspace-1',
+            namespace_epoch=11,
+            workspace_window_name='main',
+            workspace_window_id='win-herdr-main',
+            workspace_epoch=2,
+            ui_attachable=True,
+            namespace_backend_family='herdr-native',
+            backend_impl='herdr',
+            created_this_call=False,
+            workspace_recreated_this_call=False,
+        ),
+    )
+    monkeypatch.setattr('ccbd.start_flow.TmuxBackend', _FakeNamespaceTmuxBackend)
+    monkeypatch.setattr('ccbd.start_flow.set_tmux_ui_active', lambda active: None)
+    monkeypatch.setattr('ccbd.start_flow.cleanup_project_tmux_orphans_by_socket', lambda **kwargs: ())
+    monkeypatch.setattr(
+        'ccbd.start_flow.TmuxCleanupHistoryStore',
+        lambda paths: SimpleNamespace(append=lambda event: None),
+    )
+    monkeypatch.setattr('ccbd.start_flow.resolve_agent_binding', lambda **kwargs: None)
+    observed: dict[str, object] = {}
+
+    def launch_provider_runtime(*args, **kwargs):
+        del args
+        observed.update(kwargs)
+        return RuntimeLaunchResult(
+            launched=True,
+            binding=AgentBinding(
+                runtime_ref='herdr:herdr-pane-1',
+                session_ref='session-herdr-1',
+                provider='codex',
+                runtime_root=str(app.paths.agent_provider_runtime_dir('demo', 'codex')),
+                runtime_pid=901,
+                session_file=str(project_root / '.ccb' / 'demo.session.json'),
+                session_id='session-herdr-1',
+                terminal='herdr',
+                pane_id='herdr-pane-1',
+                active_pane_id='herdr-pane-1',
+                pane_title_marker='CCB-demo',
+                pane_state='alive',
+            ),
+        )
+
+    monkeypatch.setattr('ccbd.start_flow.ensure_agent_runtime', launch_provider_runtime)
+
+    summary = app.runtime_supervisor.start(
+        agent_names=('demo',),
+        restore=False,
+        auto_permission=False,
+        cleanup_tmux_orphans=False,
+        interactive_tmux_layout=True,
+        startup_run_id='start_' + 'p' * 32,
+        daemon_started=True,
+    )
+
+    assert summary.started == ('demo',)
+    assert not any(action.startswith('provider_runtime_deferred_on_herdr') for action in summary.actions_taken)
+    assert observed['namespace_backend_impl'] == 'herdr'
+    assert observed['assigned_pane_ref'] == {
+        'backend_impl': 'herdr',
+        'pane_id': 'herdr-pane-1',
+        'session_name': 'ccb-herdr-session',
+        'window_name': 'main',
+        'agent_slug': 'demo',
+    }
+    assert observed['namespace_ref'] == {
+        'backend_family': 'herdr-native',
+        'backend_impl': 'herdr',
+        'namespace_id': 'workspace-1',
+        'session_name': 'ccb-herdr-session',
+        'ipc_kind': 'herdr_socket',
+        'ipc_ref': 'herdr://local',
+        'restore_token': 'ccb-herdr-session::workspace-1',
+    }
+    assert summary.agent_results[0].terminal_backend == 'herdr'
 
 
 def test_runtime_supervisor_failure_report_preserves_start_correlation(tmp_path: Path, monkeypatch) -> None:

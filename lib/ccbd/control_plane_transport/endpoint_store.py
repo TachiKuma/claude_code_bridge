@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from pathlib import Path
 import json
 import os
+import time
 
 from .endpoint import EndpointRef, endpoint_from_record, endpoint_to_record
 
@@ -89,10 +90,17 @@ def unlink_legacy_socket_marker(legacy_socket_path: str | Path) -> None:
 
 
 def unlink_token(token_ref: str | Path) -> None:
-    try:
-        Path(token_ref).unlink()
-    except FileNotFoundError:
-        return
+    path = Path(token_ref)
+    for attempt in range(3):
+        try:
+            path.unlink()
+            return
+        except FileNotFoundError:
+            return
+        except PermissionError:
+            if attempt == 2:
+                return
+            time.sleep(0.05)
 
 
 @contextmanager

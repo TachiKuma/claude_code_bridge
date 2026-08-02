@@ -3,6 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 
+from ccbd.reload_sensitive_diagnostics import (
+    redact_sensitive_diagnostic_value,
+    redact_sensitive_diagnostics,
+)
+
 from .backend import build_backend, remember_namespace_state_ref, session_alive
 from .additive_patch_agents import append_agent_panes
 from .additive_patch_namespace import ready_namespace_or_blocked
@@ -57,7 +62,7 @@ class NamespacePatchApplyResult:
             'preserved_after': dict(self.preserved_after),
             'partial': bool(self.partial),
             'rollback_actions': list(self.rollback_actions),
-            'diagnostics': dict(self.diagnostics),
+            'diagnostics': redact_sensitive_diagnostics(self.diagnostics),
         }
 
 
@@ -224,6 +229,18 @@ def _failure_result(
     preserved_before: dict[str, str],
     preserved_after: dict[str, str],
 ) -> NamespacePatchApplyResult:
+    diagnostics = {
+        'reason': reason,
+        'error_type': type(exc).__name__,
+        'error': str(exc),
+        'graph_published': False,
+        'runtime_authority_written': False,
+        'lease_or_lifecycle_written': False,
+    }
+    for attr in ('category', 'operation', 'backend_impl', 'ipc_ref', 'evidence'):
+        value = getattr(exc, attr, None)
+        if value:
+            diagnostics[f'error_{attr}'] = redact_sensitive_diagnostic_value(value)
     return NamespacePatchApplyResult(
         status='failed',
         created_windows=tuple(state.created_windows),
@@ -253,14 +270,7 @@ def _failure_result(
             + tuple(f'removed_window:{window}' for window in state.removed_windows)
             + tuple(f'moved_agent:{agent}' for agent in state.moved_agents)
         ),
-        diagnostics={
-            'reason': reason,
-            'error_type': type(exc).__name__,
-            'error': str(exc),
-            'graph_published': False,
-            'runtime_authority_written': False,
-            'lease_or_lifecycle_written': False,
-        },
+        diagnostics=diagnostics,
     )
 
 

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
+
 from storage.paths import PathLayout
 from terminal_runtime import TmuxBackend, get_backend as resolve_terminal_backend
+from terminal_runtime.mux_backend_contract import MuxCommandErrorV2
 
 from ccbd.system import utc_now
 
@@ -25,12 +28,57 @@ def default_project_namespace_backend(*, socket_path: str | None = None, namespa
     requested_backend = backend_impl if backend_impl in {'tmux', 'herdr'} else None
     if namespace_state is not None and backend_family == 'herdr-native':
         requested_backend = 'herdr'
+    if requested_backend == 'herdr':
+        return _select_herdr_backend()
     backend = resolve_terminal_backend(requested_backend)
+    if (
+        namespace_state is None
+        and _herdr_runtime_configured()
+        and str(getattr(backend, 'backend_impl', '') or '').strip() != 'herdr'
+    ):
+        return _select_herdr_backend()
     if backend is None and namespace_state is None:
-        backend = resolve_terminal_backend('herdr')
+        return _select_herdr_backend()
     if backend is not None:
         return backend
     return TmuxBackend(socket_path=socket_path)
+
+
+def _select_herdr_backend():
+    try:
+        backend = resolve_terminal_backend('herdr')
+    except MuxCommandErrorV2 as exc:
+        raise _herdr_selection_error(cause=exc) from exc
+    if backend is not None:
+        return backend
+    raise _herdr_selection_error()
+
+
+def _herdr_selection_error(*, cause: MuxCommandErrorV2 | None = None) -> MuxCommandErrorV2:
+    evidence: dict[str, object] = {}
+    if cause is not None:
+        evidence = {
+            'cause_category': cause.category,
+            'cause_operation': cause.operation,
+            'cause_detail': cause.detail,
+        }
+    return MuxCommandErrorV2(
+        category='unsupported',
+        backend_impl='herdr',
+        operation='select_backend',
+        detail='Herdr project namespace backend selection failed',
+        evidence=evidence,
+    )
+
+
+def _herdr_runtime_configured() -> bool:
+    return any(
+        os.environ.get(name, '').strip()
+        for name in (
+            'CCB_HERDR_CAPABILITY_REPORT',
+            'CCB_HERDR_SOCKET_REF',
+        )
+    )
 
 
 class ProjectNamespaceController(ProjectNamespaceControllerStateMixin):

@@ -608,6 +608,7 @@ def test_apply_herdr_append_agent_uses_v2_namespace_ref_without_tmux_runner(tmp_
     assert 'split_pane' in call_names
     assert 'set_pane_identity' in call_names
     assert 'reflow_window' in call_names
+    assert call_names.count('reflow_window') == 1
     assert any(
         isinstance(call[1], dict) and call[1].get('restore_token') == 'restore-secret'
         for call in backend.calls

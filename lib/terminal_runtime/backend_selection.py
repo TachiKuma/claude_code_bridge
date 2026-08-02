@@ -6,6 +6,11 @@ from dataclasses import dataclass
 from dataclasses import field
 from typing import Callable, Mapping
 
+from provider_runtime.session_payload import (
+    backend_impl_from_session,
+    namespace_ref_from_session,
+    pane_id_from_session,
+)
 from terminal_runtime.backend_resolver import resolve_mux_backend_v2
 from terminal_runtime.layouts import LayoutResult, create_tmux_auto_layout
 from terminal_runtime.mux_backend_contract import MuxCommandErrorV2
@@ -103,6 +108,22 @@ class TerminalBackendSelection:
         return backend
 
     def get_backend_for_session(self, session_data: dict) -> object:
+        backend_impl = backend_impl_from_session(session_data)
+        if backend_impl == 'herdr':
+            if self.herdr_backend_factory is None:
+                raise MuxCommandErrorV2(
+                    category='unsupported',
+                    backend_impl='herdr',
+                    operation='select_backend_for_session',
+                    detail='Herdr backend factory is not available for session backend_impl=herdr',
+                )
+            backend = self.herdr_backend_factory()
+            namespace_ref = namespace_ref_from_session(session_data)
+            if namespace_ref is not None:
+                setattr(backend, '_ccb_project_namespace_ref', namespace_ref)
+            return backend
+        if backend_impl not in {None, 'tmux', 'rmux', 'psmux'}:
+            raise ValueError(f'unsupported session backend_impl: {backend_impl}')
         socket_name = str(session_data.get('tmux_socket_name') or '').strip() or None
         socket_path = str(session_data.get('tmux_socket_path') or '').strip() or None
         try:
@@ -112,7 +133,7 @@ class TerminalBackendSelection:
 
     @staticmethod
     def get_pane_id_from_session(session_data: dict) -> str | None:
-        return session_data.get('pane_id') or session_data.get('tmux_session')
+        return pane_id_from_session(session_data)
 
 
 def _selection_error_category(failure_reason: object) -> str:
