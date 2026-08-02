@@ -33,57 +33,57 @@ steps:
   - id: S7
     action: "[S7] regression guard + Windows foreground/manual evidence：运行 Herdr focused tests、现有 tmux/rmux namespace/foreground regression，并收集 Native Windows x64 foreground/manual transcript"
     exit_signal: "Herdr tests 通过；tmux/rmux project namespace、rmux attach、start foreground tests 不退化；Windows x64 transcript 记录 ccb namespace create、foreground attach、kill、reload 和 restart unsupported/deferred evidence"
-    status: pending
+    status: done
 
 checks:
   - item: "前置 V2 contract、HerdrBackend 与 HerdrBackend.attach_namespace/presentation capability 未落地时，本 feature implementation dependency-blocked，不重复定义 V2 contract 或 socket client"
     source: design AC-001 / DOD-IMPL-000
-    status: pending
+    status: passed
   - item: "旧 tmux/rmux namespace state record 的 from_record/to_record/summary 行为不退化"
     source: design AC-002 / DOD-IMPL-001
-    status: pending
+    status: passed
   - item: "Herdr namespace state round-trip 保留 herdr-native、herdr、herdr_socket、ipc_ref、opaque restore token，tmux_socket_path 可为空"
     source: design AC-003 / DOD-IMPL-001
-    status: pending
+    status: passed
   - item: "ping、event summary、project view、foreground summary、日志只包含 redacted namespace payload 和 namespace_restore_token_present，不包含 raw restore_token"
     source: design AC-004 / DOD-IMPL-001
-    status: pending
+    status: passed
   - item: "ProjectNamespaceState.summary_fields、ProjectNamespaceEvent.summary_fields 与 log capture 只消费 redacted projection helper；namespace_ref internal raw restore_token 不进入 public/event/log payload"
     source: design AC-004 / CMD-012
-    status: pending
+    status: passed
   - item: "lib/ccbd/project_view/service.py::_namespace_view 使用 redacted namespace projection；Herdr project view 不通过 tmux_session_name 或 tmux facts path 泄露 restore_token"
     source: design AC-004 / CMD-010
-    status: pending
+    status: passed
   - item: "Herdr backend 进入 namespace helper 时按 operation 走 V2 capability gate，不调用 tmux _tmux_run fallback，不要求 pane id 以 % 开头，缺 required method/capability 时结构化 fail closed"
     source: design AC-005 / DOD-IMPL-002
-    status: pending
+    status: passed
   - item: "Herdr ensure/layout materialization 后 state/event/ping payload 含 redacted Herdr namespace_ref，ccbd epoch 仍为 authority"
     source: design AC-006 / DOD-IMPL-003
-    status: pending
+    status: passed
   - item: "Herdr layout/reflow/presentation capability unsupported 时 fail closed 或跳过 tmux UI 并记录 degraded evidence，不保存错误的 attachable success state，error 含 capability gap"
     source: design AC-007 / DOD-IMPL-003
-    status: pending
+    status: passed
   - item: "Herdr foreground attach 不要求 tmux binary，builder seam 收到 redacted namespace_ref + selection diagnostics，调用 Herdr attach_namespace，summary 显示 backend/ipc 且不泄露 restore token"
     source: design AC-008 / DOD-IMPL-004
-    status: pending
+    status: passed
   - item: "Herdr foreground attach unsupported 或 payload 缺失时返回 actionable ForegroundAttachError，包含 backend selection/ipc/capability context，不 fallback tmux"
     source: design AC-009 / DOD-IMPL-004
-    status: pending
+    status: passed
   - item: "kill/reload 仍由 ccbd handler/supervisor 编排，backend 只收到 current namespace/window/pane primitive；build_project_restart_agent_handler 与 build_project_restart_panes_handler 在 Herdr 下返回 unsupported/deferred evidence，不改 provider completion，不走静默 scheduled success"
     source: design AC-010 / DOD-IMPL-005
-    status: pending
+    status: passed
   - item: "reload patch 真实执行模块 additive_patch_apply/additive_patch_windows/additive_patch_agents/move_patch_agents/remove_patch_agents/agent_window_reflow 使用 V2 refs/primitives；Herdr 缺 required primitive 时 patch result blocked/failed，不进入 published/noop 成功态"
     source: design AC-010 / CMD-011
-    status: pending
+    status: passed
   - item: "Native Windows x64 foreground/manual transcript 覆盖 ccb namespace create、foreground attach、kill、reload 和 restart unsupported/deferred evidence；缺 host/Herdr 时 blocked"
     source: design AC-011 / CMD-013
-    status: pending
+    status: passed
   - item: "现有 tmux/rmux namespace、rmux foreground attach、reload tests 不退化"
     source: design AC-012
-    status: pending
+    status: passed
   - item: "本 feature 不修改 provider runtime、recovery、Mobile/Config UI、doctor/support、package/release/update/installer、public validation matrix"
     source: design AC-013 / 明确不做
-    status: pending
+    status: passed
 
 dod:
   commands:

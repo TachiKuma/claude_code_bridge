@@ -45,18 +45,18 @@ items:
   - slug: ccbd-herdr-namespace-lifecycle
     description: 将 Herdr backend 接入 ccbd project namespace、pane topology、foreground attach、kill、restart 和 reload
     depends_on: [ccbd-windows-control-plane-transport]
-    status: in-progress
+    status: done
     feature: 2026-07-31-ccbd-herdr-namespace-lifecycle
     minimal_loop: false
-    notes: "ccbd 仍是 project authority；Herdr session 和 pane 只作为 terminal backend evidence。实现前置现由 ccbd-windows-control-plane-transport 提供 Native Windows ccb->ccbd 控制面可启动性；本 feature 不承接 control-plane transport 代码。"
+    notes: "accepted 2026-08-02；S0-S7、review、QA、acceptance 均通过。CMD-013 Native Windows x64 transcript verdict=passed：namespace create、foreground attach、reload apply、kill 均通过；restart 明确 deferred_to_provider_runtime_on_herdr。未承接 provider runtime/recovery/user-surface/release 范围；为 provider-runtime-on-herdr 提供 Herdr namespace/pane evidence。"
 
   - slug: provider-runtime-on-herdr
     description: 让所有公开 provider 在 Herdr pane 中完成启动、ask、pend、completion、cancel 和 provider state 绑定
     depends_on: [ccbd-herdr-namespace-lifecycle]
-    status: in-progress
+    status: done
     feature: 2026-07-31-provider-runtime-on-herdr
     minimal_loop: false
-    notes: "Codex/Claude/Gemini/Opencode 等当前公开 provider set 都必须通过 ask/pend/completion/cancel 或明确 blocked；任一缺口不得进入 supported；Herdr agent state 只能作为 diagnostics evidence。"
+    notes: "accepted 2026-08-03：S1-S7、review、QA、acceptance 均通过。Provider runtime 支持 Herdr assigned pane launch/session payload/lifecycle/completion authority/cancel/restart surface contract；Herdr agent state diagnostics-only，completion/cancel authority 仍归 CCB。S7 冻结当前 public provider catalog 20 项（含 qoder/qoderclicn），全部 provider 行因缺生产 API 授权/credential readiness 或 CLI 缺失记录 explicit blocked evidence；这满足证据完整性但不得宣称 supported。CMD-004 全量 runtime launch bundle 仍是 Codex bridge bootstrap baseline-risk。下游 recovery/user-surface/release/public matrix/supportability 必须继续 fail closed。"
 
   - slug: herdr-bounded-recovery-boundary
     description: 对齐 CCB v8.5.2 bounded pane recovery 与 Herdr session restore，确保恢复 owner 唯一

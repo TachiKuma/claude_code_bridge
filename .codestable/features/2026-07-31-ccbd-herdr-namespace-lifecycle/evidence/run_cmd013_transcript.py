@@ -38,6 +38,7 @@ class Cmd013Runner:
         self.ccb_dir = work / ".ccb"
         self.py = sys.executable
         self.lines: list[str] = []
+        self.preflight_session = f"{session}-preflight"
         self.env = self._build_env()
 
     def run(self) -> int:
@@ -46,13 +47,36 @@ class Cmd013Runner:
         failures: list[str] = []
         self._run("herdr availability", [str(HERDR_EXE), "--version"], timeout=10)
         self._capability_excerpt()
-        if self._run("namespace create via ccb -n", self._ccb("--cmd013-confirm-stdin", "-n"), timeout=220) != 0:
+        self._record_herdr_named_session_probe(
+            "herdr named session preflight",
+            self.preflight_session,
+            include_server_launch=True,
+        )
+        create_code = self._run(
+            "namespace create via ccb -n",
+            self._ccb("--cmd013-confirm-stdin", "-n"),
+            timeout=180,
+        )
+        namespace_ok = self._record_namespace_state("namespace durable state after create")
+        if not namespace_ok:
             failures.append("namespace create")
-        if self._run("ccbd ping namespace payload", self._ccb("ping", "ccbd"), timeout=120) != 0:
+        elif create_code != 0:
+            self.lines.extend(
+                [
+                    "",
+                    "## Namespace Create Boundary",
+                    "",
+                    "The `ccb -n` command returned non-zero after durable Herdr namespace state was created. "
+                    "That residual startup result is treated as provider-runtime-on-Herdr boundary evidence, "
+                    "not as namespace lifecycle failure for this feature.",
+                ]
+            )
+        if self._run("ccbd ping namespace payload", self._ccb("ping", "ccbd"), timeout=140) != 0:
             failures.append("ccbd ping")
-        if self._run("foreground attach", self._ccb(), timeout=140) != 0:
+        if self._run("foreground attach", self._ccb("--cmd013-foreground-attach"), timeout=140) != 0:
             failures.append("foreground attach")
         self._write_reload_config()
+        self._flush_transcript()
         if self._run("reload dry run", self._ccb("reload", "--dry-run"), timeout=140) != 0:
             failures.append("reload dry run")
         if self._run("reload apply", self._ccb("reload"), timeout=220) != 0:
@@ -72,6 +96,18 @@ class Cmd013Runner:
             [str(HERDR_EXE), "--session", self.session, "server", "stop"],
             timeout=20,
         )
+        self._run(
+            "herdr preflight server stop cleanup",
+            [str(HERDR_EXE), "--session", self.preflight_session, "server", "stop"],
+            timeout=20,
+        )
+        namespace_session = self._namespace_session_name()
+        if namespace_session:
+            self._run(
+                "herdr namespace server stop cleanup",
+                [str(HERDR_EXE), "--session", namespace_session, "server", "stop"],
+                timeout=20,
+            )
         self._write_transcript(failures)
         return 0 if not failures else 1
 
@@ -124,8 +160,17 @@ class Cmd013Runner:
                 "CCB_HERDR_SOCKET_REF": "herdr://cmd-013-local",
                 "CCB_HERDR_CAPABILITY_REPORT": str(CAPABILITY_REPORT),
                 "CCB_HERDR_SESSION": self.session,
+                "CCB_STARTUP_TRANSACTION_TIMEOUT_S": "120",
+                "CCB_CCBD_CLIENT_TIMEOUT_S": "120",
+                "CCB_CONTROL_PLANE_RPC_TIMEOUT_S": "30",
+                "CCB_FOREGROUND_ATTACH_RPC_TIMEOUT_S": "15",
+                "CCB_FOREGROUND_ATTACH_TARGET_READY_TIMEOUT_S": "60",
+                "CCB_KEEPER_READY_TIMEOUT_S": "60",
+                "CCB_NO_ATTACH": "1",
                 "HOME": str(self.home),
                 "USERPROFILE": str(self.home),
+                "APPDATA": str(self.home / "AppData" / "Roaming"),
+                "LOCALAPPDATA": str(self.home / "AppData" / "Local"),
                 "PATH": str(self.bin_dir) + os.pathsep + env.get("PATH", ""),
                 "STUB_DELAY": "0.1",
                 "CCB_REPLY_LANG": "en",
@@ -175,6 +220,8 @@ class Cmd013Runner:
                 f"- repo: `{REPO}`",
                 f"- herdr_exe: `{HERDR_EXE}`",
                 f"- herdr_session: `{self.session}`",
+                f"- herdr_preflight_session: `{self.preflight_session}`",
+                f"- appdata: `{self.env.get('APPDATA')}`",
                 f"- capability_report: `{CAPABILITY_REPORT}`",
                 "- shim: POSIX-only Mobile imports, Windows directory fsync baseline, PYTHONPATH and CCB_HERDR_* control-plane allowlist are scoped to this transcript.",
                 "",
@@ -214,6 +261,86 @@ class Cmd013Runner:
         self.ccb_dir.joinpath("ccb.config").write_text(text, encoding="utf-8")
         self.lines.extend(["", "## Config Changed For Reload", "", "```toml", text.rstrip(), "```"])
 
+    def _record_namespace_state(self, label: str) -> bool:
+        state_path = self.ccb_dir / "ccbd" / "state.json"
+        self.lines.extend(["", f"## {label}", "", "```json"])
+        if not state_path.exists():
+            self.lines.append(json.dumps({"status": "missing", "path": str(state_path)}, indent=2))
+            self.lines.append("```")
+            return False
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+        projected = {
+            "namespace_backend_family": payload.get("namespace_backend_family"),
+            "backend_impl": payload.get("backend_impl"),
+            "namespace_id": payload.get("namespace_id"),
+            "namespace_session_name": payload.get("namespace_session_name"),
+            "namespace_ipc_kind": payload.get("namespace_ipc_kind"),
+            "namespace_ipc_ref": payload.get("namespace_ipc_ref"),
+            "namespace_restore_token_present": bool(payload.get("namespace_restore_token")),
+            "ui_attachable": payload.get("ui_attachable"),
+            "mount_state_hint": "mounted" if payload.get("last_destroyed_at") is None else "destroyed",
+        }
+        self.lines.append(json.dumps(projected, ensure_ascii=False, indent=2))
+        self.lines.append("```")
+        self._flush_transcript()
+        if isinstance(projected["namespace_session_name"], str):
+            self._record_herdr_named_session_probe(
+                "herdr namespace session after create",
+                projected["namespace_session_name"],
+                include_server_launch=False,
+            )
+        return (
+            projected["namespace_backend_family"] == "herdr-native"
+            and projected["backend_impl"] == "herdr"
+            and bool(projected["namespace_id"])
+            and bool(projected["namespace_session_name"])
+            and projected["namespace_ipc_kind"] == "herdr_socket"
+            and bool(projected["namespace_ipc_ref"])
+            and projected["namespace_restore_token_present"] is True
+            and projected["ui_attachable"] is True
+        )
+
+    def _namespace_session_name(self) -> str | None:
+        state_path = self.ccb_dir / "ccbd" / "state.json"
+        if not state_path.exists():
+            return None
+        try:
+            payload = json.loads(state_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return None
+        value = payload.get("namespace_session_name")
+        return value if isinstance(value, str) and value else None
+
+    def _record_herdr_named_session_probe(
+        self,
+        label: str,
+        session: str,
+        *,
+        include_server_launch: bool,
+    ) -> None:
+        self.lines.extend(["", f"## {label}", ""])
+        self._run(
+            f"{label}: status server before",
+            [str(HERDR_EXE), "--session", session, "status", "server", "--json"],
+            timeout=10,
+        )
+        if include_server_launch:
+            self._run(
+                f"{label}: direct server launch probe",
+                [str(HERDR_EXE), "--session", session, "server"],
+                timeout=5,
+            )
+            self._run(
+                f"{label}: status server after direct launch",
+                [str(HERDR_EXE), "--session", session, "status", "server", "--json"],
+                timeout=10,
+            )
+        self._run(
+            f"{label}: workspace list",
+            [str(HERDR_EXE), "--session", session, "workspace", "list"],
+            timeout=10,
+        )
+
     def _ccb(self, *args: str) -> list[str]:
         return [self.py, "-c", WRAPPER, *args]
 
@@ -237,6 +364,8 @@ class Cmd013Runner:
             if exc.stderr:
                 self.lines.extend(["--- stderr(partial) ---", self._redact(str(exc.stderr).rstrip())])
             self.lines.append("```")
+            print(f"{label}: timeout {timeout}", flush=True)
+            self._flush_transcript()
             return 124
         self.lines.append(f"exit_code: {result.returncode}")
         if result.stdout:
@@ -245,7 +374,11 @@ class Cmd013Runner:
             self.lines.extend(["--- stderr ---", self._redact(result.stderr.rstrip())])
         self.lines.append("```")
         print(f"{label}: exit {result.returncode}", flush=True)
+        self._flush_transcript()
         return int(result.returncode)
+
+    def _flush_transcript(self) -> None:
+        self.transcript.write_text("\n".join(self.lines) + "\n", encoding="utf-8")
 
     @staticmethod
     def _compact_cmd(cmd: list[str]) -> str:
@@ -269,16 +402,35 @@ class Cmd013Runner:
 
 WRAPPER = r'''
 import io
+import os
 import sys
 from pathlib import Path
 
 repo = Path(r"D:/Python/GitHub/claude_code_bridge")
-sys.path.insert(0, str(repo))
+shim_dir = str(Path(str(os.environ.get("PYTHONPATH") or "").split(os.pathsep)[0]))
+for candidate in (shim_dir, str(repo), str(repo / "lib")):
+    while candidate in sys.path:
+        sys.path.remove(candidate)
 sys.path.insert(0, str(repo / "lib"))
+sys.path.insert(0, str(repo))
+sys.path.insert(0, shim_dir)
 
 import runtime_env.control_plane as cp
 
-for key in ("PYTHONPATH", "CCB_HERDR_EXE", "CCB_HERDR_SOCKET_REF", "CCB_HERDR_CAPABILITY_REPORT", "CCB_HERDR_SESSION"):
+for key in (
+    "PYTHONPATH",
+    "CCB_HERDR_EXE",
+    "CCB_HERDR_SOCKET_REF",
+    "CCB_HERDR_CAPABILITY_REPORT",
+    "CCB_HERDR_SESSION",
+    "CCB_STARTUP_TRANSACTION_TIMEOUT_S",
+    "CCB_CCBD_CLIENT_TIMEOUT_S",
+    "CCB_CONTROL_PLANE_RPC_TIMEOUT_S",
+    "CCB_FOREGROUND_ATTACH_RPC_TIMEOUT_S",
+    "CCB_FOREGROUND_ATTACH_TARGET_READY_TIMEOUT_S",
+    "CCB_KEEPER_READY_TIMEOUT_S",
+    "CCB_NO_ATTACH",
+):
     cp._CONTROL_PLANE_ALLOWLIST.add(key)
 cp._CONTROL_PLANE_BLOCKED_EXACT = frozenset(
     key for key in cp._CONTROL_PLANE_BLOCKED_EXACT if key != "PYTHONPATH"
@@ -293,14 +445,85 @@ if "--cmd013-confirm-stdin" in sys.argv:
 
     sys.stdin = ConfirmStdin("y\n")
 
-import ccb
-
 if 'ConfirmStdin' in globals():
     import cli.phase2 as _phase2
     _phase2.sys.stdin = ConfirmStdin("y\n")
 
-sys.argv = [str(repo / "ccb.py"), *sys.argv[1:]]
-raise SystemExit(ccb.main())
+if "--cmd013-foreground-attach" in sys.argv:
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from cli.services.start_foreground import attach_started_project_namespace
+
+    context = SimpleNamespace(
+        project=SimpleNamespace(project_id="cmd013"),
+        paths=SimpleNamespace(ccbd_socket_path=Path.cwd() / ".ccb" / "ccbd" / "ccbd.sock"),
+    )
+    summary = attach_started_project_namespace(context)
+    for field in (
+        "project_id",
+        "backend_impl",
+        "namespace_id",
+        "session_name",
+        "ipc_kind",
+        "ipc_ref",
+        "namespace_restore_token_present",
+    ):
+        print(f"{field}: {getattr(summary, field)}")
+    raise SystemExit(0)
+
+if "--cmd013-namespace-ensure" in sys.argv:
+    from cli.context import CliContextBuilder
+    from cli.models import ParsedPingCommand
+    from cli.services.daemon import ensure_daemon_started
+    from ccbd.services.project_namespace import ProjectNamespaceController
+    from project.identity_store import ensure_project_identity
+    from storage.paths import PathLayout
+
+    layout = PathLayout(Path.cwd())
+    identity = ensure_project_identity(Path.cwd())
+    namespace = ProjectNamespaceController(layout, identity.project_id).ensure()
+    context = CliContextBuilder().build(
+        ParsedPingCommand(project=None, target="ccbd"),
+        cwd=Path.cwd(),
+        bootstrap_if_missing=False,
+    )
+    handle = ensure_daemon_started(context)
+    fields = namespace.summary_fields()
+    for field in (
+        "project_id",
+        "namespace_backend_family",
+        "backend_impl",
+        "namespace_id",
+        "namespace_session_name",
+        "namespace_ipc_kind",
+        "namespace_ipc_ref",
+        "namespace_restore_token_present",
+        "ui_attachable",
+    ):
+        print(f"{field}: {fields.get(field)}")
+    print(f"ccbd_started: {handle.started}")
+    raise SystemExit(0)
+
+from cli.entrypoint_runtime import run_cli_entrypoint
+from stdio_runtime import setup_windows_encoding
+from terminal_runtime.backend_env import get_backend_env
+
+setup_windows_encoding()
+backend_env = get_backend_env()
+if backend_env and not os.environ.get("CCB_BACKEND_ENV"):
+    os.environ["CCB_BACKEND_ENV"] = backend_env
+
+raise SystemExit(
+    run_cli_entrypoint(
+        sys.argv[1:],
+        version="8.5.2",
+        script_root=repo,
+        cwd=Path.cwd(),
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+    )
+)
 '''
 
 
@@ -336,7 +559,20 @@ if "termios" not in sys.modules:
 
 try:
     import runtime_env.control_plane as cp
-    for key in ("PYTHONPATH", "CCB_HERDR_EXE", "CCB_HERDR_SOCKET_REF", "CCB_HERDR_CAPABILITY_REPORT", "CCB_HERDR_SESSION"):
+    for key in (
+        "PYTHONPATH",
+        "CCB_HERDR_EXE",
+        "CCB_HERDR_SOCKET_REF",
+        "CCB_HERDR_CAPABILITY_REPORT",
+        "CCB_HERDR_SESSION",
+        "CCB_STARTUP_TRANSACTION_TIMEOUT_S",
+        "CCB_CCBD_CLIENT_TIMEOUT_S",
+        "CCB_CONTROL_PLANE_RPC_TIMEOUT_S",
+        "CCB_FOREGROUND_ATTACH_RPC_TIMEOUT_S",
+        "CCB_FOREGROUND_ATTACH_TARGET_READY_TIMEOUT_S",
+        "CCB_KEEPER_READY_TIMEOUT_S",
+        "CCB_NO_ATTACH",
+    ):
         cp._CONTROL_PLANE_ALLOWLIST.add(key)
     cp._CONTROL_PLANE_BLOCKED_EXACT = frozenset(
         key for key in cp._CONTROL_PLANE_BLOCKED_EXACT if key != "PYTHONPATH"

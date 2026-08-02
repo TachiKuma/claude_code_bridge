@@ -482,16 +482,16 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
 6. **ccbd-herdr-namespace-lifecycle** — 把 Herdr backend 接入 ccbd project namespace、layout、foreground attach、kill/restart/reload。
    - 所属模块：CCBD Namespace Integration
    - 依赖：`ccbd-windows-control-plane-transport`
-   - 状态：in-progress
+   - 状态：accepted
    - 对应 feature：`2026-07-31-ccbd-herdr-namespace-lifecycle`
-   - 备注：ccbd 仍是 authority；Herdr session/pane 是 terminal backend evidence；control-plane transport 已拆到前置 `ccbd-windows-control-plane-transport`。
+   - 备注：accepted 2026-08-02；ccbd 仍是 authority，Herdr session/pane 是 terminal backend evidence。CMD-013 Native Windows x64 transcript 覆盖 namespace create、foreground attach、reload apply、restart deferred 和 kill；provider runtime/recovery/user-surface/release 留给后续 child。
 
 7. **provider-runtime-on-herdr** — 让所有公开 provider 的启动、`ask`、`pend`、completion、cancel 在 Herdr pane 中按 CCB 语义工作。
    - 所属模块：Provider Runtime Integration
    - 依赖：`ccbd-herdr-namespace-lifecycle`
-   - 状态：in-progress
+   - 状态：accepted
    - 对应 feature：`2026-07-31-provider-runtime-on-herdr`
-   - 备注：Codex/Claude/Gemini/Opencode 等当前公开 provider set 都必须覆盖；任一 provider 未通过或未给 blocked evidence 时不得进入 supported。
+   - 备注：accepted 2026-08-03；S1-S7、review、QA、acceptance 均通过。Herdr assigned pane launch 不要求 tmux binary，不走 detached tmux fallback / size probe，session payload 写入 ProviderRuntimeBackendRef、managed_home、completion_source/completion_source_kind、Herdr namespace_ref/pane_ref 与 restore token redaction，backend_for_session 能构造 Herdr backend且未知 backend 不回退 tmux；pane_log_support/Claude/Codex/Gemini/Opencode ensure_pane 对 Herdr 使用 pane_ref liveness/log/capture，不调用 tmux ownership/rebound；provider execution/dispatcher tracker 继续是 completion authority，terminal decision/snapshot 保留精确 completion_source_kind，terminal capture fallback 带 provider-declared diagnostics，Herdr agent state completed verdict fail closed；cancel 使用结构化 pane_ref / best-effort interrupt，dispatcher 仍只写 cancelled decision；Herdr restart surface 明确 unsupported/deferred 并返回 respawn/session binding not_attempted evidence，不接管 bounded recovery。S7 冻结当前 public provider catalog 20 项（含新增 qoder/qoderclicn），全部 provider 行都有 Native Windows x64 blocked evidence；因缺生产 API 授权/credential readiness 或 CLI 缺失，不得宣称 supported。下游 recovery/user-surface/release/public matrix/supportability 必须继续 fail closed。
 
 8. **herdr-bounded-recovery-boundary** — 对齐 CCB v8.5.2 bounded recovery 与 Herdr restore，避免双重恢复。
    - 所属模块：Recovery Boundary

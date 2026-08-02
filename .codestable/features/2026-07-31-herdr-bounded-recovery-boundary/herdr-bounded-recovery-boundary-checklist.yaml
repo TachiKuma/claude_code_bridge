@@ -5,60 +5,60 @@ steps:
   - id: S1
     action: "Admission and policy contract：确认 provider-runtime-on-herdr implementation/acceptance ready，并定义 HerdrRecoveryPolicy owner=ccb"
     exit_signal: "provider-runtime-on-herdr roadmap done、acceptance passed、artifact/evidence refs 存在；Herdr auto restore mode 必须可证明 disabled，observe-only/unsupported/unknown 时 dependency/capability blocked"
-    status: pending
+    status: done
   - id: S2
     action: "Evidence ledger and redaction：扩展 Herdr recovery evidence ledger，sanitize namespace_ref.restore_token，输出 refs、health、restore_token_present、agent_state_ref、action/reason"
     exit_signal: "recovery events/logs/project-visible evidence 的 namespace_ref 不含 raw restore_token；含 raw token 的 runtime.namespace_ref fixture 只输出 restore_token_present；ledger 可区分 pane/process/namespace/daemon health 和 Herdr auto restore mode"
-    status: pending
+    status: done
   - id: S3
     action: "Probation/circuit state machine：保留 restart_count backoff，补齐 90 秒 probation projection、success gate 和 durable circuit"
     exit_signal: "backoff 命中不调用 Herdr restore/respawn；probation 未到期不写 recover_succeeded/steady；90 秒内不稳定写 recover_failed；circuit threshold 后 blocked"
-    status: pending
+    status: done
   - id: S4
     action: "Recovery action routing：pane/process/namespace/daemon Herdr health 由 CCB supervision 路由，lifecycle start refresh 复用同一 gate"
     exit_signal: "pane/process 走 runtime_service/provider session recovery；namespace restore 通过 CCB-owned runtime/namespace service private call；daemon 只在 project-owned/allowed 时 recover；Herdr auto restore 非 disabled 时 blocked"
-    status: pending
+    status: done
   - id: S5
     action: "Provider pane primitive：支持 Herdr pane_ref respawn/reattach recovery primitive，不要求 tmux %pane，且不进入 tmux ownership/identity 分支"
     exit_signal: "fake Herdr backend 可 respawn/reattach 并写 evidence；provider auth revoked/recovery_blocked hard-block；tmux/rmux pane recovery 不退化"
-    status: pending
+    status: done
   - id: S6
     action: "Crash log retention and regression guard：保留 bounded crash logs/reason sidecar，运行 tmux/rmux recovery regression、Herdr fake recovery tests、scope/content guard"
     exit_signal: "existing rmux/restore/crash tests 通过；新增 Herdr recovery focused tests 通过；bounded crash logs/reason sidecar 保留；无 provider completion/user-surface/package/release/update/installer/Herdr socket schema-client 越界"
-    status: pending
+    status: done
   - id: S7
     action: "Native Windows recovery evidence：收集 Herdr pane/process/namespace recovery transcript 或 auto-restore blocked evidence"
     exit_signal: "transcript 显示 CCB owner、Herdr operation/evidence、90s probation/circuit；缺 host/Herdr 时 acceptance blocked"
-    status: pending
+    status: done
 
 checks:
   - item: "provider-runtime-on-herdr 不是仅 design-review passed，而是 implementation/acceptance evidence 可验证"
     source: design AC-001 / DOD-IMPL-000 / S1
-    status: pending
+    status: done
   - item: "HerdrRecoveryPolicy owner 固定为 ccb，Herdr auto restore 必须 disabled；observe-only/unsupported/unknown 不能进入 recovery-capable 或 supported"
     source: design AC-003 / DOD-IMPL-001 / S1
-    status: pending
+    status: done
   - item: "Herdr recovery evidence ledger redacted，namespace_ref.restore_token 不进入 public payload，只输出 restore_token_present"
     source: design AC-002 / AC-006 / DOD-IMPL-002 / S2
-    status: pending
+    status: done
   - item: "90 秒 probation、restart_count backoff、durable circuit 保留，probation 未到期不能写 recover_succeeded/steady"
     source: design AC-004 / AC-007 / DOD-IMPL-003 / S3
-    status: pending
+    status: done
   - item: "pane/process/namespace/daemon recovery action 均由 CCB supervision 路由，lifecycle start refresh 不绕过同一 gate"
     source: design AC-005 / AC-006 / DOD-IMPL-004 / S4
-    status: pending
+    status: done
   - item: "Herdr pane_ref recovery 不要求 tmux %pane，也不进入 tmux ownership/identity 分支；provider auth revoked hard-block"
     source: design AC-008 / DOD-IMPL-005 / S5
-    status: pending
+    status: done
   - item: "tmux/rmux recovery regression 不退化"
     source: design AC-009 / S6
-    status: pending
+    status: done
   - item: "Native Windows x64 Herdr recovery transcript 覆盖 auto restore disabled 下的 recovery，或 auto-restore-not-disabled blocked evidence"
     source: design AC-010 / DOD-ACCEPT-001 / S7
-    status: pending
+    status: done
   - item: "本 feature 不修改 provider completion、Mobile/Config UI、doctor/support、package/release/update/installer/public matrix、Herdr socket schema/client owner"
     source: design AC-011 / 明确不做 / S6
-    status: pending
+    status: done
 
 dod:
   commands:

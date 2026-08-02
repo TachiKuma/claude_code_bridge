@@ -1,0 +1,98 @@
+{
+  "doc_type": "feature-evidence",
+  "feature": "2026-07-31-provider-runtime-on-herdr",
+  "kind": "provider_catalog_public_providers_snapshot",
+  "status": "captured",
+  "generated_at": "2026-08-03T03:26:11+08:00",
+  "repo_head": "d6f9b1e0f9298bf25b2e0c442fb880834a0f734b",
+  "platform": {
+    "sys_platform": "win32",
+    "machine": "AMD64",
+    "python_bits": "64bit"
+  },
+  "source": {
+    "declared_symbols": "lib/provider_core/registry_runtime/builtin_backends.py::CORE_PROVIDER_NAMES + OPTIONAL_PROVIDER_NAMES",
+    "declared_source_lines": "lib/provider_core/registry_runtime/builtin_backends.py:5-23",
+    "catalog_builder": "provider_core.catalog.build_default_provider_catalog(include_optional=True, include_test_doubles=False).providers()",
+    "catalog_sort_source_lines": "lib/provider_core/catalog.py:40"
+  },
+  "command": "$env:PYTHONPATH = \"D:/Python/GitHub/claude_code_bridge/lib;D:/Python/GitHub/claude_code_bridge\"; python -c \"import json, platform, sys; from provider_core.registry_runtime.builtin_backends import CORE_PROVIDER_NAMES, OPTIONAL_PROVIDER_NAMES; from provider_core.catalog import build_default_provider_catalog; ...\"",
+  "source_command_exit_code": 0,
+  "test_doubles_excluded": true,
+  "core_provider_names": [
+    "codex",
+    "claude",
+    "gemini"
+  ],
+  "optional_provider_names": [
+    "opencode",
+    "droid",
+    "agy",
+    "kimi",
+    "deepseek",
+    "mimo",
+    "qwen",
+    "qoder",
+    "qoderclicn",
+    "cursor",
+    "copilot",
+    "crush",
+    "grok",
+    "kiro",
+    "pi",
+    "omp",
+    "zai"
+  ],
+  "public_providers_declared_order": [
+    "codex",
+    "claude",
+    "gemini",
+    "opencode",
+    "droid",
+    "agy",
+    "kimi",
+    "deepseek",
+    "mimo",
+    "qwen",
+    "qoder",
+    "qoderclicn",
+    "cursor",
+    "copilot",
+    "crush",
+    "grok",
+    "kiro",
+    "pi",
+    "omp",
+    "zai"
+  ],
+  "public_providers_catalog_order": [
+    "agy",
+    "claude",
+    "codex",
+    "copilot",
+    "crush",
+    "cursor",
+    "deepseek",
+    "droid",
+    "gemini",
+    "grok",
+    "kimi",
+    "kiro",
+    "mimo",
+    "omp",
+    "opencode",
+    "pi",
+    "qoder",
+    "qoderclicn",
+    "qwen",
+    "zai"
+  ],
+  "provider_count": 20,
+  "delta_vs_design_baseline": {
+    "added": [
+      "qoder",
+      "qoderclicn"
+    ],
+    "removed": []
+  }
+}

@@ -5,69 +5,71 @@ steps:
   - id: S1
     action: "Implementation admission：确认前置 V2 contract、HerdrBackend、ccbd Herdr namespace lifecycle 和 assigned pane evidence 已 implementation/acceptance ready"
     exit_signal: "前置 roadmap item 为 done、acceptance report 为 passed、required artifacts/evidence refs 存在且 focused tests/import check 通过；缺 Herdr PaneIO、namespace/pane refs、foreground/namespace evidence 或 acceptance transcript 时写 dependency-blocked admission report"
-    status: pending
+    status: done
   - id: S2
     action: "Backend-neutral runtime launch：让 provider pane launch 在 Herdr backend 下通过 PaneIO/PanePresentation 启动 assigned pane，不要求 tmux binary"
     exit_signal: "fake Herdr backend 记录 respawn/create、identity、log/capture 调用；Herdr path 不调用 detached tmux fallback、tmux size probe 或 tmux server policy；tmux/rmux launch regression 不退化"
-    status: pending
+    status: done
   - id: S3
     action: "Provider runtime session payload：扩展 writer/parser/resolver 支持 ProviderRuntimeBackendRef、managed_home、completion_source、completion_source_kind、Herdr namespace_ref/pane_ref 与 restore token redaction"
     exit_signal: "session 文件能 round-trip backend_impl=herdr、herdr-native/herdr_socket、pane_ref、managed_home、roadmap 粗粒度 completion_source、精确 completion_source_kind、namespace_restore_token_present；raw restore_token 不进 public payload/log；legacy tmux/rmux alias 兼容"
-    status: pending
+    status: done
   - id: S4
     action: "Provider session lifecycle：让 pane_log_support 和 provider session ensure_pane 使用 backend-neutral liveness/log/capture，tmux ownership/rebound 只限 tmux-compatible"
     exit_signal: "Claude/Gemini/Opencode/Codex 或 pane-log focused tests 证明 Herdr session 不走 tmux ownership/rebound；capability unsupported 输出 actionable error；tmux/rmux ensure_pane 兼容"
-    status: pending
+    status: done
   - id: S5
     action: "Ask/pend/completion authority：保持 dispatcher/provider execution/completion tracker 为 completion authority，Herdr terminal capture 仅作 provider-declared fallback 或 diagnostics"
     exit_signal: "provider-native log/event/hook artifact、session snapshot 或 structured result 保留精确 completion_source_kind；terminal capture fallback 降级可见；Herdr agent state 不得直接产出 completed verdict；Codex reply delivery acceptance gate 不退化"
-    status: pending
+    status: done
   - id: S6
     action: "Cancellation and provider pane restart surface：让 Herdr cancel/restart 只通过 CCB job/session authority 写状态，backend primitive 只提供 interrupt/kill/respawn/capture evidence"
     exit_signal: "cancel job 写 cancel flag/execution_service/cancelled decision；Herdr backend failure 不产生 completed；restart surface 返回真实 respawn/session binding evidence 或明确 unsupported/deferred，不接管 bounded recovery"
-    status: pending
+    status: done
   - id: S7
     action: "Scope/regression/manual evidence：运行 focused provider/runtime tests、scope/content guard，冻结 public_providers catalog snapshot，并收集所有公开 provider 的 Native Windows x64 Herdr pane ask/pend/completion/cancel transcript"
     exit_signal: "所有 core commands 通过或按 dependency/manual blocked 归因；snapshot 来自当前 provider catalog；transcript 逐 provider 覆盖 launch、ask、pend/completion、cancel 或 blocked evidence；任一公开 provider 缺失不得进入 supported；无 recovery/user-surface/package/release/update/installer/Herdr socket schema/client 越界"
-    status: pending
+    status: done
 
 checks:
   - item: "前置 Herdr V2/client/namespace lifecycle 不是仅 design-review passed，而是 implementation/acceptance evidence 可验证"
     source: design AC-001 / DOD-IMPL-000 / S1
-    status: pending
+    status: passed
   - item: "Herdr provider launch 不要求 tmux binary，不走 detached tmux fallback，不要求 pane id 为 %N"
     source: design AC-003 / DOD-IMPL-001 / S2
-    status: pending
+    status: passed
   - item: "tmux/rmux pane-backed provider launch 与 existing session payload tests 不退化"
     source: design AC-002 / S2
-    status: pending
+    status: passed
   - item: "ProviderRuntimeBackendRef 写入 backend_impl、namespace_ref、pane_ref、managed_home、completion_source、completion_source_kind，并保留 protected shared keys 冲突诊断"
     source: design AC-004 / DOD-IMPL-002 / S3
-    status: pending
+    status: passed
   - item: "Herdr session payload 能构造 Herdr backend；未知 backend 不默认回 tmux"
     source: design AC-005 / S3
-    status: pending
+    status: passed
   - item: "provider session ensure_pane/log/capture 在 Herdr 下不调用 tmux ownership/rebound"
     source: design AC-006 / DOD-IMPL-003 / S4
-    status: pending
+    status: passed
   - item: "ask/pend/completion 继续由 dispatcher/provider execution/completion tracker 裁决，pend 不是 authoritative completion path"
     source: design AC-007 / DOD-IMPL-004 / S5
-    status: pending
+    status: passed
   - item: "provider-native log/event/hook artifact、session snapshot、structured result stream 保留精确 completion_source_kind；terminal capture fallback 只能按 provider contract 降级使用"
     source: design AC-008 / AC-009 / S5
-    status: pending
+    status: passed
   - item: "Herdr agent state 只进入 diagnostics/evidence，不得单独产生 completed verdict"
     source: design AC-008 / AC-009 / S5 / CMD-010
-    status: pending
+    status: passed
   - item: "cancellation 和 provider pane restart surface 不接管 bounded recovery owner"
     source: design AC-010 / AC-011 / DOD-IMPL-005 / S6
-    status: pending
+    status: passed
   - item: "acceptance 先冻结当前 provider catalog 的 public_providers snapshot；Native Windows x64 all-provider transcript 覆盖每个公开 provider 的 launch、ask、pend/completion、cancel，或逐 provider explicit blocked evidence"
     source: design AC-012 / DOD-ACCEPT-001 / S7
-    status: pending
+    status: passed
+    evidence: "evidence/public-providers-snapshot.json + evidence/native-windows-x64-all-provider-herdr-workflow-transcript.md；当前 catalog 20 个 provider 全覆盖，CMD-011 verdict=blocked，不得宣称 supported"
   - item: "本 feature 不修改 recovery owner、Mobile/Config UI、doctor/support、package/release/update/installer/public matrix、Herdr socket schema/client owner"
     source: design AC-013 / 明确不做 / S7
-    status: pending
+    status: passed
+    evidence: "S7 scoped scope/content guard、CMD-010 guard、S7 evidence diff --check 均通过；CMD-004 既有 Codex bridge bootstrap 红灯见 evidence/cmd004-baseline-exemption.md；全局 CMD-009 仅命中既有 dirty test/test_herdr_backend_client.py，非本轮 S7 范围"
 
 dod:
   commands:

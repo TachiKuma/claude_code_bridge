@@ -1,64 +1,69 @@
 ---
 doc_type: feature-implementation
 feature: 2026-07-31-ccbd-herdr-namespace-lifecycle
-status: blocked
+status: implemented
 implemented: 2026-08-02
-blocked_reason: missing-windows-ccbd-tcp-loopback-control-plane
 ---
 
 # ccbd-herdr-namespace-lifecycle 实现记录
 
 ## 当前结论
 
-S0-S6 已完成。S7 自动化回归已完成，CMD-013 也已在真实 Native Windows x64 + Herdr 可执行文件上尝试运行，但 `ccbd` 在进入 Herdr namespace lifecycle 前崩溃：当前 Herdr 分支缺少旧 rmux 路线已验收的 Windows TCP loopback control-plane transport，`socket_server_runtime/lifecycle.py` 仍是 AF_UNIX-only。该修复超出本 feature approved scope，已写 owner-stop：`ccbd-herdr-namespace-lifecycle-approval-report.md`。
+S0-S7 已完成。最新 CMD-013 的 Native Windows x64 transcript 已通过，证明 CCB
+control-plane、Herdr project namespace、foreground attach、reload apply、restart deferred
+boundary 和 kill 均有可观察证据。
+
+本轮修复了 Herdr namespace ref/session scope、pane topology 映射、reload namespace patch
+边界和 provider runtime 延迟语义。Herdr namespace 的 reload 不启动 provider runtime，
+而是发布 namespace patch/config graph，并返回明确的
+`reason=provider_runtime_deferred_on_herdr` / `runtime_mount_deferred=true` 诊断。
 
 ## 主要改动
 
-- `lib/ccbd/services/project_namespace_runtime/backend.py`：新增 V2 mux helper path，覆盖 namespace ref 记忆、pane identity、respawn、kill pane、move pane、reflow window 和 per-operation capability gate。
-- `lib/ccbd/services/project_namespace_runtime/*patch*.py`：reload add/remove/move/reflow 路径改用 V2 refs/primitives，Herdr 缺 primitive 时 fail closed。
-- `lib/ccbd/services/project_namespace_runtime/additive_patch_namespace.py` 与 `lib/ccbd/reload_patch.py`：Herdr namespace readiness/scope proof 改为 namespace transport ref，不再要求 `tmux_socket_path`。
-- `lib/ccbd/services/project_namespace_pane.py`：Herdr pane id 不要求 `%` 前缀，非 tmux pane id 走 backend `describe_pane`。
-- `lib/ccbd/handlers/project_restart.py`：Herdr namespace 下 restart agent/panes 返回 unsupported/deferred evidence，不静默返回 scheduled success，不修改 provider completion。
-- `lib/terminal_runtime/tmux.py` 与 `lib/terminal_runtime/tmux_readiness.py`：修复 S7 tmux regression 中暴露的 Windows 诊断/命令构造漂移，保留默认 `/dev/null` 字面值并稳定 tmux command 诊断文本。
+- `lib/terminal_runtime/herdr_backend.py`
+  - pane 查询/描述使用当前项目 Herdr namespace。
+  - reload 新建 backend 后可从 `_ccb_project_namespace_ref` 恢复 pane namespace。
+  - `set_pane_identity()` 会重建 pane cache。
+- `lib/terminal_runtime/herdr_backend_runtime/cli.py`
+  - pane metadata 前等待 pane 可见。
+  - 非 root pane 不能作为 split parent 时回退同 workspace 的 `ccb_root_pane=1`。
+- `lib/ccbd/reload_apply_runtime.py`、`reload_runtime_mount_models.py`
+  - Herdr namespace reload 不启动 provider runtime，返回显式 noop/deferred 语义。
+  - 允许 namespace patch/config graph 发布，避免 tmux socket 依赖阻塞。
+- `lib/ccbd/services/project_namespace_runtime/additive_patch_apply.py`、
+  `lib/ccbd/reload_apply_stages.py`、`lib/cli/render_runtime/reload_view.py`
+  - 增强 namespace patch 失败的 operation/category/evidence 诊断。
+- 新增 Herdr backend、adapter、reload runtime mount、additive patch 回归测试。
 
 ## Step 状态
 
 | Step | 状态 | 证据 |
 |---|---|---|
-| S5 kill/restart/reload boundary | done | Herdr reload primitive tests 4 passed；restart handler tests 6 passed；restart panes tests 2 passed；tmux add/remove/move reload regression 3 passed。 |
-| S6 scope/content guard | done | CMD-007、CMD-008、CMD-009 均 passed。 |
-| S7 regression guard + Windows foreground/manual evidence | pending | 自动化 regression passed；CMD-013 真机 transcript 已生成但 blocked，原因是 native Windows 下 ccbd control-plane AF_UNIX-only。 |
+| S0-S6 | done | 前置 V2 contract、state projection、helper path、ensure/reflow、foreground seam、kill/restart/reload boundary 与 scope/content guard 已覆盖。 |
+| S7 | done | focused regression 与 Native Windows CMD-013 transcript 均通过。 |
 
-## 验证证据
+## 最新验证证据
 
-- `python ".codestable/tools/validate-yaml.py" --file ".codestable/features/2026-07-31-ccbd-herdr-namespace-lifecycle/ccbd-herdr-namespace-lifecycle-checklist.yaml" --yaml-only`：通过。
-- `python ".codestable/tools/validate-yaml.py" --file ".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml"`：通过。
-- `python -m pytest -q "test/test_mux_backend_contract.py" "test/test_herdr_backend_client.py" -k "V2 or HerdrBackend or attach_namespace or presentation or herdr"`：145 passed, 12 deselected。
-- Windows baseline 隔离后：`test/test_v2_project_namespace_state.py test/test_v2_project_namespace_backend.py -k "namespace or mux or herdr or restore_token or redacted or presentation or capability"`：50 passed。
-- Windows baseline 隔离后：`test/test_v2_start_foreground.py -k "foreground or attach or herdr or rmux or restore_token or redacted"`：14 passed。
-- Windows baseline 隔离后：`test/test_ccbd_project_view.py -k "herdr or restore_token or redacted or namespace_view"`：2 passed。
-- Windows baseline 隔离后：`test/test_ccbd_namespace_additive_patch.py -k "herdr or mux or namespace_ref or reload or move or reflow"`：26 passed。
-- Windows baseline 隔离后：`test/test_v2_project_namespace_state.py -k "event or summary_fields or log or restore_token or redacted"`：8 passed。
-- Windows baseline 隔离后：`test/test_agent_lifecycle_cli.py -k "reload or restart or kill"`：6 passed。
-- Windows baseline 隔离后：`test/test_ccb_restart.py -k "restart_agent_handler"`：6 passed。
-- Windows baseline 隔离后：`test/test_v2_ccbd_start_flow.py -k "project_restart_panes_handler"`：2 passed。
-- `python -m py_compile "lib/terminal_runtime/tmux.py" "lib/terminal_runtime/tmux_readiness.py"`：通过。
-- `git diff --check`：exit 0，仅 `.codestable` CRLF/LF warning。
-
-## 已知基线与环境限制
-
-- 原始 pytest 在 Windows 上会因 `storage.atomic` durable directory fsync / dir_fd 不可用失败；业务断言复跑时仅进程内替换为普通写文件。
-- 涉及 `mobile_gateway.terminal` 的 collection 会因 POSIX-only `fcntl` / `pty` / `termios` 导入失败；业务断言复跑时仅进程内 stub。
-- `test/test_ccbd_project_view.py -k "... or project_view"` 的宽过滤会命中既有 Windows 非法 `:` 路径用例；已收窄到本 feature 相关 `herdr|restore_token|redacted|namespace_view`。
-- `evidence/cmd-013-native-windows-herdr-transcript.md`：真实 Native Windows x64 / Python 64bit / Herdr `0.7.5-preview.2026-07-29-44b3adb12552`。失败点为 `ccbd exited before ready`；runtime 日志记录 `RuntimeError: unix domain sockets are not supported on this platform`。
-- `evidence/cmd-013-native-windows-herdr-runbook.md` 已记录真实入口 `python <repo>/ccb.py`、source checkout guard、必需环境变量、采集命令和 redaction 检查。
+- S7 聚焦：`200 passed, 75 deselected`。
+- reload 聚焦：`36 passed`。
+- Herdr namespace/backend 聚焦：`171 passed, 32 deselected`。
+- CMD-013：`evidence/cmd-013-native-windows-herdr-transcript.md`，最终 `Verdict: passed`。
+  - Native Windows x64 / Python 64-bit / Herdr version 已记录。
+  - namespace durable state 与 project namespace title 对齐。
+  - `ccbd ping`、foreground attach、reload apply、kill 均 exit 0。
+  - `restart agent1` 返回 exit 1，但输出预期的
+    `deferred_to_provider_runtime_on_herdr`，属于该 feature 的显式 deferred boundary。
+- YAML 校验、scope/content guard 与 `git diff --check` 已通过。
 
 ## 清洁度
 
-- 未修改 provider runtime、recovery owner、Mobile/Config UI、doctor/support、package/release/update/installer 或 public validation matrix。
-- 没有引入 provider completion / recovery / support tier / release surface 术语越界。
-- 发现由测试注入残留的一批仓库根目录无扩展随机临时文件；删除文件需要 owner 明确确认，当前未清理。
+- 未修改 provider runtime、recovery owner、Mobile/Config UI、doctor/support、
+  package/release/update/installer 或 public validation matrix。
+- public payload 只记录 `namespace_restore_token_present`；CMD-013 transcript 不输出 raw
+  restore token。
+- 本 feature 只完成 implementation gate；后续 review、QA、acceptance 不在本轮范围内。
 
 ## 下一步
 
-owner 批准后，先把旧 `windows-rmux-native-backend` 已验收的 `ccbd-control-plane-transport-seam` / `ccbd-windows-tcp-loopback-transport` 能力移植或重开到当前 Herdr roadmap；通过 focused transport tests 后重跑 CMD-013。CMD-013 通过后恢复 S7，更新 checklist，再进入 `cs-code-review`。
+将实现状态交给既有 feature gate，保持后续 `provider-runtime-on-herdr` 等 roadmap item
+不提前启动。后续 review/QA/acceptance 应按项目流程单独执行。

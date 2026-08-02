@@ -9,8 +9,8 @@ acceptance_authorization_ref: "approval-report.md#goal-acceptance"
 commit_authorization: approved
 commit_authorization_ref: "approval-report.md#goal-commits"
 handoff_reason: null
-handoff_next: "Resume ccbd-herdr-namespace-lifecycle at current_feature_index=5; rerun CMD-013 after the accepted backend-client logical window/root pane facade and control-plane transport fixes."
-current_feature_index: 5
+handoff_next: "provider-runtime-on-herdr accepted with all-provider blocked evidence and downstream fail-closed residual risks. Next action is herdr-bounded-recovery-boundary design/implementation."
+current_feature_index: 7
 features:
   - slug: "windows-x64-v852-baseline-gate"
     roadmap_item: "windows-x64-v852-baseline-gate"
@@ -65,7 +65,7 @@ features:
     review: ".codestable/features/2026-07-31-ccbd-herdr-namespace-lifecycle/ccbd-herdr-namespace-lifecycle-review.md"
     qa: ".codestable/features/2026-07-31-ccbd-herdr-namespace-lifecycle/ccbd-herdr-namespace-lifecycle-qa.md"
     acceptance: ".codestable/features/2026-07-31-ccbd-herdr-namespace-lifecycle/ccbd-herdr-namespace-lifecycle-acceptance.md"
-    status: implementing
+    status: accepted
   - slug: "provider-runtime-on-herdr"
     roadmap_item: "provider-runtime-on-herdr"
     feature_dir: ".codestable/features/2026-07-31-provider-runtime-on-herdr"
@@ -74,7 +74,7 @@ features:
     review: ".codestable/features/2026-07-31-provider-runtime-on-herdr/provider-runtime-on-herdr-review.md"
     qa: ".codestable/features/2026-07-31-provider-runtime-on-herdr/provider-runtime-on-herdr-qa.md"
     acceptance: ".codestable/features/2026-07-31-provider-runtime-on-herdr/provider-runtime-on-herdr-acceptance.md"
-    status: pending
+    status: accepted
   - slug: "herdr-bounded-recovery-boundary"
     roadmap_item: "herdr-bounded-recovery-boundary"
     feature_dir: ".codestable/features/2026-07-31-herdr-bounded-recovery-boundary"
