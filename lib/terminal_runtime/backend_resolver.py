@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import Literal, Mapping, cast
 
-from terminal_runtime.herdr_backend_runtime.capabilities import herdr_capability_report_supported
+from terminal_runtime.herdr_backend_runtime.capabilities import (
+    herdr_capability_report_supported,
+    unsupported_capability_names,
+)
 from terminal_runtime.mux_backend_contract import (
     BackendImplV2,
     HerdrFailureReasonV2,
@@ -30,6 +33,28 @@ _HERDR_REQUIRED_CAPABILITIES = frozenset(
         "read_output",
         "kill_pane",
     }
+)
+_HERDR_SELECTION_REQUIRED_OPERATIONS = (
+    "prepare_server",
+    "create_session",
+    "restore_session",
+    "namespace_alive",
+    "list_windows",
+    "ensure_window",
+    "window_root_pane",
+    "set_pane_identity",
+    "describe_pane",
+    "list_panes_by_user_options",
+    "create_pane",
+    "send_text",
+    "capture_pane",
+    "kill_pane",
+    "select_window",
+    "kill_window",
+    "destroy_namespace",
+    "kill_server",
+    "rename_window",
+    "attach_namespace",
 )
 
 
@@ -266,6 +291,10 @@ def _has_supported_herdr_capabilities(
         and _HERDR_REQUIRED_CAPABILITIES.issubset(semantic_status)
         and has_evidence_ref
         and herdr_capability_report_supported(capability_report)
+        and all(
+            not unsupported_capability_names(capability_report, operation)
+            for operation in _HERDR_SELECTION_REQUIRED_OPERATIONS
+        )
     )
 
 

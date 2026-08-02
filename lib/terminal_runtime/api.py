@@ -251,6 +251,7 @@ def _herdr_capability_report() -> dict[str, object] | None:
         return _invalid_herdr_capability_report()
     if not isinstance(payload, dict):
         return _invalid_herdr_capability_report()
+    _normalize_herdr_capability_projection(payload)
     payload["source_ref"] = _herdr_capability_report_ref()
     return payload
 
@@ -275,6 +276,16 @@ def _herdr_capability_report_path() -> Path | None:
         return Path(override).expanduser().resolve()
     except (OSError, RuntimeError, ValueError):
         return None
+
+
+def _normalize_herdr_capability_projection(payload: dict[str, object]) -> None:
+    projection = payload.get("capability_projection")
+    if not isinstance(projection, dict):
+        return
+    payload.setdefault("backend_impl", "herdr")
+    for key in ("command_status", "semantic_status", "windows_beta_gaps", "blocking_gaps"):
+        if key not in payload and key in projection:
+            payload[key] = projection[key]
 
 
 def _herdr_socket_ref() -> str:

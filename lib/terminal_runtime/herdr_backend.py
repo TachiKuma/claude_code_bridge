@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Literal
 
 from terminal_runtime.backend_types import TerminalBackend
@@ -29,6 +30,7 @@ class HerdrBackend(TerminalBackend):
         self._pane_namespaces: dict[str, MuxNamespaceRefV2] = {}
         self._legacy_namespaces: dict[str, MuxNamespaceRefV2] = {}
         self._known_namespaces: dict[tuple[str, str], MuxNamespaceRefV2] = {}
+        self._logical_windows: dict[tuple[str, str, str], dict[str, object]] = {}
 
     def capabilities(self) -> MuxCapabilitiesV2:
         return self._capability_gate.require_supported("capabilities")
@@ -58,6 +60,283 @@ class HerdrBackend(TerminalBackend):
         self._client.server_info()
         return self._register_namespace(self._client.restore_session(restore_token=restore_token))
 
+    def namespace_alive(self, namespace: MuxNamespaceRefV2) -> bool:
+        namespace_ref = self._namespace_ref_from_mapping(namespace, operation="namespace_alive")
+        self._capability_gate.require_supported("namespace_alive")
+        self._client.server_info()
+        try:
+            self._client.list_panes(namespace_ref)
+        except MuxCommandErrorV2 as exc:
+            if exc.category == "not-found":
+                return False
+            raise
+        return True
+
+    def list_windows(self, namespace: MuxNamespaceRefV2) -> list[Mapping[str, object]]:
+        namespace_ref = self._namespace_ref_from_mapping(namespace, operation="list_windows")
+        self._capability_gate.require_supported("list_windows")
+        self._client.server_info()
+        return self._client.list_windows(namespace_ref)
+
+    def ensure_window(
+        self,
+        namespace: MuxNamespaceRefV2,
+        *,
+        window_name: str,
+        cwd: str,
+        select: bool,
+    ) -> Mapping[str, object]:
+        namespace_ref = self._namespace_ref_from_mapping(namespace, operation="ensure_window")
+        self._capability_gate.require_supported("ensure_window")
+        self._client.server_info()
+        record = dict(
+            self._client.ensure_window(
+                namespace_ref,
+                window_name=window_name,
+                cwd=cwd,
+                select=select,
+            )
+        )
+        record.setdefault("window_name", window_name)
+        record.setdefault("window_id", record.get("root_pane_id"))
+        self._logical_windows[
+            (namespace_ref["session_name"], namespace_ref["namespace_id"], window_name)
+        ] = record
+        return record
+
+    create_window = ensure_window
+
+    def window_root_pane(
+        self,
+        namespace: MuxNamespaceRefV2,
+        *,
+        window_name: str,
+    ) -> MuxPaneRefV2:
+        namespace_ref = self._namespace_ref_from_mapping(namespace, operation="window_root_pane")
+        self._capability_gate.require_supported("window_root_pane")
+        self._client.server_info()
+        try:
+            pane = self._client.window_root_pane(namespace_ref, window_name=window_name)
+        except MuxCommandErrorV2 as exc:
+            if exc.category != "not-found":
+                raise
+            panes = self._client.list_panes()
+            pane = _root_pane_from_metadata(
+                panes,
+                session_name=namespace_ref["session_name"],
+                namespace_id=namespace_ref["namespace_id"],
+                window_name=window_name,
+            )
+            if pane is None:
+                raise
+        self._panes[pane["pane_id"]] = pane
+        self._pane_namespaces[pane["pane_id"]] = namespace_ref
+        return pane
+
+    def set_pane_identity(
+        self,
+        pane: MuxPaneRefV2,
+        *,
+        title: str,
+        agent_label: str,
+        project_id: str,
+        order_index: int | None = None,
+        is_cmd: bool = False,
+        role: str | None = None,
+        slot_key: str | None = None,
+        window_name: str | None = None,
+        sidebar_instance: str | None = None,
+        session_id: str | None = None,
+        namespace_epoch: int | None = None,
+        managed_by: str | None = None,
+    ) -> MuxOperationEvidenceV2:
+        pane_ref = self._pane_ref(pane, operation="set_pane_identity")
+        self._capability_gate.require_supported("set_pane_identity")
+        namespace = self._pane_namespaces.get(pane_ref["pane_id"])
+        if namespace is None:
+            namespace = self._known_namespace_for_session(
+                pane_ref["session_name"],
+                operation="set_pane_identity",
+                pane_id=pane_ref["pane_id"],
+            )
+        if namespace is None:
+            raise MuxCommandErrorV2(
+                category="not-found",
+                backend_impl="herdr",
+                operation="set_pane_identity",
+                detail=f"unknown Herdr namespace for pane {pane_ref['pane_id']!r}",
+                evidence={"pane_id": pane_ref["pane_id"]},
+            )
+        tokens = {
+            "ccb_project_id": project_id,
+            "ccb_order": str(order_index) if order_index is not None else "",
+            "ccb_is_cmd": "1" if is_cmd else "0",
+            "ccb_role": role or "",
+            "ccb_slot": slot_key or "",
+            "ccb_window": window_name or pane_ref.get("window_name") or "",
+            "ccb_sidebar_instance": sidebar_instance or "",
+            "ccb_session_id": session_id or "",
+            "ccb_namespace_epoch": str(namespace_epoch) if namespace_epoch is not None else "",
+            "ccb_managed_by": managed_by or "",
+        }
+        return self._client.set_pane_identity(
+            pane_ref,
+            title=title,
+            agent_label=agent_label,
+            tokens=tokens,
+        )
+
+    def describe_pane(
+        self,
+        pane_id: str,
+        *,
+        user_options: tuple[str, ...] = (),
+    ) -> dict[str, object] | None:
+        pane_text = str(pane_id or "").strip()
+        if not pane_text:
+            return None
+        self._capability_gate.require_supported("describe_pane")
+        self._client.server_info()
+        panes = self._client.list_panes()
+        for pane in panes:
+            if str(pane.get("pane_id") or "").strip() != pane_text:
+                continue
+            tokens = pane.get("tokens") if isinstance(pane.get("tokens"), Mapping) else {}
+            details: dict[str, object] = {
+                "pane_id": pane_text,
+                "session_name": self._client.session_name or str(
+                    pane.get("session_name") or ""
+                ).strip(),
+                "window_id": pane.get("workspace_id"),
+                "window_name": _token_value(tokens, "ccb_window")
+                or _token_value(tokens, "ccb_logical_window"),
+                "pane_title": pane.get("title") or pane.get("terminal_title"),
+                "pane_dead": "0",
+                "@ccb_role": _token_value(tokens, "ccb_role"),
+                "@ccb_slot": _token_value(tokens, "ccb_slot"),
+                "@ccb_window": _token_value(tokens, "ccb_window")
+                or _token_value(tokens, "ccb_logical_window"),
+                "@ccb_sidebar_instance": _token_value(tokens, "ccb_sidebar_instance"),
+                "@ccb_agent": _token_value(tokens, "ccb_agent_label"),
+                "@ccb_session_id": _token_value(tokens, "ccb_session_id"),
+                "@ccb_project_id": _token_value(tokens, "ccb_project_id"),
+                "@ccb_managed_by": _token_value(tokens, "ccb_managed_by"),
+                "@ccb_namespace_epoch": _token_value(tokens, "ccb_namespace_epoch"),
+            }
+            if user_options:
+                details.update(
+                    {
+                        option: _token_value(tokens, str(option).lstrip("@"))
+                        for option in user_options
+                    }
+                )
+            return details
+        return None
+
+    def list_panes_by_user_options(self, expected: dict[str, str]) -> list[str]:
+        self._capability_gate.require_supported("list_panes_by_user_options")
+        self._client.server_info()
+        panes = self._client.list_panes()
+        normalized = {str(key).lstrip("@"): str(value) for key, value in expected.items()}
+        return [
+            str(pane.get("pane_id") or "").strip()
+            for pane in panes
+            if str(pane.get("pane_id") or "").strip()
+            and all(
+                _token_value(
+                    pane.get("tokens") if isinstance(pane.get("tokens"), Mapping) else {},
+                    key,
+                )
+                == value
+                for key, value in normalized.items()
+            )
+        ]
+
+    def select_window(
+        self,
+        namespace: MuxNamespaceRefV2,
+        *,
+        window_id: str | None,
+        target: str,
+    ) -> MuxOperationEvidenceV2:
+        namespace_ref = self._namespace_ref_from_mapping(namespace, operation="select_window")
+        self._capability_gate.require_supported("select_window")
+        self._client.server_info()
+        return self._client.select_window(namespace_ref, window_id=window_id, target=target)
+
+    def kill_window(
+        self,
+        namespace: MuxNamespaceRefV2,
+        *,
+        window_id: str | None,
+        target: str,
+    ) -> MuxOperationEvidenceV2:
+        namespace_ref = self._namespace_ref_from_mapping(namespace, operation="kill_window")
+        self._capability_gate.require_supported("kill_window")
+        self._client.server_info()
+        evidence = self._client.kill_window(namespace_ref, window_id=window_id, target=target)
+        if window_id:
+            self._panes.pop(window_id, None)
+            self._pane_namespaces.pop(window_id, None)
+        for key, record in tuple(self._logical_windows.items()):
+            session_name, namespace_id, _window_name = key
+            if session_name != namespace_ref["session_name"] or namespace_id != namespace_ref["namespace_id"]:
+                continue
+            if (
+                record.get("window_id") == window_id
+                or record.get("window_name") == target.rsplit(":", 1)[-1]
+            ):
+                root_pane_id = str(record.get("root_pane_id") or "").strip()
+                if root_pane_id:
+                    self._panes.pop(root_pane_id, None)
+                    self._pane_namespaces.pop(root_pane_id, None)
+                self._logical_windows.pop(key, None)
+        return evidence
+
+    def rename_window(
+        self,
+        namespace: MuxNamespaceRefV2,
+        *,
+        window_id: str | None,
+        target: str,
+        new_name: str,
+    ) -> MuxOperationEvidenceV2:
+        namespace_ref = self._namespace_ref_from_mapping(namespace, operation="rename_window")
+        self._capability_gate.require_supported("rename_window")
+        self._client.server_info()
+        evidence = self._client.rename_window(
+            namespace_ref,
+            window_id=window_id,
+            target=target,
+            new_name=new_name,
+        )
+        old_name = target.rsplit(":", 1)[-1] if target else window_id
+        for key, record in tuple(self._logical_windows.items()):
+            session_name, namespace_id, window_name = key
+            if session_name != namespace_ref["session_name"] or namespace_id != namespace_ref["namespace_id"]:
+                continue
+            if record.get("window_id") == window_id or window_name == old_name:
+                updated = {**record, "window_name": new_name}
+                self._logical_windows.pop(key, None)
+                self._logical_windows[(session_name, namespace_id, new_name)] = updated
+        return evidence
+
+    def destroy_namespace(self, namespace: MuxNamespaceRefV2) -> MuxOperationEvidenceV2:
+        namespace_ref = self._namespace_ref_from_mapping(namespace, operation="destroy_namespace")
+        self._capability_gate.require_supported("destroy_namespace")
+        self._client.server_info()
+        evidence = self._client.destroy_namespace(namespace_ref)
+        self._drop_namespace_refs(namespace_ref)
+        return evidence
+
+    def kill_server(self, namespace: MuxNamespaceRefV2) -> MuxOperationEvidenceV2:
+        namespace_ref = self._namespace_ref_from_mapping(namespace, operation="kill_server")
+        self._capability_gate.require_supported("kill_server")
+        self._client.server_info()
+        evidence = self._client.kill_server(namespace_ref)
+        self._drop_namespace_refs(namespace_ref)
+        return evidence
+
     def namespace_ref(self, session_name: str, namespace_id: str) -> MuxNamespaceRefV2:
         return self._register_namespace(
             make_namespace_ref(
@@ -68,6 +347,29 @@ class HerdrBackend(TerminalBackend):
                 ipc_ref=self._client.socket_ref,
             )
         )
+
+    def _drop_namespace_refs(self, namespace: MuxNamespaceRefV2) -> None:
+        session_name = namespace["session_name"]
+        namespace_id = namespace["namespace_id"]
+        for key in [
+            key
+            for key in self._known_namespaces
+            if key == (session_name, namespace_id)
+        ]:
+            self._known_namespaces.pop(key, None)
+        for key in [
+            key
+            for key in self._logical_windows
+            if key[0] == session_name and key[1] == namespace_id
+        ]:
+            self._logical_windows.pop(key, None)
+        for pane_id, pane_namespace in tuple(self._pane_namespaces.items()):
+            if (
+                pane_namespace["session_name"] == session_name
+                and pane_namespace["namespace_id"] == namespace_id
+            ):
+                self._pane_namespaces.pop(pane_id, None)
+                self._panes.pop(pane_id, None)
 
     def create_pane(
         self,
@@ -388,6 +690,48 @@ class HerdrBackend(TerminalBackend):
             )
             self._legacy_namespaces[key] = namespace
         return namespace
+
+
+def _token_value(tokens: Mapping[str, object], key: str) -> str:
+    return str(tokens.get(str(key).lstrip("@")) or "").strip()
+
+
+def _root_pane_from_metadata(
+    panes: list[Mapping[str, object]],
+    *,
+    session_name: str,
+    namespace_id: str,
+    window_name: str,
+) -> MuxPaneRefV2 | None:
+    root_candidates: list[Mapping[str, object]] = []
+    candidates: list[Mapping[str, object]] = []
+    for pane in panes:
+        tokens = pane.get("tokens") if isinstance(pane.get("tokens"), Mapping) else {}
+        logical_window = _token_value(tokens, "ccb_window") or _token_value(
+            tokens,
+            "ccb_logical_window",
+        )
+        if _token_value(tokens, "ccb_namespace_id") != namespace_id:
+            continue
+        is_root = _token_value(tokens, "ccb_root_pane") == "1"
+        if logical_window == window_name and is_root:
+            root_candidates.append(pane)
+        if logical_window == window_name or (not window_name and is_root):
+            candidates.append(pane)
+    if root_candidates:
+        candidates = root_candidates
+    if not candidates:
+        return None
+    pane = candidates[0]
+    pane_id = str(pane.get("pane_id") or "").strip()
+    if not pane_id:
+        return None
+    return make_pane_ref(
+        backend_impl="herdr",
+        pane_id=pane_id,
+        session_name=session_name,
+        window_name=window_name or None,
+    )
 
 
 __all__ = ["HerdrBackend"]

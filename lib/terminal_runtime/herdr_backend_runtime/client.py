@@ -46,6 +46,11 @@ class HerdrSocketClient:
         return self._socket_ref
 
     @property
+    def session_name(self) -> str:
+        session_name = getattr(self._request_fn, "session_name", None)
+        return str(session_name or "").strip()
+
+    @property
     def allow_session_scoped_ipc_refs(self) -> bool:
         return self._allow_session_scoped_ipc_refs
 
@@ -182,6 +187,107 @@ class HerdrSocketClient:
             fallback_session_name=session_name,
         )
 
+    def list_windows(self, namespace: MuxNamespaceRefV2) -> list[Mapping[str, object]]:
+        response = self._request(
+            "list_windows",
+            {
+                "namespace_id": namespace["namespace_id"],
+                "session_name": namespace["session_name"],
+                "ipc_ref": self._socket_ref,
+            },
+            require_status=True,
+        )
+        windows = response.get("windows")
+        return [item for item in windows if isinstance(item, Mapping)] if isinstance(windows, list) else []
+
+    def ensure_window(
+        self,
+        namespace: MuxNamespaceRefV2,
+        *,
+        window_name: str,
+        cwd: str,
+        select: bool,
+    ) -> Mapping[str, object]:
+        return self._request(
+            "ensure_window",
+            {
+                "namespace_id": namespace["namespace_id"],
+                "session_name": namespace["session_name"],
+                "ipc_ref": self._socket_ref,
+                "window_name": window_name,
+                "cwd": cwd,
+                "select": select,
+            },
+            require_status=True,
+        )
+
+    def window_root_pane(
+        self,
+        namespace: MuxNamespaceRefV2,
+        *,
+        window_name: str,
+    ) -> MuxPaneRefV2:
+        response = self._request(
+            "window_root_pane",
+            {
+                "namespace_id": namespace["namespace_id"],
+                "session_name": namespace["session_name"],
+                "ipc_ref": self._socket_ref,
+                "window_name": window_name,
+            },
+            require_status=True,
+        )
+        pane = response.get("pane")
+        if not isinstance(pane, Mapping):
+            pane = response
+        pane_id = str(pane.get("pane_id") or response.get("pane_id") or "").strip()
+        response_session_name = str(
+            pane.get("session_name") or response.get("session_name") or ""
+        ).strip()
+        if response_session_name and response_session_name != namespace["session_name"]:
+            raise MuxCommandErrorV2(
+                category="command-failed",
+                backend_impl="herdr",
+                operation="window_root_pane",
+                detail="Herdr window_root_pane returned a session different from the requested namespace",
+                ipc_ref=self._socket_ref,
+                evidence={
+                    "socket_ref": self._socket_ref,
+                    "expected_session_name": namespace["session_name"],
+                    "actual_session_name": response_session_name,
+                },
+            )
+        session_name = response_session_name or namespace["session_name"]
+        try:
+            return make_pane_ref(
+                backend_impl="herdr",
+                pane_id=pane_id,
+                session_name=session_name,
+                window_name=window_name,
+            )
+        except ValueError as exc:
+            raise MuxCommandErrorV2(
+                category="command-failed",
+                backend_impl="herdr",
+                operation="window_root_pane",
+                detail=str(exc),
+                ipc_ref=self._socket_ref,
+                evidence={"socket_ref": self._socket_ref},
+            ) from exc
+
+    def list_panes(self, namespace: MuxNamespaceRefV2 | None = None) -> list[Mapping[str, object]]:
+        payload: dict[str, object] = {"ipc_ref": self._socket_ref}
+        if namespace is not None:
+            payload.update(
+                {
+                    "namespace_id": namespace["namespace_id"],
+                    "session_name": namespace["session_name"],
+                }
+            )
+        response = self._request("list_panes", payload, require_status=True)
+        panes = response.get("panes")
+        return [item for item in panes if isinstance(item, Mapping)] if isinstance(panes, list) else []
+
     def create_pane(
         self,
         namespace: MuxNamespaceRefV2,
@@ -274,6 +380,143 @@ class HerdrSocketClient:
             require_status=True,
         )
         return _operation_evidence("kill_pane", pane, response, detail="pane killed")
+
+    def set_pane_identity(
+        self,
+        pane: MuxPaneRefV2,
+        *,
+        title: str,
+        agent_label: str,
+        tokens: Mapping[str, str],
+    ) -> MuxOperationEvidenceV2:
+        response = self._request(
+            "set_pane_identity",
+            {
+                "pane_id": pane["pane_id"],
+                "session_name": pane["session_name"],
+                "title": title,
+                "agent_label": agent_label,
+                "tokens": dict(tokens),
+            },
+            require_status=True,
+        )
+        return _operation_evidence("set_pane_identity", pane, response, detail="pane metadata updated")
+
+    def select_window(
+        self,
+        namespace: MuxNamespaceRefV2,
+        *,
+        window_id: str | None,
+        target: str,
+    ) -> MuxOperationEvidenceV2:
+        response = self._request(
+            "select_window",
+            {
+                "namespace_id": namespace["namespace_id"],
+                "session_name": namespace["session_name"],
+                "ipc_ref": self._socket_ref,
+                "window_id": window_id,
+                "target": target,
+            },
+            require_status=True,
+        )
+        return make_operation_evidence(
+            operation="select_window",
+            backend_impl="herdr",
+            pane_id=window_id,
+            status="ok" if str(response.get("status") or "ok") == "ok" else "failed",
+            detail="workspace focused",
+        )
+
+    def kill_window(
+        self,
+        namespace: MuxNamespaceRefV2,
+        *,
+        window_id: str | None,
+        target: str,
+    ) -> MuxOperationEvidenceV2:
+        response = self._request(
+            "kill_window",
+            {
+                "namespace_id": namespace["namespace_id"],
+                "session_name": namespace["session_name"],
+                "ipc_ref": self._socket_ref,
+                "window_id": window_id,
+                "target": target,
+            },
+            require_status=True,
+        )
+        return make_operation_evidence(
+            operation="kill_window",
+            backend_impl="herdr",
+            pane_id=window_id,
+            status="ok" if str(response.get("status") or "ok") == "ok" else "failed",
+            detail="logical workspace closed",
+        )
+
+    def rename_window(
+        self,
+        namespace: MuxNamespaceRefV2,
+        *,
+        window_id: str | None,
+        target: str,
+        new_name: str,
+    ) -> MuxOperationEvidenceV2:
+        response = self._request(
+            "rename_window",
+            {
+                "namespace_id": namespace["namespace_id"],
+                "session_name": namespace["session_name"],
+                "ipc_ref": self._socket_ref,
+                "window_id": window_id,
+                "target": target,
+                "new_name": new_name,
+            },
+            require_status=True,
+        )
+        return make_operation_evidence(
+            operation="rename_window",
+            backend_impl="herdr",
+            pane_id=str(response.get("window_id") or window_id or "").strip() or None,
+            status="ok" if str(response.get("status") or "ok") == "ok" else "failed",
+            detail="logical workspace renamed",
+        )
+
+    def destroy_namespace(self, namespace: MuxNamespaceRefV2) -> MuxOperationEvidenceV2:
+        response = self._request(
+            "destroy_namespace",
+            {
+                "namespace_id": namespace["namespace_id"],
+                "session_name": namespace["session_name"],
+                "ipc_ref": self._socket_ref,
+            },
+            require_status=True,
+        )
+        return make_operation_evidence(
+            operation="destroy_namespace",
+            backend_impl="herdr",
+            pane_id=None,
+            status="ok" if str(response.get("status") or "ok") == "ok" else "failed",
+            detail="logical namespace destroyed",
+        )
+
+    def kill_server(self, namespace: MuxNamespaceRefV2) -> MuxOperationEvidenceV2:
+        response = self._request(
+            "kill_server",
+            {
+                "namespace_id": namespace["namespace_id"],
+                "session_name": namespace["session_name"],
+                "ipc_ref": self._socket_ref,
+            },
+            require_status=True,
+        )
+        return make_operation_evidence(
+            operation="kill_server",
+            backend_impl="herdr",
+            pane_id=None,
+            status="ok" if str(response.get("status") or "ok") == "ok" else "failed",
+            detail="logical namespace destroyed",
+        )
 
     def attach_namespace(
         self,

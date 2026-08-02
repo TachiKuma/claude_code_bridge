@@ -11,6 +11,12 @@ from collections.abc import Callable, Mapping
 
 from terminal_runtime.mux_backend_contract import MuxCommandErrorV2
 
+_METADATA_SOURCE = "ccb"
+_LOGICAL_WINDOW_TOKEN = "ccb_window"
+_LOGICAL_WINDOW_ALIAS_TOKEN = "ccb_logical_window"
+_NAMESPACE_TOKEN = "ccb_namespace_id"
+_ROOT_PANE_TOKEN = "ccb_root_pane"
+
 
 class HerdrCliRequestAdapter:
     def __init__(
@@ -39,6 +45,10 @@ class HerdrCliRequestAdapter:
         return self._ipc_ref_for_session(self._session_name)
 
     @property
+    def session_name(self) -> str:
+        return self._session_name
+
+    @property
     def allow_session_scoped_ipc_refs(self) -> bool:
         return self._socket_ref is None
 
@@ -49,8 +59,28 @@ class HerdrCliRequestAdapter:
             return self._create_session(payload)
         if operation == "restore_session":
             return self._restore_session(payload)
+        if operation == "list_windows":
+            return self._list_windows(payload)
+        if operation == "ensure_window":
+            return self._ensure_window(payload)
+        if operation == "window_root_pane":
+            return self._window_root_pane(payload)
+        if operation == "list_panes":
+            return self._list_panes(payload)
         if operation == "create_pane":
             return self._create_pane(payload)
+        if operation == "set_pane_identity":
+            return self._set_pane_identity(payload)
+        if operation == "select_window":
+            return self._select_window(payload)
+        if operation == "kill_window":
+            return self._kill_window(payload)
+        if operation == "rename_window":
+            return self._rename_window(payload)
+        if operation == "destroy_namespace":
+            return self._destroy_namespace(payload)
+        if operation == "kill_server":
+            return self._destroy_namespace(payload)
         if operation == "send_text":
             return self._send_text(payload)
         if operation == "capture_pane":
@@ -97,6 +127,27 @@ class HerdrCliRequestAdapter:
                 "create_session",
                 "Herdr workspace create response is missing workspace_id",
             )
+        root_pane_id = str(root_pane.get("pane_id") or "").strip()
+        if root_pane_id:
+            self._report_workspace_metadata(
+                namespace_id,
+                project_id=str(payload.get("project_id") or "").strip(),
+                namespace_id=namespace_id,
+                window_name=title,
+                session_name=self._session_name,
+            )
+            self._report_pane_metadata(
+                root_pane_id,
+                session_name=self._session_name,
+                title=title,
+                tokens={
+                    "ccb_project_id": str(payload.get("project_id") or "").strip(),
+                    _NAMESPACE_TOKEN: namespace_id,
+                    _LOGICAL_WINDOW_TOKEN: title,
+                    _LOGICAL_WINDOW_ALIAS_TOKEN: title,
+                    _ROOT_PANE_TOKEN: "1",
+                },
+            )
         return {
             "namespace_id": namespace_id,
             "session_name": self._session_name,
@@ -125,6 +176,205 @@ class HerdrCliRequestAdapter:
             session_name=session_name,
         )
 
+    def _list_windows(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        namespace_id = str(payload.get("namespace_id") or "").strip()
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        workspaces = self._logical_workspaces(
+            namespace_id=namespace_id,
+            session_name=session_name,
+        )
+        windows = []
+        for workspace in workspaces:
+            window_name = str(workspace.get("window_name") or "").strip()
+            if not window_name:
+                continue
+            workspace_id = str(workspace.get("workspace_id") or "").strip()
+            windows.append(
+                {
+                    "window_id": workspace_id,
+                    "window_name": window_name,
+                    "active": bool(workspace.get("focused", False)),
+                    "root_pane_id": str(workspace.get("root_pane_id") or "").strip(),
+                }
+            )
+        return {"status": "ok", "windows": windows}
+
+    def _ensure_window(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        namespace_id = str(payload.get("namespace_id") or "").strip()
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        window_name = str(payload.get("window_name") or "").strip()
+        if not namespace_id or not window_name:
+            raise self._failed(
+                "ensure_window",
+                "Herdr ensure_window requires namespace_id and window_name",
+                session_name=session_name,
+            )
+        logical_workspaces = self._logical_workspaces(
+            namespace_id=namespace_id,
+            session_name=session_name,
+        )
+        existing = next(
+            (
+                workspace
+                for workspace in logical_workspaces
+                if str(workspace.get("window_name") or "").strip() == window_name
+            ),
+            None,
+        )
+        if existing is None:
+            anchor = next(
+                (
+                    workspace
+                    for workspace in logical_workspaces
+                    if str(workspace.get("workspace_id") or "").strip() == namespace_id
+                ),
+                None,
+            )
+            if anchor is not None and _anchor_workspace_can_be_claimed(
+                anchor,
+                session_name=session_name,
+                requested_window_name=window_name,
+            ):
+                existing = anchor
+        if existing is not None:
+            workspace_id = str(existing.get("workspace_id") or namespace_id).strip()
+            root_pane_id = str(existing.get("root_pane_id") or "").strip()
+            self._report_workspace_metadata(
+                workspace_id,
+                project_id=str(payload.get("project_id") or "").strip(),
+                namespace_id=namespace_id,
+                window_name=window_name,
+                session_name=session_name,
+            )
+            if root_pane_id:
+                self._report_pane_metadata(
+                    root_pane_id,
+                    session_name=session_name,
+                    title=window_name,
+                    tokens={
+                        "ccb_project_id": str(payload.get("project_id") or "").strip(),
+                        _NAMESPACE_TOKEN: namespace_id,
+                        _LOGICAL_WINDOW_TOKEN: window_name,
+                        _LOGICAL_WINDOW_ALIAS_TOKEN: window_name,
+                        _ROOT_PANE_TOKEN: "1",
+                    },
+                )
+            existing = {
+                **dict(existing),
+                "workspace_id": workspace_id,
+                "window_name": window_name,
+                "root_pane_id": root_pane_id,
+            }
+        if existing is None:
+            cwd = str(payload.get("cwd") or "")
+            args = ["workspace", "create"]
+            if cwd:
+                args.extend(["--cwd", cwd])
+            args.extend(["--label", window_name])
+            if bool(payload.get("select", False)):
+                args.append("--focus")
+            result = self._json_command("ensure_window", args, session_name=session_name)
+            workspace = _mapping(result.get("workspace"))
+            root_pane = _mapping(result.get("root_pane"))
+            workspace_id = str(workspace.get("workspace_id") or root_pane.get("workspace_id") or "").strip()
+            root_pane_id = str(root_pane.get("pane_id") or "").strip()
+            if not workspace_id:
+                raise self._failed(
+                    "ensure_window",
+                    "Herdr workspace create response is missing workspace_id",
+                    session_name=session_name,
+                )
+            self._report_workspace_metadata(
+                workspace_id,
+                project_id=str(payload.get("project_id") or "").strip(),
+                namespace_id=namespace_id,
+                window_name=window_name,
+                session_name=session_name,
+            )
+            if root_pane_id:
+                self._report_pane_metadata(
+                    root_pane_id,
+                    session_name=session_name,
+                    title=window_name,
+                    tokens={
+                        "ccb_project_id": str(payload.get("project_id") or "").strip(),
+                        _NAMESPACE_TOKEN: namespace_id,
+                        _LOGICAL_WINDOW_TOKEN: window_name,
+                        _LOGICAL_WINDOW_ALIAS_TOKEN: window_name,
+                        _ROOT_PANE_TOKEN: "1",
+                    },
+                )
+            existing = {
+                "workspace_id": workspace_id,
+                "window_name": window_name,
+                "focused": bool(payload.get("select", False)),
+                "root_pane_id": root_pane_id,
+            }
+        workspace_id = str(existing.get("workspace_id") or namespace_id).strip()
+        root_pane_id = str(existing.get("root_pane_id") or "").strip()
+        if not workspace_id:
+            raise self._failed(
+                "ensure_window",
+                f"no Herdr pane found for workspace {namespace_id!r}",
+                session_name=session_name,
+            )
+        if bool(payload.get("select", False)):
+            self._select_window(
+                {
+                    "namespace_id": namespace_id,
+                    "session_name": session_name,
+                    "window_id": workspace_id,
+                }
+            )
+        return {
+            "status": "ok",
+            "window_id": workspace_id,
+            "window_name": window_name,
+            "active": bool(payload.get("select", False)),
+            "root_pane_id": root_pane_id,
+        }
+
+    def _window_root_pane(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        namespace_id = str(payload.get("namespace_id") or "").strip()
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        requested_window = str(payload.get("window_name") or "").strip()
+        workspace = self._resolve_logical_workspace(
+            namespace_id=namespace_id,
+            requested_window=requested_window,
+            session_name=session_name,
+        )
+        if workspace is None:
+            raise self._not_found(
+                "window_root_pane",
+                f"unknown Herdr logical window {requested_window!r}",
+                session_name=session_name,
+            )
+        workspace_id = str(workspace.get("workspace_id") or "").strip()
+        pane_id = str(workspace.get("root_pane_id") or "").strip()
+        if not pane_id:
+            raise self._not_found(
+                "window_root_pane",
+                f"unknown Herdr logical window {requested_window!r}",
+                session_name=session_name,
+            )
+        window_name = str(workspace.get("window_name") or "").strip()
+        return {
+            "status": "ok",
+            "pane": {
+                "pane_id": pane_id,
+                "session_name": session_name,
+                "workspace_id": workspace_id,
+            },
+            "pane_id": pane_id,
+            "session_name": session_name,
+            "window_name": window_name,
+        }
+
+    def _list_panes(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        namespace_id = str(payload.get("namespace_id") or "").strip()
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        return {"status": "ok", "panes": self._panes(namespace_id, session_name=session_name)}
+
     def _create_pane(self, payload: Mapping[str, object]) -> Mapping[str, object]:
         namespace_id = str(payload.get("namespace_id") or "")
         session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
@@ -142,9 +392,32 @@ class HerdrCliRequestAdapter:
             )
         parent = str(payload.get("parent_pane") or "").strip()
         if parent:
-            self._require_pane_in_namespace(namespace_id, parent, session_name=session_name)
+            parent_record = self._pane_by_id(parent, session_name=session_name)
+            if parent_record is None:
+                raise self._failed(
+                    "create_pane",
+                    f"unknown Herdr parent pane {parent!r}",
+                    session_name=session_name,
+                )
+            parent_workspace_id = str(parent_record.get("workspace_id") or "").strip()
+            if parent_workspace_id != namespace_id:
+                logical_workspace_ids = {
+                    str(workspace.get("workspace_id") or "").strip()
+                    for workspace in self._logical_workspaces(
+                        namespace_id=namespace_id,
+                        session_name=session_name,
+                    )
+                }
+                if parent_workspace_id not in logical_workspace_ids:
+                    raise self._not_found(
+                        "create_pane",
+                        f"unknown Herdr parent pane {parent!r}",
+                        session_name=session_name,
+                    )
         else:
             parent = self._first_pane(namespace_id, session_name=session_name)
+            parent_record = self._pane_by_id(parent, session_name=session_name)
+        parent_workspace_id = str((parent_record or {}).get("workspace_id") or "").strip()
         cwd = str(payload.get("cwd") or "")
         args = [
             "pane",
@@ -177,6 +450,168 @@ class HerdrCliRequestAdapter:
         return {
             "pane_id": pane_id,
             "session_name": session_name,
+            "workspace_id": str(pane.get("workspace_id") or parent_workspace_id),
+        }
+
+    def _set_pane_identity(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        pane_id = str(payload.get("pane_id") or "").strip()
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        tokens = {
+            str(key).lstrip("@"): str(value)
+            for key, value in _mapping(payload.get("tokens")).items()
+            if str(key).strip()
+        }
+        existing = self._pane_by_id(pane_id, session_name=session_name)
+        existing_tokens = _pane_tokens(existing) if existing is not None else {}
+        tokens = {
+            **{
+                str(key): ""
+                for key in existing_tokens
+                if str(key) not in {_NAMESPACE_TOKEN, _ROOT_PANE_TOKEN}
+            },
+            **tokens,
+        }
+        for token_name in (_NAMESPACE_TOKEN, _ROOT_PANE_TOKEN):
+            existing_value = str(existing_tokens.get(token_name) or "").strip()
+            if existing_value:
+                tokens[token_name] = existing_value
+            else:
+                tokens.pop(token_name, None)
+        title = str(payload.get("title") or "").strip()
+        agent_label = str(payload.get("agent_label") or "").strip()
+        if agent_label:
+            tokens.setdefault("ccb_agent_label", agent_label)
+        self._report_pane_metadata(
+            pane_id,
+            session_name=session_name,
+            title=title or None,
+            display_agent=agent_label or None,
+            tokens=tokens,
+        )
+        return {"status": "ok", "pane_id": pane_id}
+
+    def _select_window(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        namespace_id = str(payload.get("namespace_id") or "").strip()
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        requested_window = str(payload.get("window_id") or "").strip()
+        workspace = self._resolve_logical_workspace(
+            namespace_id=namespace_id,
+            requested_window=requested_window or namespace_id,
+            session_name=session_name,
+        )
+        workspace_id = str((workspace or {}).get("workspace_id") or "").strip()
+        if not workspace_id:
+            raise self._not_found(
+                "select_window",
+                f"unknown Herdr logical window {requested_window!r}",
+                session_name=session_name,
+            )
+        self._command(
+            "select_window",
+            ["workspace", "focus", workspace_id],
+            expect_json=False,
+            session_name=session_name,
+        )
+        return {"status": "ok", "namespace_id": namespace_id, "window_id": workspace_id}
+
+    def _kill_window(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        namespace_id = str(payload.get("namespace_id") or "").strip()
+        requested_window = str(payload.get("window_id") or "").strip()
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        workspace = self._resolve_logical_workspace(
+            namespace_id=namespace_id,
+            requested_window=requested_window,
+            session_name=session_name,
+        )
+        workspace_id = str((workspace or {}).get("workspace_id") or "").strip()
+        if not workspace_id:
+            raise self._not_found(
+                "kill_window",
+                f"unknown Herdr logical window {requested_window!r}",
+                session_name=session_name,
+            )
+        self._command(
+            "kill_window",
+            ["workspace", "close", workspace_id],
+            expect_json=False,
+            session_name=session_name,
+        )
+        return {"status": "ok", "window_id": workspace_id}
+
+    def _rename_window(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        namespace_id = str(payload.get("namespace_id") or "").strip()
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        requested_window = str(payload.get("window_id") or "").strip()
+        new_name = str(payload.get("new_name") or "").strip()
+        if not new_name:
+            raise self._failed(
+                "rename_window",
+                "Herdr rename_window requires new_name",
+                session_name=session_name,
+            )
+        workspace = self._resolve_logical_workspace(
+            namespace_id=namespace_id,
+            requested_window=requested_window,
+            session_name=session_name,
+        )
+        workspace_id = str((workspace or {}).get("workspace_id") or "").strip()
+        root_pane_id = str((workspace or {}).get("root_pane_id") or "").strip()
+        if not workspace_id:
+            raise self._not_found(
+                "rename_window",
+                f"unknown Herdr logical window {requested_window!r}",
+                session_name=session_name,
+            )
+        self._report_workspace_metadata(
+            workspace_id,
+            project_id=str(_mapping(workspace).get("ccb_project_id") or "").strip(),
+            namespace_id=namespace_id,
+            window_name=new_name,
+            session_name=session_name,
+        )
+        if root_pane_id:
+            self._report_pane_metadata(
+                root_pane_id,
+                session_name=session_name,
+                title=new_name,
+                tokens={
+                    _NAMESPACE_TOKEN: namespace_id,
+                    _LOGICAL_WINDOW_TOKEN: new_name,
+                    _LOGICAL_WINDOW_ALIAS_TOKEN: new_name,
+                    _ROOT_PANE_TOKEN: "1",
+                },
+            )
+        return {"status": "ok", "window_id": workspace_id, "window_name": new_name}
+
+    def _destroy_namespace(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        namespace_id = str(payload.get("namespace_id") or "").strip()
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        if not namespace_id:
+            raise self._failed(
+                "destroy_namespace",
+                "Herdr destroy_namespace requires namespace_id",
+                session_name=session_name,
+            )
+        workspaces = self._logical_workspaces(
+            namespace_id=namespace_id,
+            session_name=session_name,
+        )
+        closed: list[str] = []
+        for workspace in workspaces:
+            workspace_id = str(workspace.get("workspace_id") or "").strip()
+            if not workspace_id:
+                continue
+            self._command(
+                "destroy_namespace",
+                ["workspace", "close", workspace_id],
+                expect_json=False,
+                session_name=session_name,
+            )
+            closed.append(workspace_id)
+        return {
+            "status": "ok",
+            "namespace_id": namespace_id,
+            "closed_workspace_ids": closed,
         }
 
     def _send_text(self, payload: Mapping[str, object]) -> Mapping[str, object]:
@@ -219,13 +654,31 @@ class HerdrCliRequestAdapter:
         if not namespace_id:
             raise self._failed("attach_namespace", "Herdr attach_namespace is missing namespace_id")
         session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        requested_window = str(payload.get("window_name") or "").strip() or namespace_id
+        workspace = self._resolve_logical_workspace(
+            namespace_id=namespace_id,
+            requested_window=requested_window,
+            session_name=session_name,
+        )
+        workspace_id = str((workspace or {}).get("workspace_id") or "").strip()
+        if not workspace_id:
+            raise self._not_found(
+                "attach_namespace",
+                f"unknown Herdr logical window {requested_window!r}",
+                session_name=session_name,
+            )
         self._command(
             "attach_namespace",
-            ["workspace", "focus", namespace_id],
+            ["workspace", "focus", workspace_id],
             expect_json=False,
             session_name=session_name,
         )
-        return {"status": "ok", "namespace_id": namespace_id, "session_name": session_name}
+        return {
+            "status": "ok",
+            "namespace_id": namespace_id,
+            "session_name": session_name,
+            "window_id": workspace_id,
+        }
 
     def _is_alive(self, payload: Mapping[str, object]) -> Mapping[str, object]:
         try:
@@ -245,6 +698,90 @@ class HerdrCliRequestAdapter:
         workspaces = result.get("workspaces")
         return [item for item in workspaces if isinstance(item, Mapping)] if isinstance(workspaces, list) else []
 
+    def _logical_workspaces(
+        self,
+        *,
+        namespace_id: str,
+        session_name: str,
+    ) -> list[Mapping[str, object]]:
+        namespace_anchor = str(namespace_id or "").strip()
+        if not namespace_anchor:
+            return []
+        workspaces = self._workspaces(session_name=session_name)
+        panes = self._panes("", session_name=session_name)
+        roots_by_workspace: dict[str, Mapping[str, object]] = {}
+        for pane in panes:
+            workspace_id = str(pane.get("workspace_id") or "").strip()
+            tokens = _pane_tokens(pane)
+            if (
+                workspace_id
+                and str(tokens.get(_ROOT_PANE_TOKEN) or "").strip() == "1"
+                and str(tokens.get(_NAMESPACE_TOKEN) or "").strip() == namespace_anchor
+            ):
+                roots_by_workspace.setdefault(workspace_id, pane)
+        logical: list[Mapping[str, object]] = []
+        for workspace in workspaces:
+            workspace_id = str(workspace.get("workspace_id") or "").strip()
+            if not workspace_id:
+                continue
+            root = roots_by_workspace.get(workspace_id)
+            if root is None:
+                continue
+            root_tokens = _pane_tokens(root)
+            window_name = str(
+                root_tokens.get(_LOGICAL_WINDOW_TOKEN)
+                or root_tokens.get(_LOGICAL_WINDOW_ALIAS_TOKEN)
+                or ""
+            ).strip()
+            if not window_name:
+                continue
+            logical.append(
+                {
+                    **dict(workspace),
+                    "window_name": window_name,
+                    "root_pane_id": str(root.get("pane_id") or "").strip(),
+                }
+            )
+        return logical
+
+    def _resolve_logical_workspace(
+        self,
+        *,
+        namespace_id: str,
+        requested_window: str,
+        session_name: str,
+    ) -> Mapping[str, object] | None:
+        target = str(requested_window or "").strip()
+        if not target:
+            return None
+        for workspace in self._logical_workspaces(
+            namespace_id=namespace_id,
+            session_name=session_name,
+        ):
+            if target in {
+                str(workspace.get("workspace_id") or "").strip(),
+                str(workspace.get("window_name") or "").strip(),
+            }:
+                return workspace
+        return None
+
+    def _pane_by_id(self, pane_id: str, *, session_name: str) -> Mapping[str, object] | None:
+        target = str(pane_id or "").strip()
+        if not target:
+            return None
+        for pane in self._panes("", session_name=session_name):
+            if str(pane.get("pane_id") or "").strip() == target:
+                return pane
+        return None
+
+    def _panes(self, namespace_id: str, *, session_name: str) -> list[Mapping[str, object]]:
+        args = ["pane", "list"]
+        if namespace_id:
+            args.extend(["--workspace", namespace_id])
+        result = self._json_command("list_panes", args, session_name=session_name)
+        panes = result.get("panes")
+        return [item for item in panes if isinstance(item, Mapping)] if isinstance(panes, list) else []
+
     def _first_pane(self, namespace_id: str, *, session_name: str) -> str:
         result = self._json_command("create_pane", ["pane", "list"], session_name=session_name)
         panes = result.get("panes")
@@ -260,26 +797,54 @@ class HerdrCliRequestAdapter:
             session_name=session_name,
         )
 
-    def _require_pane_in_namespace(
+    def _report_workspace_metadata(
         self,
+        workspace_id: str,
+        *,
+        project_id: str,
         namespace_id: str,
+        window_name: str,
+        session_name: str,
+    ) -> None:
+        tokens = {
+            "ccb_project_id": project_id,
+            _NAMESPACE_TOKEN: namespace_id,
+            _LOGICAL_WINDOW_TOKEN: window_name,
+            _LOGICAL_WINDOW_ALIAS_TOKEN: window_name,
+        }
+        args = ["workspace", "report-metadata", workspace_id, "--source", _METADATA_SOURCE]
+        for name, value in tokens.items():
+            if value:
+                args.extend(["--token", f"{name}={value}"])
+        self._command(
+            "report_workspace_metadata",
+            args,
+            expect_json=False,
+            session_name=session_name,
+        )
+
+    def _report_pane_metadata(
+        self,
         pane_id: str,
         *,
         session_name: str,
+        title: str | None = None,
+        display_agent: str | None = None,
+        tokens: Mapping[str, str] | None = None,
     ) -> None:
-        result = self._json_command("create_pane", ["pane", "list"], session_name=session_name)
-        panes = result.get("panes")
-        if isinstance(panes, list):
-            for pane in panes:
-                if (
-                    isinstance(pane, Mapping)
-                    and pane.get("workspace_id") == namespace_id
-                    and pane.get("pane_id") == pane_id
-                ):
-                    return
-        raise self._failed(
-            "create_pane",
-            f"unknown Herdr parent pane {pane_id!r}",
+        args = ["pane", "report-metadata", pane_id, "--source", _METADATA_SOURCE]
+        if title:
+            args.extend(["--title", title])
+        if display_agent:
+            args.extend(["--display-agent", display_agent])
+        for name, value in (tokens or {}).items():
+            token_name = str(name).lstrip("@").strip()
+            if token_name:
+                args.extend(["--token", f"{token_name}={str(value)}"])
+        self._command(
+            "report_pane_metadata",
+            args,
+            expect_json=False,
             session_name=session_name,
         )
 
@@ -456,6 +1021,22 @@ class HerdrCliRequestAdapter:
             ipc_ref=self._ipc_ref_for_session(effective_session),
         )
 
+    def _not_found(
+        self,
+        operation: str,
+        detail: str,
+        *,
+        session_name: str | None = None,
+    ) -> MuxCommandErrorV2:
+        effective_session = session_name or self._session_name
+        return MuxCommandErrorV2(
+            category="not-found",
+            backend_impl="herdr",
+            operation=operation,
+            detail=detail,
+            ipc_ref=self._ipc_ref_for_session(effective_session),
+        )
+
     def _require_ok_json_status(
         self,
         operation: str,
@@ -478,6 +1059,23 @@ class HerdrCliRequestAdapter:
 
 def _mapping(raw: object) -> Mapping[str, object]:
     return raw if isinstance(raw, Mapping) else {}
+
+
+def _pane_tokens(pane: Mapping[str, object]) -> Mapping[str, object]:
+    return _mapping(pane.get("tokens"))
+
+
+def _anchor_workspace_can_be_claimed(
+    workspace: Mapping[str, object],
+    *,
+    session_name: str,
+    requested_window_name: str,
+) -> bool:
+    current_window_name = str(workspace.get("window_name") or "").strip()
+    return not current_window_name or current_window_name in {
+        session_name,
+        requested_window_name,
+    }
 
 
 def _restore_token(session_name: str, namespace_id: str) -> str:
