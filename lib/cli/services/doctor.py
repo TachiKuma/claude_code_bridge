@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+from pathlib import Path
+import os
+import platform
+
 from agents.config_loader import load_project_config
 from ccbd.socket_client import CcbdClient
 from provider_core.catalog import build_default_provider_catalog
 from provider_execution.registry import build_default_execution_registry
+from terminal_runtime.windows_x64_release_surface import load_windows_x64_release_surface_projection
 
 from .daemon import ping_local_state
 from .daemon_runtime.policy import CONTROL_PLANE_RPC_TIMEOUT_S
@@ -58,6 +63,7 @@ def doctor_summary(context) -> dict:
         'project_id': context.project.project_id,
         'installation': installation,
         'entrypoint': entrypoint_summary(installation=installation),
+        'windows_x64_release_surface': _windows_x64_release_surface_summary(installation),
         'runtime': runtime_identity_summary(
             context.project.project_root,
             ccb_dir=context.paths.ccb_dir,
@@ -69,6 +75,50 @@ def doctor_summary(context) -> dict:
         'active_inbound_diagnostics': active_inbound_diagnostics,
         'agents': agents,
     }
+
+
+def _windows_x64_release_surface_summary(installation: dict[str, object]) -> dict[str, object]:
+    root_text = str(installation.get('path') or '').strip()
+    root = Path(root_text).expanduser() if root_text else Path.cwd()
+    return load_windows_x64_release_surface_projection(
+        root,
+        _windows_x64_release_surface_host_evidence(),
+    )
+
+
+def _windows_x64_release_surface_host_evidence() -> dict[str, object]:
+    env_arch = str(os.environ.get('PROCESSOR_ARCHITECTURE') or platform.machine() or '').strip()
+    native_arch = str(os.environ.get('PROCESSOR_ARCHITEW6432') or '').strip()
+    return {
+        'os_platform': _release_surface_os_platform(platform.system()),
+        'cpu_arch': _release_surface_cpu_arch(native_arch or env_arch or platform.machine()),
+        'process_arch': _release_surface_cpu_arch(env_arch or platform.machine()),
+        'wow64': bool(native_arch and _release_surface_cpu_arch(env_arch) == 'ia32'),
+        'python_executable': None,
+        'python_bitness': 'unknown',
+        'installer_entrypoint': 'doctor',
+    }
+
+
+def _release_surface_os_platform(system_name: str) -> str:
+    if system_name == 'Windows':
+        return 'win32'
+    if system_name == 'Darwin':
+        return 'darwin'
+    if system_name == 'Linux':
+        return 'linux'
+    return 'unknown'
+
+
+def _release_surface_cpu_arch(value: str) -> str:
+    normalized = str(value or '').strip().lower()
+    if normalized in {'amd64', 'x86_64', 'x64'}:
+        return 'x64'
+    if normalized in {'aarch64', 'arm64'}:
+        return 'arm64'
+    if normalized in {'x86', 'i386', 'i686', 'ia32'}:
+        return 'ia32'
+    return 'unknown'
 
 
 def _load_remote_client(context, *, local) -> tuple[object | None, str | None]:

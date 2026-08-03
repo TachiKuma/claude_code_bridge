@@ -1,0 +1,69 @@
+{
+  "gate_id": "scope-gate",
+  "stage": "implementation.before_review",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "changed_files": [
+        ".codestable/features/2026-07-31-windows-x64-release-surface/windows-x64-release-surface-checklist.yaml",
+        ".codestable/features/2026-07-31-windows-x64-release-surface/windows-x64-release-surface-design.md",
+        ".codestable/roadmap/windows-native-herdr-ccb/goal-state.yaml",
+        "README.md",
+        "README/ar.md",
+        "README/de.md",
+        "README/es.md",
+        "README/fr.md",
+        "README/ja.md",
+        "README/ko.md",
+        "README/pt.md",
+        "README/ru.md",
+        "README/zh.md",
+        "bin/ccb-npm-install.js",
+        "docs/ccbd-diagnostics-contract.md",
+        "install.ps1",
+        "lib/cli/management_runtime/commands_runtime/update.py",
+        "lib/cli/render_runtime/ops_views_doctor.py",
+        "lib/cli/services/doctor.py",
+        "package.json",
+        "test/test_cli_management_update.py",
+        ".codestable/features/2026-07-31-windows-x64-release-surface/evidence/cmd-011-windows-cleanup-rollback-blocked-evidence.md",
+        ".codestable/features/2026-07-31-windows-x64-release-surface/evidence/cmd-013-s13-scope-guard-package-cleanliness.md",
+        ".codestable/features/2026-07-31-windows-x64-release-surface/windows-x64-release-surface-evidence-pack.md",
+        ".codestable/features/2026-07-31-windows-x64-release-surface/windows-x64-release-surface-implementation.md",
+        ".codestable/roadmap/windows-native-herdr-ccb/goal-driver-observation.md",
+        "lib/terminal_runtime/windows_x64_release_surface.py",
+        "lib/terminal_runtime/windows_x64_release_surface_projection.json",
+        "test/test_cli_doctor_rmux_packaging.py",
+        "test/test_cli_doctor_windows_x64_release_surface.py",
+        "test/test_install_windows_rmux_contract.py",
+        "test/test_rmux_packaging_docs_contracts.py",
+        "test/test_windows_x64_release_surface.py",
+        "test/test_windows_x64_release_surface_baseline_version.py",
+        "test/test_windows_x64_release_surface_dependency_admission.py",
+        "test/test_windows_x64_release_surface_update_rollback.py"
+      ],
+      "ignored_machine_artifacts": [
+        ".codestable/features/2026-07-31-windows-x64-release-surface/windows-x64-release-surface-dod-results.json",
+        ".codestable/features/2026-07-31-windows-x64-release-surface/windows-x64-release-surface-evidence-pack-results.json",
+        ".codestable/features/2026-07-31-windows-x64-release-surface/windows-x64-release-surface-gate-results.json"
+      ],
+      "allowed_prefixes": [
+        ".codestable/features/2026-07-31-windows-x64-release-surface",
+        ".codestable/features/2026-07-31-windows-x64-release-surface",
+        ".codestable/roadmap/windows-native-herdr-ccb/goal-state.yaml",
+        ".codestable/roadmap/windows-native-herdr-ccb/goal-driver-observation.md",
+        "lib",
+        "test",
+        "docs",
+        "README",
+        "README.md",
+        "package.json",
+        "bin",
+        "install.ps1"
+      ]
+    }
+  ],
+  "providers": {}
+}

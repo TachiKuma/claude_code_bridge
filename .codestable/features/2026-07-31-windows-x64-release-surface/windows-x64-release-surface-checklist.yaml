@@ -5,150 +5,150 @@ steps:
   - id: S1
     action: "projection schema and strict loader：新增 Python builder、strict schema、default-blocked record 和 Python 唯一 public loader"
     exit_signal: "fake baseline gate / user-surface parity / artifact / helper / python probe 下，load_windows_x64_release_surface_projection 能稳定给出 available、degraded 或 blocked；缺 required field、非法 enum、stale/malformed JSON 都 fail closed"
-    status: pending
+    status: done
   - id: S2
     action: "host gate evaluator and cross-language seam：定义 WindowsX64ReleaseHostEvidence / WindowsX64ReleaseHostGate，并固定 Node / PowerShell adapter 的通用求值边界"
     exit_signal: "Node 与 PowerShell fixture 能读取同一 JSON、只采集事实字段、只执行 projection.host_gate.rules 的 all-pass / first-failure 通用布尔求值，且不会复制 Windows x64 / WOW64 / helper / artifact 路由矩阵"
-    status: pending
+    status: done
   - id: S3
     action: "canonical packaged JSON freshness：让 packaged JSON 由 Python builder canonical 输出生成或验证，并纳入 npm pack 前 freshness gate"
     exit_signal: "提交/打包的 windows_x64_release_surface_projection.json 与 builder 在相同 repo/default-blocked 输入下的 canonical JSON 一致；npm pack --dry-run 只作为文件入包证明"
-    status: pending
+    status: done
   - id: S4
     action: "dependency and baseline admission：验证 windows-x64-v852-baseline-gate 与 herdr-user-surfaces-parity 已 done 且有 passed acceptance/evidence refs，并证明当前实现线严格来自 CCB v8.5.2 源头新分支"
     exit_signal: "parent items status 均为 done、parent acceptance frontmatter 均为 doc_type=feature-acceptance 且 status=passed、baseline/user-surface evidence refs 存在时才允许 available/degraded release route；当前 upstream 仍 in-progress 时最高只能生成 strict schema、host gate、blocked/default projection、diagnostics wiring 和回归保护"
-    status: pending
+    status: done
   - id: S5
     action: "package metadata and payload：让 package.json.os 放开 win32、package.json.files 包含 npm 可读 projection JSON；package.json.cpu 保持 envelope 级策略，不把 Windows x64-only 硬编码到全包 cpu metadata"
     exit_signal: "npm 能进入 Windows postinstall；projection JSON 出现在 npm pack payload；package.json.cpu 未误伤 macOS arm64，且该 roadmap refinement 仍等待 epic owner 统一确认承接"
-    status: pending
+    status: done
   - id: S6
     action: "Node postinstall host gate：让 ccb-npm-install.js 读取 projection、采集 host evidence、执行 host_gate.rules；只有 fake admitted upstream + strict v8.5.2 fixture 下 native Windows x64 才能走 code-level npm install dry-run route，当前真实 repo/upstream 未 admitted 时只能输出 diagnostic 或 blocked/default projection"
     exit_signal: "fake admitted upstream + strict v8.5.2 fixture 下 native Windows x64 可通过 npm install dry-run release route；当前真实 repo/upstream 未 admitted 时只能进入 postinstall diagnostic 或 blocked/default projection；Windows arm64/WOW64 不能误装；Windows ia32 至少有 projection / adapter unit 的 blocked diagnostic"
-    status: pending
+    status: done
   - id: S7
     action: "npm runner executable contract：把 windows_executable_entry 与 windows_bin_entries 接到 public npm bin runner smoke"
     exit_signal: "枚举 package.json.bin 的全部 key（当前为 ccb、ask、autonew、ctx-transfer），断言 projection.windows_bin_entries 覆盖每个 bin，并用 fake staged root / stub spawn 验证 runner 对每个 command 都使用 projection 映射；node bin/ccb.js --print-version 只是 smoke 的一个代表用例，不能替代其它 bin"
-    status: pending
+    status: done
   - id: S8
     action: "PowerShell source install adapter：让 install.ps1 消费同一 JSON projection，但明确 source/dev checkout install 不受 release artifact admission 阻断"
     exit_signal: "当前 upstream 未 admitted 时，release route 显示 blocked/default projection；既有 install.ps1 install source/dev 路径仍可按 source_install_allowed=true 继续执行并显示可行动诊断，除非存在单独 owner 决策要求阻断"
-    status: pending
+    status: done
   - id: S9
     action: "Windows update branch and rollback：让 ccb update 读取同一 JSON 发布面投影；Windows update 按 update_entry 的 diagnostic_only、install_ps1、npm、source 分支执行，不能落到 Unix installer"
     exit_signal: "Windows x64 update 路由和 release-surface diagnostic 一致；fake staged root / fake install.ps1 failure 单测证明 Windows update branch restore-or-retain backup 且不调用 Unix installer"
-    status: pending
+    status: done
   - id: S10
     action: "doctor/docs projection：把 Windows x64 发布面 rows 输出到 doctor、doctor --output、README.md、README/*.md 与 diagnostics contract，并清理旧 doctor --bundle 文案"
     exit_signal: "doctor/render/docs 都能看到 release_install_entry、source_install_allowed、source_install_entry、update_entry、managed_python_status、native_helper_status、failure_reason 和 next_action；docs/ccbd-diagnostics-contract.md 不再把旧 doctor --bundle 作为当前公开命令"
-    status: pending
+    status: done
   - id: S11
     action: "non-Windows / Rmux regression：运行 Linux/macOS/WSL 安装更新回归和既有 Windows Rmux packaging / diagnostics 回归"
     exit_signal: "非 Windows 更新安装回归与 Rmux packaging/diagnostics 回归通过，没有把 release-surface 逻辑注入旧路径"
-    status: pending
+    status: done
   - id: S12
     action: "Windows cleanup / rollback evidence：证明 install.ps1 uninstall、PATH/skills cleanup 和 Windows update failure rollback 可观察"
     exit_signal: "Native Windows transcript 或 blocked evidence 存在；真实 Windows transcript 对齐 S8/S9 已由 fake rollback 单测覆盖的 rollback 语义"
-    status: pending
+    status: done
   - id: S13
     action: "scope guard and package cleanliness：运行 package payload 断言、scope guard 和清洁度检查，禁止 publish/promotion/support claim 越界"
     exit_signal: "npm pack --dry-run、Windows npm install dry-run、scope guard 和清洁度检查全过，且没有 provider completion、recovery owner、final support claim、publish/promotion 越界"
-    status: pending
+    status: done
 
 checks:
   - item: "Windows x64 发布面由单一 JSON projection owner 产出，Python、Node、PowerShell 调用方不分别解释 host / arch / helper / Python"
     source: design AC-001 / DOD-IMPL-001 / S1
-    status: pending
+    status: passed
   - item: "WindowsX64ReleaseHostEvidence 只承载事实字段，supported、failure_reason、release_install_entry、source_install_allowed、source_install_entry 和 update_entry 只能由 release-surface owner 产出"
     source: design JSON 兼容规则 / S2
-    status: pending
+    status: passed
   - item: "Node/PowerShell adapter 只能执行 projection.host_gate.rules 的通用布尔求值，不能复制 Windows x64、WOW64、helper 或 artifact 路由矩阵"
     source: design JSON 兼容规则 / S2
-    status: pending
+    status: passed
   - item: "host_gate.rules 按顺序 all-pass / first-failure 确定性求值，缺 key、null、空值、类型不匹配、未知 op 均 fail closed"
     source: design JSON 兼容规则 / CMD-003 / S2
-    status: pending
+    status: passed
   - item: "failure_reason 是跨 install/update/doctor/docs 的 canonical machine reason；upstream、schema、artifact mismatch、installer entry、WOW64、managed Python、helper 和 baseline mismatch 不得压成 unknown"
     source: design JSON 兼容规则 / CMD-003 / CMD-009 / CMD-010
-    status: pending
+    status: passed
   - item: "Windows arm64、WOW64 或非 Windows 都 fail closed，且有明确 next_action；Windows ia32 若由 npm prefilter 拒绝，projection / adapter unit 仍要覆盖 blocked diagnostic"
     source: design AC-002 / DOD-IMPL-002 / S6 / S8 / S9
-    status: pending
+    status: passed
   - item: "npm/install/update 入口在 Windows x64 上共用同一发布面语义"
     source: design AC-003 / AC-004 / S5 / S6 / S7 / S9
-    status: pending
+    status: passed
   - item: "roadmap 依赖 herdr-user-surfaces-parity 被作为显式输入；缺 upstream evidence 时 release surface blocked，而不是本 feature 自行生成用户可见面语义"
     source: design 非显然依赖 / AC-010 / S4
-    status: pending
+    status: passed
   - item: "两个 upstream roadmap item 必须 done 且有 passed acceptance/evidence refs；当前实现线必须是 strict v8.5.2 源头新分支，否则只能 blocked/default projection"
     source: design AC-010 / DOD-IMPL-006 / DOD-IMPL-007 / S4
-    status: pending
+    status: passed
   - item: "当前 upstream 仍 in-progress 且工作区为 8.2.1 时，本 feature 可实现的最高形态是 blocked/default projection，不得打开 available/degraded route"
     source: design dependency admission / S4
-    status: pending
+    status: passed
   - item: "Roadmap 的 os=win32,cpu=x64 被解释为 Windows support tuple；package.json.cpu 仍是全包 envelope，Windows x64-only 由 projection.host_gate 和 postinstall fail-closed 满足"
     source: design Roadmap contract reconciliation / S5
-    status: pending
+    status: passed
   - item: "roadmap contract refinement 必须由 design-review passed 与后续 owner 批量确认承接：package.json.cpu 是全包 envelope，Windows cpu=x64 由 projection.host_gate 断言；确认前不得作为已沉淀实现事实"
     source: design Roadmap contract reconciliation / S5
-    status: pending
+    status: passed
   - item: "public npm bin entry 由 bin/ccb.js / bin/ccb-npm-runner.js 与 windows_executable_entry / windows_bin_entries 契约覆盖；即使无需改 runner 代码，也必须有 smoke/contract 证据"
     source: design 挂载点 / S7 / CMD-003
-    status: pending
+    status: passed
   - item: "windows_bin_entries 必须覆盖 package.json.bin 的全部 key：ccb、ask、autonew、ctx-transfer；runner smoke 必须用 fake staged root / stub spawn 覆盖每个 command"
     source: design S7 / CMD-003
-    status: pending
+    status: passed
   - item: "CMD-009 固定检查 parent item done、parent acceptance doc_type/status 和 baseline/user-surface evidence refs，避免实现阶段自行解释 upstream evidence"
     source: design dependency admission / CMD-009 / S4
-    status: pending
+    status: passed
   - item: "projection 包含 artifact_basename、archive_name、extract_dir、checksum_entry、release_artifact_ref、windows_executable_entry 和 windows_bin_entries，Node/update/install/runner 不复制 artifact 或 executable 平台矩阵"
     source: design JSON 兼容规则 / DOD-IMPL-001 / S1 / S7
-    status: pending
+    status: passed
   - item: "package.json.files 或等价 package payload 契约保证 Windows postinstall 能读取 projection JSON"
     source: design JSON 兼容规则 / CMD-006 / S5
-    status: pending
+    status: passed
   - item: "packaged JSON reader 对缺 schema_version、必要字段、合法 enum、artifact/executable 字段的 stale/malformed payload fail closed，不复制 Rmux reader 的宽松 defaults"
     source: design JSON 兼容规则 / CMD-003 / S1
-    status: pending
+    status: passed
   - item: "packaged JSON freshness gate 断言提交/打包的 windows_x64_release_surface_projection.json 与 Python builder canonical 输出一致"
     source: design JSON 兼容规则 / CMD-003 / CMD-006 / S3
-    status: pending
+    status: passed
   - item: "projection 暴露 projection_source、implementation_admission、baseline_version_status、release_install_entry、source_install_allowed、source_install_entry 和 windows_installer_entry，避免 Python/Node/PowerShell 读取不同来源或自行发明 installer 字段"
     source: design JSON 兼容规则 / S1 / S8 / S9
-    status: pending
+    status: passed
   - item: "upstream failure detail、upstream_failure_ref、upstream_detail_reason 和 beta_gaps 能透传到 doctor/docs/install/update"
     source: design JSON 兼容规则 / AC-005 / AC-006 / S1 / S8 / S9 / S10
-    status: pending
+    status: passed
   - item: "managed Python 与 native helper 状态能在 doctor/docs 中看见"
     source: design AC-005 / AC-006 / S8 / S10
-    status: pending
+    status: passed
   - item: "Linux/macOS/WSL 现有安装更新路径与 Rmux 诊断不退化"
     source: design AC-007 / S11
-    status: pending
+    status: passed
   - item: "不修改 provider completion、recovery owner、publish/promotion 或最终 support claim"
     source: design AC-008 / S13
-    status: pending
+    status: passed
   - item: "scope guard 覆盖单/双引号 support_tier=supported 以及 README/docs/doctor 中 Windows x64 final supported、full support、stable support 文案"
     source: design CMD-007 / AC-008 / S13
-    status: pending
+    status: passed
   - item: "Windows x64 真机 transcript 或 blocked evidence 可回收为 acceptance 证据"
     source: design AC-009 / S10 / S12
-    status: pending
+    status: passed
   - item: "install.ps1 uninstall cleanup 与 ccb update failure rollback 有 transcript 或 blocked evidence"
     source: design AC-011 / S12
-    status: pending
+    status: passed
   - item: "Windows update failure rollback 有 fake staged root / fake install.ps1 failure 单测，验证 restore-or-retain backup 且不调用 Unix installer"
     source: design Windows update 子流程 / CMD-012 / S9
-    status: pending
+    status: passed
   - item: "update_entry=npm 在本 feature 中只输出 next_action / diagnostic，不由 Python updater 自动执行 npm install；Windows npm install 证据只要求 code-level dry-run"
     source: design Windows update 子流程 / S9
-    status: pending
+    status: passed
   - item: "upstream 未 admitted 时 release artifact/npm/update route blocked，但既有 install.ps1 source/dev 入口不回归，并通过 source_install_allowed/source_install_entry 暴露诊断边界"
     source: design AC-012 / DOD-IMPL-008 / S8
-    status: pending
+    status: passed
   - item: "docs contract 更新必须清理旧 doctor --bundle 口径，当前公开命令使用 doctor --output"
     source: design S10 / CMD-013 / AC-006
-    status: pending
+    status: passed
 
 dod:
   commands:
@@ -199,7 +199,7 @@ dod:
         - rmux_diagnostics_regression
         - windows_install_contract_regression
     - id: CMD-006
-      command: "node -e \"const cp=require('child_process'); const out=cp.execFileSync('npm',['pack','--dry-run','--json'],{encoding:'utf8'}); const files=JSON.parse(out)[0].files.map(f=>f.path); if(!files.includes('lib/terminal_runtime/windows_x64_release_surface_projection.json')) throw new Error('projection JSON missing from npm pack payload')\""
+      command: "node -e \"const cp=require('child_process'); const out=process.platform==='win32'?cp.execFileSync('cmd',['/d','/s','/c','npm.cmd pack --dry-run --json'],{encoding:'utf8'}):cp.execFileSync('npm',['pack','--dry-run','--json'],{encoding:'utf8'}); const files=JSON.parse(out)[0].files.map(f=>f.path); if(!files.includes('lib/terminal_runtime/windows_x64_release_surface_projection.json')) throw new Error('projection JSON missing from npm pack payload')\""
       core: true
       failure_handling: fix-or-block
       test_status: new
@@ -208,7 +208,7 @@ dod:
         - projection_json_in_npm_payload
     - id: CMD-007
       command: >-
-        python -c "import pathlib,re,subprocess; roots=('lib','test','docs','README','README.md','package.json','bin','install.ps1'); run=lambda a: subprocess.run(a,capture_output=True,text=True,check=True).stdout; tracked=run(['git','diff','--',*roots])+run(['git','diff','--cached','--',*roots]); others=[p for p in run(['git','ls-files','--others','--exclude-standard','--',*roots]).splitlines() if p]; extra=''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in others if pathlib.Path(p).is_file()); lower=(tracked+extra).lower(); q='['+chr(34)+chr(39)+']?'; patterns=('npm\\s+publish','git\\s+push','git\\s+tag','support_tier\\s*[:=]\\s*'+q+'supported'+q,'windows\\s+x64\\s+(is\\s+)?(fully\\s+|stable\\s+)?supported','full\\s+windows\\s+x64\\s+support','stable\\s+windows\\s+x64\\s+support','release[_ -]?promotion\\s*[:=]\\s*(true|enabled)','provider_completion','recovery_owner'); hits=[p for p in patterns if re.search(p,lower)]; assert not hits,hits"
+        python -c "import pathlib,re,subprocess; roots=('lib','test','docs','README','README.md','package.json','bin','install.ps1'); run=lambda a: subprocess.run(a,capture_output=True,text=True,encoding='utf-8',errors='ignore',check=True).stdout; tracked=run(['git','diff','--',*roots])+run(['git','diff','--cached','--',*roots]); others=[p for p in run(['git','ls-files','--others','--exclude-standard','--',*roots]).splitlines() if p]; extra=''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in others if pathlib.Path(p).is_file()); lower=(tracked+extra).lower(); q='['+chr(34)+chr(39)+']?'; patterns=('npm\\s+publish','git\\s+push','git\\s+tag','support_tier\\s*[:=]\\s*'+q+'supported'+q,'windows\\s+x64\\s+(is\\s+)?(fully\\s+|stable\\s+)?supported','full\\s+windows\\s+x64\\s+support','stable\\s+windows\\s+x64\\s+support','release[_ -]?promotion\\s*[:=]\\s*(true|enabled)','provider_completion','recovery_owner'); hits=[p for p in patterns if re.search(p,lower)]; assert not hits,hits"
       core: true
       failure_handling: fix-or-block
       test_status: existing

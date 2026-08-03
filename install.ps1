@@ -21,6 +21,168 @@ try { chcp 65001 | Out-Null } catch {}
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 
+function Get-WindowsX64ReleaseSurfaceProjection {
+  param([string]$Root = $repoRoot)
+  $projectionPath = Join-Path $Root "lib\terminal_runtime\windows_x64_release_surface_projection.json"
+  if (-not (Test-Path $projectionPath)) {
+    return $null
+  }
+  return Get-Content $projectionPath -Raw -Encoding UTF8 | ConvertFrom-Json
+}
+
+function Test-WindowsX64ReleaseHostGate {
+  param(
+    [Parameter(Mandatory = $true)]$Projection,
+    [hashtable]$HostEvidence = @{}
+  )
+
+  $gate = $Projection.host_gate
+  if (-not $gate -or -not $gate.rules -or -not $gate.default_failure_reason -or -not $gate.default_next_action) {
+    return @{
+      allowed = $false
+      failure_reason = "projection-schema-invalid"
+      diagnostic = "Windows x64 release-surface host_gate is invalid."
+      next_action = "Regenerate the Windows x64 release-surface projection."
+    }
+  }
+
+  foreach ($rule in @($gate.rules)) {
+    $propertyNames = @($rule.PSObject.Properties.Name)
+    $validShape = (
+      ($propertyNames -contains "field") -and
+      ($propertyNames -contains "op") -and
+      ($propertyNames -contains "failure_reason") -and
+      ($propertyNames -contains "diagnostic") -and
+      ($propertyNames -contains "next_action")
+    )
+    if (-not $validShape) {
+      return @{
+        allowed = $false
+        failure_reason = $gate.default_failure_reason
+        diagnostic = "Windows x64 release-surface host_gate rule is invalid."
+        next_action = $gate.default_next_action
+      }
+    }
+    if ($rule.op -in @("equals", "not_equals") -and -not ($propertyNames -contains "value")) {
+      return @{
+        allowed = $false
+        failure_reason = $gate.default_failure_reason
+        diagnostic = "Windows x64 release-surface host_gate rule is invalid."
+        next_action = $gate.default_next_action
+      }
+    }
+    if ($rule.op -eq "in" -and -not ($rule.value -is [array])) {
+      return @{
+        allowed = $false
+        failure_reason = $gate.default_failure_reason
+        diagnostic = "Windows x64 release-surface host_gate rule is invalid."
+        next_action = $gate.default_next_action
+      }
+    }
+    $value = $HostEvidence[$rule.field]
+    $ok = $false
+    switch ($rule.op) {
+      "exists" {
+        $ok = Test-WindowsX64ReleaseHostGateValuePresent $value
+      }
+      "is_false" {
+        $ok = ($value -is [bool] -and $value -eq $false)
+      }
+      "in" {
+        $allowed = @($rule.value | ForEach-Object { Convert-WindowsX64ReleaseHostGateValue $_ })
+        $ok = $allowed -contains (Convert-WindowsX64ReleaseHostGateValue $value)
+      }
+      "equals" {
+        $ok = (Convert-WindowsX64ReleaseHostGateValue $value) -eq (Convert-WindowsX64ReleaseHostGateValue $rule.value)
+      }
+      "not_equals" {
+        $ok = (Convert-WindowsX64ReleaseHostGateValue $value) -ne (Convert-WindowsX64ReleaseHostGateValue $rule.value)
+      }
+      default {
+        return @{
+          allowed = $false
+          failure_reason = $gate.default_failure_reason
+          diagnostic = "Windows x64 release-surface host_gate rule is invalid."
+          next_action = $gate.default_next_action
+        }
+      }
+    }
+    if (-not $ok) {
+      return @{
+        allowed = $false
+        failure_reason = $rule.failure_reason
+        diagnostic = $rule.diagnostic
+        next_action = $rule.next_action
+      }
+    }
+  }
+
+  return @{
+    allowed = $true
+    failure_reason = $null
+    diagnostic = $Projection.diagnostic
+    next_action = $Projection.next_action
+  }
+}
+
+function Get-WindowsX64ReleaseHostEvidence {
+  $cpuArch = $env:PROCESSOR_ARCHITECTURE
+  if ($cpuArch -eq "AMD64") { $cpuArch = "x64" }
+  elseif ($cpuArch -eq "ARM64") { $cpuArch = "arm64" }
+  elseif ($cpuArch -eq "x86") { $cpuArch = "ia32" }
+  elseif ([string]::IsNullOrWhiteSpace($cpuArch)) { $cpuArch = "unknown" }
+  else { $cpuArch = $cpuArch.ToLowerInvariant() }
+
+  return @{
+    os_platform = "win32"
+    cpu_arch = $cpuArch
+    process_arch = $cpuArch
+    wow64 = -not [string]::IsNullOrWhiteSpace($env:PROCESSOR_ARCHITEW6432)
+    installer_entrypoint = "install_ps1"
+  }
+}
+
+function Show-WindowsX64ReleaseSurfaceProjection {
+  try {
+    $projection = Get-WindowsX64ReleaseSurfaceProjection
+    if ($null -eq $projection) {
+      Write-Host "Windows x64 release surface: projection=missing"
+      Write-Host "Windows x64 release surface diagnostic: projection file is missing or unreadable."
+      Write-Host "Windows x64 release surface next_action: Regenerate the Windows x64 release-surface projection."
+      return
+    }
+    $gate = Test-WindowsX64ReleaseHostGate -Projection $projection -HostEvidence (Get-WindowsX64ReleaseHostEvidence)
+    $effectiveState = if ($gate.allowed) { $projection.surface_state } else { "blocked" }
+    Write-Host "Windows x64 release surface: state=$effectiveState release_install_entry=$($projection.release_install_entry) source_install_allowed=$($projection.source_install_allowed) source_install_entry=$($projection.source_install_entry)"
+    if (-not $gate.allowed) {
+      Write-Host "Windows x64 release surface diagnostic: $($gate.diagnostic)"
+      Write-Host "Windows x64 release surface next_action: $($gate.next_action)"
+      return
+    }
+    if ($projection.diagnostic) {
+      Write-Host "Windows x64 release surface diagnostic: $($projection.diagnostic)"
+    }
+    if ($projection.next_action) {
+      Write-Host "Windows x64 release surface next_action: $($projection.next_action)"
+    }
+  } catch {
+    Write-Host "WARN: Windows x64 release surface projection unavailable: $_"
+  }
+}
+
+function Test-WindowsX64ReleaseHostGateValuePresent {
+  param($Value)
+  if ($null -eq $Value) { return $false }
+  if ($Value -is [string]) { return -not [string]::IsNullOrWhiteSpace($Value) }
+  return $true
+}
+
+function Convert-WindowsX64ReleaseHostGateValue {
+  param($Value)
+  if ($Value -is [string]) { return $Value.Trim().ToLowerInvariant() }
+  return $Value
+}
+
 # Constants
 $script:CCB_START_MARKER = "<!-- CCB_CONFIG_START -->"
 $script:CCB_END_MARKER = "<!-- CCB_CONFIG_END -->"
@@ -375,6 +537,8 @@ function Confirm-BackendEnv {
 
 function Install-Native {
   Confirm-BackendEnv
+
+  Show-WindowsX64ReleaseSurfaceProjection
 
   $binDir = Join-Path $InstallPrefix "bin"
   $pythonCmd = Find-Python

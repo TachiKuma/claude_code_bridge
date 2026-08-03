@@ -77,7 +77,7 @@ items:
   - slug: windows-x64-release-surface
     description: 补齐 Windows x64 npm/install/update/native helper/managed Python/doctor 的发布面 gate
     depends_on: [windows-x64-v852-baseline-gate, herdr-user-surfaces-parity]
-    status: in-progress
+    status: done
     feature: 2026-07-31-windows-x64-release-surface
     minimal_loop: false
     notes: "消费 windows-x64-v852-baseline-gate 的 platform gate，不重新实现位宽探测；只建立 release surface 和 Windows npm install dry-run gate；不授权 npm publish、release、push 或 promotion。"

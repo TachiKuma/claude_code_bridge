@@ -3,14 +3,19 @@ status: active
 baseline_ref: "3b11479a48fd8702403ca7fa6b10cd2e0688f573"
 driver_kind: host-agent
 driver_id: "019fc004-f10e-79a0-ade1-148c5d22ffc8"
+driver_observation: ".codestable/roadmap/windows-native-herdr-ccb/goal-driver-observation.md"
+driver_last_observed_at: "2026-08-03T14:55:00+08:00"
+driver_last_status: "running"
+driver_observation_error: null
+driver_reviewer_capability: confirmed
 execution_confirmation_id: "goal-execution-2026-08-01-windows-native-herdr-ccb"
 acceptance_authorization: approved
 acceptance_authorization_ref: "approval-report.md#goal-acceptance"
 commit_authorization: approved
 commit_authorization_ref: "approval-report.md#goal-commits"
 handoff_reason: null
-handoff_next: "herdr-user-surfaces-parity accepted with review, QA, acceptance, and CMD-008 Native Windows surface transcript. Next action is windows-x64-release-surface."
-current_feature_index: 9
+handoff_next: "windows-x64-release-surface accepted with review, QA, acceptance, and diagnostic/blocked release-surface evidence. Next action is native-windows-public-workflow-validation-matrix."
+current_feature_index: 10
 features:
   - slug: "windows-x64-v852-baseline-gate"
     roadmap_item: "windows-x64-v852-baseline-gate"
@@ -101,7 +106,7 @@ features:
     review: ".codestable/features/2026-07-31-windows-x64-release-surface/windows-x64-release-surface-review.md"
     qa: ".codestable/features/2026-07-31-windows-x64-release-surface/windows-x64-release-surface-qa.md"
     acceptance: ".codestable/features/2026-07-31-windows-x64-release-surface/windows-x64-release-surface-acceptance.md"
-    status: pending
+    status: accepted
   - slug: "native-windows-public-workflow-validation-matrix"
     roadmap_item: "native-windows-public-workflow-validation-matrix"
     feature_dir: ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix"

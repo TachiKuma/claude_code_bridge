@@ -510,7 +510,7 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
 10. **windows-x64-release-surface** — 补齐 npm `os=win32,cpu=x64`、managed Python、native helper、install/update/doctor gate。
    - 所属模块：Validation & Support
    - 依赖：`windows-x64-v852-baseline-gate`, `herdr-user-surfaces-parity`
-   - 状态：in-progress
+   - 状态：accepted
    - 对应 feature：`2026-07-31-windows-x64-release-surface`
    - 备注：消费 `windows-x64-v852-baseline-gate` 的 platform gate，不重新实现位宽探测；不发布、不 promotion；只建立 release surface 和 code-level Windows `npm install` dry-run gate。
 
