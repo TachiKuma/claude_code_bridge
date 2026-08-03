@@ -1,0 +1,478 @@
+param(
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]] $CcbArgs
+)
+
+$ErrorActionPreference = 'Stop'
+if ($null -eq $CcbArgs) {
+    $CcbArgs = @()
+}
+
+function Write-Stderr {
+    param([string] $Message)
+    [Console]::Error.WriteLine($Message)
+}
+
+function Write-Utf8NoBom {
+    param(
+        [string] $Path,
+        [string] $Content
+    )
+    $encoding = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($Path, $Content, $encoding)
+}
+
+function Set-DefaultEnv {
+    param(
+        [string] $Name,
+        [string] $Value
+    )
+    if ([string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($Name, 'Process'))) {
+        [Environment]::SetEnvironmentVariable($Name, $Value, 'Process')
+    }
+}
+
+function Repair-SourceDevRuntimeRootRef {
+    $refPath = Join-Path (Join-Path $env:CCB_PROJECT_ROOT '.ccb') 'runtime-root-ref.json'
+    if (-not (Test-Path -LiteralPath $refPath)) {
+        return
+    }
+    try {
+        $json = Get-Content -LiteralPath $refPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+    } catch {
+        throw ('failed to read runtime root ref: ' + $refPath)
+    }
+    $projectId = [string] $json.project_id
+    if ([string]::IsNullOrWhiteSpace($projectId)) {
+        throw ('runtime root ref is missing project_id: ' + $refPath)
+    }
+    $currentRoot = [string] $json.runtime_state_root
+    $legacyRoot = Join-Path $env:CCB_LEGACY_RUNTIME_STATE_HOME $projectId
+    $expectedRoot = Join-Path $env:CCB_RUNTIME_STATE_HOME $projectId
+    if ($currentRoot -eq $expectedRoot) {
+        return
+    }
+    if ($currentRoot -ne $legacyRoot -and $currentRoot -like '*\.ccb\ccbd*') {
+        throw ('runtime root ref points at installed CCB state; refusing to update: ' + $refPath)
+    }
+    if ($currentRoot -ne $legacyRoot -and $currentRoot -notlike '*\.ccb-source-dev\state\runtime-state*') {
+        throw ('runtime root ref points at an unexpected location; refusing to update: ' + $currentRoot)
+    }
+    $json.runtime_state_root = $expectedRoot
+    $json.created_at = (Get-Date).ToUniversalTime().ToString('o')
+    Write-Utf8NoBom -Path $refPath -Content (($json | ConvertTo-Json -Depth 20) + [Environment]::NewLine)
+}
+
+function Get-JsonPid {
+    param(
+        [object] $Json,
+        [string] $Key
+    )
+    if ($null -eq $Json) {
+        return $null
+    }
+    $property = $Json.PSObject.Properties | Where-Object { $_.Name -eq $Key } | Select-Object -First 1
+    if ($null -eq $property -or $null -eq $property.Value) {
+        return $null
+    }
+    try {
+        $pidValue = [int] $property.Value
+    } catch {
+        return $null
+    }
+    if ($pidValue -le 0) {
+        return $null
+    }
+    return $pidValue
+}
+
+function Test-SourceDevCcbdCommandLine {
+    param(
+        [string] $CommandLine,
+        [string] $ProjectRoot
+    )
+    $cmdNorm = ([string] $CommandLine).Replace('/', '\')
+    $scriptMatch =
+        $cmdNorm.IndexOf('\ccbd\main.py', [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+        $cmdNorm.IndexOf('\ccbd\keeper_main.py', [StringComparison]::OrdinalIgnoreCase) -ge 0
+    if (-not $scriptMatch) {
+        return $false
+    }
+    return $cmdNorm.IndexOf($ProjectRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0
+}
+
+function Read-ProtectedInstalledPids {
+    $protected = @{}
+    $protectedDir = Join-Path $env:CCB_PROJECT_ROOT '.ccb\ccbd'
+    foreach ($name in @('lease.json', 'keeper.json', 'lifecycle.json')) {
+        $path = Join-Path $protectedDir $name
+        if (-not (Test-Path -LiteralPath $path)) {
+            continue
+        }
+        try {
+            $json = Get-Content -LiteralPath $path -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+        } catch {
+            continue
+        }
+        foreach ($key in @('keeper_pid', 'owner_pid', 'ccbd_pid')) {
+            $pidValue = Get-JsonPid -Json $json -Key $key
+            if ($null -ne $pidValue) {
+                $protected[$pidValue] = $true
+            }
+        }
+    }
+    return $protected
+}
+
+function Get-SourceDevProjectId {
+    foreach ($path in @(
+        (Join-Path (Join-Path $env:CCB_PROJECT_ROOT '.ccb') 'runtime-root-ref.json'),
+        (Join-Path (Join-Path $env:CCB_PROJECT_ROOT '.ccb') 'project.identity.json')
+    )) {
+        if (-not (Test-Path -LiteralPath $path)) {
+            continue
+        }
+        try {
+            $json = Get-Content -LiteralPath $path -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            $projectId = [string] $json.project_id
+            if (-not [string]::IsNullOrWhiteSpace($projectId)) {
+                return $projectId
+            }
+        } catch {
+            continue
+        }
+    }
+    return $null
+}
+
+function Get-SourceDevStateFiles {
+    $stateFileNames = @('lease.json', 'keeper.json', 'lifecycle.json')
+    $projectId = Get-SourceDevProjectId
+    if ([string]::IsNullOrWhiteSpace($projectId)) {
+        return @()
+    }
+    $runtimeRoots = @($env:CCB_RUNTIME_STATE_HOME, $env:CCB_LEGACY_RUNTIME_STATE_HOME) |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+    $files = @()
+    $seen = @{}
+    foreach ($runtimeRoot in $runtimeRoots) {
+        $ccbdDir = Join-Path (Join-Path $runtimeRoot $projectId) 'ccbd'
+        try {
+            $key = [System.IO.Path]::GetFullPath($ccbdDir).TrimEnd('\').ToLowerInvariant()
+        } catch {
+            $key = $ccbdDir.ToLowerInvariant()
+        }
+        if ($seen.ContainsKey($key)) {
+            continue
+        }
+        $seen[$key] = $true
+        if (-not (Test-Path -LiteralPath $ccbdDir)) {
+            continue
+        }
+        $files += @(
+            Get-ChildItem -LiteralPath $ccbdDir -File -ErrorAction SilentlyContinue |
+                Where-Object { $stateFileNames -contains $_.Name -and $_.FullName -like '*\ccbd\*' }
+        )
+    }
+    return @($files)
+}
+
+function Get-SourceDevPidTargets {
+    param([object[]] $StateFiles)
+    $items = @()
+    foreach ($file in $StateFiles) {
+        try {
+            $json = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+        } catch {
+            continue
+        }
+        foreach ($entry in @(@('keeper_pid', 0), @('owner_pid', 1), @('ccbd_pid', 1))) {
+            $pidValue = Get-JsonPid -Json $json -Key $entry[0]
+            if ($null -ne $pidValue) {
+                $items += [pscustomobject] @{
+                    PidValue = $pidValue
+                    Priority = [int] $entry[1]
+                    Source = $file.FullName
+                }
+            }
+        }
+    }
+
+    $seen = @{}
+    return @(
+        $items |
+            Sort-Object Priority, PidValue |
+            Where-Object {
+                if ($seen.ContainsKey($_.PidValue)) {
+                    return $false
+                }
+                $seen[$_.PidValue] = $true
+                return $true
+            }
+    )
+}
+
+function Stop-SourceDevRuntimePids {
+    $stateFiles = Get-SourceDevStateFiles
+    if ($stateFiles.Count -eq 0) {
+        return
+    }
+
+    $project = $env:CCB_PROJECT_ROOT.TrimEnd('\').Replace('/', '\')
+    $protected = Read-ProtectedInstalledPids
+    $targets = Get-SourceDevPidTargets -StateFiles $stateFiles
+
+    foreach ($target in $targets) {
+        $pidValue = $target.PidValue
+        if ($protected.ContainsKey($pidValue)) {
+            Write-Host ('Skipping installed CCB pid=' + $pidValue)
+            continue
+        }
+
+        $process = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $pidValue) -ErrorAction SilentlyContinue
+        if ($null -eq $process) {
+            continue
+        }
+        if (-not (Test-SourceDevCcbdCommandLine -CommandLine $process.CommandLine -ProjectRoot $project)) {
+            continue
+        }
+
+        Write-Host ('Stopping source-dev CCB pid=' + $pidValue)
+        Stop-Process -Id $pidValue -Force -ErrorAction Stop
+    }
+
+    Start-Sleep -Milliseconds 250
+
+    foreach ($target in $targets) {
+        $pidValue = $target.PidValue
+        if ($protected.ContainsKey($pidValue)) {
+            continue
+        }
+        $process = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $pidValue) -ErrorAction SilentlyContinue
+        if ($null -eq $process) {
+            continue
+        }
+        if (Test-SourceDevCcbdCommandLine -CommandLine $process.CommandLine -ProjectRoot $project) {
+            throw ('source-dev CCB pid still alive after targeted cleanup: ' + $pidValue)
+        }
+    }
+
+    Reset-SourceDevStateFiles -StateFiles $stateFiles
+}
+
+function Reset-SourceDevStateFiles {
+    param([object[]] $StateFiles)
+    $now = (Get-Date).ToUniversalTime().ToString('o')
+    foreach ($file in $StateFiles) {
+        try {
+            $json = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            switch ($file.Name) {
+                'lease.json' {
+                    $json.mount_state = 'unmounted'
+                    $json.last_heartbeat_at = $now
+                }
+                'lifecycle.json' {
+                    $json.desired_state = 'running'
+                    $json.phase = 'unmounted'
+                    $json.phase_started_at = $now
+                    $json.startup_stage = $null
+                    $json.last_progress_at = $now
+                    $json.startup_deadline_at = $null
+                    $json.owner_pid = $null
+                    $json.owner_daemon_instance_id = $null
+                    $json.socket_inode = $null
+                    $json.control_plane_endpoint = $null
+                    $json.last_failure_reason = $null
+                    $json.shutdown_intent = $null
+                }
+                'keeper.json' {
+                    $json.state = 'stopped'
+                    $json.last_check_at = $now
+                    $json.last_failure_reason = $null
+                }
+                default {
+                    continue
+                }
+            }
+            Write-Utf8NoBom -Path $file.FullName -Content (($json | ConvertTo-Json -Depth 20) + [Environment]::NewLine)
+        } catch {
+            Write-Warning ('failed to reset source-dev state file: ' + $file.FullName)
+        }
+    }
+}
+
+function Run-BoundedKillForce {
+    $timeoutMs = 15000
+    if (-not [string]::IsNullOrEmpty($env:CCB_PRESTART_KILL_TIMEOUT_MS)) {
+        try {
+            $timeoutMs = [int] $env:CCB_PRESTART_KILL_TIMEOUT_MS
+        } catch {
+            $timeoutMs = 15000
+        }
+    }
+
+    try {
+        $argsList = @((Join-Path $env:CCB_SOURCE_ROOT 'ccb.py'), 'kill', '-f')
+        $process = Start-Process -FilePath $env:CCB_PYTHON -ArgumentList $argsList -WorkingDirectory $env:CCB_PROJECT_ROOT -WindowStyle Hidden -PassThru
+        if (-not $process.WaitForExit($timeoutMs)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            Write-Warning ('source-dev ccb kill -f timed out after ' + $timeoutMs + 'ms; continuing after targeted PID cleanup')
+            return
+        }
+        if ($process.ExitCode -ne 0) {
+            Write-Stderr 'Warning: source-dev ccb kill -f did not complete cleanly; continuing after targeted PID cleanup.'
+        }
+    } catch {
+        Write-Stderr ('Warning: source-dev ccb kill -f could not be started cleanly; continuing after targeted PID cleanup. ' + $_.Exception.Message)
+    }
+}
+
+function Invoke-PrestartCleanup {
+    Stop-SourceDevRuntimePids
+    Run-BoundedKillForce
+}
+
+function Test-ShouldPrestartKill {
+    param([string[]] $CliArgs)
+    if ($null -eq $CliArgs) {
+        return $true
+    }
+    if ($CliArgs.Count -eq 0) {
+        return $true
+    }
+    $first = $CliArgs[0]
+    return $first -ieq '-s' -or $first -ieq '--safe' -or $first -ieq '-n' -or $first -ieq '--new-context'
+}
+
+function Initialize-WrapperEnvironment {
+    $sourceRoot = 'E:\GITHUB~1\TACHIK~1\CLAUDE~1'
+    $projectRoot = (Resolve-Path -LiteralPath $PSScriptRoot).ProviderPath
+    $devRoot = Join-Path $projectRoot '.ccb-source-dev'
+    $devBin = Join-Path $devRoot 'bin'
+    $devHome = Join-Path $devRoot 'home'
+    $devTmp = Join-Path $devRoot 'tmp'
+    $devState = Join-Path $devRoot 'state'
+    $runtimeStateHome = 'D:\.c8\rs'
+    $legacyRuntimeStateHome = Join-Path $devState 'runtime-state'
+    $python = 'C:\Users\Administrator\AppData\Local\Programs\Python\Python314\python.exe'
+    $herdrExe = 'C:\Users\Administrator\AppData\Local\Programs\Herdr\herdr.exe'
+    $herdrCapabilityReport = 'E:\GITHUB~1\TACHIK~1\CLAUDE~1\CODEST~1\features\20B57C~1\evidence\HERDR-~1.JSO'
+
+    if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot 'ccb.py'))) {
+        Write-Stderr ('CCB source checkout not found: "' + $sourceRoot + '"')
+        exit 1
+    }
+    if (-not (Test-Path -LiteralPath $python)) {
+        $python = 'python'
+    }
+    if (-not (Test-Path -LiteralPath $herdrCapabilityReport)) {
+        Write-Stderr ('Herdr capability report not found: "' + $herdrCapabilityReport + '"')
+        exit 1
+    }
+
+    foreach ($path in @($devBin, $devHome, $devTmp, $devState, $runtimeStateHome)) {
+        if (-not (Test-Path -LiteralPath $path)) {
+            New-Item -ItemType Directory -Path $path | Out-Null
+        }
+    }
+
+    $env:CCB_SOURCE_ROOT = $sourceRoot
+    $env:CCB_PROJECT_ROOT = $projectRoot
+    $env:CCB_DEV_ROOT = $devRoot
+    $env:CCB_DEV_BIN = $devBin
+    $env:CCB_DEV_HOME = $devHome
+    $env:CCB_DEV_TMP = $devTmp
+    $env:CCB_DEV_STATE = $devState
+    $env:CCB_PYTHON = $python
+    $env:CCB_HERDR_EXE = $herdrExe
+    $env:CCB_HERDR_SESSION = 'ccb-herdr-avaprintdesigner-source-dev'
+    $env:CCB_HERDR_CAPABILITY_REPORT = $herdrCapabilityReport
+    $env:CCB_SOURCE_ALLOWED_ROOTS = $projectRoot
+    $env:CCB_TEST_ROOTS = $projectRoot
+    $env:CCB_SKIP_STARTUP_UPDATE_CHECK = '1'
+    $env:CCB_RUNTIME_STATE_HOME = $runtimeStateHome
+    $env:CCB_LEGACY_RUNTIME_STATE_HOME = $legacyRuntimeStateHome
+    $env:CCB_SOURCE_HOME = $devHome
+    $env:HOME = $devHome
+    $env:USERPROFILE = $devHome
+    $env:XDG_CONFIG_HOME = Join-Path $devState 'xdg-config'
+    $env:XDG_CACHE_HOME = Join-Path $devState 'xdg-cache'
+    $env:XDG_STATE_HOME = Join-Path $devState 'xdg-state'
+    $env:TEMP = $devTmp
+    $env:TMP = $devTmp
+    $env:CODEX_HOME = Join-Path $devHome '.codex'
+
+    Set-DefaultEnv -Name 'CCB_NO_ATTACH' -Value '1'
+    Set-DefaultEnv -Name 'CCB_CCBD_FAULTHANDLER' -Value '1'
+    Set-DefaultEnv -Name 'PYTHONUNBUFFERED' -Value '1'
+    Set-DefaultEnv -Name 'CCB_PRESTART_KILL_TIMEOUT_MS' -Value '15000'
+
+    $env:PATH = $devBin + ';' + $env:PATH
+    $env:PYTHONPATH = (Join-Path $sourceRoot 'lib') + ';' + $env:PYTHONPATH
+
+    $shim = Join-Path $devBin 'ccb.cmd'
+    $shimLines = @(
+        '@echo off',
+        ('set "PYTHONPATH=' + (Join-Path $sourceRoot 'lib') + ';%PYTHONPATH%"'),
+        ('"' + $python + '" "' + (Join-Path $sourceRoot 'ccb.py') + '" %*')
+    )
+    Set-Content -LiteralPath $shim -Value $shimLines -Encoding ASCII
+
+    Set-Location -LiteralPath $projectRoot
+}
+
+function Show-Diagnose {
+    Write-Host ('wrapper: ' + (Join-Path $PSScriptRoot 'ccb8.cmd'))
+    Write-Host ('powershell_wrapper: ' + $PSCommandPath)
+    Write-Host ('source_ccb: ' + (Join-Path $env:CCB_SOURCE_ROOT 'ccb.py'))
+    Write-Host ('project_root: ' + $env:CCB_PROJECT_ROOT)
+    Write-Host ('dev_root: ' + $env:CCB_DEV_ROOT)
+    Write-Host ('python: ' + $env:CCB_PYTHON)
+    Write-Host ('path_ccb_shim: ' + (Join-Path $env:CCB_DEV_BIN 'ccb.cmd'))
+    Write-Host ('CCB_HERDR_EXE: ' + $env:CCB_HERDR_EXE)
+    Write-Host ('CCB_HERDR_SESSION: ' + $env:CCB_HERDR_SESSION)
+    Write-Host ('CCB_HERDR_CAPABILITY_REPORT: ' + $env:CCB_HERDR_CAPABILITY_REPORT)
+    Write-Host ('CCB_SOURCE_ALLOWED_ROOTS: ' + $env:CCB_SOURCE_ALLOWED_ROOTS)
+    Write-Host ('CCB_SOURCE_HOME: ' + $env:CCB_SOURCE_HOME)
+    Write-Host ('CCB_RUNTIME_STATE_HOME: ' + $env:CCB_RUNTIME_STATE_HOME)
+    Write-Host ('CCB_LEGACY_RUNTIME_STATE_HOME: ' + $env:CCB_LEGACY_RUNTIME_STATE_HOME)
+    Write-Host ('HOME: ' + $env:HOME)
+    Write-Host ('USERPROFILE: ' + $env:USERPROFILE)
+    Write-Host ('CCB_NO_ATTACH: ' + $env:CCB_NO_ATTACH)
+    Write-Host ('CCB_CCBD_FAULTHANDLER: ' + $env:CCB_CCBD_FAULTHANDLER)
+    Write-Host ('PYTHONUNBUFFERED: ' + $env:PYTHONUNBUFFERED)
+    Write-Host ('CCB_PRESTART_KILL_TIMEOUT_MS: ' + $env:CCB_PRESTART_KILL_TIMEOUT_MS)
+    & $env:CCB_PYTHON (Join-Path $env:CCB_SOURCE_ROOT 'ccb.py') --print-version
+    if ($null -ne $LASTEXITCODE) {
+        exit $LASTEXITCODE
+    }
+    exit 0
+}
+
+Initialize-WrapperEnvironment
+try {
+    Repair-SourceDevRuntimeRootRef
+} catch {
+    Write-Stderr $_.Exception.Message
+    exit 1
+}
+
+if ($CcbArgs.Count -gt 0 -and $CcbArgs[0] -ieq '--diagnose') {
+    Show-Diagnose
+}
+
+if (Test-ShouldPrestartKill -CliArgs $CcbArgs) {
+    try {
+        Invoke-PrestartCleanup
+    } catch {
+        Write-Stderr $_.Exception.Message
+        exit 1
+    }
+}
+
+& $env:CCB_PYTHON (Join-Path $env:CCB_SOURCE_ROOT 'ccb.py') @CcbArgs
+if ($null -ne $LASTEXITCODE) {
+    exit $LASTEXITCODE
+}
+exit 0
