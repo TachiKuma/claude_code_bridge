@@ -72,8 +72,80 @@ tags: [windows, ccb8, kill, startup]
 - 独立 code review 已通过：`ccb8-prestart-kill-hang-review.md`（最终 PID liveness 复审）。
 - 未在 Codex 内执行正常启动，遵守“执行外部验证时严禁在 Codex 中直接启动 CCB”的约束。
 
+## 2026-08-04 跟进修复
+
+### 新增根因
+
+用户外部再次执行 `.\\ccb8.cmd` 后出现：
+
+- `failed to reset source-dev state file: D:\.c8\rs\...\ccbd\ccbd.stderr.log`
+- `Warning: source-dev ccb kill -f did not complete cleanly`
+- 主 CLI 随后卡在 `ensure_daemon_started()` 的 startup wait loop。
+
+复核后确认两个追加问题：
+
+- `ccb8.ps1` 使用 `Get-ChildItem -Recurse -File -Include lease.json, keeper.json, lifecycle.json`。Windows PowerShell 在该调用形态下实际返回了 `ccbd.stderr.log`、`keeper.lock`、`state.json` 等非目标文件，导致 reset 阶段尝试把日志当 JSON 状态文件处理。
+- 第一版修正虽然改成 `Name` 白名单，但仍从共享 `D:\.c8\rs` 递归枚举全部项目 runtime。PID 停止阶段有当前项目命令行保护，状态 reset 阶段没有项目边界，存在跨项目重置其他 source-dev runtime 状态的风险。
+- 最新 `ccbd.stderr.log` 还显示 `ensure_project_identity()` 会在 Windows 下探测 legacy `.ccb/ccbd/*.sock` Unix socket 证据。该路径不属于 Windows control-plane TCP endpoint，且会把启动身份恢复带入无意义的旧 socket 文件系统探测。
+
+### 追加改动
+
+- `D:\C#Project\GitHub\AvaPrintDesigner\ccb8.ps1`
+  - 增加 `Get-SourceDevProjectId`，优先从 `.ccb\runtime-root-ref.json` 读取当前项目 `project_id`，必要时回退 `.ccb\project.identity.json`。
+  - `Get-SourceDevStateFiles` 不再递归扫描整个 `CCB_RUNTIME_STATE_HOME` / `CCB_LEGACY_RUNTIME_STATE_HOME`，而是只访问 `<runtimeRoot>\<project_id>\ccbd`。
+  - 状态文件筛选改为显式 `Name` 白名单：`lease.json`、`keeper.json`、`lifecycle.json`。
+  - runtime root 去重改为 full path + lowercase key，避免同一路径不同写法导致重复 reset。
+- `lib/project/identity_store.py`
+  - `_socket_connectable()` 在 Windows 下直接返回 `False`，并注明该 helper 只服务 legacy AF_UNIX socket evidence；Windows control-plane endpoint 不走这条探测路径。
+- `test/test_project_identity_store.py`
+  - 增加直接回归：Windows 下 `_socket_connectable()` 不触碰 legacy socket 文件路径。
+  - 增加默认路径回归：不注入 `socket_connectable_fn` 时，`ensure_project_identity()` 在 Windows 下遇到 dead legacy lease + socket evidence 不应因 socket 探测阻止 rebind。
+
+### 追加验证
+
+- 已用只读 PowerShell 枚举验证：新逻辑只返回当前 AvaPrintDesigner `project_id` 下的 `ccbd\keeper.json`、`ccbd\lease.json`、`ccbd\lifecycle.json`，不再包含 `*.log`、`*.lock`、`state.json`，也不再枚举其他 `D:\.c8\rs\*` 项目。
+- 已运行 `cmd /d /c ""D:/C#Project/GitHub/AvaPrintDesigner/ccb8.cmd" --diagnose"`，结果通过并输出 `v8.5.2`。
+- 已运行 `python -m pytest test/test_project_identity_store.py test/test_ccbd_startup_identity.py`，结果 `16 passed`。
+- 已运行 `python -m py_compile lib/project/identity_store.py`，结果通过。
+- OCR 复审已运行：`ocr review --audience agent --exclude "笔记.md" ...`，结果 `0 finding(s)`。
+- 第二轮独立复审 agent `019fc867-def5-7b92-b37c-d6e4c7961763` 结论：blocking none，important none；上一轮跨项目 reset 与默认路径测试缺口均已关闭。
+
 ## 遗留风险
 
 - 正常启动路径仍需要用户在外部项目执行 `.\\ccb8.cmd` 验证。
 - 本次只修 wrapper 的源码开发态启动前清理边界，以及当前启动路径直接触发的 Windows PID liveness false-negative；仓库内其他与本复现路径无关的 `os.kill(pid, 0)` 调用未扩大处理。
 - `ccb kill -f` 主程序自身“远端探测先于本地强制清理”的通用问题尚未修复，可后续另开 issue。
+
+## 2026-08-04 追加修复
+
+### 新增根因
+
+外部再次执行 `.\\ccb8.cmd` 后，日志虽然还是沿用旧 traceback，但源码侧实际又暴露出一条 Windows 专属问题：`CcbdLifecycle` 和 `ProjectDaemonInspection` 会在只有 `socket_path`、没有显式 `tcp_loopback` endpoint 的情况下，把 legacy socket path 自动补成 `unix_socket`。这会把 Windows 启动早期“endpoint 还没发布”误写成 Unix 端点，污染诊断和后续接管判断。
+
+### 追加改动
+
+- `lib/ccbd/services/lifecycle.py`
+  - `build_lifecycle()` 与 `_control_plane_endpoint_from_record()` 在 Windows 下不再从 `socket_path` 合成 `unix_socket` endpoint。
+  - 只有显式 `control_plane_endpoint` 才会被保留。
+- `lib/ccbd/services/project_inspection.py`
+  - `control_plane_endpoint` 在 Windows 下不再回退到 legacy socket path。
+- `lib/ccbd/keeper.py`
+  - 新建 `spawn_requested` startup transaction 时显式清空旧 `control_plane_endpoint`，避免历史 `unix_socket` 字段被 `with_phase()` 继承。
+- `lib/ccbd/app_runtime/lifecycle.py`
+  - daemon 进入 `socket_listening` 阶段时写入当前 socket server 的真实 endpoint。
+- `D:\C#Project\GitHub\AvaPrintDesigner\ccb8.ps1`
+  - reset source-dev `lifecycle.json` 时同步清空 `control_plane_endpoint`。
+- `test/test_ccbd_windows_tcp_loopback_transport.py`
+  - 增加 Windows 回归：`build_lifecycle()` 不再合成 legacy endpoint。
+  - 增加 Windows 回归：`ProjectDaemonInspection.control_plane_endpoint` 不再回退为 `unix_socket`。
+- `test/test_v2_ccbd_keeper.py`
+  - 增加回归：历史 `unix_socket` endpoint 不会被新的 keeper startup transaction 继承。
+
+### 追加验证
+
+- `python -m pytest test/test_ccbd_windows_tcp_loopback_transport.py -q` -> `22 passed`
+- `python -m pytest test/test_v2_daemon_startup_wait.py -q` -> `9 passed`
+- `python -m pytest test/test_v2_ccbd_keeper.py::test_keeper_releases_startup_lock_before_spawn_and_preserves_child_mounted_record test/test_ccbd_windows_tcp_loopback_transport.py test/test_v2_daemon_startup_wait.py -q` -> `32 passed`
+- `python -m pytest test/test_ccbd_startup_fence_app.py test/test_ccbd_startup_identity.py -q` -> `11 passed`
+- `python -m py_compile lib/ccbd/keeper.py lib/ccbd/app_runtime/lifecycle.py lib/ccbd/services/lifecycle.py lib/ccbd/services/project_inspection.py test/test_v2_ccbd_keeper.py test/test_ccbd_windows_tcp_loopback_transport.py` -> passed
+- `cmd /d /c ""D:/C#Project/GitHub/AvaPrintDesigner/ccb8.cmd" --diagnose"` -> 通过并输出 `v8.5.2`

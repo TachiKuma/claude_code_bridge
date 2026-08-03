@@ -2,15 +2,15 @@
 doc_type: issue-review
 issue: 2026-08-03-ccb8-prestart-kill-hang
 status: passed
-reviewer: subagent
-reviewed: 2026-08-03
-round: 2
+reviewer: subagent+ocr
+reviewed: 2026-08-04
+round: 3
 lane_a_state: completed
-lane_a_ref: "019fc843-9fe9-7910-930e-06eedd203355"
+lane_a_ref: "019fc867-def5-7b92-b37c-d6e4c7961763"
 lane_a_reason: ""
-lane_b_state: unavailable
+lane_b_state: completed
 lane_b_ref: ""
-lane_b_reason: "最终 PID liveness 复审时 ocr llm test 30 秒超时；按协议降级为本地行级核验。"
+lane_b_reason: ""
 ---
 
 # ccb8-prestart-kill-hang 代码审查报告
@@ -118,4 +118,30 @@ none
   - `python -m py_compile lib/process_liveness.py lib/project/identity_store.py lib/ccbd/system.py` -> passed。
   - `cmd /d /c ""D:/C#Project/GitHub/AvaPrintDesigner/ccb8.cmd" --diagnose"` -> 输出 `v8.5.2`。
   - 只读函数级验证：`_process_exists(12652)=True`、`_process_exists(12720)=True`、`_legacy_evidence(...).active_runtime=True`。
+- Verdict: passed。
+
+## 11. Full Rereview After State File Enumeration Fix
+
+- Trigger: 用户外部再次执行 `.\\ccb8.cmd`，wrapper 报 `failed to reset source-dev state file: D:\.c8\rs\...\ccbd\ccbd.stderr.log`，随后源码 CLI 仍卡在 `ensure_daemon_started()` startup wait loop。
+- Delta:
+  - `D:/C#Project/GitHub/AvaPrintDesigner/ccb8.ps1:127` 新增当前项目 `project_id` 恢复。
+  - `D:/C#Project/GitHub/AvaPrintDesigner/ccb8.ps1:148` 将状态文件枚举限定到 `<runtimeRoot>/<project_id>/ccbd`，不再递归扫描共享 runtime home。
+  - `D:/C#Project/GitHub/AvaPrintDesigner/ccb8.ps1:174` 使用非递归 `Get-ChildItem -File` + `Name` 白名单，只允许 `lease.json`、`keeper.json`、`lifecycle.json`。
+  - `lib/project/identity_store.py:405` Windows 下跳过 legacy AF_UNIX socket evidence 探测，避免把 Windows control-plane 恢复带入旧 Unix socket 路径。
+  - `test/test_project_identity_store.py:284` 与 `test/test_project_identity_store.py:296` 覆盖直接 helper 和 `ensure_project_identity()` 默认路径。
+- Independent rereview:
+  - 第一轮 reviewer `019fc861-02fa-7a62-8024-ec7b1466ee8a` 给出 `changes-requested`：跨项目 runtime reset 为 blocking，默认路径测试缺口为 important。
+  - 修复后第二轮 reviewer `019fc867-def5-7b92-b37c-d6e4c7961763` 复审通过：blocking none，important none；确认上一轮两项均已关闭。
+  - OCR 复审完成：`ocr review --audience agent --exclude "笔记.md" ...` -> `0 finding(s)`。
+- Targeted verification:
+  - 只读 PowerShell 枚举验证只返回当前 AvaPrintDesigner `project_id` 下的 `ccbd\keeper.json`、`ccbd\lease.json`、`ccbd\lifecycle.json`，不再返回 `*.log`、`*.lock`、`state.json`，也不扫其他 `D:\.c8\rs\*` 项目。
+  - `cmd /d /c ""D:/C#Project/GitHub/AvaPrintDesigner/ccb8.cmd" --diagnose"` -> 输出 `v8.5.2`。
+  - `python -m pytest test/test_project_identity_store.py test/test_ccbd_startup_identity.py` -> `16 passed`。
+  - `python -m py_compile lib/project/identity_store.py` -> passed。
+- Findings:
+  - blocking: none
+  - important: none
+  - nit: none
+  - suggestion: 可后续把 `ccb8.ps1` 的状态文件收集改成逐个 `Join-Path` + `Test-Path`，进一步机械化边界；不作为本轮要求。
+- Residual risk: 未在 Codex 内执行外部正常启动；仍需用户在 `D:\C#Project\GitHub\AvaPrintDesigner` 执行 `.\\ccb8.cmd` 做实机验证。
 - Verdict: passed。
