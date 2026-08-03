@@ -69,14 +69,18 @@ def test_control_plane_env_keeps_windows_profile_roots(monkeypatch) -> None:
 
 def test_control_plane_env_keeps_source_test_wrapper_signals(monkeypatch) -> None:
     monkeypatch.setenv('CCB_TEST_ENTRYPOINT', '1')
+    monkeypatch.setenv('CCB_RUNTIME_STATE_HOME', '/tmp/source-dev-state/projects')
     monkeypatch.setenv('CCB_SOURCE_ALLOWED_ROOTS', '/tmp/source-test-root')
+    monkeypatch.setenv('CCB_SOURCE_ROOT', '/tmp/ccb-source')
     monkeypatch.setenv('CCB_TEST_ROOTS', '/tmp/extra-test-root')
     monkeypatch.setenv('CCB_CALLER_ACTOR', 'stale-agent')
 
     env = control_plane_env()
 
     assert env['CCB_TEST_ENTRYPOINT'] == '1'
+    assert env['CCB_RUNTIME_STATE_HOME'] == '/tmp/source-dev-state/projects'
     assert env['CCB_SOURCE_ALLOWED_ROOTS'] == '/tmp/source-test-root'
+    assert env['CCB_SOURCE_ROOT'] == '/tmp/ccb-source'
     assert env['CCB_TEST_ROOTS'] == '/tmp/extra-test-root'
     assert 'CCB_CALLER_ACTOR' not in env
 

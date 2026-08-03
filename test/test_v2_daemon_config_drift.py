@@ -17,6 +17,7 @@ from cli.models import ParsedStartCommand
 import cli.services.daemon as daemon_service
 from cli.services.config_restart_intent import record_config_restart_intent
 from project.resolver import bootstrap_project
+from runtime_env.source_identity import current_source_runtime_identity
 from storage.paths import PathLayout
 import pytest
 
@@ -32,6 +33,12 @@ def _context(project_root: Path, config_text: str) -> CliContext:
     project = bootstrap_project(project_root)
     command = ParsedStartCommand(project=None, agent_names=(), restore=False, auto_permission=False)
     return CliContext(command=command, cwd=project_root, project=project, paths=PathLayout(project_root))
+
+
+def _source_root(root: Path) -> Path:
+    _write(root / 'ccb.py', 'print("ccb")\n')
+    _write(root / 'lib' / 'demo.py', 'VALUE = 1\n')
+    return root
 
 
 def _inspection(
@@ -234,6 +241,108 @@ def test_connect_compatible_daemon_skips_probe_when_lease_signature_matches(
 
     assert handle is not None
     assert captured == [None]
+
+
+def test_connect_compatible_daemon_restarts_source_dev_daemon_without_runtime_identity(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    source_root = _source_root(tmp_path / 'ccb-source')
+    monkeypatch.setenv('CCB_SOURCE_ROOT', str(source_root))
+    project_root = tmp_path / 'repo-source-dev-old-daemon'
+    ctx = _context(project_root, 'agent1:codex\n')
+    expected = project_config_identity_payload(load_project_config(project_root).config)
+    inspection = _inspection(
+        ctx,
+        health=LeaseHealth.HEALTHY,
+        socket_connectable=True,
+        pid_alive=True,
+        heartbeat_fresh=True,
+        reason='healthy',
+        config_signature=str(expected['config_signature']),
+    )
+    captured: list[float | None] = []
+    shutdown_calls: list[object] = []
+
+    class FakeClient:
+        def __init__(self, socket_path, *, timeout_s=None) -> None:
+            del socket_path
+            captured.append(timeout_s)
+
+        def ping(self, target: str = 'ccbd') -> dict:
+            assert target == 'ccbd'
+            return {'config_signature': expected['config_signature']}
+
+    monkeypatch.setattr(daemon_service, 'CcbdClient', FakeClient)
+    monkeypatch.setattr(
+        daemon_service,
+        '_shutdown_incompatible_daemon',
+        lambda context, client: shutdown_calls.append((context, client)),
+    )
+
+    handle = daemon_service._connect_compatible_daemon(
+        ctx,
+        inspection,
+        restart_on_mismatch=True,
+    )
+
+    assert handle is None
+    assert captured == [daemon_service.CONTROL_PLANE_RPC_TIMEOUT_S, None]
+    assert len(shutdown_calls) == 1
+    assert shutdown_calls[0][0] is ctx
+
+
+def test_connect_compatible_daemon_accepts_matching_source_dev_runtime_identity(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    source_root = _source_root(tmp_path / 'ccb-source-match')
+    monkeypatch.setenv('CCB_SOURCE_ROOT', str(source_root))
+    source_identity = current_source_runtime_identity()
+    project_root = tmp_path / 'repo-source-dev-match'
+    ctx = _context(project_root, 'agent1:codex\n')
+    expected = project_config_identity_payload(load_project_config(project_root).config)
+    inspection = _inspection(
+        ctx,
+        health=LeaseHealth.HEALTHY,
+        socket_connectable=True,
+        pid_alive=True,
+        heartbeat_fresh=True,
+        reason='healthy',
+        config_signature=str(expected['config_signature']),
+    )
+    captured: list[float | None] = []
+    shutdown_calls: list[object] = []
+
+    class FakeClient:
+        def __init__(self, socket_path, *, timeout_s=None) -> None:
+            del socket_path
+            captured.append(timeout_s)
+
+        def ping(self, target: str = 'ccbd') -> dict:
+            assert target == 'ccbd'
+            return {
+                'config_signature': expected['config_signature'],
+                'source_runtime_identity': source_identity,
+            }
+
+    monkeypatch.setattr(daemon_service, 'CcbdClient', FakeClient)
+    monkeypatch.setattr(
+        daemon_service,
+        '_shutdown_incompatible_daemon',
+        lambda context, client: shutdown_calls.append((context, client)),
+    )
+
+    handle = daemon_service._connect_compatible_daemon(
+        ctx,
+        inspection,
+        restart_on_mismatch=True,
+    )
+
+    assert handle is not None
+    assert handle.started is False
+    assert captured == [daemon_service.CONTROL_PLANE_RPC_TIMEOUT_S, None]
+    assert shutdown_calls == []
 
 
 def test_connect_compatible_daemon_restarts_explicit_config_ui_source_holder(

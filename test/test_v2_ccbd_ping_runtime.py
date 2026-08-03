@@ -139,6 +139,11 @@ def test_build_ccbd_payload_prefers_lifecycle_phase_over_lease_mount_state() -> 
             'serving_daemon_instance_id': 'daemon-1',
             'serving_lease_generation': 7,
             'accepted_startup_id': 'a' * 32,
+            'source_runtime_identity': {
+                'kind': 'source-tree',
+                'root': '/src/ccb',
+                'digest': 'digest-1',
+            },
         },
     )
 
@@ -155,6 +160,11 @@ def test_build_ccbd_payload_prefers_lifecycle_phase_over_lease_mount_state() -> 
     assert payload['serving_daemon_instance_id'] == 'daemon-1'
     assert payload['serving_lease_generation'] == 7
     assert payload['accepted_startup_id'] == 'a' * 32
+    assert payload['source_runtime_identity'] == {
+        'kind': 'source-tree',
+        'root': '/src/ccb',
+        'digest': 'digest-1',
+    }
     assert payload['diagnostics']['last_request_queue_wait_s'] == 0.012
     assert payload['diagnostics']['last_submit_duration_s'] == 0.034
     assert payload['diagnostics']['last_ping_duration_s'] == 0.056

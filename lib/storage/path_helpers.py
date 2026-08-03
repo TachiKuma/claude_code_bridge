@@ -158,6 +158,15 @@ def choose_runtime_state_placement(
     del project_root
     anchor = Path(anchor_path).expanduser()
     filesystem_hint = socket_filesystem_hint(anchor)
+    runtime_state_home = _absolute_path_from_env('CCB_RUNTIME_STATE_HOME')
+    if runtime_state_home is not None:
+        return RuntimeStatePlacement(
+            anchor_path=anchor,
+            effective_path=runtime_state_home / project_id,
+            root_kind='relocated',
+            relocation_reason='runtime_state_home',
+            filesystem_hint=filesystem_hint,
+        )
     ref_root = runtime_state_root_from_anchor_ref(anchor, project_id=project_id)
     if ref_root is not None:
         return RuntimeStatePlacement(

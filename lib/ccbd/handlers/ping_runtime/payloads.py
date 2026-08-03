@@ -86,6 +86,7 @@ def build_ccbd_payload(
         'serving_lease_generation': serving.get('serving_lease_generation'),
         'serving_startup_generation': serving.get('serving_startup_generation'),
         'accepted_startup_id': serving.get('accepted_startup_id'),
+        'source_runtime_identity': serving.get('source_runtime_identity'),
         **namespace_summary,
         **namespace_event_summary,
         **start_policy_summary,
