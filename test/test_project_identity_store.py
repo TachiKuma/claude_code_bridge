@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 import ccbd.system
+import project.identity_store as identity_store
 import process_liveness
 from project.ids import compute_legacy_project_id, compute_project_id, project_slug
 from project.identity_store import (
@@ -278,6 +279,58 @@ def test_existing_identity_refuses_rebind_when_windows_legacy_runtime_is_active(
 
     with pytest.raises(ProjectIdentityConflictError, match='still active'):
         ensure_project_identity(moved, clock=lambda: '2026-07-24T00:01:00Z')
+
+
+def test_windows_socket_connectable_skips_legacy_unix_socket_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _unexpected_exists(_path: Path) -> bool:
+        raise AssertionError('Windows legacy socket probe should not touch the filesystem')
+
+    monkeypatch.setattr(identity_store.os, 'name', 'nt')
+    monkeypatch.setattr(identity_store.Path, 'exists', _unexpected_exists)
+
+    assert identity_store._socket_connectable('D:/repo/.ccb/ccbd/ccbd.sock') is False
+
+
+def test_existing_identity_rebind_on_windows_ignores_dead_legacy_socket_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    original = tmp_path / 'legacy-root'
+    ccb_dir = original / '.ccb'
+    ccb_dir.mkdir(parents=True)
+    identity = ensure_project_identity(
+        original,
+        clock=lambda: '2026-07-24T00:00:00Z',
+        id_factory=lambda: '1' * 64,
+    )
+    socket_path = ccb_dir / 'ccbd' / 'ccbd.sock'
+    _write_json(
+        ccb_dir / 'ccbd' / 'lease.json',
+        _legacy_lease(identity.project_id, socket_path),
+    )
+    moved = tmp_path / 'moved-root'
+    original.rename(moved)
+    original_exists = identity_store.Path.exists
+
+    def _exists(path: Path) -> bool:
+        if str(path) == str(socket_path):
+            raise AssertionError('Windows legacy socket evidence should not be probed')
+        return original_exists(path)
+
+    monkeypatch.setattr(identity_store.os, 'name', 'nt')
+    monkeypatch.setattr(process_liveness, '_windows_process_exists', lambda _pid: False)
+    monkeypatch.setattr(identity_store.Path, 'exists', _exists)
+
+    rebound = ensure_project_identity(
+        moved,
+        clock=lambda: '2026-07-24T00:01:00Z',
+    )
+
+    assert rebound.project_id == identity.project_id
+    assert rebound.bound_root == str(moved)
+    assert rebound.binding_epoch == 2
 
 
 def test_ccbd_system_process_exists_uses_shared_platform_liveness(

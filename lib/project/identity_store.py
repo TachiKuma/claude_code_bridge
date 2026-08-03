@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import re
 import secrets
@@ -402,6 +403,10 @@ def _process_exists(pid: int | None) -> bool:
 
 
 def _socket_connectable(path: str | Path, *, timeout_s: float = 0.1) -> bool:
+    # Legacy runtime evidence uses AF_UNIX sockets; Windows control-plane endpoints
+    # are represented separately and should not be probed through this path.
+    if os.name == 'nt':
+        return False
     target = Path(path)
     if not target.exists() or not hasattr(socket, 'AF_UNIX'):
         return False
