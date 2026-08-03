@@ -183,7 +183,10 @@ def iter_runnable_agent_slots(dispatcher):
             continue
         if runtime.state is AgentState.DEGRADED:
             action = _degraded_runtime_action(dispatcher, runtime)
-            if action in {"blocked", "drop"}:
+            if action == "blocked":
+                _record_lifecycle_recovery_blocked(dispatcher, runtime)
+                continue
+            if action == "drop":
                 continue
         yield QueuedTargetSlot(
             target_kind=TargetKind.AGENT,

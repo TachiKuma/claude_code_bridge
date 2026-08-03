@@ -8,6 +8,7 @@ import pytest
 from agents.models import AgentRuntime, AgentState, RuntimeBindingSource
 from ccbd.api_models import TargetKind
 from ccbd.services.dispatcher_runtime.lifecycle_start_runtime.models import QueuedTargetSlot
+from ccbd.services.dispatcher_runtime.lifecycle_start_runtime.tick import tick_jobs
 from ccbd.services.runtime_recovery_policy import (
     HERDR_RECOVERY_CIRCUIT_THRESHOLD,
     HERDR_RECOVERY_OWNER,
@@ -159,6 +160,47 @@ def test_lifecycle_start_blocked_herdr_auto_restore_writes_evidence() -> None:
     assert events[-1].event_kind == "recover_blocked"
     assert events[-1].details["recovery_evidence_ledger"]["action"] == "blocked"
     assert events[-1].details["recovery_evidence_ledger"]["herdr_auto_restore_mode"] == "observe-only"
+
+
+def test_lifecycle_start_tick_records_blocked_herdr_recovery_evidence() -> None:
+    events = []
+    calls = []
+    runtime = _herdr_runtime(auto_restore_mode="observe-only", health="process-dead")
+    runtime.daemon_generation = 7
+    runtime.desired_state = "mounted"
+    runtime.reconcile_state = "degraded"
+    runtime.runtime_ref = "herdr:pane-1"
+    runtime.session_ref = "session-1"
+    runtime.namespace_restore_token_present = True
+    registry = _Registry(runtime)
+    dispatcher = SimpleNamespace(
+        _project_id="project-1",
+        _clock=lambda: "2026-08-03T00:00:00Z",
+        _config=SimpleNamespace(agents=["codex"]),
+        _state=SimpleNamespace(
+            active_job=lambda agent_name: None,
+            queue_depth=lambda agent_name: 1,
+        ),
+        _event_store=SimpleNamespace(append=events.append),
+        _execution_service=object(),
+        _runtime_service=SimpleNamespace(
+            refresh_provider_binding=lambda agent_name, recover: calls.append((agent_name, recover))
+        ),
+        _registry=registry,
+        _provider_catalog=SimpleNamespace(get=lambda provider: SimpleNamespace(supports_resume=True)),
+    )
+
+    assert tick_jobs(dispatcher) == ()
+
+    assert calls == []
+    assert registry.current.health == PROVIDER_RECOVERY_BLOCKED_RUNTIME_HEALTH
+    assert events[-1].event_kind == "recover_blocked"
+    assert events[-1].details["recovery_evidence_ledger"]["action"] == "blocked"
+    assert events[-1].details["recovery_evidence_ledger"]["herdr_auto_restore_mode"] == "observe-only"
+
+    assert tick_jobs(dispatcher) == ()
+    assert calls == []
+    assert len(events) == 1
 
 
 def test_herdr_recovery_event_ledger_redacts_namespace_ref() -> None:

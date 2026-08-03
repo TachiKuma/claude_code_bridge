@@ -177,3 +177,25 @@ Goal lane implementation 完成，进入 `cs-code-review`。Review passed 后进
 - 边界：
   - 未修改 provider completion、Mobile/Config UI、doctor/support、package/release/update/installer/public matrix、Herdr socket schema/client owner。
   - 未宣称真实 Herdr recovery supported；`REV-005` 和 S7 Herdr server `not_running` 继续交给 QA/acceptance 作为 blocked/fail-closed evidence。
+
+## Review-fix 证据（round 4）
+
+- 目标：`R4-001`，对应 Bohr round 4 blocking finding。
+- 改动文件：
+  - `lib/ccbd/services/dispatcher_runtime/lifecycle_start_runtime/recovery_runtime/slots.py`
+  - `test/test_ccbd_herdr_recovery_boundary.py`
+- 处理方式：`iter_runnable_agent_slots()` 在生产 `tick_jobs()` 扫描 queued degraded runtime 时，若 Herdr recovery admission 返回 `blocked`，先复用 `_record_lifecycle_recovery_blocked()` 写 `recover_blocked` supervision event / Herdr recovery ledger，再跳过 slot；`drop` 仍保持原 backoff/drop 语义，不调用 refresh。
+- RED：
+  - `python -m pytest -q "test/test_ccbd_herdr_recovery_boundary.py" -k "tick_records_blocked" --basetemp "D:/tmp/ccb-herdr-r4-red" -p no:cacheprovider`：失败，`registry.current.health` 仍为 `process-dead`，证明 `tick_jobs()` 生产路径没有写 durable blocked evidence。
+- GREEN/VERIFY：
+  - `python -m pytest -q "test/test_ccbd_herdr_recovery_boundary.py" -k "tick_records_blocked" --basetemp "D:/tmp/ccb-herdr-r4-green-focused" -p no:cacheprovider`：1 passed, 27 deselected。
+  - `python -m pytest -q "test/test_ccbd_herdr_recovery_boundary.py" -k "tick_records_blocked" --basetemp "D:/tmp/ccb-herdr-r4-idempotent" -p no:cacheprovider`：1 passed, 27 deselected，覆盖第二次 `tick_jobs()` 不重复写 `recover_blocked` event。
+  - `python -m pytest -q "test/test_ccbd_herdr_recovery_boundary.py" --basetemp "D:/tmp/ccb-herdr-r4-green-all" -p no:cacheprovider`：28 passed。
+  - `python -m pytest -q "test/test_ccbd_herdr_recovery_boundary.py" --basetemp "D:/tmp/ccb-herdr-r4-green-all2" -p no:cacheprovider`：28 passed。
+  - `python -m pytest -q "test/test_v2_ccbd_supervision_loop.py" "test/test_ccbd_restore_helpers.py" "test/test_pane_crash_reason.py" -k "recovery or recover or crash or backoff or blocked" --basetemp "D:/tmp/ccb-herdr-r4-recovery-regression" -p no:cacheprovider`：20 passed, 24 deselected。
+  - `python -m pytest -q "test/test_v2_agent_store.py" "test/test_ccbd_runtime_refresh.py" "test/test_ccbd_health_monitor_rebind.py" -k "roundtrip or refresh_provider_binding or recovery or herdr" --basetemp "D:/tmp/ccb-herdr-r4-runtime-regression" -p no:cacheprovider`：5 passed, 2 deselected。
+  - `git diff --check -- "lib/ccbd/services/dispatcher_runtime/lifecycle_start_runtime/recovery_runtime/slots.py" "test/test_ccbd_herdr_recovery_boundary.py"`：passed。
+  - `rg --line-number "console\\.log|console\\.error|TODO|FIXME|XXX" "lib/ccbd/services/dispatcher_runtime/lifecycle_start_runtime/recovery_runtime/slots.py" "test/test_ccbd_herdr_recovery_boundary.py"`：no matches。
+- 边界：
+  - 本轮只闭合 R4-001，没有实现 `REV-005` 的真实 production `herdr_auto_restore_mode` producer。
+  - 未修改 provider completion、Mobile/Config UI、doctor/support、package/release/update/installer/public matrix、Herdr socket schema/client owner。

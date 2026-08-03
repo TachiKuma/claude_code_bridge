@@ -496,9 +496,9 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
 8. **herdr-bounded-recovery-boundary** — 对齐 CCB v8.5.2 bounded recovery 与 Herdr restore，避免双重恢复。
    - 所属模块：Recovery Boundary
    - 依赖：`provider-runtime-on-herdr`
-   - 状态：in-progress
+   - 状态：accepted
    - 对应 feature：`2026-07-31-herdr-bounded-recovery-boundary`
-   - 备注：保留 90 秒 probation、backoff、crash record bound、durable circuit；Herdr auto restore 不能关闭或不能证明 disabled 时直接阻塞 recovery-capable/supported。
+   - 备注：accepted 2026-08-03；CCB 作为唯一 recovery owner，Herdr auto restore 非 `disabled` 直接 blocked/fail-closed。交付 Herdr recovery policy/evidence ledger redaction、raw restore token presence 投影、90 秒 probation、Herdr 3 次 circuit threshold、lifecycle-start tick durable `recover_blocked` evidence、backend-neutral Herdr pane_ref primitive 和 tmux/rmux recovery regression。真实 Herdr server 当前 `not_running` / `capabilities=null`，只作为 blocked evidence，不能宣称 supported recovery。
 
 9. **herdr-user-surfaces-parity** — 将 Herdr evidence 投影到 foreground attach、Mobile terminal、Config UI、doctor、ping、mounted、project view。
    - 所属模块：User Surfaces

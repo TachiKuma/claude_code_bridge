@@ -61,10 +61,10 @@ items:
   - slug: herdr-bounded-recovery-boundary
     description: 对齐 CCB v8.5.2 bounded pane recovery 与 Herdr session restore，确保恢复 owner 唯一
     depends_on: [provider-runtime-on-herdr]
-    status: in-progress
+    status: done
     feature: 2026-07-31-herdr-bounded-recovery-boundary
     minimal_loop: false
-    notes: "必须保留 90 秒 probation、退避、bounded crash logs 和 durable circuit；Herdr auto restore 必须可证明 disabled，observe-only/unsupported/unknown 直接阻塞 recovery-capable/supported。"
+    notes: "accepted 2026-08-03：S1-S7、review、QA、acceptance 均通过。CCB 是唯一 recovery owner；Herdr auto restore 只有 disabled 可进入 recovery-capable path，observe-only/unsupported/unknown fail closed。实现覆盖 recovery ledger redaction、raw restore token presence 投影、90 秒 probation、Herdr 3 次 circuit threshold、lifecycle-start tick blocked evidence、pane/process/namespace/daemon CCB-owned routing、backend-neutral Herdr pane_ref primitive 和 tmux/rmux regression。真实 Herdr server 当前 not_running/capabilities null，仅记录 blocked evidence，不得宣称 supported recovery。"
 
   - slug: herdr-user-surfaces-parity
     description: 将 Herdr backend evidence 投影到 foreground attach、Mobile terminal、Config UI、doctor、ping、mounted 和 project view

@@ -34,31 +34,31 @@ steps:
 checks:
   - item: "provider-runtime-on-herdr 不是仅 design-review passed，而是 implementation/acceptance evidence 可验证"
     source: design AC-001 / DOD-IMPL-000 / S1
-    status: done
+    status: passed
   - item: "HerdrRecoveryPolicy owner 固定为 ccb，Herdr auto restore 必须 disabled；observe-only/unsupported/unknown 不能进入 recovery-capable 或 supported"
     source: design AC-003 / DOD-IMPL-001 / S1
-    status: done
+    status: passed
   - item: "Herdr recovery evidence ledger redacted，namespace_ref.restore_token 不进入 public payload，只输出 restore_token_present"
     source: design AC-002 / AC-006 / DOD-IMPL-002 / S2
-    status: done
+    status: passed
   - item: "90 秒 probation、restart_count backoff、durable circuit 保留，probation 未到期不能写 recover_succeeded/steady"
     source: design AC-004 / AC-007 / DOD-IMPL-003 / S3
-    status: done
+    status: passed
   - item: "pane/process/namespace/daemon recovery action 均由 CCB supervision 路由，lifecycle start refresh 不绕过同一 gate"
     source: design AC-005 / AC-006 / DOD-IMPL-004 / S4
-    status: done
+    status: passed
   - item: "Herdr pane_ref recovery 不要求 tmux %pane，也不进入 tmux ownership/identity 分支；provider auth revoked hard-block"
     source: design AC-008 / DOD-IMPL-005 / S5
-    status: done
+    status: passed
   - item: "tmux/rmux recovery regression 不退化"
     source: design AC-009 / S6
-    status: done
+    status: passed
   - item: "Native Windows x64 Herdr recovery transcript 覆盖 auto restore disabled 下的 recovery，或 auto-restore-not-disabled blocked evidence"
     source: design AC-010 / DOD-ACCEPT-001 / S7
-    status: done
+    status: passed
   - item: "本 feature 不修改 provider completion、Mobile/Config UI、doctor/support、package/release/update/installer/public matrix、Herdr socket schema/client owner"
     source: design AC-011 / 明确不做 / S6
-    status: done
+    status: passed
 
 dod:
   commands:
