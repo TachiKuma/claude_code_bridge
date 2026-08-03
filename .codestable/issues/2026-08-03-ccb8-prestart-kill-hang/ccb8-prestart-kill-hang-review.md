@@ -4,13 +4,13 @@ issue: 2026-08-03-ccb8-prestart-kill-hang
 status: passed
 reviewer: subagent
 reviewed: 2026-08-03
-round: 1
+round: 2
 lane_a_state: completed
-lane_a_ref: "019fc7f9-7fac-7430-b592-55b537ea64a1"
+lane_a_ref: "019fc843-9fe9-7910-930e-06eedd203355"
 lane_a_reason: ""
-lane_b_state: skipped
+lane_b_state: unavailable
 lane_b_ref: ""
-lane_b_reason: "ocr CLI 可用，但本次主要改动文件 D:/C#Project/GitHub/AvaPrintDesigner/ccb8.cmd 位于当前 git 仓库外，且仓库工作区存在大量无关 dirty 文件；按 scope 规则不裸跑 workspace OCR。"
+lane_b_reason: "最终 PID liveness 复审时 ocr llm test 30 秒超时；按协议降级为本地行级核验。"
 ---
 
 # ccb8-prestart-kill-hang 代码审查报告
@@ -22,7 +22,7 @@ lane_b_reason: "ocr CLI 可用，但本次主要改动文件 D:/C#Project/GitHub
 - Fix note: `.codestable/issues/2026-08-03-ccb8-prestart-kill-hang/ccb8-prestart-kill-hang-fix-note.md`
 - Implementation evidence: `D:/C#Project/GitHub/AvaPrintDesigner/ccb8.cmd`
 - Diff basis: 外部 wrapper 文件内容审查 + 本仓库 issue 产物新增；`ccb8.cmd` 不在当前 git 仓库内，无法用本仓库 `git diff` 归因。
-- Review mode: initial + focused-closure
+- Review mode: initial + focused-closure + PID liveness rereview
 - Baseline dirty files: 当前仓库存在多处既有 dirty 文件，非本轮 wrapper 修复范围。
 
 ### Independent Review
@@ -38,6 +38,8 @@ lane_b_reason: "ocr CLI 可用，但本次主要改动文件 D:/C#Project/GitHub
 
 - 新增：`.codestable/issues/2026-08-03-ccb8-prestart-kill-hang/*`
 - 修改：`D:/C#Project/GitHub/AvaPrintDesigner/ccb8.cmd`
+- 新增：`lib/process_liveness.py`
+- 修改：`lib/project/identity_store.py`、`lib/ccbd/system.py`、`test/test_project_identity_store.py`
 - 删除：none
 - 未跟踪 / staged：issue 目录为未跟踪；wrapper 位于仓库外。
 - 风险热点：Windows batch/PowerShell 引号与 errorlevel 传播；避免误杀已安装 CCB/v5。
@@ -105,3 +107,15 @@ none
 - Independent focused closure: reviewer `019fc804-0dcc-77e2-9085-c48d6ff1ad5e` 复审通过，blocking/important 均为 none。
 - Reviewer conclusion: 停止候选仍只来自 `.ccb-source-dev/state/runtime-state/.../ccbd/{lease,keeper,lifecycle}.json`；`.ccb/ccbd` 只用于保护 PID，当前保护 `12652/12720`，不会误杀已安装 `.ccb` v5。
 - Residual risk: 若 `.ccb` 保护文件严重陈旧且 PID 被源码态复用，最坏是过度保护导致漏杀 source-dev，不是误杀 v5。
+
+## 10. Final PID Liveness Rereview
+
+- Trigger: 短 runtime 下最新 `ccbd.stderr.log` 暴露源码层根因：Windows / Python 3.14 上 `os.kill(pid, 0)` 对活的已安装 CCB PID 返回 `OSError`，导致 `identity_store._process_exists()` 和 `ccbd.system.process_exists()` 误判 daemon/keeper 不活。
+- Delta: 新增 `lib/process_liveness.py`，Windows 分支改用 `OpenProcess(SYNCHRONIZE, False, pid)`；`identity_store.py` 与 `ccbd/system.py` 委托共享 helper；测试覆盖 helper、`ensure_project_identity()` 默认回归路径和 `ccbd.system` 委托。
+- Independent rereview: reviewer `019fc843-9fe9-7910-930e-06eedd203355` 复审后 blocking 为 none；原 important finding 均已关闭。其指出的新文件未跟踪交付风险已通过将 `lib/process_liveness.py` 纳入 index 关闭。
+- Targeted verification:
+  - `python -m pytest test/test_project_identity_store.py test/test_ccbd_startup_identity.py` -> `14 passed`。
+  - `python -m py_compile lib/process_liveness.py lib/project/identity_store.py lib/ccbd/system.py` -> passed。
+  - `cmd /d /c ""D:/C#Project/GitHub/AvaPrintDesigner/ccb8.cmd" --diagnose"` -> 输出 `v8.5.2`。
+  - 只读函数级验证：`_process_exists(12652)=True`、`_process_exists(12720)=True`、`_legacy_evidence(...).active_runtime=True`。
+- Verdict: passed。

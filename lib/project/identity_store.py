@@ -3,13 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import json
-import os
 from pathlib import Path
 import re
 import secrets
 import socket
 from typing import Callable
 
+from process_liveness import process_exists as _platform_process_exists
 from storage.atomic import atomic_write_json
 from storage.locks import file_lock
 
@@ -398,15 +398,7 @@ def _same_existing_path(left: Path, right: Path) -> bool:
 
 
 def _process_exists(pid: int | None) -> bool:
-    if pid is None or pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        return False
-    except Exception:
-        return False
-    return True
+    return _platform_process_exists(pid)
 
 
 def _socket_connectable(path: str | Path, *, timeout_s: float = 0.1) -> bool:
