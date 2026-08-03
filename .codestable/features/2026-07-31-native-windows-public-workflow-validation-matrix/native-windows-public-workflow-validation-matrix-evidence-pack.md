@@ -1,0 +1,178 @@
+---
+doc_type: feature-evidence-pack
+feature: native-windows-public-workflow-validation-matrix
+status: generated
+---
+
+# native-windows-public-workflow-validation-matrix evidence pack
+
+## 1. Scope
+
+- Design: `.codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-design.md`
+- Checklist: `.codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-checklist.yaml`
+
+## 2. DoD Results
+
+```json
+{
+  "gate_id": "dod-runner",
+  "stage": "acceptance.after_writeback",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "command": "python \".codestable/tools/validate-yaml.py\" --file \".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-checklist.yaml\" --yaml-only",
+      "exit_code": 0,
+      "stdout": "Validated 1 file(s): 1 passed, 0 failed.\n\n  ✓ .codestable\\features\\2026-07-31-native-windows-public-workflow-validation-matrix\\native-windows-public-workflow-validation-matrix-checklist.yaml\n\nAll files valid.\n",
+      "stderr": "",
+      "id": "CMD-001",
+      "core": true,
+      "failure_handling": "fix-or-block",
+      "test_status": "existing"
+    },
+    {
+      "command": "python \".codestable/tools/validate-yaml.py\" --file \".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml\"",
+      "exit_code": 0,
+      "stdout": "Validated 1 file(s): 1 passed, 0 failed.\n\n  ✓ .codestable\\roadmap\\windows-native-herdr-ccb\\windows-native-herdr-ccb-items.yaml\n\nAll files valid.\n",
+      "stderr": "",
+      "id": "CMD-002",
+      "core": true,
+      "failure_handling": "fix-or-block",
+      "test_status": "existing"
+    },
+    {
+      "command": "python -m pytest -q test/test_windows_herdr_public_workflow_matrix.py",
+      "exit_code": 0,
+      "stdout": "....................................................................     [100%]\n68 passed in 3.66s\n",
+      "stderr": "",
+      "id": "CMD-003",
+      "core": true,
+      "failure_handling": "fix-or-block",
+      "test_status": "new"
+    },
+    {
+      "command": "python -m pytest -q test/test_windows_herdr_public_workflow_matrix.py -k \"parent_admission or blocked_skeleton\"",
+      "exit_code": 0,
+      "stdout": "......................                                                   [100%]\n22 passed, 46 deselected in 2.30s\n",
+      "stderr": "",
+      "id": "CMD-004",
+      "core": true,
+      "failure_handling": "fix-or-block",
+      "test_status": "conditional"
+    },
+    {
+      "command": "python -c \"import pathlib,re,subprocess; roots=('lib','test','docs','README.md'); run=lambda a: subprocess.run(a,capture_output=True,text=True,encoding='utf-8',errors='ignore',check=True).stdout; text=run(['git','diff','--',*roots])+run(['git','diff','--cached','--',*roots]); untracked=run(['git','ls-files','--others','--exclude-standard','--',*roots]).splitlines(); text+=''.join(pathlib.Path(p).read_text(encoding='utf-8',errors='ignore') for p in untracked if pathlib.Path(p).is_file()); lower=text.lower(); forbidden=(r'npm\\s+publish',r'git\\s+push',r'git\\s+tag',r'windows\\s+x64\\s+(is\\s+)?(fully\\s+|stable\\s+)?supported',r'provider[\\s_-]+completion',r'recovery[\\s_-]+owner'); hits=[p for p in forbidden if re.search(p,lower)]; docs_claim=[line for line in lower.splitlines() if re.search(r'support_tier\\s*[:=].*supported',line) and 'support_tier_is_candidate' not in line and 'candidate' not in line]; assert not hits and not docs_claim, {'forbidden': hits, 'docs_claim': docs_claim[:5], 'untracked': untracked[:10]}\"",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "id": "CMD-005",
+      "core": true,
+      "failure_handling": "fix-or-block",
+      "test_status": "existing"
+    },
+    {
+      "command": "python -c \"import json,pathlib; base=pathlib.Path('.codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence'); required=('native-windows-transcript.md','provider-workflows-transcript.md','blocked-evidence.md','public-providers-freeze.json','windows-herdr-public-workflow-matrix.json'); missing=[name for name in required if not (base/name).exists()]; assert not missing, missing; matrix=json.loads((base/'windows-herdr-public-workflow-matrix.json').read_text(encoding='utf-8')); assert matrix['support_projection_allowed'] is False; assert all(status == 'blocked' for status in matrix['workflows'].values()); assert all(status == 'blocked' for rows in matrix['provider_workflow_rows'].values() for status in rows.values())\"",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "id": "CMD-006",
+      "core": true,
+      "failure_handling": "blocked-if-no-host-or-herdr-or-any-provider-missing",
+      "test_status": "conditional"
+    },
+    {
+      "command": "python -c \"import pathlib,re; p=pathlib.Path('docs/ccbd-diagnostics-contract.md'); bad=[(i+1,line.rstrip()) for i,line in enumerate(p.read_text(encoding='utf-8').splitlines()) if 'doctor --bundle' in line.lower() and not re.search(r'deprecated|unsupported|no longer supported|not supported', line, re.I)]; assert not bad,bad\"",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "id": "CMD-007",
+      "core": true,
+      "failure_handling": "fix-or-block",
+      "test_status": "new"
+    }
+  ],
+  "providers": {}
+}
+```
+
+## 3. Validation Commands
+
+Extracted from checklist `dod.commands`; see DoD Results for command status.
+
+## 4. Scope And Cleanliness
+
+Design bytes: 27374
+Checklist bytes: 11782
+
+## 5. Residual Risks
+
+- none
+
+## 6. Provider Signals
+
+```json
+{
+  "archguard": {
+    "status": "skipped",
+    "reason": "archguard collection disabled",
+    "warnings": []
+  },
+  "meta_cc": {
+    "status": "skipped",
+    "reason": "meta-cc collection disabled",
+    "warnings": []
+  }
+}
+```
+
+## 7. Gate Results
+
+```json
+{
+  "gate_id": "scope-gate",
+  "stage": "acceptance.after_writeback",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "changed_files": [
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-checklist.yaml",
+        ".codestable/roadmap/windows-native-herdr-ccb/goal-state.yaml",
+        ".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml",
+        ".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-roadmap.md",
+        "docs/ccbd-diagnostics-contract.md",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/blocked-evidence.md",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/native-windows-transcript.md",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/provider-workflows-transcript.md",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/public-providers-freeze.json",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/windows-herdr-public-workflow-matrix.json",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-acceptance.md",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-evidence-pack.md",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-implementation.md",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-qa.md",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-review.md",
+        "lib/terminal_runtime/windows_herdr_public_workflow_matrix.py",
+        "test/test_windows_herdr_public_workflow_matrix.py"
+      ],
+      "ignored_machine_artifacts": [
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-dod-results.json",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-evidence-pack-results.json",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-gate-results.json"
+      ],
+      "allowed_prefixes": [
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix",
+        "lib/terminal_runtime/windows_herdr_public_workflow_matrix.py",
+        "test/test_windows_herdr_public_workflow_matrix.py",
+        "docs/ccbd-diagnostics-contract.md",
+        ".codestable/roadmap/windows-native-herdr-ccb/goal-state.yaml",
+        ".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml",
+        ".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-roadmap.md"
+      ]
+    }
+  ],
+  "providers": {}
+}
+```

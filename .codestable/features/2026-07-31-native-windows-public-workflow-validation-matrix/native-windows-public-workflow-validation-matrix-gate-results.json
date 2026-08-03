@@ -1,0 +1,46 @@
+{
+  "gate_id": "scope-gate",
+  "stage": "acceptance.after_writeback",
+  "status": "passed",
+  "blocking": [],
+  "warnings": [],
+  "evidence": [
+    {
+      "changed_files": [
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-checklist.yaml",
+        ".codestable/roadmap/windows-native-herdr-ccb/goal-state.yaml",
+        ".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml",
+        ".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-roadmap.md",
+        "docs/ccbd-diagnostics-contract.md",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/blocked-evidence.md",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/native-windows-transcript.md",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/provider-workflows-transcript.md",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/public-providers-freeze.json",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/windows-herdr-public-workflow-matrix.json",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-acceptance.md",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-evidence-pack.md",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-implementation.md",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-qa.md",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-review.md",
+        "lib/terminal_runtime/windows_herdr_public_workflow_matrix.py",
+        "test/test_windows_herdr_public_workflow_matrix.py"
+      ],
+      "ignored_machine_artifacts": [
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-dod-results.json",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-evidence-pack-results.json",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-gate-results.json"
+      ],
+      "allowed_prefixes": [
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix",
+        ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix",
+        "lib/terminal_runtime/windows_herdr_public_workflow_matrix.py",
+        "test/test_windows_herdr_public_workflow_matrix.py",
+        "docs/ccbd-diagnostics-contract.md",
+        ".codestable/roadmap/windows-native-herdr-ccb/goal-state.yaml",
+        ".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-items.yaml",
+        ".codestable/roadmap/windows-native-herdr-ccb/windows-native-herdr-ccb-roadmap.md"
+      ]
+    }
+  ],
+  "providers": {}
+}

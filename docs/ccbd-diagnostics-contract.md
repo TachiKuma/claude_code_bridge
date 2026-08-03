@@ -697,6 +697,18 @@ Rules:
   `managed_python_status`, `native_helper_status`, `failure_reason`, and
   `next_action`; these rows are diagnostics only and must not imply final
   Windows support, publish, tag, or release promotion authority
+- it may surface a Native Windows Herdr public workflow validation matrix when
+  the accepted matrix artifact is available. The stable matrix fields are
+  `backend_impl`, `os_platform`, `cpu_arch`, `ccb_version`,
+  `ccb_source_status`, `herdr_auto_restore_mode`, `required_workflows`,
+  `workflows`, `workflow_rows`, `public_providers`, `provider_workflows`,
+  `provider_workflow_rows`, `provider_workflow_detail_rows`,
+  `mobile_terminal_status`, `config_ui_status`,
+  `windows_npm_install_dry_run_status`, `beta_gaps`, `residual_risks`,
+  `artifacts`, `support_tier`, `support_tier_is_candidate`, and
+  `support_projection_allowed`. The matrix is evidence for support projection;
+  doctor output must not treat candidate fields as final support, publish,
+  tag, release promotion, provider runtime, or recovery authority.
 
 ### 3.7 Support Bundle Export
 

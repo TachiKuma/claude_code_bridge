@@ -1,0 +1,33 @@
+{
+  "excluded_test_doubles": true,
+  "provider_workflows": [
+    "ask",
+    "pend",
+    "completion",
+    "cancel"
+  ],
+  "public_providers": [
+    "agy",
+    "claude",
+    "codex",
+    "copilot",
+    "crush",
+    "cursor",
+    "deepseek",
+    "droid",
+    "gemini",
+    "grok",
+    "kimi",
+    "kiro",
+    "mimo",
+    "omp",
+    "opencode",
+    "pi",
+    "qoder",
+    "qoderclicn",
+    "qwen",
+    "zai"
+  ],
+  "schema_version": 1,
+  "source": "build_default_provider_manifests(include_optional=True, include_test_doubles=False)"
+}

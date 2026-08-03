@@ -85,10 +85,10 @@ items:
   - slug: native-windows-public-workflow-validation-matrix
     description: 在 Native Windows x64 上验证 CCB public workflows 的 pass、partial、blocked、failed 证据矩阵
     depends_on: [windows-x64-release-surface, herdr-user-surfaces-parity]
-    status: in-progress
+    status: done
     feature: 2026-07-31-native-windows-public-workflow-validation-matrix
     minimal_loop: false
-    notes: "覆盖 ccb、watch、ping、mounted、kill、restart、reload、foreground attach、Mobile terminal、Config UI、doctor/update，以及所有公开 provider 在 Herdr pane 下的 ask、pend、completion、cancel；证据来自专用 Native Windows x64 主机。"
+    notes: "accepted 2026-08-03：建立 WindowsHerdrPublicWorkflowEvidence schema、required workflow key set、public provider ask/pend/completion/cancel rows、parent admission 与 root-aware artifact validator；当前 evidence 是 blocked candidate，support_projection_allowed=false、support_tier=beta、support_tier_is_candidate=true，所有 workflow/provider rows blocked，不宣称 Native Windows supported。下游 supportability projection 必须重新消费该 matrix 并保持 fail closed。"
 
   - slug: herdr-supportability-projection
     description: 将 validation evidence 汇总到 support tier、README/docs、doctor 和 residual risk

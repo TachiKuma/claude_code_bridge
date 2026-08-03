@@ -517,9 +517,9 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
 11. **native-windows-public-workflow-validation-matrix** — 覆盖 CCB public workflow parity 的 Native Windows x64 真机验证矩阵。
     - 所属模块：Validation & Support
     - 依赖：`windows-x64-release-surface`, `herdr-user-surfaces-parity`
-    - 状态：in-progress
+    - 状态：accepted
     - 对应 feature：`2026-07-31-native-windows-public-workflow-validation-matrix`
-    - 备注：必须覆盖 `ccb`、`watch`、`ping`、`mounted`、`kill`、`restart`、`reload`、foreground attach、Mobile terminal、Config UI、doctor/update，以及所有公开 provider 在 Herdr pane 下的 `ask`、`pend`、completion、cancel。
+    - 备注：accepted 2026-08-03；建立 evidence schema、required workflow key set、public provider workflow rows、parent admission 与 root-aware artifact validator。当前 matrix 是 blocked candidate：`support_projection_allowed=false`、`support_tier=beta`、`support_tier_is_candidate=true`，不得声明 Native Windows supported；后续 supportability projection 必须重新消费并 fail closed。
 
 12. **herdr-supportability-projection** — 将 validation evidence 汇总到 support tier、README/docs、doctor 和 residual risk。
     - 所属模块：Validation & Support

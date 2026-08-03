@@ -14,8 +14,8 @@ acceptance_authorization_ref: "approval-report.md#goal-acceptance"
 commit_authorization: approved
 commit_authorization_ref: "approval-report.md#goal-commits"
 handoff_reason: null
-handoff_next: "windows-x64-release-surface accepted with review, QA, acceptance, and diagnostic/blocked release-surface evidence. Next action is native-windows-public-workflow-validation-matrix."
-current_feature_index: 10
+handoff_next: "native-windows-public-workflow-validation-matrix accepted with review, QA, acceptance, blocked candidate matrix evidence, root-aware artifact validation, and parent admission ready. Next action is herdr-supportability-projection."
+current_feature_index: 11
 features:
   - slug: "windows-x64-v852-baseline-gate"
     roadmap_item: "windows-x64-v852-baseline-gate"
@@ -115,7 +115,7 @@ features:
     review: ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-review.md"
     qa: ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-qa.md"
     acceptance: ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/native-windows-public-workflow-validation-matrix-acceptance.md"
-    status: pending
+    status: accepted
   - slug: "herdr-supportability-projection"
     roadmap_item: "herdr-supportability-projection"
     feature_dir: ".codestable/features/2026-07-31-herdr-supportability-projection"
