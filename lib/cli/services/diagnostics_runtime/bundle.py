@@ -23,9 +23,7 @@ def export_diagnostic_bundle(context, command) -> DiagnosticBundleSummary:
     storage_data, storage_error = _storage_payload(context)
     entries: list[DiagnosticBundleEntry] = []
 
-    support_dir = context.paths.ccbd_support_dir
-    support_dir.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix='bundle-', dir=str(support_dir)) as tmpdir:
+    with tempfile.TemporaryDirectory(prefix='ccb-support-bundle-') as tmpdir:
         stage_root = Path(tmpdir) / bundle_id
         stage_root.mkdir(parents=True, exist_ok=True)
         _write_generated_payloads(

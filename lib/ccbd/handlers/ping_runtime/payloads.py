@@ -75,7 +75,7 @@ def build_ccbd_payload(
         'generation': inspection.generation,
         'socket_path': socket_path,
         'control_plane_endpoint': control_plane_endpoint,
-        'tmux_socket_path': str(paths.ccbd_tmux_socket_placement.effective_path),
+        'tmux_socket_path': paths.ccbd_tmux_socket_placement.effective_path.as_posix(),
         **(paths.runtime_state_payload() if hasattr(paths, 'runtime_state_payload') else {}),
         **socket_placement_payload(paths.ccbd_socket_placement),
         **socket_placement_payload(paths.ccbd_tmux_socket_placement, prefix='tmux'),

@@ -8,7 +8,10 @@ import tarfile
 from cli.context import CliContextBuilder
 from cli.models import ParsedDoctorCommand
 import cli.services.diagnostics_runtime.bundle as bundle_runtime
+import cli.services.diagnostics_runtime.staging as staging_runtime
 from cli.services.diagnostics import export_diagnostic_bundle
+from cli.services.diagnostics_runtime.sources import archive_path_for_source
+from cli.services.diagnostics_runtime.staging import stage_file
 from project.ids import compute_project_id
 
 
@@ -22,6 +25,64 @@ def _read_tar_json(bundle_path: Path, member_name: str) -> dict:
 def _archive_members(bundle_path: Path) -> list[str]:
     with tarfile.open(bundle_path, 'r:gz') as archive:
         return archive.getnames()
+
+
+def test_diagnostic_external_windows_drive_archive_path_stays_relative(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-bundle-external-short'
+    (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
+    (project_root / '.ccb' / 'ccb.config').write_text('demo:codex\n', encoding='utf-8')
+    context = CliContextBuilder().build(
+        ParsedDoctorCommand(project=None, bundle=True),
+        cwd=project_root,
+        bootstrap_if_missing=False,
+    )
+
+    source = Path('C:/session.jsonl')
+    archive_path = archive_path_for_source(context, source)
+
+    assert archive_path == 'external/session.jsonl'
+    assert not Path(archive_path).is_absolute()
+
+
+def test_diagnostic_stage_file_rejects_archive_path_escape(tmp_path: Path, monkeypatch) -> None:
+    project_root = tmp_path / 'repo-bundle-stage-escape'
+    (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
+    (project_root / '.ccb' / 'ccb.config').write_text('demo:codex\n', encoding='utf-8')
+    context = CliContextBuilder().build(
+        ParsedDoctorCommand(project=None, bundle=True),
+        cwd=project_root,
+        bootstrap_if_missing=False,
+    )
+    source = tmp_path / 'session.jsonl'
+    source.write_text('original\n', encoding='utf-8')
+    monkeypatch.setattr(staging_runtime, 'archive_path_for_source', lambda *_args: 'C:/escaped/session.jsonl')
+
+    entry = stage_file(context, tmp_path / 'stage', category='agent-runtime', source=source)
+
+    assert entry.status == 'error'
+    assert entry.error == 'diagnostic archive path escapes staging root'
+    assert source.read_text(encoding='utf-8') == 'original\n'
+
+
+def test_diagnostic_stage_file_rejects_archive_path_escape_before_missing_source(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project_root = tmp_path / 'repo-bundle-stage-missing-escape'
+    (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
+    (project_root / '.ccb' / 'ccb.config').write_text('demo:codex\n', encoding='utf-8')
+    context = CliContextBuilder().build(
+        ParsedDoctorCommand(project=None, bundle=True),
+        cwd=project_root,
+        bootstrap_if_missing=False,
+    )
+    source = tmp_path / 'missing-session.jsonl'
+    monkeypatch.setattr(staging_runtime, 'archive_path_for_source', lambda *_args: 'C:/escaped/session.jsonl')
+
+    entry = stage_file(context, tmp_path / 'stage', category='agent-runtime', source=source)
+
+    assert entry.status == 'error'
+    assert entry.error == 'diagnostic archive path escapes staging root'
 
 
 def test_export_diagnostic_bundle_collects_reports_and_log_tails(tmp_path: Path) -> None:

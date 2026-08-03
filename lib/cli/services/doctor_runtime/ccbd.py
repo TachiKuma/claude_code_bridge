@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import re
 import shlex
 import tempfile
 
@@ -175,16 +176,21 @@ def _implementation_root_from_cmdline(cmdline: tuple[str, ...]) -> Path | None:
 
 
 def _path_is_temporary(path: Path) -> bool:
-    text = str(path)
+    text = path.as_posix()
     temporary_roots = ('/tmp', '/var/tmp', '/dev/shm', '/private/tmp', _resolved_tempdir())
-    return any(text == root or text.startswith(f'{root}/') for root in temporary_roots)
+    return any(
+        text == root
+        or text.startswith(f'{root}/')
+        or re.match(rf'^[A-Za-z]:{re.escape(root)}(?:/|$)', text)
+        for root in temporary_roots
+    )
 
 
 def _resolved_tempdir() -> str:
     try:
-        return str(Path(tempfile.gettempdir()).expanduser().resolve(strict=False))
+        return Path(tempfile.gettempdir()).expanduser().resolve(strict=False).as_posix()
     except Exception:
-        return str(Path(tempfile.gettempdir()).expanduser())
+        return Path(tempfile.gettempdir()).expanduser().as_posix()
 
 
 def _tmux_start_server_command(socket_path: object) -> str | None:

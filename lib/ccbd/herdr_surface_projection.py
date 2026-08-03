@@ -80,6 +80,20 @@ def build_herdr_runtime_surface_projection(runtime) -> HerdrSurfaceProjection | 
     )
 
 
+def herdr_surface_projection_passes_gate(projection: Mapping[str, object] | None) -> bool:
+    if not isinstance(projection, Mapping) or projection.get("backend_impl") != "herdr":
+        return False
+    return (
+        _optional_text(projection.get("capability_status")) == "supported"
+        and _optional_text(projection.get("support_tier_projection")) == "beta"
+        and _optional_text(projection.get("support_tier_projection_source")) == "backend_capability"
+        and projection.get("beta_gaps") == []
+        and projection.get("blocking_gaps") == []
+        and "degraded_next_action" in projection
+        and projection.get("degraded_next_action") is None
+    )
+
+
 def _has_herdr_backend(evidence: Mapping[str, object] | None) -> bool:
     if evidence is None:
         return False
@@ -239,4 +253,5 @@ __all__ = [
     "SupportTierProjectionSource",
     "build_herdr_runtime_surface_projection",
     "build_herdr_surface_projection",
+    "herdr_surface_projection_passes_gate",
 ]

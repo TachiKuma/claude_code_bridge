@@ -218,8 +218,8 @@ def choose_socket_placement(
 def socket_placement_payload(placement: SocketPlacement, *, prefix: str = '') -> dict[str, Any]:
     field_prefix = f'{prefix}_' if prefix else ''
     return {
-        f'{field_prefix}preferred_socket_path': str(placement.preferred_path),
-        f'{field_prefix}effective_socket_path': str(placement.effective_path),
+        f'{field_prefix}preferred_socket_path': _display_path(placement.preferred_path),
+        f'{field_prefix}effective_socket_path': _display_path(placement.effective_path),
         f'{field_prefix}socket_root_kind': placement.root_kind,
         f'{field_prefix}socket_fallback_reason': placement.fallback_reason,
         f'{field_prefix}socket_filesystem_hint': placement.filesystem_hint,
@@ -228,12 +228,16 @@ def socket_placement_payload(placement: SocketPlacement, *, prefix: str = '') ->
 
 def runtime_state_placement_payload(placement: RuntimeStatePlacement) -> dict[str, Any]:
     return {
-        'project_anchor_path': str(placement.anchor_path),
-        'runtime_state_root': str(placement.effective_path),
+        'project_anchor_path': _display_path(placement.anchor_path),
+        'runtime_state_root': _display_path(placement.effective_path),
         'runtime_root_kind': placement.root_kind,
         'runtime_relocation_reason': placement.relocation_reason,
         'runtime_filesystem_hint': placement.filesystem_hint,
     }
+
+
+def _display_path(path: Path) -> str:
+    return Path(path).as_posix()
 
 
 def runtime_root_marker_path(runtime_state_root: Path) -> Path:
