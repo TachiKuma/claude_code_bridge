@@ -329,14 +329,16 @@ def resolve_tmux_binary(
     candidates: list[str] = []
     seen: set[str] = set()
     for directory in os.get_exec_path(env):
-        candidate = os.path.join(directory, 'tmux')
-        if not os.path.isfile(candidate) or not os.access(candidate, os.X_OK):
-            continue
-        identity = os.path.realpath(candidate)
-        if identity in seen:
-            continue
-        seen.add(identity)
-        candidates.append(candidate)
+        for candidate in _tmux_binary_candidates(directory, env=env):
+            if not os.path.isfile(candidate):
+                continue
+            if os.name != 'nt' and not os.access(candidate, os.X_OK):
+                continue
+            identity = os.path.realpath(candidate)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            candidates.append(candidate)
 
     failures: list[str] = []
     for candidate in candidates:
@@ -366,6 +368,18 @@ def resolve_tmux_binary(
 
     detail = '; '.join(failures) or 'no executable tmux found in PATH'
     raise RuntimeError(f'no compatible tmux client for {session_name}: {detail}')
+
+
+def _tmux_binary_candidates(directory: str, *, env: Mapping[str, str]) -> tuple[str, ...]:
+    base = os.path.join(directory, 'tmux')
+    if os.name != 'nt':
+        return (base,)
+    extensions = [item.strip().lower() for item in str(env.get('PATHEXT') or '').split(os.pathsep) if item.strip()]
+    if not extensions:
+        extensions = ['.exe', '.cmd', '.bat', '.com']
+    candidates = [base]
+    candidates.extend(base + extension for extension in extensions)
+    return tuple(dict.fromkeys(candidates))
 
 
 def _with_compatible_tmux(target):

@@ -10,6 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import ipaddress
 import json
 import mimetypes
+import os
 from pathlib import Path
 from queue import Empty, Full, Queue
 import re
@@ -23,8 +24,10 @@ import time
 from typing import Callable, Mapping
 from uuid import uuid4
 from urllib.parse import parse_qs, unquote, urlparse
+from urllib.request import url2pathname
 
 from ccbd.api_models import DeliveryScope, MessageEnvelope
+from ccbd.herdr_surface_projection import herdr_surface_projection_passes_gate
 from ccbd.socket_client import CcbdClientError
 from provider_pane_status.control_messages import (
     clean_provider_local_control_message,
@@ -445,6 +448,24 @@ class _TerminalBlockedError(MobileGatewayError):
         self.terminal_blocked = payload
 
 
+def _default_terminal_session_factory(target: TerminalAttachTarget):
+    if target.backend_impl == 'herdr':
+        raise _TerminalBlockedError(_herdr_terminal_target_blocked_payload('herdr-terminal-adapter-unavailable'))
+    return create_tmux_terminal_session(target)
+
+
+def _default_terminal_history_factory(target: TerminalHistoryTarget) -> dict[str, object]:
+    if target.backend_impl == 'herdr':
+        raise _TerminalBlockedError(_herdr_terminal_target_blocked_payload('herdr-terminal-adapter-unavailable'))
+    return create_tmux_terminal_history(target)
+
+
+def _default_terminal_message_sender(target: PaneMessageTarget, text: str) -> dict[str, object]:
+    if target.backend_impl == 'herdr':
+        raise _TerminalBlockedError(_herdr_terminal_target_blocked_payload('herdr-terminal-adapter-unavailable'))
+    return send_tmux_pane_message(target, text)
+
+
 class MobileGatewayService:
     def __init__(
         self,
@@ -484,9 +505,9 @@ class MobileGatewayService:
         self._background_executor = background_executor
         self._owns_background_executor = False
         self._closed = False
-        self._terminal_session_factory = terminal_session_factory or create_tmux_terminal_session
-        self._terminal_history_factory = terminal_history_factory or create_tmux_terminal_history
-        self._terminal_message_sender = terminal_message_sender or send_tmux_pane_message
+        self._terminal_session_factory = terminal_session_factory or _default_terminal_session_factory
+        self._terminal_history_factory = terminal_history_factory or _default_terminal_history_factory
+        self._terminal_message_sender = terminal_message_sender or _default_terminal_message_sender
         self._agent_activity_probe = (
             agent_activity_probe or probe_mobile_agent_activity
         )
@@ -621,7 +642,7 @@ class MobileGatewayService:
             item = {
                 'id': project.project_id,
                 'display_name': project.public_display_name,
-                'root': str(project.project_root),
+                'root': project.project_root.as_posix(),
                 'health': str(ccbd.get('health') or 'unknown'),
                 'mount_state': str(ccbd.get('mount_state') or ''),
                 'health_freshness': str(ccbd.get('health_freshness') or 'unknown'),
@@ -904,6 +925,13 @@ class MobileGatewayService:
         )
         try:
             history = dict(self._terminal_history_factory(target) or {})
+        except _TerminalBlockedError as exc:
+            return {
+                'schema_version': _SCHEMA_VERSION,
+                'status': 'blocked',
+                'project_id': project.project_id,
+                'terminal_blocked': exc.terminal_blocked,
+            }
         except Exception as exc:
             raise MobileGatewayError(_error_text(exc), status_code=503) from exc
         history.setdefault('agent', target.agent)
@@ -1383,6 +1411,14 @@ class MobileGatewayService:
         )
         try:
             self._terminal_message_sender(message_target, submit_body)
+        except _TerminalBlockedError as exc:
+            return {
+                'schema_version': _SCHEMA_VERSION,
+                'status': 'blocked',
+                'project_id': project.project_id,
+                'agent': target['agent'],
+                'terminal_blocked': exc.terminal_blocked,
+            }
         except Exception as exc:
             raise MobileGatewayError(_error_text(exc), status_code=503) from exc
         message_id = idempotency_key
@@ -1537,7 +1573,7 @@ class MobileGatewayService:
         except MobileGatewayError as exc:
             close_reason = _terminal_error_code(exc)
             close_handle = True
-            _safe_send_json(connection, {'type': 'error', 'code': close_reason})
+            _safe_send_json(connection, _terminal_error_frame(exc))
         except WebSocketProtocolError as exc:
             close_reason = 'protocol_error'
             close_handle = True
@@ -2269,11 +2305,7 @@ def build_mobile_gateway_server(listen: ListenAddress, service: MobileGatewaySer
                 try:
                     status, body, headers = service.dispatch_file_download(self.path, self.headers)
                 except MobileGatewayError as exc:
-                    self._send_json(exc.status_code, {
-                        'schema_version': _SCHEMA_VERSION,
-                        'status': 'error',
-                        'error': _error_text(exc),
-                    })
+                    self._send_json(exc.status_code, _mobile_error_payload(exc))
                     return
                 self._send_bytes(status, body, headers)
                 return
@@ -2281,11 +2313,7 @@ def build_mobile_gateway_server(listen: ListenAddress, service: MobileGatewaySer
                 status, payload = service.dispatch_get(self.path, self.headers)
             except MobileGatewayError as exc:
                 status = exc.status_code
-                payload = {
-                    'schema_version': _SCHEMA_VERSION,
-                    'status': 'error',
-                    'error': _error_text(exc),
-                }
+                payload = _mobile_error_payload(exc)
             self._send_json(status, payload)
 
         def do_POST(self) -> None:  # noqa: N802 - stdlib hook
@@ -2300,11 +2328,7 @@ def build_mobile_gateway_server(listen: ListenAddress, service: MobileGatewaySer
                     status, payload = service.dispatch_post(self.path, self._read_json_body(), self.headers)
             except MobileGatewayError as exc:
                 status = exc.status_code
-                payload = {
-                    'schema_version': _SCHEMA_VERSION,
-                    'status': 'error',
-                    'error': _error_text(exc),
-                }
+                payload = _mobile_error_payload(exc)
             except ValueError as exc:
                 status = 400
                 payload = {
@@ -2319,7 +2343,7 @@ def build_mobile_gateway_server(listen: ListenAddress, service: MobileGatewaySer
                 status, payload = service.dispatch_put(self.path, self._read_json_body(), self.headers)
             except MobileGatewayError as exc:
                 status = exc.status_code
-                payload = {'schema_version': _SCHEMA_VERSION, 'status': 'error', 'error': _error_text(exc)}
+                payload = _mobile_error_payload(exc)
             except ValueError as exc:
                 status = 400
                 payload = {'schema_version': _SCHEMA_VERSION, 'status': 'error', 'error': _error_text(exc)}
@@ -2330,7 +2354,7 @@ def build_mobile_gateway_server(listen: ListenAddress, service: MobileGatewaySer
                 status, payload = service.dispatch_delete(self.path, self.headers)
             except MobileGatewayError as exc:
                 status = exc.status_code
-                payload = {'schema_version': _SCHEMA_VERSION, 'status': 'error', 'error': _error_text(exc)}
+                payload = _mobile_error_payload(exc)
             self._send_json(status, payload)
 
         def log_message(self, format: str, *args) -> None:  # noqa: A002 - stdlib signature
@@ -2352,11 +2376,7 @@ def build_mobile_gateway_server(listen: ListenAddress, service: MobileGatewaySer
             try:
                 events = service.notification_events_since(self.path, self.headers)
             except MobileGatewayError as exc:
-                self._send_json(exc.status_code, {
-                    'schema_version': _SCHEMA_VERSION,
-                    'status': 'error',
-                    'error': _error_text(exc),
-                })
+                self._send_json(exc.status_code, _mobile_error_payload(exc))
                 return
             self.send_response(200)
             self.send_header('content-type', 'text/event-stream; charset=utf-8')
@@ -4486,12 +4506,17 @@ def _inject_workspace_artifacts(
         parsed = urlparse(url)
         if url.startswith('#'):
             return match.group(0)
-        if parsed.scheme not in {'', 'file'}:
+        if parsed.scheme not in {'', 'file'} and not (os.name == 'nt' and len(parsed.scheme) == 1):
             return match.group(0)
         if parsed.netloc not in {'', 'localhost'}:
             return match.group(0)
         try:
-            link_path = unquote(parsed.path)
+            if parsed.scheme == 'file':
+                link_path = url2pathname(parsed.path)
+            elif os.name == 'nt' and len(parsed.scheme) == 1:
+                link_path = f'{parsed.scheme}:{unquote(parsed.path)}'
+            else:
+                link_path = unquote(parsed.path)
             if not link_path.strip():
                 return match.group(0)
             target_path = Path(link_path).expanduser()
@@ -5054,6 +5079,14 @@ def _validate_terminal_target(
         herdr_summary = _herdr_terminal_target_summary(view, agent=agent, operation='attach')
         if not socket_path or not session_name:
             if herdr_summary is None:
+                blocked = _terminal_operation_blocked_payload(
+                    view_payload,
+                    agent=agent,
+                    namespace_epoch=namespace_epoch,
+                    operation='attach',
+                )
+                if blocked is not None:
+                    raise _TerminalBlockedError(blocked)
                 raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
         return {
             'target_epoch': actual_epoch,
@@ -5068,15 +5101,41 @@ def _validate_terminal_target(
     if kind == 'window_active_pane':
         if not window:
             raise MobileGatewayError('terminal target window is required', status_code=400)
-        if not any(str(item.get('name') or '') == window for item in windows):
+        matched_window = next((item for item in windows if str(item.get('name') or '') == window), None)
+        if matched_window is None:
             raise MobileGatewayError('unknown terminal target window', status_code=404)
+        herdr_summary = _herdr_terminal_target_summary(view, agent=None, operation='attach')
+        if herdr_summary is not None:
+            herdr_pane_id = _optional_text(herdr_summary.get('pane_id'))
+            active_pane_id = (
+                _optional_text(matched_window.get('active_pane_id'))
+                or (
+                    _optional_text(namespace.get('active_pane_id'))
+                    if _optional_text(namespace.get('active_window')) == window
+                    else None
+                )
+            )
+            if not active_pane_id or active_pane_id != herdr_pane_id:
+                raise _TerminalBlockedError(
+                    _herdr_terminal_target_blocked_payload('window-active-pane-does-not-match-herdr-pane')
+                )
         if not socket_path or not session_name:
-            raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
+            if herdr_summary is None:
+                blocked = _terminal_operation_blocked_payload(
+                    view_payload,
+                    agent=None,
+                    namespace_epoch=namespace_epoch,
+                    operation='attach',
+                )
+                if blocked is not None:
+                    raise _TerminalBlockedError(blocked)
+                raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
         return {
             'target_epoch': actual_epoch,
             'target_summary': {
                 'project_id': project_id,
                 'window': window,
+                **(herdr_summary or {}),
             },
         }
     if kind == 'pane_evidence':
@@ -5086,8 +5145,24 @@ def _validate_terminal_target(
             raise MobileGatewayError('unknown terminal target agent', status_code=404)
         if window and not any(str(item.get('name') or '') == window for item in windows):
             raise MobileGatewayError('unknown terminal target window', status_code=404)
+        herdr_summary = _herdr_terminal_target_summary(view, agent=agent, operation='attach')
+        if herdr_summary is not None:
+            herdr_pane_id = _optional_text(herdr_summary.get('pane_id'))
+            if not pane_id or pane_id != herdr_pane_id:
+                raise _TerminalBlockedError(
+                    _herdr_terminal_target_blocked_payload('pane-evidence-does-not-match-herdr-pane')
+                )
         if not socket_path or not session_name:
-            raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
+            if herdr_summary is None:
+                blocked = _terminal_operation_blocked_payload(
+                    view_payload,
+                    agent=agent,
+                    namespace_epoch=namespace_epoch,
+                    operation='attach',
+                )
+                if blocked is not None:
+                    raise _TerminalBlockedError(blocked)
+                raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
         summary = {'project_id': project_id}
         if agent:
             summary['agent'] = agent
@@ -5095,6 +5170,7 @@ def _validate_terminal_target(
             summary['window'] = window
         if pane_id:
             summary['pane_id'] = pane_id
+        summary.update(herdr_summary or {})
         return {
             'target_epoch': actual_epoch,
             'target_summary': summary,
@@ -5145,6 +5221,18 @@ def _terminal_operation_blocked_payload(
     }
 
 
+def _herdr_terminal_target_blocked_payload(reason: str) -> dict[str, object]:
+    return {
+        'code': 'target_not_attachable',
+        'backend_impl': 'herdr',
+        'capability_status': 'blocked',
+        'degraded_next_action': 'collect-validation-transcript',
+        'message': f'Herdr mobile terminal target is not attachable; reason={reason}',
+        'beta_gaps': [],
+        'blocking_gaps': [reason],
+    }
+
+
 def _herdr_terminal_projection(view: dict[str, object], *, agent: str | None) -> dict[str, object] | None:
     agent_name = _optional_text(agent)
     if agent_name:
@@ -5171,10 +5259,7 @@ def _herdr_terminal_projection(view: dict[str, object], *, agent: str | None) ->
 
 
 def _herdr_terminal_operation_supported(projection: dict[str, object]) -> bool:
-    return (
-        _optional_text(projection.get('capability_status')) == 'supported'
-        and not _text_list(projection.get('blocking_gaps'))
-    )
+    return herdr_surface_projection_passes_gate(projection)
 
 
 def _herdr_terminal_target_summary(
@@ -5373,6 +5458,9 @@ def _ccbd_focus_status(exc: Exception) -> int:
 
 
 def _terminal_error_code(exc: MobileGatewayError) -> str:
+    blocked = _terminal_blocked_payload(exc)
+    if blocked is not None:
+        return _optional_text(blocked.get('code')) or 'terminal_blocked'
     text = _error_text(exc)
     if text.startswith('stale namespace epoch'):
         return 'stale_namespace_epoch'
@@ -5387,6 +5475,39 @@ def _terminal_error_code(exc: MobileGatewayError) -> str:
     if text.startswith('ProjectView tmux evidence is not attachable'):
         return 'target_not_attachable'
     return 'terminal_error'
+
+
+def _mobile_error_payload(exc: MobileGatewayError) -> dict[str, object]:
+    blocked = _terminal_blocked_payload(exc)
+    if blocked is not None:
+        return {
+            'schema_version': _SCHEMA_VERSION,
+            'status': 'blocked',
+            'terminal_blocked': blocked,
+            'error': _error_text(exc),
+        }
+    return {
+        'schema_version': _SCHEMA_VERSION,
+        'status': 'error',
+        'error': _error_text(exc),
+    }
+
+
+def _terminal_error_frame(exc: MobileGatewayError) -> dict[str, object]:
+    blocked = _terminal_blocked_payload(exc)
+    if blocked is not None:
+        return {
+            'type': 'error',
+            'code': _optional_text(blocked.get('code')) or 'terminal_blocked',
+            'terminal_blocked': blocked,
+            'message': _error_text(exc),
+        }
+    return {'type': 'error', 'code': _terminal_error_code(exc)}
+
+
+def _terminal_blocked_payload(exc: MobileGatewayError) -> dict[str, object] | None:
+    payload = getattr(exc, 'terminal_blocked', None)
+    return dict(payload) if isinstance(payload, Mapping) else None
 
 
 def _pump_terminal_output(

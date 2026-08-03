@@ -198,7 +198,9 @@ class _FakeHerdrCcbdClient(_FakeCcbdClient):
             'namespace_ipc_ref': 'herdr://workspace-1',
             'herdr_surface_projection': projection,
             'active_window': 'main',
+            'active_pane_id': 'pane-1',
         }
+        payload['view']['windows'][0]['active_pane_id'] = 'pane-1'
         payload['view']['agents'][0] = {
             'name': 'mobile',
             'provider': 'codex',
@@ -1296,6 +1298,54 @@ def test_terminal_history_returns_herdr_blocked_payload(tmp_path: Path) -> None:
     assert 'herdr://workspace-1' not in json.dumps(payload)
 
 
+def test_terminal_history_blocks_contradictory_herdr_supported_projection(tmp_path: Path) -> None:
+    class _ContradictoryHerdrClient(_FakeHerdrSupportedCcbdClient):
+        def __init__(self, projection_delta: dict[str, object]) -> None:
+            super().__init__()
+            self.projection_delta = projection_delta
+
+        def project_view(self, *, schema_version: int = 1) -> dict[str, object]:
+            payload = super().project_view(schema_version=schema_version)
+            projection = dict(payload['view']['namespace']['herdr_surface_projection'])
+            projection.update({'capability_status': 'supported'})
+            projection.update(self.projection_delta)
+            payload['view']['namespace']['herdr_surface_projection'] = projection
+            payload['view']['agents'][0]['herdr_surface_projection'] = projection
+            return payload
+
+    contradictions = [
+        ({'beta_gaps': ['mobile-terminal-validation-pending']}, 'beta_gaps'),
+        ({'support_tier_projection': 'experimental'}, 'support_tier_projection'),
+        ({'support_tier_projection_source': 'validation_pending'}, 'support_tier_projection_source'),
+    ]
+
+    for delta, case in contradictions:
+        called = False
+
+        def history_factory(_target):
+            nonlocal called
+            called = True
+            return {}
+
+        service = _service(
+            _ContradictoryHerdrClient(delta),
+            mobile_dir=tmp_path / f'mobile-{case}',
+            terminal_history_factory=history_factory,
+        )
+        pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
+        _, claim = service.dispatch_post('/v1/pairing/claim', {'pairing_code': str(pairing['pairing_code'])})
+
+        status, payload = service.dispatch_get(
+            '/v1/projects/proj-demo/terminal-history?agent=mobile&namespace_epoch=4&max_lines=120',
+            {'Authorization': f'Bearer {claim["device_token"]}'},
+        )
+
+        assert status == 409
+        assert payload['status'] == 'blocked'
+        assert payload['terminal_blocked']['backend_impl'] == 'herdr'
+        assert called is False
+
+
 def test_terminal_history_uses_herdr_backend_neutral_target(tmp_path: Path) -> None:
     targets = []
 
@@ -1330,6 +1380,23 @@ def test_terminal_history_uses_herdr_backend_neutral_target(tmp_path: Path) -> N
     assert targets[0].namespace_ref['namespace_id'] == 'workspace-1'
     assert targets[0].history_supported is True
     assert 'herdr://workspace-1' not in json.dumps(payload)
+
+
+def test_terminal_history_default_herdr_adapter_missing_returns_blocked(tmp_path: Path) -> None:
+    service = _service(_FakeHerdrSupportedCcbdClient(), mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
+    _, claim = service.dispatch_post('/v1/pairing/claim', {'pairing_code': str(pairing['pairing_code'])})
+
+    status, payload = service.dispatch_get(
+        '/v1/projects/proj-demo/terminal-history?agent=mobile&namespace_epoch=4&max_lines=120',
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+
+    assert status == 409
+    assert payload['status'] == 'blocked'
+    assert payload['terminal_blocked']['code'] == 'target_not_attachable'
+    assert payload['terminal_blocked']['blocking_gaps'] == ['herdr-terminal-adapter-unavailable']
+    assert 'tmux' not in json.dumps(payload)
 
 
 def test_terminal_history_requires_view_auth_and_fresh_epoch(tmp_path: Path) -> None:
@@ -3176,9 +3243,11 @@ def test_non_native_conversation_resolves_project_file_links(tmp_path: Path) -> 
     notes_path = outside_dir / 'release-notes.txt'
     oversized_path = outside_dir / 'oversized.bin'
     hidden_path = project_root / '.ccb' / 'secret.txt'
+    encoded_percent_path = docs_dir / 'a%2Fb.txt'
     report_path.write_text('report body\n', encoding='utf-8')
     release_path.write_bytes(b'release apk body\n')
     notes_path.write_text('release notes\n', encoding='utf-8')
+    encoded_percent_path.write_text('percent path\n', encoding='utf-8')
     with oversized_path.open('wb') as oversized_file:
         oversized_file.truncate(129 * 1024 * 1024)
     hidden_path.write_text('hidden\n', encoding='utf-8')
@@ -3204,6 +3273,7 @@ def test_non_native_conversation_resolves_project_file_links(tmp_path: Path) -> 
                         '- [hidden](.ccb/secret.txt)\n'
                         f'- [outside]({release_path})\n'
                         f'- [file URI]({notes_path.as_uri()})\n'
+                        f'- [encoded percent file URI]({encoded_percent_path.as_uri()})\n'
                         f'- [directory]({outside_dir})\n'
                         f'- [oversized]({oversized_path})\n'
                         '- [remote file URI](file://remote-host/etc/hosts)\n'
@@ -3253,6 +3323,7 @@ def test_non_native_conversation_resolves_project_file_links(tmp_path: Path) -> 
         'report.txt',
         'ccb-mobile-release.apk',
         'release-notes.txt',
+        'a%2Fb.txt',
     ]
 
     release = next(
@@ -3440,6 +3511,35 @@ def test_agent_message_submit_uses_herdr_backend_neutral_target(tmp_path: Path) 
     assert target.namespace_ref['namespace_id'] == 'workspace-1'
     assert target.input_supported is True
     assert 'herdr://workspace-1' not in json.dumps(payload)
+
+
+def test_agent_message_submit_default_herdr_adapter_missing_returns_blocked(tmp_path: Path) -> None:
+    service = _service(_FakeHerdrSupportedCcbdClient(), mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view', 'message_submit'),
+    )
+    _, claim = service.dispatch_post('/v1/pairing/claim', {'pairing_code': str(pairing['pairing_code'])})
+
+    status, payload = service.dispatch_post(
+        '/v1/projects/proj-demo/agents/mobile/messages',
+        {
+            'schema_version': 1,
+            'project_id': 'proj-demo',
+            'agent': 'mobile',
+            'namespace_epoch': 4,
+            'idempotency_key': 'mobile-msg-herdr-adapter-missing',
+            'body': 'continue with the next step',
+            'format': 'markdown',
+        },
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+
+    assert status == 409
+    assert payload['status'] == 'blocked'
+    assert payload['terminal_blocked']['code'] == 'target_not_attachable'
+    assert payload['terminal_blocked']['blocking_gaps'] == ['herdr-terminal-adapter-unavailable']
+    assert 'tmux' not in json.dumps(payload)
 
 
 def test_terminal_attach_target_raises_herdr_attach_blocked_payload(tmp_path: Path) -> None:
@@ -3997,7 +4097,8 @@ def test_reusable_handoff_survives_restart_and_manual_rotation_keeps_old_devices
     )
     assert restarted['pairing_code'] == code
     assert restarted['generation'] == 1
-    assert (mobile_dir / 'pairing-handoff.json').stat().st_mode & 0o777 == 0o600
+    if os.name != 'nt':
+        assert (mobile_dir / 'pairing-handoff.json').stat().st_mode & 0o777 == 0o600
 
     rotated = MobileGatewayPairingStore(mobile_dir).rotate_reusable_pairing_payload(
         project_id='host-demo',
@@ -4345,6 +4446,309 @@ def test_terminal_open_requires_terminal_scope_and_mints_hashed_token(tmp_path: 
     assert str(handle['terminal_token']) not in stored_audit
     assert 'sha256:' in stored_tokens
     assert '"last_input_seq": 0' in stored_tokens
+
+
+@pytest.mark.parametrize(
+    'target',
+    [
+        {'kind': 'agent', 'agent': 'mobile', 'window': 'main'},
+        {'kind': 'window_active_pane', 'window': 'main'},
+        {'kind': 'pane_evidence', 'window': 'main', 'pane_id': 'pane-1'},
+    ],
+)
+def test_terminal_open_herdr_non_agent_target_uses_backend_neutral_attach(
+    tmp_path: Path,
+    target: dict[str, object],
+) -> None:
+    service = _service(_FakeHerdrSupportedCcbdClient(), mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
+    _, claim = service.dispatch_post('/v1/pairing/claim', {'pairing_code': str(pairing['pairing_code'])})
+
+    status, handle = service.dispatch_post(
+        '/v1/projects/proj-demo/terminals',
+        {
+            'project_id': 'proj-demo',
+            'namespace_epoch': 4,
+            'target': target,
+            'geometry': {'columns': 100, 'rows': 30},
+        },
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+    record = service._require_pairing_store().authenticate_terminal_token(
+        terminal_id=str(handle['terminal_id']),
+        terminal_token=str(handle['terminal_token']),
+    )
+    attach_target = service._terminal_attach_target(record, include_history=True)
+
+    assert status == 201
+    assert attach_target.backend_impl == 'herdr'
+    assert attach_target.socket_path == ''
+    assert attach_target.session_name == 'ccb-herdr'
+    assert attach_target.namespace_ref['namespace_id'] == 'workspace-1'
+    assert attach_target.pane_ref == {'backend_impl': 'herdr', 'pane_id': 'pane-1'}
+    assert attach_target.attach_supported is True
+
+
+@pytest.mark.parametrize(
+    'target',
+    [
+        {'kind': 'window_active_pane', 'window': 'main'},
+        {'kind': 'pane_evidence', 'window': 'main', 'pane_id': 'pane-1'},
+    ],
+)
+def test_terminal_open_herdr_non_agent_target_returns_structured_blocked(
+    tmp_path: Path,
+    target: dict[str, object],
+) -> None:
+    service = _service(_FakeHerdrCcbdClient(), mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
+    _, claim = service.dispatch_post('/v1/pairing/claim', {'pairing_code': str(pairing['pairing_code'])})
+
+    with pytest.raises(MobileGatewayError) as exc_info:
+        service.dispatch_post(
+            '/v1/projects/proj-demo/terminals',
+            {
+                'project_id': 'proj-demo',
+                'namespace_epoch': 4,
+                'target': target,
+                'geometry': {'columns': 100, 'rows': 30},
+            },
+            {'Authorization': f'Bearer {claim["device_token"]}'},
+        )
+
+    assert exc_info.value.status_code == 409
+    blocked = getattr(exc_info.value, 'terminal_blocked')
+    assert blocked['code'] == 'attach_unsupported'
+    assert blocked['backend_impl'] == 'herdr'
+    assert blocked['degraded_next_action'] == 'collect-validation-transcript'
+
+
+def test_terminal_open_herdr_agent_target_blocks_contradictory_projection(tmp_path: Path) -> None:
+    class _ContradictoryHerdrClient(_FakeHerdrSupportedCcbdClient):
+        def project_view(self, *, schema_version: int = 1) -> dict[str, object]:
+            payload = super().project_view(schema_version=schema_version)
+            projection = dict(payload['view']['namespace']['herdr_surface_projection'])
+            projection.update({'capability_status': 'supported', 'beta_gaps': ['mobile-terminal-validation-pending']})
+            payload['view']['namespace']['herdr_surface_projection'] = projection
+            payload['view']['agents'][0]['herdr_surface_projection'] = projection
+            return payload
+
+    service = _service(_ContradictoryHerdrClient(), mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
+    _, claim = service.dispatch_post('/v1/pairing/claim', {'pairing_code': str(pairing['pairing_code'])})
+
+    with pytest.raises(MobileGatewayError) as exc_info:
+        service.dispatch_post(
+            '/v1/projects/proj-demo/terminals',
+            {
+                'project_id': 'proj-demo',
+                'namespace_epoch': 4,
+                'target': {'kind': 'agent', 'agent': 'mobile', 'window': 'main'},
+                'geometry': {'columns': 100, 'rows': 30},
+            },
+            {'Authorization': f'Bearer {claim["device_token"]}'},
+        )
+
+    assert exc_info.value.status_code == 409
+    blocked = getattr(exc_info.value, 'terminal_blocked')
+    assert blocked['code'] == 'attach_unsupported'
+    assert blocked['backend_impl'] == 'herdr'
+    assert blocked['beta_gaps'] == ['mobile-terminal-validation-pending']
+
+
+def test_terminal_open_http_returns_herdr_blocked_payload(tmp_path: Path) -> None:
+    service = _service(_FakeHerdrCcbdClient(), mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
+    server = build_mobile_gateway_server(parse_listen_address('127.0.0.1:0'), service)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    try:
+        thread.start()
+        host, port = server.server_address[:2]
+        base = f'http://{host}:{port}'
+        claim_request = Request(
+            f'{base}/v1/pairing/claim',
+            data=json.dumps({'pairing_code': pairing['pairing_code']}).encode('utf-8'),
+            method='POST',
+            headers={'Content-Type': 'application/json'},
+        )
+        with urlopen(claim_request) as response:
+            claim = json.loads(response.read().decode('utf-8'))
+        terminal_request = Request(
+            f'{base}/v1/projects/proj-demo/terminals',
+            data=json.dumps(
+                {
+                    'project_id': 'proj-demo',
+                    'namespace_epoch': 4,
+                    'target': {'kind': 'agent', 'agent': 'mobile', 'window': 'main'},
+                    'geometry': {'columns': 100, 'rows': 30},
+                }
+            ).encode('utf-8'),
+            method='POST',
+            headers={
+                'Authorization': f'Bearer {claim["device_token"]}',
+                'Content-Type': 'application/json',
+            },
+        )
+
+        with pytest.raises(HTTPError) as exc_info:
+            urlopen(terminal_request)
+        payload = json.loads(exc_info.value.read().decode('utf-8'))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert exc_info.value.code == 409
+    assert payload['status'] == 'blocked'
+    assert payload['terminal_blocked']['code'] == 'attach_unsupported'
+    assert payload['terminal_blocked']['backend_impl'] == 'herdr'
+
+
+def test_terminal_websocket_open_returns_herdr_blocked_payload(tmp_path: Path) -> None:
+    class _SwitchingHerdrClient(_FakeHerdrSupportedCcbdClient):
+        blocked = False
+
+        def project_view(self, *, schema_version: int = 1) -> dict[str, object]:
+            if self.blocked:
+                return _FakeHerdrCcbdClient.project_view(self, schema_version=schema_version)
+            return super().project_view(schema_version=schema_version)
+
+    client = _SwitchingHerdrClient()
+    service = _service(client, mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
+    _, claim = service.dispatch_post('/v1/pairing/claim', {'pairing_code': str(pairing['pairing_code'])})
+    _, handle = service.dispatch_post(
+        '/v1/projects/proj-demo/terminals',
+        {
+            'project_id': 'proj-demo',
+            'namespace_epoch': 4,
+            'target': {'kind': 'agent', 'agent': 'mobile', 'window': 'main'},
+            'geometry': {'columns': 100, 'rows': 30},
+        },
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+    client.blocked = True
+    server = build_mobile_gateway_server(parse_listen_address('127.0.0.1:0'), service)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    sock = None
+    try:
+        thread.start()
+        host, port = server.server_address[:2]
+        sock = _websocket_connect(host, port, f'/v1/terminals/{handle["terminal_id"]}')
+        _websocket_send_json(
+            sock,
+            {
+                'type': 'open',
+                'terminal_id': handle['terminal_id'],
+                'token': handle['terminal_token'],
+            },
+        )
+
+        error = _websocket_read_until(sock, 'error')
+    finally:
+        if sock is not None:
+            sock.close()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert error['code'] == 'attach_unsupported'
+    assert error['terminal_blocked']['code'] == 'attach_unsupported'
+    assert error['terminal_blocked']['backend_impl'] == 'herdr'
+
+
+def test_terminal_websocket_default_herdr_adapter_missing_returns_blocked(tmp_path: Path) -> None:
+    service = _service(_FakeHerdrSupportedCcbdClient(), mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
+    _, claim = service.dispatch_post('/v1/pairing/claim', {'pairing_code': str(pairing['pairing_code'])})
+    _, handle = service.dispatch_post(
+        '/v1/projects/proj-demo/terminals',
+        {
+            'project_id': 'proj-demo',
+            'namespace_epoch': 4,
+            'target': {'kind': 'agent', 'agent': 'mobile', 'window': 'main'},
+            'geometry': {'columns': 100, 'rows': 30},
+        },
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+    server = build_mobile_gateway_server(parse_listen_address('127.0.0.1:0'), service)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    sock = None
+    try:
+        thread.start()
+        host, port = server.server_address[:2]
+        sock = _websocket_connect(host, port, f'/v1/terminals/{handle["terminal_id"]}')
+        _websocket_send_json(
+            sock,
+            {
+                'type': 'open',
+                'terminal_id': handle['terminal_id'],
+                'token': handle['terminal_token'],
+            },
+        )
+
+        error = _websocket_read_until(sock, 'error')
+    finally:
+        if sock is not None:
+            sock.close()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert error['code'] == 'target_not_attachable'
+    assert error['terminal_blocked']['code'] == 'target_not_attachable'
+    assert error['terminal_blocked']['blocking_gaps'] == ['herdr-terminal-adapter-unavailable']
+    assert 'tmux' not in error['message']
+
+
+@pytest.mark.parametrize(
+    'target,expected_gap',
+    [
+        ({'kind': 'window_active_pane', 'window': 'logs'}, 'window-active-pane-does-not-match-herdr-pane'),
+        ({'kind': 'pane_evidence', 'window': 'main', 'pane_id': 'pane-2'}, 'pane-evidence-does-not-match-herdr-pane'),
+    ],
+)
+def test_terminal_open_herdr_supported_target_mismatch_fails_closed(
+    tmp_path: Path,
+    target: dict[str, object],
+    expected_gap: str,
+) -> None:
+    class _MismatchedHerdrClient(_FakeHerdrSupportedCcbdClient):
+        def project_view(self, *, schema_version: int = 1) -> dict[str, object]:
+            payload = super().project_view(schema_version=schema_version)
+            payload['view']['windows'].append(
+                {
+                    'name': 'logs',
+                    'label': 'logs',
+                    'kind': 'logs',
+                    'order': 1,
+                    'active': False,
+                    'agents': [],
+                    'active_pane_id': 'pane-2',
+                }
+            )
+            return payload
+
+    service = _service(_MismatchedHerdrClient(), mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(gateway_url='http://127.0.0.1:8787')
+    _, claim = service.dispatch_post('/v1/pairing/claim', {'pairing_code': str(pairing['pairing_code'])})
+
+    with pytest.raises(MobileGatewayError) as exc_info:
+        service.dispatch_post(
+            '/v1/projects/proj-demo/terminals',
+            {
+                'project_id': 'proj-demo',
+                'namespace_epoch': 4,
+                'target': target,
+                'geometry': {'columns': 100, 'rows': 30},
+            },
+            {'Authorization': f'Bearer {claim["device_token"]}'},
+        )
+
+    assert exc_info.value.status_code == 409
+    blocked = getattr(exc_info.value, 'terminal_blocked')
+    assert blocked['code'] == 'target_not_attachable'
+    assert blocked['blocking_gaps'] == [expected_gap]
 
 
 def test_terminal_open_rejects_missing_scope_and_stale_epoch(tmp_path: Path) -> None:
@@ -5121,8 +5525,10 @@ def _write_claude_transcript(
             project_key_for_path,
         )
 
-        session_parent = project_key_for_path(project_root)
+        discovery_work_dir = Path('C:/ccb-mobile-test/repo') if os.name == 'nt' else project_root
+        session_parent = project_key_for_path(discovery_work_dir)
     else:
+        discovery_work_dir = project_root
         session_parent = ''
     projects_root = (
         project_root
@@ -5149,7 +5555,7 @@ def _write_claude_transcript(
     session_file.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         'active': True,
-        'work_dir': str(project_root),
+        'work_dir': str(discovery_work_dir),
         'claude_session_id': session_id,
         'claude_projects_root': str(projects_root),
     }
