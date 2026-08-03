@@ -5,27 +5,27 @@ steps:
   - id: S1
     action: "Admission and projection contract：确认 provider-runtime-on-herdr 与 herdr-bounded-recovery-boundary acceptance ready，并定义 shared Herdr surface projection"
     exit_signal: "两个 upstream roadmap item done、acceptance passed、artifact/evidence refs 存在；projection 字段含 capability_status、support_tier_projection、support_tier_projection_source、beta_gaps、blocking_gaps、degraded_next_action、redacted refs"
-    status: pending
+    status: done
   - id: S2
     action: "ProjectView / ping source of truth：投影 Herdr backend identity、capability、support tier projection、beta gaps、degraded next action 和 redacted refs"
     exit_signal: "ProjectView 与 ping payload 字段一致；backend_impl=herdr、capability_status、support_tier_projection/source、blocking_gaps、degraded_next_action 可断言；raw restore token 不出现"
-    status: pending
+    status: done
   - id: S3
     action: "Foreground attach：Herdr attach supported 时走 backend-neutral attach，unsupported/partial 时 structured blocked"
     exit_signal: "fake Herdr attach 成功路径返回 Herdr summary；unsupported 路径错误含 beta gap/next action；不要求 tmux binary"
-    status: pending
+    status: done
   - id: S4
     action: "Mobile terminal target v2：Mobile history/websocket/message 经 backend-neutral operation adapter，Herdr unsupported 时 structured blocked/degraded"
     exit_signal: "Herdr target 不要求 tmux socket/session/%pane；pass 路径调用 backend primitive；blocked/degraded 路径返回 stable error code、reason 和 next action，且后续 supported 被阻塞"
-    status: pending
+    status: done
   - id: S5
     action: "Doctor / mounted / diagnostics support surfaces：doctor render、mounted state projection、project view、diagnostics bundle 对齐同一 Herdr projection"
     exit_signal: "doctor/ping/ps/layout status/project view/diagnostics bundle 显示一致 capability、support tier projection/source、beta gaps、degraded next action；bundle 来源为 redacted ccbd/generated artifact"
-    status: pending
+    status: done
   - id: S6
     action: "Config UI readonly status：Config UI readonly status/session payload 对齐同一 Herdr projection，不改变编辑 contract"
     exit_signal: "Config UI readonly endpoint 或 /api/session 显示 backend status/capability/beta gaps/support tier projection；Config UI pass 是 supported hard gate；config save/apply/reload tests 不变"
-    status: pending
+    status: done
   - id: S7
     action: "Regression and scope guard：运行 tmux/rmux/Mobile/doctor/config UI regression、Herdr fake surface tests、scope/redaction guard"
     exit_signal: "existing public surface tests 通过；新增 Herdr surface tests 通过；无 provider completion/package/release/update/installer/support final claim/Herdr socket schema-client/raw token 越界"
@@ -38,22 +38,22 @@ steps:
 checks:
   - item: "provider-runtime-on-herdr 与 herdr-bounded-recovery-boundary 不是仅 design-review passed，而是 implementation/acceptance evidence 可验证"
     source: design AC-001 / DOD-IMPL-000 / S1
-    status: pending
+    status: done
   - item: "ProjectView/ping/doctor/mounted/diagnostics/Config UI 使用一致 Herdr surface projection，含 support tier projection/source"
     source: design AC-002 / AC-003 / AC-008 / AC-009 / S2 / S5 / S6
-    status: pending
+    status: done
   - item: "public refs redacted，不泄露 raw restore token、provider secret 或 terminal buffer 全量"
     source: design DOD-IMPL-001 / AC-002 / AC-003 / S2 / S7
     status: pending
   - item: "foreground attach supported/blocked 两条路径均可观察，Herdr 不落 tmux fallback"
     source: design AC-004 / AC-005 / S3
-    status: pending
+    status: done
   - item: "Mobile terminal target v2 经 backend-neutral operation adapter，不要求 tmux socket/session/%pane；非 pass 时 structured blocked 且阻塞 supported"
     source: design AC-006 / AC-007 / S4
-    status: pending
+    status: done
   - item: "Config UI 只增加 readonly status，不改变 config edit/apply/reload contract；非 pass 时阻塞 supported"
     source: design AC-009 / DOD-IMPL-005 / S6
-    status: pending
+    status: done
   - item: "tmux/rmux public surface regression 不退化"
     source: design AC-010 / S7
     status: pending

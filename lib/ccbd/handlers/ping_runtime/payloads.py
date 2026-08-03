@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from agents.models import AgentState
+from ccbd.herdr_surface_projection import (
+    build_herdr_runtime_surface_projection,
+    build_herdr_surface_projection,
+)
 from agents.config_identity import project_config_identity_payload
 from provider_execution.capabilities import execution_restore_capability
 from storage.path_helpers import socket_placement_payload
@@ -11,6 +15,22 @@ def build_agent_payload(*, project_id: str, agent_name: str, registry, inspectio
     runtime = registry.get(agent_name)
     adapter = execution_registry.get(spec.provider) if execution_registry is not None else None
     capability = execution_restore_capability(adapter, provider=spec.provider)
+    diagnostics = {
+        'ccbd_generation': inspection.generation,
+        'last_heartbeat_at': inspection.lease.last_heartbeat_at if inspection.lease else None,
+        'desired_state': _inspection_desired_state(inspection),
+        'reconcile_state': getattr(runtime, 'reconcile_state', None) if runtime is not None else None,
+        'restart_count': getattr(runtime, 'restart_count', 0) if runtime is not None else 0,
+        'recovery_failure_count': (
+            getattr(runtime, 'recovery_failure_count', 0) if runtime is not None else 0
+        ),
+        'last_reconcile_at': getattr(runtime, 'last_reconcile_at', None) if runtime is not None else None,
+        'last_failure_reason': getattr(runtime, 'last_failure_reason', None) if runtime is not None else None,
+        **capability,
+    }
+    herdr_projection = build_herdr_runtime_surface_projection(runtime)
+    if herdr_projection is not None:
+        diagnostics['herdr_surface_projection'] = herdr_projection
     return {
         'project_id': project_id,
         'agent_name': spec.name,
@@ -18,19 +38,7 @@ def build_agent_payload(*, project_id: str, agent_name: str, registry, inspectio
         'mount_state': _agent_mount_state(runtime, inspection=inspection),
         'runtime_state': runtime.state.value if runtime is not None else 'stopped',
         'health': runtime.health if runtime is not None else inspection.health.value,
-        'diagnostics': {
-            'ccbd_generation': inspection.generation,
-            'last_heartbeat_at': inspection.lease.last_heartbeat_at if inspection.lease else None,
-            'desired_state': _inspection_desired_state(inspection),
-            'reconcile_state': getattr(runtime, 'reconcile_state', None) if runtime is not None else None,
-            'restart_count': getattr(runtime, 'restart_count', 0) if runtime is not None else 0,
-            'recovery_failure_count': (
-                getattr(runtime, 'recovery_failure_count', 0) if runtime is not None else 0
-            ),
-            'last_reconcile_at': getattr(runtime, 'last_reconcile_at', None) if runtime is not None else None,
-            'last_failure_reason': getattr(runtime, 'last_failure_reason', None) if runtime is not None else None,
-            **capability,
-        },
+        'diagnostics': diagnostics,
     }
 
 
@@ -59,7 +67,7 @@ def build_ccbd_payload(
     )
     process_metrics = _process_metrics(control_plane_metrics)
     serving = dict(serving_identity or {})
-    return {
+    payload = {
         'project_id': project_id,
         'mount_state': _inspection_phase(inspection),
         'desired_state': _inspection_desired_state(inspection),
@@ -161,6 +169,14 @@ def build_ccbd_payload(
             **restore_summary,
         },
     }
+    herdr_projection = _ccbd_herdr_surface_projection(
+        namespace_summary=namespace_summary,
+        restore_summary=restore_summary,
+        namespace_event_summary=namespace_event_summary,
+    )
+    if herdr_projection is not None:
+        payload['herdr_surface_projection'] = herdr_projection
+    return payload
 
 
 def _process_metrics(control_plane_metrics) -> dict[str, int | None]:
@@ -172,6 +188,37 @@ def _process_metrics(control_plane_metrics) -> dict[str, int | None]:
     except Exception:
         return {}
     return dict(value or {}) if isinstance(value, dict) else {}
+
+
+def _ccbd_herdr_surface_projection(
+    *,
+    namespace_summary: dict,
+    restore_summary: dict,
+    namespace_event_summary: dict,
+) -> dict[str, object] | None:
+    evidence = {
+        'backend_impl': namespace_summary.get('namespace_backend_impl'),
+        'namespace_ref': _namespace_summary_ref(namespace_summary),
+        'recovery_evidence_ledger': (
+            restore_summary.get('recovery_evidence_ledger')
+            or namespace_event_summary.get('recovery_evidence_ledger')
+        ),
+    }
+    return build_herdr_surface_projection(evidence)
+
+
+def _namespace_summary_ref(namespace_summary: dict) -> dict[str, object] | None:
+    backend_impl = str(namespace_summary.get('namespace_backend_impl') or '').strip()
+    if backend_impl != 'herdr':
+        return None
+    return {
+        'backend_family': str(namespace_summary.get('namespace_backend_family') or '').strip() or None,
+        'backend_impl': 'herdr',
+        'namespace_id': str(namespace_summary.get('namespace_id') or '').strip() or None,
+        'session_name': str(namespace_summary.get('namespace_session_name') or '').strip() or None,
+        'ipc_kind': str(namespace_summary.get('namespace_ipc_kind') or '').strip() or None,
+        'ipc_ref': str(namespace_summary.get('namespace_ipc_ref') or '').strip() or None,
+    }
 
 
 def _inspection_phase(inspection) -> str:

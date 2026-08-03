@@ -6,11 +6,21 @@ import shlex
 import tempfile
 
 from terminal_runtime.tmux import tmux_base
+from ..herdr_surface import (
+    herdr_surface_projection_from_namespace_state,
+    herdr_surface_projection_from_remote,
+)
 from .stores import report_summary_fields, safe_report_load
 
 
 def ccbd_summary(*, local, stores: dict[str, object], errors: list[str], remote: dict | None = None) -> dict:
     implementation = _implementation_summary(getattr(local, 'ccbd_pid', None))
+    namespace_state = safe_report_load(stores['namespace_state'].load, errors, label='namespace_state')
+    namespace_event = safe_report_load(stores['namespace_event'].load_latest, errors, label='namespace_event')
+    herdr_projection = (
+        herdr_surface_projection_from_remote(remote)
+        or herdr_surface_projection_from_namespace_state(namespace_state)
+    )
     return {
         'state': local.mount_state,
         'pid': local.ccbd_pid,
@@ -89,8 +99,9 @@ def ccbd_summary(*, local, stores: dict[str, object], errors: list[str], remote:
         **report_summary_fields(safe_report_load(stores['restore_report'].load, errors, label='restore_report')),
         **report_summary_fields(safe_report_load(stores['startup_report'].load, errors, label='startup_report')),
         **report_summary_fields(safe_report_load(stores['shutdown_report'].load, errors, label='shutdown_report')),
-        **report_summary_fields(safe_report_load(stores['namespace_state'].load, errors, label='namespace_state')),
-        **report_summary_fields(safe_report_load(stores['namespace_event'].load_latest, errors, label='namespace_event')),
+        **report_summary_fields(namespace_state),
+        **report_summary_fields(namespace_event),
+        **({'herdr_surface_projection': herdr_projection} if herdr_projection is not None else {}),
         **report_summary_fields(safe_report_load(stores['start_policy'].load, errors, label='start_policy')),
         **report_summary_fields(safe_report_load(stores['tmux_cleanup'].load_latest, errors, label='tmux_cleanup')),
         'diagnostic_errors': errors,

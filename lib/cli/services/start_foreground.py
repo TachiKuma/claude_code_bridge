@@ -185,6 +185,7 @@ def _attach_target_ready(payload: dict[str, object], *, env: dict[str, str]) -> 
 def _attach_herdr_project_namespace(context: CliContext, payload: dict[str, object]) -> ForegroundAttachSummary:
     namespace_ref = _herdr_namespace_ref_from_payload(payload)
     backend_selection = _herdr_backend_selection_from_payload(payload)
+    projection_detail = _herdr_surface_projection_detail(payload)
     backend = _build_herdr_attach_backend(
         namespace_ref=namespace_ref,
         backend_selection=backend_selection,
@@ -194,6 +195,7 @@ def _attach_herdr_project_namespace(context: CliContext, payload: dict[str, obje
         raise ForegroundAttachError(
             'foreground attach failed: Herdr backend does not support attach_namespace '
             f'(backend_impl={backend_selection.get("backend_impl")}, ipc_kind={namespace_ref.get("ipc_kind")})'
+            f'{projection_detail}'
         )
     try:
         attach(namespace_ref, window_name=_clean_optional_payload_text(payload.get('namespace_workspace_window_name')))
@@ -202,17 +204,22 @@ def _attach_herdr_project_namespace(context: CliContext, payload: dict[str, obje
             'foreground attach failed: Herdr attach_namespace failed '
             f'(backend_impl={backend_selection.get("backend_impl")}, ipc_kind={namespace_ref.get("ipc_kind")}, '
             f'ipc_ref_present={bool(namespace_ref.get("ipc_ref"))}, detail={exc})'
+            f'{projection_detail}'
         ) from exc
     return _foreground_attach_summary_from_payload(context, payload)
 
 
 def _herdr_attach_target_ready(payload: dict[str, object]) -> tuple[bool, str]:
+    projection_detail = _herdr_surface_projection_detail(payload)
     if not bool(payload.get('namespace_ui_attachable')):
-        return False, 'Herdr project namespace is not attachable after successful `ccb` start'
+        return False, (
+            'Herdr project namespace is not attachable after successful `ccb` start'
+            f'{projection_detail}'
+        )
     try:
         _herdr_namespace_ref_from_payload(payload)
     except ForegroundAttachError as exc:
-        return False, str(exc)
+        return False, f'{exc}{projection_detail}'
     return True, ''
 
 
@@ -266,6 +273,31 @@ def _foreground_attach_summary_from_payload(context: CliContext, payload: dict[s
 
 def _payload_backend_impl(payload: dict[str, object]) -> str:
     return str(payload.get('namespace_backend_impl') or 'tmux').strip() or 'tmux'
+
+
+def _herdr_surface_projection_detail(payload: dict[str, object]) -> str:
+    projection = payload.get('herdr_surface_projection')
+    if not isinstance(projection, Mapping):
+        return ''
+    parts = []
+    for field, label in (
+        ('capability_status', 'capability_status'),
+        ('support_tier_projection', 'support_tier_projection'),
+        ('support_tier_projection_source', 'support_tier_source'),
+    ):
+        value = _clean_optional_payload_text(projection.get(field))
+        if value:
+            parts.append(f'{label}={value}')
+    beta_gaps = _projection_list_text(projection.get('beta_gaps'))
+    if beta_gaps:
+        parts.append(f'beta_gaps={beta_gaps}')
+    blocking_gaps = _projection_list_text(projection.get('blocking_gaps'))
+    if blocking_gaps:
+        parts.append(f'blocking_gaps={blocking_gaps}')
+    next_action = _clean_optional_payload_text(projection.get('degraded_next_action'))
+    if next_action:
+        parts.append(f'next_action={next_action}')
+    return f' ({", ".join(parts)})' if parts else ''
 
 
 def _build_herdr_attach_backend(*, namespace_ref: dict[str, object], backend_selection: dict[str, object]):
@@ -323,6 +355,17 @@ def _client_for_attach_attempt(client, *, timeout_s: float):
 def _clean_optional_payload_text(value: object) -> str | None:
     text = str(value or '').strip()
     return text or None
+
+
+def _projection_list_text(value: object) -> str | None:
+    if isinstance(value, (str, bytes)):
+        items = [value]
+    elif isinstance(value, (list, tuple, set)):
+        items = list(value)
+    else:
+        items = []
+    texts = [text for item in items if (text := _clean_optional_payload_text(item))]
+    return ','.join(texts) if texts else None
 
 
 def _attach_target_unavailable_error(*, attempts: int, timeout_s: float) -> str:

@@ -238,6 +238,35 @@ def test_start_foreground_herdr_attach_rejects_missing_payload_without_tmux_fall
     assert 'ipc_ref_present=False' in error
 
 
+def test_start_foreground_herdr_attach_blocked_error_includes_projection() -> None:
+    payload = {
+        'namespace_backend_impl': 'herdr',
+        'namespace_id': 'workspace-1',
+        'namespace_session_name': 'ccb-herdr',
+        'namespace_ipc_kind': 'herdr_socket',
+        'namespace_ipc_ref': 'herdr://workspace-1',
+        'namespace_ui_attachable': False,
+        'herdr_surface_projection': {
+            'backend_impl': 'herdr',
+            'capability_status': 'blocked',
+            'support_tier_projection': 'experimental',
+            'support_tier_projection_source': 'validation_pending',
+            'beta_gaps': ['foreground-attach-validation-pending'],
+            'blocking_gaps': ['attach_unsupported'],
+            'degraded_next_action': 'collect-validation-transcript',
+            'evidence_refs': {},
+        },
+    }
+
+    ready, error = start_foreground_service._attach_target_ready(payload, env={})
+
+    assert ready is False
+    assert 'capability_status=blocked' in error
+    assert 'beta_gaps=foreground-attach-validation-pending' in error
+    assert 'blocking_gaps=attach_unsupported' in error
+    assert 'next_action=collect-validation-transcript' in error
+
+
 def test_start_foreground_herdr_attach_builder_rejects_backend_ipc_ref_mismatch(monkeypatch) -> None:
     namespace_ref = {
         'backend_family': 'herdr-native',

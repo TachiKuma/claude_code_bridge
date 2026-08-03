@@ -102,6 +102,54 @@ def test_export_diagnostic_bundle_collects_reports_and_log_tails(tmp_path: Path)
     assert any(entry['archive_path'] == 'project/.ccb/agents/demo/runtime.json' for entry in manifest['entries'])
 
 
+def test_export_diagnostic_bundle_traces_redacted_herdr_projection_source(tmp_path: Path, monkeypatch) -> None:
+    project_root = tmp_path / 'repo-bundle-herdr'
+    (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
+    (project_root / '.ccb' / 'ccb.config').write_text('demo:codex\n', encoding='utf-8')
+    context = CliContextBuilder().build(
+        ParsedDoctorCommand(project=None, bundle=True),
+        cwd=project_root,
+        bootstrap_if_missing=False,
+    )
+    projection = {
+        'backend_impl': 'herdr',
+        'capability_status': 'partial',
+        'support_tier_projection': 'experimental',
+        'support_tier_projection_source': 'validation_pending',
+        'beta_gaps': ['mobile-terminal-validation-pending'],
+        'blocking_gaps': [],
+        'degraded_next_action': 'collect-validation-transcript',
+        'evidence_refs': {
+            'namespace_ref': {
+                'backend_impl': 'herdr',
+                'namespace_id': 'workspace-1',
+                'session_name': 'ccb-herdr',
+                'restore_token_present': True,
+            }
+        },
+    }
+
+    monkeypatch.setattr(
+        bundle_runtime,
+        'doctor_summary',
+        lambda _context: {
+            'project': str(project_root),
+            'project_id': context.project.project_id,
+            'ccbd': {'state': 'mounted', 'herdr_surface_projection': projection},
+            'agents': [],
+        },
+    )
+
+    summary = export_diagnostic_bundle(context, ParsedDoctorCommand(project=None, bundle=True))
+    doctor_payload = _read_tar_json(Path(summary.bundle_path), f'{summary.bundle_id}/generated/doctor.json')
+    manifest = _read_tar_json(Path(summary.bundle_path), f'{summary.bundle_id}/manifest.json')
+
+    assert doctor_payload['ccbd']['herdr_surface_projection'] == projection
+    assert manifest['herdr_surface_projection_sources'] == ['generated/doctor.json:ccbd.herdr_surface_projection']
+    assert 'raw-secret-token' not in str(doctor_payload)
+    assert 'raw-secret-token' not in str(manifest)
+
+
 def test_export_diagnostic_bundle_includes_relocated_runtime_state_files(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-bundle-relocated'
     (project_root / '.ccb').mkdir(parents=True, exist_ok=True)

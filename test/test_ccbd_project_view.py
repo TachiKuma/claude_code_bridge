@@ -377,6 +377,19 @@ def test_project_view_namespace_view_redacts_herdr_restore_token() -> None:
     assert view['namespace_backend_impl'] == 'herdr'
     assert view['namespace_ipc_kind'] == 'herdr_socket'
     assert view['namespace_restore_token_present'] is True
+    assert view['herdr_surface_projection']['backend_impl'] == 'herdr'
+    assert view['herdr_surface_projection']['capability_status'] == 'partial'
+    assert view['herdr_surface_projection']['support_tier_projection'] == 'experimental'
+    assert view['herdr_surface_projection']['support_tier_projection_source'] == 'validation_pending'
+    assert view['herdr_surface_projection']['beta_gaps'] == ['validation_pending']
+    assert view['herdr_surface_projection']['evidence_refs']['namespace_ref'] == {
+        'backend_family': 'herdr-native',
+        'backend_impl': 'herdr',
+        'namespace_id': 'workspace-1',
+        'session_name': 'ccb-herdr',
+        'ipc_kind': 'herdr_socket',
+        'ipc_ref': 'herdr://ccb-herdr',
+    }
     assert 'namespace_restore_token' not in view
     assert 'ccb-herdr::workspace-1' not in str(view)
 
@@ -410,6 +423,62 @@ def test_project_view_herdr_namespace_skips_tmux_project_view_facts() -> None:
     )
 
     assert project_view_service._collect_tmux_project_view_facts(context) == ({}, {})
+
+
+def test_project_view_agent_projects_herdr_runtime_surface(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-herdr-agent-projection'
+    project_root.mkdir()
+    layout = PathLayout(project_root)
+    project_id = compute_project_id(project_root)
+    config = _config()
+    registry = AgentRegistry(layout, config)
+    runtime = _runtime('agent1', project_id=project_id, state=AgentState.DEGRADED, health='process-dead')
+    runtime.runtime_ref = 'herdr:pane-1'
+    runtime.terminal_backend = 'herdr'
+    runtime.provider_runtime_backend_ref = {
+        'backend_impl': 'herdr',
+        'namespace_ref': {
+            'backend_impl': 'herdr',
+            'namespace_id': 'workspace-1',
+            'restore_token': 'raw-token',
+        },
+        'pane_ref': {'backend_impl': 'herdr', 'pane_id': 'pane-1'},
+    }
+    runtime.namespace_ref = {
+        'backend_impl': 'herdr',
+        'namespace_id': 'workspace-1',
+        'restore_token': 'raw-token',
+    }
+    runtime.pane_ref = {'backend_impl': 'herdr', 'pane_id': 'pane-1'}
+    runtime.namespace_restore_token_present = True
+    runtime.herdr_auto_restore_mode = 'observe-only'
+    runtime.reconcile_state = 'blocked'
+    runtime.last_failure_reason = 'Herdr auto restore observe-only blocks CCB-owned recovery'
+    registry.upsert(runtime)
+    for agent_name in ('agent2', 'agent3'):
+        registry.upsert(_runtime(agent_name, project_id=project_id))
+    dispatcher = JobDispatcher(layout, config, registry, clock=lambda: NOW)
+
+    view = _project_view_service(
+        project_root=project_root,
+        project_id=project_id,
+        layout=layout,
+        config=config,
+        registry=registry,
+        dispatcher=dispatcher,
+    ).build_response()['view']
+
+    agent = next(item for item in view['agents'] if item['name'] == 'agent1')
+    projection = agent['herdr_surface_projection']
+    assert projection['backend_impl'] == 'herdr'
+    assert projection['capability_status'] == 'blocked'
+    assert projection['support_tier_projection'] == 'experimental'
+    assert projection['blocking_gaps'] == [
+        'Herdr auto restore observe-only blocks CCB-owned recovery',
+        'herdr_auto_restore_mode:observe-only',
+    ]
+    assert projection['evidence_refs']['pane_ref'] == {'backend_impl': 'herdr', 'pane_id': 'pane-1'}
+    assert 'raw-token' not in str(projection)
 
 
 def _write_active_unload_drain(layout: PathLayout, agent_name: str):

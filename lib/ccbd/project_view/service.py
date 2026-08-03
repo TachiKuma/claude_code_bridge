@@ -12,6 +12,10 @@ import threading
 from agents.config_loader import load_project_config
 from agents.models import AgentState
 from ccbd.api_models import JobStatus, TargetKind
+from ccbd.herdr_surface_projection import (
+    build_herdr_runtime_surface_projection,
+    build_herdr_surface_projection,
+)
 from ccbd.models import MountState
 from ccbd.reload_drain_status import reload_drain_revision, reload_drain_status_payload
 from ccbd.project_focus.tmux import backend_for_namespace, refresh_sidebar_panes
@@ -921,6 +925,9 @@ def _agent_view(
     }
     if provider_runtime is not None:
         record['provider_runtime'] = provider_runtime
+    projection = build_herdr_runtime_surface_projection(runtime)
+    if projection is not None:
+        record['herdr_surface_projection'] = projection
     if provider_runtime_status is not None:
         record['provider_runtime_status'] = provider_runtime_status.to_record()
     return record
@@ -1308,7 +1315,7 @@ def _namespace_view(*, config, sidebar_view_result, namespace, focus: dict[str, 
     if sidebar_view_error is not None:
         sidebar['view_error'] = sidebar_view_error
     namespace_projection = _redacted_namespace_view_projection(namespace)
-    return {
+    record = {
         'epoch': namespace.namespace_epoch if namespace is not None else None,
         'socket_path': namespace.tmux_socket_path if namespace is not None else None,
         'session_name': namespace.tmux_session_name if namespace is not None else None,
@@ -1318,6 +1325,10 @@ def _namespace_view(*, config, sidebar_view_result, namespace, focus: dict[str, 
         'entry_window': config.entry_window,
         'sidebar': sidebar,
     }
+    projection = _namespace_herdr_surface_projection(namespace)
+    if projection is not None:
+        record['herdr_surface_projection'] = projection
+    return record
 
 
 def _redacted_namespace_view_projection(namespace) -> dict[str, object]:
@@ -1337,6 +1348,17 @@ def _redacted_namespace_view_projection(namespace) -> dict[str, object]:
             'namespace_restore_token': getattr(namespace, 'namespace_restore_token', None),
         }
     )
+
+
+def _namespace_herdr_surface_projection(namespace) -> dict[str, object] | None:
+    if namespace is None:
+        return None
+    namespace_ref = getattr(namespace, 'namespace_ref', None)
+    evidence = {
+        'backend_impl': getattr(namespace, 'backend_impl', None),
+        'namespace_ref': namespace_ref() if callable(namespace_ref) else None,
+    }
+    return build_herdr_surface_projection(evidence)
 
 
 def _current_sidebar_view(deps: ProjectViewDependencies):

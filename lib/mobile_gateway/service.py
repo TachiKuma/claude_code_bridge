@@ -439,6 +439,12 @@ class MobileGatewayError(RuntimeError):
         self.status_code = int(status_code)
 
 
+class _TerminalBlockedError(MobileGatewayError):
+    def __init__(self, payload: dict[str, object]) -> None:
+        super().__init__(str(payload.get('message') or 'terminal target is blocked'), status_code=409)
+        self.terminal_blocked = payload
+
+
 class MobileGatewayService:
     def __init__(
         self,
@@ -768,11 +774,12 @@ class MobileGatewayService:
         history_suffix = '/terminal-history'
         if route.startswith(prefix) and route.endswith(history_suffix):
             project_id = unquote(route[len(prefix):-len(history_suffix)].strip('/'))
-            return 200, self.terminal_history_payload(
+            history_payload = self.terminal_history_payload(
                 project_id,
                 query=parse_qs(parsed.query, keep_blank_values=True),
                 headers=headers,
             )
+            return (409 if history_payload.get('status') == 'blocked' else 200), history_payload
         conversation_route = _parse_project_agent_route(route, suffix='conversation')
         if conversation_route is not None:
             project_id, agent = conversation_route
@@ -875,6 +882,19 @@ class MobileGatewayService:
         project = self._require_project(project_id)
         self._authenticate(headers, required_scopes=('view',))
         view_payload = self._request_project_view(project)
+        blocked = _terminal_operation_blocked_payload(
+            view_payload,
+            agent=_query_text(query, 'agent'),
+            namespace_epoch=_query_int(query, 'namespace_epoch'),
+            operation='history',
+        )
+        if blocked is not None:
+            return {
+                'schema_version': _SCHEMA_VERSION,
+                'status': 'blocked',
+                'project_id': project.project_id,
+                'terminal_blocked': blocked,
+            }
         target = _terminal_history_target(
             project_id=project.project_id,
             view_payload=view_payload,
@@ -1220,12 +1240,13 @@ class MobileGatewayService:
         message_route = _parse_project_agent_route(route, suffix='messages')
         if message_route is not None:
             project_id, agent = message_route
-            return 202, self._submit_agent_message(
+            message_payload = self._submit_agent_message(
                 project_id=project_id,
                 agent=agent,
                 payload=payload,
                 headers=headers,
             )
+            return (409 if message_payload.get('status') == 'blocked' else 202), message_payload
         prefix = '/v1/devices/'
         suffix = '/revoke'
         if route.startswith(prefix) and route.endswith(suffix):
@@ -1340,6 +1361,20 @@ class MobileGatewayService:
                         'attachments': attachments,
                     },
                 },
+            }
+        blocked = _terminal_operation_blocked_payload(
+            view_payload,
+            agent=str(target['agent']),
+            namespace_epoch=int(target['namespace_epoch']),
+            operation='input',
+        )
+        if blocked is not None:
+            return {
+                'schema_version': _SCHEMA_VERSION,
+                'status': 'blocked',
+                'project_id': project.project_id,
+                'agent': target['agent'],
+                'terminal_blocked': blocked,
             }
         message_target = _pane_message_target(
             project_id=project.project_id,
@@ -2108,23 +2143,40 @@ class MobileGatewayService:
         target_epoch = _optional_int(record.get('target_epoch'))
         if actual_epoch is None or target_epoch is None or actual_epoch != target_epoch:
             raise MobileGatewayError('stale namespace epoch', status_code=409)
+        blocked = _terminal_operation_blocked_payload(
+            view_payload,
+            agent=_optional_text(_map(record.get('target_summary')).get('agent')),
+            namespace_epoch=target_epoch,
+            operation='attach',
+        )
+        if blocked is not None:
+            raise _TerminalBlockedError(blocked)
+        target_summary = _map(record.get('target_summary'))
+        herdr_summary = _herdr_terminal_target_summary(
+            view,
+            agent=_optional_text(target_summary.get('agent')),
+            operation='attach',
+        )
         socket_path = _optional_text(namespace.get('socket_path'))
         session_name = _optional_text(namespace.get('session_name'))
+        _validate_terminal_summary(record, view, herdr_summary=herdr_summary)
         if not socket_path or not session_name:
-            raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
-        _validate_terminal_summary(record, view)
-        target_summary = _map(record.get('target_summary'))
+            if herdr_summary is None:
+                raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
         pane_id = _terminal_summary_pane_id(target_summary, view)
+        if not pane_id and herdr_summary is not None:
+            pane_id = _optional_text(herdr_summary.get('pane_id'))
         if not pane_id:
             raise MobileGatewayError('terminal target pane evidence is required', status_code=409)
         return TerminalAttachTarget(
             terminal_id=str(record.get('terminal_id') or ''),
-            socket_path=socket_path,
-            session_name=session_name,
+            socket_path=socket_path or '',
+            session_name=session_name or _optional_text(_map(herdr_summary).get('session_name')) or '',
             pane_id=pane_id,
             geometry=TerminalGeometry.from_mapping(record.get('geometry')),
             target_summary=target_summary,
             include_history=include_history,
+            **_terminal_target_kwargs(herdr_summary),
         )
 
     def _handle_terminal_frame(
@@ -4909,7 +4961,12 @@ def _agent_status_summary(agent: dict[str, object]) -> str:
     return f'{state}, {health}, no queued items'
 
 
-def _validate_terminal_summary(record: dict[str, object], view: dict[str, object]) -> None:
+def _validate_terminal_summary(
+    record: dict[str, object],
+    view: dict[str, object],
+    *,
+    herdr_summary: dict[str, object] | None = None,
+) -> None:
     summary = _map(record.get('target_summary'))
     agent = _optional_text(summary.get('agent'))
     window = _optional_text(summary.get('window'))
@@ -4923,6 +4980,9 @@ def _validate_terminal_summary(record: dict[str, object], view: dict[str, object
     if pane_id and agent:
         matched = next((item for item in agents if str(item.get('name') or '') == agent), None)
         if matched is None or _optional_text(matched.get('pane_id')) != pane_id:
+            herdr_pane_id = _optional_text(_map(herdr_summary).get('pane_id'))
+            if herdr_pane_id == pane_id:
+                return
             raise MobileGatewayError('unknown terminal target pane', status_code=404)
 
 
@@ -4971,8 +5031,8 @@ def _validate_terminal_target(
         raise MobileGatewayError('ProjectView namespace epoch is required', status_code=409)
     if namespace_epoch != actual_epoch:
         raise MobileGatewayError('stale namespace epoch', status_code=409)
-    if not _optional_text(namespace.get('socket_path')) or not _optional_text(namespace.get('session_name')):
-        raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
+    socket_path = _optional_text(namespace.get('socket_path'))
+    session_name = _optional_text(namespace.get('session_name'))
 
     kind = str(target.get('kind') or '').strip()
     agent = _optional_text(target.get('agent'))
@@ -4991,6 +5051,10 @@ def _validate_terminal_target(
         if window and matched_window and window != matched_window:
             raise MobileGatewayError('terminal target window does not match agent', status_code=409)
         matched_pane_id = _optional_text(matched.get('pane_id')) or pane_id
+        herdr_summary = _herdr_terminal_target_summary(view, agent=agent, operation='attach')
+        if not socket_path or not session_name:
+            if herdr_summary is None:
+                raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
         return {
             'target_epoch': actual_epoch,
             'target_summary': {
@@ -4998,6 +5062,7 @@ def _validate_terminal_target(
                 'agent': agent,
                 'window': matched_window,
                 **({'pane_id': matched_pane_id} if matched_pane_id else {}),
+                **(herdr_summary or {}),
             },
         }
     if kind == 'window_active_pane':
@@ -5005,6 +5070,8 @@ def _validate_terminal_target(
             raise MobileGatewayError('terminal target window is required', status_code=400)
         if not any(str(item.get('name') or '') == window for item in windows):
             raise MobileGatewayError('unknown terminal target window', status_code=404)
+        if not socket_path or not session_name:
+            raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
         return {
             'target_epoch': actual_epoch,
             'target_summary': {
@@ -5019,6 +5086,8 @@ def _validate_terminal_target(
             raise MobileGatewayError('unknown terminal target agent', status_code=404)
         if window and not any(str(item.get('name') or '') == window for item in windows):
             raise MobileGatewayError('unknown terminal target window', status_code=404)
+        if not socket_path or not session_name:
+            raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
         summary = {'project_id': project_id}
         if agent:
             summary['agent'] = agent
@@ -5031,6 +5100,138 @@ def _validate_terminal_target(
             'target_summary': summary,
         }
     raise MobileGatewayError('unknown terminal target kind', status_code=400)
+
+
+def _terminal_operation_blocked_payload(
+    view_payload: dict[str, object],
+    *,
+    agent: str | None,
+    namespace_epoch: int | None,
+    operation: str,
+) -> dict[str, object] | None:
+    view = _map(view_payload.get('view'))
+    namespace = _map(view.get('namespace'))
+    actual_epoch = _optional_int(namespace.get('epoch'))
+    if actual_epoch is None or namespace_epoch != actual_epoch:
+        return None
+    projection = _herdr_terminal_projection(view, agent=agent)
+    if projection is None:
+        return None
+    if _herdr_terminal_operation_supported(projection):
+        return None
+    code = {
+        'attach': 'attach_unsupported',
+        'history': 'history_unsupported',
+        'input': 'input_unsupported',
+    }.get(operation, 'target_not_attachable')
+    capability_status = _optional_text(projection.get('capability_status')) or 'blocked'
+    if capability_status == 'supported':
+        capability_status = 'blocked'
+    beta_gaps = _text_list(projection.get('beta_gaps'))
+    blocking_gaps = _text_list(projection.get('blocking_gaps')) or [code]
+    next_action = _optional_text(projection.get('degraded_next_action'))
+    message = (
+        f'Herdr mobile terminal {operation} is not available; '
+        f'next_action={next_action or "collect-validation-transcript"}'
+    )
+    return {
+        'code': code,
+        'backend_impl': 'herdr',
+        'capability_status': capability_status,
+        'degraded_next_action': next_action,
+        'message': message,
+        'beta_gaps': beta_gaps,
+        'blocking_gaps': blocking_gaps,
+    }
+
+
+def _herdr_terminal_projection(view: dict[str, object], *, agent: str | None) -> dict[str, object] | None:
+    agent_name = _optional_text(agent)
+    if agent_name:
+        for item in _iterable(view.get('agents')):
+            record = _map(item)
+            if _optional_text(record.get('name')) != agent_name:
+                continue
+            projection = _map(record.get('herdr_surface_projection'))
+            if projection.get('backend_impl') == 'herdr':
+                return projection
+    namespace = _map(view.get('namespace'))
+    projection = _map(namespace.get('herdr_surface_projection'))
+    if projection.get('backend_impl') == 'herdr':
+        return projection
+    if namespace.get('namespace_backend_impl') == 'herdr':
+        return {
+            'backend_impl': 'herdr',
+            'capability_status': 'blocked',
+            'beta_gaps': ['mobile-terminal-validation-pending'],
+            'blocking_gaps': ['mobile-terminal-adapter-unavailable'],
+            'degraded_next_action': 'collect-validation-transcript',
+        }
+    return None
+
+
+def _herdr_terminal_operation_supported(projection: dict[str, object]) -> bool:
+    return (
+        _optional_text(projection.get('capability_status')) == 'supported'
+        and not _text_list(projection.get('blocking_gaps'))
+    )
+
+
+def _herdr_terminal_target_summary(
+    view: dict[str, object],
+    *,
+    agent: str | None,
+    operation: str,
+) -> dict[str, object] | None:
+    projection = _herdr_terminal_projection(view, agent=agent)
+    if projection is None or not _herdr_terminal_operation_supported(projection):
+        return None
+    refs = _map(projection.get('evidence_refs'))
+    namespace_ref = _map(refs.get('namespace_ref'))
+    pane_ref = _map(refs.get('pane_ref'))
+    if not namespace_ref or not pane_ref:
+        return None
+    pane_id = _optional_text(pane_ref.get('pane_id'))
+    return {
+        'backend_impl': 'herdr',
+        'namespace_ref': dict(namespace_ref),
+        'pane_ref': dict(pane_ref),
+        'pane_id': pane_id,
+        'session_name': _optional_text(namespace_ref.get('session_name')),
+        'attach_supported': True,
+        'history_supported': True,
+        'input_supported': True,
+        'blocked_reason': None,
+    }
+
+
+def _terminal_target_kwargs(summary: dict[str, object] | None) -> dict[str, object]:
+    if not summary:
+        return {}
+    return {
+        'backend_impl': _optional_text(summary.get('backend_impl')) or 'tmux',
+        'namespace_ref': _map(summary.get('namespace_ref')) or None,
+        'pane_ref': _map(summary.get('pane_ref')) or None,
+        'attach_supported': bool(summary.get('attach_supported')),
+        'history_supported': bool(summary.get('history_supported')),
+        'input_supported': bool(summary.get('input_supported')),
+        'blocked_reason': _optional_text(summary.get('blocked_reason')),
+    }
+
+
+def _text_list(value: object) -> list[str]:
+    if isinstance(value, (str, bytes)):
+        values = [value]
+    elif isinstance(value, (list, tuple, set)):
+        values = list(value)
+    else:
+        values = []
+    result: list[str] = []
+    for item in values:
+        text = _optional_text(item)
+        if text and text not in result:
+            result.append(text)
+    return result
 
 
 def _terminal_history_target(
@@ -5050,8 +5251,6 @@ def _terminal_history_target(
         raise MobileGatewayError('stale namespace epoch', status_code=409)
     socket_path = _optional_text(namespace.get('socket_path'))
     session_name = _optional_text(namespace.get('session_name'))
-    if not socket_path or not session_name:
-        raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
     agent_name = str(agent or '').strip()
     if not agent_name:
         raise MobileGatewayError('agent is required', status_code=400)
@@ -5060,6 +5259,12 @@ def _terminal_history_target(
     if matched is None:
         raise MobileGatewayError('unknown terminal target agent', status_code=404)
     pane_id = _optional_text(matched.get('pane_id'))
+    herdr_summary = _herdr_terminal_target_summary(view, agent=agent_name, operation='history')
+    if not socket_path or not session_name:
+        if herdr_summary is None:
+            raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
+    if not pane_id and herdr_summary is not None:
+        pane_id = _optional_text(herdr_summary.get('pane_id'))
     if not pane_id:
         raise MobileGatewayError('terminal history target has no pane evidence', status_code=409)
     return TerminalHistoryTarget(
@@ -5068,9 +5273,10 @@ def _terminal_history_target(
         agent=agent_name,
         window=_optional_text(matched.get('window')) or '',
         pane_id=pane_id,
-        socket_path=socket_path,
-        session_name=session_name,
+        socket_path=socket_path or '',
+        session_name=session_name or _optional_text(_map(herdr_summary).get('session_name')) or '',
         max_lines=min(2000, max(20, int(max_lines))),
+        **_terminal_target_kwargs(herdr_summary),
     )
 
 
@@ -5084,10 +5290,14 @@ def _pane_message_target(
     namespace = _map(view.get('namespace'))
     socket_path = _optional_text(namespace.get('socket_path'))
     session_name = _optional_text(namespace.get('session_name'))
-    if not socket_path or not session_name:
-        raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
     agent_record = _map(target.get('agent_record'))
     pane_id = _optional_text(agent_record.get('pane_id'))
+    herdr_summary = _herdr_terminal_target_summary(view, agent=str(target.get('agent') or ''), operation='input')
+    if not socket_path or not session_name:
+        if herdr_summary is None:
+            raise MobileGatewayError('ProjectView tmux evidence is not attachable', status_code=409)
+    if not pane_id and herdr_summary is not None:
+        pane_id = _optional_text(herdr_summary.get('pane_id'))
     if not pane_id:
         raise MobileGatewayError('message target has no pane evidence', status_code=409)
     return PaneMessageTarget(
@@ -5096,8 +5306,9 @@ def _pane_message_target(
         agent=str(target.get('agent') or ''),
         window=_optional_text(agent_record.get('window')) or '',
         pane_id=pane_id,
-        socket_path=socket_path,
-        session_name=session_name,
+        socket_path=socket_path or '',
+        session_name=session_name or _optional_text(_map(herdr_summary).get('session_name')) or '',
+        **_terminal_target_kwargs(herdr_summary),
     )
 
 

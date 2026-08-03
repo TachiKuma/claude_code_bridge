@@ -26,6 +26,7 @@ from cli.services.config_ui import (
 )
 from cli.services.config_ui_settings import resolve_config_ui_settings
 from agents.config_loader import ConfigValidationError
+from ccbd.services.project_namespace_state import ProjectNamespaceState, ProjectNamespaceStateStore
 from storage.paths import PathLayout
 
 
@@ -120,7 +121,7 @@ def test_config_ui_serves_token_guarded_page_and_project_session(tmp_path: Path)
     assert handle.summary['url'].endswith('/')
     assert handle.summary['bind'] == 'loopback'
     time.sleep(0.35)
-    thread = threading.Thread(target=handle.serve_forever)
+    thread = threading.Thread(target=handle.serve_forever, daemon=True)
     thread.start()
 
     try:
@@ -171,6 +172,49 @@ def test_config_ui_serves_token_guarded_page_and_project_session(tmp_path: Path)
         thread.join(timeout=2)
         handle.close()
     assert not thread.is_alive()
+
+
+def test_config_ui_session_projects_herdr_readonly_status(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-herdr'
+    config_path = project_root / '.ccb' / 'ccb.config'
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text('agent1:codex\n', encoding='utf-8')
+    paths = PathLayout(project_root)
+    ProjectNamespaceStateStore(paths).save(
+        ProjectNamespaceState(
+            project_id=paths.project_id,
+            namespace_epoch=4,
+            tmux_socket_path='',
+            tmux_session_name='ccb-herdr',
+            namespace_backend_family='herdr-native',
+            backend_impl='herdr',
+            namespace_id='workspace-1',
+            namespace_session_name='ccb-herdr',
+            namespace_ipc_kind='herdr_socket',
+            namespace_ipc_ref='herdr://workspace-1',
+            namespace_restore_token='raw-secret-token',
+        )
+    )
+    context = SimpleNamespace(project=SimpleNamespace(project_root=project_root), paths=paths)
+    payload = config_ui_module._config_ui_session_payload(
+        context,
+        project_root=project_root.resolve(),
+        config_path=config_path.resolve(),
+    )
+
+    projection = payload['herdr_surface_projection']
+    assert projection['backend_impl'] == 'herdr'
+    assert projection['capability_status'] == 'partial'
+    assert projection['support_tier_projection'] == 'experimental'
+    assert projection['support_tier_projection_source'] == 'validation_pending'
+    assert projection['evidence_refs']['namespace_ref']['namespace_id'] == 'workspace-1'
+    assert payload['config_ui_readonly_status'] == {
+        'status': 'blocked',
+        'backend_impl': 'herdr',
+        'reason': 'capability_status=partial',
+        'degraded_next_action': None,
+    }
+    assert 'raw-secret-token' not in json.dumps(payload)
 
 
 def test_config_ui_reads_and_saves_user_theme_preference(

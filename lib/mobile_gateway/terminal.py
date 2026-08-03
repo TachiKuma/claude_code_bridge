@@ -49,9 +49,18 @@ class TerminalAttachTarget:
     target_summary: dict[str, object]
     tmux_binary: str = 'tmux'
     include_history: bool = True
+    backend_impl: str = 'tmux'
+    namespace_ref: dict[str, object] | None = None
+    pane_ref: dict[str, object] | None = None
+    attach_supported: bool = True
+    history_supported: bool = True
+    input_supported: bool = True
+    blocked_reason: str | None = None
 
     @property
     def command(self) -> list[str]:
+        if self.backend_impl != 'tmux':
+            raise RuntimeError(f'terminal command is not available for {self.backend_impl}')
         return _tmux_capture_command(self, self.geometry)
 
 
@@ -66,9 +75,18 @@ class TerminalHistoryTarget:
     session_name: str
     max_lines: int = 200
     tmux_binary: str = 'tmux'
+    backend_impl: str = 'tmux'
+    namespace_ref: dict[str, object] | None = None
+    pane_ref: dict[str, object] | None = None
+    attach_supported: bool = True
+    history_supported: bool = True
+    input_supported: bool = True
+    blocked_reason: str | None = None
 
     @property
     def command(self) -> list[str]:
+        if self.backend_impl != 'tmux':
+            raise RuntimeError(f'terminal history command is not available for {self.backend_impl}')
         return [
             self.tmux_binary,
             '-S',
@@ -92,6 +110,13 @@ class PaneMessageTarget:
     socket_path: str
     session_name: str
     tmux_binary: str = 'tmux'
+    backend_impl: str = 'tmux'
+    namespace_ref: dict[str, object] | None = None
+    pane_ref: dict[str, object] | None = None
+    attach_supported: bool = True
+    history_supported: bool = True
+    input_supported: bool = True
+    blocked_reason: str | None = None
 
 
 def capture_tmux_pane_text(

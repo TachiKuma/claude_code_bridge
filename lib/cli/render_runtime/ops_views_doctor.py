@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from .ops_views_common import binding_line
+from .ops_views_common import binding_line, herdr_surface_lines
 
 
 def render_doctor(payload: Mapping[str, object]) -> tuple[str, ...]:
@@ -196,6 +196,7 @@ def render_doctor(payload: Mapping[str, object]) -> tuple[str, ...]:
         lines.append(f'runtime_warning: {warning}')
     for error in ccbd.get('diagnostic_errors') or ():
         lines.append(f'ccbd_diagnostic_error: {error}')
+    lines.extend(herdr_surface_lines(ccbd.get('herdr_surface_projection'), prefix='ccbd_herdr'))
     diagnostics = payload.get('active_inbound_diagnostics') or ()
     lines.append(f'active_inbound_diagnostic_count: {len(diagnostics)}')
     for diagnostic in diagnostics:

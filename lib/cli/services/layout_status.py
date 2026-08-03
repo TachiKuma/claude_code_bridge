@@ -18,6 +18,7 @@ from .agent_status_diagnostics import (
     pane_identity_source,
 )
 from .daemon import ping_local_state
+from .herdr_surface import herdr_surface_projection_from_namespace_state
 
 
 def layout_status(context) -> dict[str, object]:
@@ -230,6 +231,9 @@ def _namespace_record(context, local) -> dict[str, object]:
             'ui_attachable': state.ui_attachable,
         }
     )
+    herdr_projection = herdr_surface_projection_from_namespace_state(state)
+    if herdr_projection is not None:
+        payload['herdr_surface_projection'] = herdr_projection
     return payload
 
 

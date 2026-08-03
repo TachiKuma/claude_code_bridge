@@ -36,7 +36,9 @@ from cli.services.config_restart_intent import (
     record_config_restart_intent,
 )
 from cli.services.config_ui_settings import resolve_config_ui_settings
+from cli.services.herdr_surface import herdr_surface_projection_from_namespace_state
 from cli.services.theme import set_theme_preference, theme_preference_payload
+from ccbd.services.project_namespace_state import ProjectNamespaceStateStore
 from provider_core.registry import CORE_PROVIDER_NAMES, OPTIONAL_PROVIDER_NAMES
 from provider_model_shortcuts import supported_provider_model_shortcuts
 from provider_profiles import supported_provider_api_shortcuts, validate_provider_runtime_home_uniqueness
@@ -86,13 +88,11 @@ def prepare_config_ui(
     config_path = project_root / '.ccb' / 'ccb.config'
     settings = resolve_config_ui_settings(project_root=project_root, cli_port=command.port)
     session_payload = json.dumps(
-        {
-            'schema_version': 2,
-            'mode': 'editor',
-            'project_root': str(project_root),
-            'config_path': str(config_path),
-            'config_exists': config_path.is_file(),
-        },
+        _config_ui_session_payload(
+            context,
+            project_root=project_root,
+            config_path=config_path,
+        ),
         ensure_ascii=False,
     ).encode('utf-8')
     capabilities_payload = json.dumps(
@@ -226,6 +226,49 @@ def _is_wsl_environment() -> bool:
         return 'microsoft' in os.uname().release.lower()
     except (AttributeError, OSError):
         return False
+
+
+def _config_ui_session_payload(
+    context: CliContext,
+    *,
+    project_root: Path,
+    config_path: Path,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        'schema_version': 2,
+        'mode': 'editor',
+        'project_root': str(project_root),
+        'config_path': str(config_path),
+        'config_exists': config_path.is_file(),
+    }
+    projection = _config_ui_herdr_surface_projection(context)
+    if projection is not None:
+        payload['herdr_surface_projection'] = projection
+        payload['config_ui_readonly_status'] = _config_ui_readonly_status(projection)
+    return payload
+
+
+def _config_ui_herdr_surface_projection(context: CliContext) -> dict[str, object] | None:
+    paths = getattr(context, 'paths', None)
+    if paths is None:
+        return None
+    try:
+        namespace_state = ProjectNamespaceStateStore(paths).load()
+    except Exception:
+        return None
+    return herdr_surface_projection_from_namespace_state(namespace_state)
+
+
+def _config_ui_readonly_status(projection: dict[str, object]) -> dict[str, object]:
+    capability_status = str(projection.get('capability_status') or '').strip() or 'blocked'
+    status = 'pass' if capability_status == 'supported' else 'blocked'
+    reason = None if status == 'pass' else f'capability_status={capability_status}'
+    return {
+        'status': status,
+        'backend_impl': 'herdr',
+        'reason': reason,
+        'degraded_next_action': projection.get('degraded_next_action'),
+    }
 
 
 def config_ui_asset_path() -> Path:
