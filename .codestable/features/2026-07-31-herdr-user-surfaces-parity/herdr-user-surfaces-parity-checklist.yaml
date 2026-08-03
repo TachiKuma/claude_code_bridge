@@ -29,40 +29,40 @@ steps:
   - id: S7
     action: "Regression and scope guard：运行 tmux/rmux/Mobile/doctor/config UI regression、Herdr fake surface tests、scope/redaction guard"
     exit_signal: "existing public surface tests 通过；新增 Herdr surface tests 通过；无 provider completion/package/release/update/installer/support final claim/Herdr socket schema-client/raw token 越界"
-    status: pending
+    status: done
   - id: S8
     action: "Native Windows surface transcript：收集 foreground attach、Mobile terminal pass/blocked、Config UI pass/blocked、doctor、ping、mounted、project view Herdr evidence"
     exit_signal: "transcript 显示 Herdr backend evidence、capability/support tier projection/beta gaps/degraded next action；Mobile/Config partial/degraded 只能作为 blocked evidence；缺 host/Herdr 时 acceptance blocked"
-    status: pending
+    status: done
 
 checks:
   - item: "provider-runtime-on-herdr 与 herdr-bounded-recovery-boundary 不是仅 design-review passed，而是 implementation/acceptance evidence 可验证"
     source: design AC-001 / DOD-IMPL-000 / S1
-    status: done
+    status: passed
   - item: "ProjectView/ping/doctor/mounted/diagnostics/Config UI 使用一致 Herdr surface projection，含 support tier projection/source"
     source: design AC-002 / AC-003 / AC-008 / AC-009 / S2 / S5 / S6
-    status: done
+    status: passed
   - item: "public refs redacted，不泄露 raw restore token、provider secret 或 terminal buffer 全量"
     source: design DOD-IMPL-001 / AC-002 / AC-003 / S2 / S7
-    status: pending
+    status: passed
   - item: "foreground attach supported/blocked 两条路径均可观察，Herdr 不落 tmux fallback"
     source: design AC-004 / AC-005 / S3
-    status: done
+    status: passed
   - item: "Mobile terminal target v2 经 backend-neutral operation adapter，不要求 tmux socket/session/%pane；非 pass 时 structured blocked 且阻塞 supported"
     source: design AC-006 / AC-007 / S4
-    status: done
+    status: passed
   - item: "Config UI 只增加 readonly status，不改变 config edit/apply/reload contract；非 pass 时阻塞 supported"
     source: design AC-009 / DOD-IMPL-005 / S6
-    status: done
+    status: passed
   - item: "tmux/rmux public surface regression 不退化"
     source: design AC-010 / S7
-    status: pending
+    status: passed
   - item: "不修改 provider completion、package/release/update/installer/support final claim、Herdr socket schema/client owner"
     source: design AC-011 / S7
-    status: pending
+    status: passed
   - item: "Native Windows x64 transcript 覆盖 foreground attach、Mobile terminal、Config UI、doctor、ping、mounted、project view；Mobile/Config 非 pass 必须 blocked evidence"
     source: design AC-012 / S8
-    status: pending
+    status: passed
 
 dod:
   commands:
@@ -80,7 +80,7 @@ dod:
       core: true
       failure_handling: dependency-blocked
     - id: CMD-004
-      command: "python -m pytest -q test/test_ccbd_project_view.py test/test_v2_ccbd_ping_runtime.py test/test_cli_doctor_supervision.py test/test_v2_cli_render.py test/test_v2_diagnostics_bundle.py -k \"herdr or backend or evidence or diagnostics or project_view or ping or doctor or mounted or ps or layout\""
+      command: "python -m pytest -q test/test_ccbd_project_view.py test/test_v2_ccbd_ping_runtime.py test/test_doctor_runtime_identity.py test/test_doctor_active_inbound_diagnostics.py test/test_v2_cli_render.py test/test_v2_diagnostics_bundle.py -k \"herdr or backend or evidence or diagnostics or project_view or ping or doctor or mounted or ps or layout\""
       core: true
       failure_handling: fix-or-block
     - id: CMD-005
@@ -88,7 +88,7 @@ dod:
       core: true
       failure_handling: fix-or-block
     - id: CMD-006
-      command: "python -m pytest -q test/test_terminal_runtime_tmux_attach.py test/test_mobile_gateway_terminal.py test/test_mobile_gateway_service.py test/test_ccbd_project_view.py test/test_cli_doctor_supervision.py"
+      command: "python -m pytest -q test/test_terminal_runtime_tmux_attach.py test/test_mobile_gateway_terminal.py test/test_mobile_gateway_service.py test/test_ccbd_project_view.py test/test_doctor_runtime_identity.py test/test_doctor_active_inbound_diagnostics.py"
       core: true
       failure_handling: fix-or-block
     - id: CMD-007

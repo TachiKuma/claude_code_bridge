@@ -69,10 +69,10 @@ items:
   - slug: herdr-user-surfaces-parity
     description: 将 Herdr backend evidence 投影到 foreground attach、Mobile terminal、Config UI、doctor、ping、mounted 和 project view
     depends_on: [provider-runtime-on-herdr, herdr-bounded-recovery-boundary]
-    status: in-progress
+    status: done
     feature: 2026-07-31-herdr-user-surfaces-parity
     minimal_loop: false
-    notes: "用户可见面必须展示 beta gaps、degraded next action 和 support tier；Mobile terminal 与 Config UI 是 supported hard gate，degraded/partial 不得宣称 supported。"
+    notes: "accepted 2026-08-03：S1-S8、review、QA、acceptance 均通过。Herdr evidence 投影到 ProjectView、ping、foreground attach、Mobile terminal、Config UI、doctor、mounted 和 diagnostics bundle；shared projection 输出 capability/support tier projection/source、beta/blocking gaps、degraded next action 与 redacted refs。Mobile history/message/websocket 支持 backend-neutral Herdr target，blocked/partial 返回 structured terminal_blocked；Config UI readonly status 只有完整 supported projection 才 pass。CMD-008 Native Windows x64 surface transcript 覆盖 foreground、Mobile、Config UI、ping/project view、doctor/mounted；本 child 只证明 surface parity 与 pass/blocked gate，不声明 Windows x64 CCB final supported。"
 
   - slug: windows-x64-release-surface
     description: 补齐 Windows x64 npm/install/update/native helper/managed Python/doctor 的发布面 gate

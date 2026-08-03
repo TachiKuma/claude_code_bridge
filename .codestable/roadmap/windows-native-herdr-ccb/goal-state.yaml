@@ -9,8 +9,8 @@ acceptance_authorization_ref: "approval-report.md#goal-acceptance"
 commit_authorization: approved
 commit_authorization_ref: "approval-report.md#goal-commits"
 handoff_reason: null
-handoff_next: "herdr-bounded-recovery-boundary accepted with blocked Herdr recovery evidence and fail-closed residual risks. Next action is herdr-user-surfaces-parity design/implementation."
-current_feature_index: 8
+handoff_next: "herdr-user-surfaces-parity accepted with review, QA, acceptance, and CMD-008 Native Windows surface transcript. Next action is windows-x64-release-surface."
+current_feature_index: 9
 features:
   - slug: "windows-x64-v852-baseline-gate"
     roadmap_item: "windows-x64-v852-baseline-gate"
@@ -92,7 +92,7 @@ features:
     review: ".codestable/features/2026-07-31-herdr-user-surfaces-parity/herdr-user-surfaces-parity-review.md"
     qa: ".codestable/features/2026-07-31-herdr-user-surfaces-parity/herdr-user-surfaces-parity-qa.md"
     acceptance: ".codestable/features/2026-07-31-herdr-user-surfaces-parity/herdr-user-surfaces-parity-acceptance.md"
-    status: pending
+    status: accepted
   - slug: "windows-x64-release-surface"
     roadmap_item: "windows-x64-release-surface"
     feature_dir: ".codestable/features/2026-07-31-windows-x64-release-surface"

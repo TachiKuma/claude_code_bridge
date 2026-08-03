@@ -1,7 +1,7 @@
 ---
 doc_type: feature-implementation
 feature: 2026-07-31-herdr-user-surfaces-parity
-status: in-progress
+status: implemented
 implemented: 2026-08-03
 ---
 
@@ -153,7 +153,48 @@ implemented: 2026-08-03
   - 未新增调试输出、临时待办标记、注释掉代码。
   - Config UI 未改变 validate/save/render/apply/reload 路由，只改变 `/api/session` 只读 payload。
 
+### S7 Regression and scope guard
+
+- 退出信号：existing public surface tests 通过；新增 Herdr surface tests 通过；无 provider completion/package/release/update/installer/support final claim/Herdr socket schema-client/raw token 越界。
+- 改动：
+  - `lib/storage/path_helpers.py`、`lib/ccbd/handlers/ping_runtime/payloads.py`、`lib/storage_classification/service.py`、`lib/storage_classification/models.py`、`lib/mobile_gateway/service.py`、`lib/cli/services/diagnostics_runtime/sources.py`：统一 public JSON / archive / storage summary 中的路径展示为 POSIX 分隔符，修复 Native Windows 下 payload 与 tar manifest 形状漂移。
+  - `lib/cli/services/doctor_runtime/system.py`、`lib/cli/services/doctor_runtime/ccbd.py`：修复 POSIX-like `/tmp`、`/private/tmp` 路径在 Windows resolve 后的 temporary-root 识别。
+  - `lib/cli/services/diagnostics_runtime/bundle.py`：diagnostics bundle staging 改用系统临时目录，避免在 project `.ccb/ccbd/support` 下递归 stage 自身并触发 Windows 长路径。
+  - `lib/mobile_gateway/terminal.py`、`test/test_mobile_gateway_terminal.py`：`resolve_tmux_binary()` 在 Windows 支持 `PATHEXT` 候选，测试 fake tmux 按平台创建 `.cmd` 或 POSIX shell script。
+  - `lib/mobile_gateway/service.py`、`test/test_mobile_gateway_service.py`：Mobile artifact injection 支持 Windows 裸绝对路径和 `file:///C:/...`；Claude native transcript discovery fixture 使用短 work_dir；POSIX-only handoff mode 断言不在 Windows 执行。
+  - `lib/cli/services/config_ui.py`、`test/test_config_ui.py`：Config UI prepare 不阻塞外部 provider CLI model probing；server close 唤醒 `handle_request()` loop；API config text 输出规范化为 LF；POSIX token-file permission test 在 Windows skip。
+  - `herdr-user-surfaces-parity-checklist.yaml`、`herdr-user-surfaces-parity-design.md`：CMD-004/CMD-006 中过期的 `test/test_cli_doctor_supervision.py` 替换为当前 `test_doctor_runtime_identity.py` 与 `test_doctor_active_inbound_diagnostics.py`。
+- 验证：
+  - `python -m pytest -q test/test_ccbd_project_view.py test/test_v2_ccbd_ping_runtime.py test/test_doctor_runtime_identity.py test/test_doctor_active_inbound_diagnostics.py test/test_v2_cli_render.py test/test_v2_diagnostics_bundle.py -k "herdr or backend or evidence or diagnostics or project_view or ping or doctor or mounted or ps or layout"`：127 passed, 29 deselected。
+  - `python -m pytest -q test/test_v2_start_foreground.py test/test_mobile_gateway_terminal.py test/test_mobile_gateway_service.py test/test_config_ui.py -k "herdr or backend or terminal or attach or blocked or config or readonly"`：88 passed, 1 skipped, 74 deselected。
+  - `python -m pytest -q test/test_terminal_runtime_tmux_attach.py test/test_mobile_gateway_terminal.py test/test_mobile_gateway_service.py test/test_ccbd_project_view.py test/test_doctor_runtime_identity.py test/test_doctor_active_inbound_diagnostics.py`：217 passed。
+  - checklist CMD-007 scope/redaction guard：passed。
+  - `git diff --check`：passed。
+  - `python -m py_compile lib/storage/path_helpers.py lib/ccbd/handlers/ping_runtime/payloads.py lib/cli/services/doctor_runtime/system.py lib/cli/services/doctor_runtime/ccbd.py lib/cli/services/diagnostics_runtime/bundle.py lib/cli/services/diagnostics_runtime/sources.py lib/storage_classification/models.py lib/storage_classification/service.py lib/mobile_gateway/terminal.py lib/mobile_gateway/service.py lib/cli/services/config_ui.py`：passed。
+- 清洁度：
+  - 未修改 provider completion、package/release/update/installer/support final claim 或 Herdr socket/schema/client owner。
+  - scope guard 覆盖 staged/unstaged/untracked `lib/`、`test/`、`bin/`、`scripts/`、`docs/`、顶层 package/install/README forbidden paths。
+  - diagnostics manifest 与 public payload 保持 redacted source，未新增 raw restore token/provider secret/terminal buffer 全量归档。
+
 ## 当前边界
 
-- S6 Config UI readonly status 已完成，下一步进入 S7 Regression and scope guard。
-- redaction/scope guard、tmux/rmux public surface regression 和 Native Windows transcript 仍保持 pending。
+- S7 Regression and scope guard 已完成；S8 Native Windows surface transcript 已在下节记录。
+
+### S8 Native Windows surface transcript
+
+- 退出信号：transcript 显示 Herdr backend evidence、capability/support tier projection/beta gaps/degraded next action；Mobile/Config partial/degraded 只能作为 blocked evidence；缺 host/Herdr 时 acceptance blocked。
+- 证据：
+  - 新增 `.codestable/features/2026-07-31-herdr-user-surfaces-parity/evidence/cmd-008-native-windows-surface-transcript.md`。
+  - Host fresh preflight：Windows native x64 / AMD64 / Python 64bit；`C:\Users\Administrator\AppData\Local\Programs\Herdr\herdr.exe --version` 输出 `herdr 0.7.5-preview.2026-07-29-44b3adb12552`。
+  - 同 roadmap true-host Herdr namespace 证据复用：`.codestable/features/2026-07-31-ccbd-herdr-namespace-lifecycle/evidence/cmd-013-native-windows-herdr-transcript.md` verdict `passed`，覆盖 Herdr namespace create、ccbd ping、foreground attach、reload、restart deferred、kill/post-kill。
+  - Surface harness fresh transcript 覆盖 foreground attach pass/blocked、Mobile history/message/attach pass/blocked、Config UI blocked/pass gate、ping、project view、doctor、mounted Herdr projection。
+- 验证：
+  - `python -m pytest -q "test/test_v2_start_foreground.py::test_start_foreground_herdr_attach_uses_builder_without_tmux_binary" "test/test_v2_start_foreground.py::test_start_foreground_herdr_attach_blocked_error_includes_projection" "test/test_mobile_gateway_service.py::test_terminal_history_returns_herdr_blocked_payload" "test/test_mobile_gateway_service.py::test_terminal_history_uses_herdr_backend_neutral_target" "test/test_mobile_gateway_service.py::test_agent_message_submit_returns_herdr_input_blocked_payload" "test/test_mobile_gateway_service.py::test_agent_message_submit_uses_herdr_backend_neutral_target" "test/test_mobile_gateway_service.py::test_terminal_attach_target_raises_herdr_attach_blocked_payload" "test/test_mobile_gateway_service.py::test_terminal_websocket_uses_herdr_backend_neutral_target" "test/test_config_ui.py::test_config_ui_session_projects_herdr_readonly_status" "test/test_v2_cli_render.py::test_render_ps_and_layout_include_herdr_surface_projection"`：10 passed。
+- 清洁度：
+  - transcript 不包含 raw restore token sentinel、provider secret 或 terminal buffer 全量。
+  - Mobile blocked 样例保持 `status=blocked`；Config UI partial 样例保持 `config_ui_readonly_status.status=blocked`；未输出最终 supported claim。
+
+## 当前边界
+
+- S1-S8 implementation checklist 全部完成。
+- 下一步进入 feature review / QA / acceptance；feature 仍未 acceptance passed，roadmap goal 不标 complete。

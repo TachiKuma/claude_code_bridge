@@ -503,9 +503,9 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
 9. **herdr-user-surfaces-parity** — 将 Herdr evidence 投影到 foreground attach、Mobile terminal、Config UI、doctor、ping、mounted、project view。
    - 所属模块：User Surfaces
    - 依赖：`provider-runtime-on-herdr`, `herdr-bounded-recovery-boundary`
-   - 状态：in-progress
+   - 状态：accepted
    - 对应 feature：`2026-07-31-herdr-user-surfaces-parity`
-   - 备注：用户可见面必须展示 beta gaps 和 actionable diagnostics；Mobile terminal 与 Config UI degraded/partial 时不得进入 supported。
+   - 备注：accepted 2026-08-03；S1-S8、review、QA、acceptance 均通过。Herdr evidence 已投影到 ProjectView、ping、foreground attach、Mobile terminal、Config UI、doctor、mounted 和 diagnostics bundle；Mobile/Config partial 或 degraded 只输出 blocked evidence，不能进入 supported。CMD-008 Native Windows x64 transcript 覆盖 public surface pass/blocked gate；本 child 不声明 Windows x64 CCB final supported，后续 release surface、validation matrix 和 supportability projection 仍需继续 fail closed。
 
 10. **windows-x64-release-surface** — 补齐 npm `os=win32,cpu=x64`、managed Python、native helper、install/update/doctor gate。
    - 所属模块：Validation & Support
