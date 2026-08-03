@@ -22,6 +22,8 @@ from ccbd.control_plane_transport.endpoint_store import (
 from ccbd.control_plane_transport.factory import connect_endpoint, transport_for_legacy_socket_path
 from ccbd.control_plane_transport.token_auth import RpcTransportAuthError, create_token_file, load_token_file, _current_windows_user
 from ccbd.control_plane_transport.windows_tcp import WindowsTcpControlPlaneTransport
+from ccbd.services.lifecycle import build_lifecycle
+from ccbd.services.project_inspection import ProjectDaemonInspection
 from ccbd.socket_client import CcbdClient, CcbdClientError
 from ccbd.socket_client_runtime import decode_response, recv_response_line, send_request
 from ccbd.socket_server import CcbdSocketServer
@@ -143,6 +145,40 @@ def test_socket_server_prefers_windows_tcp_without_endpoint_descriptor(monkeypat
 
     assert isinstance(server._control_plane_transport, WindowsTcpControlPlaneTransport)
     assert server._control_plane_transport.endpoint is None
+
+
+def test_windows_lifecycle_does_not_synthesize_legacy_endpoint_from_socket_path(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr('ccbd.services.lifecycle.os.name', 'nt')
+
+    lifecycle = build_lifecycle(
+        project_id='proj-1',
+        occurred_at='2026-08-04T00:00:00Z',
+        desired_state='running',
+        phase='starting',
+        generation=1,
+        socket_path=tmp_path / 'ccbd.sock',
+    )
+
+    assert lifecycle.control_plane_endpoint is None
+
+
+def test_windows_project_inspection_does_not_fall_back_to_legacy_endpoint(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr('ccbd.services.project_inspection.os.name', 'nt')
+
+    inspection = ProjectDaemonInspection(
+        lease=None,
+        health=None,
+        pid_alive=False,
+        socket_connectable=False,
+        heartbeat_fresh=False,
+        takeover_allowed=True,
+        reason='missing',
+        phase='unmounted',
+        desired_state='stopped',
+        lifecycle=SimpleNamespace(socket_path=str(tmp_path / 'ccbd.sock'), control_plane_endpoint=None),
+    )
+
+    assert inspection.control_plane_endpoint is None
 
 
 def test_tcp_endpoint_record_roundtrips_without_legacy_socket_path() -> None:

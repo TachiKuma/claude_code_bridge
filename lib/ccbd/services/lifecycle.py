@@ -188,14 +188,9 @@ def build_lifecycle(
         config_signature=_clean_text(config_signature),
         socket_path=str(Path(socket_path)) if socket_path else None,
         socket_inode=_clean_positive_int(socket_inode),
-        control_plane_endpoint=(
-            endpoint_to_record(endpoint_from_record(control_plane_endpoint))
-            if control_plane_endpoint
-            else (
-                endpoint_to_record(endpoint_from_legacy_socket_path(socket_path))
-                if socket_path
-                else None
-            )
+        control_plane_endpoint=_control_plane_endpoint_or_legacy(
+            control_plane_endpoint,
+            socket_path=socket_path,
         ),
         namespace_epoch=int(namespace_epoch) if namespace_epoch is not None else None,
         last_failure_reason=_clean_text(last_failure_reason),
@@ -208,7 +203,17 @@ def _control_plane_endpoint_from_record(payload: dict[str, Any]) -> dict[str, An
     if isinstance(value, dict):
         return endpoint_to_record(endpoint_from_record(value))
     socket_path = _clean_text(payload.get('socket_path'))
-    if not socket_path:
+    return _control_plane_endpoint_or_legacy(None, socket_path=socket_path)
+
+
+def _control_plane_endpoint_or_legacy(
+    control_plane_endpoint: dict[str, Any] | None,
+    *,
+    socket_path: str | Path | None,
+) -> dict[str, Any] | None:
+    if control_plane_endpoint:
+        return endpoint_to_record(endpoint_from_record(control_plane_endpoint))
+    if not socket_path or os.name == 'nt':
         return None
     return endpoint_to_record(endpoint_from_legacy_socket_path(socket_path))
 

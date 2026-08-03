@@ -781,6 +781,7 @@ def _save_starting_owner_claim(app, lifecycle, *, generation: int) -> None:
             or lifecycle.config_signature,
             socket_path=str(app.paths.ccbd_socket_path),
             socket_inode=current_socket_inode(app.paths.ccbd_socket_path),
+            control_plane_endpoint=_current_control_plane_endpoint(app),
             startup_id=(expected_fence.startup_id if expected_fence is not None else None),
             startup_stage='socket_listening',
             last_progress_at=app.clock(),
