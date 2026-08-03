@@ -23,10 +23,17 @@ from ..project_namespace_pane import snapshot_project_namespace_panes
 def default_project_namespace_backend(*, socket_path: str | None = None, namespace_state=None):
     backend_impl = str(getattr(namespace_state, 'backend_impl', '') or '').strip()
     backend_family = str(getattr(namespace_state, 'namespace_backend_family', '') or '').strip()
-    if namespace_state is not None and backend_family != 'herdr-native' and backend_impl != 'herdr':
+    if (
+        namespace_state is not None
+        and backend_family != 'herdr-native'
+        and backend_impl != 'herdr'
+        and not _herdr_runtime_configured()
+    ):
         return TmuxBackend(socket_path=socket_path)
     requested_backend = backend_impl if backend_impl in {'tmux', 'herdr'} else None
     if namespace_state is not None and backend_family == 'herdr-native':
+        requested_backend = 'herdr'
+    if _herdr_runtime_configured():
         requested_backend = 'herdr'
     if requested_backend == 'herdr':
         return _select_herdr_backend()

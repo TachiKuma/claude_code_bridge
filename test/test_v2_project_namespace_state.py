@@ -569,6 +569,47 @@ def test_project_namespace_default_backend_factory_keeps_persisted_tmux_state_on
     assert calls == []
 
 
+def test_project_namespace_default_backend_factory_rejects_persisted_tmux_state_when_herdr_configured(
+    monkeypatch,
+) -> None:
+    from ccbd.services.project_namespace_runtime.controller import default_project_namespace_backend
+    from terminal_runtime.mux_backend_contract import MuxCommandErrorV2
+
+    calls: list[object] = []
+
+    def resolve(backend_name=None):
+        calls.append(backend_name)
+        raise MuxCommandErrorV2(
+            category='schema-mismatch',
+            backend_impl='herdr',
+            operation='capability_probe',
+            detail='partial herdr capability evidence',
+        )
+
+    monkeypatch.setattr(
+        'ccbd.services.project_namespace_runtime.controller.resolve_terminal_backend',
+        resolve,
+    )
+    monkeypatch.setenv('CCB_HERDR_CAPABILITY_REPORT', 'evidence/herdr-partial.json')
+    state = ProjectNamespaceState(
+        project_id='proj-tmux',
+        namespace_epoch=3,
+        tmux_socket_path='tmux.sock',
+        tmux_session_name='ccb-tmux',
+        namespace_backend_family='tmux-family',
+        backend_impl='tmux',
+    )
+
+    with pytest.raises(MuxCommandErrorV2) as exc_info:
+        default_project_namespace_backend(socket_path='tmux.sock', namespace_state=state)
+
+    assert calls == ['herdr']
+    assert exc_info.value.backend_impl == 'herdr'
+    assert exc_info.value.operation == 'select_backend'
+    assert exc_info.value.evidence['cause_operation'] == 'capability_probe'
+    assert exc_info.value.evidence['cause_detail'] == 'partial herdr capability evidence'
+
+
 def test_project_namespace_rebuild_backend_keeps_persisted_tmux_state_on_recreate(
     tmp_path: Path,
     monkeypatch,
