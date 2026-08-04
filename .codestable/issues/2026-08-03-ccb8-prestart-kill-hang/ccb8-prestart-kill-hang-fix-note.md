@@ -418,3 +418,22 @@ tags: [windows, ccb8, kill, startup]
 
 - 当前外部 daemon 仍运行修复前代码，并且可能继续 `pane_recovery:cmd` 循环；需要用户在外部项目重新执行 `.\\ccb8.cmd`，让 wrapper 先停止旧 source-dev PID 并用新代码启动。
 - 若下次已越过 `authoritative topology cmd pane is missing`，下一层失败预计会进入 Herdr provider runtime deferred/agent pane 启动路径，应依据新的 `startup-report.json` 继续定位。
+
+## 2026-08-04 源根回退防护追加修复
+
+### 新增根因
+
+用户外部日志里的 traceback 指向了 `E:\GitHub开源项目\TachiKuma\claude_code_bridgebak`，说明启动时的源码根仍可能被旧的进程环境变量污染，错误地回退到备份仓库。当前 wrapper 虽然能解析出正确的源码树，但 `CCB_SOURCE_ROOT` 仍被放在候选首位时，会把这种旧值当成优先来源。
+
+### 追加改动
+
+- `ccb8.ps1`
+  - 调整 `Resolve-CcbSourceRoot()` 的候选顺序，改为先使用仓库里已知正确的 `E:\GITHUB~1\TACHIK~1\claude_code_bridge`，再回退到 `CCB_SOURCE_ROOT`，最后才是脚本位置候选。
+  - 外部项目副本同步同样修改，避免旧环境变量把启动链路拉回 `claude_code_bridgebak`。
+
+### 追加验证
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File "D:/C#Project/GitHub/AvaPrintDesigner/ccb8.ps1" --diagnose` -> `source_ccb: E:\GITHUB~1\TACHIK~1\claude_code_bridge\ccb.py`
+- 在临时设置 `CCB_SOURCE_ROOT=E:\GitHub开源项目\TachiKuma\claude_code_bridgebak` 的情况下再次执行外部 `--diagnose`，`source_ccb` 仍解析为当前仓库源码根。
+- `powershell -NoProfile -ExecutionPolicy Bypass -File "./ccb8.ps1" --diagnose` -> 通过，仍解析为当前仓库源码根。
+- `git diff --check` -> 通过，仅保留既有 LF/CRLF 提示。

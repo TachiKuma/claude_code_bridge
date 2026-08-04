@@ -93,7 +93,7 @@ function Resolve-ExistingPath {
 function Resolve-CcbSourceRoot {
     return Resolve-ExistingPath `
         -Description 'CCB source checkout' `
-        -Candidates @($env:CCB_SOURCE_ROOT, $PSScriptRoot, 'E:\GITHUB~1\TACHIK~1\claude_code_bridge') `
+        -Candidates @('E:\GITHUB~1\TACHIK~1\claude_code_bridge', $env:CCB_SOURCE_ROOT, $PSScriptRoot) `
         -Validate { param([string] $Path) Test-Path -LiteralPath (Join-Path $Path 'ccb.py') }
 }
 
