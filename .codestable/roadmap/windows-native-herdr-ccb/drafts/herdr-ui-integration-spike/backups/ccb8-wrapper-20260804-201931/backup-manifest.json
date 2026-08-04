@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-04T12:19:31.2987035Z",
+  "project_root": "D:\\C#Project\\GitHub\\AvaPrintDesigner",
+  "backup_dir": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\backups\\ccb8-wrapper-20260804-201931",
+  "files": [
+    {
+      "source": "D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.cmd",
+      "backed_up_as": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\backups\\ccb8-wrapper-20260804-201931\\ccb8.cmd",
+      "bytes": 252,
+      "last_write": "2026-08-03T22:38:08.4831834+08:00"
+    },
+    {
+      "source": "D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.ps1",
+      "backed_up_as": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\backups\\ccb8-wrapper-20260804-201931\\ccb8.ps1",
+      "bytes": 16915,
+      "last_write": "2026-08-04T00:46:47.6865319+08:00"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+project_id: 575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03
+ccbd_state: failed
+agent: name=agent1 state=stopped provider=codex queue=0
+binding: status=partial runtime=None session=None source=provider-session workspace=D:\C#Project\GitHub\AvaPrintDesigner\.ccb\workspaces\agent1 terminal=None socket=None socket_path=None window=None window_id=None pane=None active_pane=None pane_state=None marker=None
+agent: name=agent2 state=stopped provider=claude queue=0
+binding: status=partial runtime=None session=None source=provider-session workspace=D:\C#Project\GitHub\AvaPrintDesigner\.ccb\workspaces\agent2 terminal=None socket=None socket_path=None window=None window_id=None pane=None active_pane=None pane_state=None marker=None

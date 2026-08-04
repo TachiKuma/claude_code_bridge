@@ -1,0 +1,12 @@
+{
+  "name": "ccb8-start-new-context",
+  "command": [
+    "D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.cmd",
+    "-n"
+  ],
+  "exit_code": 124,
+  "timed_out": true,
+  "elapsed_ms": 130946,
+  "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-192845\\raw-command-refs\\ccb8-start-new-context.stdout.txt",
+  "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-192845\\raw-command-refs\\ccb8-start-new-context.stderr.txt"
+}

@@ -1,0 +1,12 @@
+{
+  "name": "ccb8-wrapper-self-test",
+  "command": [
+    "D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.cmd",
+    "--wrapper-self-test"
+  ],
+  "exit_code": 2,
+  "timed_out": false,
+  "elapsed_ms": 957,
+  "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-190541\\raw-command-refs\\ccb8-wrapper-self-test.stdout.txt",
+  "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-190541\\raw-command-refs\\ccb8-wrapper-self-test.stderr.txt"
+}

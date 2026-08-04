@@ -1,0 +1,11 @@
+{
+  "name": "herdr-pane-list-before",
+  "command": [
+    "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Herdr\\herdr.exe"
+  ],
+  "exit_code": 124,
+  "timed_out": true,
+  "elapsed_ms": 20219,
+  "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-200104\\raw-command-refs\\herdr-pane-list-before.stdout.txt",
+  "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-200104\\raw-command-refs\\herdr-pane-list-before.stderr.txt"
+}

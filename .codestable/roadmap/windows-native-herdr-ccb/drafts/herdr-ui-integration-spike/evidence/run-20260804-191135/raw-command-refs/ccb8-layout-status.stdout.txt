@@ -1,0 +1,15 @@
+layout_status: ok
+action: status
+project_id: 575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03
+pane_count: 2
+window_count: 1
+ccbd_state: unmounted
+windows_explicit: False
+entry_window: main
+dynamic_agent_count: 0
+loop_agent_count: 0
+runtime_agent_count: 0
+namespace: status=unmounted state=ok session=ccb-avaprintdesigner-575a971f workspace=ccb
+layout_window: name=main index=0 panes=2 layout=cmd; agent1:codex, agent2:claude
+layout_agent: window=main agent=agent1 source=configured state=missing lifecycle=configured pane=None
+layout_agent: window=main agent=agent2 source=configured state=missing lifecycle=configured pane=None

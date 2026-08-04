@@ -1,0 +1,2 @@
+command_status: invalid
+error: invalid start command
