@@ -217,6 +217,33 @@ def test_tmux_layout_for_start_uses_namespace_agent_panes_when_provided() -> Non
     assert layout.agent_panes == {'agent1': '%1', 'agent2': '%2', 'agent3': '%3'}
 
 
+def test_tmux_layout_for_start_keeps_herdr_namespace_panes_for_bound_agents() -> None:
+    from ccbd.start_flow_runtime.service_tmux import tmux_layout_for_start
+
+    calls: list[str] = []
+    deps = SimpleNamespace(set_tmux_ui_active_fn=lambda active: calls.append(f'ui:{active}'))
+    prepared_agents = (
+        SimpleNamespace(agent_name='agent1', binding=object()),
+        SimpleNamespace(agent_name='agent2', binding=object()),
+    )
+
+    layout = tmux_layout_for_start(
+        deps,
+        SimpleNamespace(),
+        config=SimpleNamespace(windows_explicit=False),
+        prepared_agents=prepared_agents,
+        interactive_tmux_layout=True,
+        tmux_backend=SimpleNamespace(),
+        root_pane_id='w1:p0',
+        namespace_agent_panes={'agent1': 'w1:p1', 'agent2': 'w1:p2'},
+        actions_taken=[],
+        namespace_backend_impl='herdr',
+    )
+
+    assert calls == ['ui:True']
+    assert layout.agent_panes == {'agent1': 'w1:p1', 'agent2': 'w1:p2'}
+
+
 def test_tmux_layout_for_start_labels_legacy_main_window() -> None:
     from ccbd.start_flow_runtime.service_tmux import tmux_layout_for_start
     from cli.services.tmux_start_layout import TmuxStartLayout
@@ -1045,6 +1072,83 @@ def test_runtime_supervisor_start_passes_visible_layout_signature_to_namespace(t
     assert seen['layout_signature'] == app.runtime_supervisor._config.topology_signature
     assert seen['force_recreate'] is False
     assert seen['recreate_reason'] is None
+
+
+def test_runtime_supervisor_start_uses_namespace_topology_for_herdr_compact_layout(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project_root = tmp_path / 'repo-herdr-compact-topology'
+    (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
+    (project_root / '.ccb' / 'ccb.config').write_text('cmd; agent_2:codex, agent_1:claude\n', encoding='utf-8')
+    bootstrap_project(project_root)
+    app = CcbdApp(project_root)
+    seen: list[dict[str, object]] = []
+    start_calls: list[dict[str, object]] = []
+    monkeypatch.delenv('CCB_HERDR_CAPABILITY_REPORT', raising=False)
+    monkeypatch.delenv('CCB_HERDR_SOCKET_REF', raising=False)
+
+    class FakeProjectNamespace:
+        _last_materialized_agent_panes = {'agent_2': 'w1:p3', 'agent_1': 'w1:p4'}
+        _last_materialized_cmd_pane = 'w1:p2'
+        _last_topology_pane_records = {}
+        _last_topology_active_panes = ('w1:p2', 'w1:p3', 'w1:p4')
+
+        def ensure(self, *, layout_signature=None, topology_plan=None, force_recreate=False, recreate_reason=None):
+            seen.append(
+                {
+                    'layout_signature': layout_signature,
+                    'topology_plan': topology_plan,
+                    'force_recreate': force_recreate,
+                    'recreate_reason': recreate_reason,
+                }
+            )
+            return SimpleNamespace(
+                tmux_socket_path='',
+                tmux_session_name='ccb-herdr-session',
+                namespace_session_name='ccb-herdr-session',
+                namespace_epoch=12,
+                namespace_backend_family='herdr-native',
+                backend_impl='herdr',
+                namespace_id='w1',
+                namespace_ipc_kind='herdr_socket',
+                namespace_ipc_ref='herdr://local',
+                namespace_restore_token='ccb-herdr-session::w1',
+                workspace_window_name='main',
+                workspace_window_id='w1',
+                workspace_epoch=1,
+                created_this_call=False,
+                workspace_recreated_this_call=False,
+            )
+
+    monkeypatch.setattr(app.runtime_supervisor, '_project_namespace', FakeProjectNamespace())
+    monkeypatch.setattr(
+        'ccbd.supervisor.run_start_flow',
+        lambda **kwargs: start_calls.append(dict(kwargs)) or StartFlowSummary(
+            project_root=str(project_root),
+            project_id=app.project_id,
+            started=('agent_2', 'agent_1'),
+            socket_path=str(app.paths.ccbd_socket_path),
+        ),
+    )
+
+    app.runtime_supervisor.start(
+        agent_names=('agent_2', 'agent_1'),
+        restore=True,
+        auto_permission=True,
+        interactive_tmux_layout=True,
+        cleanup_tmux_orphans=False,
+    )
+
+    assert len(seen) == 1
+    assert seen[0]['topology_plan'] is not None
+    assert seen[0]['layout_signature'] == seen[0]['topology_plan'].signature
+    assert seen[0]['force_recreate'] is False
+    assert seen[0]['recreate_reason'] is None
+    assert start_calls[0]['namespace_agent_panes'] == {'agent_2': 'w1:p3', 'agent_1': 'w1:p4'}
+    assert start_calls[0]['namespace_cmd_pane'] == 'w1:p2'
+    assert start_calls[0]['namespace_topology_managed'] is True
+    assert start_calls[0]['namespace_backend_impl'] == 'herdr'
 
 
 def test_runtime_supervisor_start_syncs_namespace_epoch_into_lifecycle_authority(tmp_path: Path, monkeypatch) -> None:

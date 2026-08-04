@@ -53,16 +53,26 @@ def tmux_layout_for_start(
     root_pane_id: str | None,
     namespace_agent_panes: dict[str, str] | None,
     actions_taken: list[str],
+    namespace_backend_family: str | None = None,
+    namespace_backend_impl: str | None = None,
 ) -> TmuxStartLayout:
     if not interactive_tmux_layout:
         return TmuxStartLayout(cmd_pane_id=None, agent_panes={})
     deps.set_tmux_ui_active_fn(True)
     launch_targets = tuple(item.agent_name for item in prepared_agents if item.binding is None)
+    pane_targets = (
+        tuple(item.agent_name for item in prepared_agents)
+        if _namespace_panes_are_authoritative(
+            namespace_backend_family=namespace_backend_family,
+            namespace_backend_impl=namespace_backend_impl,
+        )
+        else launch_targets
+    )
     if namespace_agent_panes:
         assigned = {
             name: pane
             for name, pane in dict(namespace_agent_panes).items()
-            if name in set(launch_targets)
+            if name in set(pane_targets)
         }
         if assigned:
             actions_taken.append(f'use_namespace_topology:{",".join(sorted(assigned))}')
@@ -92,6 +102,17 @@ def _legacy_layout_window_name(config) -> str | None:
     if len(windows) != 1:
         return None
     return str(getattr(windows[0], 'name', '') or '').strip() or None
+
+
+def _namespace_panes_are_authoritative(
+    *,
+    namespace_backend_family: str | None,
+    namespace_backend_impl: str | None,
+) -> bool:
+    return (
+        str(namespace_backend_impl or '').strip() == 'herdr'
+        or str(namespace_backend_family or '').strip() == 'herdr-native'
+    )
 
 
 def project_socket_active_panes(

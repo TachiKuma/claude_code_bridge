@@ -128,6 +128,8 @@ def run_start_flow(
             **dict(restart_agent_panes or {}),
         },
         actions_taken=actions_taken,
+        namespace_backend_family=namespace_backend_family,
+        namespace_backend_impl=namespace_backend_impl,
     )
     timings_ms['tmux_layout'] = _elapsed_ms(stage_started_ns)
 
