@@ -1,0 +1,14 @@
+{
+  "name": "herdr-status-server-before",
+  "command": [
+    "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Herdr\\herdr.exe",
+    "status",
+    "server",
+    "--json"
+  ],
+  "exit_code": 0,
+  "timed_out": false,
+  "elapsed_ms": 12,
+  "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260805-041337\\raw-command-refs\\herdr-status-server-before.stdout.txt",
+  "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260805-041337\\raw-command-refs\\herdr-status-server-before.stderr.txt"
+}

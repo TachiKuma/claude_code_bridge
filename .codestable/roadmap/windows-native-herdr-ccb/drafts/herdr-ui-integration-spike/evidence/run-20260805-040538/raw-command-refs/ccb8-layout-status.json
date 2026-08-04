@@ -1,0 +1,14 @@
+{
+  "name": "ccb8-layout-status",
+  "command": [
+    "D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.cmd",
+    "layout",
+    "status",
+    "--json"
+  ],
+  "exit_code": 0,
+  "timed_out": false,
+  "elapsed_ms": 731,
+  "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260805-040538\\raw-command-refs\\ccb8-layout-status.stdout.txt",
+  "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260805-040538\\raw-command-refs\\ccb8-layout-status.stderr.txt"
+}

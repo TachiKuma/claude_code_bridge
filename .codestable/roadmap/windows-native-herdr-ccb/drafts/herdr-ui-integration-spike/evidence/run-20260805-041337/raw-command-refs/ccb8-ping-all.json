@@ -1,0 +1,13 @@
+{
+  "name": "ccb8-ping-all",
+  "command": [
+    "D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.cmd",
+    "ping",
+    "all"
+  ],
+  "exit_code": 0,
+  "timed_out": false,
+  "elapsed_ms": 845,
+  "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260805-041337\\raw-command-refs\\ccb8-ping-all.stdout.txt",
+  "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260805-041337\\raw-command-refs\\ccb8-ping-all.stderr.txt"
+}

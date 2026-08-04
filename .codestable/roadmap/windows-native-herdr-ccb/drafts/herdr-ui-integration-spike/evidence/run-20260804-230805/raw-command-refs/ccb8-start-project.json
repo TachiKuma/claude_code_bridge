@@ -1,0 +1,12 @@
+{
+  "name": "ccb8-start-project",
+  "command": [
+    "D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.cmd"
+  ],
+  "status": "running",
+  "process_id": 18904,
+  "exit_code": 0,
+  "elapsed_ms": 338,
+  "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-230805\\raw-command-refs\\ccb8-start-project.stdout.txt",
+  "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-230805\\raw-command-refs\\ccb8-start-project.stderr.txt"
+}

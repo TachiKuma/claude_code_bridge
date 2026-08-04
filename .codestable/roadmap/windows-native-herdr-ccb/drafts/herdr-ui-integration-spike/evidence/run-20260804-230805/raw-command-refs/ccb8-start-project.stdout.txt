@@ -1,0 +1,15 @@
+Stopping source-dev CCB pid=15168
+Stopping source-dev CCB pid=10776
+start_status: ok
+project: D:\C#Project\GitHub\AvaPrintDesigner
+project_id: 575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03
+ccbd_started: true
+socket_path: D:\.c8\rs\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\ccbd\ccbd.sock
+agents: agent1, agent2
+startup_run_id: start_74f15b9e884c495d93d163ab22f9df2e
+startup_cli_timings_ms: {"cli_post_rpc":108.79589999999999,"cli_pre_rpc":1.4737,"cli_total":4248.1081,"daemon_ensure":1733.9357,"layout_status":29.2513,"maintenance_heartbeat":0.8677,"sidebar_helper_refresh":78.6325,"start_rpc":2403.8295}
+layout_summary_status: ok
+layout: windows=1 panes=2 runtime_panes=0 dynamic=0 loop=0 runtime=2 explicit=false entry_window=main ccbd_state=mounted observe_status=skipped observe_reason=namespace_tmux_scope_missing
+layout_window: name=main index=- panes=2 runtime_panes=0 agents=agent1,agent2
+layout_agent: name=agent1 kind=static source=configured ownership=static_configured dispatch=enabled window=main pane=w2:p3 pane_identity=runtime runtime_state=idle apply_status=- failed_apply=false
+layout_agent: name=agent2 kind=static source=configured ownership=static_configured dispatch=enabled window=main pane=w2:p4 pane_identity=runtime runtime_state=idle apply_status=- failed_apply=false

@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "spike": "herdr-ui-integration-spike",
+  "run_id": "run-20260804-222025",
+  "generated_at": "2026-08-04T14:23:17.4974764Z",
+  "classification": "mounted-with-herdr-panel-observation",
+  "output_dir": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025",
+  "process_samples_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\process-samples.jsonl",
+  "host_context_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\host-context.json",
+  "manual_observation_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\manual-observation.md",
+  "observed_windows_flash": true,
+  "observed_herdr_agents_panel_text": "claude",
+  "has_herdr_ui_evidence": true,
+  "expected_agents": 2,
+  "ping_all_success": true,
+  "layout_configured_count": 2,
+  "layout_materialized_count": 2,
+  "layout_materialization_complete": true,
+  "commands": [
+    {
+      "name": "herdr-version",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 10,
+      "ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\herdr-version.json",
+      "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\herdr-version.stdout.txt",
+      "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\herdr-version.stderr.txt",
+      "stdout_tail": "herdr 0.7.5-preview.2026-07-29-44b3adb12552\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "herdr-status-server-before",
+      "exit_code": 124,
+      "timed_out": true,
+      "elapsed_ms": 20169,
+      "ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\herdr-status-server-before.json",
+      "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\herdr-status-server-before.stdout.txt",
+      "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\herdr-status-server-before.stderr.txt",
+      "stdout_tail": "30;86H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;87H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;88H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;89H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;90H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;91H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;92H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;93H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;94H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;95H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;96H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;97H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;98H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;99H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;100H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;101H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;102H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;103H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;104H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;105H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;106H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;107H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;108H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;109H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;110H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;111H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;112H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;113H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;114H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;115H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;116H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;117H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;118H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;119H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;120H\u001b[0;2;38;2;30;30;46;49m鈹?[0m\u001b[30;120H\u001b[?25l\u001b[?2026l",
+      "stderr_tail": ""
+    },
+    {
+      "name": "herdr-api-snapshot-before",
+      "exit_code": 124,
+      "timed_out": true,
+      "elapsed_ms": 20155,
+      "ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\herdr-api-snapshot-before.json",
+      "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\herdr-api-snapshot-before.stdout.txt",
+      "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\herdr-api-snapshot-before.stderr.txt",
+      "stdout_tail": "30;86H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;87H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;88H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;89H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;90H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;91H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;92H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;93H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;94H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;95H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;96H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;97H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;98H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;99H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;100H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;101H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;102H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;103H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;104H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;105H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;106H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;107H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;108H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;109H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;110H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;111H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;112H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;113H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;114H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;115H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;116H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;117H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;118H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;119H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;120H\u001b[0;2;38;2;30;30;46;49m鈹?[0m\u001b[30;120H\u001b[?25l\u001b[?2026l",
+      "stderr_tail": ""
+    },
+    {
+      "name": "ccb8-wrapper-self-test",
+      "exit_code": 2,
+      "timed_out": false,
+      "elapsed_ms": 727,
+      "ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-wrapper-self-test.json",
+      "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-wrapper-self-test.stdout.txt",
+      "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-wrapper-self-test.stderr.txt",
+      "stdout_tail": "",
+      "stderr_tail": "command_status: invalid\r\nerror: invalid start command\r\n"
+    },
+    {
+      "name": "ccb8-diagnose",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 712,
+      "ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-diagnose.json",
+      "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-diagnose.stdout.txt",
+      "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-diagnose.stderr.txt",
+      "stdout_tail": "er: D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.cmd\npowershell_wrapper: D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.ps1\nsource_ccb: E:\\GITHUB~1\\TACHIK~1\\CLAUDE~1\\ccb.py\nproject_root: D:\\C#Project\\GitHub\\AvaPrintDesigner\ndev_root: D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb-source-dev\npython: C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\python.exe\npath_ccb_shim: D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb-source-dev\\bin\\ccb.cmd\nCCB_HERDR_EXE: C:\\Users\\Administrator\\AppData\\Local\\Programs\\Herdr\\herdr.exe\nCCB_HERDR_SESSION: ccb-herdr-avaprintdesigner-source-dev\nCCB_HERDR_CAPABILITY_REPORT: E:\\GITHUB~1\\TACHIK~1\\CLAUDE~1\\CODEST~1\\features\\20B57C~1\\evidence\\HERDR-~1.JSO\nCCB_SOURCE_ALLOWED_ROOTS: D:\\C#Project\\GitHub\\AvaPrintDesigner\nCCB_SOURCE_HOME: D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb-source-dev\\home\nCCB_RUNTIME_STATE_HOME: D:\\.c8\\rs\nCCB_LEGACY_RUNTIME_STATE_HOME: D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb-source-dev\\state\\runtime-state\nHOME: D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb-source-dev\\home\nUSERPROFILE: D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb-source-dev\\home\nCCB_NO_ATTACH: 1\nCCB_CCBD_FAULTHANDLER: 1\nPYTHONUNBUFFERED: 1\nCCB_PRESTART_KILL_TIMEOUT_MS: 15000\nv8.5.2\r\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "ccb8-start-project",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 321,
+      "ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-start-project.json",
+      "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-start-project.stdout.txt",
+      "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-start-project.stderr.txt",
+      "stdout_tail": "",
+      "stderr_tail": "",
+      "status": "running",
+      "process_id": 12904
+    },
+    {
+      "name": "herdr-status-server-after",
+      "exit_code": 124,
+      "timed_out": true,
+      "elapsed_ms": 20219,
+      "ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\herdr-status-server-after.json",
+      "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\herdr-status-server-after.stdout.txt",
+      "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\herdr-status-server-after.stderr.txt",
+      "stdout_tail": "30;86H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;87H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;88H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;89H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;90H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;91H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;92H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;93H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;94H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;95H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;96H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;97H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;98H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;99H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;100H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;101H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;102H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;103H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;104H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;105H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;106H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;107H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;108H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;109H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;110H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;111H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;112H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;113H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;114H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;115H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;116H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;117H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;118H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;119H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;120H\u001b[0;2;38;2;30;30;46;49m鈹?[0m\u001b[30;120H\u001b[?25l\u001b[?2026l",
+      "stderr_tail": ""
+    },
+    {
+      "name": "herdr-api-snapshot-after",
+      "exit_code": 124,
+      "timed_out": true,
+      "elapsed_ms": 20131,
+      "ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\herdr-api-snapshot-after.json",
+      "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\herdr-api-snapshot-after.stdout.txt",
+      "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\herdr-api-snapshot-after.stderr.txt",
+      "stdout_tail": "30;86H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;87H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;88H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;89H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;90H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;91H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;92H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;93H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;94H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;95H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;96H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;97H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;98H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;99H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;100H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;101H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;102H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;103H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;104H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;105H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;106H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;107H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;108H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;109H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;110H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;111H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;112H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;113H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;114H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;115H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;116H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;117H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;118H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;119H\u001b[0;2;38;2;30;30;46;49m鈹€\u001b[30;120H\u001b[0;2;38;2;30;30;46;49m鈹?[0m\u001b[30;120H\u001b[?25l\u001b[?2026l",
+      "stderr_tail": ""
+    },
+    {
+      "name": "ccb8-ping-ccbd",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 3424,
+      "ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-ping-ccbd.json",
+      "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-ping-ccbd.stdout.txt",
+      "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-ping-ccbd.stderr.txt",
+      "stdout_tail": "ending_maintenance_ticks: 0\r\nlast_project_view_response_duration_s: None\r\nlast_project_view_build_duration_s: None\r\nproject_view_cache_hits: 0\r\nproject_view_cache_misses: 0\r\nlast_project_view_tmux_command_count: None\r\nlast_project_view_capture_pane_count: None\r\nlast_project_view_store_scan_count: None\r\nrss_bytes: None\r\nvirtual_memory_bytes: None\r\nfd_count: None\r\nthread_count: 3\r\nservice_graph_version: 1\r\nservice_graph_created_at: 2026-08-04T14:21:10.027169Z\r\nservice_graph_retained_count: 1\r\nservice_graph_retained_count_scope: published_graph_count_not_inflight_retention\r\nlast_reload_duration_s: None\r\nlast_reload_plan_class: None\r\nlast_reload_error: None\r\nactive_execution_count: 0\r\nrecoverable_execution_count: 0\r\nnonrecoverable_execution_count: 0\r\npending_items_count: 0\r\nterminal_pending_count: 0\r\nrecoverable_execution_providers: []\r\nnonrecoverable_execution_providers: []\r\nlast_restore_at: 2026-08-04T14:21:11.051539Z\r\nlast_restore_running_job_count: 0\r\nlast_restore_restored_execution_count: 0\r\nlast_restore_replay_pending_count: 0\r\nlast_restore_terminal_pending_count: 0\r\nlast_restore_abandoned_execution_count: 0\r\nlast_restore_already_active_count: 0\r\nlast_restore_results_text: none\r\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "ccb8-ping-all",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 810,
+      "ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-ping-all.json",
+      "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-ping-all.stdout.txt",
+      "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-ping-all.stderr.txt",
+      "stdout_tail": "497a48228040a14841fb4529aaa476beb21d34e53f1629bc03', 'agent_name': 'agent1', 'provider': 'codex', 'mount_state': 'mounted', 'runtime_state': 'idle', 'health': 'restored', 'diagnostics': {'ccbd_generation': 3, 'last_heartbeat_at': '2026-08-04T14:21:56.732771Z', 'desired_state': 'running', 'reconcile_state': 'steady', 'restart_count': 0, 'recovery_failure_count': 0, 'last_reconcile_at': None, 'last_failure_reason': None, 'resume_supported': True, 'restore_mode': 'provider_resume', 'restore_reason': None, 'restore_detail': 'provider execution can be resumed after ccbd restart'}}, {'project_id': '575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03', 'agent_name': 'agent2', 'provider': 'claude', 'mount_state': 'mounted', 'runtime_state': 'idle', 'health': 'restored', 'diagnostics': {'ccbd_generation': 3, 'last_heartbeat_at': '2026-08-04T14:21:56.732771Z', 'desired_state': 'running', 'reconcile_state': 'steady', 'restart_count': 0, 'recovery_failure_count': 0, 'last_reconcile_at': None, 'last_failure_reason': None, 'resume_supported': True, 'restore_mode': 'provider_resume', 'restore_reason': None, 'restore_detail': 'provider execution can be resumed after ccbd restart'}}]\r\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "ccb8-ps",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 742,
+      "ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-ps.json",
+      "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-ps.stdout.txt",
+      "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-ps.stderr.txt",
+      "stdout_tail": "ject_id: 575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\r\nccbd_state: mounted\r\nherdr_surface: capability_status=partial support_tier_projection=experimental source=validation_pending beta_gaps=validation_pending blocking_gaps=none next_action=None\r\nherdr_namespace_ref: backend_family=herdr-native,backend_impl=herdr,ipc_kind=herdr_socket,ipc_ref=herdr://local,namespace_id=w1,session_name=ccb-avaprintdesigner-575a971f\r\nagent: name=agent1 state=idle provider=codex queue=0\r\nbinding: status=bound runtime=mux:w1:p3 session=D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\.codex-agent1-session source=provider-session workspace=D:\\C#Project\\GitHub\\AvaPrintDesigner terminal=mux socket=None socket_path=None window=main window_id=None pane=w1:p3 active_pane=w1:p3 pane_state=alive marker=CCB-agent1-575a971f\r\nagent: name=agent2 state=idle provider=claude queue=0\r\nbinding: status=bound runtime=mux:w1:p4 session=D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\.claude-agent2-session source=provider-session workspace=D:\\C#Project\\GitHub\\AvaPrintDesigner terminal=mux socket=None socket_path=None window=main window_id=None pane=w1:p4 active_pane=w1:p4 pane_state=alive marker=CCB-agent2-575a971f\r\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "ccb8-doctor-ps",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 733,
+      "ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-doctor-ps.json",
+      "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-doctor-ps.stdout.txt",
+      "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-doctor-ps.stderr.txt",
+      "stdout_tail": "ject_id: 575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\r\nccbd_state: mounted\r\nherdr_surface: capability_status=partial support_tier_projection=experimental source=validation_pending beta_gaps=validation_pending blocking_gaps=none next_action=None\r\nherdr_namespace_ref: backend_family=herdr-native,backend_impl=herdr,ipc_kind=herdr_socket,ipc_ref=herdr://local,namespace_id=w1,session_name=ccb-avaprintdesigner-575a971f\r\nagent: name=agent1 state=idle provider=codex queue=0\r\nbinding: status=bound runtime=mux:w1:p3 session=D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\.codex-agent1-session source=provider-session workspace=D:\\C#Project\\GitHub\\AvaPrintDesigner terminal=mux socket=None socket_path=None window=main window_id=None pane=w1:p3 active_pane=w1:p3 pane_state=alive marker=CCB-agent1-575a971f\r\nagent: name=agent2 state=idle provider=claude queue=0\r\nbinding: status=bound runtime=mux:w1:p4 session=D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\.claude-agent2-session source=provider-session workspace=D:\\C#Project\\GitHub\\AvaPrintDesigner terminal=mux socket=None socket_path=None window=main window_id=None pane=w1:p4 active_pane=w1:p4 pane_state=alive marker=CCB-agent2-575a971f\r\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "ccb8-layout-status",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 723,
+      "ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-layout-status.json",
+      "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-layout-status.stdout.txt",
+      "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-layout-status.stderr.txt",
+      "stdout_tail": "\"static\",\r\n          \"apply_plan_class\": null,\r\n          \"apply_stage\": null,\r\n          \"apply_status\": null,\r\n          \"ask_target\": \"agent2\",\r\n          \"dispatch_disabled\": false,\r\n          \"dispatch_state\": \"enabled\",\r\n          \"failed_apply\": false,\r\n          \"lifecycle_state\": \"configured\",\r\n          \"loop_id\": null,\r\n          \"node_id\": null,\r\n          \"observed\": null,\r\n          \"ownership_class\": \"static_configured\",\r\n          \"pane_id\": \"w1:p4\",\r\n          \"pane_identity_source\": \"runtime\",\r\n          \"pane_state\": \"alive\",\r\n          \"profile\": null,\r\n          \"provider\": \"claude\",\r\n          \"queue_depth\": 0,\r\n          \"retained_busy\": false,\r\n          \"role\": null,\r\n          \"role_class\": null,\r\n          \"runtime_state\": \"idle\",\r\n          \"source\": \"configured\",\r\n          \"state_path\": null,\r\n          \"visibility_state\": \"visible\",\r\n          \"window_name\": \"main\"\r\n        }\r\n      ],\r\n      \"index\": 0,\r\n      \"layout_spec\": \"cmd; agent1:codex, agent2:claude\",\r\n      \"name\": \"main\",\r\n      \"observed\": null,\r\n      \"order\": 0,\r\n      \"pane_count\": 2,\r\n      \"runtime_pane_count\": 0,\r\n      \"tool_names\": []\r\n    }\r\n  ],\r\n  \"windows_explicit\": false\r\n}\r\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "ccb8-doctor-output",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 997,
+      "ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-doctor-output.json",
+      "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-doctor-output.stdout.txt",
+      "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\raw-command-refs\\ccb8-doctor-output.stderr.txt",
+      "stdout_tail": "doctor_bundle_status: ok\r\nproject: D:\\C#Project\\GitHub\\AvaPrintDesigner\r\nproject_id: 575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\r\nbundle_id: ccb-support-20260804t142200058503z-575a971fdf5a\r\nbundle_path: E:\\GitHub寮€婧愰」鐩甛TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-222025\\doctor-output\r\nfile_count: 58\r\nincluded_count: 47\r\nmissing_count: 11\r\ntruncated_count: 0\r\ndoctor_error: None\r\n",
+      "stderr_tail": ""
+    }
+  ],
+  "notes": [
+    "Herdr agents panel text is manual observation unless Herdr exposes it through CLI metadata.",
+    "Herdr agent detection is diagnostics evidence only; CCB provider completion/runtime authority remains CCB-owned.",
+    "This spike does not claim Native Windows supported."
+  ]
+}

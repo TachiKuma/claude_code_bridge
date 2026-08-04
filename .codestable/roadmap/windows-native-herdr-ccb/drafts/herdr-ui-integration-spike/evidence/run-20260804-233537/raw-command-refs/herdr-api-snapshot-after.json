@@ -1,0 +1,13 @@
+{
+  "name": "herdr-api-snapshot-after",
+  "command": [
+    "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Herdr\\herdr.exe",
+    "api",
+    "snapshot"
+  ],
+  "exit_code": 0,
+  "timed_out": false,
+  "elapsed_ms": 11,
+  "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-233537\\raw-command-refs\\herdr-api-snapshot-after.stdout.txt",
+  "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260804-233537\\raw-command-refs\\herdr-api-snapshot-after.stderr.txt"
+}

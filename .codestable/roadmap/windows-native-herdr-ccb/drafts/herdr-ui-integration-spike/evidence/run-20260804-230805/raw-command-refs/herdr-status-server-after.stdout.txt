@@ -1,0 +1,1 @@
+{"status":"running","running":true,"version":"0.7.5-preview.2026-07-29-44b3adb12552","protocol":18,"capabilities":{"live_handoff":false,"detached_server_daemon":true},"compatible":true,"socket":"C:\\Users\\Administrator\\AppData\\Roaming\\herdr\\herdr.sock","session":null,"restart_needed":false}
