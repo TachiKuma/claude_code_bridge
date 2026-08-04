@@ -437,12 +437,26 @@ function Run-BoundedKillForce {
     try {
         $scriptPath = Join-Path $env:CCB_SOURCE_ROOT 'ccb.py'
         $argumentText = Join-WindowsProcessArguments -Arguments @($scriptPath, 'kill', '-f')
-        $process = Start-Process -FilePath $env:CCB_PYTHON -ArgumentList $argumentText -WorkingDirectory $env:CCB_PROJECT_ROOT -WindowStyle Hidden -PassThru
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $env:CCB_PYTHON
+        $psi.Arguments = $argumentText
+        $psi.WorkingDirectory = $env:CCB_PROJECT_ROOT
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $process = New-Object System.Diagnostics.Process
+        $process.StartInfo = $psi
+        [void] $process.Start()
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
         if (-not $process.WaitForExit($timeoutMs)) {
             Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
             Write-Warning ('source-dev ccb kill -f timed out after ' + $timeoutMs + 'ms; continuing after targeted PID cleanup')
             return
         }
+        try { $stdoutTask.Wait(5000) | Out-Null } catch {}
+        try { $stderrTask.Wait(5000) | Out-Null } catch {}
         if ($process.ExitCode -ne 0) {
             Write-Stderr 'Warning: source-dev ccb kill -f did not complete cleanly; continuing after targeted PID cleanup.'
         }
@@ -631,8 +645,90 @@ function Show-Diagnose {
     exit 0
 }
 
+function Get-WrapperLogRoots {
+    $roots = @(
+        (Join-Path (Join-Path $env:CCB_DEV_HOME '.ccb') 'logs'),
+        (Join-Path $env:CCB_PROJECT_ROOT '.ccb\ccbd'),
+        (Join-Path $env:CCB_PROJECT_ROOT '.ccb\agents')
+    )
+    $projectId = Get-SourceDevProjectId
+    if (-not [string]::IsNullOrWhiteSpace($projectId)) {
+        foreach ($runtimeRoot in @($env:CCB_RUNTIME_STATE_HOME, $env:CCB_LEGACY_RUNTIME_STATE_HOME)) {
+            if ([string]::IsNullOrWhiteSpace($runtimeRoot)) {
+                continue
+            }
+            $roots += (Join-Path (Join-Path $runtimeRoot $projectId) 'ccbd')
+        }
+    }
+
+    $seen = @{}
+    return @(
+        foreach ($root in $roots) {
+            if ([string]::IsNullOrWhiteSpace($root) -or -not (Test-Path -LiteralPath $root -PathType Container)) {
+                continue
+            }
+            try {
+                $key = [System.IO.Path]::GetFullPath($root).TrimEnd('\').ToLowerInvariant()
+            } catch {
+                $key = $root.TrimEnd('\').ToLowerInvariant()
+            }
+            if ($seen.ContainsKey($key)) {
+                continue
+            }
+            $seen[$key] = $true
+            $root
+        }
+    )
+}
+
+function Show-WrapperLogs {
+    param(
+        [string] $Filter,
+        [int] $TailLines = 80,
+        [int] $MaxFiles = 8
+    )
+
+    $roots = Get-WrapperLogRoots
+    Write-Host ('log_roots: ' + (($roots | ForEach-Object { '"' + $_ + '"' }) -join '; '))
+    if ($roots.Count -eq 0) {
+        Write-Host 'log_status: no_log_roots'
+        exit 0
+    }
+
+    $files = @(
+        foreach ($root in $roots) {
+            Get-ChildItem -LiteralPath $root -Recurse -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -like '*.log' -or $_.Name -like '*.out' -or $_.Name -like '*.err' }
+        }
+    )
+    if (-not [string]::IsNullOrWhiteSpace($Filter)) {
+        $files = @($files | Where-Object { $_.FullName.IndexOf($Filter, [StringComparison]::OrdinalIgnoreCase) -ge 0 })
+    }
+    $files = @($files | Sort-Object LastWriteTime -Descending | Select-Object -First $MaxFiles)
+    if ($files.Count -eq 0) {
+        Write-Host 'log_status: no_logs'
+        exit 0
+    }
+
+    Write-Host ('log_status: ok')
+    foreach ($file in $files) {
+        Write-Host ('--- ' + $file.FullName + ' (' + $file.Length + ' bytes, ' + $file.LastWriteTime.ToString('s') + ') ---')
+        if ($file.Length -eq 0) {
+            Write-Host '<empty>'
+            continue
+        }
+        try {
+            Get-Content -LiteralPath $file.FullName -Tail $TailLines -ErrorAction Stop
+        } catch {
+            Write-Warning ('failed to read log: ' + $file.FullName)
+        }
+    }
+    exit 0
+}
+
 if ($CcbArgs.Count -gt 0 -and $CcbArgs[0] -ieq '--wrapper-self-test') {
     Invoke-WrapperSelfTest
+    exit 0
 }
 
 Initialize-WrapperEnvironment
@@ -645,6 +741,11 @@ try {
 
 if ($CcbArgs.Count -gt 0 -and $CcbArgs[0] -ieq '--diagnose') {
     Show-Diagnose
+}
+
+if ($CcbArgs.Count -gt 0 -and $CcbArgs[0] -ieq '--log') {
+    $filter = if ($CcbArgs.Count -gt 1) { $CcbArgs[1] } else { '' }
+    Show-WrapperLogs -Filter $filter
 }
 
 if (Test-ShouldPrestartKill -CliArgs $CcbArgs) {
