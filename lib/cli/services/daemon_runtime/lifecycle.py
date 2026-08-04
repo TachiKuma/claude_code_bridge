@@ -155,6 +155,10 @@ def _startup_wait_exhausted(
     now = time.time()
     if now >= local_deadline:
         return True
+    if phase == 'failed':
+        return _desired_state(inspection) != 'running' or bool(
+            str(getattr(inspection, 'last_failure_reason', '') or '').strip()
+        )
     if phase != 'starting' and not (
         phase == 'mounted' and not mounted_control_plane_ready(inspection)
     ):

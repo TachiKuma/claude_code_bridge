@@ -8,6 +8,12 @@ if ($null -eq $CcbArgs) {
     $CcbArgs = @()
 }
 
+$script:utf8Strict = New-Object System.Text.UTF8Encoding($false, $true)
+$script:utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+try { $OutputEncoding = $script:utf8NoBom } catch {}
+try { [Console]::OutputEncoding = $script:utf8NoBom } catch {}
+try { [Console]::InputEncoding = $script:utf8NoBom } catch {}
+
 function Write-Stderr {
     param([string] $Message)
     [Console]::Error.WriteLine($Message)
@@ -18,8 +24,124 @@ function Write-Utf8NoBom {
         [string] $Path,
         [string] $Content
     )
-    $encoding = New-Object System.Text.UTF8Encoding($false)
-    [System.IO.File]::WriteAllText($Path, $Content, $encoding)
+    [System.IO.File]::WriteAllText($Path, $Content, $script:utf8NoBom)
+}
+
+function Read-Utf8Text {
+    param([string] $Path)
+    try {
+        $bytes = [System.IO.File]::ReadAllBytes($Path)
+        $text = $script:utf8Strict.GetString($bytes)
+    } catch [System.Text.DecoderFallbackException] {
+        throw ('invalid UTF-8 JSON file: ' + $Path)
+    }
+    if ($text.Length -gt 0 -and $text[0] -eq [char] 0xFEFF) {
+        return $text.Substring(1)
+    }
+    return $text
+}
+
+function Read-Utf8Json {
+    param([string] $Path)
+    return (Read-Utf8Text -Path $Path) | ConvertFrom-Json -ErrorAction Stop
+}
+
+function Test-Utf8Bom {
+    param([string] $Path)
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $false
+    }
+    try {
+        $stream = [System.IO.File]::OpenRead($Path)
+        try {
+            if ($stream.Length -lt 3) {
+                return $false
+            }
+            $bytes = New-Object byte[] 3
+            [void] $stream.Read($bytes, 0, 3)
+            return $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF
+        } finally {
+            $stream.Close()
+        }
+    } catch {
+        return $false
+    }
+}
+
+function Resolve-ExistingPath {
+    param(
+        [string] $Description,
+        [string[]] $Candidates,
+        [scriptblock] $Validate
+    )
+    foreach ($candidate in @($Candidates)) {
+        if ([string]::IsNullOrWhiteSpace($candidate)) {
+            continue
+        }
+        try {
+            $resolved = (Resolve-Path -LiteralPath $candidate -ErrorAction Stop).ProviderPath
+        } catch {
+            continue
+        }
+        if (& $Validate $resolved) {
+            return $resolved
+        }
+    }
+    throw ($Description + ' not found')
+}
+
+function Resolve-CcbSourceRoot {
+    return Resolve-ExistingPath `
+        -Description 'CCB source checkout' `
+        -Candidates @($env:CCB_SOURCE_ROOT, $PSScriptRoot, 'E:\GITHUB~1\TACHIK~1\claude_code_bridge') `
+        -Validate { param([string] $Path) Test-Path -LiteralPath (Join-Path $Path 'ccb.py') }
+}
+
+function Resolve-HerdrCapabilityReport {
+    param([string] $SourceRoot)
+    return Resolve-ExistingPath `
+        -Description 'Herdr capability report' `
+        -Candidates @(
+            $env:CCB_HERDR_CAPABILITY_REPORT,
+            (Join-Path $SourceRoot '.codestable\features\2026-07-31-herdr-backend-contract-spike\evidence\herdr-contract-spike-evidence.json')
+        ) `
+        -Validate { param([string] $Path) Test-Path -LiteralPath $Path -PathType Leaf }
+}
+
+function Invoke-WrapperSelfTest {
+    $samplePath = 'E:\GitHub' + [char] 0x5F00 + [char] 0x6E90 + [char] 0x9879 + [char] 0x76EE + '\TachiKuma'
+    $tempPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ccb8-wrapper-self-test-' + [Guid]::NewGuid().ToString('N') + '.json')
+    $utf16Path = Join-Path ([System.IO.Path]::GetTempPath()) ('ccb8-wrapper-self-test-utf16-' + [Guid]::NewGuid().ToString('N') + '.json')
+    try {
+        $payload = @{ path = $samplePath } | ConvertTo-Json -Compress
+        Write-Utf8NoBom -Path $tempPath -Content $payload
+        if (Test-Utf8Bom -Path $tempPath) {
+            throw 'self-test JSON was written with UTF-8 BOM'
+        }
+        $json = Read-Utf8Json -Path $tempPath
+        if ([string] $json.path -ne $samplePath) {
+            throw 'self-test UTF-8 JSON roundtrip failed'
+        }
+        [System.IO.File]::WriteAllText($utf16Path, $payload, [System.Text.Encoding]::Unicode)
+        $invalidUtf8Rejected = $false
+        try {
+            [void] (Read-Utf8Json -Path $utf16Path)
+        } catch {
+            $invalidUtf8Rejected = $true
+        }
+        if (-not $invalidUtf8Rejected) {
+            throw 'self-test UTF-16 JSON was not rejected'
+        }
+        if ($CcbArgs.Count -gt 1 -and $CcbArgs[1] -ieq '--full-env') {
+            $sourceRoot = Resolve-CcbSourceRoot
+            [void] (Resolve-HerdrCapabilityReport -SourceRoot $sourceRoot)
+        }
+        Write-Host 'wrapper_self_test: passed'
+    } finally {
+        Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $utf16Path -Force -ErrorAction SilentlyContinue
+    }
+    exit 0
 }
 
 function Set-DefaultEnv {
@@ -38,7 +160,7 @@ function Repair-SourceDevRuntimeRootRef {
         return
     }
     try {
-        $json = Get-Content -LiteralPath $refPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+        $json = Read-Utf8Json -Path $refPath
     } catch {
         throw ('failed to read runtime root ref: ' + $refPath)
     }
@@ -110,9 +232,9 @@ function Read-ProtectedInstalledPids {
             continue
         }
         try {
-            $json = Get-Content -LiteralPath $path -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            $json = Read-Utf8Json -Path $path
         } catch {
-            continue
+            throw ('failed to read installed CCB protection state file: ' + $path)
         }
         foreach ($key in @('keeper_pid', 'owner_pid', 'ccbd_pid')) {
             $pidValue = Get-JsonPid -Json $json -Key $key
@@ -133,7 +255,7 @@ function Get-SourceDevProjectId {
             continue
         }
         try {
-            $json = Get-Content -LiteralPath $path -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            $json = Read-Utf8Json -Path $path
             $projectId = [string] $json.project_id
             if (-not [string]::IsNullOrWhiteSpace($projectId)) {
                 return $projectId
@@ -183,7 +305,7 @@ function Get-SourceDevPidTargets {
     $items = @()
     foreach ($file in $StateFiles) {
         try {
-            $json = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            $json = Read-Utf8Json -Path $file.FullName
         } catch {
             continue
         }
@@ -266,7 +388,7 @@ function Reset-SourceDevStateFiles {
     $now = (Get-Date).ToUniversalTime().ToString('o')
     foreach ($file in $StateFiles) {
         try {
-            $json = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            $json = Read-Utf8Json -Path $file.FullName
             switch ($file.Name) {
                 'lease.json' {
                     $json.mount_state = 'unmounted'
@@ -313,8 +435,9 @@ function Run-BoundedKillForce {
     }
 
     try {
-        $argsList = @((Join-Path $env:CCB_SOURCE_ROOT 'ccb.py'), 'kill', '-f')
-        $process = Start-Process -FilePath $env:CCB_PYTHON -ArgumentList $argsList -WorkingDirectory $env:CCB_PROJECT_ROOT -WindowStyle Hidden -PassThru
+        $scriptPath = Join-Path $env:CCB_SOURCE_ROOT 'ccb.py'
+        $argumentText = Join-WindowsProcessArguments -Arguments @($scriptPath, 'kill', '-f')
+        $process = Start-Process -FilePath $env:CCB_PYTHON -ArgumentList $argumentText -WorkingDirectory $env:CCB_PROJECT_ROOT -WindowStyle Hidden -PassThru
         if (-not $process.WaitForExit($timeoutMs)) {
             Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
             Write-Warning ('source-dev ccb kill -f timed out after ' + $timeoutMs + 'ms; continuing after targeted PID cleanup')
@@ -345,19 +468,74 @@ function Test-ShouldPrestartKill {
     return $first -ieq '-s' -or $first -ieq '--safe' -or $first -ieq '-n' -or $first -ieq '--new-context'
 }
 
+function Quote-WindowsProcessArgument {
+    param([string] $Argument)
+    $value = [string] $Argument
+    if ($value.Length -gt 0 -and $value.IndexOfAny([char[]] @(' ', "`t", '"')) -lt 0) {
+        return $value
+    }
+
+    $result = '"'
+    $backslashes = 0
+    foreach ($char in $value.ToCharArray()) {
+        if ($char -eq '\') {
+            $backslashes += 1
+            continue
+        }
+        if ($char -eq '"') {
+            $result += '\' * (($backslashes * 2) + 1)
+            $result += '"'
+            $backslashes = 0
+            continue
+        }
+        if ($backslashes -gt 0) {
+            $result += '\' * $backslashes
+            $backslashes = 0
+        }
+        $result += $char
+    }
+    if ($backslashes -gt 0) {
+        $result += '\' * ($backslashes * 2)
+    }
+    return $result + '"'
+}
+
+function Join-WindowsProcessArguments {
+    param([string[]] $Arguments)
+    return (@($Arguments) | ForEach-Object { Quote-WindowsProcessArgument -Argument $_ }) -join ' '
+}
+
 function Initialize-WrapperEnvironment {
-    $sourceRoot = 'E:\GITHUB~1\TACHIK~1\CLAUDE~1'
+    try {
+        $sourceRoot = Resolve-CcbSourceRoot
+    } catch {
+        Write-Stderr $_.Exception.Message
+        exit 1
+    }
     $projectRoot = (Resolve-Path -LiteralPath $PSScriptRoot).ProviderPath
     $devRoot = Join-Path $projectRoot '.ccb-source-dev'
     $devBin = Join-Path $devRoot 'bin'
     $devHome = Join-Path $devRoot 'home'
     $devTmp = Join-Path $devRoot 'tmp'
     $devState = Join-Path $devRoot 'state'
-    $runtimeStateHome = 'D:\.c8\rs'
+    try {
+        $runtimeStateHome = if ([string]::IsNullOrWhiteSpace($env:CCB_RUNTIME_STATE_HOME)) { 'D:\.c8\rs' } else { [System.IO.Path]::GetFullPath($env:CCB_RUNTIME_STATE_HOME) }
+    } catch {
+        Write-Stderr ('invalid CCB_RUNTIME_STATE_HOME: ' + $env:CCB_RUNTIME_STATE_HOME)
+        exit 1
+    }
     $legacyRuntimeStateHome = Join-Path $devState 'runtime-state'
-    $python = 'C:\Users\Administrator\AppData\Local\Programs\Python\Python314\python.exe'
-    $herdrExe = 'C:\Users\Administrator\AppData\Local\Programs\Herdr\herdr.exe'
-    $herdrCapabilityReport = 'E:\GITHUB~1\TACHIK~1\CLAUDE~1\CODEST~1\features\20B57C~1\evidence\HERDR-~1.JSO'
+    $python = if ([string]::IsNullOrWhiteSpace($env:CCB_PYTHON)) { $env:CCB_PYTHON_BIN } else { $env:CCB_PYTHON }
+    if ([string]::IsNullOrWhiteSpace($python)) {
+        $python = 'C:\Users\Administrator\AppData\Local\Programs\Python\Python314\python.exe'
+    }
+    $herdrExe = if ([string]::IsNullOrWhiteSpace($env:CCB_HERDR_EXE)) { 'C:\Users\Administrator\AppData\Local\Programs\Herdr\herdr.exe' } else { $env:CCB_HERDR_EXE }
+    try {
+        $herdrCapabilityReport = Resolve-HerdrCapabilityReport -SourceRoot $sourceRoot
+    } catch {
+        Write-Warning $_.Exception.Message
+        $herdrCapabilityReport = $null
+    }
 
     if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot 'ccb.py'))) {
         Write-Stderr ('CCB source checkout not found: "' + $sourceRoot + '"')
@@ -365,10 +543,6 @@ function Initialize-WrapperEnvironment {
     }
     if (-not (Test-Path -LiteralPath $python)) {
         $python = 'python'
-    }
-    if (-not (Test-Path -LiteralPath $herdrCapabilityReport)) {
-        Write-Stderr ('Herdr capability report not found: "' + $herdrCapabilityReport + '"')
-        exit 1
     }
 
     foreach ($path in @($devBin, $devHome, $devTmp, $devState, $runtimeStateHome)) {
@@ -386,8 +560,12 @@ function Initialize-WrapperEnvironment {
     $env:CCB_DEV_STATE = $devState
     $env:CCB_PYTHON = $python
     $env:CCB_HERDR_EXE = $herdrExe
-    $env:CCB_HERDR_SESSION = 'ccb-herdr-avaprintdesigner-source-dev'
-    $env:CCB_HERDR_CAPABILITY_REPORT = $herdrCapabilityReport
+    $env:CCB_HERDR_SESSION = if ([string]::IsNullOrWhiteSpace($env:CCB_HERDR_SESSION)) { 'ccb-herdr-avaprintdesigner-source-dev' } else { $env:CCB_HERDR_SESSION }
+    if ([string]::IsNullOrWhiteSpace($herdrCapabilityReport)) {
+        Remove-Item Env:CCB_HERDR_CAPABILITY_REPORT -ErrorAction SilentlyContinue
+    } else {
+        $env:CCB_HERDR_CAPABILITY_REPORT = $herdrCapabilityReport
+    }
     $env:CCB_SOURCE_ALLOWED_ROOTS = $projectRoot
     $env:CCB_TEST_ROOTS = $projectRoot
     $env:CCB_SKIP_STARTUP_UPDATE_CHECK = '1'
@@ -443,11 +621,19 @@ function Show-Diagnose {
     Write-Host ('CCB_CCBD_FAULTHANDLER: ' + $env:CCB_CCBD_FAULTHANDLER)
     Write-Host ('PYTHONUNBUFFERED: ' + $env:PYTHONUNBUFFERED)
     Write-Host ('CCB_PRESTART_KILL_TIMEOUT_MS: ' + $env:CCB_PRESTART_KILL_TIMEOUT_MS)
+    Write-Host ('powershell_version: ' + $PSVersionTable.PSVersion.ToString())
+    Write-Host ('default_encoding: ' + [System.Text.Encoding]::Default.WebName)
+    Write-Host ('ccb8_cmd_utf8_bom: ' + (Test-Utf8Bom -Path (Join-Path $PSScriptRoot 'ccb8.cmd')))
+    Write-Host ('ccb8_ps1_utf8_bom: ' + (Test-Utf8Bom -Path $PSCommandPath))
     & $env:CCB_PYTHON (Join-Path $env:CCB_SOURCE_ROOT 'ccb.py') --print-version
     if ($null -ne $LASTEXITCODE) {
         exit $LASTEXITCODE
     }
     exit 0
+}
+
+if ($CcbArgs.Count -gt 0 -and $CcbArgs[0] -ieq '--wrapper-self-test') {
+    Invoke-WrapperSelfTest
 }
 
 Initialize-WrapperEnvironment

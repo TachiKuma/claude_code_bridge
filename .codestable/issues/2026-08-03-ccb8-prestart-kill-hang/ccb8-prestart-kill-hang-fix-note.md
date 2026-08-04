@@ -149,3 +149,272 @@ tags: [windows, ccb8, kill, startup]
 - `python -m pytest test/test_ccbd_startup_fence_app.py test/test_ccbd_startup_identity.py -q` -> `11 passed`
 - `python -m py_compile lib/ccbd/keeper.py lib/ccbd/app_runtime/lifecycle.py lib/ccbd/services/lifecycle.py lib/ccbd/services/project_inspection.py test/test_v2_ccbd_keeper.py test/test_ccbd_windows_tcp_loopback_transport.py` -> passed
 - `cmd /d /c ""D:/C#Project/GitHub/AvaPrintDesigner/ccb8.cmd" --diagnose"` -> 通过并输出 `v8.5.2`
+
+## 2026-08-04 编码与路径追加修复
+
+### 新增根因
+
+按用户补充的四个方向复核后确认，源码版 wrapper 仍有一条 native Windows 简中环境下的高风险路径：`ccb8.cmd` 调用的是 Windows PowerShell 5.1 `powershell.exe`，而该进程在当前机器上的默认文本编码为 `gb2312`。`ccb8.ps1` 之前多处使用 `Get-Content ... | ConvertFrom-Json` 读取 `.ccb` / `.ccb-source-dev` / 短 runtime 下的 JSON 状态文件，没有显式指定 UTF-8。
+
+源码 CCB 的 JSON 状态文件由 Python 以 UTF-8 no BOM 写入，且 `ensure_ascii=False`，路径字段会保留中文字符。因此当源码仓库路径或外部项目路径包含中文时，Windows PowerShell 5 会按 GBK/gb2312 误读 UTF-8 no BOM JSON，轻则路径乱码，重则乱码中出现反斜杠组合导致 `ConvertFrom-Json` 抛出 `Unrecognized escape sequence`，表现为 wrapper 启动前直接失败。
+
+同时确认：
+
+- `ccb8.cmd` 已通过 `%~dp0ccb8.ps1` 按 wrapper 所在目录定位 PowerShell 脚本，没有写死外部项目路径。
+- `ccb8.ps1` 已通过 `$PSScriptRoot` 获取外部项目根，但源码根、Python、Herdr capability report、runtime home 仍是固定 fallback，缺少环境变量优先的解析层。
+- `ccb8.cmd` 与 `ccb8.ps1` 当前均无 UTF-8 BOM；此前的 BOM 风险主要来自 PowerShell 5 的 `Set-Content -Encoding UTF8` 写 JSON，本轮继续保持 no-BOM 写回。
+
+### 追加改动
+
+- `ccb8.ps1`
+  - 新增严格 UTF-8 解码 helper：`Read-Utf8Text` / `Read-Utf8Json`，使用 byte-level `ReadAllBytes()` + `.NET UTF8Encoding(false, true).GetString()` 读取 JSON，避免 Windows PowerShell / .NET 按 BOM 自动接受 UTF-16 / UTF-32；同时兼容剥离输入文件开头的 UTF-8 BOM。
+  - 所有 wrapper 内部 JSON 读取改为 `Read-Utf8Json`，不再依赖 PowerShell 5 默认 `Get-Content` 编码。
+  - `Write-Utf8NoBom` 复用进程级 `$script:utf8NoBom`，保持 JSON 写回 UTF-8 no BOM。
+  - 进程内设置 `$OutputEncoding`、`Console.OutputEncoding`、`Console.InputEncoding` 为 UTF-8，减少诊断输出和参数处理中的简中 code page 干扰。
+  - 新增 `Resolve-CcbSourceRoot`：优先使用调用方提供的 `CCB_SOURCE_ROOT`，其次在 wrapper 所在目录寻找 `ccb.py`，最后使用当前机器的 ASCII 短父目录 + 精确源码目录名 fallback。
+  - 新增 `Resolve-HerdrCapabilityReport`：优先使用 `CCB_HERDR_CAPABILITY_REPORT`，其次按已解析的源码根拼接当前仓库内 Herdr evidence 相对路径。
+  - `CCB_RUNTIME_STATE_HOME`、`CCB_PYTHON` / `CCB_PYTHON_BIN`、`CCB_HERDR_EXE`、`CCB_HERDR_SESSION` 改为环境变量优先，默认值仅作为兼容 fallback；`CCB_RUNTIME_STATE_HOME` override 会先规范化为绝对路径，非法路径 fail-fast。
+  - Herdr capability report 改成机会性解析：能从环境变量、源码根相对路径或旧 8.3 fallback 解析到文件才导出 `CCB_HERDR_CAPABILITY_REPORT`；解析不到只 warning 并清除该 env，不再让 wrapper 初始化直接失败。
+  - `--diagnose` 增加 PowerShell 版本、默认编码、`ccb8.cmd` / `ccb8.ps1` BOM 状态输出。
+  - 新增 `--wrapper-self-test`：默认验证 wrapper 自身的 UTF-8 no BOM 写入、中文路径 JSON roundtrip、UTF-16 JSON 拒绝；传入 `--full-env` 时额外验证源码根解析和 Herdr evidence 解析。该入口不调用 `ccb.py`，不启动源码版 CCB。
+  - `Run-BoundedKillForce` 增加 `Join-WindowsProcessArguments` / `Quote-WindowsProcessArgument`，按 Windows argv 规则引用 `ccb.py` 参数，避免 `CCB_SOURCE_ROOT` 含空格时 PowerShell `Start-Process -ArgumentList` 拼接错误。
+- `D:\C#Project\GitHub\AvaPrintDesigner\ccb8.ps1`
+  - 已同步同一份 wrapper 修复，这是用户外部实际执行 `.\\ccb8.cmd` 的位置。
+
+### 追加验证
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File "./ccb8.ps1" --wrapper-self-test` -> `wrapper_self_test: passed`
+- `$env:CCB_SOURCE_ROOT=(Resolve-Path -LiteralPath ".").ProviderPath; powershell -NoProfile -ExecutionPolicy Bypass -File "./ccb8.ps1" --wrapper-self-test --full-env` -> `wrapper_self_test: passed`
+- `powershell -NoProfile -ExecutionPolicy Bypass -File "D:/C#Project/GitHub/AvaPrintDesigner/ccb8.ps1" --wrapper-self-test` -> `wrapper_self_test: passed`
+- `$env:CCB_SOURCE_ROOT=(Resolve-Path -LiteralPath ".").ProviderPath; powershell -NoProfile -ExecutionPolicy Bypass -File "D:/C#Project/GitHub/AvaPrintDesigner/ccb8.ps1" --wrapper-self-test --full-env` -> `wrapper_self_test: passed`
+- PowerShell AST parse：
+  - `./ccb8.ps1` -> `repo_parse: passed`
+  - `D:/C#Project/GitHub/AvaPrintDesigner/ccb8.ps1` -> `external_parse: passed`
+- BOM 检查：
+  - `./ccb8.cmd` -> `BOM=False`
+  - `./ccb8.ps1` -> `BOM=False`
+  - `D:/C#Project/GitHub/AvaPrintDesigner/ccb8.cmd` -> `BOM=False`
+  - `D:/C#Project/GitHub/AvaPrintDesigner/ccb8.ps1` -> `BOM=False`
+- 静态扫描确认 `ccb8.ps1` 中只剩 `Read-Utf8Json` helper 内部调用 `ConvertFrom-Json`，不再有 `Get-Content ... | ConvertFrom-Json`。
+- PowerShell AST parse：
+  - `./ccb8.ps1` -> `repo_parse: passed`
+  - `D:/C#Project/GitHub/AvaPrintDesigner/ccb8.ps1` -> `external_parse: passed`
+- `git diff --check` -> 通过；仅提示仓库换行策略会在 Git 触碰时将 LF 替换为 CRLF。
+- `D:/C#Project/GitHub/AvaPrintDesigner/ccb8.ps1` 与仓库 `./ccb8.ps1` SHA256 一致：`B796B6B462039F705A1309BC457F07DEA17CCA3E8A23CE6E72D7DFC1AED906E7`。
+- 独立 review：
+  - Task agent `019fca2d-71e8-7e22-b104-540cb4f170dc`：无 blocking；提出 fix-note 验证描述不精确和 bounded kill 参数引用风险，均已修正。
+  - OCR 多轮 focused closure：resolver hard-fail、自检环境耦合、bounded kill 参数、Herdr hard dependency、UTF-8 byte-level 读取和 runtime override 规范化均已处理。
+  - OCR 剩余 medium 建议：`.ccb\ccbd` installed protection file 读取失败当前仍 fail-closed。该点有意保留，因为用户约束是“不影响已安装 CCB/v5”，保护 PID 证据不可读时宁可阻止 wrapper 清理，也不冒险跳过保护。
+- 未在 Codex 内执行 `.\\ccb8.cmd` 正常启动，也未调用 `--diagnose`，遵守本轮“严禁在 Codex 中直接启动源码版 CCB”的约束。
+
+## 2026-08-04 路径纠偏追加修复
+
+### 新增根因
+
+用户在外部项目执行 `.\\ccb8.cmd` 后仍然失败：
+
+- `警告: Herdr capability report not found`
+- `error: ccbd is unavailable: lease_missing; lifecycle_failure: ccbd exited before ready with code 1`
+
+只读日志复核确认，`D:\C#Project\GitHub\AvaPrintDesigner\.ccb\ccbd\ccbd.stderr.log` 的 traceback 实际来自：
+
+- `E:\GitHub开源项目\TachiKuma\claude_code_bridgebak\...`
+
+本机 8.3 短路径解析结果为：
+
+- `E:\GITHUB~1\TACHIK~1\CLAUDE~4` -> `E:\GitHub开源项目\TachiKuma\claude_code_bridge`
+- `E:\GITHUB~1\TACHIK~1\CLAUDE~1` -> `E:\GitHub开源项目\TachiKuma\claude_code_bridgebak`
+
+因此上一轮 wrapper 里保留的 `E:\GITHUB~1\TACHIK~1\CLAUDE~1` fallback 会在未显式设置 `CCB_SOURCE_ROOT` 时把外部项目带到备份源码。日志中的 Windows token ACL owner failure 发生在备份源码里，不能代表当前源码修复链路。
+
+### 追加改动
+
+- `ccb8.ps1`
+  - `Resolve-CcbSourceRoot` 去掉 `E:\GITHUB~1\TACHIK~1\CLAUDE~1`，改为 `E:\GITHUB~1\TACHIK~1\claude_code_bridge`。
+  - 该候选仍保持 ASCII，避免 UTF-8 no BOM 的 PowerShell 5 脚本内直接写中文源码路径；同时用精确目录名避开 `CLAUDE~N` 顺序不稳定和备份仓库误命中。
+  - `Resolve-HerdrCapabilityReport` 去掉旧 `CLAUDE~1\CODEST~1\...` fallback，只从显式环境变量或已解析源码根的相对 evidence 路径解析。
+- `D:\C#Project\GitHub\AvaPrintDesigner\ccb8.ps1`
+  - 已同步同一份 wrapper。
+
+### 追加验证
+
+- 仓库版 `--wrapper-self-test` -> `wrapper_self_test: passed`
+- 仓库版 `--wrapper-self-test --full-env` -> `wrapper_self_test: passed`
+- 外部版 `--wrapper-self-test` -> `wrapper_self_test: passed`
+- 外部版 `--wrapper-self-test --full-env` -> `wrapper_self_test: passed`
+- PowerShell AST parse：仓库版和外部版均 passed。
+- BOM 检查：仓库版 / 外部版的 `ccb8.cmd`、`ccb8.ps1` 均为 `BOM=False`。
+- 静态扫描：仓库版 / 外部版 `ccb8.ps1` 均不再包含 `CLAUDE~1`、`claude_code_bridgebak` 或 `GITHUB~1.*CLAUDE`。
+- 两份 `ccb8.ps1` SHA256 一致：`B796B6B462039F705A1309BC457F07DEA17CCA3E8A23CE6E72D7DFC1AED906E7`。
+- `git diff --check` -> 通过；仅提示仓库换行策略会在 Git 触碰时将 LF 替换为 CRLF。
+- 函数级 ACL 探针：当前源码 `ccbd.control_plane_transport.token_auth.create_token_file()` 在临时目录创建 token 并证明 ACL 收敛成功，返回 `windows-icacls-user-read`；该探针未启动 CCB。
+
+## 当前遗留风险
+
+- 未在 Codex 内执行 `.\\ccb8.cmd` 正常启动，也未执行 `--diagnose`，遵守“严禁在 Codex 中直接启动源码版 CCB”的约束。
+- 下一次外部验证若仍出现 token ACL 报错，应以新的日志路径为准；如果日志已来自 `claude_code_bridge` 而非 `claude_code_bridgebak`，再进入 `token_auth.py` 的 Windows owner/SID 兼容修复。
+
+## 2026-08-04 Windows 控制台中断追加修复
+
+### 新增根因
+
+用户外部再次执行 `.\\ccb8.cmd` 后，前台 traceback 停在：
+
+- `lib\cli\services\daemon_runtime\lifecycle.py`
+- `ensure_daemon_started()`
+- `time.sleep(0.05)`
+
+只读复核确认当前 wrapper 已经跑到正确源码：
+
+- `E:\GITHUB~1\TACHIK~1\claude_code_bridge\ccb.py`
+- `E:\GitHub开源项目\TachiKuma\claude_code_bridge\lib\...`
+
+真正的源码 runtime 不在项目 `.ccb\ccbd`，而在 `D:\.c8\rs\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\ccbd`。该目录下：
+
+- `keeper_pid=10688` 已不是活进程。
+- `lifecycle.json` 停在 `phase=starting` / `startup_stage=spawn_requested`。
+- `ccbd.stderr.log` 只有 `Fatal Python error: init_sys_streams: can't initialize sys standard streams` 和 `KeyboardInterrupt`。
+
+这说明用户前台 Ctrl+C / 控制台中断会传播到正在初始化的后台 ccbd 子进程。`spawn_ccbd_process()` 和 `spawn_keeper_process()` 之前只传 `start_new_session=True`，在 Windows native 控制台下不足以可靠隔离后台 keeper/daemon。
+
+同时，CLI 等待循环对 `phase=failed` 终态也缺少快速出口，导致外部只能看到 `time.sleep(0.05)` 栈，而不是直接看到 lifecycle failure。
+
+### 追加改动
+
+- `lib/process_background.py`
+  - 新增 `background_process_kwargs()`，统一后台进程启动参数。
+  - Windows 下显式设置 `CREATE_NEW_PROCESS_GROUP`、`DETACHED_PROCESS`、`CREATE_NO_WINDOW`，避免后台 keeper/ccbd 继承前台控制台 Ctrl+C。
+  - 非 Windows 保持 `start_new_session=True`。
+- `lib/ccbd/daemon_process.py`
+  - `spawn_ccbd_process()` 改用 `background_process_kwargs()`。
+- `lib/cli/services/daemon_runtime/keeper.py`
+  - `spawn_keeper_process()` 改用 `background_process_kwargs()`。
+- `lib/cli/services/daemon_runtime/lifecycle.py`
+  - `_startup_wait_exhausted()` 遇到 `phase=failed` 且 `desired_state != running` 或存在 `last_failure_reason` 时立即结束等待，交给 `finalize_daemon_start()` 输出明确错误。
+- `test/test_ccbd_process_env.py`
+  - 覆盖 Windows 后台进程 flags。
+  - 修正 POSIX 清理路径测试在 Windows 上对 `os.killpg` / `SIGKILL` 的模拟。
+- `test/test_cli_daemon_keeper_runtime.py`
+  - 覆盖 keeper spawn 会携带后台进程参数。
+- `test/test_v2_daemon_startup_wait.py`
+  - 覆盖 failed 终态不会继续 sleep，而是立即抛出 lifecycle failure。
+
+### 追加验证
+
+- `python -m pytest test/test_ccbd_process_env.py test/test_cli_daemon_keeper_runtime.py test/test_v2_daemon_startup_wait.py -q` -> `26 passed, 2 skipped`
+- `python -m py_compile lib/process_background.py lib/ccbd/daemon_process.py lib/cli/services/daemon_runtime/keeper.py lib/cli/services/daemon_runtime/lifecycle.py test/test_ccbd_process_env.py test/test_cli_daemon_keeper_runtime.py test/test_v2_daemon_startup_wait.py` -> passed
+- `git diff --check` -> passed；仅 LF/CRLF warning。
+- 只读进程检查：`keeper_pid=10688` 已不是活进程；未停止任何进程。
+- 未在 Codex 内执行 `.\\ccb8.cmd` 正常启动，也未执行 `--diagnose`。
+
+## 当前遗留风险
+
+- 需要用户在外部项目重新执行 `.\\ccb8.cmd`。wrapper 下次启动前会重置 `D:\.c8\rs\...\ccbd` 的 stale source-dev 状态。
+- 如果用户再次按 Ctrl+C，新的 keeper/ccbd 子进程不应再被同一个控制台中断直接打死；但正常启动是否完全成功仍需外部验证。
+
+## 2026-08-04 Herdr namespace state 追加修复
+
+### 新增根因
+
+用户外部按顺序执行 `.\\ccb8.cmd --diagnose` 与 `.\\ccb8.cmd` 后，`bug.txt` 显示诊断已通过，但正常启动失败为：
+
+- `command_status: failed`
+- `error: invalid Herdr namespace ref`
+
+只读复核当前短 runtime 后确认，daemon 已经成功启动并 mounted，`startup-report.json` 中 `daemon_started=true`、`health=healthy`、`socket_connectable=true`。故障已从 daemon 启动层进入 Herdr project namespace 层。
+
+根因是 `default_project_namespace_backend()` 在 Herdr runtime 已配置时会选择 Herdr backend，但 `load_namespace_context()` 仍可能把旧 `state.json` 中的 tmux namespace state 传给 Herdr backend。`remember_namespace_state_ref()` 之前不校验 state/ref 的后端归属，导致后续 `session_alive()` / `ensure_window()` 把 `backend_impl=tmux`、`backend_family=tmux-family` 的旧 ref 注入 Herdr 操作，触发 `invalid Herdr namespace ref`。
+
+用户观察到的数个窗口一闪而过，另有独立来源：Herdr CLI adapter 默认 `run_fn=subprocess.run`，没有复用 `terminal_runtime.api._run()` 的 Windows `CREATE_NO_WINDOW` subprocess 参数。
+
+### 追加改动
+
+- `lib/ccbd/services/project_namespace_runtime/backend.py`
+  - `remember_namespace_state_ref()` 改为先解析一次 `namespace_ref()`，再同时参考 state 元数据和实际 ref 的 `backend_impl/backend_family` 做后端匹配。
+  - Herdr backend 会拒绝记忆旧 tmux state/ref；缺少 state 元数据的兼容 ref 仍可按实际 ref 后端判断，避免破坏既有空 session ref 清理行为。
+- `lib/terminal_runtime/api.py`
+  - `_herdr_request_adapter()` 创建 `HerdrCliRequestAdapter` 时显式传入 `run_fn=_run`，让 Herdr CLI 短命令继承 Windows 无窗口 subprocess flags。
+- `test/test_v2_project_namespace_backend.py`
+  - 增加回归：Herdr backend 遇到旧 tmux namespace state 时不得记忆该 ref，`session_alive()` 应重建 Herdr namespace ref，而不是把 tmux ref 交给 Herdr 校验。
+- `test/test_herdr_backend_client.py`
+  - 增加回归：`terminal_api._herdr_request_adapter()` 必须注入 `_run` 包装。
+  - 更新 Herdr runtime 已配置时的 backend selection 契约：直接显式选择 Herdr，不再先走默认 tmux 后重试。
+
+### 追加验证
+
+- `python -m pytest test/test_v2_project_namespace_backend.py -q` -> `23 passed`
+- `python -m pytest test/test_herdr_backend_client.py -q` -> `167 passed`
+- `python -m py_compile lib/ccbd/services/project_namespace_runtime/backend.py lib/terminal_runtime/api.py test/test_v2_project_namespace_backend.py test/test_herdr_backend_client.py` -> passed
+- `git diff --check` -> passed；仅 LF/CRLF warning。
+- 未在 Codex 内执行 `.\\ccb8.cmd` 正常启动，也未执行 `--diagnose`。
+
+## 当前遗留风险
+
+- 仍需用户在外部项目 `D:\C#Project\GitHub\AvaPrintDesigner` 重新运行 `.\\ccb8.cmd` 验证正常启动。
+- 若下一次失败不再是 `invalid Herdr namespace ref`，应优先依据新的 `bug.txt` / 短 runtime `startup-report.json` / `ccbd.stderr.log` 判断是否进入 provider pane 或 Herdr capability 的下一层问题。
+
+## 2026-08-04 Herdr authoritative cmd pane 追加修复
+
+### 新增根因
+
+用户外部再次执行 `.\\ccb8.cmd` 后，前台输出：
+
+- `Stopping source-dev CCB pid=3308`
+- `Stopping source-dev CCB pid=14976`
+- `command_status: failed`
+- `error: authoritative topology cmd pane is missing`
+
+用户没有生成新的 `bug.txt`，因此本轮只读读取短 runtime：
+
+- `D:\.c8\rs\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\ccbd\startup-report.json`
+- `D:\.c8\rs\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\ccbd\state.json`
+- `D:\.c8\rs\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\ccbd\lifecycle.jsonl`
+
+证据显示 daemon 仍为 healthy，TCP endpoint 正常；`state.json` 已是 `namespace_backend_family=herdr-native` / `backend_impl=herdr`，上一轮 `invalid Herdr namespace ref` 已越过。
+
+新故障有两个直接原因：
+
+- `materialize_topology()` 在创建并标识化 `cmd` pane 后只返回 agent panes，随后 `ensure_project_namespace()` 依赖一次 metadata/list-panes 回读去找 authoritative cmd pane。Herdr 下 metadata 可见性或查询作用域不稳定时，刚创建的 cmd pane 会被回读成 `None`，导致 `_last_materialized_cmd_pane=None`。
+- `start_flow_runtime/service_tmux.py` 仍把空字符串 `tmux_socket_path=""` 当作有效 tmux socket，并把有效 cmd pane id 硬编码为必须以 `%` 开头。这不适用于 Herdr pane id。
+
+`lifecycle.jsonl` 进一步显示 daemon 因 `pane_recovery:cmd` 每约 30 秒反复重建 Herdr namespace，epoch 持续增长，说明这是一个稳定的恢复循环而非单次启动抖动。
+
+### 追加改动
+
+- `lib/ccbd/services/project_namespace_runtime/materialize_topology.py`
+  - `materialize_topology()` 改为返回 `(agent_panes, cmd_pane)`。
+  - `_materialize_agent_layout()` 在处理 `cmd` leaf 时直接记录本次 materialize 的 pane id。
+- `lib/ccbd/services/project_namespace_runtime/ensure.py`
+  - 新建 namespace 时优先使用 `materialize_topology()` 返回的 cmd pane；只有缺失时才回退到 metadata 查询。
+- `lib/ccbd/start_flow_runtime/service_tmux.py`
+  - `tmux_socket_path=""` 规范化为无 tmux socket，不再实例化 tmux backend。
+  - topology-managed cmd pane 校验改为：真实 tmux socket 下仍要求 `%...`；无 tmux socket 的 Herdr 路径允许非空 pane id。
+  - `project_socket_active_panes()` 和 `bootstrap_cmd_pane_if_needed()` 在无 tmux socket 时不再把 Herdr pane id 送入 tmux active pane / bootstrap 路径。
+- `test/test_v2_project_namespace_state.py`
+  - 增加回归：Herdr topology materialize 后即使 metadata 暂不可回读，也保留本次创建的 cmd pane id。
+- `test/test_v2_ccbd_start_flow.py`
+  - 增加回归：Herdr topology-managed cmd pane 可以是非 `%` id。
+  - 增加回归：无 tmux socket 时不记录 Herdr pane 到 tmux active pane 集合。
+  - 增加回归：无 tmux socket 时跳过 tmux cmd pane bootstrap。
+
+### 追加验证
+
+- `python -m pytest test/test_v2_project_namespace_state.py -q` -> `44 passed`
+- `python -m pytest test/test_v2_project_namespace_backend.py test/test_herdr_backend_client.py -q` -> `190 passed`
+- 定点 start-flow 回归：
+  - `test_topology_start_uses_only_the_authoritative_cmd_pane`
+  - `test_topology_start_accepts_herdr_authoritative_cmd_pane_without_tmux_socket`
+  - `test_topology_start_fails_closed_when_cmd_authority_is_missing`
+  - `test_project_socket_active_panes_preserves_namespace_root_without_cmd`
+  - `test_project_socket_active_panes_ignores_herdr_panes_without_tmux_socket`
+  - `test_bootstrap_cmd_pane_skips_herdr_namespace_without_tmux_socket`
+  - 结果：`6 passed`
+- `python -m py_compile lib/ccbd/services/project_namespace_runtime/materialize_topology.py lib/ccbd/services/project_namespace_runtime/ensure.py lib/ccbd/start_flow_runtime/service_tmux.py test/test_v2_project_namespace_state.py test/test_v2_ccbd_start_flow.py` -> passed
+- `git diff --check` -> passed；仅 LF/CRLF warning。
+- `python -m pytest test/test_v2_ccbd_start_flow.py -q` 全文件当前有 3 个既有 Windows 环境耦合失败，分别是 shutdown 时 Herdr backend selection、socket path 斜杠格式和 auth handshake 文案；新增/相关定点用例已通过，本轮未扩大处理。
+- 未在 Codex 内执行 `.\\ccb8.cmd` 正常启动，也未执行 `--diagnose`。
+
+## 当前遗留风险
+
+- 当前外部 daemon 仍运行修复前代码，并且可能继续 `pane_recovery:cmd` 循环；需要用户在外部项目重新执行 `.\\ccb8.cmd`，让 wrapper 先停止旧 source-dev PID 并用新代码启动。
+- 若下次已越过 `authoritative topology cmd pane is missing`，下一层失败预计会进入 Herdr provider runtime deferred/agent pane 启动路径，应依据新的 `startup-report.json` 继续定位。
