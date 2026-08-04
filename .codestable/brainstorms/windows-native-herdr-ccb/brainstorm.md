@@ -60,9 +60,25 @@ CCB 保持现有控制面、provider 隔离、ask/pend/watch、Mobile、Config U
 - 倾向：优先把 Herdr 作为 backend adapter，而不是把 CCB 重写成 Herdr 插件。
 - 约束：Native Windows “全功能”应定义为 CCB public workflow parity；Herdr 当前不支持或 beta 的能力必须在 CCB support projection 中明确表达，不能伪装成 Linux/macOS fully supported。
 
+## 2026-08-04 外部项目 / Herdr UI 观察
+
+owner 在外部项目中从 Herdr 内置 PowerShell 直接运行 `.\ccb8.cmd`：没有出现 `.ccb/ccb.config` 中定义的两个 agent CLI 对话界面，只看到一批 `cmd` 窗口短暂闪现后关闭。闪退前一瞬间，Herdr 左侧 agents 面板中曾出现 `claude` 字样。该现象目前是 owner 观察，尚未形成可审计 transcript，需要后续区分“agent pane 已创建但 provider 命令立即退出”和“provider 没有被 CCB runtime 正确启动”。
+
+对照观察：在 Herdr 中手动启动 `claude` 表现正常，但这只证明 Herdr 可以承载 Claude CLI 交互；它不证明 CCB 的 provider home/env、completion、ask/pend/cancel、bounded recovery、Mobile/Config UI 等 control-plane 能力已经接入。
+
+这条观察把 sidebar 关系提升为后续设计问题：
+
+- 方向 1：CCB full-feature sidebar 替代 Herdr 左侧面板。价值是 CCB 语义最完整；风险是和 Herdr 原生 agent/session UI 形成双 UI、双状态源。
+- 方向 2：Herdr 左侧面板替代 CCB sidebar。价值是体验更 native；风险是 Herdr agent detection 不能直接成为 CCB provider/completion/runtime authority。
+- 方向 3：Herdr 负责原生 pane/agent 面板展示，CCB sidebar 能力降为 Herdr 可消费的 project surface / layout projection。价值是边界清晰：Herdr owns terminal/UI shell，CCB owns provider/control-plane truth；代价是需要定义 CCB pane layout config 到 Herdr workspace/tab/pane 的稳定转换和状态回写口径。
+
+当前倾向：优先探索方向 3，而不是让任一 sidebar 全面替代另一方。关键事实问题是 Herdr 是否能接受 CCB 的 pane layout 配置，或是否能稳定消费 CCB 转换后的 workspace/tab/pane layout 与 agent metadata。
+
 ## 遗留问题 & 下一步
 
 - 需要锁定 Herdr 具体版本、安装方式和 socket API schema，避免依赖未稳定文档。
 - 需要确认 Herdr socket API 是否覆盖 CCB 需要的 pane create/split/resize/focus/send/capture/kill/session restore/agent status 语义。
 - 需要做 5-30 分钟 spike：用 Python 调 Herdr socket API 创建 session、启动一个 provider CLI pane、发送输入、捕获输出、重启后恢复 session。
 - 若 spike 通过，进入 `cs-epic` 规划 Native Windows Herdr backend；若失败，记录具体缺口，再决定补 Herdr upstream、保留 rmux 线，或缩小 Native Windows 支持范围。
+- 需要新增/补充 UI integration spike：在真实 Herdr UI client 中运行外部项目 `.\ccb8.cmd`，记录 pane/window 变化、短暂 `cmd` 窗口来源、Herdr agents 面板状态、CCB runtime state、provider stdout/stderr 与退出码。
+- 需要验证 Herdr layout/metadata 能力：能否由 CCB 创建或转换 workspace/tab/pane layout，能否标注 agent/provider/role，Herdr sidebar 是否只读展示还是可触发 CCB action。
