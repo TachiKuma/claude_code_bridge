@@ -760,7 +760,12 @@ class HerdrCliRequestAdapter:
         return {"status": "ok", "pane_id": captured["pane_id"], "alive": True}
 
     def _workspaces(self, *, session_name: str | None = None) -> list[Mapping[str, object]]:
-        result = self._json_command("restore_session", ["workspace", "list"], session_name=session_name)
+        try:
+            result = self._json_command("restore_session", ["workspace", "list"], session_name=session_name)
+        except MuxCommandErrorV2 as exc:
+            if not _looks_like_herdr_list_parse_gap(exc.detail):
+                raise
+            return self._snapshot_items("restore_session", "workspaces", session_name=session_name)
         workspaces = result.get("workspaces")
         return [item for item in workspaces if isinstance(item, Mapping)] if isinstance(workspaces, list) else []
 
@@ -852,24 +857,45 @@ class HerdrCliRequestAdapter:
         args = ["pane", "list"]
         if namespace_id:
             args.extend(["--workspace", namespace_id])
-        result = self._json_command("list_panes", args, session_name=session_name)
+        try:
+            result = self._json_command("list_panes", args, session_name=session_name)
+        except MuxCommandErrorV2 as exc:
+            if not _looks_like_herdr_list_parse_gap(exc.detail):
+                raise
+            panes = self._snapshot_items("list_panes", "panes", session_name=session_name)
+            if namespace_id:
+                return [
+                    pane
+                    for pane in panes
+                    if str(pane.get("workspace_id") or "").strip() == str(namespace_id or "").strip()
+                ]
+            return panes
         panes = result.get("panes")
         return [item for item in panes if isinstance(item, Mapping)] if isinstance(panes, list) else []
 
     def _first_pane(self, namespace_id: str, *, session_name: str) -> str:
-        result = self._json_command("create_pane", ["pane", "list"], session_name=session_name)
-        panes = result.get("panes")
-        if isinstance(panes, list):
-            for pane in panes:
-                if isinstance(pane, Mapping) and pane.get("workspace_id") == namespace_id:
-                    pane_id = str(pane.get("pane_id") or "")
-                    if pane_id:
-                        return pane_id
+        for pane in self._panes("", session_name=session_name):
+            if pane.get("workspace_id") == namespace_id:
+                pane_id = str(pane.get("pane_id") or "")
+                if pane_id:
+                    return pane_id
         raise self._failed(
             "create_pane",
             f"no Herdr pane found for workspace {namespace_id!r}",
             session_name=session_name,
         )
+
+    def _snapshot_items(
+        self,
+        operation: str,
+        key: str,
+        *,
+        session_name: str | None,
+    ) -> list[Mapping[str, object]]:
+        result = self._json_command(operation, ["api", "snapshot"], session_name=session_name)
+        snapshot = _mapping(result.get("snapshot"))
+        items = snapshot.get(key)
+        return [item for item in items if isinstance(item, Mapping)] if isinstance(items, list) else []
 
     def _root_pane_for_workspace(self, workspace_id: str, *, session_name: str) -> str | None:
         workspace_text = str(workspace_id or "").strip()
@@ -1324,6 +1350,11 @@ def _command_error_category(detail: str, *, expect_json: bool) -> str:
     ):
         return "not-found"
     return "transient-unavailable" if expect_json else "command-failed"
+
+
+def _looks_like_herdr_list_parse_gap(detail: str) -> bool:
+    lowered = str(detail or "").lower()
+    return "did not return json" in lowered or "json response is not an object" in lowered
 
 
 def _looks_like_missing_server(detail: str) -> bool:

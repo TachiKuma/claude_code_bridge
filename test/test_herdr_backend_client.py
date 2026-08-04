@@ -1943,6 +1943,85 @@ def test_herdr_cli_request_adapter_maps_server_info_and_core_operations() -> Non
     assert captured["text"] == "ready"
     assert killed["status"] == "ok"
     assert commands
+    joined_commands = [" ".join(command) for command in commands]
+    assert any("workspace list" in command for command in joined_commands)
+    assert any("pane list" in command for command in joined_commands)
+    assert not any("workspace list --json" in command for command in joined_commands)
+    assert not any("pane list --json" in command for command in joined_commands)
+
+
+def test_herdr_cli_request_adapter_falls_back_to_api_snapshot_when_list_output_is_not_json() -> None:
+    commands: list[list[str]] = []
+
+    def run_fn(command, **kwargs):
+        commands.append(command)
+        joined = " ".join(command)
+        if "workspace list" in joined or "pane list" in joined:
+            assert "--json" not in command
+            return _completed("not-json")
+        if "api snapshot" in joined:
+            return _completed(
+                json.dumps(
+                    {
+                        "result": {
+                            "snapshot": {
+                                "workspaces": [{"workspace_id": "w1", "label": "demo"}],
+                                "panes": [
+                                    {"pane_id": "w1:p1", "workspace_id": "w1"},
+                                    {"pane_id": "w2:p1", "workspace_id": "w2"},
+                                ],
+                            }
+                        }
+                    }
+                )
+            )
+        raise AssertionError(joined)
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        which_fn=lambda name: "herdr",
+    )
+
+    restored = adapter("restore_session", {"restore_token": "ccb-demo::w1"})
+    listed = adapter("list_panes", {"namespace_id": "w1", "session_name": "ccb-demo"})
+
+    assert restored["namespace_id"] == "w1"
+    assert [pane["pane_id"] for pane in listed["panes"]] == ["w1:p1"]
+    joined_commands = [" ".join(command) for command in commands]
+    assert any("workspace list" in command for command in joined_commands)
+    assert any("pane list" in command for command in joined_commands)
+    assert not any("workspace list --json" in command for command in joined_commands)
+    assert not any("pane list --json" in command for command in joined_commands)
+    assert sum("api snapshot" in command for command in joined_commands) == 2
+
+
+def test_herdr_cli_request_adapter_does_not_fallback_to_snapshot_for_list_command_failure() -> None:
+    commands: list[list[str]] = []
+
+    def run_fn(command, **kwargs):
+        commands.append(command)
+        joined = " ".join(command)
+        if "workspace list" in joined:
+            raise _called_process_error(command, stderr="permission denied")
+        if "api snapshot" in joined:
+            raise AssertionError("snapshot fallback must not mask real command failures")
+        raise AssertionError(joined)
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        which_fn=lambda name: "herdr",
+    )
+
+    with pytest.raises(MuxCommandErrorV2) as exc_info:
+        adapter("restore_session", {"restore_token": "ccb-demo::w1"})
+
+    assert "permission denied" in exc_info.value.detail
+    assert any("workspace list" in " ".join(command) for command in commands)
+    assert not any("api snapshot" in " ".join(command) for command in commands)
 
 
 def test_herdr_cli_request_adapter_starts_server_and_retries_server_backed_command() -> None:
