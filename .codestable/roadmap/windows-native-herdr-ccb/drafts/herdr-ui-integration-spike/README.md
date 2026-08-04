@@ -46,7 +46,11 @@ $out = "$repo/.codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-ui-integ
 - `raw-command-refs/*.json|*.txt`：`herdr`、`ccb8 --diagnose`、`ccb8`、`ping`、`doctor ps`、`layout status`、`doctor --output` 等命令证据。
 - `manual-observation.md`：Herdr 左侧 agents panel 与窗口闪退的人工观察补充位。
 
-Herdr 0.7.5 的 `workspace list` / `pane list` 不支持 `--json`；脚本使用 `api snapshot` 采集机器可读 workspace/pane 状态。
+Herdr 0.7.5 的 `workspace list` / `pane list` 不支持 `--json`；脚本使用 `api snapshot` 采集机器可读 workspace/pane 状态。带 session 的 Herdr 子命令必须使用 `herdr <subcommand> ... --session <name>`，不要使用 `herdr --session <name> <subcommand>`，否则会进入 attach/TUI 路径。
+
+`ccb8-wrapper-file-check` 只验证外部项目 `ccb8.cmd` / `ccb8.ps1` 文件存在且没有 UTF-8 BOM。外部 wrapper 不要求支持仓库根模板的私有 `--wrapper-self-test` 参数；真实启动链路由 `ccb8 --diagnose` 和 `ccb8` 主启动继续验证。
+
+`ccb8-start-project` 使用 `UseShellExecute=false` 和 `CreateNoWindow=true` 启动，避免 spike 自己的 `cmd.exe -> powershell.exe` 链路创建外部控制台窗口。外部项目 `ccb8.ps1` 的预启动 `python ccb.py kill -f` 清理也应使用 `CreateNoWindow=true`；若后续仍观察到闪窗，优先用 `process-samples.jsonl` 区分 CCB wrapper 链路与环境中已有的 `codegraph.cmd` / `codex-dual` 控制台进程。命令引用中会记录 spike 启动属性；`observed_windows_flash` 仍是人工观察字段。
 
 `ccb8-start-project` 是启动证据点：脚本只确认它已启动并继续采样，不等待它阻塞主采集流程。不要默认使用 `-n`；当前证据显示 `ccb8.cmd -n` 会先触发 `Refresh project memory/context ... [y/N]` 交互确认，容易让自动采集卡在 reset prompt 上。
 
@@ -68,7 +72,7 @@ Herdr 0.7.5 的 `workspace list` / `pane list` 不支持 `--json`；脚本使用
 .codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-ui-integration-spike/backups/
 ```
 
-再次运行真实 UI spike 前，需要先把对应备份恢复到外部项目根目录，或显式用 `-Ccb8Path` 指向可执行 wrapper。
+当前外部项目根目录已有可执行 wrapper，可直接用于真实 UI spike。上述备份只作为回滚点保留。
 
 ## 边界
 

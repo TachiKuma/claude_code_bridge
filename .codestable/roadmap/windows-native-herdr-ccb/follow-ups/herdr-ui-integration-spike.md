@@ -44,3 +44,24 @@ owner 在外部项目中从 Herdr 内置 PowerShell 运行 `.\ccb8.cmd` 时，�
 - spike harness 改为采集 `ccb8 layout status --json`，并新增 `layout_materialization_complete` 判定。
 - spike harness 分类已把 `ping all` 成功纳入 layout materialized / panel observation 通过类前置。
 - 当前下一次真实 UI 验收闭环是：在 Herdr pane 内运行 spike，先要求 `ccb8-start-project.stderr.txt` 不再出现 `unknown option: --json`，再要求 `ping ccbd` mounted、`ping all` 成功、`layout_materialized_count >= expected_agents`。
+
+## 最新进展：2026-08-04 22:20 采集后
+
+- 最新 run `run-20260804-222025` 显示 `classification=mounted-with-herdr-panel-observation`，`ping_all_success=true`，`layout_configured_count=2`，`layout_materialized_count=2`，两个 provider pane 已 materialize。
+- `ccb8-ps` 记录 `agent1/codex -> mux:w1:p3`、`agent2/claude -> mux:w1:p4`，两者 `pane_state=alive`、`runtime_state=idle`。
+- 采集脚本后续修复了两个 harness 异常：Herdr session 参数改为追加在子命令之后，避免 `herdr --session <name> ...` 进入 TUI；外部 wrapper 检查改为 `ccb8-wrapper-file-check`，不再要求外部项目 wrapper 支持私有 `--wrapper-self-test`。
+- 当前下一次真实 UI 验收闭环改为：在 Herdr pane 内重跑 spike，要求 `herdr-status-server-*` 不再 timeout 抓 TUI、`ccb8-wrapper-file-check` exit 0、`ping all` 成功、`layout_materialized_count >= expected_agents`。
+
+## 最新进展：2026-08-04 23:08 采集后
+
+- 最新 run `run-20260804-230805` 继续显示 `classification=mounted-with-herdr-panel-observation`，`ping_all_success=true`，`layout_configured_count=2`，`layout_materialized_count=2`，Herdr CLI timeout 和 wrapper file check 均已修正。
+- `observed_windows_flash=true` 仍成立；`process-samples.jsonl` 中可见 CCB 可控链路 `cmd.exe /c D:\C#Project\GitHub\AvaPrintDesigner\ccb8.cmd -> powershell.exe -File ccb8.ps1 -> python.exe ccb.py kill -f`，同时也存在 `codex-dual` / `codegraph.cmd` 等环境噪声。
+- spike harness 的 detached 启动已改为 `UseShellExecute=false` + `CreateNoWindow=true`；仓库模板和外部项目 `D:/C#Project/GitHub/AvaPrintDesigner/ccb8.ps1` 的预启动 `kill -f` 子进程也改为 `CreateNoWindow=true`，避免手动运行 `.\ccb8.cmd` 时内部清理链路创建外部控制台窗口。
+- 下一次真实 UI 验收应不传 `-ObservedWindowsFlash`；若仍观察到闪窗，再用新的 `process-samples.jsonl` 判定是否还来自 CCB wrapper 链路，还是 Herdr / codegraph / codex-dual 环境进程。
+
+## 最新进展：2026-08-05 04:05 复验后
+
+- 最新 run `run-20260805-040538` 仍为 `classification=mounted-with-herdr-panel-observation`，但这次 `observed_windows_flash=false`，说明前述闪窗问题已在当前链路上消失。
+- 机器证据保持一致：`ping_all_success=true`、`layout_configured_count=2`、`layout_materialized_count=2`、`layout_materialization_complete=true`。
+- `ccb8-start-project.json` 明确记录 `create_no_window=true`、`use_shell_execute=false`；`process-samples.jsonl` 仍能看到 `cmd.exe -> powershell.exe -> python.exe ccb.py kill -f`，但它已不再对应可见外部窗口闪现。
+- 这次复验可以作为 `observed_windows_flash` 的关闭证据；后续只需继续关注 layout / provider authority 是否稳定，而不必再把闪窗本身当成未关闭阻塞项。

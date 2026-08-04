@@ -166,6 +166,81 @@ function New-CommandRef {
     Write-Utf8NoBom -Path $RefPath -Content (($payload | ConvertTo-Json -Depth 20) + [Environment]::NewLine)
 }
 
+function Test-Utf8Bom {
+    param([string] $Path)
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $false
+    }
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        if ($stream.Length -lt 3) {
+            return $false
+        }
+        $buffer = New-Object byte[] 3
+        [void] $stream.Read($buffer, 0, 3)
+        return $buffer[0] -eq 0xEF -and $buffer[1] -eq 0xBB -and $buffer[2] -eq 0xBF
+    } finally {
+        $stream.Dispose()
+    }
+}
+
+function Invoke-WrapperFileCheck {
+    param(
+        [string] $Name,
+        [string] $Ccb8Path,
+        [string] $RawDir
+    )
+    $stdoutPath = Join-Path $RawDir ($Name + '.stdout.txt')
+    $stderrPath = Join-Path $RawDir ($Name + '.stderr.txt')
+    $refPath = Join-Path $RawDir ($Name + '.json')
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+
+    $cmdPath = $Ccb8Path
+    $ps1Path = [System.IO.Path]::ChangeExtension($cmdPath, '.ps1')
+    $errors = @()
+    if (-not (Test-Path -LiteralPath $cmdPath)) {
+        $errors += ('missing wrapper cmd: ' + $cmdPath)
+    }
+    if (-not (Test-Path -LiteralPath $ps1Path)) {
+        $errors += ('missing wrapper ps1: ' + $ps1Path)
+    }
+    if ((Test-Path -LiteralPath $cmdPath) -and (Test-Utf8Bom -Path $cmdPath)) {
+        $errors += ('wrapper cmd has UTF-8 BOM: ' + $cmdPath)
+    }
+    if ((Test-Path -LiteralPath $ps1Path) -and (Test-Utf8Bom -Path $ps1Path)) {
+        $errors += ('wrapper ps1 has UTF-8 BOM: ' + $ps1Path)
+    }
+
+    $stdoutLines = @(
+        ('wrapper_cmd: ' + $cmdPath),
+        ('wrapper_ps1: ' + $ps1Path),
+        ('wrapper_cmd_exists: ' + (Test-Path -LiteralPath $cmdPath)),
+        ('wrapper_ps1_exists: ' + (Test-Path -LiteralPath $ps1Path)),
+        ('wrapper_cmd_utf8_bom: ' + (Test-Utf8Bom -Path $cmdPath)),
+        ('wrapper_ps1_utf8_bom: ' + (Test-Utf8Bom -Path $ps1Path))
+    )
+    Write-Utf8NoBom -Path $stdoutPath -Content (($stdoutLines -join [Environment]::NewLine) + [Environment]::NewLine)
+    Write-Utf8NoBom -Path $stderrPath -Content (($errors -join [Environment]::NewLine) + $(if ($errors.Count -gt 0) { [Environment]::NewLine } else { "" }))
+    $sw.Stop()
+
+    $exitCode = if ($errors.Count -gt 0) { 1 } else { 0 }
+    New-CommandRef -Name $Name -Command @('wrapper-file-check', $Ccb8Path) -ExitCode $exitCode -TimedOut $false -ElapsedMs ([int] $sw.ElapsedMilliseconds) -StdoutPath $stdoutPath -StderrPath $stderrPath -RefPath $refPath
+
+    $stdoutText = [System.IO.File]::ReadAllText($stdoutPath)
+    $stderrText = [System.IO.File]::ReadAllText($stderrPath)
+    return [ordered] @{
+        name = $Name
+        exit_code = $exitCode
+        timed_out = $false
+        elapsed_ms = [int] $sw.ElapsedMilliseconds
+        ref = $refPath
+        stdout_ref = $stdoutPath
+        stderr_ref = $stderrPath
+        stdout_tail = $stdoutText
+        stderr_tail = $stderrText
+    }
+}
+
 function Invoke-CapturedCommand {
     param(
         [string] $Name,
@@ -266,15 +341,21 @@ function Invoke-DetachedCommand {
         $actualCommand = @($env:ComSpec, '/d', '/s', '/c', $cmdText)
     }
 
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $actualCommand[0]
+    $psi.Arguments = Join-WindowsProcessArguments -Arguments @($actualCommand | Select-Object -Skip 1)
+    $psi.WorkingDirectory = $WorkingDirectory
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    $process = Start-Process `
-        -FilePath $actualCommand[0] `
-        -ArgumentList (Join-WindowsProcessArguments -Arguments @($actualCommand | Select-Object -Skip 1)) `
-        -WorkingDirectory $WorkingDirectory `
-        -RedirectStandardOutput $stdoutPath `
-        -RedirectStandardError $stderrPath `
-        -WindowStyle Hidden `
-        -PassThru
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $psi
+    [void] $process.Start()
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
 
     $launchDeadline = (Get-Date).AddSeconds($LaunchProbeSeconds)
     $observedPid = $process.Id
@@ -309,12 +390,14 @@ function Invoke-DetachedCommand {
 
     $stdoutText = ""
     $stderrText = ""
-    if (Test-Path -LiteralPath $stdoutPath) {
-        try { $stdoutText = Redact-Text -Text ([System.IO.File]::ReadAllText($stdoutPath)) } catch {}
+    if ($process.HasExited) {
+        try { $stdoutTask.Wait(5000) | Out-Null } catch {}
+        try { $stderrTask.Wait(5000) | Out-Null } catch {}
+        try { $stdoutText = Redact-Text -Text ([string] $stdoutTask.Result) } catch {}
+        try { $stderrText = Redact-Text -Text ([string] $stderrTask.Result) } catch {}
     }
-    if (Test-Path -LiteralPath $stderrPath) {
-        try { $stderrText = Redact-Text -Text ([System.IO.File]::ReadAllText($stderrPath)) } catch {}
-    }
+    Write-Utf8NoBom -Path $stdoutPath -Content $stdoutText
+    Write-Utf8NoBom -Path $stderrPath -Content $stderrText
     $sw.Stop()
 
     $exitCode = if ($launchStatus -eq 'launch_failed') { [int] $process.ExitCode } else { 0 }
@@ -323,6 +406,8 @@ function Invoke-DetachedCommand {
         command = @($Command | ForEach-Object { Redact-Text -Text $_ })
         status = $launchStatus
         process_id = $observedPid
+        create_no_window = $true
+        use_shell_execute = $false
         exit_code = $exitCode
         elapsed_ms = [int] $sw.ElapsedMilliseconds
         stdout_ref = $stdoutPath
@@ -342,6 +427,8 @@ function Invoke-DetachedCommand {
         stderr_tail = if ($stderrText.Length -gt 1200) { $stderrText.Substring($stderrText.Length - 1200) } else { $stderrText }
         status = $launchStatus
         process_id = $observedPid
+        create_no_window = $true
+        use_shell_execute = $false
     }
 }
 
@@ -436,6 +523,17 @@ function Get-HerdrArgs {
     return @('--session', $Session)
 }
 
+function Add-HerdrSessionArgs {
+    param(
+        [string[]] $Command,
+        [string] $Session
+    )
+    if ([string]::IsNullOrWhiteSpace($Session)) {
+        return @($Command)
+    }
+    return @($Command) + @('--session', $Session)
+}
+
 function New-ManualObservationTemplate {
     param(
         [string] $Path,
@@ -463,6 +561,7 @@ function New-ManualObservationTemplate {
 
 function Invoke-SelfTest {
     $temp = Join-Path ([System.IO.Path]::GetTempPath()) ('ccb-herdr-ui-spike-selftest-' + [Guid]::NewGuid().ToString('N') + '.json')
+    $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ('ccb-herdr-ui-spike-selftest-' + [Guid]::NewGuid().ToString('N'))
     try {
         $redacted = Redact-Text -Text 'token=abc password xyz bearer qwerty'
         if ($redacted -match 'abc|xyz|qwerty') {
@@ -473,9 +572,23 @@ function Invoke-SelfTest {
         if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
             throw 'UTF-8 BOM self-test failed'
         }
+        $sessionArgs = Add-HerdrSessionArgs -Command @('herdr', 'status', 'server', '--json') -Session 'demo'
+        if (($sessionArgs -join ' ') -ne 'herdr status server --json --session demo') {
+            throw 'Herdr session arg ordering self-test failed'
+        }
+        New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
+        $cmdPath = Join-Path $tempDir 'ccb8.cmd'
+        $ps1Path = Join-Path $tempDir 'ccb8.ps1'
+        Write-Utf8NoBom -Path $cmdPath -Content "@echo off`r`n"
+        Write-Utf8NoBom -Path $ps1Path -Content "param()`r`n"
+        $check = Invoke-WrapperFileCheck -Name 'wrapper-file-check-selftest' -Ccb8Path $cmdPath -RawDir $tempDir
+        if ([int] $check.exit_code -ne 0) {
+            throw 'wrapper file check self-test failed'
+        }
         Write-Host 'herdr_ui_integration_spike_selftest: passed'
     } finally {
         Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $tempDir -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -512,12 +625,11 @@ Write-Utf8NoBom -Path (Join-Path $resolvedOut 'host-context.json') -Content (($h
 New-ManualObservationTemplate -Path (Join-Path $resolvedOut 'manual-observation.md') -RunId $runId -ObservedPanel $ObservedHerdrAgentsPanelText -ObservedFlash ([bool] $ObservedWindowsFlash)
 
 $commands = @()
-$herdrPrefix = Get-HerdrArgs -Session $effectiveHerdrSession
 Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'collecting Herdr baseline' -PercentComplete 5
 $commands += Invoke-CapturedCommand -Name 'herdr-version' -Command @($resolvedHerdr, '--version') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 15
-$commands += Invoke-CapturedCommand -Name 'herdr-status-server-before' -Command @($resolvedHerdr) + $herdrPrefix + @('status', 'server', '--json') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 20
-$commands += Invoke-CapturedCommand -Name 'herdr-api-snapshot-before' -Command @($resolvedHerdr) + $herdrPrefix + @('api', 'snapshot') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 20
-$commands += Invoke-CapturedCommand -Name 'ccb8-wrapper-self-test' -Command @($resolvedCcb8, '--wrapper-self-test') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 30
+$commands += Invoke-CapturedCommand -Name 'herdr-status-server-before' -Command (Add-HerdrSessionArgs -Command @($resolvedHerdr, 'status', 'server', '--json') -Session $effectiveHerdrSession) -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 20
+$commands += Invoke-CapturedCommand -Name 'herdr-api-snapshot-before' -Command (Add-HerdrSessionArgs -Command @($resolvedHerdr, 'api', 'snapshot') -Session $effectiveHerdrSession) -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 20
+$commands += Invoke-WrapperFileCheck -Name 'ccb8-wrapper-file-check' -Ccb8Path $resolvedCcb8 -RawDir $rawDir
 $commands += Invoke-CapturedCommand -Name 'ccb8-diagnose' -Command @($resolvedCcb8, '--diagnose') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 45
 
 $samplerPath = Join-Path $resolvedOut 'process-samples.jsonl'
@@ -541,8 +653,8 @@ try {
     if ($null -eq $oldUnbuffered) { Remove-Item Env:PYTHONUNBUFFERED -ErrorAction SilentlyContinue } else { $env:PYTHONUNBUFFERED = $oldUnbuffered }
 }
 
-$commands += Invoke-CapturedCommand -Name 'herdr-status-server-after' -Command @($resolvedHerdr) + $herdrPrefix + @('status', 'server', '--json') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 20
-$commands += Invoke-CapturedCommand -Name 'herdr-api-snapshot-after' -Command @($resolvedHerdr) + $herdrPrefix + @('api', 'snapshot') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 20
+$commands += Invoke-CapturedCommand -Name 'herdr-status-server-after' -Command (Add-HerdrSessionArgs -Command @($resolvedHerdr, 'status', 'server', '--json') -Session $effectiveHerdrSession) -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 20
+$commands += Invoke-CapturedCommand -Name 'herdr-api-snapshot-after' -Command (Add-HerdrSessionArgs -Command @($resolvedHerdr, 'api', 'snapshot') -Session $effectiveHerdrSession) -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 20
 $commands += Invoke-CapturedCommand -Name 'ccb8-ping-ccbd' -Command @($resolvedCcb8, 'ping', 'ccbd') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 30
 $commands += Invoke-CapturedCommand -Name 'ccb8-ping-all' -Command @($resolvedCcb8, 'ping', 'all') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 30
 $commands += Invoke-CapturedCommand -Name 'ccb8-ps' -Command @($resolvedCcb8, 'ps') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 30
