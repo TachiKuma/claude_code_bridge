@@ -493,3 +493,40 @@ tags: [windows, ccb8, kill, startup]
 
 - 本轮已验证 foreground attach 代码路径可以成功 focus Herdr namespace；但 Codex 工具自身不是交互式 Windows 控制台，不能直接证明用户桌面上的 GUI 前台切换观感。
 - `startup-report.json` 仍显示 `provider_runtime_deferred_on_herdr:*`。这不再是 cmd pane 循环故障：Herdr workspace 内 agent panes 已存在，但 provider runtime commit 需要依赖 start flow 的 assigned pane 条件；若用户接下来要求 agent pane 内 provider 进程也必须自动启动，应作为下一层 Herdr provider runtime issue 继续处理。
+
+## 17. Focused Closure After Herdr Provider Runtime Launch Repro
+
+### 新增根因
+
+用户外部再次执行 `.\\ccb8.cmd` 后，Herdr namespace 已出现，但 agent pane 仍是空 PowerShell，没有进入 Codex / Claude CLI 对话界面。`startup-report.json` 显示 `reuse_binding`，说明 provider launch 被旧 binding 早退短路，而不是 Herdr pane 本身没分配出来。
+
+### 追加改动
+
+- `lib/ccbd/start_flow_runtime/service_tmux.py`
+  - Herdr namespace 下不再按 `binding is None` 过滤 namespace panes；只要是当前目标 agent，就保留 authoritative Herdr pane。
+- `lib/ccbd/start_runtime/agent_runtime_binding.py`
+  - Herdr assigned pane 存在时，不再因为已有 binding 直接返回 `attached`，而是继续走 `ensure_agent_runtime()`，让 provider 真实 respawn 到 Herdr pane。
+- `lib/ccbd/start_flow_runtime/service.py`
+  - 向 `tmux_layout_for_start()` 传递 namespace backend 标识，确保 Herdr 分支可被识别。
+- `test/test_v2_ccbd_start_flow.py`
+  - 增加 Herdr namespace pane 即使已有 binding 也要保留的回归。
+- `test/test_ccbd_start_agent_runtime.py`
+  - 增加 Herdr assigned pane 即使存在旧 binding 也要触发 launch 的回归。
+
+### 追加验证
+
+- `python -m pytest "test/test_ccbd_start_agent_runtime.py" "test/test_v2_ccbd_start_flow.py" -k "herdr or namespace_topology or visible_layout_signature or launches_herdr_assigned_pane"` -> `10 passed`
+- `python -m py_compile lib/ccbd/start_runtime/agent_runtime_binding.py lib/ccbd/supervisor_runtime/lifecycle.py lib/ccbd/start_flow_runtime/service_tmux.py lib/ccbd/start_flow_runtime/service.py test/test_ccbd_start_agent_runtime.py test/test_v2_ccbd_start_flow.py` -> passed
+- 外部项目 `D:\C#Project\GitHub\AvaPrintDesigner\ccb8.cmd` 实机验证：
+  - `actions_taken`: `use_namespace_topology:agent_1,agent_2`, `launch_runtime:agent_2`, `restore_runtime:agent_2`, `launch_runtime:agent_1`, `restore_runtime:agent_1`
+  - `agent_results[].action = launched`
+  - Herdr pane `wAV:p3` / `wAV:p4` 不再是空 PowerShell，而是实际 provider 会话。
+
+### 结果
+
+- blocking: none
+- important: none
+- nit: none
+- suggestion: 这次改动和上一轮 Herdr namespace / cmd pane 修复可以一起合并成一个收尾提交；如果想让历史更清楚，也可以拆成第二个 commit 单独记录 provider launch 修复。
+- residual-risk: `startup-report.json` 的 `runtime_state` / `runtime_panes` 仍是 legacy 命名，排障时需结合 `actions_taken` 和实际 pane 内容看结论。
+- verdict: passed

@@ -138,7 +138,7 @@ def launch_or_reuse_binding(
     provider_prepared: bool = False,
     effective_command=None,
 ):
-    if binding is not None:
+    if binding is not None and not _is_herdr_assigned_pane_ref(assigned_pane_ref):
         return binding, 'attached', {}
 
     launch_kwargs = dict(
@@ -176,6 +176,12 @@ def launch_or_reuse_binding(
     if launch.launched:
         return binding, 'launched', launch_timings_ms
     return binding, 'attached', launch_timings_ms
+
+
+def _is_herdr_assigned_pane_ref(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    return str(value.get('backend_impl') or '').strip() == 'herdr'
 
 
 def relabel_runtime_pane(
