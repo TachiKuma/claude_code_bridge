@@ -3,6 +3,12 @@ from __future__ import annotations
 import math
 from time import monotonic_ns
 
+from .binding_runtime.common import (
+    binding_pane_id,
+    is_pane_runtime_ref,
+    runtime_ref_backend,
+    runtime_ref_pane_id,
+)
 from .agent_runtime_models import RuntimeBindingState
 
 
@@ -234,12 +240,17 @@ def runtime_pane_facts(
     tmux_socket_path: str | None,
     same_tmux_socket_path_fn,
 ) -> tuple[str | None, str | None, str | None]:
-    if not runtime_ref or not str(runtime_ref).startswith('tmux:') or binding is None:
+    if not runtime_ref or not is_pane_runtime_ref(runtime_ref) or binding is None:
         return None, None, None
-    runtime_pane_id = str(runtime_ref)[len('tmux:') :]
+    runtime_pane_id = binding_pane_id(binding) or runtime_ref_pane_id(runtime_ref)
+    if runtime_pane_id is None:
+        return None, None, None
     socket_name = binding.tmux_socket_path or binding.tmux_socket_name
     project_socket_active_pane_id = None
-    if same_tmux_socket_path_fn(getattr(binding, 'tmux_socket_path', None), tmux_socket_path):
+    if (
+        runtime_ref_backend(runtime_ref) == 'tmux'
+        and same_tmux_socket_path_fn(getattr(binding, 'tmux_socket_path', None), tmux_socket_path)
+    ):
         project_socket_active_pane_id = runtime_pane_id
     return socket_name, runtime_pane_id, project_socket_active_pane_id
 

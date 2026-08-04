@@ -107,6 +107,7 @@ def run_start_flow(
         tmux_session_name=tmux_session_name,
         workspace_window_id=workspace_window_id,
         namespace_epoch=namespace_epoch,
+        namespace_agent_panes=namespace_agent_panes,
         namespace_pane_records=namespace_pane_records,
         force_restart_agents=tuple((restart_agent_panes or {}).keys()),
     )
