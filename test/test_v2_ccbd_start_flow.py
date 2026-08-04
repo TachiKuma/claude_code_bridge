@@ -116,6 +116,28 @@ def test_topology_start_uses_only_the_authoritative_cmd_pane() -> None:
     assert calls == []
 
 
+def test_topology_start_accepts_herdr_authoritative_cmd_pane_without_tmux_socket() -> None:
+    class Backend:
+        def __init__(self, *, socket_path: str | None = None):
+            self.socket_path = socket_path
+
+        def _tmux_run(self, args, **kwargs):
+            raise AssertionError(f'Herdr topology must not invoke tmux: {args!r}, {kwargs!r}')
+
+    backend, cmd_pane = tmux_namespace_runtime(
+        SimpleNamespace(tmux_backend_cls=Backend),
+        tmux_socket_path='',
+        tmux_session_name='ccb-project',
+        tmux_workspace_window_name='main',
+        namespace_cmd_pane='herdr-pane-cmd',
+        namespace_topology_managed=True,
+        cmd_enabled=True,
+    )
+
+    assert backend is None
+    assert cmd_pane == 'herdr-pane-cmd'
+
+
 def test_topology_start_fails_closed_when_cmd_authority_is_missing() -> None:
     with pytest.raises(RuntimeError, match='authoritative topology cmd pane is missing'):
         tmux_namespace_runtime(
@@ -129,28 +151,6 @@ def test_topology_start_fails_closed_when_cmd_authority_is_missing() -> None:
         )
 
 
-def test_tmux_layout_for_start_uses_namespace_agent_panes_when_provided() -> None:
-    from ccbd.start_flow_runtime.service_tmux import tmux_layout_for_start
-
-    calls: dict[str, object] = {}
-    deps = SimpleNamespace(
-        set_tmux_ui_active_fn=lambda active: calls.setdefault('ui_active', active),
-        build_project_layout_plan_fn=lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError('namespace topology should provide panes')
-        ),
-        prepare_tmux_start_layout_fn=None,
-    )
-    prepared_agents = (
-        SimpleNamespace(agent_name='agent1', binding=None),
-        SimpleNamespace(agent_name='agent2', binding=None),
-        SimpleNamespace(agent_name='agent3', binding=None),
-    )
-
-    layout = tmux_layout_for_start(
-        deps,
-        SimpleNamespace(),
-        config=SimpleNamespace(windows_explicit=False),
-        prepared_agents=prepared_agents,
 def test_project_socket_active_panes_ignores_herdr_panes_without_tmux_socket() -> None:
     active_panes, cmd_pane_id = project_socket_active_panes(
         tmux_layout=SimpleNamespace(cmd_pane_id='herdr-pane-cmd', agent_panes={}),
@@ -183,6 +183,28 @@ def test_bootstrap_cmd_pane_skips_herdr_namespace_without_tmux_socket(tmp_path: 
     assert calls == []
 
 
+def test_tmux_layout_for_start_uses_namespace_agent_panes_when_provided() -> None:
+    from ccbd.start_flow_runtime.service_tmux import tmux_layout_for_start
+
+    calls: dict[str, object] = {}
+    deps = SimpleNamespace(
+        set_tmux_ui_active_fn=lambda active: calls.setdefault('ui_active', active),
+        build_project_layout_plan_fn=lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError('namespace topology should provide panes')
+        ),
+        prepare_tmux_start_layout_fn=None,
+    )
+    prepared_agents = (
+        SimpleNamespace(agent_name='agent1', binding=None),
+        SimpleNamespace(agent_name='agent2', binding=None),
+        SimpleNamespace(agent_name='agent3', binding=None),
+    )
+
+    layout = tmux_layout_for_start(
+        deps,
+        SimpleNamespace(),
+        config=SimpleNamespace(windows_explicit=False),
+        prepared_agents=prepared_agents,
         interactive_tmux_layout=True,
         tmux_backend=SimpleNamespace(),
         root_pane_id='%0',

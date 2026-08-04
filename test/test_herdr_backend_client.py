@@ -1871,6 +1871,17 @@ def test_terminal_api_herdr_request_adapter_uses_socket_ref_override(monkeypatch
     assert adapter.socket_ref == "herdr://override"
 
 
+def test_terminal_api_herdr_request_adapter_uses_windowless_run_wrapper(monkeypatch) -> None:
+    def run_fn(*_args, **_kwargs):
+        raise AssertionError("run_fn should not be executed by adapter construction")
+
+    monkeypatch.setattr(terminal_api, "_run", run_fn)
+
+    adapter = terminal_api._herdr_request_adapter()
+
+    assert adapter._run_fn is run_fn
+
+
 def test_herdr_cli_request_adapter_maps_server_info_and_core_operations() -> None:
     commands: list[list[str]] = []
 
@@ -2966,7 +2977,7 @@ def test_default_project_namespace_backend_retries_explicit_herdr_when_auto_retu
     assert calls == [None, "herdr"]
 
 
-def test_default_project_namespace_backend_retries_explicit_herdr_when_runtime_configured(monkeypatch) -> None:
+def test_default_project_namespace_backend_uses_explicit_herdr_when_runtime_configured(monkeypatch) -> None:
     calls: list[object] = []
 
     class LegacyBackend:
@@ -2980,7 +2991,7 @@ def test_default_project_namespace_backend_retries_explicit_herdr_when_runtime_c
     monkeypatch.setattr(namespace_controller, "resolve_terminal_backend", resolve)
 
     assert namespace_controller.default_project_namespace_backend() == "herdr-backend"
-    assert calls == [None, "herdr"]
+    assert calls == ["herdr"]
 
 
 def test_herdr_socket_client_rejects_window_root_pane_session_mismatch() -> None:

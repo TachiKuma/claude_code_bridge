@@ -448,6 +448,42 @@ def test_project_namespace_controller_creates_herdr_state_and_redacted_event(tmp
     assert 'set_pane_identity' in [call[0] for call in backend.calls]
 
 
+def test_project_namespace_controller_keeps_materialized_herdr_cmd_pane_when_metadata_is_not_yet_queryable(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / 'repo-herdr-topology'
+    (project_root / '.ccb').mkdir(parents=True)
+    (project_root / '.ccb' / 'ccb.config').write_text(
+        'cmd; agent1:codex\n',
+        encoding='utf-8',
+    )
+    config = load_project_config(project_root).config
+    layout = PathLayout(project_root)
+    backend = _FakeHerdrProjectNamespaceBackend()
+    controller = ProjectNamespaceController(
+        layout,
+        'proj-herdr-topology',
+        backend_factory=lambda socket_path=None: backend,
+        state_store=_MemoryProjectNamespaceStateStore(),
+        event_store=_MemoryProjectNamespaceEventStore(),
+    )
+    topology = build_namespace_topology_plan(
+        config,
+        ccbd_socket_path=str(layout.ccbd_socket_path),
+        project_root=str(project_root),
+    )
+
+    controller.ensure(topology_plan=topology)
+
+    cmd_identity_calls = [
+        call
+        for call in backend.calls
+        if call[0] == 'set_pane_identity' and call[1].get('role') == 'cmd'
+    ]
+    assert len(cmd_identity_calls) == 1
+    assert controller._last_materialized_cmd_pane == cmd_identity_calls[0][1]['pane']['pane_id']
+
+
 def test_project_namespace_controller_preserves_herdr_server_session_name(tmp_path: Path) -> None:
     layout = PathLayout(tmp_path / 'repo-herdr-server-session')
     backend = _FakeHerdrProjectNamespaceBackend(server_session_name='ccb-cmd-013-session')

@@ -331,6 +331,7 @@ def _herdr_request_adapter() -> HerdrCliRequestAdapter:
         session_name=session_name,
         herdr_executable=executable,
         socket_ref=_herdr_socket_ref(),
+        run_fn=_run,
     )
 
 

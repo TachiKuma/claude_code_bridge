@@ -95,11 +95,33 @@ def remember_namespace_state_ref(backend, state) -> None:
         return
     namespace_ref = getattr(state, 'namespace_ref', None)
     if callable(namespace_ref):
+        ref = namespace_ref()
+        if not _namespace_state_matches_backend(backend, state, ref):
+            return
         _remember_mux_namespace_ref(
             backend,
-            namespace_ref(),
+            ref,
             requested_session_name=getattr(state, 'tmux_session_name', None),
         )
+
+
+def _namespace_state_matches_backend(backend, state, namespace: object | None = None) -> bool:
+    backend_impl = str(getattr(backend, 'backend_impl', '') or '').strip()
+    state_impl = str(getattr(state, 'backend_impl', '') or '').strip()
+    state_family = str(getattr(state, 'namespace_backend_family', '') or '').strip()
+    ref_impl_value = namespace.get('backend_impl') if isinstance(namespace, dict) else ''
+    ref_family_value = namespace.get('backend_family') if isinstance(namespace, dict) else ''
+    ref_impl = str(ref_impl_value or '').strip()
+    ref_family = str(ref_family_value or '').strip()
+    if backend_impl == 'herdr':
+        if state_impl or state_family:
+            return state_impl == 'herdr' or state_family == 'herdr-native'
+        return ref_impl == 'herdr' or ref_family == 'herdr-native'
+    if backend_impl:
+        if state_impl or state_family:
+            return state_impl in {'', backend_impl} and state_family != 'herdr-native'
+        return ref_impl in {'', backend_impl} and ref_family != 'herdr-native'
+    return state_impl not in {'herdr'} and ref_impl not in {'herdr'}
 
 
 def namespace_state_fields(backend, *, session_name: str, tmux_socket_path: str) -> dict[str, object | None]:

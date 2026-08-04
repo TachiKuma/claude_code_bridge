@@ -104,10 +104,10 @@ def materialize_topology(
     epoch: int,
     terminal_size: tuple[int, int] | None = None,
     timeout_s: float | None = None,
-) -> dict[str, str]:
+) -> tuple[dict[str, str], str | None]:
     windows = tuple(getattr(topology_plan, 'windows', ()) or ())
     if not windows:
-        return {}
+        return {}, None
     first_window = windows[0]
     if not context.session_is_alive:
         create_session(
@@ -138,6 +138,7 @@ def materialize_topology(
     _rename_legacy_workspace_if_needed(controller, context, first_window_name=first_window.name, timeout_s=timeout_s)
 
     agent_panes: dict[str, str] = {}
+    cmd_pane: str | None = None
     for index, window in enumerate(windows):
         ensure_window(
             context.backend,
@@ -157,16 +158,16 @@ def materialize_topology(
             epoch=epoch,
             timeout_s=timeout_s,
         )
-        agent_panes.update(
-            _materialize_agent_layout(
-                controller,
-                context,
-                window=window,
-                user_root=user_root,
-                epoch=epoch,
-                timeout_s=timeout_s,
-            )
+        window_agent_panes, window_cmd_pane = _materialize_agent_layout(
+            controller,
+            context,
+            window=window,
+            user_root=user_root,
+            epoch=epoch,
+            timeout_s=timeout_s,
         )
+        agent_panes.update(window_agent_panes)
+        cmd_pane = cmd_pane or window_cmd_pane
         _materialize_tool_window(
             controller,
             context,
@@ -187,7 +188,7 @@ def materialize_topology(
         context.backend,
         target=session_window_target(context.desired_session_name, topology_plan.entry_window),
     )
-    return agent_panes
+    return agent_panes, cmd_pane
 
 
 def existing_topology_agent_panes(
@@ -617,16 +618,18 @@ def _materialize_agent_layout(
     user_root: str,
     epoch: int,
     timeout_s: float | None,
-) -> dict[str, str]:
+) -> tuple[dict[str, str], str | None]:
     if str(getattr(window, 'kind', '') or '') == 'tool':
-        return {}
+        return {}, None
     layout = parse_layout_spec(window.user_layout)
     agent_names = tuple(str(name) for name in getattr(window, 'agent_names', ()) or ())
     tool_names = set(str(name) for name in tuple(getattr(window, 'tool_names', ()) or ()))
     style_index_by_agent = {name: index for index, name in enumerate(agent_names)}
     agent_panes: dict[str, str] = {}
+    cmd_pane: str | None = None
 
     def assign_leaf(item: str, pane_id: str) -> None:
+        nonlocal cmd_pane
         if item == 'cmd':
             apply_pane_identity(
                 context.backend,
@@ -641,6 +644,7 @@ def _materialize_agent_layout(
                 namespace_epoch=epoch,
                 managed_by='ccbd',
             )
+            cmd_pane = pane_id
             return
         item_tool = str(item or '').strip().lower()
         if item_tool in tool_names:
@@ -679,7 +683,7 @@ def _materialize_agent_layout(
         assign_leaf=assign_leaf,
         timeout_s=timeout_s,
     )
-    return agent_panes
+    return agent_panes, cmd_pane
 
 
 def _materialize_tool_window(

@@ -112,7 +112,7 @@ def ensure_project_namespace(
 
     epoch = context.current.namespace_epoch + 1 if context.current is not None else 1
     if topology_plan is not None:
-        agent_panes = materialize_topology(
+        agent_panes, cmd_pane = materialize_topology(
             controller,
             context,
             topology_plan=topology_plan,
@@ -121,13 +121,14 @@ def ensure_project_namespace(
             timeout_s=session_probe_timeout_s,
         )
         pane_records = snapshot_project_namespace_panes(context.backend)
-        cmd_pane = existing_topology_cmd_pane(
-            controller,
-            context,
-            topology_plan=topology_plan,
-            pane_records=pane_records,
-            namespace_epoch=epoch,
-        )
+        if cmd_pane is None:
+            cmd_pane = existing_topology_cmd_pane(
+                controller,
+                context,
+                topology_plan=topology_plan,
+                pane_records=pane_records,
+                namespace_epoch=epoch,
+            )
         setattr(controller, '_last_materialized_agent_panes', agent_panes)
         setattr(controller, '_last_materialized_cmd_pane', cmd_pane)
         setattr(

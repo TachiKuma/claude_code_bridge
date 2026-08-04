@@ -290,6 +290,17 @@ class _FakeHerdrNamespaceBackend:
     def kill_server(self, namespace: dict[str, object]) -> None:
         self.calls.append(('kill_server', namespace))
 
+    def namespace_alive(self, namespace: dict[str, object]) -> bool:
+        self.calls.append(('namespace_alive', namespace))
+        if namespace.get('backend_impl') != 'herdr':
+            raise MuxCommandErrorV2(
+                category='invalid-request',
+                backend_impl='herdr',
+                operation='session_alive',
+                detail='invalid Herdr namespace ref',
+            )
+        return True
+
 
 def test_v2_mux_backend_helpers_use_namespace_refs_without_tmux_fallback(tmp_path: Path) -> None:
     backend = _FakeHerdrNamespaceBackend()
@@ -433,6 +444,33 @@ def test_blank_namespace_ref_clears_previous_aliases(tmp_path: Path) -> None:
 
     assert fields['namespace_session_name'] is None
     assert fields['namespace_restore_token'] is None
+
+
+def test_herdr_backend_ignores_stale_tmux_namespace_state(tmp_path: Path) -> None:
+    backend = _FakeHerdrNamespaceBackend()
+    remember_namespace_state_ref(
+        backend,
+        SimpleNamespace(
+            tmux_session_name='ccb-proj',
+            namespace_backend_family='tmux-family',
+            backend_impl='tmux',
+            namespace_ref=lambda: {
+                'backend_family': 'tmux-family',
+                'backend_impl': 'tmux',
+                'namespace_id': 'ccb-proj',
+                'session_name': 'ccb-proj',
+                'ipc_kind': 'psmux',
+                'ipc_ref': str(tmp_path / 'tmux.sock'),
+                'restore_token': None,
+            },
+        ),
+    )
+
+    assert session_alive(backend, 'ccb-proj') is True
+    assert ('namespace_ref', {'session_name': 'ccb-proj', 'namespace_id': 'ccb-proj'}) in backend.calls
+    alive_call = backend.calls[-1]
+    assert alive_call[0] == 'namespace_alive'
+    assert alive_call[1]['backend_impl'] == 'herdr'  # type: ignore[index]
 
 
 def test_v2_mux_backend_helper_capability_gap_fails_closed(tmp_path: Path) -> None:
