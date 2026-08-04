@@ -8,6 +8,7 @@ import sys
 
 from provider_backends.codex.runtime_artifacts import codex_runtime_artifact_layout
 from provider_profiles import load_resolved_provider_profile
+from provider_core.transport import endpoint_for_fifo_path
 
 from .command import prepare_codex_home_overrides
 from .session_paths import session_file_for_runtime_dir
@@ -75,9 +76,9 @@ def bridge_runtime_env(runtime_dir: Path, *, prepared_state: dict[str, object] |
 def validate_bridge_bootstrap(runtime_dir: Path) -> None:
     artifacts = codex_runtime_artifact_layout(runtime_dir)
     missing: list[str] = []
-    if not artifacts.input_fifo.exists():
+    if not endpoint_for_fifo_path(artifacts.input_fifo).exists():
         missing.append(str(artifacts.input_fifo.name))
-    if not artifacts.output_fifo.exists():
+    if not endpoint_for_fifo_path(artifacts.output_fifo).exists():
         missing.append(str(artifacts.output_fifo.name))
     if not artifacts.completion_dir.is_dir():
         missing.append(str(artifacts.completion_dir.name))
