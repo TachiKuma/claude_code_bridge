@@ -58,6 +58,7 @@ def run_start_flow(
 ) -> StartFlowSummary:
     flow_started_ns = time.monotonic_ns()
     timings_ms: dict[str, float] = {}
+    tmux_socket_path = str(tmux_socket_path or '').strip() or None
     stage_started_ns = flow_started_ns
     command, context = build_start_context(
         project_root=project_root,

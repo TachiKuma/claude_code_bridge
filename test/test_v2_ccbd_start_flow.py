@@ -15,7 +15,11 @@ from ccbd.lifecycle_report_store import CcbdStartupReportStore
 from ccbd.services.lifecycle import build_lifecycle
 from ccbd.startup_fence import StartupFenceError
 from ccbd.start_flow import StartFlowSummary
-from ccbd.start_flow_runtime.service_tmux import project_socket_active_panes, tmux_namespace_runtime
+from ccbd.start_flow_runtime.service_tmux import (
+    bootstrap_cmd_pane_if_needed,
+    project_socket_active_panes,
+    tmux_namespace_runtime,
+)
 from ccbd.socket_client import CcbdClient, CcbdClientError
 from cli.services.provider_binding import AgentBinding
 from cli.services.runtime_launch import RuntimeLaunchResult
@@ -147,6 +151,38 @@ def test_tmux_layout_for_start_uses_namespace_agent_panes_when_provided() -> Non
         SimpleNamespace(),
         config=SimpleNamespace(windows_explicit=False),
         prepared_agents=prepared_agents,
+def test_project_socket_active_panes_ignores_herdr_panes_without_tmux_socket() -> None:
+    active_panes, cmd_pane_id = project_socket_active_panes(
+        tmux_layout=SimpleNamespace(cmd_pane_id='herdr-pane-cmd', agent_panes={}),
+        tmux_socket_path='',
+        config=SimpleNamespace(cmd_enabled=True),
+        root_pane_id='herdr-pane-root',
+        namespace_active_panes=('herdr-pane-cmd', 'herdr-pane-agent'),
+    )
+
+    assert active_panes == []
+    assert cmd_pane_id == 'herdr-pane-cmd'
+
+
+def test_bootstrap_cmd_pane_skips_herdr_namespace_without_tmux_socket(tmp_path: Path) -> None:
+    calls: list[object] = []
+
+    bootstrap_cmd_pane_if_needed(
+        SimpleNamespace(
+            bootstrap_project_namespace_cmd_pane_impl=lambda **kwargs: calls.append(kwargs),
+        ),
+        fresh_namespace=True,
+        cmd_pane_id='herdr-pane-cmd',
+        project_root=tmp_path,
+        project_id='proj-herdr',
+        tmux_socket_path='',
+        namespace_epoch=1,
+        actions_taken=[],
+    )
+
+    assert calls == []
+
+
         interactive_tmux_layout=True,
         tmux_backend=SimpleNamespace(),
         root_pane_id='%0',

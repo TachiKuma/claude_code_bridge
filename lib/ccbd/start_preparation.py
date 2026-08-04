@@ -52,6 +52,7 @@ def prepare_start_agents(
     namespace_pane_records: dict[str, object] | None = None,
     force_restart_agents: tuple[str, ...] = (),
 ) -> tuple[PreparedStartAgent, ...]:
+    clean_tmux_socket_path = str(tmux_socket_path or '').strip() or None
     spec_store = AgentSpecStore(paths)
     restore_store = AgentRestoreStore(paths)
     planner = WorkspacePlanner()
@@ -97,11 +98,11 @@ def prepare_start_agents(
                 project_root=project_root,
                 ensure_usable=False,
             )
-            if tmux_socket_path is not None:
+            if clean_tmux_socket_path is not None:
                 binding = project_binding_filter_fn(
                     raw_binding,
                     cmd_enabled=bool(getattr(config, 'cmd_enabled', False)),
-                    tmux_socket_path=tmux_socket_path,
+                    tmux_socket_path=clean_tmux_socket_path,
                     tmux_session_name=tmux_session_name,
                     workspace_window_id=workspace_window_id,
                     agent_name=agent_name,
