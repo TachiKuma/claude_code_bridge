@@ -581,7 +581,6 @@ function Initialize-WrapperEnvironment {
     $env:TMP = $devTmp
     $env:CODEX_HOME = Join-Path $devHome '.codex'
 
-    Set-DefaultEnv -Name 'CCB_NO_ATTACH' -Value '1'
     Set-DefaultEnv -Name 'CCB_CCBD_FAULTHANDLER' -Value '1'
     Set-DefaultEnv -Name 'PYTHONUNBUFFERED' -Value '1'
     Set-DefaultEnv -Name 'CCB_PRESTART_KILL_TIMEOUT_MS' -Value '15000'

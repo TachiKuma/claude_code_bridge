@@ -437,3 +437,59 @@ tags: [windows, ccb8, kill, startup]
 - 在临时设置 `CCB_SOURCE_ROOT=E:\GitHub开源项目\TachiKuma\claude_code_bridgebak` 的情况下再次执行外部 `--diagnose`，`source_ccb` 仍解析为当前仓库源码根。
 - `powershell -NoProfile -ExecutionPolicy Bypass -File "./ccb8.ps1" --diagnose` -> 通过，仍解析为当前仓库源码根。
 - `git diff --check` -> 通过，仅保留既有 LF/CRLF 提示。
+
+## 2026-08-04 Herdr cmd supervision 与前台 attach 追加修复
+
+### 新增根因
+
+用户在两次提交前后从外部项目执行 `.\\ccb8.cmd`，仍然看不到预期 Herdr 窗口，且第二次启动会先停止旧 CCB PID。复核短 runtime：
+
+- `D:\.c8\rs\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\ccbd\lifecycle.jsonl`
+- `D:\.c8\rs\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\ccbd\startup-report.json`
+- Herdr 隔离状态目录 `D:\C#Project\GitHub\AvaPrintDesigner\.ccb-source-dev\state\xdg-config\herdr`
+
+确认两条独立故障：
+
+- `lib/ccbd/supervision/cmd_slot.py` 的 cmd slot 健康检查仍沿用 tmux `%pane` 模型。Herdr 的 pane id 是 `wAK:p2` 这类 mux id，不以 `%` 开头；因此健康的 Herdr cmd pane 会被误判为缺失，supervision 每约 30 秒触发 `pane_recovery:cmd`，持续重建 namespace。
+- `ccb8.ps1` 默认注入 `CCB_NO_ATTACH=1`。CLI 的 `handle_start()` 只有在未设置 `CCB_NO_ATTACH` 且 stdin/stdout 是 TTY 时才执行 `attach_started_project_namespace()`，因此用户交互式执行 `.\\ccb8.cmd` 也会被 wrapper 强制跳过 Herdr foreground attach。
+
+### 追加改动
+
+- `lib/ccbd/supervision/cmd_slot.py`
+  - 构建 namespace backend 时传入并记住当前 namespace state，避免 Herdr backend 丢失 session / namespace ref。
+  - Herdr namespace 下不再读取 tmux `%pane` root；改用 `list_panes_by_user_options()` 按 `@ccb_project_id`、`@ccb_role=cmd`、`@ccb_slot=cmd`、`@ccb_managed_by=ccbd`、`@ccb_namespace_epoch` 和窗口 token 查找唯一 cmd pane。
+  - 找到 Herdr cmd pane 后继续复用 `inspect_project_namespace_pane()` 和 `cmd_slot_matches_namespace()` 做权威校验；校验失败才触发 reflow。
+- `test/test_v2_ccbd_supervision_loop.py`
+  - 增加 Herdr 回归：健康 cmd pane id 为 `w-main:p2` 时必须保持 `healthy`，不得触发 `pane_recovery:cmd`。
+- `ccb8.ps1`
+  - 删除默认 `Set-DefaultEnv -Name 'CCB_NO_ATTACH' -Value '1'`。需要无前台窗口收集日志时，调用方仍可显式设置 `CCB_NO_ATTACH=1`。
+- `D:\C#Project\GitHub\AvaPrintDesigner\ccb8.ps1`
+  - 已同步同一处 wrapper 改动，这是用户当前真实执行 `.\\ccb8.cmd` 的文件。
+
+### 追加验证
+
+- `python -m pytest "test/test_v2_ccbd_supervision_loop.py" -k "cmd_slot or cmd"` -> `6 passed`
+- `python -m pytest "test/test_v2_ccbd_start_flow.py" -k "herdr"` -> `6 passed`
+- `python -m pytest "test/test_herdr_backend_client.py" -k "list_panes_by_user_options or window_root_pane_fallback or logical_windows or attach_namespace"` -> `5 passed`
+- 仓库版 `.\\ccb8.cmd --wrapper-self-test --full-env` -> `wrapper_self_test: passed`
+- 外部项目执行 `D:\C#Project\GitHub\AvaPrintDesigner\.\\ccb8.cmd`：
+  - wrapper 停止旧 source-dev CCB PID `12876`、`13780`。
+  - `start_status: ok`，新 daemon PID `2436`，`ccbd_started: true`。
+  - `startup-report.json` 中 `daemon_started=true`、`health=healthy`、`socket_connectable=true`。
+- 等待超过一个 supervision 周期后，`lifecycle.jsonl` 最后一条仍停留在新启动时的 `namespace_created` / `reason=missing_session` / `namespace_epoch=339`，未继续追加 `pane_recovery:cmd`，确认 cmd 恢复循环已停止。
+- 真实 Herdr state 查询：
+  - 最新 focused workspace 为 `wAK`。
+  - 最新 workspace 内存在 `sidebar=wAK:p1`、`cmd=wAK:p2`、`agent_2=wAK:p3`、`agent_1=wAK:p4`。
+  - `cmd` pane token 包含 `ccb_role=cmd`、`ccb_slot=cmd`、`ccb_project_id=575a...`、`ccb_namespace_epoch=339`、`ccb_window=main`。
+- 外部项目 `.\\ccb8.cmd --diagnose` 在同步 wrapper 后输出 `CCB_NO_ATTACH:` 为空，确认 wrapper 不再默认禁用前台 attach。
+- 函数级调用 `attach_started_project_namespace()` 成功返回：
+  - `backend_impl='herdr'`
+  - `namespace_id='wAK'`
+  - `session_name='ccb-avaprintdesigner-575a971f'`
+  - `ipc_kind='herdr_socket'`
+  - `namespace_restore_token_present=True`
+
+## 当前遗留风险
+
+- 本轮已验证 foreground attach 代码路径可以成功 focus Herdr namespace；但 Codex 工具自身不是交互式 Windows 控制台，不能直接证明用户桌面上的 GUI 前台切换观感。
+- `startup-report.json` 仍显示 `provider_runtime_deferred_on_herdr:*`。这不再是 cmd pane 循环故障：Herdr workspace 内 agent panes 已存在，但 provider runtime commit 需要依赖 start flow 的 assigned pane 条件；若用户接下来要求 agent pane 内 provider 进程也必须自动启动，应作为下一层 Herdr provider runtime issue 继续处理。
