@@ -987,18 +987,52 @@ if (Test-SpikeDimensionEnabled -Dimension 'startup-state-files' -EnabledDimensio
             }
         }
     }
-    $ccbdDir = Join-Path $ccbDir 'ccbd'
+    # Resolve the actual ccbd state directory.  When CCB_RUNTIME_STATE_HOME
+    # relocates runtime state, ccbd state files live under the runtime state
+    # root rather than under .ccb/ccbd/.  Parse runtime-root-ref.json (already
+    # collected above) to build the correct path; fall back to .ccb/ccbd/ when
+    # the ref is unavailable or the runtime-root directory does not exist.
+    $runtimeStateRoot = $null
+    $runtimeProjectId = $null
+    $runtimeRootRefPath = Join-Path $stateFilesDir 'runtime-root-ref.json'
+    if (Test-Path -LiteralPath $runtimeRootRefPath) {
+        try {
+            $refPayload = Get-Content -Raw -LiteralPath $runtimeRootRefPath | ConvertFrom-Json
+            $runtimeStateRoot = if ($refPayload.PSObject.Properties['runtime_state_root']) { $refPayload.runtime_state_root } else { $null }
+            $runtimeProjectId = if ($refPayload.PSObject.Properties['project_id']) { $refPayload.project_id } else { $null }
+        } catch { }
+    }
+    $ccbdStateDirs = @()
+    if ($runtimeStateRoot -and $runtimeProjectId) {
+        $ccbdStateDirs += Join-Path $runtimeStateRoot $runtimeProjectId 'ccbd'
+    }
+    $ccbdStateDirs += Join-Path $ccbDir 'ccbd'
     $ccbdStateFiles = @('lease.json', 'keeper.json', 'lifecycle.json')
-    foreach ($fileName in $ccbdStateFiles) {
-        $src = Join-Path $ccbdDir $fileName
-        if (Test-Path -LiteralPath $src) {
-            try {
-                $dest = Join-Path $stateFilesDir $fileName
-                Copy-Item -LiteralPath $src -Destination $dest -Force
-                Append-Utf8NoBom -Path (Join-Path $resolvedOut 'startup-state-files-manifest.txt') -Content ("copied $fileName`r`n")
-            } catch {
-                Append-Utf8NoBom -Path (Join-Path $resolvedOut 'startup-state-files-manifest.txt') -Content ("failed to copy $fileName : $_`r`n")
+    # Track copied files per-name so that files split across directories
+    # are still collected from fallback paths (e.g. lease.json in runtime
+    # root while keeper.json only exists under .ccb/ccbd/).
+    $copiedCcbdFiles = @{}
+    foreach ($ccbdSearchDir in $ccbdStateDirs) {
+        if (-not (Test-Path -LiteralPath $ccbdSearchDir)) { continue }
+        foreach ($fileName in $ccbdStateFiles) {
+            if ($copiedCcbdFiles.ContainsKey($fileName)) { continue }
+            $src = Join-Path $ccbdSearchDir $fileName
+            if (Test-Path -LiteralPath $src) {
+                try {
+                    $dest = Join-Path $stateFilesDir $fileName
+                    Copy-Item -LiteralPath $src -Destination $dest -Force
+                    Append-Utf8NoBom -Path (Join-Path $resolvedOut 'startup-state-files-manifest.txt') -Content ("copied $fileName`r`n")
+                    $copiedCcbdFiles[$fileName] = $true
+                } catch {
+                    Append-Utf8NoBom -Path (Join-Path $resolvedOut 'startup-state-files-manifest.txt') -Content ("failed to copy $fileName : $_`r`n")
+                }
             }
+        }
+    }
+    foreach ($fileName in $ccbdStateFiles) {
+        $dest = Join-Path $stateFilesDir $fileName
+        if (-not (Test-Path -LiteralPath $dest)) {
+            Append-Utf8NoBom -Path (Join-Path $resolvedOut 'startup-state-files-manifest.txt') -Content ("skipped $fileName : not found in any ccbd state directory (searched: $($ccbdStateDirs -join ', '))`r`n")
         }
     }
 
@@ -1231,10 +1265,15 @@ if (-not $hasHerdrUiEvidence -and -not $AllowNonHerdrUi) {
     $classification = 'blocked-not-herdr-ui'
 } elseif ($startCommand.Count -eq 0 -or $startStatus -eq 'launch_failed' -or ([string]::IsNullOrWhiteSpace($startStatus) -and $startExitCode -ne 0)) {
     $classification = 'ccb8-start-failed'
-} elseif ($pingText -notmatch 'mount_state:\s*mounted') {
-    $classification = 'ccb-mounted-not-proven'
 } elseif (-not $pingAllSuccess) {
-    $classification = 'ccb-provider-ping-not-proven'
+    # ping-all (agent-level, with retry) is the authoritative mount signal.
+    # Fall back to ping-ccbd (daemon-level) only when ping-all failed,
+    # to distinguish daemon-not-mounted from specific-provider-failure.
+    if ($pingText -notmatch 'mount_state:\s*mounted') {
+        $classification = 'ccb-mounted-not-proven'
+    } else {
+        $classification = 'ccb-provider-ping-not-proven'
+    }
 } elseif (-not $layoutMaterializationComplete) {
     $classification = 'mounted-but-layout-materialization-missing'
 } elseif ([string]::IsNullOrWhiteSpace($ObservedHerdrAgentsPanelText)) {

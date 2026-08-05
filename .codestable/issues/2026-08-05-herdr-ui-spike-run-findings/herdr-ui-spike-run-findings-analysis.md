@@ -1,13 +1,25 @@
 ---
 doc_type: issue-analysis
 issue: 2026-08-05-herdr-ui-spike-run-findings
-status: draft
-root_cause_type: config
-related: [herdr-ui-spike-run-findings-report.md]
+status: confirmed
+root_cause_type: multi
+root_cause_detail:
+  F1: config (外部项目包装器版本与 Python 源代码不一致)
+  F2: concurrency (Herdr server socket 生命周期不稳定)
+  F3: concurrency (ping-ccbd 在 ccbd 完全启动前被调用，读到过渡态)
+  F4: config (结构性设计——CCB 创建独立 Herdr 会话)
+  F5: config (CCB_RUNTIME_STATE_HOME 重定位导致采集路径假设错误)
+  F6: missing-guard (用户操作步骤未完成)
+related:
+  - herdr-ui-spike-run-findings-report.md
+  - herdr-ui-spike-run-findings-unified.md
+cross_ref_audit: .codestable/audits/2026-08-05-herdr-ccb-recent-changes/index.md
 tags:
   - ccb8-cli
   - ccbd-socket
   - run_spike.ps1
+  - herdr-session
+  - windows
   - herdr-session
   - windows
 ---
