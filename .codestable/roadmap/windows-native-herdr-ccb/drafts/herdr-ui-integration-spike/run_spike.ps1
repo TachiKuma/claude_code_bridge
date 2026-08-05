@@ -738,6 +738,34 @@ $commands += Invoke-CapturedCommand -Name 'ccb8-doctor-ps' -Command @($resolvedC
 $commands += Invoke-CapturedCommand -Name 'ccb8-layout-status' -Command @($resolvedCcb8, 'layout', 'status', '--json') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 30
 $commands += Invoke-CapturedCommand -Name 'ccb8-doctor-output' -Command @($resolvedCcb8, 'doctor', '--output', (Join-Path $resolvedOut 'doctor-output')) -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 60
 
+# --- Extract CCB actual Herdr session from ccb8-ps output ---
+$ccbHerdrSession = ''
+$psResult = $commands | Where-Object { $_.name -eq 'ccb8-ps' } | Select-Object -First 1
+if ($psResult -and (Test-Path -LiteralPath $psResult.stdout_ref)) {
+    $psText = [System.IO.File]::ReadAllText($psResult.stdout_ref, [System.Text.Encoding]::UTF8)
+    if ($psText -match 'session_name=([^\s,]+)') {
+        $ccbHerdrSession = $Matches[1]
+    }
+}
+if ([string]::IsNullOrWhiteSpace($ccbHerdrSession)) {
+    $layoutResult = $commands | Where-Object { $_.name -eq 'ccb8-layout-status' } | Select-Object -First 1
+    if ($layoutResult -and (Test-Path -LiteralPath $layoutResult.stdout_ref)) {
+        $layoutText = [System.IO.File]::ReadAllText($layoutResult.stdout_ref, [System.Text.Encoding]::UTF8)
+        if ($layoutText -match '"session_name"\s*:\s*"([^"]+)"') {
+            $ccbHerdrSession = $Matches[1]
+        }
+    }
+}
+if ($ccbHerdrSession -and $ccbHerdrSession -ne $effectiveHerdrSession) {
+    Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status ('collecting CCB namespace snapshot via session=' + $ccbHerdrSession) -PercentComplete 76
+    $commands += Invoke-CapturedCommand `
+        -Name 'herdr-api-snapshot-ccb-namespace' `
+        -Command (Add-HerdrSessionArgs -Command @($resolvedHerdr, 'api', 'snapshot') -Session $ccbHerdrSession) `
+        -WorkingDirectory $resolvedProject `
+        -RawDir $rawDir `
+        -TimeoutSeconds 20
+}
+
 # --- expanded collection dimensions (analysis 2026-08-05) ---
 
 # Dimension 1: CCB startup state files snapshot
@@ -791,9 +819,15 @@ if (Test-Path -LiteralPath $startupReport) {
 Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'validating pane materialization' -PercentComplete 78
 $paneEvidenceDir = Join-Path $resolvedOut 'pane-evidence'
 New-Item -ItemType Directory -Force -Path $paneEvidenceDir | Out-Null
-$snapshotResult = $commands | Where-Object { $_.name -eq 'herdr-api-snapshot-after' } | Select-Object -First 1
+# Prefer CCB namespace snapshot if available, fall back to wrapper session snapshot
+$preferredSnapshotName = if ($ccbHerdrSession -and $ccbHerdrSession -ne $effectiveHerdrSession) { 'herdr-api-snapshot-ccb-namespace' } else { 'herdr-api-snapshot-after' }
+$snapshotResult = $commands | Where-Object { $_.name -eq $preferredSnapshotName } | Select-Object -First 1
+if ($null -eq $snapshotResult) {
+    $snapshotResult = $commands | Where-Object { $_.name -eq 'herdr-api-snapshot-after' } | Select-Object -First 1
+}
 $paneVerificationReport = @()
 $paneVerificationReport += '# Pane materialization verification'
+$paneVerificationReport += ('- snapshot_source: ' + $preferredSnapshotName)
 $paneVerificationReport += ''
 if ($snapshotResult -and (Test-Path -LiteralPath $snapshotResult.stdout_ref)) {
     try {

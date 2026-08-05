@@ -387,8 +387,12 @@ function Reset-SourceDevStateFiles {
     param([object[]] $StateFiles)
     $now = (Get-Date).ToUniversalTime().ToString('o')
     foreach ($file in $StateFiles) {
+        # Delete + recreate to force ACL refresh on D:\.c8\rs\ files
+        # (WriteAllText preserves existing ACL even if it lacks DELETE for os.replace)
+        $path = $file.FullName
+        $resetContent = $null
         try {
-            $json = Read-Utf8Json -Path $file.FullName
+            $json = Read-Utf8Json -Path $path
             switch ($file.Name) {
                 'lease.json' {
                     $json.mount_state = 'unmounted'
@@ -419,9 +423,23 @@ function Reset-SourceDevStateFiles {
                     continue
                 }
             }
-            Write-Utf8NoBom -Path $file.FullName -Content (($json | ConvertTo-Json -Depth 20) + [Environment]::NewLine)
+            $resetContent = ($json | ConvertTo-Json -Depth 20) + [Environment]::NewLine
         } catch {
-            Write-Warning ('failed to reset source-dev state file: ' + $file.FullName)
+            Write-Warning ('failed to read source-dev state file for reset: ' + $path)
+            continue
+        }
+        if ($null -eq $resetContent) {
+            continue
+        }
+        try {
+            Remove-Item -LiteralPath $path -Force -ErrorAction Stop
+        } catch {
+            Write-Warning ('failed to delete source-dev state file before ACL refresh: ' + $path)
+        }
+        try {
+            Write-Utf8NoBom -Path $path -Content $resetContent
+        } catch {
+            Write-Warning ('failed to recreate source-dev state file after ACL refresh: ' + $path)
         }
     }
 }

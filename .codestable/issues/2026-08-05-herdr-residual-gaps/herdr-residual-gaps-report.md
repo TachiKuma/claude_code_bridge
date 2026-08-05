@@ -1,7 +1,7 @@
 ---
 doc_type: issue-report
 issue: herdr-residual-gaps
-status: draft
+status: confirmed
 severity: P3
 summary: CCB Herdr集成路径上存在三个低级残留问题，不影响核心功能但需跟踪
 tags:
