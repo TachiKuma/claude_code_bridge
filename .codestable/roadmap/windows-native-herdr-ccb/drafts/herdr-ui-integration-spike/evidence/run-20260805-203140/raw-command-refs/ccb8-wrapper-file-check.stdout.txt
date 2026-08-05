@@ -1,0 +1,6 @@
+wrapper_cmd: D:\C#Project\GitHub\AvaPrintDesigner\ccb8.cmd
+wrapper_ps1: D:\C#Project\GitHub\AvaPrintDesigner\ccb8.ps1
+wrapper_cmd_exists: True
+wrapper_ps1_exists: True
+wrapper_cmd_utf8_bom: False
+wrapper_ps1_utf8_bom: False

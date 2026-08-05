@@ -1,0 +1,25 @@
+wrapper: D:\C#Project\GitHub\AvaPrintDesigner\ccb8.cmd
+powershell_wrapper: D:\C#Project\GitHub\AvaPrintDesigner\ccb8.ps1
+source_ccb: E:\GITHUB~1\TACHIK~1\claude_code_bridge\ccb.py
+project_root: D:\C#Project\GitHub\AvaPrintDesigner
+dev_root: D:\C#Project\GitHub\AvaPrintDesigner\.ccb-source-dev
+python: C:\Users\Administrator\AppData\Local\Programs\Python\Python314\python.exe
+path_ccb_shim: D:\C#Project\GitHub\AvaPrintDesigner\.ccb-source-dev\bin\ccb.cmd
+CCB_HERDR_EXE: C:\Users\Administrator\AppData\Local\Programs\Herdr\herdr.exe
+CCB_HERDR_SESSION: ccb-herdr-avaprintdesigner-source-dev
+CCB_HERDR_CAPABILITY_REPORT: E:\GITHUB~1\TACHIK~1\claude_code_bridge\.codestable\features\2026-07-31-herdr-backend-contract-spike\evidence\herdr-contract-spike-evidence.json
+CCB_SOURCE_ALLOWED_ROOTS: D:\C#Project\GitHub\AvaPrintDesigner
+CCB_SOURCE_HOME: D:\C#Project\GitHub\AvaPrintDesigner\.ccb-source-dev\home
+CCB_RUNTIME_STATE_HOME: D:\.c8\rs
+CCB_LEGACY_RUNTIME_STATE_HOME: D:\C#Project\GitHub\AvaPrintDesigner\.ccb-source-dev\state\runtime-state
+HOME: D:\C#Project\GitHub\AvaPrintDesigner\.ccb-source-dev\home
+USERPROFILE: D:\C#Project\GitHub\AvaPrintDesigner\.ccb-source-dev\home
+CCB_NO_ATTACH: 
+CCB_CCBD_FAULTHANDLER: 1
+PYTHONUNBUFFERED: 1
+CCB_PRESTART_KILL_TIMEOUT_MS: 15000
+powershell_version: 5.1.19041.6157
+default_encoding: gb2312
+ccb8_cmd_utf8_bom: False
+ccb8_ps1_utf8_bom: False
+v8.5.2

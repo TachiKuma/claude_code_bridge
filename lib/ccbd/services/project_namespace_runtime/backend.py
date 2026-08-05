@@ -703,6 +703,7 @@ def apply_pane_identity(
     session_id: str | None = None,
     namespace_epoch: int | None = None,
     managed_by: str | None = None,
+    provider_kind: str = "",
 ) -> None:
     if _is_mux_backend(backend):
         _require_mux_operation(backend, operation='set_pane_identity', methods=('set_pane_identity',))

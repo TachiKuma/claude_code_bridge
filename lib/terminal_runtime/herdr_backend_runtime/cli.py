@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import platform
 import shlex
 import shutil
@@ -515,6 +516,17 @@ class HerdrCliRequestAdapter:
             display_agent=agent_label or None,
             tokens=tokens,
         )
+        # Herdr v0.8.0+: notify the Herdr agent subsystem that a CCB-owned
+        # agent is now running in this pane.  This makes the agent visible
+        # in `herdr agent list` and the Herdr sidebar.
+        if agent_label and str(payload.get("role") or "").strip() == 'agent':
+            provider = str(payload.get("provider_kind") or "").strip()
+            self._notify_herdr_agent_start(
+                agent_label=agent_label,
+                pane_id=pane_id,
+                provider_kind=provider,
+                session_name=session_name,
+            )
         return {"status": "ok", "pane_id": pane_id}
 
     def _respawn_pane(self, payload: Mapping[str, object]) -> Mapping[str, object]:
@@ -754,27 +766,27 @@ class HerdrCliRequestAdapter:
             expect_json=False,
             session_name=session_name,
         )
+        # `herdr session attach` is a foreground terminal operation that only
+        # succeeds when the calling terminal can take over the session.  In
+        # contexts such as Herdr UI (where the terminal already belongs to a
+        # different session) or daemon startups the command may exit non-zero
+        # or block indefinitely.  Treat a failed attach as non-fatal: the
+        # preceding `workspace focus` already brought the target workspace
+        # into view.
         executable = self._resolve_executable()
         command = [executable, "session", "attach", session_name]
+        attached = False
         try:
-            self._run_fn(command, check=True)
-        except (OSError, subprocess.SubprocessError) as exc:
-            detail = f"Herdr foreground attach failed for session {session_name!r}"
-            if isinstance(exc, subprocess.CalledProcessError):
-                detail = (exc.stderr or exc.stdout or detail).strip() or detail
-            raise MuxCommandErrorV2(
-                category=_command_error_category(detail, expect_json=False),
-                backend_impl="herdr",
-                operation="attach_namespace",
-                detail=detail,
-                ipc_ref=self._ipc_ref_for_session(session_name),
-                evidence=_command_evidence("attach_namespace", command),
-            ) from exc
+            self._run_fn(command, check=True, timeout=5, env=_env_without_xdg_redirects())
+            attached = True
+        except (OSError, subprocess.SubprocessError):
+            pass
         return {
             "status": "ok",
             "namespace_id": namespace_id,
             "session_name": session_name,
             "window_id": workspace_id,
+            "attached": attached,
         }
 
     def _is_alive(self, payload: Mapping[str, object]) -> Mapping[str, object]:
@@ -990,6 +1002,29 @@ class HerdrCliRequestAdapter:
             session_name=session_name,
         )
 
+    def _notify_herdr_agent_start(
+        self,
+        *,
+        agent_label: str,
+        pane_id: str,
+        provider_kind: str,
+        session_name: str,
+    ) -> None:
+        """Tell the Herdr agent subsystem that a CCB-owned agent is running
+        in *pane_id*.  On success the agent becomes visible in
+        ``herdr agent list`` and the Herdr sidebar."""
+        executable = self._resolve_executable()
+        args = ["agent", "start", agent_label, "--pane", pane_id]
+        if provider_kind:
+            args.extend(["--kind", provider_kind])
+        command = [executable, *args]
+        try:
+            self._run_fn(command, check=True, capture_output=True, timeout=15, env=_env_without_xdg_redirects())
+        except (OSError, subprocess.SubprocessError):
+            # herdr agent start is best-effort: agent metadata is already
+            # reported via _report_pane_metadata above.
+            pass
+
     def _json_command(
         self,
         operation: str,
@@ -1048,7 +1083,7 @@ class HerdrCliRequestAdapter:
     ) -> subprocess.CompletedProcess:
         executable = self._resolve_executable()
         effective_session = session_name or self._session_name
-        command = [executable, *args, "--session", effective_session]
+        command = [executable, "--session", effective_session, *args]
         try:
             return self._run_command_once(
                 operation,
@@ -1093,6 +1128,7 @@ class HerdrCliRequestAdapter:
                 encoding="utf-8",
                 errors="replace",
                 check=True,
+                env=_env_without_xdg_redirects(),
             )
         except (OSError, subprocess.SubprocessError) as exc:
             detail = f"Herdr command failed for {operation}"
@@ -1113,11 +1149,13 @@ class HerdrCliRequestAdapter:
             return
         self._server_sessions.discard(session_name)
         self._server_processes.pop(session_name, None)
+        clean_env = _env_without_xdg_redirects()
         command = [executable, "--session", session_name, "server"]
         kwargs: dict[str, object] = {
             "stdin": subprocess.DEVNULL,
             "stdout": subprocess.DEVNULL,
             "stderr": subprocess.DEVNULL,
+            "env": clean_env,
         }
         if sys.platform.startswith("win"):
             kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -1149,7 +1187,7 @@ class HerdrCliRequestAdapter:
                             "exit_code": exit_code,
                         },
                     )
-            if self._server_status_running(executable, session_name=session_name):
+            if self._server_status_running(executable, session_name=session_name, env=clean_env):
                 self._server_sessions.add(session_name)
                 self._server_processes[session_name] = process
                 return
@@ -1164,21 +1202,29 @@ class HerdrCliRequestAdapter:
 
     def _ensure_server_ready(self, session_name: str) -> None:
         executable = self._resolve_executable()
-        if self._server_status_running(executable, session_name=session_name):
+        if self._server_status_running(executable, session_name=session_name,
+                                       env=_env_without_xdg_redirects()):
             return
         self._start_server(session_name, executable=executable)
 
-    def _server_status_running(self, executable: str, *, session_name: str) -> bool:
-        command = [executable, "status", "server", "--json", "--session", session_name]
+    def _server_status_running(
+        self, executable: str, *, session_name: str | None, env: dict[str, str] | None = None
+    ) -> bool:
+        if session_name is not None:
+            command = [executable, "status", "server", "--json", "--session", session_name]
+        else:
+            command = [executable, "status", "server", "--json"]
+        kwargs: dict[str, object] = dict(
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
+        )
+        if env is not None:
+            kwargs["env"] = env
         try:
-            result = self._run_fn(
-                command,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                check=True,
-            )
+            result = self._run_fn(command, **kwargs)
             payload = json.loads(result.stdout or "{}")
         except Exception:
             return False
@@ -1410,6 +1456,23 @@ def _redacted_argv(operation: str, command: list[str]) -> list[str]:
     elif redacted:
         redacted[-1] = "<redacted>"
     return redacted
+
+
+def _env_without_xdg_redirects() -> dict[str, str]:
+    """Return a copy of os.environ with the wrapper's XDG sandbox redirects
+    removed, so that Herdr CLI commands can reach the real default Herdr
+    server instead of the source-dev sandbox."""
+    env = dict(os.environ)
+    for key in ("XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"):
+        env.pop(key, None)
+    # Herdr v0.8.0 respects HERDR_CONFIG_PATH.  When XDG is cleared,
+    # point to the real config so the CLI discovers the running daemon.
+    if "HERDR_CONFIG_PATH" not in env:
+        env["HERDR_CONFIG_PATH"] = os.path.join(
+            os.environ.get("USERPROFILE", os.path.expanduser("~")),
+            "AppData", "Roaming", "herdr", "config.toml",
+        )
+    return env
 
 
 __all__ = ["HerdrCliRequestAdapter"]

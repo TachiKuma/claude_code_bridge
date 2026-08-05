@@ -1,0 +1,40 @@
+{
+    "only_dimension":  [
+
+                       ],
+    "skip_dimension":  [
+
+                       ],
+    "enabled_dimensions":  [
+                               "herdr-baseline",
+                               "wrapper-file-check",
+                               "ccb-diagnose",
+                               "process-samples",
+                               "ccb-start",
+                               "post-start-herdr",
+                               "ccb-ping",
+                               "ccb-layout",
+                               "startup-state-files",
+                               "pane-verification",
+                               "backend-route"
+                           ],
+    "executed_dimensions":  [
+                                "herdr-baseline",
+                                "wrapper-file-check",
+                                "ccb-diagnose",
+                                "process-samples",
+                                "ccb-start",
+                                "post-start-herdr",
+                                "ccb-ping",
+                                "ccb-layout",
+                                "startup-state-files",
+                                "pane-verification",
+                                "backend-route"
+                            ],
+    "implicit_dependencies":  {
+                                  "post_start_herdr_for_pane_verification":  false,
+                                  "ccb_layout_for_pane_verification":  false,
+                                  "ccb_diagnose_for_backend_route":  false
+                              },
+    "pane_capture_lines":  20
+}

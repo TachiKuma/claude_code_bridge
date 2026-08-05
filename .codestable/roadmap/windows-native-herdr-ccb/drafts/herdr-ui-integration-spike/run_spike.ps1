@@ -10,9 +10,9 @@ param(
     [switch] $ObservedWindowsFlash,
     [switch] $AllowNonHerdrUi,
     [switch] $SelfTest,
-    [ValidateSet('herdr-baseline', 'wrapper-file-check', 'ccb-diagnose', 'process-samples', 'ccb-start', 'post-start-herdr', 'ccb-ping', 'ccb-layout', 'startup-state-files', 'pane-verification', 'backend-route')]
+    [ValidateSet('herdr-baseline', 'wrapper-file-check', 'ccb-diagnose', 'process-samples', 'ccb-start', 'post-start-herdr', 'ccb-ping', 'ccb-layout', 'startup-state-files', 'pane-verification', 'backend-route', 'herdr-v0.8-probe')]
     [string[]] $OnlyDimension = @(),
-    [ValidateSet('herdr-baseline', 'wrapper-file-check', 'ccb-diagnose', 'process-samples', 'ccb-start', 'post-start-herdr', 'ccb-ping', 'ccb-layout', 'startup-state-files', 'pane-verification', 'backend-route')]
+    [ValidateSet('herdr-baseline', 'wrapper-file-check', 'ccb-diagnose', 'process-samples', 'ccb-start', 'post-start-herdr', 'ccb-ping', 'ccb-layout', 'startup-state-files', 'pane-verification', 'backend-route', 'herdr-v0.8-probe')]
     [string[]] $SkipDimension = @(),
     [ValidateRange(1, 500)]
     [int] $PaneCaptureLines = 20,
@@ -34,7 +34,8 @@ $script:SpikeDimensions = @(
     'ccb-layout',
     'startup-state-files',
     'pane-verification',
-    'backend-route'
+    'backend-route',
+    'herdr-v0.8-probe'
 )
 
 function Write-Utf8NoBom {
@@ -1003,8 +1004,11 @@ if (Test-SpikeDimensionEnabled -Dimension 'startup-state-files' -EnabledDimensio
         } catch { }
     }
     $ccbdStateDirs = @()
-    if ($runtimeStateRoot -and $runtimeProjectId) {
-        $ccbdStateDirs += Join-Path $runtimeStateRoot $runtimeProjectId 'ccbd'
+    if ($runtimeStateRoot) {
+        # runtime_state_root in runtime-root-ref.json already includes the
+        # project_id segment (e.g. D:\.c8\rs\<project_id>).  The ccbd state
+        # directory is directly under it — no additional project_id needed.
+        $ccbdStateDirs += Join-Path $runtimeStateRoot 'ccbd'
     }
     $ccbdStateDirs += Join-Path $ccbDir 'ccbd'
     $ccbdStateFiles = @('lease.json', 'keeper.json', 'lifecycle.json')
@@ -1186,6 +1190,63 @@ if ($collectBackendRoute) {
     Write-Utf8NoBom -Path (Join-Path $backendRouteDir 'backend-route-summary.md') -Content (($backendRouteSummary -join [Environment]::NewLine) + [Environment]::NewLine)
 }
 
+# Dimension 4: Herdr v0.8.0 capability probe
+# Collect version, API surface, plugin state, and session-reporting format
+# to assess integration readiness vs the C2 federation architecture.
+if (Test-SpikeDimensionEnabled -Dimension 'herdr-v0.8-probe' -EnabledDimensions $enabledDimensions) {
+    Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'probing Herdr v0.8 capabilities' -PercentComplete 87
+    $v08Dir = Join-Path $resolvedOut 'herdr-v0.8-probe'
+    New-Item -ItemType Directory -Force -Path $v08Dir | Out-Null
+
+    # 1: Exact version string
+    $commands += Invoke-CapturedCommand -Name 'herdr-v0.8-version' -Command @($resolvedHerdr, '--version') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 15
+
+    # 2: Full API help / usage to discover new endpoints
+    $commands += Invoke-CapturedCommand -Name 'herdr-v0.8-api-help' -Command @($resolvedHerdr, 'api', '--help') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 15
+
+    # 3: Server status with full JSON — compare format against v0.7.5
+    $commands += Invoke-CapturedCommand -Name 'herdr-v0.8-status-server' -Command (Add-HerdrSessionArgs -Command @($resolvedHerdr, 'status', 'server', '--json') -Session $effectiveHerdrSession) -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 20
+
+    # 4: Plugin list (if available in v0.8)
+    $commands += Invoke-CapturedCommand -Name 'herdr-v0.8-plugin-list' -Command @($resolvedHerdr, 'plugin', 'list', '--json') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 15
+
+    # 5: Help top-level — discover any new subcommands
+    $commands += Invoke-CapturedCommand -Name 'herdr-v0.8-help' -Command @($resolvedHerdr, '--help') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 15
+
+    # 6: Session list to probe lifecycle reporting format (no `session info` in v0.8)
+    $commands += Invoke-CapturedCommand -Name 'herdr-v0.8-session-list' -Command @($resolvedHerdr, 'session', 'list', '--json') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 15
+
+    # 7: Status (non-server) for agent detection changes
+    $commands += Invoke-CapturedCommand -Name 'herdr-v0.8-status' -Command @($resolvedHerdr, 'status', '--json') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 15
+
+    # Build v0.8 probe summary markdown
+    $v08Summary = @()
+    $v08Summary += '# Herdr v0.8.0 Capability Probe'
+    $v08Summary += ''
+    $v08Summary += '## Probe commands executed'
+    $v08Summary += ''
+    foreach ($cmd in @($commands | Where-Object { $_.name -like 'herdr-v0.8-*' })) {
+        $v08Summary += ('- `' + $cmd.name + '`: exit=' + $cmd.exit_code + ', elapsed=' + $cmd.elapsed_ms + 'ms')
+    }
+    $v08Summary += ''
+    $v08Summary += '## Integration Readiness Assessment'
+    $v08Summary += ''
+    $v08Summary += '| Capability | v0.7.5 Status | v0.8.0 Probe Result | C2 Impact |'
+    $v08Summary += '|---|---|---|---|'
+    $v08Summary += '| Session reporting format | `herdr status server --json` | see `herdr-v0.8-status-server.stdout.txt` | CCB→Herdr evidence path |'
+    $v08Summary += '| Plugin system | CLI-wrapped only | see `herdr-v0.8-plugin-list` | B-lite feasibility |'
+    $v08Summary += '| API surface | `api snapshot`, `api workspace` | see `herdr-v0.8-api-help.stdout.txt` | C2 pane lifecycle |'
+    $v08Summary += '| Lifecycle reporting | Kimi/Qoder/Cursor simplified | see `herdr-v0.8-status.stdout.txt` | C2 integration pattern |'
+    $v08Summary += '| Session list/attach | `session list`/`attach`/`stop`/`delete` | see `herdr-v0.8-session-list.stdout.txt` | C2 session lifecycle |'
+    $v08Summary += '| License | unknown | check `herdr-v0.8-version.stdout.txt` | Apache-2.0 confirmed? |'
+    $v08Summary += ''
+    $v08Summary += '## Raw evidence'
+    $v08Summary += ''
+    $v08Summary += 'Full command outputs under `raw-command-refs/herdr-v0.8-*`.'
+
+    Write-Utf8NoBom -Path (Join-Path $v08Dir 'herdr-v0.8-probe-summary.md') -Content (($v08Summary -join [Environment]::NewLine) + [Environment]::NewLine)
+}
+
 if ($null -ne $sampler) {
     try {
         Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'waiting for sampler completion' -PercentComplete 90
@@ -1288,6 +1349,7 @@ $processSamplesRef = if ($collectProcessSamples) { $samplerPath } else { $null }
 $startupStateFilesRef = if (Test-SpikeDimensionEnabled -Dimension 'startup-state-files' -EnabledDimensions $enabledDimensions) { Join-Path $resolvedOut 'startup-state-files-manifest.txt' } else { $null }
 $paneEvidenceRef = if ($collectPaneVerification) { Join-Path $paneEvidenceDir 'pane-verification.md' } else { $null }
 $backendRouteEvidenceRef = if ($collectBackendRoute) { Join-Path $backendRouteDir 'backend-route-summary.md' } else { $null }
+$herdrV08ProbeRef = if (Test-SpikeDimensionEnabled -Dimension 'herdr-v0.8-probe' -EnabledDimensions $enabledDimensions) { Join-Path (Join-Path $resolvedOut 'herdr-v0.8-probe') 'herdr-v0.8-probe-summary.md' } else { $null }
 $skippedDimensions = @($script:SpikeDimensions | Where-Object { $executedDimensions -notcontains $_ })
 
 $summary = [ordered] @{
@@ -1322,6 +1384,7 @@ $summary = [ordered] @{
     startup_state_files_ref = $startupStateFilesRef
     pane_evidence_ref = $paneEvidenceRef
     backend_route_evidence_ref = $backendRouteEvidenceRef
+    herdr_v0_8_probe_ref = $herdrV08ProbeRef
     notes = @(
         'Herdr agents panel text is manual observation unless Herdr exposes it through CLI metadata.',
         'Herdr agent detection is diagnostics evidence only; CCB provider completion/runtime authority remains CCB-owned.',
@@ -1365,6 +1428,9 @@ $report += ''
 $report += '- If `process-samples.jsonl` contains short-lived `cmd.exe` / `powershell.exe` children but CCB ping is not mounted, classify as startup wrapper failure.'
 $report += '- If CCB ping is mounted but `ccb8 layout status --json` lacks expected provider pane ids, classify as layout/materialization projection gap.'
 $report += '- Herdr CLI `workspace list` / `pane list` are intentionally not used here because Herdr 0.7.5 exposes machine-readable workspace/pane state through `api snapshot` instead.'
+if ($herdrV08ProbeRef) {
+    $report += '- Herdr v0.8.0 capability probe evidence: ' + $herdrV08ProbeRef
+}
 $report += '- If Herdr agents panel shows `claude` while CCB runtime state is failed, treat Herdr agent detection as diagnostics-only evidence, not completion authority.'
 $report += ''
 Write-Utf8NoBom -Path (Join-Path $resolvedOut 'report.md') -Content (($report -join [Environment]::NewLine) + [Environment]::NewLine)

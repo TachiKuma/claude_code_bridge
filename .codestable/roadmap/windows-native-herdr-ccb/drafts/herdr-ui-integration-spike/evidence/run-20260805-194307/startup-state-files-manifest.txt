@@ -1,0 +1,5 @@
+copied runtime-root-ref.json
+copied project.identity.json
+skipped lease.json : not found in any ccbd state directory (searched: D:\.c8\rs\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\ccbd, D:\C#Project\GitHub\AvaPrintDesigner\.ccb\ccbd)
+skipped keeper.json : not found in any ccbd state directory (searched: D:\.c8\rs\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\ccbd, D:\C#Project\GitHub\AvaPrintDesigner\.ccb\ccbd)
+skipped lifecycle.json : not found in any ccbd state directory (searched: D:\.c8\rs\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\ccbd, D:\C#Project\GitHub\AvaPrintDesigner\.ccb\ccbd)

@@ -4,8 +4,17 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-if ($null -eq $CcbArgs) {
-    $CcbArgs = @()
+# ValueFromRemainingArguments may produce a scalar string when only one
+# argument is passed.  Force array semantics so that @splatting transmits
+# the argument as a single value rather than character-by-character.
+$CcbArgs = @($CcbArgs)
+# CRITICAL: on PowerShell 5.1, ValueFromRemainingArguments with [string[]]
+# type constraint may receive a single string argument as a [char[]]
+# (character array) rather than [string[]] (string array).  When ANY
+# element is Char, re-join the whole array back into a single string
+# argument.  (Single-char and multi-char arguments are both affected.)
+if ($CcbArgs.Count -gt 0 -and $CcbArgs[0].GetType().Name -eq 'Char') {
+    $CcbArgs = @([string]::new($CcbArgs))
 }
 
 $script:utf8Strict = New-Object System.Text.UTF8Encoding($false, $true)
@@ -526,9 +535,33 @@ function Run-BoundedKillForce {
 }
 
 function Invoke-PrestartCleanup {
+    $protected = Read-ProtectedInstalledPids
     Stop-SourceDevRuntimePids
     Run-BoundedKillForce
     Reset-ProjectCcbdStateFiles
+    # Final sweep: after kill -f and state reset, verify no ccbd
+    # processes are still alive for this project.  On Windows the
+    # kill may race with a lingering process that will later collide
+    # on lease.json / lifecycle.json atomic writes.
+    # Reuse the same installed-PID protection that Stop-SourceDevRuntimePids
+    # applies so that stale source-dev state pointing at installed CCB never
+    # causes an accidental installed-daemon kill.
+    $remaining = Get-SourceDevStateFiles
+    $targets = Get-SourceDevPidTargets -StateFiles $remaining
+    $project = $env:CCB_PROJECT_ROOT.TrimEnd('\').Replace('/', '\')
+    foreach ($target in $targets) {
+        if ($protected.ContainsKey($target.PidValue)) { continue }
+        $proc = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $target.PidValue) -ErrorAction SilentlyContinue
+        if ($null -eq $proc) { continue }
+        if (-not (Test-SourceDevCcbdCommandLine -CommandLine $proc.CommandLine -ProjectRoot $project)) { continue }
+        Write-Warning ('ccbd pid=' + $target.PidValue + ' still alive after prestart cleanup; forcing stop')
+        Stop-Process -Id $target.PidValue -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 500
+        $proc2 = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $target.PidValue) -ErrorAction SilentlyContinue
+        if ($null -ne $proc2) {
+            throw ('ccbd pid=' + $target.PidValue + ' could not be stopped after prestart cleanup')
+        }
+    }
 }
 
 function Test-ShouldPrestartKill {
@@ -832,6 +865,41 @@ $finalArgs = if ($CcbArgs.Count -gt 0 -and $CcbArgs[0] -ieq 'start') {
 } else {
     $CcbArgs
 }
+# Force array semantics: when ValueFromRemainingArguments receives a single
+# argument with [string[]] type constraint on PowerShell 5.1, the parameter
+# may bind as a scalar string.  @() wrapping at param init (line 10) guards
+# against char-by-char splatting, but the if/else assignment can collapse
+# single-element arrays back to scalars.  Re-wrap right before the call.
+$finalArgs = @($finalArgs)
+
+# Herdr v0.8.0: pre-start the CCB Herdr session server so that ccbd can
+# create workspaces and panes within it.  The server is started as a
+# detached process; it stays alive as long as ccbd runs.
+if (Test-ShouldPrestartKill -CliArgs $CcbArgs -or $CcbArgs.Count -eq 0) {
+    $herdrExe = $env:CCB_HERDR_EXE
+    if (-not [string]::IsNullOrWhiteSpace($herdrExe) -and (Test-Path -LiteralPath $herdrExe)) {
+        $projectId = Get-SourceDevProjectId
+        if (-not [string]::IsNullOrWhiteSpace($projectId)) {
+            $projectName = (Split-Path -Leaf $env:CCB_PROJECT_ROOT)
+            $shortId = $projectId.Substring(0, [Math]::Min(8, $projectId.Length))
+            $ccbSession = "ccb-${projectName}-${shortId}"
+            $statusCmd = & $herdrExe session list --json 2>$null | ConvertFrom-Json -ErrorAction SilentlyContinue
+            $existing = if ($statusCmd -and $statusCmd.sessions) {
+                $statusCmd.sessions | Where-Object { $_.name -eq $ccbSession -and $_.running }
+            } else { $null }
+            if (-not $existing) {
+                $psi = New-Object System.Diagnostics.ProcessStartInfo
+                $psi.FileName = $herdrExe
+                $psi.Arguments = "--session $ccbSession server"
+                $psi.UseShellExecute = $false
+                $psi.CreateNoWindow = $true
+                $null = [System.Diagnostics.Process]::Start($psi)
+                Start-Sleep -Milliseconds 500
+            }
+        }
+    }
+}
+
 & $env:CCB_PYTHON (Join-Path $env:CCB_SOURCE_ROOT 'ccb.py') @finalArgs
 if ($null -ne $LASTEXITCODE) {
     exit $LASTEXITCODE

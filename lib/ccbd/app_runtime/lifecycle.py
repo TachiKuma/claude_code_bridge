@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from pathlib import Path
 from time import monotonic
 
 from agents.models import AgentState, RuntimeBindingSource, normalize_runtime_binding_source
 from ccbd.api_models import JobStatus, TargetKind
 from ccbd.models import CcbdShutdownReport, CcbdStartupReport, MountState, cleanup_summaries_from_objects
+from ccbd.system import process_exists
 from ccbd.reload_drain_auto_retry import tick_reload_drain_auto_retry
 from ccbd.services.dispatcher_runtime.frontdesk_direct_handoff import recover_frontdesk_direct_handoffs
 from ccbd.services.dispatcher_runtime.detailer_replan_handoff import recover_detailer_replan_handoffs
@@ -50,6 +52,19 @@ def start(app):
                 )
             else:
                 lifecycle = app.lifecycle_store.load()
+                if lifecycle is not None:
+                    owner_pid = int(getattr(lifecycle, 'owner_pid', 0) or 0)
+                    if (
+                        str(getattr(lifecycle, 'phase', '')) == 'mounted'
+                        and owner_pid > 0
+                        and not process_exists(owner_pid)
+                    ):
+                        # The previous ccbd crashed and left the lifecycle
+                        # phase at "mounted".  Reset to "starting" so the
+                        # expected-fence validation can proceed.
+                        # CcbdLifecycle is a frozen dataclass; use replace()
+                        # to create a new instance with the corrected phase.
+                        lifecycle = replace(lifecycle, phase='starting')
                 validate_expected_startup_lifecycle(
                     expected_fence,
                     lifecycle,
