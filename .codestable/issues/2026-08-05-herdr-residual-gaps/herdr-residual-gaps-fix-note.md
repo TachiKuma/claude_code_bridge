@@ -70,7 +70,7 @@ CCB 在 `_create_session_scope()`（`cli.py:1282-1286`）中使用 `project_id` 
 - 闪窗修复依赖 `-WindowStyle Hidden`，在非 Herdr 环境的普通控制台中行为可能不同
 - ACL 刷新依赖文件可删除，若 `D:\.c8\rs\` 目录本身 ACL 损坏则仍需手动修复
 - snapshot session 自动发现依赖 `ccb8-ps` 输出格式稳定（`session_name=<value>` 正则匹配）
-- `.\ccb8 start` 的别名只处理 'start' 作为独立第一个参数的情况，不支持 `ccb8 start --safe` 等组合
+- `.\ccb8 start` renamed 'start' as standalone first argument; `ccb8 start --safe` not supported (use `ccb8 -s` or bare `ccb8`)
 
 ## 补充修复 (2026-08-05 13:20)
 
