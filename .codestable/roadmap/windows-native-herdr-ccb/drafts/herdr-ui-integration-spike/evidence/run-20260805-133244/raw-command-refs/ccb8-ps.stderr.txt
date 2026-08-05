@@ -1,0 +1,2 @@
+command_status: invalid
+error: start does not accept agent names or extra arguments; configure startup agents in `.ccb/ccb.config` and run `ccb`

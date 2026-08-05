@@ -2048,6 +2048,8 @@ def test_herdr_cli_request_adapter_starts_server_and_retries_server_backed_comma
             return _completed(
                 '{"result":{"workspace":{"workspace_id":"w1"},"root_pane":{"pane_id":"w1:p1","workspace_id":"w1"}}}'
             )
+        if "workspace list" in joined:
+            return _completed('{"result":{"workspaces":[{"workspace_id":"w1"}]}}')
         raise AssertionError(joined)
 
     class _RunningProcess:
@@ -2071,7 +2073,7 @@ def test_herdr_cli_request_adapter_starts_server_and_retries_server_backed_comma
 
     assert namespace["namespace_id"] == "w1"
     assert workspace_create_calls == 2
-    assert popen_commands == [["herdr", "server", "--session", "ccb-demo"]]
+    assert popen_commands == [["herdr", "--session", "ccb-demo", "server"]]
     workspace_commands = [command for command in commands if "workspace create" in " ".join(command)]
     assert workspace_commands[0] == workspace_commands[1]
 
@@ -2102,6 +2104,8 @@ def test_herdr_cli_request_adapter_fails_closed_when_server_exits_immediately() 
             return _completed(
                 '{"result":{"workspace":{"workspace_id":"w1"},"root_pane":{"pane_id":"w1:p1","workspace_id":"w1"}}}'
             )
+        if "workspace list" in joined:
+            return _completed('{"result":{"workspaces":[{"workspace_id":"w1"}]}}')
         raise AssertionError(joined)
 
     def popen_fn(command, **kwargs):
@@ -2124,7 +2128,7 @@ def test_herdr_cli_request_adapter_fails_closed_when_server_exits_immediately() 
     assert exc_info.value.category == "transient-unavailable"
     assert "exited immediately" in exc_info.value.detail
     assert workspace_create_calls == 1
-    assert popen_commands == [["herdr", "server", "--session", "ccb-demo"]]
+    assert popen_commands == [["herdr", "--session", "ccb-demo", "server"]]
 
 
 def test_herdr_cli_request_adapter_fails_closed_when_started_server_is_not_running() -> None:
@@ -2169,7 +2173,59 @@ def test_herdr_cli_request_adapter_fails_closed_when_started_server_is_not_runni
     assert exc_info.value.category == "transient-unavailable"
     assert "did not become ready" in exc_info.value.detail
     assert workspace_create_calls == 1
-    assert popen_commands == [["herdr", "server", "--session", "ccb-demo"]]
+    assert popen_commands == [["herdr", "--session", "ccb-demo", "server"]]
+
+
+def test_herdr_cli_request_adapter_accepts_nested_server_status() -> None:
+    commands: list[list[str]] = []
+
+    def run_fn(command, **kwargs):
+        del kwargs
+        commands.append(command)
+        return _completed('{"server":{"status":"running","running":true}}')
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        which_fn=lambda name: "herdr",
+    )
+
+    assert adapter._server_status_running("herdr", session_name="ccb-demo") is True
+    assert commands == [["herdr", "status", "server", "--json", "--session", "ccb-demo"]]
+
+
+def test_herdr_cli_request_adapter_fails_when_created_workspace_is_not_listed() -> None:
+    def run_fn(command, **kwargs):
+        del kwargs
+        joined = " ".join(command)
+        if "status --json" in joined:
+            return _completed('{"client":{"version":"0.7.5"}}')
+        if "api schema --json" in joined:
+            return _completed('{"title":"Herdr API"}')
+        if "--version" in joined:
+            return _completed("herdr 0.7.5")
+        if "workspace create" in joined:
+            return _completed(
+                '{"result":{"workspace":{"workspace_id":"w1"},"root_pane":{"pane_id":"w1:p1","workspace_id":"w1"}}}'
+            )
+        if "workspace list" in joined:
+            return _completed('{"result":{"workspaces":[]}}')
+        raise AssertionError(joined)
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        which_fn=lambda name: "herdr",
+    )
+
+    with pytest.raises(MuxCommandErrorV2) as exc_info:
+        adapter("create_session", {"project_id": "demo", "cwd": "D:/demo", "title": "demo"})
+
+    assert exc_info.value.operation == "create_session"
+    assert exc_info.value.category == "command-failed"
+    assert "was not found after creation" in exc_info.value.detail
 
 
 def test_herdr_cli_request_adapter_does_not_start_server_for_server_info() -> None:
@@ -2219,6 +2275,8 @@ def test_herdr_backend_uses_cli_adapter_envelope_contract_for_core_operations() 
             return _completed(
                 '{"result":{"workspace":{"workspace_id":"w1"},"root_pane":{"pane_id":"w1:p1","workspace_id":"w1"}}}'
             )
+        if "workspace list" in joined:
+            return _completed('{"result":{"workspaces":[{"workspace_id":"w1"}]}}')
         if "pane list" in joined:
             return _completed(
                 '{"result":{"panes":[{"pane_id":"w1:p1","workspace_id":"w1"},{"pane_id":"w1:p2","workspace_id":"w1"}]}}'
@@ -2596,6 +2654,66 @@ def test_herdr_cli_logical_windows_accept_workspace_ids_and_isolate_namespace_gr
 
     assert state["closed"] == ["w2", "w1"]
     assert set(state["workspaces"]) == {"w3", "w4"}
+
+
+def test_herdr_cli_destroy_namespace_ignores_missing_workspace_during_close() -> None:
+    calls: list[list[str]] = []
+
+    def run_fn(command, **kwargs):
+        del kwargs
+        calls.append(list(command))
+        joined = " ".join(command)
+        if "workspace list" in joined:
+            return _completed(
+                json.dumps(
+                    {
+                        "result": {
+                            "workspaces": [
+                                {"workspace_id": "w1", "focused": False},
+                            ],
+                        },
+                    }
+                )
+            )
+        if "pane list" in joined:
+            return _completed(
+                json.dumps(
+                    {
+                        "result": {
+                            "panes": [
+                                {
+                                    "pane_id": "w1:p1",
+                                    "workspace_id": "w1",
+                                    "tokens": {
+                                        "ccb_namespace_id": "w1",
+                                        "ccb_root_pane": "1",
+                                        "ccb_window": "ccb",
+                                    },
+                                },
+                            ],
+                        },
+                    }
+                )
+            )
+        if "workspace close" in joined:
+            raise subprocess.CalledProcessError(
+                1,
+                command,
+                stderr='{"error":{"code":"workspace_not_found","message":"workspace w1 not found"}}',
+            )
+        raise AssertionError(joined)
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        which_fn=lambda name: "herdr",
+    )
+
+    result = adapter("destroy_namespace", {"namespace_id": "w1", "session_name": "ccb-demo"})
+
+    assert result == {"status": "ok", "namespace_id": "w1", "closed_workspace_ids": []}
+    assert any("workspace close w1" in " ".join(command) for command in calls)
 
 
 def test_herdr_backend_destroy_namespace_and_kill_server_delegate_and_drop_namespace_refs() -> None:
@@ -3395,7 +3513,8 @@ def test_herdr_cli_request_adapter_focuses_workspace_for_attach_namespace() -> N
 
     assert attached["status"] == "ok"
     assert attached["namespace_id"] == "w1"
-    assert commands[-1] == ["herdr", "workspace", "focus", "w2", "--session", "restored-session"]
+    assert commands[-2] == ["herdr", "workspace", "focus", "w2", "--session", "restored-session"]
+    assert commands[-1] == ["herdr", "session", "attach", "restored-session"]
     assert "secret" not in str(commands)
 
 
@@ -3591,6 +3710,8 @@ def test_herdr_cli_request_adapter_create_session_uses_project_namespace_title_a
             return _completed(
                 '{"result":{"workspace":{"workspace_id":"w1"},"root_pane":{"pane_id":"w1:p1","workspace_id":"w1"}}}'
             )
+        if "workspace list" in joined:
+            return _completed('{"result":{"workspaces":[{"workspace_id":"w1"}]}}')
         raise AssertionError(joined)
 
     adapter = HerdrCliRequestAdapter(
@@ -3608,7 +3729,7 @@ def test_herdr_cli_request_adapter_create_session_uses_project_namespace_title_a
     assert namespace["session_name"] == "ccb-project-12345678"
     assert namespace["restore_token"] == "ccb-project-12345678::w1"
     assert namespace["ipc_ref"] == "herdr://ccb-project-12345678"
-    assert len(commands) == 4
+    assert len(commands) == 5
 
 
 def test_herdr_cli_request_adapter_restore_uses_restored_session_ipc_ref() -> None:
@@ -3843,6 +3964,8 @@ def test_herdr_cli_request_adapter_omits_empty_cwd_arguments() -> None:
             return _completed(
                 '{"result":{"workspace":{"workspace_id":"w1"},"root_pane":{"pane_id":"w1:p1","workspace_id":"w1"}}}'
             )
+        if "workspace list" in joined:
+            return _completed('{"result":{"workspaces":[{"workspace_id":"w1"}]}}')
         if "pane list" in joined:
             return _completed('{"result":{"panes":[{"pane_id":"w1:p1","workspace_id":"w1"}]}}')
         if "pane split" in joined:

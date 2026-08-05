@@ -135,6 +135,16 @@ class HerdrCliRequestAdapter:
             raise self._failed(
                 "create_session",
                 "Herdr workspace create response is missing workspace_id",
+                session_name=session_name,
+            )
+        if not any(
+            str(item.get("workspace_id") or "").strip() == namespace_id
+            for item in self._workspaces(session_name=session_name)
+        ):
+            raise self._failed(
+                "create_session",
+                f"Herdr workspace {namespace_id!r} was not found after creation",
+                session_name=session_name,
             )
         root_pane_id = str(root_pane.get("pane_id") or "").strip()
         if root_pane_id:
@@ -667,12 +677,17 @@ class HerdrCliRequestAdapter:
             workspace_id = str(workspace.get("workspace_id") or "").strip()
             if not workspace_id:
                 continue
-            self._command(
-                "destroy_namespace",
-                ["workspace", "close", workspace_id],
-                expect_json=False,
-                session_name=session_name,
-            )
+            try:
+                self._command(
+                    "destroy_namespace",
+                    ["workspace", "close", workspace_id],
+                    expect_json=False,
+                    session_name=session_name,
+                )
+            except MuxCommandErrorV2 as exc:
+                if exc.category != "not-found":
+                    raise
+                continue
             closed.append(workspace_id)
         return {
             "status": "ok",
@@ -739,6 +754,22 @@ class HerdrCliRequestAdapter:
             expect_json=False,
             session_name=session_name,
         )
+        executable = self._resolve_executable()
+        command = [executable, "session", "attach", session_name]
+        try:
+            self._run_fn(command, check=True)
+        except (OSError, subprocess.SubprocessError) as exc:
+            detail = f"Herdr foreground attach failed for session {session_name!r}"
+            if isinstance(exc, subprocess.CalledProcessError):
+                detail = (exc.stderr or exc.stdout or detail).strip() or detail
+            raise MuxCommandErrorV2(
+                category=_command_error_category(detail, expect_json=False),
+                backend_impl="herdr",
+                operation="attach_namespace",
+                detail=detail,
+                ipc_ref=self._ipc_ref_for_session(session_name),
+                evidence=_command_evidence("attach_namespace", command),
+            ) from exc
         return {
             "status": "ok",
             "namespace_id": namespace_id,
@@ -1082,7 +1113,7 @@ class HerdrCliRequestAdapter:
             return
         self._server_sessions.discard(session_name)
         self._server_processes.pop(session_name, None)
-        command = [executable, "server", "--session", session_name]
+        command = [executable, "--session", session_name, "server"]
         kwargs: dict[str, object] = {
             "stdin": subprocess.DEVNULL,
             "stdout": subprocess.DEVNULL,
@@ -1153,7 +1184,9 @@ class HerdrCliRequestAdapter:
             return False
         if not isinstance(payload, Mapping):
             return False
-        return bool(payload.get("running") is True or payload.get("status") == "running")
+        server = payload.get("server")
+        status = server if isinstance(server, Mapping) else payload
+        return bool(status.get("running") is True or status.get("status") == "running")
 
     def _resolve_executable(self) -> str:
         executable = (self._herdr_executable or "").strip() or self._which_fn("herdr")
@@ -1344,6 +1377,7 @@ def _command_error_category(detail: str, *, expect_json: bool) -> str:
     lowered = detail.lower()
     if (
         "not found" in lowered
+        or "not_found" in lowered
         or "notfound" in lowered
         or "unknown pane" in lowered
         or "unknown workspace" in lowered

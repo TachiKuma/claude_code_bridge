@@ -1,0 +1,2 @@
+command_status: failed
+error: mounted ccbd config does not match current .ccb/ccb.config

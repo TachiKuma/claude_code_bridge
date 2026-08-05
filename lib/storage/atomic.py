@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import time
 from pathlib import Path
 from typing import Any
 
@@ -147,7 +148,7 @@ def _atomic_write_text_path_replace(target: Path, text: str, *, encoding: str) -
             handle.write(text)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(tmp_path, target)
+        _replace_path_with_windows_retry(tmp_path, target)
     except BaseException:
         if not handle_opened:
             try:
@@ -159,6 +160,23 @@ def _atomic_write_text_path_replace(target: Path, text: str, *, encoding: str) -
         except BaseException:
             pass
         raise
+
+
+def _replace_path_with_windows_retry(source: Path, target: Path) -> None:
+    for attempt in range(4):
+        try:
+            os.replace(source, target)
+            return
+        except OSError as exc:
+            if not _is_transient_windows_replace_error(exc) or attempt == 3:
+                raise
+            time.sleep(0.025 * (attempt + 1))
+
+
+def _is_transient_windows_replace_error(exc: OSError) -> bool:
+    if os.name != 'nt':
+        return False
+    return int(getattr(exc, 'winerror', 0) or 0) in {5, 32}
 
 
 def _record_atomic_write_metrics(collect_metrics: bool, *, written_bytes: int | None) -> None:

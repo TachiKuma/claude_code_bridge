@@ -86,3 +86,38 @@ CCB 在 `_create_session_scope()`（`cli.py:1282-1286`）中使用 `project_id` 
 
 - `ccb8.ps1`: `Test-ShouldPrestartKill` + `@finalArgs` 剥离 'start' token
 - `token_auth.py`: `_windows_acl_owner_matches()` 接受 `BUILTIN\Administrators`
+
+## 补充修复 (2026-08-05 14:45)
+
+### 根因六（阻塞）：Herdr 前台附着使用了旧的裸 session 入口
+
+`HerdrCliRequestAdapter._attach_namespace()` 在 workspace focus 成功后执行
+`herdr --session <session_name>`。当前 Herdr CLI 的可用前台附着入口是
+`herdr session attach <session_name>`，裸 `--session` 调用会以非零退出，导致
+`.\ccb8` 报：
+
+`foreground attach failed: Herdr attach_namespace failed ... Herdr foreground attach failed for session 'ccb-ccb8v-4bbce237'`
+
+### 修复
+
+- `lib/terminal_runtime/herdr_backend_runtime/cli.py`: 前台附着命令改为 `herdr session attach <session_name>`
+- `test/test_herdr_backend_client.py`: 补强 `attach_namespace` 断言，确认先 focus workspace，再执行显式 `session attach`，且不泄露 `restore_token`
+
+### 验证
+
+- `pytest -q test/test_herdr_backend_client.py`
+  - `172 passed`
+- `pytest -q test/test_v2_start_foreground.py`
+  - `17 passed`
+- `C:\ccb8v> .\ccb8.ps1 kill -f`
+  - `kill_status: ok`
+- `C:\ccb8v> powershell -NoProfile -ExecutionPolicy Bypass -File .\ccb8.ps1`
+  - 15 秒内未再快速退出并打印前台附着失败；该命令进入前台交互路径，工具侧超时终止观察
+- `D:\.c8\rs\4bbce237a31b746a3d1e8e1b29cc52e810ca8f889145c662fc533f342864d2c4\ccbd\lease.json`
+  - `mount_state: mounted`
+- Herdr 私有 profile 下 `status server --json --session ccb-ccb8v-4bbce237`
+  - `running: true`
+
+### 遗留风险
+
+- 工具环境无法直接渲染 Herdr 交互 UI，只能通过不再快速失败、`ccbd` mounted、Herdr server running 三项运行证据验证前台附着路径已越过原失败点。

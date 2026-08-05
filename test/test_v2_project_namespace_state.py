@@ -154,6 +154,24 @@ def test_project_namespace_event_summary_redacts_herdr_restore_token() -> None:
     assert 'ccb-herdr::workspace-1' not in str(summary)
 
 
+def test_project_namespace_event_store_load_latest_skips_corrupt_historical_rows(tmp_path: Path) -> None:
+    layout = PathLayout(tmp_path / 'repo')
+    store = ProjectNamespaceEventStore(layout)
+    latest = ProjectNamespaceEvent(
+        event_kind='namespace_destroyed',
+        project_id='proj-1',
+        occurred_at='2026-08-05T00:00:00Z',
+        namespace_epoch=1,
+        tmux_session_name='ccb-proj-1',
+        details={'reason': 'kill'},
+    )
+    store.append(latest)
+    with layout.ccbd_lifecycle_log_path.open('a', encoding='utf-8') as handle:
+        handle.write('}}\n')
+
+    assert store.load_latest() == latest
+
+
 def test_project_namespace_runtime_dto_preserves_internal_herdr_namespace_ref() -> None:
     state = ProjectNamespaceState(
         project_id='proj-herdr',

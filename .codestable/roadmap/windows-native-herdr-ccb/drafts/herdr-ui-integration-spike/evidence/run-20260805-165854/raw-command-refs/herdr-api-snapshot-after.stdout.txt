@@ -1,0 +1,1 @@
+{"id":"cli:api:snapshot","result":{"snapshot":{"agents":[],"layouts":[],"panes":[],"protocol":18,"tabs":[],"version":"0.7.5-preview.2026-07-29-44b3adb12552","workspaces":[]},"type":"session_snapshot"}}

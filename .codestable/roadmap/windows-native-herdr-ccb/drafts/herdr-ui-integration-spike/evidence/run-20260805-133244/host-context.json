@@ -1,0 +1,21 @@
+{
+  "captured_at": "2026-08-05T05:32:44.2864850Z",
+  "project_root": "D:\\C#Project\\GitHub\\AvaPrintDesigner",
+  "repo_root": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge",
+  "ccb8_path": "D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.cmd",
+  "herdr_exe": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Herdr\\herdr.exe",
+  "herdr_session": "ccb-herdr-avaprintdesigner-source-dev",
+  "expected_agents": 2,
+  "in_herdr_ui": false,
+  "herdr_env": {
+    "CCB_HERDR_CAPABILITY_REPORT": "E:\\GITHUB~1\\TACHIK~1\\claude_code_bridge\\.codestable\\features\\2026-07-31-herdr-backend-contract-spike\\evidence\\herdr-contract-spike-evidence.json",
+    "CCB_HERDR_EXE": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Herdr\\herdr.exe",
+    "CCB_HERDR_SESSION": "ccb-herdr-avaprintdesigner-source-dev"
+  },
+  "powershell_version": "7.5.4",
+  "os_version": "Microsoft Windows NT 10.0.19045.0",
+  "machine_name": "FDYL-002",
+  "user_domain": "FDYL-002",
+  "user_name": "Administrator",
+  "current_directory": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge"
+}
