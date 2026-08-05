@@ -1,0 +1,30 @@
+{
+  "schema_version": 2,
+  "record_type": "ccbd_lifecycle",
+  "project_id": "575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03",
+  "desired_state": "stopped",
+  "phase": "failed",
+  "generation": 20,
+  "phase_started_at": "2026-08-04T02:05:18.711667Z",
+  "startup_id": "1170553412a945e7b6fb606ec57d0aab",
+  "startup_stage": "spawn_failed",
+  "last_progress_at": "2026-08-04T02:05:18.711667Z",
+  "startup_deadline_at": null,
+  "keeper_pid": 6324,
+  "owner_pid": null,
+  "owner_daemon_instance_id": null,
+  "config_signature": "66ebd6e4c6f9e8e4541bfe8ae440c539499f1ecc09e69a03559e05ddca3bedbc",
+  "socket_path": "D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\ccbd\\ccbd.sock",
+  "socket_inode": null,
+  "control_plane_endpoint": {
+    "kind": "unix_socket",
+    "address": "D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\ccbd\\ccbd.sock",
+    "display": "D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\ccbd\\ccbd.sock",
+    "legacy_socket_path": "D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\ccbd\\ccbd.sock",
+    "auth_ref": null,
+    "fingerprint": null
+  },
+  "namespace_epoch": null,
+  "last_failure_reason": "keeper_restart_suppressed:max_start_failures:20:ccbd exited before ready with code 1",
+  "shutdown_intent": null
+}

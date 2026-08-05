@@ -287,6 +287,7 @@ def _normalize_herdr_capability_projection(payload: dict[str, object]) -> None:
         if key not in payload and key in projection:
             payload[key] = projection[key]
     _derive_herdr_facade_capabilities(payload)
+    _deduce_herdr_verdict(payload)
 
 
 _DERIVED_HERDR_FACADE_CAPABILITIES = {
@@ -318,6 +319,15 @@ def _derive_herdr_facade_capabilities(payload: dict[str, object]) -> None:
 
 def _all_capabilities_supported(statuses: dict[object, object], names: tuple[str, ...]) -> bool:
     return all(statuses.get(name) == "supported" for name in names)
+
+
+def _deduce_herdr_verdict(payload: dict[str, object]) -> None:
+    if payload.get("verdict", ""):
+        return
+    adapter_recommendation = str(payload.get("adapter_recommendation") or "").strip()
+    failure_class = str(payload.get("failure_class") or "").strip()
+    if adapter_recommendation == "continue-with-gaps" and failure_class == "windows-beta-gap":
+        payload["verdict"] = "partial"
 
 
 def _herdr_socket_ref() -> str:

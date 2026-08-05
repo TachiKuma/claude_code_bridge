@@ -1,0 +1,2 @@
+command_status: failed
+error: project ccbd is starting; wait for keeper to finish startup

@@ -128,6 +128,48 @@ function Resolve-OptionalPath {
     return (Resolve-Path -LiteralPath $candidate -ErrorAction Stop).ProviderPath
 }
 
+function Get-RepoRootFromScript {
+    param([string] $ScriptRoot)
+    if ([string]::IsNullOrWhiteSpace($ScriptRoot)) {
+        return ""
+    }
+    $path = $ScriptRoot
+    for ($i = 0; $i -lt 5; $i++) {
+        if ([string]::IsNullOrWhiteSpace($path)) {
+            return ""
+        }
+        $path = Split-Path -Parent $path
+    }
+    if ([string]::IsNullOrWhiteSpace($path)) {
+        return ""
+    }
+    try {
+        return (Resolve-Path -LiteralPath $path -ErrorAction Stop).ProviderPath
+    } catch {
+        return ""
+    }
+}
+
+function Resolve-SpikeOutputDir {
+    param(
+        [string] $OutputDir,
+        [string] $RepoRoot,
+        [string] $RunId,
+        [string] $ScriptRoot
+    )
+    if (-not [string]::IsNullOrWhiteSpace($OutputDir)) {
+        return $OutputDir
+    }
+    $resolvedRepo = Resolve-OptionalPath -Path $RepoRoot -Fallback (Get-RepoRootFromScript -ScriptRoot $ScriptRoot)
+    if ([string]::IsNullOrWhiteSpace($resolvedRepo)) {
+        $resolvedRepo = (Get-Location).ProviderPath
+    }
+    if ([string]::IsNullOrWhiteSpace($resolvedRepo)) {
+        throw 'unable to resolve a repository root for the default evidence directory; pass -OutputDir explicitly'
+    }
+    return (Join-Path $resolvedRepo ('.codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-ui-integration-spike/evidence/' + $RunId))
+}
+
 function Resolve-HerdrExe {
     param([string] $Explicit)
     if (-not [string]::IsNullOrWhiteSpace($Explicit)) {
@@ -576,6 +618,14 @@ function Invoke-SelfTest {
         if (($sessionArgs -join ' ') -ne 'herdr status server --json --session demo') {
             throw 'Herdr session arg ordering self-test failed'
         }
+        $repoRoot = Get-RepoRootFromScript -ScriptRoot $PSScriptRoot
+        if ([string]::IsNullOrWhiteSpace($repoRoot)) {
+            throw 'repo root derivation self-test failed'
+        }
+        $defaultOutputDir = Resolve-SpikeOutputDir -OutputDir '' -RepoRoot '' -RunId 'run-selftest' -ScriptRoot $PSScriptRoot
+        if ([string]::IsNullOrWhiteSpace($defaultOutputDir) -or $defaultOutputDir -notmatch '[\\/]\.codestable[\\/].*[\\/]evidence[\\/]run-selftest$') {
+            throw 'default output dir self-test failed'
+        }
         New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
         $cmdPath = Join-Path $tempDir 'ccb8.cmd'
         $ps1Path = Join-Path $tempDir 'ccb8.ps1'
@@ -598,7 +648,10 @@ if ($SelfTest) {
 }
 
 $resolvedProject = Resolve-OptionalPath -Path $ProjectRoot -Fallback (Get-Location).ProviderPath
-$resolvedRepo = Resolve-OptionalPath -Path $RepoRoot -Fallback ""
+$resolvedRepo = Resolve-OptionalPath -Path $RepoRoot -Fallback (Get-RepoRootFromScript -ScriptRoot $PSScriptRoot)
+if ([string]::IsNullOrWhiteSpace($resolvedRepo)) {
+    $resolvedRepo = (Get-Location).ProviderPath
+}
 $resolvedCcb8 = Resolve-OptionalPath -Path $Ccb8Path -Fallback (Join-Path $resolvedProject 'ccb8.cmd')
 $resolvedHerdr = Resolve-HerdrExe -Explicit $HerdrExe
 $effectiveHerdrSession = if (-not [string]::IsNullOrWhiteSpace($HerdrSession)) {
@@ -612,9 +665,7 @@ $effectiveHerdrSession = if (-not [string]::IsNullOrWhiteSpace($HerdrSession)) {
 }
 
 $runId = 'run-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
-if ([string]::IsNullOrWhiteSpace($OutputDir)) {
-    $OutputDir = Join-Path $resolvedRepo ('.codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-ui-integration-spike/evidence/' + $runId)
-}
+$OutputDir = Resolve-SpikeOutputDir -OutputDir $OutputDir -RepoRoot $RepoRoot -RunId $runId -ScriptRoot $PSScriptRoot
 $resolvedOut = $OutputDir
 New-Item -ItemType Directory -Force -Path $resolvedOut | Out-Null
 $rawDir = Join-Path $resolvedOut 'raw-command-refs'
@@ -656,11 +707,220 @@ try {
 $commands += Invoke-CapturedCommand -Name 'herdr-status-server-after' -Command (Add-HerdrSessionArgs -Command @($resolvedHerdr, 'status', 'server', '--json') -Session $effectiveHerdrSession) -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 20
 $commands += Invoke-CapturedCommand -Name 'herdr-api-snapshot-after' -Command (Add-HerdrSessionArgs -Command @($resolvedHerdr, 'api', 'snapshot') -Session $effectiveHerdrSession) -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 20
 $commands += Invoke-CapturedCommand -Name 'ccb8-ping-ccbd' -Command @($resolvedCcb8, 'ping', 'ccbd') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 30
-$commands += Invoke-CapturedCommand -Name 'ccb8-ping-all' -Command @($resolvedCcb8, 'ping', 'all') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 30
+# Retry ping-all up to 3 times to allow ccbd to finish starting
+$pingAllResult = $null
+for ($pingAllAttempt = 1; $pingAllAttempt -le 3; $pingAllAttempt++) {
+    $pingAllResult = Invoke-CapturedCommand -Name ('ccb8-ping-all-attempt-' + $pingAllAttempt) -Command @($resolvedCcb8, 'ping', 'all') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 30
+    $commands += $pingAllResult
+    if ($pingAllAttempt -lt 3 -and [int] $pingAllResult.exit_code -ne 0) {
+        Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status ('ccb8 ping-all retry ' + $pingAllAttempt + '/3, ccbd may still be starting') -PercentComplete 62
+        Start-Sleep -Seconds 3
+    } else {
+        break
+    }
+}
+# Keep the last (best) ping-all as ccb8-ping-all for classification
+if ($pingAllAttempt -gt 1) {
+    $commands += [ordered] @{
+        name = 'ccb8-ping-all'
+        exit_code = [int] $pingAllResult.exit_code
+        timed_out = [bool] $pingAllResult.timed_out
+        elapsed_ms = [int] $pingAllResult.elapsed_ms
+        ref = $pingAllResult.ref
+        stdout_ref = $pingAllResult.stdout_ref
+        stderr_ref = $pingAllResult.stderr_ref
+        stdout_tail = $pingAllResult.stdout_tail
+        stderr_tail = $pingAllResult.stderr_tail
+    }
+}
 $commands += Invoke-CapturedCommand -Name 'ccb8-ps' -Command @($resolvedCcb8, 'ps') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 30
 $commands += Invoke-CapturedCommand -Name 'ccb8-doctor-ps' -Command @($resolvedCcb8, 'doctor', 'ps') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 30
 $commands += Invoke-CapturedCommand -Name 'ccb8-layout-status' -Command @($resolvedCcb8, 'layout', 'status', '--json') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 30
 $commands += Invoke-CapturedCommand -Name 'ccb8-doctor-output' -Command @($resolvedCcb8, 'doctor', '--output', (Join-Path $resolvedOut 'doctor-output')) -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 60
+
+# --- expanded collection dimensions (analysis 2026-08-05) ---
+
+# Dimension 1: CCB startup state files snapshot
+Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'collecting CCB startup state files' -PercentComplete 72
+$stateFilesDir = Join-Path $resolvedOut 'startup-state-files'
+New-Item -ItemType Directory -Force -Path $stateFilesDir | Out-Null
+$ccbDir = Join-Path $resolvedProject '.ccb'
+$stateKeyFiles = @('runtime-root-ref.json', 'project.identity.json')
+foreach ($fileName in $stateKeyFiles) {
+    $src = Join-Path $ccbDir $fileName
+    if (Test-Path -LiteralPath $src) {
+        try {
+            $dest = Join-Path $stateFilesDir $fileName
+            Copy-Item -LiteralPath $src -Destination $dest -Force
+            Append-Utf8NoBom -Path (Join-Path $resolvedOut 'startup-state-files-manifest.txt') -Content ("copied $fileName`r`n")
+        } catch {
+            Append-Utf8NoBom -Path (Join-Path $resolvedOut 'startup-state-files-manifest.txt') -Content ("failed to copy $fileName : $_`r`n")
+        }
+    }
+}
+$ccbdDir = Join-Path $ccbDir 'ccbd'
+$ccbdStateFiles = @('lease.json', 'keeper.json', 'lifecycle.json')
+foreach ($fileName in $ccbdStateFiles) {
+    $src = Join-Path $ccbdDir $fileName
+    if (Test-Path -LiteralPath $src) {
+        try {
+            $dest = Join-Path $stateFilesDir $fileName
+            Copy-Item -LiteralPath $src -Destination $dest -Force
+            Append-Utf8NoBom -Path (Join-Path $resolvedOut 'startup-state-files-manifest.txt') -Content ("copied $fileName`r`n")
+        } catch {
+            Append-Utf8NoBom -Path (Join-Path $resolvedOut 'startup-state-files-manifest.txt') -Content ("failed to copy $fileName : $_`r`n")
+        }
+    }
+}
+
+# Also copy startup-report.json from doctor output if available
+$startupReport = Join-Path $resolvedOut 'doctor-output/startup-report.json'
+if (-not (Test-Path -LiteralPath $startupReport)) {
+    $startupReport = Join-Path $resolvedOut 'doctor-output/ccbd/startup-report.json'
+}
+if (Test-Path -LiteralPath $startupReport) {
+    try {
+        Copy-Item -LiteralPath $startupReport -Destination (Join-Path $stateFilesDir 'startup-report.json') -Force
+        Append-Utf8NoBom -Path (Join-Path $resolvedOut 'startup-state-files-manifest.txt') -Content "copied startup-report.json`r`n"
+    } catch {
+        Append-Utf8NoBom -Path (Join-Path $resolvedOut 'startup-state-files-manifest.txt') -Content ("failed to copy startup-report.json : $_`r`n")
+    }
+}
+
+# Dimension 2: Pane-level materialization verification via Herdr api snapshot pane tokens
+Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'validating pane materialization' -PercentComplete 78
+$paneEvidenceDir = Join-Path $resolvedOut 'pane-evidence'
+New-Item -ItemType Directory -Force -Path $paneEvidenceDir | Out-Null
+$snapshotResult = $commands | Where-Object { $_.name -eq 'herdr-api-snapshot-after' } | Select-Object -First 1
+$paneVerificationReport = @()
+$paneVerificationReport += '# Pane materialization verification'
+$paneVerificationReport += ''
+if ($snapshotResult -and (Test-Path -LiteralPath $snapshotResult.stdout_ref)) {
+    try {
+        $snapshotText = [System.IO.File]::ReadAllText($snapshotResult.stdout_ref, [System.Text.Encoding]::UTF8)
+        # api snapshot is nested: {"result":{"snapshot":{...}}}
+        $snapshotPayload = $null
+        $snapshot = $null
+        try {
+            $snapshotPayload = $snapshotText | ConvertFrom-Json -ErrorAction Stop
+        } catch {
+            $paneVerificationReport += ('- snapshot_parse_warning: direct ConvertFrom-Json failed, trying manual extraction')
+            $snapshotPayload = $null
+        }
+        if ($null -eq $snapshotPayload) {
+            $paneVerificationReport += ('- snapshot_available: true (raw text saved, unable to parse JSON)')
+    } else {
+        $paneVerificationReport += ('- snapshot_available: true')
+        # Try result.snapshot first, then snapshot
+        if ($null -ne $snapshotPayload.result -and $null -ne $snapshotPayload.result.snapshot) {
+            $snapshot = $snapshotPayload.result.snapshot
+        } else {
+            $snapshot = $snapshotPayload.snapshot
+        }
+    }
+        if ($null -ne $snapshot) {
+            $panes = $snapshot.panes
+            $workspaces = $snapshot.workspaces
+            $paneVerificationReport += ('- pane_count: ' + @($panes).Count)
+            $paneVerificationReport += ('- workspace_count: ' + @($workspaces).Count)
+            $paneVerificationReport += ''
+            $paneVerificationReport += '## Pane identity'
+            $paneVerificationReport += ''
+            foreach ($pane in @($panes)) {
+                $paneId = [string] $pane.pane_id
+                $title = [string] $pane.title
+                $displayAgent = [string] $pane.display_agent
+                $paneVerificationReport += ('- pane_id=' + $paneId + ' title=' + $title + ' display_agent=' + $displayAgent)
+                $tokens = $pane.tokens
+                if ($null -ne $tokens) {
+                    foreach ($prop in $tokens.PSObject.Properties) {
+                        $paneVerificationReport += ('  token: ' + $prop.Name + '=' + $prop.Value)
+                    }
+                }
+            }
+            $paneVerificationReport += ''
+            $paneVerificationReport += '## Workspaces'
+            foreach ($workspace in @($workspaces)) {
+                $wsId = [string] $workspace.workspace_id
+                $label = [string] $workspace.label
+                $paneVerificationReport += ('- workspace_id=' + $wsId + ' label=' + $label)
+            }
+
+            # Try capturing pane content for materialized panes (non-destructive read)
+            $paneVerificationReport += ''
+            $paneVerificationReport += '## Pane content capture'
+            $paneVerificationReport += ''
+            foreach ($pane in @($panes)) {
+                $paneId = [string] $pane.pane_id
+                if ([string]::IsNullOrWhiteSpace($paneId)) { continue }
+                $captureResult = Invoke-CapturedCommand `
+                    -Name ('ccb-herdr-pane-capture-' + ($paneId -replace '[^a-zA-Z0-9_-]', '-')) `
+                    -Command (Add-HerdrSessionArgs -Command @($resolvedHerdr, 'pane', 'read', $paneId, '--lines', '3', '--format', 'text') -Session $effectiveHerdrSession) `
+                    -WorkingDirectory $resolvedProject `
+                    -RawDir $rawDir `
+                    -TimeoutSeconds 10
+                $captureText = if (Test-Path -LiteralPath $captureResult.stdout_ref) {
+                    [System.IO.File]::ReadAllText($captureResult.stdout_ref)
+                } else { '' }
+                $paneVerificationReport += ('- pane_id=' + $paneId + ' exit_code=' + [int] $captureResult.exit_code + ' tail=' + ($captureText.Substring(0, [Math]::Min($captureText.Length, 80))))
+            }
+        } else {
+            $paneVerificationReport += '- snapshot_available: false (no snapshot object in response)'
+        }
+    } catch {
+        $paneVerificationReport += ('- snapshot_parse_error: ' + $_.Exception.Message)
+    }
+} else {
+    $paneVerificationReport += '- snapshot_available: false (no herdr-api-snapshot-after output)'
+}
+Write-Utf8NoBom -Path (Join-Path $paneEvidenceDir 'pane-verification.md') -Content (($paneVerificationReport -join [Environment]::NewLine) + [Environment]::NewLine)
+
+# Dimension 3: Backend resolver route evidence via ccb8 --diagnose extended output
+Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'collecting backend resolver route evidence' -PercentComplete 85
+$backendRouteDir = Join-Path $resolvedOut 'backend-route-evidence'
+New-Item -ItemType Directory -Force -Path $backendRouteDir | Out-Null
+$doctorOutputDir = Join-Path $resolvedOut 'doctor-output'
+if (Test-Path -LiteralPath $doctorOutputDir) {
+    # Collect ccbd startup log fragments for backend selection
+    Get-ChildItem -LiteralPath $doctorOutputDir -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like '*.log' -or $_.Name -like '*.json' -or $_.Name -like '*.txt' } |
+        ForEach-Object {
+            try {
+                $dest = Join-Path $backendRouteDir $_.Name
+                Copy-Item -LiteralPath $_.FullName -Destination $dest -Force
+            } catch {}
+        }
+}
+# Extract backend-selection relevant lines from diagnose output
+$diagnoseResult = $commands | Where-Object { $_.name -eq 'ccb8-diagnose' } | Select-Object -First 1
+$backendRouteSummary = @()
+$backendRouteSummary += '# Backend resolver route evidence'
+$backendRouteSummary += ''
+if ($diagnoseResult -and (Test-Path -LiteralPath $diagnoseResult.stdout_ref)) {
+    $diagnoseText = [System.IO.File]::ReadAllText($diagnoseResult.stdout_ref)
+    $backendRouteSummary += '## Diagnose output (backend-relevant lines)'
+    $backendRouteSummary += ''
+    foreach ($line in ($diagnoseText -split "`n")) {
+        if ($line -match 'herdr|backend|Herdr|HERDR|CCB_HERDR') {
+            $backendRouteSummary += ('- ' + $line.Trim())
+        }
+    }
+}
+# Collect env vars relevant to backend selection
+$backendRouteSummary += ''
+$backendRouteSummary += '## Herdr environment variables'
+foreach ($entry in Get-ChildItem Env:) {
+    if ($entry.Name -like 'HERDR*' -or $entry.Name -like 'CCB_HERDR*') {
+        $backendRouteSummary += ('- ' + $entry.Name + '=' + (Redact-Text -Text $entry.Value))
+    }
+}
+$backendRouteSummary += ''
+$backendRouteSummary += '## Platform gate (from host context)'
+$backendRouteSummary += ('- os_platform: ' + $hostContext.os_version)
+$backendRouteSummary += ('- powershell_version: ' + $hostContext.powershell_version)
+$backendRouteSummary += ('- machine_name: ' + $hostContext.machine_name)
+
+Write-Utf8NoBom -Path (Join-Path $backendRouteDir 'backend-route-summary.md') -Content (($backendRouteSummary -join [Environment]::NewLine) + [Environment]::NewLine)
 
 try {
     Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'waiting for sampler completion' -PercentComplete 90
@@ -767,6 +1027,10 @@ $summary = [ordered] @{
     layout_materialized_count = $layoutMaterializedCount
     layout_materialization_complete = $layoutMaterializationComplete
     commands = $commands
+    startup_state_files_dir = $stateFilesDir
+    startup_state_files_ref = Join-Path $resolvedOut 'startup-state-files-manifest.txt'
+    pane_evidence_ref = Join-Path $paneEvidenceDir 'pane-verification.md'
+    backend_route_evidence_ref = Join-Path $backendRouteDir 'backend-route-summary.md'
     notes = @(
         'Herdr agents panel text is manual observation unless Herdr exposes it through CLI metadata.',
         'Herdr agent detection is diagnostics evidence only; CCB provider completion/runtime authority remains CCB-owned.',

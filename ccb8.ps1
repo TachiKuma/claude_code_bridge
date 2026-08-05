@@ -410,7 +410,9 @@ function Reset-SourceDevStateFiles {
                 }
                 'keeper.json' {
                     $json.state = 'stopped'
+                    $json.restart_count = 0
                     $json.last_check_at = $now
+                    $json.last_restart_at = $now
                     $json.last_failure_reason = $null
                 }
                 default {
@@ -420,6 +422,46 @@ function Reset-SourceDevStateFiles {
             Write-Utf8NoBom -Path $file.FullName -Content (($json | ConvertTo-Json -Depth 20) + [Environment]::NewLine)
         } catch {
             Write-Warning ('failed to reset source-dev state file: ' + $file.FullName)
+        }
+    }
+}
+
+function Reset-ProjectCcbdStateFiles {
+    $ccbdDir = Join-Path $env:CCB_PROJECT_ROOT '.ccb\ccbd'
+    if (-not (Test-Path -LiteralPath $ccbdDir)) {
+        return
+    }
+    $now = (Get-Date).ToUniversalTime().ToString('o')
+    foreach ($fileName in @('keeper.json')) {
+        $path = Join-Path $ccbdDir $fileName
+        if (-not (Test-Path -LiteralPath $path)) {
+            continue
+        }
+        try {
+            $json = Read-Utf8Json -Path $path
+            $json.state = 'stopped'
+            $json.restart_count = 0
+            $json.last_check_at = $now
+            $json.last_restart_at = $now
+            $json.last_failure_reason = $null
+            Write-Utf8NoBom -Path $path -Content (($json | ConvertTo-Json -Depth 20) + [Environment]::NewLine)
+        } catch {
+            Write-Warning ('failed to reset project ccbd state file, attempting delete+recreate: ' + $path)
+            try {
+                Remove-Item -LiteralPath $path -Force -ErrorAction Stop
+                $defaultState = [ordered] @{
+                    schema_version = 2
+                    record_type = 'ccbd_keeper'
+                    state = 'stopped'
+                    restart_count = 0
+                    last_check_at = $now
+                    last_restart_at = $now
+                    last_failure_reason = $null
+                }
+                Write-Utf8NoBom -Path $path -Content (($defaultState | ConvertTo-Json -Depth 10) + [Environment]::NewLine)
+            } catch {
+                Write-Warning ('failed to recreate project ccbd state file: ' + $path)
+            }
         }
     }
 }
@@ -468,6 +510,7 @@ function Run-BoundedKillForce {
 function Invoke-PrestartCleanup {
     Stop-SourceDevRuntimePids
     Run-BoundedKillForce
+    Reset-ProjectCcbdStateFiles
 }
 
 function Test-ShouldPrestartKill {

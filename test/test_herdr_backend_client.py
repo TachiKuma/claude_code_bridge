@@ -1887,7 +1887,7 @@ def test_herdr_cli_request_adapter_maps_server_info_and_core_operations() -> Non
 
     def run_fn(command, **kwargs):
         commands.append(command)
-        assert command[1:3] == ["--session", "ccb-demo"]
+        assert command[-2:] == ["--session", "ccb-demo"]
         joined = " ".join(command)
         if "status --json" in joined:
             return _completed('{"client":{"version":"0.7.5-preview"},"server":{"socket":"C:/tmp/herdr.sock"}}')
@@ -2071,7 +2071,7 @@ def test_herdr_cli_request_adapter_starts_server_and_retries_server_backed_comma
 
     assert namespace["namespace_id"] == "w1"
     assert workspace_create_calls == 2
-    assert popen_commands == [["herdr", "--session", "ccb-demo", "server"]]
+    assert popen_commands == [["herdr", "server", "--session", "ccb-demo"]]
     workspace_commands = [command for command in commands if "workspace create" in " ".join(command)]
     assert workspace_commands[0] == workspace_commands[1]
 
@@ -2124,7 +2124,7 @@ def test_herdr_cli_request_adapter_fails_closed_when_server_exits_immediately() 
     assert exc_info.value.category == "transient-unavailable"
     assert "exited immediately" in exc_info.value.detail
     assert workspace_create_calls == 1
-    assert popen_commands == [["herdr", "--session", "ccb-demo", "server"]]
+    assert popen_commands == [["herdr", "server", "--session", "ccb-demo"]]
 
 
 def test_herdr_cli_request_adapter_fails_closed_when_started_server_is_not_running() -> None:
@@ -2169,7 +2169,7 @@ def test_herdr_cli_request_adapter_fails_closed_when_started_server_is_not_runni
     assert exc_info.value.category == "transient-unavailable"
     assert "did not become ready" in exc_info.value.detail
     assert workspace_create_calls == 1
-    assert popen_commands == [["herdr", "--session", "ccb-demo", "server"]]
+    assert popen_commands == [["herdr", "server", "--session", "ccb-demo"]]
 
 
 def test_herdr_cli_request_adapter_does_not_start_server_for_server_info() -> None:
@@ -2348,10 +2348,10 @@ def test_herdr_backend_logical_window_facade_restores_from_root_pane_metadata() 
                 json.dumps({"result": {"pane": {"pane_id": pane_id, "workspace_id": workspace_id}}})
             )
         if "workspace focus" in joined:
-            state["focused_workspaces"].append(command[-1])  # type: ignore[union-attr]
+            state["focused_workspaces"].append(command[-3])  # type: ignore[union-attr]
             return _completed("")
         if "workspace close" in joined:
-            workspace_id = command[-1]
+            workspace_id = command[-3]
             state["closed_workspaces"].append(workspace_id)  # type: ignore[union-attr]
             workspaces.pop(workspace_id)
             for pane_id in [pane_id for pane_id, pane in panes.items() if pane["workspace_id"] == workspace_id]:
@@ -2542,10 +2542,10 @@ def test_herdr_cli_logical_windows_accept_workspace_ids_and_isolate_namespace_gr
                 selected = [pane for pane in selected if pane["workspace_id"] == workspace_id]
             return _completed(json.dumps({"result": {"panes": selected}}))
         if "workspace focus" in joined:
-            state["focused"].append(command[-1])  # type: ignore[union-attr]
+            state["focused"].append(command[-3])  # type: ignore[union-attr]
             return _completed("")
         if "workspace close" in joined:
-            workspace_id = command[-1]
+            workspace_id = command[-3]
             state["closed"].append(workspace_id)  # type: ignore[union-attr]
             workspaces.pop(workspace_id)
             for pane_id in [
@@ -3242,13 +3242,15 @@ def test_herdr_cli_request_adapter_runs_command_after_create_pane_split() -> Non
         if "pane split" in joined:
             return _completed('{"result":{"pane":{"pane_id":"w1:p2","workspace_id":"w1"}}}')
         if "pane run" in joined:
-            assert command[1:3] == ["--session", "ccb-demo"]
+            assert command[-2:] == ["--session", "ccb-demo"]
             expected_command = (
                 subprocess.list2cmdline(["python", "-c", "print('a b')"])
                 if sys.platform.startswith("win")
                 else shlex.join(["python", "-c", "print('a b')"])
             )
-            assert command[-2:] == ["w1:p2", expected_command]
+            assert command[-4] == "w1:p2"
+            assert command[-3] == expected_command
+            assert command[-2:] == ["--session", "ccb-demo"]
             return _completed("")
         raise AssertionError(joined)
 
@@ -3393,7 +3395,7 @@ def test_herdr_cli_request_adapter_focuses_workspace_for_attach_namespace() -> N
 
     assert attached["status"] == "ok"
     assert attached["namespace_id"] == "w1"
-    assert commands[-1] == ["herdr", "--session", "restored-session", "workspace", "focus", "w2"]
+    assert commands[-1] == ["herdr", "workspace", "focus", "w2", "--session", "restored-session"]
     assert "secret" not in str(commands)
 
 
@@ -3418,11 +3420,11 @@ def test_herdr_cli_request_adapter_threads_session_scope_and_split_geometry() ->
     def run_fn(command, **kwargs):
         joined = " ".join(command)
         if "pane list" in joined:
-            assert command[1:3] == ["--session", "restored-session"]
+            assert command[-2:] == ["--session", "restored-session"]
             return _completed('{"result":{"panes":[{"pane_id":"w1:p1","workspace_id":"w1"}]}}')
         if "pane split" in joined:
             split_commands.append(command)
-            assert command[1:3] == ["--session", "restored-session"]
+            assert command[-2:] == ["--session", "restored-session"]
             return _completed('{"result":{"pane":{"pane_id":"w1:p2","workspace_id":"w1"}}}')
         raise AssertionError(joined)
 
@@ -3579,7 +3581,7 @@ def test_herdr_cli_request_adapter_create_session_uses_project_namespace_title_a
 
     def run_fn(command, **kwargs):
         commands.append(command)
-        assert command[1:3] == ["--session", "ccb-project-12345678"]
+        assert command[-2:] == ["--session", "ccb-project-12345678"]
         joined = " ".join(command)
         if "status server --json" in joined:
             return _completed('{"status":"running","running":true}')
@@ -3616,7 +3618,7 @@ def test_herdr_cli_request_adapter_restore_uses_restored_session_ipc_ref() -> No
         commands.append(command)
         joined = " ".join(command)
         if "workspace list" in joined:
-            assert command[1:3] == ["--session", "restored-session"]
+            assert command[-2:] == ["--session", "restored-session"]
             return _completed('{"result":{"workspaces":[{"workspace_id":"w1","label":"demo"}]}}')
         raise AssertionError(joined)
 
@@ -3638,7 +3640,7 @@ def test_herdr_cli_request_adapter_restore_failure_uses_restored_session_ipc_ref
     def run_fn(command, **kwargs):
         joined = " ".join(command)
         if "workspace list" in joined:
-            assert command[1:3] == ["--session", "restored-session"]
+            assert command[-2:] == ["--session", "restored-session"]
             return _completed('{"result":{"workspaces":[]}}')
         raise AssertionError(joined)
 
@@ -3776,13 +3778,14 @@ def test_herdr_cli_request_adapter_redacts_send_text_failure_evidence() -> None:
         adapter("send_text", {"pane_id": "p1", "text": secret})
 
     assert secret not in str(exc_info.value.evidence)
-    assert exc_info.value.evidence["argv"][-1] == "<redacted>"
+    redacted = [v for v in exc_info.value.evidence.get("argv", []) if v == "<redacted>"]
+    assert len(redacted) >= 1
     assert exc_info.value.evidence["operation"] == "send_text"
 
 
 def test_herdr_cli_request_adapter_command_failure_uses_effective_session_ipc_ref() -> None:
     def run_fn(command, **kwargs):
-        assert command[1:3] == ["--session", "restored-session"]
+        assert command[-2:] == ["--session", "restored-session"]
         raise _called_process_error(command, stderr="send failed")
 
     adapter = HerdrCliRequestAdapter(

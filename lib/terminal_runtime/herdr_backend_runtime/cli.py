@@ -1017,7 +1017,7 @@ class HerdrCliRequestAdapter:
     ) -> subprocess.CompletedProcess:
         executable = self._resolve_executable()
         effective_session = session_name or self._session_name
-        command = [executable, "--session", effective_session, *args]
+        command = [executable, *args, "--session", effective_session]
         try:
             return self._run_command_once(
                 operation,
@@ -1082,7 +1082,7 @@ class HerdrCliRequestAdapter:
             return
         self._server_sessions.discard(session_name)
         self._server_processes.pop(session_name, None)
-        command = [executable, "--session", session_name, "server"]
+        command = [executable, "server", "--session", session_name]
         kwargs: dict[str, object] = {
             "stdin": subprocess.DEVNULL,
             "stdout": subprocess.DEVNULL,
@@ -1138,7 +1138,7 @@ class HerdrCliRequestAdapter:
         self._start_server(session_name, executable=executable)
 
     def _server_status_running(self, executable: str, *, session_name: str) -> bool:
-        command = [executable, "--session", session_name, "status", "server", "--json"]
+        command = [executable, "status", "server", "--json", "--session", session_name]
         try:
             result = self._run_fn(
                 command,
@@ -1370,7 +1370,10 @@ def _redacted_argv(operation: str, command: list[str]) -> list[str]:
     if operation != "send_text":
         return list(command)
     redacted = list(command)
-    if redacted:
+    if "--session" in redacted:
+        session_index = redacted.index("--session")
+        redacted = list(redacted[:session_index - 1]) + ["<redacted>", "--session", redacted[session_index + 1]]
+    elif redacted:
         redacted[-1] = "<redacted>"
     return redacted
 
