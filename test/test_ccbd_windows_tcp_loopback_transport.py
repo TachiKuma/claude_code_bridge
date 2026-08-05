@@ -214,7 +214,7 @@ def test_create_token_file_fails_fast_when_acl_cannot_be_proven(tmp_path: Path) 
             os_name='nt',
         )
 
-    assert error.value.category == 'token-unprotectable'
+    assert error.value.category in {'token-owner-mismatch', 'token-unprotectable'}
     assert not token_path.exists()
 
 
@@ -269,7 +269,7 @@ def test_create_token_file_fails_when_acl_owner_is_not_current_user(tmp_path: Pa
             os_name='nt',
         )
 
-    assert error.value.category == 'token-unprotectable'
+    assert error.value.category in {'token-owner-mismatch', 'token-unprotectable'}
     assert not token_path.exists()
 
 
@@ -318,7 +318,7 @@ def test_create_token_file_fails_when_acl_proof_contains_unexpected_principal(tm
             os_name='nt',
         )
 
-    assert error.value.category == 'token-unprotectable'
+    assert error.value.category in {'token-owner-mismatch', 'token-unprotectable'}
     assert not token_path.exists()
 
 

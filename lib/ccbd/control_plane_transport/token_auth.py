@@ -387,7 +387,10 @@ def _read_windows_acl_proof(path: Path, *, command_runner) -> dict:
 
 def _assert_windows_acl_proof(proof: dict, *, current_user: str, current_sid: str) -> None:
     if not _windows_acl_owner_matches(proof, current_user=current_user, current_sid=current_sid):
-        raise RpcTransportAuthError('token-unprotectable', 'Windows token owner is not the current user')
+        raise RpcTransportAuthError(
+            'token-owner-mismatch',
+            f'token file owner {proof.get("owner")!r} did not converge to current user {current_user!r} (SID {current_sid!r})'
+        )
     access = proof.get('access') or []
     if isinstance(access, dict):
         access = [access]
@@ -420,7 +423,14 @@ def _windows_acl_owner_matches(proof: dict, *, current_user: str, current_sid: s
     if owner and owner in {user, sid}:
         return True
     sddl = str(proof.get('sddl') or '').strip().casefold()
-    return bool(sid and f'o:{sid}' in sddl)
+    if bool(sid and f'o:{sid}' in sddl):
+        return True
+    # Windows icacls /grant:r owner may be reported as BUILTIN\\Administrators
+    # when the creating user belongs to the Administrators group. Accept this as
+    # long as the ACL access rule lists only the current user or its SID.
+    if owner == 'builtin\\administrators':
+        return True
+    return False
 
 
 def _windows_acl_rights_prove_read(rights: str) -> bool:
