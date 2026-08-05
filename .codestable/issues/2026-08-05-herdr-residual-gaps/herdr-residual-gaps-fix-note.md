@@ -57,6 +57,13 @@ CCB 在 `_create_session_scope()`（`cli.py:1282-1286`）中使用 `project_id` 
   - `88 passed, 1 skipped`
 - `powershell -NoProfile -ExecutionPolicy Bypass -File "run_spike.ps1" -SelfTest`
   - `herdr_ui_integration_spike_selftest: passed`
+- Full test suite: `195 passed, 1 skipped` across all modified modules
+
+## 外部项目同步
+
+- 外部项目 ccb8.ps1 缺少最新 start alias 和 prestart cleanup 修复，已同步
+- ccb8.cmd 缺少 WindowStyle Hidden，已同步
+- `.ccb/ccbd/` 下残留 8/4 旧状态和 420 行 `claude_code_bridgebak` 旧日志，已清理
 
 ## 遗留风险
 
