@@ -60,6 +60,22 @@ CCB 在 `_create_session_scope()`（`cli.py:1282-1286`）中使用 `project_id` 
 
 ## 遗留风险
 
-- 闪窗修复依赖 `start /B` + `-WindowStyle Hidden`，在非 Herdr 环境的普通控制台中 `start /B` 可能行为不同
+- 闪窗修复依赖 `-WindowStyle Hidden`，在非 Herdr 环境的普通控制台中行为可能不同
 - ACL 刷新依赖文件可删除，若 `D:\.c8\rs\` 目录本身 ACL 损坏则仍需手动修复
 - snapshot session 自动发现依赖 `ccb8-ps` 输出格式稳定（`session_name=<value>` 正则匹配）
+- `.\ccb8 start` 的别名只处理 'start' 作为独立第一个参数的情况，不支持 `ccb8 start --safe` 等组合
+
+## 补充修复 (2026-08-05 13:20)
+
+### 根因四（阻塞）：`ccb8 start` parser 拒绝 'start' 参数
+
+`ccb8 start` 将 `start` 作为额外参数传给 `ccb.py`，`parse_start()` 将 'start' 视为 agent name 拒绝。
+
+### 根因五（阻塞）：Windows token ACL owner 断言过严
+
+`_windows_acl_owner_matches()` 不承认 `BUILTIN\Administrators` 作为 token 文件 owner。
+
+### 修复
+
+- `ccb8.ps1`: `Test-ShouldPrestartKill` + `@finalArgs` 剥离 'start' token
+- `token_auth.py`: `_windows_acl_owner_matches()` 接受 `BUILTIN\Administrators`
