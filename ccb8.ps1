@@ -539,7 +539,15 @@ function Test-ShouldPrestartKill {
     if ($CliArgs.Count -eq 0) {
         return $true
     }
-    $first = $CliArgs[0]
+    # Treat 'start' as an alias for bare start (no agent names / extra args)
+    $first = if ($CliArgs[0] -ieq 'start') {
+        if ($CliArgs.Count -eq 1) {
+            return $true
+        }
+        $CliArgs[1]
+    } else {
+        $CliArgs[0]
+    }
     return $first -ieq '-s' -or $first -ieq '--safe' -or $first -ieq '-n' -or $first -ieq '--new-context'
 }
 
@@ -818,7 +826,13 @@ if (Test-ShouldPrestartKill -CliArgs $CcbArgs) {
     }
 }
 
-& $env:CCB_PYTHON (Join-Path $env:CCB_SOURCE_ROOT 'ccb.py') @CcbArgs
+# Translate 'start' alias to bare invocation (no args)
+$finalArgs = if ($CcbArgs.Count -gt 0 -and $CcbArgs[0] -ieq 'start') {
+    @($CcbArgs | Select-Object -Skip 1)
+} else {
+    $CcbArgs
+}
+& $env:CCB_PYTHON (Join-Path $env:CCB_SOURCE_ROOT 'ccb.py') @finalArgs
 if ($null -ne $LASTEXITCODE) {
     exit $LASTEXITCODE
 }
