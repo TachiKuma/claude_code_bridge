@@ -5,6 +5,8 @@ status: passed
 reviewer: subagent+ocr
 reviewed: 2026-08-05
 round: 1
+closed: 2026-08-05
+residual_issue: 2026-08-05-herdr-residual-gaps
 lane_a_state: completed
 lane_a_ref: "native-agent (sonnet)"
 lane_b_state: completed
