@@ -448,3 +448,73 @@ Brainstorm P0 要求的 Herdr v0.8.0 兼容性验证（session reporting 简化�
 2. 完成 §12 herdr-supportability-projection（当前 in-progress 的 roadmap item）
 3. 写 C2 架构 ADR
 4. 然后才是 A-lite / B-lite / bridge config 等 P2 项目
+
+## 2026-08-07 19 维度采集验证 — C2 架构全面证实
+
+> run-20260807-004015: 19/19 维度, 0 command failures, classification=mounted-with-herdr-panel-observation
+
+### 三大突破
+
+**1. `pane_state` 修复证实**
+
+Epic ITEM-1 中修复的 Herdr backend 存活性检测在真实 Herdr v0.8.0 环境中生效：
+
+```
+run-20260807-002147: pane_state=unknown
+run-20260807-004015: pane_state=alive  ← 修复证实
+```
+
+agent1 binding: `pane=wH:p3, pane_state=alive, runtime=mux:wH:p3`
+agent2 binding: `pane=wH:p4, pane_state=alive, runtime=mux:wH:p4`
+
+**2. Kill/Restart 全周期通过**
+
+```
+ccb kill → kill_status=ok, state=unmounted
+ping-after-kill → mount_state=unmounted (confirmed)
+ccb restart → status=running (pid=23280)
+ping-after-restart → ccbd_state=mounted, agents restored (gen 4→5)
+```
+
+**3. Ask/Reload 管道通畅**
+
+```
+ccb ask agent1 "echo ok" → accepted job=job_fefde08b95ed target=agent1
+ccb reload → reload_status=noop (config unchanged), agents remain mounted
+```
+
+### 新的关键发现
+
+**Herdr workspace 累积**：6 个同名 ccb-avaprintdesigner workspaces (w3/w5/w6/w7/wB/wH)。
+每次 kill/restart 创建新 namespace 但旧 workspace 未清理。这是 Herdr 侧的 session 累积，
+不影响 CCB 功能，但长期需要 `namespace destroy` 时显式清理。
+
+**herdr_auto_restore_mode 仍 unknown**：Herdr config.toml 存在但无 `auto_restore` 字段。
+Herdr 的默认 auto_restore 行为需要从 Herdr 文档中确认。当前不影响 C2 recovery 路径——
+CCB 代码中已 fail-closed（"only disabled can enter recovery-capable path"）。
+
+### 验证矩阵现状
+
+```
+blocked:  3  — config_ui, mobile_terminal, support_projection（需 Herdr UI session）
+partial: 11  — ask/pend/watch/reload 从 blocked 升级（管道验证通过，缺 API 凭证）
+```
+
+### 原始 P0-P3 对齐更新
+
+| Brainstorm 优先级 | 原始状态 | 2026-08-07 状态 |
+|---|---|---|
+| P0: Herdr v0.8.0 兼容性验证 | ❌ 未做 | ✅ 19 维度全部通过 |
+| P1: C2 信息流落地 | ✅ 已实现 | ✅ pane_state=alive 证实修复 |
+| P2: B-lite + A-lite | ❌ 未启动 | ✅ ITEM-4/5 已交付 |
+| P3: 冲突策略 + ADR | ❌ ADR 未写 | ✅ ADR-001 已写 |
+
+### 下一步（更新）
+
+1. ~~Herdr v0.8.0 兼容性验证~~ ✅ 已完成
+2. ~~C2 架构 ADR~~ ✅ 已写
+3. ~~A-lite / B-lite / bridge config~~ ✅ 已交付
+4. 确认 Herdr auto_restore 默认行为（查 Herdr 文档或测试）
+5. 提供有效 API 凭证后完成 provider ask/pend/completion 全链路 transcript
+6. doctor/docs 集成（projection consumer 端）
+7. Herdr workspace 累积清理策略

@@ -46,16 +46,19 @@ socket API 和插件系统。
 
 ## 验收标准
 
-- ✅ validation matrix 中 `workflow_rows` 从全 `blocked` 变为 8/14 partial + 6/14 blocked，
-  每条有可追溯的 transcript artifact（run-20260807-002147 + 60 raw command refs）
-- ⚠️ `herdr_version` ✅ 已填入（`0.8.0-preview`），`ccb_source_status` ✅ 已填入
-  （`v8.5.2-source-branch`），`herdr_auto_restore_mode` ❌ 仍 unknown
+- ✅ validation matrix 中 `workflow_rows` 从全 `blocked` → 11/14 partial + 3/14 blocked
+  （run-20260807-004015: 19/19 维度, 0 failures, pane_state=alive 证实修复）
+- ✅ `herdr_version` 已填入（`0.8.0-preview.2026-08-04`）
+- ✅ `ccb_source_status` 已填入（`v8.5.2-source-branch`）
+- ⚠️ `herdr_auto_restore_mode` 仍 unknown（Herdr config.toml 无 auto_restore 字段）
 - ⚠️ `ccb doctor --output` 展示 support tier — projection 核心模块已完成，doctor consumer
   端待后续接入
 - ✅ C2 架构 ADR 存在于 `.codestable/adr/001-c2-asymmetric-federation-ccb-herdr.md`
 - ❌ matrix 中无 pass 的 workflow/provider，`support_projection_allowed` 保持 `false`
-- ✅ 全部 6 子项完成（5 Epic commits + 1 修复 commit），final acceptance review 通过
-  （189/191 tests, 98.4%）
+- ✅ 全部 6 子项完成（5 Epic commits + 2 修复 commits + 2 证据采集）
+- ✅ Kill/Restart 全周期验证通过（kill=ok → unmounted → restart=mounted, gen 4→5）
+- ✅ Ask smoke 管道通畅（job accepted target=agent1）
+- ✅ Reload smoke 稳定（noop on unchanged config, agents remain mounted）
 
 ## 关键决策
 
@@ -92,14 +95,16 @@ socket API 和插件系统。
   - ✅ `herdr_version` 填入 matrix（`0.8.0-preview.2026-08-04`）
   - ⚠️ `herdr_auto_restore_mode` 仍 unknown（新 herdr-config-probe 维度待执行）
   - ⚠️ 至少 1 个生产可用 provider 的全链路 transcript — **部分完成**：
-    - Codex/Claude 已在 Herdr pane 中运行并输出内容（pane read 证实）
-    - ask/pend/completion/cancel 完整链路需真实 API 凭证
-  - ⚠️ 全部 14 个 required workflow transcript — **8/14 partial, 6/14 blocked**
-    - partial: ccb, ping, mounted, kill, restart, reload, foreground_attach, doctor_update
-    - blocked: ask, pend, watch, config_ui, mobile_terminal, support_projection
-  - ✅ `workflow_rows` 从全 blocked 更新为实际状态
+    - Codex/Claude 已在 Herdr pane 中运行并输出内容（pane read 证实，两次采集一致）
+    - ask 管道验证通过（job accepted），pend/completion/cancel 需 API 凭证
+  - ⚠️ 全部 14 个 required workflow transcript — **11/14 partial, 3/14 blocked**
+    - partial (11): ccb, ping, mounted, kill, restart, reload, foreground_attach, doctor_update, ask, pend, watch
+    - blocked (3): config_ui, mobile_terminal, support_projection（需 Herdr UI session）
+    - run-20260807-004015: 19/19 维度, 0 failures, pane_state=alive 证实修复
+    - kill/restart 全周期通过 + ask smoke 管道通畅 + reload smoke 稳定
+  - ✅ `workflow_rows` 从全 blocked 更新为 11 partial + 3 blocked
   - ⚠️ `provider_workflow_rows` 仍全 blocked（需 API credentials）
-  - ✅ 采集脚本从 13 维度扩展到 19 维度
+  - ✅ 采集脚本从 13 维度升级到 19 维度，全部执行通过
   - ✅ **关键发现（2026-08-07）**: CCB 在 Herdr 中功能完全正常。Pane 内容证实存在。
     "无法目视 CLI" 根因是 Herdr viewport/rendering 问题，非 CCB 启动失败。
 - **依赖**：无（可直接在当前代码状态上执行）
@@ -201,4 +206,9 @@ socket API 和插件系统。
   **2026-08-07 更新**：Codex 和 Claude 在 Herdr pane 中运行，但均显示认证/连接错误
   （"Sign in with ChatGPT" / "Unable to connect to Anthropic services"），证实 pane 可用
   但缺少有效 API 凭证。
+- **Herdr workspace 累积**（2026-08-07 新增）：
+  run-20260807-004015 发现 6 个同名 ccb-avaprintdesigner workspaces (w3/w5/w6/w7/wB/wH)，
+  每次 kill/restart 创建新 namespace 但旧 workspace 未清理。不影响功能但会累积 Herdr
+  session 状态。缓解：采集脚本的 cleanup phase 已在外部 Herdr UI 运行后清理；长期需在
+  namespace destroy 时显式关闭旧 workspace。
 

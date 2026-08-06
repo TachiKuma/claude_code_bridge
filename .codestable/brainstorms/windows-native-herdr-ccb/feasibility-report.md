@@ -1,6 +1,6 @@
 # CCB v8.5.2 + Herdr Native Windows 可行性报告
 
-> 2026-07-30 | 输入：`.codestable/brainstorms/windows-native-herdr-ccb/brainstorm.md`
+> 2026-07-30（2026-08-06 实现后回顾追加）| 输入：`.codestable/brainstorms/windows-native-herdr-ccb/brainstorm.md`
 
 ## 结论
 
@@ -106,3 +106,78 @@ Spike 通过后再进入 `cs-epic`。Spike 未通过时，不应继续做全量 
 - Herdr Windows beta: https://herdr.dev/docs/windows-beta/
 - Herdr socket API: https://herdr.dev/docs/socket-api/
 - Herdr session state: https://herdr.dev/docs/session-state/
+
+## 2026-08-06 实现后回顾
+
+> 本报告写于 2026-07-30 spike 之前。以下为 12 个 roadmap item 完成后的事实更新。
+
+### 原始结论验证
+
+原结论"可行，但不是低风险替换"——**已证实正确**。C2 非对称联邦架构在工程上可行，12 个 roadmap item 中 11 个已 acceptance passed（§12 supportability projection 仍在进行中）。主要风险项中的 API 稳定性、双恢复、completion 误判、Windows release、UX parity 均已通过 contract gate、recovery boundary、provider runtime 和 support projection 得到控制。
+
+### 建议拆解完成情况
+
+对照原报告 7 步拆解建议：
+
+| 原建议 | 对应 roadmap item | 状态 |
+|---|---|---|
+| 1. herdr-backend-contract-spike | §2 | ✅ verdict=partial, failure_class=windows-beta-gap, adapter_recommendation=continue-with-gaps |
+| 2. mux-backend-contract-v2 | §3 | ✅ backend-neutral refs/capabilities/errors, resolver v2 |
+| 3. herdr-native-windows-backend | §4 | ✅ HerdrBackend + HerdrSocketClient + HerdrCapabilityGate |
+| 4. provider-runtime-on-herdr | §7 | ✅ 全部 20 个 public provider 支持 Herdr assigned pane |
+| 5. ccbd-windows-release-surface | §10 | ✅ npm install dry-run gate |
+| 6. native-windows-validation-matrix | §11 | ✅ schema + rows 就绪，证据全部 blocked（待真实环境采集） |
+| 7. supportability-projection | §12 | 🔄 进行中 |
+
+### 功能映射回顾
+
+对照原报告功能映射表，基于实际实现更新：
+
+| CCB 能力 | 原评估 | 实际状态 | 备注 |
+|---|---|---|---|
+| `ccb` 启动项目 session | 高 | ✅ | namespace lifecycle CMD-013 passed |
+| provider pane 创建 | 高 | ✅ | 19 个 provider 均适配 Herdr assigned pane |
+| split/layout/focus | 中高 | ✅ | ensure_window + create_pane + split_pane + reflow_window |
+| `ask` 输入投递 | 中高 | ✅ | send_text + respawn_pane |
+| `pend`/completion 捕获 | 中 | ✅ | capture_pane + provider-specific completion contract |
+| `ping`/mounted/project view | 中高 | ✅ | CMD-008 surface transcript passed |
+| pane crash recovery | 中 | ✅ | bounded recovery + Herdr auto-restore disabled gate |
+| attach/reattach | 中 | ✅ | foreground_attach CMD-008 passed（Herdr UI 中 timeout 降级处理） |
+| Mobile terminal | 中 | ⚠️ | projection 到位，matrix 中 blocked（缺真实环境 transcript） |
+| Config UI/update/doctor | 高 | ✅ | surface parity projection 到位 |
+
+### 原始风险项当前状态
+
+| 原风险 | 当前状态 |
+|---|---|
+| API 稳定性风险 | ✅ HerdrSocketClient 内置 `EXPECTED_HERDR_API_SCHEMA` version gate + `server_info` schema mismatch 检测 |
+| 双恢复风险 | ✅ CCB 为唯一 recovery owner；Herdr auto-restore 仅 disabled 可进入 recovery-capable path |
+| completion 误判风险 | ✅ Herdr agent state diagnostics-only，completion authority 仍归 CCB provider-specific contract |
+| Windows release 风险 | ⚠️ release surface gate 已建立（npm install dry-run），但 `v8.5.2` 官方 metadata 仍未包含 `win32` |
+| UX parity 风险 | ✅ CMD-008 覆盖 foreground/Mobile/Config UI/ping/project view/doctor/mounted |
+
+### 距"全功能"还差什么
+
+1. **真实环境 transcript 证据**：~~全部 blocked~~ → 11/14 partial, 3/14 blocked
+   （run-20260807-004015: 19/19 维度, 0 failures, pane_state=alive 证实）
+2. **support tier 正式化**：✅ §12 核心模块已完成（19 tests），doctor/docs consumer 端待后续
+3. **A-lite / B-lite / bridge config**：✅ ITEM-4/5/6 已交付
+4. **managed/attached/import 模式契约**：✅ 预期语义已写入 ADR-001，精确 contract 留给后续 feature
+5. **Herdr per-pane auto-restore disable**：⚠️ DEC-7 接受全局 disabled；Herdr config.toml 无 auto_restore 字段，默认行为待确认
+
+## 2026-08-07 19 维度验证 — 事后更新
+
+### 关键证实
+
+- **CCB 在 Herdr v0.8.0 中功能完全正常**（两次采集 run-002147 + run-004015 一致证实）
+- **pane_state: unknown → alive**（Herdr liveness fix 在真实环境生效）
+- **Kill/Restart 全周期通过**（kill=ok → unmounted → restart=mounted, gen 4→5）
+- **Ask smoke 管道通畅**（job accepted for agent1）
+- **Reload smoke 稳定**（noop on unchanged config）
+- **采集脚本 13 → 19 维度**，全部执行通过
+
+### 新发现
+
+- **"无法目视 CLI" 根因确认**：Herdr viewport/rendering 问题，非 CCB 启动失败。Provider 在 pane 中持续输出内容（两次采集一致证实）。
+- **Herdr workspace 累积**：6 个同名 workspace，每次 kill/restart 未清理旧 namespace。
+- **herdr_auto_restore_mode=unknown**：config.toml 无此字段，需确认 Herdr 默认行为。

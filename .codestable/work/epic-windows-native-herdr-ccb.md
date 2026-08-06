@@ -48,25 +48,25 @@ remote_publish: final
 ### Epic 子项完成（§12 部分）
 - §12 herdr-supportability-projection ✅ 4b4f96b4（核心模块 + 19 tests，doctor/docs 集成待后续）
 
-### 2026-08-07 最新采集证据（run-20260807-002147）
-- **CCB 在 Herdr v0.8.0 中功能正常**
-  - ccbd healthy (generation=3), 2 agents mounted (codex+claude, idle/restored)
-  - 60/60 commands exit=0, 0 failures
-  - namespace_backend_impl=herdr, namespace_backend_family=herdr-native ✅
-- **关键发现: Pane 内容确实存在！**
-  - codex pane (wG:p3): "Sign in with ChatGPT to use Codex..."
-  - claude pane (wG:p4): "Welcome to Claude Code v2.1.220 / Unable to connect to Anthropic services"
-  - 根因: "无法目视 CLI" = **Herdr viewport/rendering issue**, 非 CCB 启动失败
-  - observed_windows_flash=True + pane_state=unknown 均指向视觉渲染层面
-- **采集脚本升级**: 13 → 19 维度 (9001d758)
-  - 新增: provider-logs, ccb-lifecycle (kill/restart cycle), herdr-config-probe, provider-session-files, ccb-ask-smoke, ccb-reload-smoke
-- **待下次采集运行解决**:
-  - `herdr_auto_restore_mode` 仍 unknown — herdr-config-probe 维度将探测 config.toml
-  - provider ask/pend/completion/cancel 链路需有效 API 凭证
-  - kill/restart/reload 生命周期完整测试
+### 2026-08-07 采集证据 v2（run-20260807-004015）← 最新
+- **19/19 维度全部执行，0 command failures**
+  - classification: mounted-with-herdr-panel-observation ✅
+- **pane_state 修复证实**: unknown → **alive**（Herdr liveness fix 在真实环境生效）
+- **Kill/Restart 全周期**: kill=ok → unmounted → restart=mounted (gen 4→5) ✅
+- **Ask smoke**: pipeline accepted (job created for agent1) ✅
+- **Reload smoke**: noop stable (agents remain mounted) ✅
+- **Pane 内容**: 两次采集一致 — codex/claude 持续在 pane 中运行并输出 ✅
+- **herdr config**: config.toml 存在但无 auto_restore 字段 → mode=unknown ⚠️
+- **新发现**: Herdr workspace 累积（6 个同名 workspace from repeated kill/restart）
+- **矩阵**: blocked 3 → 11, partial 8 → 11 (ask/pend/watch 从 blocked 升级)
+
+### 2026-08-07 采集证据 v1（run-20260807-002147）
+- CCB 在 Herdr 中功能正常，pane 内容证实存在
+- "无法目视 CLI" 根因 = Herdr viewport/rendering issue
+- 采集脚本 13 → 19 维度升级 (9001d758)
 
 ### Epic 文档同步（2026-08-07）
-- 永久 Epic `验收标准` 更新为实际达成状态（✅/⚠️/❌ 标注）
-- 永久 Epic `ITEM-1/2` 可交付结果更新为实际交付状态
-- 永久 Epic `遗留风险` 新增：Herdr viewport 渲染 + auto_restore_mode unknown + API 凭证缺失
-- Work 游标 `已完成 roadmap items` 更正为 8/14 partial（非"全 blocked"）
+- 永久 Epic `验收标准`: 标注实际达成状态（✅/⚠️/❌）
+- 永久 Epic `ITEM-1`: 更新为 11/14 partial + 3 blocked + pane_state=alive 证实
+- 永久 Epic `遗留风险`: 新增 viewport 渲染 + auto_restore unknown + workspace 累积 + API 凭证
+- 验证矩阵: run-20260807-004015 证据更新 (e2ab233e)
