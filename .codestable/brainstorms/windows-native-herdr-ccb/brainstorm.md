@@ -3,8 +3,8 @@ doc_type: brainstorm
 slug: windows-native-herdr-ccb
 created: 2026-07-30
 status: active
-summary: 探索以 CCB v8.5.2 为基底、借助 Herdr 实现 Native Windows CCB 全功能的可行路径
-tags: [windows, native-windows, herdr, ccb-v8.5.2, multiplexer, epic-candidate]
+summary: 探索以 CCB v8.5.2 为基底、借助 Herdr 实现 Native Windows CCB 全功能的可行路径。2026-08-06 代码状态评估：C2 架构已完整落地，12 roadmap items 中 11 完成，方向不变，修正后续优先级。
+tags: [windows, native-windows, herdr, ccb-v8.5.2, multiplexer, epic-candidate, code-assessment]
 ---
 
 # Native Windows CCB via Herdr
@@ -320,3 +320,131 @@ Herdr session/agent restore 与 CCB bounded recovery 可能同时恢复同一个
 - A-lite 的导入模式仍然是最低风险的 onboarding 路径
 
 唯一需要警惕的是：v0.8.0 的 "简化 session reporting" 可能改变我们已验证的 `herdr status server --json` 输出格式——这是 P0 验证的首要原因。
+
+## 2026-08-06 代码状态评估与方向修正
+
+> 本轮评估是在 2026-08-05 brainstorm 结论基础上，对照已完成的 12 个 roadmap item 实现状态，重新校准后续工作优先级。结论是 C2 架构已完整落地，不修正方向，只修正下一步优先级。
+
+### 代码实现全景
+
+以 CCB v8.5.2 为基底，已实现一个边界清晰的 Herdr backend 层，包含以下核心模块：
+
+| 模块 | 文件 | 行数 | 职责 |
+|---|---|---|---|
+| HerdrBackend | `lib/terminal_runtime/herdr_backend.py` | 809 | 完整 MuxBackend contract：session/pane/window/layout/identity/capture/kill/recovery |
+| HerdrSocketClient | `lib/terminal_runtime/herdr_backend_runtime/client.py` | 795 | Herdr socket API 全量操作：server_info、CRUD session/pane/window、send/capture/respawn/identity/reflow |
+| HerdrCapabilityGate | `lib/terminal_runtime/herdr_backend_runtime/capabilities.py` | 269 | fail-closed 能力门：spike evidence → capability projection → operation gating |
+| BackendSelection | `lib/terminal_runtime/backend_selection.py` | 183 | 多后端派发：config 优先级 > env > 终端检测，herdr/tmux/rmux |
+| MuxBackendContract | `lib/terminal_runtime/mux_backend_contract.py` | 269 | backend-neutral 类型：refs、capabilities、structured errors、evidence |
+
+此外，19 个公开 provider（Codex/Claude/Gemini/Grok/Kimi/DeepSeek/Qwen/Copilot/OpenCode/Droid/Mimo/Agy/CodeBuddy/Pi/Qoder/QoderCLICN/Zai/Crush/Kiro）的 session/execution 层均已适配 Herdr assigned pane 模式。
+
+### Roadmap 进度
+
+```
+§1  v8.5.2-baseline-gate           ✅ 2026-07-31
+§2  herdr-backend-contract-spike    ✅ 2026-07-31  (verdict=partial, failure_class=windows-beta-gap)
+§3  mux-backend-contract-herdr-v2   ✅ 2026-07-31
+§4  herdr-backend-client            ✅ 2026-08-01
+§5  control-plane-transport         ✅ 2026-08-02
+§6  herdr-namespace-lifecycle       ✅ 2026-08-02  (CMD-013 passed)
+§7  provider-runtime-on-herdr       ✅ 2026-08-03
+§8  herdr-bounded-recovery          ✅ 2026-08-03
+§9  herdr-user-surfaces-parity      ✅ 2026-08-03  (CMD-008 passed)
+§10 windows-x64-release-surface     ✅ 2026-08-03
+§11 public-workflow-validation-matrix ✅ 2026-08-03 (架构就绪，证据全 blocked)
+§12 herdr-supportability-projection 🔄 进行中
+```
+
+### C2 架构落地验证
+
+对照 brainstorm 中 C2 权威矩阵，逐项确认实现状态：
+
+| 领域 | 权威方 | 实现方式 | 状态 |
+|---|---|---|---|
+| agent/provider/role/model/MCP | CCB | `set_pane_identity` 写入 `ccb_agent`/`ccb_role`/`ccb_provider`/`ccb_managed_by` tokens | ✅ |
+| provider home/auth/session | CCB | provider runtime 独立管理 pane env/home，不写入 Herdr metadata | ✅ |
+| job/completion/cancel/queue | CCB | completion authority 归 CCB；Herdr agent state 仅 diagnostics | ✅ |
+| workspace/tab/pane/ConPTY | Herdr | `create_session`/`ensure_window`/`create_pane`/`split_pane` 通过 socket API | ✅ |
+| CCB→Herdr 投影 | CCB | `set_pane_identity` 写入含 `ccb_project_id`/`ccb_config_revision`/`lifecycle_owner=ccb`/`recovery_owner=ccb` 的 token 集合 | ✅ |
+| Herdr→CCB 证据 | Herdr | `describe_pane`/`list_panes_by_user_options` 从 Herdr pane tokens 回读 CCB 元数据 | ✅ |
+| recovery owner | CCB | `HerdrBackend.is_alive` 实际存活性检测；bounded recovery 90s probation + 3 次 circuit threshold | ✅ |
+| Herdr auto-restore | 禁用 | 仅 `disabled` 可进入 recovery-capable path；`observe-only`/`unsupported`/`unknown` fail closed | ✅ |
+| config 优先级 | CCB | `runtime.mux.backend` 声明式单一事实源，`set_backend_config_preference()` → `get_backend()` 消费 | ✅ |
+| fail-closed gate | CCB | 缺 capability evidence 或平台 gate 不通过时，`HerdrCapabilityGate.require_supported()` 抛出 `MuxCommandErrorV2(category="unsupported")` | ✅ |
+| managed/attached/import 模式 | — | 架构已预留 `managed` 默认模式；`import`/`attached` 模式契约未定义 | 🟡 |
+
+### 关键差距
+
+#### 🔴 验证矩阵全 blocked
+
+`windows-herdr-public-workflow-matrix.json` 中，14 个 required workflow 和 20 个 provider × 4 个 provider workflow 全部标记为 `blocked`，原因统一为 **"Native Windows public workflow transcripts are not fully captured for every required workflow and public provider"**。
+
+这不是代码缺陷——§1–§10 的代码实现均已 acceptance passed，CMD-008、CMD-013 等关键 transcript 在受控环境中通过。问题在于**尚未在真实 Herdr v0.8.0 环境中系统性跑通全量 public workflow 并采集完整 transcript 证据**。
+
+当前矩阵元数据：
+- `herdr_version=unknown`、`herdr_auto_restore_mode=unknown`
+- `ccb_source_status=unknown`
+- `support_tier=beta`、`support_tier_is_candidate=True`、`support_projection_allowed=False`
+
+#### 🔴 Herdr v0.8.0 兼容性未验证
+
+Brainstorm P0 要求的 Herdr v0.8.0 兼容性验证（session reporting 简化是否影响 `herdr status server --json` 输出格式）未执行。这是进入正式 support projection 的前置条件。
+
+#### 🟡 未启动：A-lite / B-lite / Bridge config / ADR
+
+| 项目 | Brainstorm 优先级 | 说明 |
+|---|---|---|
+| A-lite 导入模式 | P2 | `ccb config import-herdr`，将 Herdr layout 转为 CCB config 草稿 |
+| B-lite Herdr 插件 | P2 | 最小 Herdr 插件，在 sidebar 展示 `ccb status`，只读 |
+| Bridge config schema | P1 | `ccb-herdr-bridge.json` v1 schema，定义 `project_id`/`herdr_session`/`pane_bindings[]`/`config_revision` |
+| C2 架构 ADR | P3 | 将 C2 + B-lite + A-lite 选择固化为跨版本 ADR |
+| managed/attached/import 契约 | P3 | 三种模式的正式行为契约和状态机 |
+
+### 修正后的方向推荐
+
+**方向不变**：C2 非对称联邦为核心架构，B-lite + A-lite 为补充模式。代码已证明这可行且正确。以下只修正优先级，不修正方向。
+
+#### 第一阶段：完成 roadmap 收尾（当前迭代）
+
+1. **Herdr v0.8.0 兼容性验证**
+   - 在真实 Herdr v0.8.0 环境中启动 CCB
+   - 验证 `herdr status server --json` 输出格式兼容性
+   - 记录 `herdr_version`、`herdr_auto_restore_mode`
+
+2. **采集 public workflow transcript**
+   - 对至少一个生产可用的 provider (Codex/Claude) 跑通完整链路：ccb → ask → pend → completion → cancel → kill → restart → reload
+   - 对全部 14 个 required workflow 采集 Native Windows x64 transcript
+   - 更新 `workflow_rows` 状态从 `blocked` 到实际 pass/partial/blocked
+
+3. **完成 herdr-supportability-projection**
+   - 消费更新后的 matrix
+   - 产出一个有真实证据支撑的 support tier
+   - 同步 doctor/diagnostics/README
+
+4. **写 C2 架构 ADR**
+   - 将 C2 权威矩阵、信息流、冲突策略固化为 `.codestable/adr/` 下的正式 ADR
+   - 记录 managed/attached/import 三种模式的预期语义（实现可后续）
+
+#### 第二阶段：P2 增强（后续迭代）
+
+5. **Bridge config schema**：定义 `ccb-herdr-bridge.json` v1
+6. **A-lite 导入**：`ccb config import-herdr`
+7. **B-lite 原型**：Herdr sidebar 只读插件
+
+### 不变的原则
+
+- C2 非对称联邦为核心——**不变**
+- fail-closed：缺证据时不升级 support tier——**不变**
+- CCB owns recovery / provider truth / completion authority——**不变**
+- Herdr observed state 不静默覆盖 `.ccb/ccb.config`——**不变**
+- Native Windows 在 matrix 全 pass 前只能标 beta/experimental——**不变**
+
+### 下一步
+
+立即行动的优先级排序：
+
+1. 在 Herdr v0.8.0 环境中做一次 CCB 全量 public workflow transcript 采集（P0 验证 + matrix 证据）
+2. 完成 §12 herdr-supportability-projection（当前 in-progress 的 roadmap item）
+3. 写 C2 架构 ADR
+4. 然后才是 A-lite / B-lite / bridge config 等 P2 项目
