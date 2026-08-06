@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from agents.models import LayoutNode, parse_layout_spec
+from agents.models import AgentValidationError, LayoutNode, normalize_agent_name, parse_layout_spec
 from ccbd.reload_additive_agents import append_agent_plan_for_window, append_agent_windows, window_agent_names, window_map
 
 from .backend import apply_pane_identity, reflow_window, split_pane
@@ -84,7 +84,13 @@ def _append_window_agent_panes(
     agent_panes: dict[str, str] = {}
     appended_sequence = tuple(appended_agents)
     for index, appended in enumerate(appended_sequence):
-        agent_name = str(appended.agent)
+        # 物化 token / agent_panes key 统一用 normalized 名（layout 可能保留原始大小写
+        # 如 Main_Code，而 CCB 内部 agent 标识是 main_code）——否则大小写敏感匹配下
+        # agent 拿不到 pane（2026-08-06 采集暴露）。
+        try:
+            agent_name = normalize_agent_name(str(appended.agent))
+        except AgentValidationError:
+            agent_name = str(appended.agent)
         if agent_name in excluded_agents:
             target = _anchor_pane(existing_agent_panes, agent_name)
             continue
@@ -153,15 +159,19 @@ def _append_single_agent_pane(
         timeout_s=timeout_s,
     )
     _append_unique(created_panes, pane_id)
+    try:
+        agent_label = normalize_agent_name(str(appended.agent))
+    except AgentValidationError:
+        agent_label = str(appended.agent)
     apply_pane_identity(
         backend,
         pane_id=pane_id,
         title=appended.agent,
-        agent_label=appended.agent,
+        agent_label=agent_label,
         project_id=controller._project_id,
         order_index=order_index,
         role='agent',
-        slot_key=appended.agent,
+        slot_key=agent_label,
         window_name=window_name,
         namespace_epoch=namespace_epoch,
         managed_by='ccbd',

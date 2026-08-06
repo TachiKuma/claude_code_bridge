@@ -539,6 +539,10 @@ function Invoke-PrestartCleanup {
     Stop-SourceDevRuntimePids
     Run-BoundedKillForce
     Reset-ProjectCcbdStateFiles
+    # Run-BoundedKillForce（ccb kill -f）可能把 lifecycle desired_state 置为 stopped
+    # （shutdown_intent=stop_all）；在 start 前恢复 running 意图，避免 start 命令因
+    # desired_state=stopped 拒绝拉起 ccbd 而报 lease_unmounted（2026-08-06 采集暴露）。
+    Reset-SourceDevStateFiles -StateFiles (Get-SourceDevStateFiles)
     # Final sweep: after kill -f and state reset, verify no ccbd
     # processes are still alive for this project.  On Windows the
     # kill may race with a lingering process that will later collide

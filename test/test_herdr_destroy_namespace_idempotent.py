@@ -66,6 +66,40 @@ def test_destroy_namespace_idempotent_when_server_not_running(monkeypatch) -> No
     assert result["closed_workspace_ids"] == []
 
 
+def test_destroy_namespace_idempotent_when_logical_workspaces_server_not_running(monkeypatch) -> None:
+    """_logical_workspaces 查询本身遇到 herdr server 未运行时也应幂等成功。
+
+    回归背景（2026-08-06 采集暴露 lease_unmounted）：ccbd 启动/停止流程调用
+    destroy_namespace，若 herdr 会话 server 未运行，_logical_workspaces 抛
+    server_not_running（此前只容忍 workspace close 阶段的错误），导致 destroy
+    失败、ccbd 启动中止。
+    """
+    from terminal_runtime.mux_backend_contract import MuxCommandErrorV2
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=lambda command, **kwargs: (_ for _ in ()).throw(AssertionError("unexpected run")),
+        which_fn=lambda name: "herdr",
+    )
+
+    def raise_server_not_running(namespace_id, session_name):
+        raise MuxCommandErrorV2(
+            category="command-failed",
+            backend_impl="herdr",
+            operation="destroy_namespace",
+            detail=(
+                '{"error":{"code":"server_not_running",'
+                '"message":"no herdr server is running at C:/tmp/herdr.sock"}}'
+            ),
+        )
+
+    monkeypatch.setattr(adapter, "_logical_workspaces", raise_server_not_running)
+    result = adapter("destroy_namespace", {"namespace_id": "w1"})
+    assert result["status"] == "ok"
+    assert result["closed_workspace_ids"] == []
+
+
 def test_destroy_namespace_raises_on_other_errors(monkeypatch) -> None:
     """非幂等类错误（如权限/会话名无效）仍应原样抛出。"""
     adapter, _ = _adapter_with(

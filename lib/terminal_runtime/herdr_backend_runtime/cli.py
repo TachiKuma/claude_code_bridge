@@ -680,10 +680,22 @@ class HerdrCliRequestAdapter:
                 "Herdr destroy_namespace requires namespace_id",
                 session_name=session_name,
             )
-        workspaces = self._logical_workspaces(
-            namespace_id=namespace_id,
-            session_name=session_name,
-        )
+        try:
+            workspaces = self._logical_workspaces(
+                namespace_id=namespace_id,
+                session_name=session_name,
+            )
+        except MuxCommandErrorV2 as exc:
+            # herdr server 未运行 / 会话不可达：namespace 已不可见，destroy 视为
+            # 清理完成（幂等），避免 ccbd 启动/停止流程因 server_not_running 失败
+            # 而中止（2026-08-06 采集暴露 lease_unmounted）。
+            if _looks_like_missing_server(exc.detail):
+                return {
+                    "status": "ok",
+                    "namespace_id": namespace_id,
+                    "closed_workspace_ids": [],
+                }
+            raise
         closed: list[str] = []
         for workspace in workspaces:
             workspace_id = str(workspace.get("workspace_id") or "").strip()

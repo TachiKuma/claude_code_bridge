@@ -785,10 +785,48 @@ def test_connect_mounted_daemon_waits_when_lifecycle_is_starting(
     assert handle is expected_handle
 
 
-def test_connect_mounted_daemon_does_not_restart_when_lifecycle_desired_stopped(
+def test_connect_mounted_daemon_recovers_when_desired_stopped_and_restart_allowed(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
+    """start 命令（allow_restart_stale=True）应覆盖 desired_state=stopped。
+
+    回归背景（2026-08-06 采集暴露 lease_unmounted）：ccb8.ps1 prestart kill -f 遗留
+    shutdown_intent=stop_all，start 因 desired_state=stopped 拒绝拉起 ccbd。
+    """
+    project_root = tmp_path / 'repo-stopped-recover'
+    ctx = _context(project_root, 'agent1:codex\n')
+    inspection = SimpleNamespace(
+        phase='unmounted',
+        desired_state='stopped',
+        health=LeaseHealth.UNMOUNTED,
+        socket_connectable=False,
+        pid_alive=False,
+        heartbeat_fresh=False,
+        takeover_allowed=True,
+        reason='lease_unmounted',
+        lease=None,
+        last_failure_reason=None,
+    )
+    started = False
+
+    def fake_ensure(context):
+        nonlocal started
+        started = True
+        return SimpleNamespace(client=object(), started=True)
+
+    monkeypatch.setattr(daemon_service, 'inspect_daemon', lambda context: (None, None, inspection))
+    monkeypatch.setattr(daemon_service, 'ensure_daemon_started', fake_ensure)
+
+    handle = daemon_service.connect_mounted_daemon(ctx, allow_restart_stale=True)
+    assert started is True
+
+
+def test_connect_mounted_daemon_does_not_restart_when_desired_stopped_without_restart_allowed(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    """非 start 路径（allow_restart_stale=False）在 desired_state=stopped 时仍不 autostart。"""
     project_root = tmp_path / 'repo-stopped-no-recover'
     ctx = _context(project_root, 'agent1:codex\n')
     inspection = SimpleNamespace(
@@ -808,11 +846,11 @@ def test_connect_mounted_daemon_does_not_restart_when_lifecycle_desired_stopped(
     monkeypatch.setattr(
         daemon_service,
         'ensure_daemon_started',
-        lambda context: (_ for _ in ()).throw(AssertionError('should not autostart while desired_state=stopped')),
+        lambda context: (_ for _ in ()).throw(AssertionError('should not autostart without restart allowed')),
     )
 
     with pytest.raises(daemon_service.CcbdServiceError, match='project ccbd is unmounted; run `ccb` first'):
-        daemon_service.connect_mounted_daemon(ctx, allow_restart_stale=True)
+        daemon_service.connect_mounted_daemon(ctx, allow_restart_stale=False)
 
 
 def test_managed_caller_invocation_bypasses_socket_probe_without_restart(

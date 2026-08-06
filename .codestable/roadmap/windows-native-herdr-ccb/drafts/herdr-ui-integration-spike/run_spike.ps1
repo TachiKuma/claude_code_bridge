@@ -635,12 +635,21 @@ function Start-ProcessSampler {
                     $name = [string] $_.Name
                     $cmd = [string] $_.CommandLine
                     $lowerName = $name.ToLowerInvariant()
+                    # 排除旧 ccb（codex-dual / WezTerm / 用户级 .cache\ccb）——
+                    # 它们与 herdr UI 中的 source-dev CCB 无关（2026-08-06 采集暴露：
+                    # 裸 codex.exe 来自旧 ccb 在 WezTerm 启动，CCB_RUN_DIR 指向 .cache\ccb）。
+                    $legacyCcb = $cmd -match 'codex-dual|\.cache[\\/]ccb|CCB_PARENT_PID|CCB_RUN_DIR|CCB_CALLER'
+                    $isWezTermWindow = $lowerName -in @('wezterm.exe', 'wezterm-gui.exe')
+                    if ($legacyCcb -or $isWezTermWindow) {
+                        return $false
+                    }
                     $projectRelated = $cmd.IndexOf($ProjectRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
                         $cmd.IndexOf($RepoRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0
-                    # CCB 守护进程 marker：ccbd / keeper_main / ccb.py / ccb8 wrapper / CCB Herdr 会话
-                    $ccbRuntimeMarker = $cmd -match 'ccbd[\\/]|keeper_main\.py|ccb\.py|ccb8\.(cmd|ps1)|ccb-herdr'
+                    # source-dev CCB 相关：ccbd / keeper / ccb.py / ccb8 wrapper / CCB Herdr 会话 /
+                    # provider bridge / provider-runtime 目录 / runtime root（D:\.c8\rs）
+                    $sourceCcbMarker = $cmd -match 'ccbd[\\/]|keeper_main\.py|ccb\.py|ccb8\.(cmd|ps1)|ccb-herdr|provider_backends|provider-runtime|[\\/]\.c8[\\/]rs[\\/]'
                     $isHerdr = $lowerName -eq $herdrName
-                    $projectRelated -or $ccbRuntimeMarker -or $isHerdr
+                    $projectRelated -or $sourceCcbMarker -or $isHerdr
                 } |
                 Select-Object ProcessId, ParentProcessId, Name, ExecutablePath, CommandLine
             foreach ($process in @($processes)) {

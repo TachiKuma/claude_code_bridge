@@ -2372,3 +2372,54 @@ def _project(project_root: Path, config_text: str) -> Path:
 
 def _load_config(project_root: Path, config_text: str):
     return load_project_config(_project(project_root, config_text)).config
+
+
+def test_apply_add_window_normalizes_mixed_case_agent_names(tmp_path: Path, monkeypatch) -> None:
+    """物化时 agent_panes key / pane token 用 normalize_agent_name 统一。
+
+    回归背景（2026-08-06 采集暴露）：config 布局含大写 agent 名（Main_Code）时，
+    物化用原始名写 key/token，消费端用 normalized 名匹配 → main_code 拿不到 pane →
+    provider_runtime_deferred_on_herdr。
+    """
+    monkeypatch.delenv('CCB_TMUX_THEME_PROFILE', raising=False)
+    config_text = ADD_WINDOW_CONFIG.replace('agent3:codex', 'Main_Code:codex')
+    current = _load_config(tmp_path / 'current', BASE_CONFIG)
+    new = _load_config(tmp_path / 'new', config_text)
+    project_root = _project(tmp_path / 'repo', BASE_CONFIG)
+    layout = PathLayout(project_root)
+    backend = _PatchFakeBackend(socket_path=str(layout.ccbd_tmux_socket_path))
+    backend.add_window(layout.ccbd_tmux_session_name, 'main')
+    backend.sessions[layout.ccbd_tmux_session_name][0]['panes'].append('%2')
+    backend.pane_counter = 2
+    _seed_agent_pane(backend, '%1', project_id='proj-1', window='main', agent='agent1')
+    _seed_agent_pane(backend, '%2', project_id='proj-1', window='main', agent='agent2')
+    _store_namespace(layout, project_id='proj-1')
+    controller = ProjectNamespaceController(
+        layout,
+        'proj-1',
+        clock=lambda: '2026-05-29T00:00:00Z',
+        backend_factory=lambda socket_path=None: backend,
+    )
+    _forbid_recreate_paths(monkeypatch)
+    plan = build_reload_dry_run_plan(
+        current,
+        new,
+        project_id='proj-1',
+        current_namespace=controller.load(),
+    )
+
+    result = controller.apply_additive_patch(
+        patch_plan=plan['namespace_patch_plan'],
+        old_topology=build_namespace_topology_plan(current),
+        new_topology=build_namespace_topology_plan(new),
+        timeout_s=0.0,
+    )
+
+    assert result.status == 'applied'
+    # 大写 agent 名物化后 key 归一化为小写；原始大小写 key 不应出现
+    assert 'main_code' in result.agent_panes
+    assert 'Main_Code' not in result.agent_panes
+    assert result.agent_panes['main_code'] == '%4'
+    # pane token 也应归一化（ccb_slot / ccb_agent 用 main_code）
+    assert backend.pane_options['%4'].get('@ccb_slot') == 'main_code'
+    assert backend.pane_options['%4'].get('@ccb_agent') == 'main_code'

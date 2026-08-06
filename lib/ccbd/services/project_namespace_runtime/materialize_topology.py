@@ -5,7 +5,13 @@ from types import SimpleNamespace
 from typing import Any
 
 from cli.services.tmux_ui import apply_project_tmux_ui
-from agents.models import layout_tool_alias_command, layout_tool_alias_label, parse_layout_spec
+from agents.models import (
+    AgentValidationError,
+    layout_tool_alias_command,
+    layout_tool_alias_label,
+    normalize_agent_name,
+    parse_layout_spec,
+)
 from terminal_runtime.placeholders import pane_placeholder_cmd
 from terminal_runtime.tmux_theme import tmux_theme_profile
 from ccbd.services.project_namespace_pane import (
@@ -660,16 +666,25 @@ def _materialize_agent_layout(
                 epoch=epoch,
             )
             return
-        agent_panes[item] = pane_id
+        # 用 normalize_agent_name 统一 agent 标识（layout leaf 可能保留原始大小写如
+        # Main_Code，而 CCB 内部 config key / topology agent_names 是 normalized
+        # main_code）。否则 pane token 与提取/匹配用大小写敏感比较，main_code 会
+        # 拿不到 pane → provider_runtime_deferred_on_herdr（2026-08-06 采集暴露）。
+        try:
+            agent_name = normalize_agent_name(item)
+        except AgentValidationError:
+            # 非法 agent 名（罕见）：保留原始名，避免物化中断
+            agent_name = item
+        agent_panes[agent_name] = pane_id
         apply_pane_identity(
             context.backend,
             pane_id=pane_id,
             title=item,
-            agent_label=item,
+            agent_label=agent_name,
             project_id=controller._project_id,
-            order_index=style_index_by_agent.get(item),
+            order_index=style_index_by_agent.get(agent_name),
             role='agent',
-            slot_key=item,
+            slot_key=agent_name,
             window_name=window.name,
             namespace_epoch=epoch,
             managed_by='ccbd',

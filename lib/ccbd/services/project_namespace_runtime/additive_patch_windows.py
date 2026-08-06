@@ -4,7 +4,13 @@ from dataclasses import dataclass, field
 import shlex
 from typing import Any
 
-from agents.models import layout_tool_alias_command, layout_tool_alias_label, parse_layout_spec
+from agents.models import (
+    AgentValidationError,
+    layout_tool_alias_command,
+    layout_tool_alias_label,
+    normalize_agent_name,
+    parse_layout_spec,
+)
 from terminal_runtime.placeholders import pane_placeholder_cmd
 from terminal_runtime.tmux_theme import tmux_theme_profile
 
@@ -201,16 +207,20 @@ def _materialize_new_window_agents(
             )
             return
         _append_unique(created_panes, pane_id)
-        agent_panes[item] = pane_id
+        try:
+            agent_name = normalize_agent_name(item)
+        except AgentValidationError:
+            agent_name = item
+        agent_panes[agent_name] = pane_id
         apply_pane_identity(
             backend,
             pane_id=pane_id,
             title=item,
-            agent_label=item,
+            agent_label=agent_name,
             project_id=controller._project_id,
-            order_index=style_index_by_agent.get(item),
+            order_index=style_index_by_agent.get(agent_name),
             role='agent',
-            slot_key=item,
+            slot_key=agent_name,
             window_name=str(window.name),
             namespace_epoch=namespace_epoch,
             managed_by='ccbd',
