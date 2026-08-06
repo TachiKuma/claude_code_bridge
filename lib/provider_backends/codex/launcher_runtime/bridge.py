@@ -18,8 +18,22 @@ def post_launch(backend: object, pane_id: str, runtime_dir: Path, launch_session
     del launch_session_id
     artifacts = codex_runtime_artifact_layout(runtime_dir)
     write_pane_pid(backend, pane_id, artifacts.codex_pid)
+    # design D3 决策 A：herdr 下 bridge 降级为辅助。bridge 依赖 tmux 环境变量
+    # （CODEX_TERMINAL=tmux），在 herdr 下 bootstrap 可能失败并阻断 agent launch。
+    # 交互 codex CLI 已通过 respawn 进 herdr pane，bridge RPC 为辅助，失败不阻塞。
+    if _backend_is_herdr(backend):
+        return
     spawn_codex_bridge(runtime_dir=runtime_dir, pane_id=pane_id, prepared_state=prepared_state)
     validate_bridge_bootstrap(runtime_dir)
+
+
+def _backend_is_herdr(backend: object) -> bool:
+    """检测 backend 是否为 herdr-native 后端。
+
+    herdr backend 无 ``_tmux_run``（tmux 专属方法），以此为信号检测。
+    与 ``write_pane_pid`` 的检测逻辑保持一致。
+    """
+    return not callable(getattr(backend, '_tmux_run', None))
 
 
 def spawn_codex_bridge(*, runtime_dir: Path, pane_id: str, prepared_state: dict[str, object] | None = None) -> None:

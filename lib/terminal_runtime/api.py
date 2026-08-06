@@ -153,12 +153,13 @@ def get_backend(terminal_type: Optional[str] = None) -> Optional[TerminalBackend
     global _backend_cache, _backend_cache_key
     # design D2: config runtime.mux.backend 为声明式单一事实源，优先于终端/环境检测。
     # 优先级：显式 terminal_type > set_backend_config_preference() > env CCB_RUNTIME_MUX_BACKEND
-    if terminal_type is None and not _backend_config_preference:
-        env_pref = os.environ.get('CCB_RUNTIME_MUX_BACKEND', '').strip().lower()
-        if env_pref in ('herdr', 'rmux'):
-            _backend_config_preference = env_pref
-    if terminal_type is None and _backend_config_preference:
-        terminal_type = _backend_config_preference
+    env_pref = None
+    if terminal_type is None:
+        candidate = os.environ.get('CCB_RUNTIME_MUX_BACKEND', '').strip().lower()
+        if candidate in ('herdr', 'rmux'):
+            env_pref = candidate
+    if terminal_type is None:
+        terminal_type = _backend_config_preference or env_pref
     detected_terminal = detect_terminal() if terminal_type is None else None
     use_cache = (
         terminal_type is None
