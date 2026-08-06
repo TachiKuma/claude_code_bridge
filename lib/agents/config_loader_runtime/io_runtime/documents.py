@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 from pathlib import Path
 
 from agents.config_loader_runtime.role_lookup import RoleLookupError, installed_role_default_agent_name, looks_like_role_id, normalize_role_id
@@ -325,6 +326,7 @@ def load_project_config(project_root: Path, *, include_loop_overlays: bool = Tru
         if include_loop_overlays:
             config = apply_loop_capacity_overlays(config, project_root)
             config = apply_dynamic_agent_overlays(config, project_root)
+        _propagate_runtime_mux_backend(config)
         return ConfigLoadResult(
             config=config,
             source_path=project_path,
@@ -333,18 +335,34 @@ def load_project_config(project_root: Path, *, include_loop_overlays: bool = Tru
         )
     user_default_path = user_default_config_path()
     if user_default_path.exists():
+        config = validate_project_config(_load_config_document(user_default_path), source_path=user_default_path)
+        _propagate_runtime_mux_backend(config)
         return ConfigLoadResult(
-            config=validate_project_config(_load_config_document(user_default_path), source_path=user_default_path),
+            config=config,
             source_path=user_default_path,
             source_kind=CONFIG_SOURCE_USER,
             used_default=False,
         )
+    _propagate_runtime_mux_backend(None)
     return ConfigLoadResult(
         config=build_default_project_config(),
         source_path=None,
         source_kind=CONFIG_SOURCE_BUILTIN_DEFAULT,
         used_default=True,
     )
+
+
+def _propagate_runtime_mux_backend(config) -> None:
+    """将 config ``runtime.mux.backend`` 传播到 env ``CCB_RUNTIME_MUX_BACKEND``。
+
+    design D2：config 为声明式单一事实源，通过 env 桥梁驱动 ``terminal_runtime.api.get_backend()``。
+    """
+    backend = getattr(config, 'runtime_mux_backend', None) if config is not None else None
+    key = 'CCB_RUNTIME_MUX_BACKEND'
+    if backend and str(backend).strip():
+        os.environ[key] = str(backend).strip().lower()
+    else:
+        os.environ.pop(key, None)
 
 
 __all__ = ['load_project_config', 'parse_config_document_text']

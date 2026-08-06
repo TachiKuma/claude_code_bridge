@@ -108,7 +108,27 @@ def get_shell_type() -> str:
 
 _backend_cache: Optional[TerminalBackend] = None
 _backend_cache_key: str | None = None
+_backend_config_preference: str | None = None
 _ROOT_DIR = Path(__file__).resolve().parents[2]
+
+
+def set_backend_config_preference(backend: str | None) -> None:
+    """设置 config ``runtime.mux.backend`` 驱动的后端偏好（design D2 单一事实源）。
+
+    config 显式声明优先于终端/环境检测。
+    调用时机：项目 config 加载后、首次 ``get_backend()`` 前。
+    """
+    global _backend_config_preference, _backend_cache, _backend_cache_key
+    value = str(backend or '').strip().lower() or None
+    if value not in {None, 'herdr', 'rmux'}:
+        raise ValueError(
+            f'invalid runtime.mux.backend config value: {backend!r} '
+            f'(expected herdr, rmux, or absent)'
+        )
+    if value != _backend_config_preference:
+        _backend_config_preference = value
+        _backend_cache = None
+        _backend_cache_key = None
 
 
 def _inside_tmux() -> bool:
@@ -131,11 +151,20 @@ def detect_terminal() -> Optional[str]:
 
 def get_backend(terminal_type: Optional[str] = None) -> Optional[TerminalBackend]:
     global _backend_cache, _backend_cache_key
+    # design D2: config runtime.mux.backend 为声明式单一事实源，优先于终端/环境检测。
+    # 优先级：显式 terminal_type > set_backend_config_preference() > env CCB_RUNTIME_MUX_BACKEND
+    if terminal_type is None and not _backend_config_preference:
+        env_pref = os.environ.get('CCB_RUNTIME_MUX_BACKEND', '').strip().lower()
+        if env_pref in ('herdr', 'rmux'):
+            _backend_config_preference = env_pref
+    if terminal_type is None and _backend_config_preference:
+        terminal_type = _backend_config_preference
     detected_terminal = detect_terminal() if terminal_type is None else None
     use_cache = (
         terminal_type is None
         and detected_terminal == "tmux"
         and not _herdr_runtime_configured()
+        and not _backend_config_preference
     )
     if use_cache and _backend_cache is not None and _backend_cache_key == detected_terminal:
         return _backend_cache
@@ -422,4 +451,5 @@ __all__ = [
     "get_shell_type",
     "is_windows",
     "is_wsl",
+    "set_backend_config_preference",
 ]

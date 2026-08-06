@@ -44,6 +44,23 @@ def _binding_attr(binding, field_name: str):
     return getattr(binding, field_name, None) if binding is not None else None
 
 
+def _runtime_ref_prefix(
+    namespace_backend_impl: str | None,
+    assigned_pane_ref: dict[str, object] | None,
+) -> str:
+    """按后端选择 runtime_ref 前缀（design I-2）。
+
+    tmux/rmux → ``tmux:``，herdr → ``mux:``。
+    优先取 namespace_backend_impl，其次 assigned_pane_ref['backend_impl']。
+    """
+    backend = str(namespace_backend_impl or '').strip().lower()
+    if not backend and isinstance(assigned_pane_ref, dict):
+        backend = str(assigned_pane_ref.get('backend_impl') or '').strip().lower()
+    if backend == 'herdr':
+        return 'mux'
+    return 'tmux'
+
+
 def start_agent_runtime(
     *,
     context,
@@ -147,7 +164,10 @@ def start_agent_runtime(
             stale_binding=stale_binding,
             tmux_socket_path=tmux_socket_path,
         )
-        namespace_runtime_ref = f'tmux:{namespace_pane_id}' if namespace_pane_id else None
+        namespace_runtime_ref = (
+            f'{_runtime_ref_prefix(namespace_backend_impl, assigned_pane_ref)}:{namespace_pane_id}'
+            if namespace_pane_id else None
+        )
         namespace_socket_path = str(tmux_socket_path or '').strip() or None
         binding_pane_id = _binding_attr(binding_state.binding, 'pane_id') or namespace_pane_id
         namespace_record = (namespace_pane_records or {}).get(str(binding_pane_id or ''))

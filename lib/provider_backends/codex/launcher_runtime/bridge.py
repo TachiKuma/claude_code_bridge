@@ -25,6 +25,9 @@ def post_launch(backend: object, pane_id: str, runtime_dir: Path, launch_session
 def spawn_codex_bridge(*, runtime_dir: Path, pane_id: str, prepared_state: dict[str, object] | None = None) -> None:
     artifacts = codex_runtime_artifact_layout(runtime_dir)
     env = os.environ.copy()
+    # TODO(herdr): CODEX_TERMINAL 应随 backend 选择（herdr→'herdr'，tmux→'tmux'）。
+    # 当前硬编码 'tmux' 不影响 herdr pane 内交互 codex CLI（respawn 已进 pane）；
+    # bridge 为辅助 RPC，CODEX_TERMINAL 适配留后续 herdr integration。
     env['CODEX_TERMINAL'] = 'tmux'
     env['CODEX_TMUX_SESSION'] = pane_id
     env['CODEX_RUNTIME_DIR'] = str(runtime_dir)
@@ -92,8 +95,13 @@ def validate_bridge_bootstrap(runtime_dir: Path) -> None:
 
 
 def write_pane_pid(backend: object, pane_id: str, path: Path) -> None:
+    # herdr backend 没有 _tmux_run；交互 codex 已通过 respawn 进 herdr pane，
+    # bridge 为辅助 RPC，PID 缺失不阻塞 launch（design D3 决策 A）。
+    run_fn = getattr(backend, '_tmux_run', None)
+    if not callable(run_fn):
+        return
     try:
-        result = backend._tmux_run(  # type: ignore[attr-defined]
+        result = run_fn(
             ['display-message', '-p', '-t', pane_id, '#{pane_pid}'],
             capture=True,
             timeout=1.0,
