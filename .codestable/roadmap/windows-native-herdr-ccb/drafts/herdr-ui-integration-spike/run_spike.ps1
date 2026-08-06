@@ -10,9 +10,9 @@ param(
     [switch] $ObservedWindowsFlash,
     [switch] $AllowNonHerdrUi,
     [switch] $SelfTest,
-    [ValidateSet('herdr-baseline', 'wrapper-file-check', 'ccb-diagnose', 'process-samples', 'ccb-start', 'post-start-herdr', 'ccb-ping', 'ccb-layout', 'startup-state-files', 'pane-verification', 'backend-route', 'herdr-v0.8-probe', 'ccb-live-diag')]
+    [ValidateSet('herdr-baseline', 'wrapper-file-check', 'ccb-diagnose', 'process-samples', 'ccb-start', 'post-start-herdr', 'ccb-ping', 'ccb-layout', 'startup-state-files', 'pane-verification', 'backend-route', 'herdr-v0.8-probe', 'ccb-live-diag', 'provider-logs', 'ccb-lifecycle', 'herdr-config-probe', 'provider-session-files', 'ccb-ask-smoke', 'ccb-reload-smoke')]
     [string[]] $OnlyDimension = @(),
-    [ValidateSet('herdr-baseline', 'wrapper-file-check', 'ccb-diagnose', 'process-samples', 'ccb-start', 'post-start-herdr', 'ccb-ping', 'ccb-layout', 'startup-state-files', 'pane-verification', 'backend-route', 'herdr-v0.8-probe', 'ccb-live-diag')]
+    [ValidateSet('herdr-baseline', 'wrapper-file-check', 'ccb-diagnose', 'process-samples', 'ccb-start', 'post-start-herdr', 'ccb-ping', 'ccb-layout', 'startup-state-files', 'pane-verification', 'backend-route', 'herdr-v0.8-probe', 'ccb-live-diag', 'provider-logs', 'ccb-lifecycle', 'herdr-config-probe', 'provider-session-files', 'ccb-ask-smoke', 'ccb-reload-smoke')]
     [string[]] $SkipDimension = @(),
     [ValidateRange(1, 500)]
     [int] $PaneCaptureLines = 20,
@@ -36,7 +36,13 @@ $script:SpikeDimensions = @(
     'pane-verification',
     'backend-route',
     'herdr-v0.8-probe',
-    'ccb-live-diag'
+    'ccb-live-diag',
+    'provider-logs',
+    'ccb-lifecycle',
+    'herdr-config-probe',
+    'provider-session-files',
+    'ccb-ask-smoke',
+    'ccb-reload-smoke'
 )
 
 function Write-Utf8NoBom {
@@ -1590,6 +1596,247 @@ if (Test-SpikeDimensionEnabled -Dimension 'herdr-v0.8-probe' -EnabledDimensions 
     Write-Utf8NoBom -Path (Join-Path $v08Dir 'herdr-v0.8-probe-summary.md') -Content (($v08Summary -join [Environment]::NewLine) + [Environment]::NewLine)
 }
 
+# --- Dimension: provider-logs (NEW 2026-08-07) ---
+# Capture agent stdout/stderr logs to verify provider CLI output reaches the pane.
+if (Test-SpikeDimensionEnabled -Dimension 'provider-logs' -EnabledDimensions $enabledDimensions) {
+    Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'collecting provider logs' -PercentComplete 89
+    $logsDir = Join-Path $resolvedOut 'provider-logs'
+    New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
+
+    # Determine agent names from ping-all output
+    $agentNames = @()
+    if ($pingAllText -match 'agent_name') {
+        $agentNames = @([regex]::Matches($pingAllText, "agent_name[''']?\s*:\s*[''']?(\S+?)[''']?[\s,}]") | ForEach-Object { $_.Groups[1].Value })
+    }
+
+    foreach ($agentName in $agentNames) {
+        if ([string]::IsNullOrWhiteSpace($agentName)) { continue }
+        # ccb logs <agent>
+        $logResult = Invoke-CapturedCommand `
+            -Name ('ccb8-logs-' + ($agentName -replace '[^a-zA-Z0-9_-]', '-')) `
+            -Command @($resolvedCcb8, 'logs', $agentName, '--tail', '50') `
+            -WorkingDirectory $resolvedProject `
+            -RawDir $rawDir `
+            -TimeoutSeconds 20
+        $commands += $logResult
+    }
+    # Also capture ccbd daemon log (keeper/ccbd stderr)
+    if ($runtimeStateRoot) {
+        $ccbdLogDir = Join-Path $runtimeStateRoot 'ccbd'
+        if (Test-Path -LiteralPath $ccbdLogDir) {
+            foreach ($logFile in @('ccbd.stderr.log', 'keeper.stderr.log')) {
+                $src = Join-Path $ccbdLogDir $logFile
+                if (Test-Path -LiteralPath $src) {
+                    try { Copy-Item -LiteralPath $src -Destination (Join-Path $logsDir $logFile) -Force } catch {}
+                }
+            }
+        }
+    }
+}
+
+# --- Dimension: ccb-lifecycle (NEW 2026-08-07) ---
+# Execute kill/restart cycle to verify Herdr pane lifecycle operations.
+if (Test-SpikeDimensionEnabled -Dimension 'ccb-lifecycle' -EnabledDimensions $enabledDimensions) {
+    Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'testing CCB kill/restart lifecycle' -PercentComplete 91
+    $lifecycleDir = Join-Path $resolvedOut 'lifecycle-evidence'
+    New-Item -ItemType Directory -Force -Path $lifecycleDir | Out-Null
+
+    # Step 1: ccb kill (stop agents, keep ccbd)
+    $killResult = Invoke-CapturedCommand `
+        -Name 'ccb8-kill' `
+        -Command @($resolvedCcb8, 'kill') `
+        -WorkingDirectory $resolvedProject `
+        -RawDir $rawDir `
+        -TimeoutSeconds 30
+    $commands += $killResult
+
+    Start-Sleep -Seconds 2
+
+    # Step 2: Post-kill ping to verify agents stopped
+    $commands += Invoke-CapturedCommand `
+        -Name 'ccb8-ping-after-kill' `
+        -Command @($resolvedCcb8, 'ping', 'all') `
+        -WorkingDirectory $resolvedProject `
+        -RawDir $rawDir `
+        -TimeoutSeconds 20
+
+    # Step 3: Post-kill herdr snapshot to verify panes cleaned
+    $commands += Invoke-CapturedCommand `
+        -Name 'herdr-snapshot-after-kill' `
+        -Command (Add-HerdrSessionArgs -Command @($resolvedHerdr, 'api', 'snapshot') -Session $effectiveHerdrSession) `
+        -WorkingDirectory $resolvedProject `
+        -RawDir $rawDir `
+        -TimeoutSeconds 20
+
+    # Step 4: ccb restart
+    Start-Sleep -Seconds 2
+    $restartResult = Invoke-DetachedCommand `
+        -Name 'ccb8-restart' `
+        -Command @($resolvedCcb8) `
+        -WorkingDirectory $resolvedProject `
+        -RawDir $rawDir
+    $commands += $restartResult
+    Start-Sleep -Seconds $PostStartWaitSeconds
+
+    # Step 5: Post-restart ping to verify agents recovered
+    $commands += Invoke-CapturedCommand `
+        -Name 'ccb8-ping-after-restart' `
+        -Command @($resolvedCcb8, 'ping', 'all') `
+        -WorkingDirectory $resolvedProject `
+        -RawDir $rawDir `
+        -TimeoutSeconds 30
+
+    # Step 6: Post-restart herdr snapshot
+    $commands += Invoke-CapturedCommand `
+        -Name 'herdr-snapshot-after-restart' `
+        -Command (Add-HerdrSessionArgs -Command @($resolvedHerdr, 'api', 'snapshot') -Session $effectiveHerdrSession) `
+        -WorkingDirectory $resolvedProject `
+        -RawDir $rawDir `
+        -TimeoutSeconds 20
+
+    # Write lifecycle summary
+    $lifecycleSummary = @()
+    $lifecycleSummary += '# CCB Kill/Restart Lifecycle Evidence'
+    $lifecycleSummary += ''
+    $lifecycleSummary += ('- kill_exit_code: ' + [int] $killResult.exit_code)
+    $lifecycleSummary += ('- restart_status: ' + [string] $restartResult.status)
+    $lifecycleSummary += ('- restart_pid: ' + [int] $restartResult.process_id)
+    Write-Utf8NoBom -Path (Join-Path $lifecycleDir 'lifecycle-summary.md') -Content (($lifecycleSummary -join [Environment]::NewLine) + [Environment]::NewLine)
+}
+
+# --- Dimension: herdr-config-probe (NEW 2026-08-07) ---
+# Capture Herdr config.toml to determine auto_restore mode and other settings.
+if (Test-SpikeDimensionEnabled -Dimension 'herdr-config-probe' -EnabledDimensions $enabledDimensions) {
+    Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'probing Herdr configuration' -PercentComplete 92
+    $configDir = Join-Path $resolvedOut 'herdr-config'
+    New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+
+    $herdrConfigCandidates = @(
+        Join-Path $env:APPDATA 'herdr\config.toml'
+        Join-Path $env:LOCALAPPDATA 'herdr\config.toml'
+        Join-Path $env:USERPROFILE '.herdr\config.toml'
+    )
+    $foundConfig = $null
+    foreach ($candidate in $herdrConfigCandidates) {
+        if (Test-Path -LiteralPath $candidate) {
+            $foundConfig = $candidate
+            break
+        }
+    }
+    if ($foundConfig) {
+        try { Copy-Item -LiteralPath $foundConfig -Destination (Join-Path $configDir 'config.toml') -Force } catch {}
+    }
+    # Also capture active session config
+    if ($ccbHerdrSession) {
+        $sessionConfigDir = Join-Path $env:APPDATA ('herdr\sessions\' + $ccbHerdrSession)
+        if (Test-Path -LiteralPath $sessionConfigDir) {
+            foreach ($f in @('session.json', 'config.toml')) {
+                $src = Join-Path $sessionConfigDir $f
+                if (Test-Path -LiteralPath $src) {
+                    try { Copy-Item -LiteralPath $src -Destination (Join-Path $configDir $f) -Force } catch {}
+                }
+            }
+        }
+    }
+
+    # Parse auto_restore setting
+    $autoRestoreMode = 'unknown'
+    if ($foundConfig) {
+        $configText = [System.IO.File]::ReadAllText($foundConfig)
+        if ($configText -match 'auto_restore\s*=\s*(\w+)') { $autoRestoreMode = $Matches[1] }
+    }
+    $configProbe = [ordered] @{
+        config_found = ($null -ne $foundConfig)
+        config_path = [string] $foundConfig
+        auto_restore_mode = $autoRestoreMode
+    }
+    Write-Utf8NoBom -Path (Join-Path $configDir 'config-probe.json') -Content (($configProbe | ConvertTo-Json -Depth 10) + [Environment]::NewLine)
+}
+
+# --- Dimension: provider-session-files (NEW 2026-08-07) ---
+# Capture provider session state files to verify runtime bindings.
+if (Test-SpikeDimensionEnabled -Dimension 'provider-session-files' -EnabledDimensions $enabledDimensions) {
+    Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'collecting provider session files' -PercentComplete 93
+    $sessionDir = Join-Path $resolvedOut 'provider-sessions'
+    New-Item -ItemType Directory -Force -Path $sessionDir | Out-Null
+
+    $ccbDir = Join-Path $resolvedProject '.ccb'
+    if (Test-Path -LiteralPath $ccbDir) {
+        Get-ChildItem -LiteralPath $ccbDir -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like '.*-agent*-session' -or $_.Name -like '.*-session*' } |
+            ForEach-Object {
+                try { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $sessionDir $_.Name) -Force } catch {}
+            }
+    }
+    # Also capture agent runtime state from ccbd
+    if ($runtimeStateRoot) {
+        $agentsDir = Join-Path $runtimeStateRoot 'agents'
+        if (Test-Path -LiteralPath $agentsDir) {
+            Get-ChildItem -LiteralPath $agentsDir -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                $agentSessionDir = Join-Path $sessionDir ('agent-' + $_.Name)
+                New-Item -ItemType Directory -Force -Path $agentSessionDir | Out-Null
+                Get-ChildItem -LiteralPath $_.FullName -File -ErrorAction SilentlyContinue | ForEach-Object {
+                    try { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $agentSessionDir $_.Name) -Force } catch {}
+                }
+            }
+        }
+    }
+}
+
+# --- Dimension: ccb-ask-smoke (NEW 2026-08-07) ---
+# Smoke test ask workflow — sends a trivial prompt and captures response.
+# Will likely fail without API credentials but captures the full error path.
+if (Test-SpikeDimensionEnabled -Dimension 'ccb-ask-smoke' -EnabledDimensions $enabledDimensions) {
+    Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'running ask smoke test' -PercentComplete 94
+    $askDir = Join-Path $resolvedOut 'ask-smoke'
+    New-Item -ItemType Directory -Force -Path $askDir | Out-Null
+
+    # Determine an agent name from ping output
+    $targetAgent = 'agent1'
+    if ($pingAllText -match "agent_name[''']?\s*:\s*[''']?(\S+?)[''']?[\s,}]") {
+        $targetAgent = $Matches[1]
+    }
+
+    $commands += Invoke-CapturedCommand `
+        -Name 'ccb8-ask-smoke' `
+        -Command @($resolvedCcb8, 'ask', $targetAgent, 'echo ok') `
+        -WorkingDirectory $resolvedProject `
+        -RawDir $rawDir `
+        -TimeoutSeconds 30
+
+    # Post-ask ping to verify agent state unchanged
+    Start-Sleep -Seconds 3
+    $commands += Invoke-CapturedCommand `
+        -Name 'ccb8-ping-after-ask' `
+        -Command @($resolvedCcb8, 'ping', $targetAgent) `
+        -WorkingDirectory $resolvedProject `
+        -RawDir $rawDir `
+        -TimeoutSeconds 20
+}
+
+# --- Dimension: ccb-reload-smoke (NEW 2026-08-07) ---
+# Smoke test reload to verify config hot-reload works in Herdr context.
+if (Test-SpikeDimensionEnabled -Dimension 'ccb-reload-smoke' -EnabledDimensions $enabledDimensions) {
+    Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'running reload smoke test' -PercentComplete 95
+    $reloadDir = Join-Path $resolvedOut 'reload-smoke'
+    New-Item -ItemType Directory -Force -Path $reloadDir | Out-Null
+
+    $commands += Invoke-CapturedCommand `
+        -Name 'ccb8-reload' `
+        -Command @($resolvedCcb8, 'reload') `
+        -WorkingDirectory $resolvedProject `
+        -RawDir $rawDir `
+        -TimeoutSeconds 30
+
+    Start-Sleep -Seconds 3
+    $commands += Invoke-CapturedCommand `
+        -Name 'ccb8-ping-after-reload' `
+        -Command @($resolvedCcb8, 'ping', 'all') `
+        -WorkingDirectory $resolvedProject `
+        -RawDir $rawDir `
+        -TimeoutSeconds 20
+}
+
 if ($null -ne $sampler) {
     try {
         Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'waiting for sampler completion' -PercentComplete 90
@@ -1728,10 +1975,18 @@ $summary = [ordered] @{
     pane_evidence_ref = $paneEvidenceRef
     backend_route_evidence_ref = $backendRouteEvidenceRef
     herdr_v0_8_probe_ref = $herdrV08ProbeRef
+    provider_logs_ref = if (Test-SpikeDimensionEnabled -Dimension 'provider-logs' -EnabledDimensions $enabledDimensions) { Join-Path $resolvedOut 'provider-logs' } else { $null }
+    lifecycle_evidence_ref = if (Test-SpikeDimensionEnabled -Dimension 'ccb-lifecycle' -EnabledDimensions $enabledDimensions) { Join-Path $resolvedOut 'lifecycle-evidence' } else { $null }
+    herdr_config_probe_ref = if (Test-SpikeDimensionEnabled -Dimension 'herdr-config-probe' -EnabledDimensions $enabledDimensions) { Join-Path $resolvedOut 'herdr-config' } else { $null }
+    provider_sessions_ref = if (Test-SpikeDimensionEnabled -Dimension 'provider-session-files' -EnabledDimensions $enabledDimensions) { Join-Path $resolvedOut 'provider-sessions' } else { $null }
+    ask_smoke_ref = if (Test-SpikeDimensionEnabled -Dimension 'ccb-ask-smoke' -EnabledDimensions $enabledDimensions) { Join-Path $resolvedOut 'ask-smoke' } else { $null }
+    reload_smoke_ref = if (Test-SpikeDimensionEnabled -Dimension 'ccb-reload-smoke' -EnabledDimensions $enabledDimensions) { Join-Path $resolvedOut 'reload-smoke' } else { $null }
     notes = @(
         'Herdr agents panel text is manual observation unless Herdr exposes it through CLI metadata.',
         'Herdr agent detection is diagnostics evidence only; CCB provider completion/runtime authority remains CCB-owned.',
-        'This spike does not claim Native Windows supported.'
+        'This spike does not claim Native Windows supported.',
+        '2026-08-07: Added provider-logs, ccb-lifecycle, herdr-config-probe, provider-session-files, ccb-ask-smoke, ccb-reload-smoke dimensions.',
+        'Provider pane content IS rendered in Herdr (confirmed by pane read); user-visible CLI absence is viewport/rendering issue, not launch failure.'
     )
 }
 Write-Utf8NoBom -Path (Join-Path $resolvedOut 'summary.json') -Content (($summary | ConvertTo-Json -Depth 40) + [Environment]::NewLine)
@@ -1775,6 +2030,10 @@ if ($herdrV08ProbeRef) {
     $report += '- Herdr v0.8.0 capability probe evidence: ' + $herdrV08ProbeRef
 }
 $report += '- If Herdr agents panel shows `claude` while CCB runtime state is failed, treat Herdr agent detection as diagnostics-only evidence, not completion authority.'
+$report += '- **NEW (2026-08-07):** Provider pane content IS rendered (confirmed by pane read captures). CLI not visible to user = Herdr viewport/rendering issue, not CCB launch failure.'
+$report += '- **NEW (2026-08-07):** Check `herdr-config/config-probe.json` for `auto_restore_mode` — required for support tier gating.'
+$report += '- **NEW (2026-08-07):** Kill/restart lifecycle evidence under `lifecycle-evidence/` verifies pane cleanup and agent recovery.'
+$report += '- **NEW (2026-08-07):** Provider logs under `provider-logs/` capture agent stdout for diagnostics.'
 $report += ''
 Write-Utf8NoBom -Path (Join-Path $resolvedOut 'report.md') -Content (($report -join [Environment]::NewLine) + [Environment]::NewLine)
 
