@@ -1,0 +1,248 @@
+[
+    {
+        "pid":  6636,
+        "parent_pid":  8020,
+        "name":  "node.exe",
+        "command_line":  "\"C:\\Program Files\\Adobe\\Adobe Creative Cloud Experience\\libs\\node.exe\" \"C:\\Program Files\\Adobe\\Adobe Creative Cloud Experience\\js\\main.js\""
+    },
+    {
+        "pid":  16992,
+        "parent_pid":  15512,
+        "name":  "pwsh.exe",
+        "command_line":  "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\" -NoLogo"
+    },
+    {
+        "pid":  16200,
+        "parent_pid":  16992,
+        "name":  "cmd.exe",
+        "command_line":  "C:\\Windows\\system32\\cmd.exe /c \"\"C:\\Users\\Administrator\\AppData\\Local\\codex-dual\\bin\\ccb.bat\" -a\""
+    },
+    {
+        "pid":  16888,
+        "parent_pid":  16200,
+        "name":  "python.exe",
+        "command_line":  "python  \"C:\\Users\\Administrator\\AppData\\Local\\codex-dual\\bin\\..\\\\ccb\" -a"
+    },
+    {
+        "pid":  11088,
+        "parent_pid":  16888,
+        "name":  "python.exe",
+        "command_line":  "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\python.exe C:\\Users\\Administrator\\AppData\\Local\\codex-dual\\bin\\askd"
+    },
+    {
+        "pid":  10196,
+        "parent_pid":  15512,
+        "name":  "pwsh.exe",
+        "command_line":  "\"C:\\Program Files\\PowerShell\\7\\pwsh.EXE\" -Command \"$esc=[char]27; [Console]::Write(\\\"$esc]0;CCB-Opencode`a\\\"); $Host.UI.RawUI.WindowTitle = \u0027CCB-Opencode\u0027; $env:CCB_MANAGED = \u00271\u0027; $env:CCB_PARENT_PID = \u002716888\u0027; $env:CCB_RUN_DIR = \u0027C:\\Users\\Administrator\\.cache\\ccb\\projects\\26ac1d7cfc71c73f\u0027; $env:Path = \u0027C:\\Users\\Administrator\\AppData\\Local\\codex-dual\\bin;C:\\Program Files\\PowerShell\\7;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Program Files\\Git\\cmd;d:\\Program Files\\cursor\\resources\\app\\bin;C:\\Users\\Administrator\\AppData\\Roaming\\npm;C:\\Users\\Administrator\\AppData\\Roaming\\npm\\claude;C:\\Program Files\\dotnet\\;D:\\Tools\\AI Tools\\WezTerm;C:\\Users\\Administrator\\.bun\\bin;C:\\Users\\Administrator\\AppData\\Local\\cca;C:\\Users\\Administrator\\AppData\\Roaming\\cca;C:\\Program Files\\nodejs\\;C:\\Program Files\\PowerShell\\7\\;C:\\Program Files\\Microsoft SQL Server\\170\\Tools\\Binn\\;C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\;C:\\Users\\Administrator\\.cargo\\bin;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Launcher\\;C:\\Users\\Administrator\\.local\\bin;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Users\\Administrator\\AppData\\Roaming\\npm\\claude;C:\\Users\\Administrator\\.dotnet\\tools;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\Administrator\\.bun\\bin;C:\\Users\\Administrator\\bin;C:\\Users\\Administrator\\AppData\\Roaming\\npm;C:\\Users\\Administrator\\.dotnet\\tools;D:/C#Project/GitHub/FengDaGeniusForAvalonia/.dotnet-home\\.dotnet\\tools;C:\\Users\\Administrator\\AppData\\Local\\codex-dual\\bin;C:\\Users\\Administrator\\AppData\\Local\\psmux;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Links;;C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python314\\Scripts;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64;\u0027; opencode; $code = $LASTEXITCODE; Write-Host \\\"`n[opencode] exited with code $code. Press Enter to close...\\\"; Read-Host; exit $code\""
+    },
+    {
+        "pid":  14460,
+        "parent_pid":  15512,
+        "name":  "pwsh.exe",
+        "command_line":  "\"C:\\Program Files\\PowerShell\\7\\pwsh.EXE\" -Command \"$esc=[char]27; [Console]::Write(\\\"$esc]0;CCB-Gemini`a\\\"); $Host.UI.RawUI.WindowTitle = \u0027CCB-Gemini\u0027; $env:CCB_MANAGED = \u00271\u0027; $env:CCB_PARENT_PID = \u002716888\u0027; $env:CCB_RUN_DIR = \u0027C:\\Users\\Administrator\\.cache\\ccb\\projects\\26ac1d7cfc71c73f\u0027; $env:Path = \u0027C:\\Users\\Administrator\\AppData\\Local\\codex-dual\\bin;C:\\Program Files\\PowerShell\\7;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Program Files\\Git\\cmd;d:\\Program Files\\cursor\\resources\\app\\bin;C:\\Users\\Administrator\\AppData\\Roaming\\npm;C:\\Users\\Administrator\\AppData\\Roaming\\npm\\claude;C:\\Program Files\\dotnet\\;D:\\Tools\\AI Tools\\WezTerm;C:\\Users\\Administrator\\.bun\\bin;C:\\Users\\Administrator\\AppData\\Local\\cca;C:\\Users\\Administrator\\AppData\\Roaming\\cca;C:\\Program Files\\nodejs\\;C:\\Program Files\\PowerShell\\7\\;C:\\Program Files\\Microsoft SQL Server\\170\\Tools\\Binn\\;C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\;C:\\Users\\Administrator\\.cargo\\bin;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Launcher\\;C:\\Users\\Administrator\\.local\\bin;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Users\\Administrator\\AppData\\Roaming\\npm\\claude;C:\\Users\\Administrator\\.dotnet\\tools;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\Administrator\\.bun\\bin;C:\\Users\\Administrator\\bin;C:\\Users\\Administrator\\AppData\\Roaming\\npm;C:\\Users\\Administrator\\.dotnet\\tools;D:/C#Project/GitHub/FengDaGeniusForAvalonia/.dotnet-home\\.dotnet\\tools;C:\\Users\\Administrator\\AppData\\Local\\codex-dual\\bin;C:\\Users\\Administrator\\AppData\\Local\\psmux;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Links;;C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python314\\Scripts;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64;\u0027; gemini --yolo; $code = $LASTEXITCODE; Write-Host \\\"`n[gemini] exited with code $code. Press Enter to close...\\\"; Read-Host; exit $code\""
+    },
+    {
+        "pid":  5188,
+        "parent_pid":  15512,
+        "name":  "pwsh.exe",
+        "command_line":  "\"C:\\Program Files\\PowerShell\\7\\pwsh.EXE\" -Command \"$esc=[char]27; [Console]::Write(\\\"$esc]0;CCB-Codex`a\\\"); $Host.UI.RawUI.WindowTitle = \u0027CCB-Codex\u0027; $env:CCB_MANAGED = \u00271\u0027; $env:CCB_PARENT_PID = \u002716888\u0027; $env:CCB_RUN_DIR = \u0027C:\\Users\\Administrator\\.cache\\ccb\\projects\\26ac1d7cfc71c73f\u0027; $env:Path = \u0027C:\\Users\\Administrator\\AppData\\Local\\codex-dual\\bin;C:\\Program Files\\PowerShell\\7;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Program Files\\Git\\cmd;d:\\Program Files\\cursor\\resources\\app\\bin;C:\\Users\\Administrator\\AppData\\Roaming\\npm;C:\\Users\\Administrator\\AppData\\Roaming\\npm\\claude;C:\\Program Files\\dotnet\\;D:\\Tools\\AI Tools\\WezTerm;C:\\Users\\Administrator\\.bun\\bin;C:\\Users\\Administrator\\AppData\\Local\\cca;C:\\Users\\Administrator\\AppData\\Roaming\\cca;C:\\Program Files\\nodejs\\;C:\\Program Files\\PowerShell\\7\\;C:\\Program Files\\Microsoft SQL Server\\170\\Tools\\Binn\\;C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\;C:\\Users\\Administrator\\.cargo\\bin;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Launcher\\;C:\\Users\\Administrator\\.local\\bin;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Users\\Administrator\\AppData\\Roaming\\npm\\claude;C:\\Users\\Administrator\\.dotnet\\tools;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\Administrator\\.bun\\bin;C:\\Users\\Administrator\\bin;C:\\Users\\Administrator\\AppData\\Roaming\\npm;C:\\Users\\Administrator\\.dotnet\\tools;D:/C#Project/GitHub/FengDaGeniusForAvalonia/.dotnet-home\\.dotnet\\tools;C:\\Users\\Administrator\\AppData\\Local\\codex-dual\\bin;C:\\Users\\Administrator\\AppData\\Local\\psmux;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Links;;C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python314\\Scripts;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64;\u0027; codex -c disable_paste_burst=true -c trust_level=\\\"trusted\\\" -c approval_policy=\\\"never\\\" -c sandbox_mode=\\\"danger-full-access\\\"; $code = $LASTEXITCODE; Write-Host \\\"`n[codex] exited with code $code. Press Enter to close...\\\"; Read-Host; exit $code\""
+    },
+    {
+        "pid":  10280,
+        "parent_pid":  14460,
+        "name":  "node.exe",
+        "command_line":  "\"C:\\Program Files\\nodejs\\node.exe\" C:\\Users\\Administrator\\AppData\\Roaming\\npm/node_modules/@google/gemini-cli/bundle/gemini.js --yolo"
+    },
+    {
+        "pid":  10620,
+        "parent_pid":  5188,
+        "name":  "node.exe",
+        "command_line":  "\"C:\\Program Files\\nodejs\\node.exe\" C:\\Users\\Administrator\\AppData\\Roaming\\npm/node_modules/@openai/codex/bin/codex.js -c disable_paste_burst=true -c trust_level=trusted -c approval_policy=never -c sandbox_mode=danger-full-access"
+    },
+    {
+        "pid":  5968,
+        "parent_pid":  10620,
+        "name":  "codex.exe",
+        "command_line":  "C:\\Users\\Administrator\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe -c disable_paste_burst=true -c trust_level=trusted -c approval_policy=never -c sandbox_mode=danger-full-access"
+    },
+    {
+        "pid":  17240,
+        "parent_pid":  5968,
+        "name":  "cmd.exe",
+        "command_line":  "cmd.exe /e:ON /v:OFF /d /c \"\"C:\\Users\\Administrator\\AppData\\Roaming\\npm\\codegraph.cmd\" serve --mcp\""
+    },
+    {
+        "pid":  17176,
+        "parent_pid":  17240,
+        "name":  "node.exe",
+        "command_line":  "\"node\"   \"C:\\Users\\Administrator\\AppData\\Roaming\\npm\\\\node_modules\\@colbymchenry\\codegraph\\dist\\bin\\codegraph.js\" serve --mcp"
+    },
+    {
+        "pid":  6468,
+        "parent_pid":  10280,
+        "name":  "node.exe",
+        "command_line":  "\"C:\\Program Files\\nodejs\\node.exe\" --max-old-space-size=32674 C:\\Users\\Administrator\\AppData\\Roaming\\npm\\node_modules\\@google\\gemini-cli\\bundle\\gemini.js --yolo"
+    },
+    {
+        "pid":  15824,
+        "parent_pid":  7880,
+        "name":  "cmd.exe",
+        "command_line":  "C:\\Windows\\system32\\cmd.exe /d /s /c \"codegraph ^\"serve^\" ^\"--mcp^\"\""
+    },
+    {
+        "pid":  11464,
+        "parent_pid":  15824,
+        "name":  "node.exe",
+        "command_line":  "\"node\"   \"C:\\Users\\Administrator\\AppData\\Roaming\\npm\\\\node_modules\\@colbymchenry\\codegraph\\dist\\bin\\codegraph.js\" \"serve\" \"--mcp\""
+    },
+    {
+        "pid":  19388,
+        "parent_pid":  20320,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  1788,
+        "parent_pid":  20320,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  18472,
+        "parent_pid":  14944,
+        "name":  "python.exe",
+        "command_line":  "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\python.exe E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\lib\\ccbd\\keeper_main.py --project D:\\C#Project\\GitHub\\AvaPrintDesigner"
+    },
+    {
+        "pid":  14192,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  16968,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  16688,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  18104,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  15560,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  20240,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  14436,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  4828,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  8596,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  8912,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  17512,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  20176,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  9552,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  13972,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  8492,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  20148,
+        "parent_pid":  18472,
+        "name":  "python.exe",
+        "command_line":  "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\python.exe E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\lib\\ccbd\\main.py --project D:\\C#Project\\GitHub\\AvaPrintDesigner"
+    },
+    {
+        "pid":  18732,
+        "parent_pid":  19912,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  18900,
+        "parent_pid":  1788,
+        "name":  "powershell.exe",
+        "command_line":  "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -Version 5.1 -s -NoLogo -NoProfile"
+    },
+    {
+        "pid":  15684,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  17776,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  20904,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  18488,
+        "parent_pid":  16972,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    }
+]

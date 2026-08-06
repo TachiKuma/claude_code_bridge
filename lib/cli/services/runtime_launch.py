@@ -262,7 +262,35 @@ def _pane_title_marker(context: CliContext, spec: AgentSpec) -> str:
 
 
 def _binding_runtime_alive(binding: AgentBinding) -> bool:
-    return _binding_runtime_alive_impl(binding, tmux_backend_cls=TmuxBackend)
+    return _binding_runtime_alive_impl(
+        binding,
+        tmux_backend_cls=TmuxBackend,
+        herdr_liveness_check_fn=_herdr_liveness_check,
+    )
+
+
+def _herdr_liveness_check(binding) -> bool:
+    """通过 herdr IPC 探测 pane 是否存活（capture_pane）。
+
+    mux: runtime_ref 的实际存活性检测 —— 替代 liveness.py 中无条件 return True。
+    """
+    try:
+        from terminal_runtime.api import get_backend_for_session
+
+        session_data = dict(getattr(binding, 'session_ref', None) or {})
+        if not session_data:
+            return True  # 无 session 数据，假设存活（避免误杀）
+        backend = get_backend_for_session(session_data)
+        if backend is None:
+            return True
+        pane_id = str(getattr(binding, 'pane_id', '') or '')
+        if not pane_id:
+            return True
+        # 使用 herdr IPC 探测：capture_pane 成功 → 存活，异常 → 死亡
+        backend.capture_pane(pane_id, lines=1)
+        return True
+    except Exception:
+        return False
 
 
 def _cleanup_stale_tmux_binding(binding: AgentBinding | None) -> None:

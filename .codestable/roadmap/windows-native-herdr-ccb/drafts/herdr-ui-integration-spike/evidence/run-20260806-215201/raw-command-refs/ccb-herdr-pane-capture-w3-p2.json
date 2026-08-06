@@ -1,0 +1,20 @@
+{
+    "name":  "ccb-herdr-pane-capture-w3-p2",
+    "command":  [
+                    "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Herdr\\herdr.exe",
+                    "pane",
+                    "read",
+                    "w3:p2",
+                    "--lines",
+                    "20",
+                    "--format",
+                    "text",
+                    "--session",
+                    "ccb-avaprintdesigner-575a971f"
+                ],
+    "exit_code":  0,
+    "timed_out":  false,
+    "elapsed_ms":  15,
+    "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-215201\\raw-command-refs\\ccb-herdr-pane-capture-w3-p2.stdout.txt",
+    "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-215201\\raw-command-refs\\ccb-herdr-pane-capture-w3-p2.stderr.txt"
+}
