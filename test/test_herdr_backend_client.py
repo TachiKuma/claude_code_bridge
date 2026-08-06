@@ -2192,7 +2192,8 @@ def test_herdr_cli_request_adapter_accepts_nested_server_status() -> None:
     )
 
     assert adapter._server_status_running("herdr", session_name="ccb-demo") is True
-    assert commands == [["herdr", "--session", "ccb-demo", "status", "server", "--json"]]
+    # v0.8.0: _server_status_running places --session after the status subcommand
+    assert commands == [["herdr", "status", "server", "--json", "--session", "ccb-demo"]]
 
 
 def test_herdr_cli_request_adapter_fails_when_created_workspace_is_not_listed() -> None:
@@ -2405,11 +2406,25 @@ def test_herdr_backend_logical_window_facade_restores_from_root_pane_metadata() 
             return _completed(
                 json.dumps({"result": {"pane": {"pane_id": pane_id, "workspace_id": workspace_id}}})
             )
+        if "pane report-metadata" in joined:
+            pane_id = command[command.index("report-metadata") + 1]
+            tokens = tokens_from_command(command)
+            if pane_id in panes:
+                existing = panes[pane_id]
+                existing["tokens"] = {**existing.get("tokens", {}), **tokens}
+            return _completed("")
         if "workspace focus" in joined:
-            state["focused_workspaces"].append(command[-3])  # type: ignore[union-attr]
+            state["focused_workspaces"].append(command[-1])  # type: ignore[union-attr]
+            return _completed("")
+        if "workspace report-metadata" in joined:
+            workspace_id = command[command.index("report-metadata") + 1]
+            tokens = tokens_from_command(command)
+            if workspace_id in workspaces:
+                existing = workspaces[workspace_id]
+                existing["tokens"] = {**existing.get("tokens", {}), **tokens}
             return _completed("")
         if "workspace close" in joined:
-            workspace_id = command[-3]
+            workspace_id = command[-1]
             state["closed_workspaces"].append(workspace_id)  # type: ignore[union-attr]
             workspaces.pop(workspace_id)
             for pane_id in [pane_id for pane_id, pane in panes.items() if pane["workspace_id"] == workspace_id]:
@@ -2600,10 +2615,10 @@ def test_herdr_cli_logical_windows_accept_workspace_ids_and_isolate_namespace_gr
                 selected = [pane for pane in selected if pane["workspace_id"] == workspace_id]
             return _completed(json.dumps({"result": {"panes": selected}}))
         if "workspace focus" in joined:
-            state["focused"].append(command[-3])  # type: ignore[union-attr]
+            state["focused"].append(command[-1])  # type: ignore[union-attr]
             return _completed("")
         if "workspace close" in joined:
-            workspace_id = command[-3]
+            workspace_id = command[-1]
             state["closed"].append(workspace_id)  # type: ignore[union-attr]
             workspaces.pop(workspace_id)
             for pane_id in [
