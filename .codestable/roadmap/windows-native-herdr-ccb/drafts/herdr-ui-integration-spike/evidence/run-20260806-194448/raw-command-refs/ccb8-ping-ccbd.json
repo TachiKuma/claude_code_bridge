@@ -1,0 +1,13 @@
+{
+    "name":  "ccb8-ping-ccbd",
+    "command":  [
+                    "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\ccb8.cmd",
+                    "ping",
+                    "ccbd"
+                ],
+    "exit_code":  1,
+    "timed_out":  false,
+    "elapsed_ms":  719,
+    "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-194448\\raw-command-refs\\ccb8-ping-ccbd.stdout.txt",
+    "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-194448\\raw-command-refs\\ccb8-ping-ccbd.stderr.txt"
+}

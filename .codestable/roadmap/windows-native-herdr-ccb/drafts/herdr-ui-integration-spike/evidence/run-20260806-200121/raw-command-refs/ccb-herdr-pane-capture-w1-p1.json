@@ -1,0 +1,18 @@
+{
+    "name":  "ccb-herdr-pane-capture-w1-p1",
+    "command":  [
+                    "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Herdr\\herdr.exe",
+                    "pane",
+                    "read",
+                    "w1:p1",
+                    "--lines",
+                    "20",
+                    "--format",
+                    "text"
+                ],
+    "exit_code":  0,
+    "timed_out":  false,
+    "elapsed_ms":  16,
+    "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-200121\\raw-command-refs\\ccb-herdr-pane-capture-w1-p1.stdout.txt",
+    "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-200121\\raw-command-refs\\ccb-herdr-pane-capture-w1-p1.stderr.txt"
+}

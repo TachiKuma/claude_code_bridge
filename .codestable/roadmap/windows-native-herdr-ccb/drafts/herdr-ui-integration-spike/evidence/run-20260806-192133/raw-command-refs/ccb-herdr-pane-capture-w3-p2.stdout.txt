@@ -1,0 +1,11 @@
+运行程序的名称。请检查名称的拼写，如果包括路径，请确
+保路径正确，然后再试一次。
+所在位置 行:1 字符: 1
++ sh -lc "while :; do sleep 3600; done"
++ ~~
+    + CategoryInfo          : ObjectNotFound: (sh:St
+   ring) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundExcepti
+   on
+
+PS D:\C#Project\GitHub\AvaPrintDesigner>

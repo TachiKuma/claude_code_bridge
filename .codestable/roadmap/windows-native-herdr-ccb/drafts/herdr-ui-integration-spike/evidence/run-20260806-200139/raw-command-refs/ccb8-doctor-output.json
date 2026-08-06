@@ -1,0 +1,14 @@
+{
+    "name":  "ccb8-doctor-output",
+    "command":  [
+                    "D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.cmd",
+                    "doctor",
+                    "--output",
+                    "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-200139\\doctor-output.tar.gz"
+                ],
+    "exit_code":  0,
+    "timed_out":  false,
+    "elapsed_ms":  1350,
+    "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-200139\\raw-command-refs\\ccb8-doctor-output.stdout.txt",
+    "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-200139\\raw-command-refs\\ccb8-doctor-output.stderr.txt"
+}

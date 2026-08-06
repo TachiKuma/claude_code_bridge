@@ -1,0 +1,582 @@
+{
+  "schema_version": 1,
+  "record_type": "ccbd_diagnostic_bundle",
+  "generated_at": "2026-08-06T11:47:45.752903Z",
+  "project_root": "D:\\C#Project\\GitHub\\AvaPrintDesigner",
+  "project_id": "575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03",
+  "bundle_id": "ccb-support-20260806t114745752903z-575a971fdf5a",
+  "doctor_error": null,
+  "storage_error": null,
+  "herdr_surface_projection_sources": [
+    "generated/doctor.json:ccbd.herdr_surface_projection"
+  ],
+  "entries": [
+    {
+      "category": "project-config",
+      "source_path": "D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\ccb.config",
+      "archive_path": "project/.ccb/ccb.config",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 33,
+      "error": null
+    },
+    {
+      "category": "ccbd-authority",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\lifecycle.json",
+      "archive_path": "project/.ccb/ccbd/lifecycle.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 1553,
+      "error": null
+    },
+    {
+      "category": "ccbd-authority",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\lease.json",
+      "archive_path": "project/.ccb/ccbd/lease.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 1347,
+      "error": null
+    },
+    {
+      "category": "ccbd-authority",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\keeper.json",
+      "archive_path": "project/.ccb/ccbd/keeper.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 401,
+      "error": null
+    },
+    {
+      "category": "ccbd-authority",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\shutdown-intent.json",
+      "archive_path": "project/.ccb/ccbd/shutdown-intent.json",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-authority",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\state.json",
+      "archive_path": "project/.ccb/ccbd/state.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 1002,
+      "error": null
+    },
+    {
+      "category": "ccbd-authority",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\start-policy.json",
+      "archive_path": "project/.ccb/ccbd/start-policy.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 293,
+      "error": null
+    },
+    {
+      "category": "ccbd-report",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\startup-report.json",
+      "archive_path": "project/.ccb/ccbd/startup-report.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 8898,
+      "error": null
+    },
+    {
+      "category": "ccbd-report",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\shutdown-report.json",
+      "archive_path": "project/.ccb/ccbd/shutdown-report.json",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-report",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\restore-report.json",
+      "archive_path": "project/.ccb/ccbd/restore-report.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 432,
+      "error": null
+    },
+    {
+      "category": "ccbd-events",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\submissions.jsonl",
+      "archive_path": "project/.ccb/ccbd/submissions.jsonl",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-events",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\messages\\messages.jsonl",
+      "archive_path": "project/.ccb/ccbd/messages/messages.jsonl",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-events",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\attempts\\attempts.jsonl",
+      "archive_path": "project/.ccb/ccbd/attempts/attempts.jsonl",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-events",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\replies\\replies.jsonl",
+      "archive_path": "project/.ccb/ccbd/replies/replies.jsonl",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-events",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\dead-letters\\dead_letters.jsonl",
+      "archive_path": "project/.ccb/ccbd/dead-letters/dead_letters.jsonl",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-events",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\supervision.jsonl",
+      "archive_path": "project/.ccb/ccbd/supervision.jsonl",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-events",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\lifecycle.jsonl",
+      "archive_path": "project/.ccb/ccbd/lifecycle.jsonl",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 2064,
+      "error": null
+    },
+    {
+      "category": "ccbd-events",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\tmux-cleanup-history.jsonl",
+      "archive_path": "project/.ccb/ccbd/tmux-cleanup-history.jsonl",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 454,
+      "error": null
+    },
+    {
+      "category": "ccbd-log",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\ccbd.stdout.log",
+      "archive_path": "project/.ccb/ccbd/ccbd.stdout.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-log",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\ccbd.stderr.log",
+      "archive_path": "project/.ccb/ccbd/ccbd.stderr.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-log",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\keeper.stdout.log",
+      "archive_path": "project/.ccb/ccbd/keeper.stdout.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-log",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\keeper.stderr.log",
+      "archive_path": "project/.ccb/ccbd/keeper.stderr.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "runtime-root",
+      "source_path": "D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\runtime-root-ref.json",
+      "archive_path": "project/.ccb/runtime-root-ref.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 310,
+      "error": null
+    },
+    {
+      "category": "runtime-root",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\runtime-root.json",
+      "archive_path": "project/.ccb/runtime-root.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 434,
+      "error": null
+    },
+    {
+      "category": "agent-authority",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\agent.json",
+      "archive_path": "project/.ccb/agents/agent1/agent.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 903,
+      "error": null
+    },
+    {
+      "category": "agent-authority",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\runtime.json",
+      "archive_path": "project/.ccb/agents/agent1/runtime.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 1839,
+      "error": null
+    },
+    {
+      "category": "agent-authority",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\restore.json",
+      "archive_path": "project/.ccb/agents/agent1/restore.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 305,
+      "error": null
+    },
+    {
+      "category": "agent-events",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\jobs.jsonl",
+      "archive_path": "project/.ccb/agents/agent1/jobs.jsonl",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "agent-events",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\events.jsonl",
+      "archive_path": "project/.ccb/agents/agent1/events.jsonl",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 491,
+      "error": null
+    },
+    {
+      "category": "agent-workspace",
+      "source_path": "D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\workspaces\\agent1\\.ccb-workspace.json",
+      "archive_path": "project/.ccb/workspaces/agent1/.ccb-workspace.json",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-runtime\\codex\\bridge.log",
+      "archive_path": "project/.ccb/agents/agent1/provider-runtime/codex/bridge.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-runtime\\codex\\codex-memory-projection.json",
+      "archive_path": "project/.ccb/agents/agent1/provider-runtime/codex/codex-memory-projection.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 296,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-runtime\\codex\\provider-profile.json",
+      "archive_path": "project/.ccb/agents/agent1/provider-runtime/codex/provider-profile.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 421,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-state\\codex\\home\\.ccb-session-namespace.json",
+      "archive_path": "project/.ccb/agents/agent1/provider-state/codex/home/.ccb-session-namespace.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 160,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-state\\codex\\home\\config.toml",
+      "archive_path": "project/.ccb/agents/agent1/provider-state/codex/home/config.toml",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 177,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-state\\codex\\home\\hooks.json",
+      "archive_path": "project/.ccb/agents/agent1/provider-state/codex/home/hooks.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 21,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-state\\codex\\home\\skills\\ask.ccb-projection.json",
+      "archive_path": "project/.ccb/agents/agent1/provider-state/codex/home/skills/ask.ccb-projection.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 280,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-state\\codex\\home\\skills\\ccb-clear.ccb-projection.json",
+      "archive_path": "project/.ccb/agents/agent1/provider-state/codex/home/skills/ccb-clear.ccb-projection.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 292,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-state\\codex\\home\\skills\\reconnect.ccb-projection.json",
+      "archive_path": "project/.ccb/agents/agent1/provider-state/codex/home/skills/reconnect.ccb-projection.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 292,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-state\\codex\\home\\skills\\.system\\imagegen\\LICENSE.txt",
+      "archive_path": "project/.ccb/agents/agent1/provider-state/codex/home/skills/.system/imagegen/LICENSE.txt",
+      "status": "included",
+      "truncated": true,
+      "byte_count": 10761,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-state\\codex\\home\\skills\\.system\\imagegen\\agents\\openai.yaml",
+      "archive_path": "project/.ccb/agents/agent1/provider-state/codex/home/skills/.system/imagegen/agents/openai.yaml",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 275,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-state\\codex\\home\\skills\\.system\\openai-docs\\LICENSE.txt",
+      "archive_path": "project/.ccb/agents/agent1/provider-state/codex/home/skills/.system/openai-docs/LICENSE.txt",
+      "status": "included",
+      "truncated": true,
+      "byte_count": 10761,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-state\\codex\\home\\skills\\.system\\openai-docs\\agents\\openai.yaml",
+      "archive_path": "project/.ccb/agents/agent1/provider-state/codex/home/skills/.system/openai-docs/agents/openai.yaml",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 598,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-state\\codex\\home\\skills\\.system\\plugin-creator\\agents\\openai.yaml",
+      "archive_path": "project/.ccb/agents/agent1/provider-state/codex/home/skills/.system/plugin-creator/agents/openai.yaml",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 339,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-state\\codex\\home\\skills\\.system\\review-agent\\agents\\openai.yaml",
+      "archive_path": "project/.ccb/agents/agent1/provider-state/codex/home/skills/.system/review-agent/agents/openai.yaml",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 252,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-state\\codex\\home\\skills\\.system\\skill-creator\\license.txt",
+      "archive_path": "project/.ccb/agents/agent1/provider-state/codex/home/skills/.system/skill-creator/license.txt",
+      "status": "included",
+      "truncated": true,
+      "byte_count": 11309,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-state\\codex\\home\\skills\\.system\\skill-creator\\agents\\openai.yaml",
+      "archive_path": "project/.ccb/agents/agent1/provider-state/codex/home/skills/.system/skill-creator/agents/openai.yaml",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 183,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-state\\codex\\home\\skills\\.system\\skill-installer\\LICENSE.txt",
+      "archive_path": "project/.ccb/agents/agent1/provider-state/codex/home/skills/.system/skill-installer/LICENSE.txt",
+      "status": "included",
+      "truncated": true,
+      "byte_count": 11309,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent1\\provider-state\\codex\\home\\skills\\.system\\skill-installer\\agents\\openai.yaml",
+      "archive_path": "project/.ccb/agents/agent1/provider-state/codex/home/skills/.system/skill-installer/agents/openai.yaml",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 221,
+      "error": null
+    },
+    {
+      "category": "agent-session",
+      "source_path": "D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\.codex-agent1-session",
+      "archive_path": "project/.ccb/.codex-agent1-session",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 10138,
+      "error": null
+    },
+    {
+      "category": "agent-authority",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent2\\agent.json",
+      "archive_path": "project/.ccb/agents/agent2/agent.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 904,
+      "error": null
+    },
+    {
+      "category": "agent-authority",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent2\\runtime.json",
+      "archive_path": "project/.ccb/agents/agent2/runtime.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 1843,
+      "error": null
+    },
+    {
+      "category": "agent-authority",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent2\\restore.json",
+      "archive_path": "project/.ccb/agents/agent2/restore.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 305,
+      "error": null
+    },
+    {
+      "category": "agent-events",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent2\\jobs.jsonl",
+      "archive_path": "project/.ccb/agents/agent2/jobs.jsonl",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "agent-events",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent2\\events.jsonl",
+      "archive_path": "project/.ccb/agents/agent2/events.jsonl",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 503,
+      "error": null
+    },
+    {
+      "category": "agent-workspace",
+      "source_path": "D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\workspaces\\agent2\\.ccb-workspace.json",
+      "archive_path": "project/.ccb/workspaces/agent2/.ccb-workspace.json",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent2\\provider-runtime\\claude\\claude-memory-projection.json",
+      "archive_path": "project/.ccb/agents/agent2/provider-runtime/claude/claude-memory-projection.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 306,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent2\\provider-runtime\\claude\\claude-settings.json",
+      "archive_path": "project/.ccb/agents/agent2/provider-runtime/claude/claude-settings.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 43,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent2\\provider-runtime\\claude\\provider-profile.json",
+      "archive_path": "project/.ccb/agents/agent2/provider-runtime/claude/provider-profile.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 380,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent2\\provider-state\\claude\\home\\.claude\\settings.json",
+      "archive_path": "project/.ccb/agents/agent2/provider-state/claude/home/.claude/settings.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 4468,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent2\\provider-state\\claude\\home\\.claude\\skills\\ask.ccb-projection.json",
+      "archive_path": "project/.ccb/agents/agent2/provider-state/claude/home/.claude/skills/ask.ccb-projection.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 282,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent2\\provider-state\\claude\\home\\.claude\\skills\\ccb-clear.ccb-projection.json",
+      "archive_path": "project/.ccb/agents/agent2/provider-state/claude/home/.claude/skills/ccb-clear.ccb-projection.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 294,
+      "error": null
+    },
+    {
+      "category": "agent-session",
+      "source_path": "D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\.claude-agent2-session",
+      "archive_path": "project/.ccb/.claude-agent2-session",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 7651,
+      "error": null
+    }
+  ]
+}

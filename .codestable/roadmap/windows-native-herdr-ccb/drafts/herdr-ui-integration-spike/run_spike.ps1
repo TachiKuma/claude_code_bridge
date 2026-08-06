@@ -894,10 +894,194 @@ function Invoke-SelfTest {
     }
 }
 
+function Stop-SpikeResidualProcesses {
+    param(
+        [string] $ProjectRoot,
+        [string] $RepoRoot,
+        [string] $Ccb8Path,
+        [int] $TrackedStartPid,
+        [bool] $InsideHerdrUi
+    )
+    if ([string]::IsNullOrWhiteSpace($ProjectRoot) -and [string]::IsNullOrWhiteSpace($RepoRoot)) {
+        Write-Warning 'spike cleanup: no project or repo root available; skipping residual process cleanup'
+        return
+    }
+    $normalizedPaths = @(
+        if (-not [string]::IsNullOrWhiteSpace($ProjectRoot)) {
+            try { [System.IO.Path]::GetFullPath($ProjectRoot).TrimEnd('\') } catch { $ProjectRoot }
+        }
+        if (-not [string]::IsNullOrWhiteSpace($RepoRoot)) {
+            try { [System.IO.Path]::GetFullPath($RepoRoot).TrimEnd('\') } catch { $RepoRoot }
+        }
+    ) | Select-Object -Unique
+    if ($normalizedPaths.Count -eq 0) {
+        Write-Warning 'spike cleanup: unable to normalize any project/repo path; skipping'
+        return
+    }
+    Write-Host ('spike cleanup: starting residual process cleanup (project=' + $ProjectRoot + ', repo=' + $RepoRoot + ')')
+
+    # ── Phase 1: try graceful CCB shutdown via ccb.py kill -f ──
+    # ccb.py 优先从 ProjectRoot 找（repo 自引用时），fallback 到 RepoRoot（ext 项目时 ccb.py 在 repo 中）
+    $ccbPyCandidates = @(
+        if (-not [string]::IsNullOrWhiteSpace($ProjectRoot)) { Join-Path $ProjectRoot 'ccb.py' }
+        if (-not [string]::IsNullOrWhiteSpace($RepoRoot) -and $RepoRoot -ne $ProjectRoot) { Join-Path $RepoRoot 'ccb.py' }
+    ) | Where-Object { Test-Path -LiteralPath $_ }
+    $ccbPyPath = @($ccbPyCandidates)[0]
+    if ($ccbPyPath) {
+        try {
+            $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
+            if (-not $pythonExe) { $pythonExe = 'python' }
+            $killPsi = New-Object System.Diagnostics.ProcessStartInfo
+            $killPsi.FileName = $pythonExe
+            $killPsi.Arguments = (Quote-WindowsProcessArgument -Argument $ccbPyPath) + ' kill -f'
+            $killPsi.WorkingDirectory = $ProjectRoot
+            $killPsi.UseShellExecute = $false
+            $killPsi.CreateNoWindow = $true
+            $killPsi.RedirectStandardOutput = $true
+            $killPsi.RedirectStandardError = $true
+            $killProcess = [System.Diagnostics.Process]::Start($killPsi)
+            if (-not $killProcess.WaitForExit(15000)) {
+                try { $killProcess.Kill() } catch {}
+                Write-Warning 'spike cleanup: ccb kill -f timed out after 15s'
+            } elseif ($killProcess.ExitCode -ne 0) {
+                Write-Warning ('spike cleanup: ccb kill -f exited with code ' + $killProcess.ExitCode)
+            } else {
+                Write-Host 'spike cleanup: ccb kill -f completed'
+            }
+        } catch {
+            Write-Warning ('spike cleanup: ccb kill -f failed: ' + $_.Exception.Message)
+        }
+    } else {
+        Write-Host ('spike cleanup: ccb.py not found in project root or repo root; skipping graceful shutdown')
+    }
+
+    # ── Phase 2: kill tracked start process tree ──
+    if ($TrackedStartPid -gt 0) {
+        try {
+            $proc = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $TrackedStartPid) -ErrorAction SilentlyContinue
+            if ($null -ne $proc) {
+                Write-Host ('spike cleanup: terminating tracked start process tree pid=' + $TrackedStartPid)
+                & taskkill /F /T /PID $TrackedStartPid 2>$null
+                Start-Sleep -Milliseconds 500
+            }
+        } catch {
+            Write-Warning ('spike cleanup: taskkill on tracked start pid ' + $TrackedStartPid + ' failed: ' + $_.Exception.Message)
+        }
+    }
+
+    # ── Phase 3: broad sweep — find ALL processes referencing project/repo paths ──
+    # NOTE: 变量名 `$procId` 有意避开 `$pid` — PowerShell 不区分大小写，
+    # $pid 会覆盖自动变量 $PID，导致自身进程过滤失效。
+    $sweepTargets = @{}
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            $procId = $_.ProcessId
+            if ($procId -eq $PID) { return $false }
+            $cmd = [string] $_.CommandLine
+            if ([string]::IsNullOrWhiteSpace($cmd)) { return $false }
+            $matched = $false
+            foreach ($root in $normalizedPaths) {
+                if ([string]::IsNullOrWhiteSpace($root)) { continue }
+                if ($cmd.IndexOf($root, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                    $matched = $true
+                    break
+                }
+            }
+            return $matched
+        } |
+        ForEach-Object {
+            $sweepTargets[[int] $_.ProcessId] = [string] $_.Name
+        }
+
+    # ── Phase 4: herdr sweep (only outside Herdr UI) ──
+    if (-not $InsideHerdrUi) {
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.ProcessId -ne $PID -and
+                [string] $_.Name -eq 'herdr.exe'
+            } |
+            ForEach-Object {
+                if (-not $sweepTargets.ContainsKey([int] $_.ProcessId)) {
+                    $sweepTargets[[int] $_.ProcessId] = 'herdr.exe'
+                }
+            }
+    } else {
+        Write-Host 'spike cleanup: inside Herdr UI; skipping herdr.exe termination'
+    }
+
+    # ── Phase 5: terminate every collected target with process tree ──
+    foreach ($targetPid in $sweepTargets.Keys) {
+        $targetName = $sweepTargets[$targetPid]
+        Write-Host ('spike cleanup: terminating ' + $targetName + ' (pid=' + $targetPid + ') and its children')
+        try {
+            & taskkill /F /T /PID $targetPid 2>$null
+        } catch {
+            try {
+                Stop-Process -Id $targetPid -Force -ErrorAction SilentlyContinue
+            } catch {}
+        }
+    }
+
+    # ── Phase 6: final verification sweep ──
+    Start-Sleep -Milliseconds 1500
+    $stubborn = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            $procId = $_.ProcessId
+            if ($procId -eq $PID) { return $false }
+            $cmd = [string] $_.CommandLine
+            if ([string]::IsNullOrWhiteSpace($cmd)) { return $false }
+            $matched = $false
+            foreach ($root in $normalizedPaths) {
+                if ([string]::IsNullOrWhiteSpace($root)) { continue }
+                if ($cmd.IndexOf($root, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                    $matched = $true
+                    break
+                }
+            }
+            return $matched
+        })
+    if ($stubborn.Count -gt 0) {
+        $names = ($stubborn | ForEach-Object { "$($_.Name)(pid=$($_.ProcessId))" }) -join ', '
+        Write-Warning "spike cleanup: STUBBORN processes still alive after cleanup: $names"
+        foreach ($proc in $stubborn) {
+            try { & taskkill /F /T /PID $proc.ProcessId 2>$null } catch {}
+        }
+        Start-Sleep -Milliseconds 1000
+    }
+
+    $finalCheck = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            $procId = $_.ProcessId
+            if ($procId -eq $PID) { return $false }
+            $cmd = [string] $_.CommandLine
+            if ([string]::IsNullOrWhiteSpace($cmd)) { return $false }
+            $matched = $false
+            foreach ($root in $normalizedPaths) {
+                if ([string]::IsNullOrWhiteSpace($root)) { continue }
+                if ($cmd.IndexOf($root, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                    $matched = $true
+                    break
+                }
+            }
+            return $matched
+        })
+    if ($finalCheck.Count -eq 0) {
+        Write-Host 'spike cleanup: ALL residual CCB/herdr processes terminated'
+    } else {
+        $remaining = ($finalCheck | ForEach-Object { "$($_.Name)(pid=$($_.ProcessId))" }) -join ', '
+        Write-Warning "spike cleanup: could not terminate: $remaining"
+    }
+}
+
 if ($SelfTest) {
     Invoke-SelfTest
     exit 0
 }
+
+$script:ccbStartPid = 0
+$script:insideHerdrUi = -not [string]::IsNullOrWhiteSpace($env:HERDR_ENV)
+
+try {
 
 $resolvedProject = Resolve-OptionalPath -Path $ProjectRoot -Fallback (Get-Location).ProviderPath
 $resolvedRepo = Resolve-OptionalPath -Path $RepoRoot -Fallback (Get-RepoRootFromScript -ScriptRoot $PSScriptRoot)
@@ -994,7 +1178,9 @@ if ($collectCcbStart) {
         $env:CCB_CCBD_FAULTHANDLER = '1'
         $env:PYTHONUNBUFFERED = '1'
         Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'starting CCB project' -PercentComplete 35 -CurrentOperation $resolvedCcb8
-        $commands += Invoke-DetachedCommand -Name 'ccb8-start-project' -Command @($resolvedCcb8) -WorkingDirectory $resolvedProject -RawDir $rawDir
+        $startResult = Invoke-DetachedCommand -Name 'ccb8-start-project' -Command @($resolvedCcb8) -WorkingDirectory $resolvedProject -RawDir $rawDir
+        $commands += $startResult
+        $script:ccbStartPid = [int] $startResult.process_id
         Start-Sleep -Seconds $PostStartWaitSeconds
     } finally {
         if ($null -eq $oldNoAttach) { Remove-Item Env:CCB_NO_ATTACH -ErrorAction SilentlyContinue } else { $env:CCB_NO_ATTACH = $oldNoAttach }
@@ -1595,3 +1781,19 @@ Write-Utf8NoBom -Path (Join-Path $resolvedOut 'report.md') -Content (($report -j
 $summaryRef = Join-Path $resolvedOut 'summary.json'
 Write-Progress -Id 1 -Activity 'Herdr UI integration spike' -Completed
 Write-Host (('wrote {0} classification={1}' -f $summaryRef, $classification))
+
+} finally {
+    $cleanupProject = if (Test-Path variable:resolvedProject) { $resolvedProject } else { '' }
+    $cleanupRepo = if (Test-Path variable:resolvedRepo) { $resolvedRepo } else { '' }
+    $cleanupCcb8 = if (Test-Path variable:resolvedCcb8) { $resolvedCcb8 } else { '' }
+    $cleanupHerdrUi = if (Test-Path variable:script:insideHerdrUi) { $script:insideHerdrUi } else { $false }
+    $cleanupStartPid = if (Test-Path variable:script:ccbStartPid) { $script:ccbStartPid } else { 0 }
+    try {
+        Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'cleaning up residual CCB/herdr processes' -PercentComplete 100
+        Stop-SpikeResidualProcesses -ProjectRoot $cleanupProject -RepoRoot $cleanupRepo -Ccb8Path $cleanupCcb8 -TrackedStartPid $cleanupStartPid -InsideHerdrUi $cleanupHerdrUi
+    } catch {
+        Write-Warning ('spike cleanup error: ' + $_.Exception.Message)
+    } finally {
+        Write-Progress -Id 1 -Activity 'Herdr UI integration spike' -Completed
+    }
+}

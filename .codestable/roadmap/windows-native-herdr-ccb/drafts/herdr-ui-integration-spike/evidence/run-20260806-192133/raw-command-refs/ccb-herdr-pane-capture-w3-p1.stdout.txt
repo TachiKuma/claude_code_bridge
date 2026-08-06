@@ -1,0 +1,17 @@
+ocket 'D:\.c8\rs\575a971fdf5a0c497a48228040a14841fb452
+9aaa476beb21d34e53f1629bc03\ccbd\ccbd.sock' --project-
+root 'D:\C#Project\GitHub\AvaPrintDesigner' --pane-win
+dow main"
+sh : 无法将“sh”项识别为 cmdlet、函数、脚本文件或可
+运行程序的名称。请检查名称的拼写，如果包括路径，请确
+保路径正确，然后再试一次。
+所在位置 行:1 字符: 1
++ sh -lc "CCB_SIDEBAR_THEME_PROFILE=default 'E:\GitHu
+b开源项目\TachiKuma\cl ...
++ ~~
+    + CategoryInfo          : ObjectNotFound: (sh:St
+   ring) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundExcepti
+   on
+
+PS D:\C#Project\GitHub\AvaPrintDesigner>

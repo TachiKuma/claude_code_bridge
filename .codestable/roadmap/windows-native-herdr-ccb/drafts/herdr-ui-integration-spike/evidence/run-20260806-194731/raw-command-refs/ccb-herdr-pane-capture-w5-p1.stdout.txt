@@ -1,0 +1,20 @@
+er' --pane-window main"
+sh : 无法将“sh”项识别为 cmdl
+et、函数、脚本文件或可运行程序
+的名称。请检查名称的拼写，如果
+包括路径，请确保路径正确，然后
+再试一次。
+所在位置 行:1 字符: 1
++ sh -lc "CCB_SIDEBAR_THEME_PR
+OFILE=default 'E:\GitHub开源项
+目\TachiKuma\cl ...
++ ~~
+    + CategoryInfo          :
+    ObjectNotFound: (sh:Stri
+  ng) [], CommandNotFoundEx
+ ception
+    + FullyQualifiedErrorId :
+    CommandNotFoundException
+
+PS D:\C#Project\GitHub\AvaPrint
+Designer>

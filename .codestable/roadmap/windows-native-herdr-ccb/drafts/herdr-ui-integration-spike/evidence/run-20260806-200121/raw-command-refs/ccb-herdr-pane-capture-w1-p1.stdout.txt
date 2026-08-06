@@ -1,0 +1,20 @@
+ps1" -ProjectRoot "E:\GitHub开源项目\TachiKuma\claude_code_bridge" -ObservedWindowsFlash -ObservedHerdrAgentsPanelText  "codex"
+ Herdr UI integration spike
+    running ccb8-doctor-output
+    E:\GitHub开源项目\TachiKuma\claude_code_bridge\ccb8.cmd doctor --output E:\GitHub开源项目\TachiKuma\claude_code_bridge\.codestable\roadmap\
+    native-herdr-ccb\drafts\herdr-ui-integration-spike\evidence\run-20260806-200121\doctor-output.tar.gz
+PS E:\GitHub开源项目\TachiKuma\claude_code_bridge> & ".codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-ui-integration-spike/run_spike.
+ps1" -ProjectRoot "E:\GitHub开源项目\TachiKuma\claude_code_bridge" -ObservedWindowsFlash -ObservedHerdrAgentsPanelText  "codex"
+ Herdr UI integration spike
+    collecting CCB startup state files
+    [oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo                                     ]
+PS E:\GitHub开源项目\TachiKuma\claude_code_bridge> & ".codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-ui-integration-spike/run_spike.
+ps1" -ProjectRoot "E:\GitHub开源项目\TachiKuma\claude_code_bridge" -ObservedWindowsFlash -ObservedHerdrAgentsPanelText  "codex"
+ Herdr UI integration spike
+    validating pane materialization
+    [oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo                             ]
+PS E:\GitHub开源项目\TachiKuma\claude_code_bridge> & ".codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-ui-integration-spike/run_spike.
+ps1" -ProjectRoot "E:\GitHub开源项目\TachiKuma\claude_code_bridge" -ObservedWindowsFlash -ObservedHerdrAgentsPanelText  "codex"
+ Herdr UI integration spike
+    running ccb-herdr-pane-capture-w1-p1
+    C:\Users\Administrator\AppData\Local\Programs\Herdr\herdr.exe pane read w1:p1 --lines 20 --format text
