@@ -514,7 +514,7 @@ partial: 11  — ask/pend/watch/reload 从 blocked 升级（管道验证通过�
 1. ~~Herdr v0.8.0 兼容性验证~~ ✅ 已完成
 2. ~~C2 架构 ADR~~ ✅ 已写
 3. ~~A-lite / B-lite / bridge config~~ ✅ 已交付
-4. 确认 Herdr auto_restore 默认行为（查 Herdr 文档或测试）
+4. ~~确认 Herdr auto_restore 默认行为~~ ✅ 2026-08-07 双验证完成 → disabled
 5. 提供有效 API 凭证后完成 provider ask/pend/completion 全链路 transcript
 6. doctor/docs 集成（projection consumer 端）
 7. Herdr workspace 累积清理策略

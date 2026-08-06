@@ -1,0 +1,342 @@
+{
+  "version": 3,
+  "workspaces": [
+    {
+      "id": "w3",
+      "custom_name": "ccb-avaprintdesigner-575a971f",
+      "identity_cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner",
+      "public_pane_numbers": {
+        "2": 3,
+        "1": 1,
+        "3": 2
+      },
+      "next_public_pane_number": 5,
+      "public_tab_numbers": [
+        1
+      ],
+      "next_public_tab_number": 2,
+      "tabs": [
+        {
+          "custom_name": null,
+          "layout": {
+            "Split": {
+              "direction": "Horizontal",
+              "ratio": 0.85,
+              "first": {
+                "Split": {
+                  "direction": "Horizontal",
+                  "ratio": 0.67,
+                  "first": {
+                    "Pane": 1
+                  },
+                  "second": {
+                    "Pane": 2
+                  }
+                }
+              },
+              "second": {
+                "Pane": 3
+              }
+            }
+          },
+          "panes": {
+            "1": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            },
+            "2": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            },
+            "3": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            }
+          },
+          "zoomed": false,
+          "focused": 2,
+          "root_pane": 1
+        }
+      ],
+      "active_tab": 0
+    },
+    {
+      "id": "w5",
+      "custom_name": "ccb-avaprintdesigner-575a971f",
+      "identity_cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner",
+      "public_pane_numbers": {
+        "5": 4,
+        "4": 1,
+        "6": 3,
+        "7": 2
+      },
+      "next_public_pane_number": 5,
+      "public_tab_numbers": [
+        1
+      ],
+      "next_public_tab_number": 2,
+      "tabs": [
+        {
+          "custom_name": null,
+          "layout": {
+            "Split": {
+              "direction": "Horizontal",
+              "ratio": 0.85,
+              "first": {
+                "Split": {
+                  "direction": "Horizontal",
+                  "ratio": 0.67,
+                  "first": {
+                    "Split": {
+                      "direction": "Vertical",
+                      "ratio": 0.5,
+                      "first": {
+                        "Pane": 4
+                      },
+                      "second": {
+                        "Pane": 5
+                      }
+                    }
+                  },
+                  "second": {
+                    "Pane": 6
+                  }
+                }
+              },
+              "second": {
+                "Pane": 7
+              }
+            }
+          },
+          "panes": {
+            "5": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            },
+            "4": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            },
+            "6": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            },
+            "7": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            }
+          },
+          "zoomed": false,
+          "focused": 5,
+          "root_pane": 4
+        }
+      ],
+      "active_tab": 0
+    },
+    {
+      "id": "w6",
+      "custom_name": "ccb-avaprintdesigner-575a971f",
+      "identity_cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner",
+      "public_pane_numbers": {
+        "9": 4,
+        "11": 2,
+        "10": 3,
+        "8": 1
+      },
+      "next_public_pane_number": 5,
+      "public_tab_numbers": [
+        1
+      ],
+      "next_public_tab_number": 2,
+      "tabs": [
+        {
+          "custom_name": null,
+          "layout": {
+            "Split": {
+              "direction": "Horizontal",
+              "ratio": 0.85,
+              "first": {
+                "Split": {
+                  "direction": "Horizontal",
+                  "ratio": 0.67,
+                  "first": {
+                    "Split": {
+                      "direction": "Vertical",
+                      "ratio": 0.5,
+                      "first": {
+                        "Pane": 8
+                      },
+                      "second": {
+                        "Pane": 9
+                      }
+                    }
+                  },
+                  "second": {
+                    "Pane": 10
+                  }
+                }
+              },
+              "second": {
+                "Pane": 11
+              }
+            }
+          },
+          "panes": {
+            "10": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            },
+            "11": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            },
+            "9": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            },
+            "8": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            }
+          },
+          "zoomed": false,
+          "focused": 9,
+          "root_pane": 8
+        }
+      ],
+      "active_tab": 0
+    },
+    {
+      "id": "w7",
+      "custom_name": "ccb-avaprintdesigner-575a971f",
+      "identity_cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner",
+      "public_pane_numbers": {
+        "15": 2,
+        "13": 4,
+        "14": 3,
+        "12": 1
+      },
+      "next_public_pane_number": 5,
+      "public_tab_numbers": [
+        1
+      ],
+      "next_public_tab_number": 2,
+      "tabs": [
+        {
+          "custom_name": null,
+          "layout": {
+            "Split": {
+              "direction": "Horizontal",
+              "ratio": 0.85,
+              "first": {
+                "Split": {
+                  "direction": "Horizontal",
+                  "ratio": 0.67,
+                  "first": {
+                    "Split": {
+                      "direction": "Vertical",
+                      "ratio": 0.5,
+                      "first": {
+                        "Pane": 12
+                      },
+                      "second": {
+                        "Pane": 13
+                      }
+                    }
+                  },
+                  "second": {
+                    "Pane": 14
+                  }
+                }
+              },
+              "second": {
+                "Pane": 15
+              }
+            }
+          },
+          "panes": {
+            "13": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            },
+            "12": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            },
+            "14": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            },
+            "15": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            }
+          },
+          "zoomed": false,
+          "focused": 13,
+          "root_pane": 12
+        }
+      ],
+      "active_tab": 0
+    },
+    {
+      "id": "wB",
+      "custom_name": "ccb-avaprintdesigner-575a971f",
+      "identity_cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner",
+      "public_pane_numbers": {
+        "16": 1,
+        "18": 3,
+        "19": 2,
+        "17": 4
+      },
+      "next_public_pane_number": 5,
+      "public_tab_numbers": [
+        1
+      ],
+      "next_public_tab_number": 2,
+      "tabs": [
+        {
+          "custom_name": null,
+          "layout": {
+            "Split": {
+              "direction": "Horizontal",
+              "ratio": 0.85,
+              "first": {
+                "Split": {
+                  "direction": "Horizontal",
+                  "ratio": 0.67,
+                  "first": {
+                    "Split": {
+                      "direction": "Vertical",
+                      "ratio": 0.5,
+                      "first": {
+                        "Pane": 16
+                      },
+                      "second": {
+                        "Pane": 17
+                      }
+                    }
+                  },
+                  "second": {
+                    "Pane": 18
+                  }
+                }
+              },
+              "second": {
+                "Pane": 19
+              }
+            }
+          },
+          "panes": {
+            "18": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            },
+            "19": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            },
+            "17": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            },
+            "16": {
+              "cwd": "D:\\C#Project\\GitHub\\AvaPrintDesigner"
+            }
+          },
+          "zoomed": false,
+          "focused": 17,
+          "root_pane": 16
+        }
+      ],
+      "active_tab": 0
+    }
+  ],
+  "active": 4,
+  "selected": 4,
+  "sidebar_width": 26,
+  "sidebar_section_split": 0.5,
+  "collapsed_space_keys": []
+}

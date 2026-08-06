@@ -1,0 +1,25 @@
+{
+    "captured_at":  "2026-08-06T16:40:15.1936272Z",
+    "project_root":  "D:\\C#Project\\GitHub\\AvaPrintDesigner",
+    "repo_root":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge",
+    "ccb8_path":  "D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.cmd",
+    "herdr_exe":  "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Herdr\\herdr.exe",
+    "herdr_session":  "",
+    "expected_agents":  2,
+    "in_herdr_ui":  true,
+    "herdr_env":  {
+                      "HERDR_ENV":  "1",
+                      "HERDR_PANE_ID":  "w1:p2",
+                      "HERDR_SOCKET_PATH":  "C:\\Users\\Administrator\\AppData\\Roaming\\herdr\\herdr.sock",
+                      "HERDR_STARTUP_CWD":  "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Herdr",
+                      "HERDR_TAB_ID":  "w1:t1",
+                      "HERDR_WORKSPACE_ID":  "w1"
+                  },
+    "powershell_version":  "5.1.19041.6157",
+    "os_version":  "Microsoft Windows NT 10.0.19045.0",
+    "machine_name":  "DESKTOP-Q8BCR5T",
+    "user_domain":  "DESKTOP-Q8BCR5T",
+    "user_name":  "Administrator",
+    "current_directory":  "D:\\C#Project\\GitHub\\AvaPrintDesigner",
+    "working_directory_differs_from_project":  false
+}

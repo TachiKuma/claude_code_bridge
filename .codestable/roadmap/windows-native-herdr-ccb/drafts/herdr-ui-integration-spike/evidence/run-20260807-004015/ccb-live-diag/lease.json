@@ -1,0 +1,31 @@
+{
+  "schema_version": 2,
+  "record_type": "ccbd_lease",
+  "api_version": 2,
+  "project_id": "575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03",
+  "ccbd_pid": 22952,
+  "socket_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\ccbd.sock",
+  "owner_uid": -1,
+  "boot_id": "DESKTOP-Q8BCR5T",
+  "started_at": "2026-08-06T16:40:19.829075Z",
+  "last_heartbeat_at": "2026-08-06T16:40:19.829075Z",
+  "mount_state": "mounted",
+  "generation": 4,
+  "config_signature": "34c9e3c85d122c6ab4fe754397acbe5f9ab0f6f3d1a50b3590effdbdb6206dea",
+  "keeper_pid": 15336,
+  "daemon_instance_id": "8588ebbe6b2248b596585d849f8a751f",
+  "control_plane_endpoint": {
+    "kind": "tcp_loopback",
+    "address": "127.0.0.1:60708",
+    "display": "127.0.0.1:60708",
+    "legacy_socket_path": null,
+    "auth_ref": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\control-plane-token-a8247f6f48d24002.json",
+    "fingerprint": "f5bbb5a4772ef713",
+    "socket_path": null,
+    "host": "127.0.0.1",
+    "port": 60708,
+    "token_ref": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\control-plane-token-a8247f6f48d24002.json",
+    "generation": "5d9bc2e3cb40aa47",
+    "acl_status": "windows-icacls-user-read"
+  }
+}

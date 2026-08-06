@@ -1,0 +1,13 @@
+{
+    "name":  "ccb8-ping-after-ask",
+    "command":  [
+                    "D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.cmd",
+                    "ping",
+                    "agent1"
+                ],
+    "exit_code":  0,
+    "timed_out":  false,
+    "elapsed_ms":  833,
+    "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260807-004015\\raw-command-refs\\ccb8-ping-after-ask.stdout.txt",
+    "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260807-004015\\raw-command-refs\\ccb8-ping-after-ask.stderr.txt"
+}

@@ -48,7 +48,14 @@ remote_publish: final
 ### Epic 子项完成（§12 部分）
 - §12 herdr-supportability-projection ✅ 4b4f96b4（核心模块 + 19 tests，doctor/docs 集成待后续）
 
-### 2026-08-07 采集证据 v2（run-20260807-004015）← 最新
+### 2026-08-07 herdr_auto_restore 双验证 ← 最新
+- **文档验证**: `herdr --default-config` 证实 `[session] resume_agents_on_restore = true`（默认启用）
+- **实证验证**: `config.toml` 写入 `resume_agents_on_restore = false` + `server reload-config applied`
+- **结论**: herdr_auto_restore_mode = **disabled** ✅
+- CCB 为唯一 recovery owner（C2 DEC-7），Herdr agent auto-restore 显式禁用，互不冲突
+- 原始 config.toml 备份: `config.toml.bak-20260807`
+
+### 2026-08-07 采集证据 v2（run-20260807-004015）
 - **19/19 维度全部执行，0 command failures**
   - classification: mounted-with-herdr-panel-observation ✅
 - **pane_state 修复证实**: unknown → **alive**（Herdr liveness fix 在真实环境生效）

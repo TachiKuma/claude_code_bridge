@@ -50,7 +50,9 @@ socket API 和插件系统。
   （run-20260807-004015: 19/19 维度, 0 failures, pane_state=alive 证实修复）
 - ✅ `herdr_version` 已填入（`0.8.0-preview.2026-08-04`）
 - ✅ `ccb_source_status` 已填入（`v8.5.2-source-branch`）
-- ⚠️ `herdr_auto_restore_mode` 仍 unknown（Herdr config.toml 无 auto_restore 字段）
+- ✅ `herdr_auto_restore_mode` = **disabled**（2026-08-07 双验证确认：
+  文档 `herdr --default-config` 证实 `resume_agents_on_restore` 默认 true；
+  实证 `config.toml` 写入 `resume_agents_on_restore = false` + `server reload-config` applied）
 - ⚠️ `ccb doctor --output` 展示 support tier — projection 核心模块已完成，doctor consumer
   端待后续接入
 - ✅ C2 架构 ADR 存在于 `.codestable/adr/001-c2-asymmetric-federation-ccb-herdr.md`
@@ -188,8 +190,8 @@ socket API 和插件系统。
   属于已知的跨工具体验限制。缓解：此限制已在 C2 ADR 中显式记录；若后续 Herdr 原生
   支持 per-pane disable，可通过后续 feature 升级 recovery capability 并更新 support tier。
   DEC-7 已确认不向 Herdr upstream 提需求。
-  **2026-08-07 更新**：`herdr_auto_restore_mode` 仍为 `unknown`——新采集维度
-  `herdr-config-probe` 将在下次采集运行中探测 Herdr config.toml 的实际值。
+  **2026-08-07 已解决**：经文档+实证双验证确认后，`config.toml` 已写入
+  `resume_agents_on_restore = false` 并 `server reload-config` applied，mode=**disabled**。
 - **Herdr viewport / 用户可见 CLI 渲染**（2026-08-07 新增）：
   run-20260807-002147 证实 provider 在 Herdr pane 中正常运行并输出内容（pane read 抓取），
   但用户无法在 Herdr UI 中目视到 CLI 界面。根因是 Herdr viewport/rendering 层面的问题

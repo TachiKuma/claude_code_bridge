@@ -163,7 +163,7 @@ Spike 通过后再进入 `cs-epic`。Spike 未通过时，不应继续做全量 
 2. **support tier 正式化**：✅ §12 核心模块已完成（19 tests），doctor/docs consumer 端待后续
 3. **A-lite / B-lite / bridge config**：✅ ITEM-4/5/6 已交付
 4. **managed/attached/import 模式契约**：✅ 预期语义已写入 ADR-001，精确 contract 留给后续 feature
-5. **Herdr per-pane auto-restore disable**：⚠️ DEC-7 接受全局 disabled；Herdr config.toml 无 auto_restore 字段，默认行为待确认
+5. **Herdr per-pane auto-restore disable**：✅ 2026-08-07 双验证确认，`config.toml` 已写入 `resume_agents_on_restore = false` + `server reload-config applied`，mode=disabled。Herdr 默认 `[session] resume_agents_on_restore = true`，但 CCB agents 无官方 Herdr 集成，auto-restore 不会主动恢复 CCB agents
 
 ## 2026-08-07 19 维度验证 — 事后更新
 
