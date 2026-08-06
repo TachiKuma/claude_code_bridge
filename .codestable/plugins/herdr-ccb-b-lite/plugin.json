@@ -1,0 +1,35 @@
+{
+  "name": "ccb",
+  "version": "0.1.0",
+  "description": "CCB status viewer for Herdr sidebar (B-lite prototype — read-only).",
+  "author": "CodeStable",
+  "homepage": "https://github.com/TachiKuma/claude_code_bridge",
+  "actions": [
+    {
+      "id": "ccb-status",
+      "label": "CCB Status",
+      "command": "ccb",
+      "args": ["ps"],
+      "cwd": "${HERDR_PANE_CWD}",
+      "refresh_ms": 15000,
+      "output": "sidebar-text"
+    },
+    {
+      "id": "ccb-ping",
+      "label": "CCB Ping",
+      "command": "ccb",
+      "args": ["ping", "all"],
+      "cwd": "${HERDR_PANE_CWD}",
+      "refresh_ms": 30000,
+      "output": "sidebar-text"
+    }
+  ],
+  "permissions": {
+    "commands": ["ccb"],
+    "filesystem": "read-only"
+  },
+  "compatibility": {
+    "herdr": ">=0.8.0",
+    "platforms": ["windows", "linux", "macos"]
+  }
+}
