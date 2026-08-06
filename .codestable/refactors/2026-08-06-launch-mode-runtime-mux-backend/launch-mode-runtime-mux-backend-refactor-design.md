@@ -87,11 +87,17 @@ tags:
 - **耦合边界（review 确认）**：herdr 环境整体用 herdr 语义（backend + launch 同源），**无 per-agent backend 需求**——backend 是项目级声明，所有 agent 在同一后端。若未来出现"某 agent 需不同 launch 语义"，再引入 per-agent 覆盖（不在本次范围）。
 - 影响：backend_resolver / api_selection 的输入扩展（config 优先）。
 
-### D3 — herdr 原生 launch 机制（已确认，review 修订 I-1）
-- **用 herdr `pane run` 运行 `build_start_cmd` 命令**：review 核实 `herdr_backend_runtime/cli.py:725 _send_text` 实际调用 `["pane", "run", pane_id, text]`——是在 herdr pane 中**运行命令**（非"模拟键盘输入"）。launch 时把 `build_start_cmd` 的命令经 herdr backend 的 `send_text`（=`pane run`）送进 pane，codex 交互 CLI 接管 pane（可见可输入）。
-- **交互验证点（review 新增）**：需验证 `pane run` 对交互式 codex 的语义——长/多行命令、codex TUI 全屏接管、Ctrl-C 信号转发、codex 退出后 pane 状态。若 `pane run` 不能保持交互前台，则回退到"pane 内启动 shell + send 命令"的组合方案。
-- bridge 作为辅助（`CODEX_TERMINAL` 支持 herdr）。
-- 影响：`runtime_launch_runtime/tmux_runtime.py` 抽象出"launch 后端"接口（tmux/herdr 实现）。
+### D3 — herdr 原生 launch 机制（已确认，实施修订：决策 A）
+- **决策 A（2026-08-06 实施确认）**：改 codex provider 启动模型——**交互式 codex CLI 真正在 herdr pane 里运行**（`pane run "codex -c ..."`），使用户在 herdr UI 可见且可交互；bridge 降级为辅助（保留 RPC，但不再替代 pane CLI）。
+- **现状诊断**：CCB 当前 codex 集成是 **bridge headless**（`runtime_pid = bridge`、`bridge.stdout = "waiting for Claude commands"`、pane 为空 powershell）——与"pane 交互 CLI"目标冲突。launch 的 herdr 分支（`launch_runtime_pane → respawn_pane`）已存在但未让 codex 进 pane（需诊断：respawn 是否执行、codex 命令是否因环境/引号退出）。
+- **根因（2026-08-06 实测确认，已修复）**：`_respawn_pane`（cli.py:532）最终调用 `herdr pane run <pane_id> <command>`，其中 `_command_text`（cli.py:1363）用 `subprocess.list2cmdline(argv)` 把 command **当作 argv** 拼命令行。`_herdr_launch_command` 原实现返回**单条 PowerShell 字符串**（`"& 'sh.exe' 'script.sh'"`），被 list2cmdline 整体加引号 → pane 里 PowerShell 把它当**字符串字面量回显不执行**（实测 pane read 显示 `"& '...'"` 后回到提示符）。修复：返回 argv 片段 `['&', sh_exe, script_path]`，list2cmdline 输出 `& "sh.exe" script.sh`，实测可执行。
+- **实施要点**：
+  1. ~~诊断 `respawn_pane`（herdr `pane run`）为何未让 codex 留在 pane（命令格式/交互 TTY/退出）~~（已诊断：命令被二次引号化；pane 交互 TTY 待实测）
+  2. 让 launch 的 herdr 分支真正 respawn 交互 codex 到 pane（`pane run "codex -c ..."`）；
+  3. bridge 保留为辅助（`CODEX_TERMINAL` 支持 herdr），但不阻塞 pane CLI；
+  4. 隔离非 herdr 环境（tmux）的 codex 行为不受影响。
+- **附带发现（未修，待评估）**：`build_start_cmd` 的 app-server socket 路径（`managed_app_server._managed_shell_command`）在 bash 脚本里是 `'\tmp\ccb-runtime\app-server-*.sock'`（反斜杠形式，`choose_socket_placement` fallback 到 runtime 目录），bash 的 `-S` 检查不匹配 → codex 会 fallback 本地模式（不连 bridge app-server）。不影响"codex 进 pane"（本地交互仍可见），但 bridge RPC 会失效，需单独评估。
+- 影响：`provider_backends/codex/launcher.py` 启动路径、`runtime_launch_runtime/tmux_runtime.py` launch 后端接口、`launch_runtime_pane` herdr 分支、bridge `CODEX_TERMINAL`。
 
 ### D4 — rmux 与 tmux 的关系（**待实现，非本次范围**）
 - **技术验证结论**：rmux 后端在当前代码库**未实现**（`rmux_backend_runtime/` 仅 `__pycache__` 残留；rmux 仅作为 `RequestedBackendV2`/`BackendImplV2` 类型字面量，无 backend 类/工厂）。
