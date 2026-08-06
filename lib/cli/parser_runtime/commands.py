@@ -8,6 +8,7 @@ from cli.models import (
     ParsedCancelCommand,
     ParsedClearCommand,
     ParsedCleanupCommand,
+    ParsedConfigImportHerdrCommand,
     ParsedConfigUiCommand,
     ParsedConfigValidateCommand,
     ParsedDoctorCommand,
@@ -1212,7 +1213,7 @@ def parse_doctor(tokens: list[str], *, project: str | None, error_type) -> Parse
 
 def parse_config(tokens: list[str], *, project: str | None, error_type):
     if not tokens:
-        raise error_type('config supports: validate, effective, migrate, ui')
+        raise error_type('config supports: validate, effective, migrate, ui, import-herdr')
     action = str(tokens[0]).strip().lower()
     if action in {'validate', 'effective'}:
         parser = argparse.ArgumentParser(prog=f'ccb config {action}', add_help=False)
@@ -1256,7 +1257,22 @@ def parse_config(tokens: list[str], *, project: str | None, error_type):
             no_open=bool(namespace.no_open),
             port=int(namespace.port) if namespace.port is not None else None,
         )
-    raise error_type('config supports: validate, effective, migrate, ui')
+    if action == 'import-herdr':
+        parser = argparse.ArgumentParser(prog='ccb config import-herdr', add_help=False)
+        parser.add_argument('--output', dest='output_path')
+        parser.add_argument('--no-dry-run', dest='no_dry_run', action='store_true')
+        namespace = parse_args(
+            parser,
+            tokens[1:],
+            error_message='invalid config import-herdr command',
+            error_type=error_type,
+        )
+        return ParsedConfigImportHerdrCommand(
+            project=project,
+            output_path=str(namespace.output_path) if namespace.output_path else None,
+            dry_run=not bool(namespace.no_dry_run),
+        )
+    raise error_type('config supports: validate, effective, migrate, ui, import-herdr')
 
 
 def parse_reload(tokens: list[str], *, project: str | None, error_type) -> ParsedReloadCommand:

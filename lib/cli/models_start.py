@@ -256,6 +256,14 @@ class ParsedConfigUiCommand:
 
 
 @dataclass(frozen=True)
+class ParsedConfigImportHerdrCommand:
+    project: str | None
+    output_path: str | None = None
+    dry_run: bool = True
+    kind: str = 'config-import-herdr'
+
+
+@dataclass(frozen=True)
 class ParsedReloadCommand:
     project: str | None
     dry_run: bool = False

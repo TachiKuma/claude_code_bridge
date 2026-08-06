@@ -125,4 +125,35 @@ def _terminal_size_for_streams(*streams: object) -> tuple[int, int] | None:
     return None
 
 
-__all__ = ['handle_config_ui', 'handle_config_validate', 'handle_start']
+def handle_config_import_herdr(context, command, out, services) -> int:
+    """A-lite: import Herdr workspace/pane topology as a CCB config draft."""
+    from cli.services.herdr_config_import import import_herdr_config
+
+    project_dir = str(getattr(context, 'project_dir', '') or os.getcwd())
+    result = import_herdr_config(
+        project_dir=project_dir,
+        output_path=command.output_path,
+        dry_run=command.dry_run,
+    )
+    if result.get("ok") is not True:
+        msg = str(result.get("reason") or "import-herdr failed")
+        print(msg, file=sys.stderr)
+        return 1
+    warnings = result.get("warnings")
+    if isinstance(warnings, list) and warnings:
+        for w in warnings:
+            print(f"Warning: {w}", file=sys.stderr)
+    if command.dry_run:
+        print(f"\n# Dry-run: config draft shown above. Use --no-dry-run to write to {result.get('written_path')}",
+              file=sys.stderr)
+    else:
+        print(f"Config draft written to {result.get('written_path')}", file=sys.stderr)
+    return 0
+
+
+__all__ = [
+    'handle_config_import_herdr',
+    'handle_config_ui',
+    'handle_config_validate',
+    'handle_start',
+]
