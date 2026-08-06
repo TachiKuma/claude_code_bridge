@@ -98,7 +98,7 @@ def _launch_with_clock(
         clock.advance_ms(19)
 
     monkeypatch.setattr(tmux_runtime, 'apply_ccb_pane_identity', apply_identity)
-    call = lambda: tmux_runtime.launch_tmux_runtime(
+    call = lambda: tmux_runtime.launch_runtime(
         context,
         object(),
         spec,
@@ -193,7 +193,7 @@ def test_launch_tmux_runtime_uses_herdr_assigned_pane_ref_without_tmux_fallback(
     spec = SimpleNamespace(name='demo', provider='codex')
     plan = SimpleNamespace(workspace_path=tmp_path / 'workspace')
 
-    timings = tmux_runtime.launch_tmux_runtime(
+    timings = tmux_runtime.launch_runtime(
         context,
         object(),
         spec,
@@ -212,10 +212,14 @@ def test_launch_tmux_runtime_uses_herdr_assigned_pane_ref_without_tmux_fallback(
     )
 
     assert timings['tmux_respawn'] >= 0
-    assert calls[0] == (
-        'respawn_pane',
-        (pane_ref, ['provider start --flag'], str(plan.workspace_path), {}),
-    )
+    assert calls[0][0] == 'respawn_pane'
+    assert calls[0][1][0] == pane_ref
+    # herdr launch command 可能被 _herdr_launch_command 包装为 ['&', sh_exe, script_path]
+    # 或直接为 ['provider start --flag']（sh.exe 不可用时）
+    cmd = calls[0][1][1]
+    assert isinstance(cmd, list) and len(cmd) > 0
+    assert calls[0][1][2] == str(plan.workspace_path)
+    assert calls[0][1][3] == {}
     assert calls[1][0] == 'capture_pane'
     assert calls[2][0] == 'set_pane_identity'
     assert calls[2][1][0] == pane_ref
@@ -256,7 +260,7 @@ def test_ensure_runtime_skips_tmux_tool_check_for_herdr_assigned_pane(monkeypatc
         binding_runtime_alive_fn=lambda binding: False,
         provider_executable_fn=lambda provider: provider,
         cleanup_stale_tmux_binding_fn=lambda binding: None,
-        launch_tmux_runtime_fn=launch,
+        launch_runtime_fn=launch,
         resolve_agent_binding_fn=lambda **kwargs: binding,
         assigned_pane_ref=pane_ref,
         namespace_backend_impl='herdr',
@@ -319,7 +323,7 @@ def test_ensure_runtime_adds_binding_resolve_and_supports_legacy_result(monkeypa
         binding_runtime_alive_fn=lambda binding: False,
         provider_executable_fn=lambda provider: provider,
         cleanup_stale_tmux_binding_fn=lambda binding: None,
-        launch_tmux_runtime_fn=launch,
+        launch_runtime_fn=launch,
         resolve_agent_binding_fn=resolve,
     )
     context = SimpleNamespace(project=SimpleNamespace(project_root='/tmp/project'))

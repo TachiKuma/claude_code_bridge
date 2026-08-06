@@ -298,3 +298,56 @@ test/test_config_runtime_mux_backend.py: 41 passed in 0.46s
 ### Verdict
 
 **passed** — 纯测试新增，design aligned，41/41 通过。focused closure 条件满足：round 2 reviewer 锚点有效（`subagent+ocr`），diff 归因明确（test-only），无行为变更。
+
+## 7. Launch 后端抽象层 Review（Round 4）
+
+审查日期：2026-08-06
+审查类型：完整独立复审（material production code changes + test updates）
+reviewer: subagent（Lane A Task agent）；OCR 不可用（超时），跳过 Lane B
+审查范围：8 files，+126/-31
+
+### 变更归因
+
+§9 第 2 步实施：将 `launch_tmux_runtime` 重构为显式多后端 `launch_runtime`：
+
+| 文件 | 改动 |
+|---|---|
+| `tmux_backend.py` | 新增 `_is_herdr_launch()`；`tmux_backend()` → `create_tmux_backend()`（保留别名） |
+| `tmux_runtime.py` | 新增 sentinel 回调 + `_create_runtime_backend()`；`launch_tmux_runtime()` → `launch_runtime()`；Stage 2/3 herdr 分发 |
+| `ensure.py` | `launch_tmux_runtime_fn` → `launch_runtime_fn`；IM-1 修复 |
+| `runtime_launch.py` | 接线名称对齐 |
+| `__init__.py` | `launch_runtime` 为主导出，`launch_tmux_runtime` 为别名 |
+| `bridge.py` | `_backend_is_herdr()` 改用 `backend_impl` 属性；`write_pane_pid()` 同步 |
+| 测试文件 | 函数名/参数名对齐 |
+
+### Lane A 独立审查发现
+
+**IM-1 — `ensure.py` `_is_herdr_runtime_launch` 检测不一致**（已修复）
+
+原代码 `del namespace_backend_impl` 仅通过 `assigned_pane_ref` 判断 herdr，与 `tmux_backend._is_herdr_launch` 的双源检测不一致。修复为一致逻辑：先 `namespace_backend_impl`，再 `assigned_pane_ref`。
+
+**NIT-1** — 三个语义近似的 herdr 检测函数（`_is_herdr_launch` / `_is_herdr_pane_ref` / `_is_herdr_runtime_launch`），服务于不同调用点，接受为合理设计。
+
+**NIT-2** — `tmux_runtime.py` `backend_is_herdr` 在 `_create_runtime_backend` 内部已判断 + Stage 3 重复判断，接受为轻量重复计算（无 IO 负担）。
+
+**NIT-3** — 测试函数名仍用 `test_launch_tmux_runtime_*` 前缀，接受为延后清理（不影响功能）。
+
+### 本地核验
+
+- `HerdrBackend.backend_impl = "herdr"` 类属性确认（`herdr_backend.py:21`）
+- `TmuxBackend` 无 `backend_impl` 属性确认
+- `launch_tmux_runtime` 别名链完整（`__init__.py` + `__all__`）
+- 全局 grep 无遗漏的 `launch_tmux_runtime` 生产代码调用方
+- B2（`startswith('tmux:')` 硬编码）为已知架构限制，不在本次范围
+
+### 测试结果
+
+```
+test/test_runtime_launch_timings.py: 7 passed
+test/test_mux_backend_contract.py:   8 passed
+test/test_config_runtime_mux_backend.py: 41 passed
+```
+
+### Verdict
+
+**passed** — IM-1 已修复，无 blocking。herdr 派发正确、向后兼容完整、设计对齐。

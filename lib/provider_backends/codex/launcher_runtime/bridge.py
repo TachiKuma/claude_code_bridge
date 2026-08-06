@@ -30,10 +30,10 @@ def post_launch(backend: object, pane_id: str, runtime_dir: Path, launch_session
 def _backend_is_herdr(backend: object) -> bool:
     """检测 backend 是否为 herdr-native 后端。
 
-    herdr backend 无 ``_tmux_run``（tmux 专属方法），以此为信号检测。
-    与 ``write_pane_pid`` 的检测逻辑保持一致。
+    通过 ``backend_impl`` 类/实例属性显式检测，而非依赖方法存在性判断。
+    HerdrBackend 设 ``backend_impl = "herdr"``，TmuxBackend 无此属性。
     """
-    return not callable(getattr(backend, '_tmux_run', None))
+    return str(getattr(backend, 'backend_impl', '') or '').strip() == 'herdr'
 
 
 def spawn_codex_bridge(*, runtime_dir: Path, pane_id: str, prepared_state: dict[str, object] | None = None) -> None:
@@ -109,8 +109,10 @@ def validate_bridge_bootstrap(runtime_dir: Path) -> None:
 
 
 def write_pane_pid(backend: object, pane_id: str, path: Path) -> None:
-    # herdr backend 没有 _tmux_run；交互 codex 已通过 respawn 进 herdr pane，
+    # herdr backend 通过 respawn 把 codex 交互 CLI 已送进 pane；
     # bridge 为辅助 RPC，PID 缺失不阻塞 launch（design D3 决策 A）。
+    if _backend_is_herdr(backend):
+        return
     run_fn = getattr(backend, '_tmux_run', None)
     if not callable(run_fn):
         return

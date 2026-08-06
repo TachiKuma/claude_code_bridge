@@ -26,7 +26,7 @@ def ensure_agent_runtime(
     binding_runtime_alive_fn,
     provider_executable_fn,
     cleanup_stale_tmux_binding_fn,
-    launch_tmux_runtime_fn,
+    launch_runtime_fn,
     resolve_agent_binding_fn,
     assigned_pane_id: str | None = None,
     assigned_pane_ref: dict[str, object] | None = None,
@@ -68,7 +68,7 @@ def ensure_agent_runtime(
             launch_kwargs['namespace_ref'] = namespace_ref
         if namespace_backend_impl is not None:
             launch_kwargs['namespace_backend_impl'] = namespace_backend_impl
-        launch_timings = launch_tmux_runtime_fn(
+        launch_timings = launch_runtime_fn(
             context,
             command,
             spec,
@@ -151,10 +151,16 @@ def _is_herdr_runtime_launch(
     namespace_backend_impl: str | None,
     assigned_pane_ref,
 ) -> bool:
-    del namespace_backend_impl
-    if not isinstance(assigned_pane_ref, dict):
-        return False
-    return str(assigned_pane_ref.get('backend_impl') or '').strip() == 'herdr'
+    """判断当前启动是否为 herdr 后端。
+
+    优先 ``namespace_backend_impl``，其次 ``assigned_pane_ref['backend_impl']``。
+    与 ``tmux_backend._is_herdr_launch`` 保持一致的检测逻辑。
+    """
+    if str(namespace_backend_impl or '').strip() == 'herdr':
+        return True
+    if isinstance(assigned_pane_ref, dict):
+        return str(assigned_pane_ref.get('backend_impl') or '').strip() == 'herdr'
+    return False
 
 
 def _resolve_refreshed_binding(*, context, spec, plan, resolve_agent_binding_fn):

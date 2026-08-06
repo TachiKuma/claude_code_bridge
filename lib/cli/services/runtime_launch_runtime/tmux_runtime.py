@@ -5,7 +5,7 @@ from time import monotonic_ns
 
 from terminal_runtime.tmux_identity import apply_ccb_pane_identity
 
-from .tmux_backend import prepared_state, run_cwd, tmux_backend
+from .tmux_backend import _is_herdr_launch, create_tmux_backend, prepared_state, run_cwd
 from .pane_runtime import launch_runtime_pane, pane_runtime_id
 from .tmux_panes import (
     best_effort_kill_tmux_pane,
@@ -16,7 +16,43 @@ from .tmux_panes import (
 )
 
 
-def launch_tmux_runtime(
+def _assert_tmux_only_fn(*args, **kwargs):
+    """Sentinel: herdr 路径下不应调用 tmux 专用回调（如 create_detached_tmux_pane）。
+
+    若触发说明 herdr launch 缺少 assigned_pane_ref → 误入 tmux pane 分配路径。
+    """
+    raise RuntimeError(
+        'tmux-specific callback invoked on herdr backend path '
+        '(herdr launch should use assigned_pane_ref, not dynamically allocate tmux panes)'
+    )
+
+
+def _noop(*args, **kwargs):
+    """No-op: herdr 路径下的无害占位回调。"""
+    pass
+
+
+def _create_runtime_backend(
+    backend_factory,
+    tmux_socket_path: str | None,
+    *,
+    namespace_backend_impl: str | None = None,
+    assigned_pane_ref: object = None,
+):
+    """按后端类型创建 runtime backend 实例。
+
+    herdr 路径：直接调用 ``backend_factory()``（无需 socket path）。
+    tmux 路径：经 ``create_tmux_backend()`` 创建（支持 socket path 注入）。
+    """
+    if _is_herdr_launch(
+        namespace_backend_impl=namespace_backend_impl,
+        assigned_pane_ref=assigned_pane_ref,
+    ):
+        return backend_factory()
+    return create_tmux_backend(backend_factory, tmux_socket_path)
+
+
+def launch_runtime(
     context,
     command,
     spec,
@@ -63,7 +99,12 @@ def launch_tmux_runtime(
                 )
         finally:
             _record_elapsed_ms(timings_ms, 'prepare_launch_context', stage_started_ns)
-        backend = tmux_backend(backend_factory, tmux_socket_path)
+        backend = _create_runtime_backend(
+            backend_factory,
+            tmux_socket_path,
+            namespace_backend_impl=namespace_backend_impl,
+            assigned_pane_ref=assigned_pane_ref,
+        )
         pane_title_marker = pane_title_marker_fn(context, spec)
 
         stage_started_ns = monotonic_ns()
@@ -80,6 +121,10 @@ def launch_tmux_runtime(
 
         stage_started_ns = monotonic_ns()
         try:
+            backend_is_herdr = _is_herdr_launch(
+                namespace_backend_impl=namespace_backend_impl,
+                assigned_pane_ref=assigned_pane_ref,
+            )
             pane = launch_runtime_pane(
                 backend,
                 spec_name=spec.name,
@@ -87,10 +132,18 @@ def launch_tmux_runtime(
                 assigned_pane_ref=assigned_pane_ref,
                 start_cmd=start_cmd,
                 run_cwd=runtime_cwd,
-                create_detached_tmux_pane_fn=create_detached_tmux_pane_fn,
-                pane_meets_minimum_size_fn=pane_meets_minimum_size_fn,
-                best_effort_kill_tmux_pane_fn=best_effort_kill_tmux_pane_fn,
-                allow_detached_fallback=allow_detached_fallback,
+                create_detached_tmux_pane_fn=(
+                    _assert_tmux_only_fn if backend_is_herdr else create_detached_tmux_pane_fn
+                ),
+                pane_meets_minimum_size_fn=(
+                    _noop if backend_is_herdr else pane_meets_minimum_size_fn
+                ),
+                best_effort_kill_tmux_pane_fn=(
+                    _noop if backend_is_herdr else best_effort_kill_tmux_pane_fn
+                ),
+                allow_detached_fallback=(
+                    False if backend_is_herdr else allow_detached_fallback
+                ),
             )
             pane_id = pane_runtime_id(pane)
         finally:
@@ -245,7 +298,7 @@ def _attach_startup_timings(exc: Exception, timings_ms: dict[str, float]) -> Non
 __all__ = [
     'best_effort_kill_tmux_pane',
     'create_detached_tmux_pane',
-    'launch_tmux_runtime',
+    'launch_runtime',
     'pane_meets_minimum_size',
     'prepare_detached_tmux_server',
 ]

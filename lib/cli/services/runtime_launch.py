@@ -30,7 +30,7 @@ from .runtime_launch_runtime import (
     create_detached_tmux_pane as _create_detached_tmux_pane_impl,
     ensure_agent_runtime as _ensure_agent_runtime_impl,
     launch_session_id as _launch_session_id_impl,
-    launch_tmux_runtime as _launch_tmux_runtime_impl,
+    launch_runtime as _launch_runtime_impl,
     pane_meets_minimum_size as _pane_meets_minimum_size_impl,
     pane_title_marker as _pane_title_marker_impl,
     runtime_launcher as _runtime_launcher_impl,
@@ -107,7 +107,7 @@ def ensure_agent_runtime(
         binding_runtime_alive_fn=_binding_runtime_alive,
         provider_executable_fn=_provider_executable,
         cleanup_stale_tmux_binding_fn=_cleanup_stale_tmux_binding,
-        launch_tmux_runtime_fn=_launch_tmux_runtime,
+        launch_runtime_fn=_launch_runtime,
         resolve_agent_binding_fn=resolve_agent_binding,
         assigned_pane_id=assigned_pane_id,
         assigned_pane_ref=assigned_pane_ref,
@@ -126,7 +126,7 @@ def effective_start_command(command: ParsedStartCommand, spec: AgentSpec) -> Par
     return command
 
 
-def _launch_tmux_runtime(
+def _launch_runtime(
     context: CliContext,
     command: ParsedStartCommand,
     spec: AgentSpec,
@@ -140,7 +140,7 @@ def _launch_tmux_runtime(
     tmux_socket_path: str | None = None,
     namespace_backend_impl: str | None = None,
 ) -> dict[str, float]:
-    return _launch_tmux_runtime_impl(
+    return _launch_runtime_impl(
         context,
         command,
         spec,
