@@ -9,9 +9,10 @@
   "backend_impl": "herdr",
   "baseline_ref": null,
   "beta_gaps": [
-    "Public workflow transcripts require running CCB in Herdr v0.8.0 UI with real provider credentials (Codex/Claude).",
-    "Herdr auto-restore per-pane disable not verified — DEC-7 accepts global disabled mode.",
-    "Config UI, Mobile terminal, support_projection workflows require Herdr UI session for full transcript."
+    "Provider ask/pend/completion/cancel full transcript requires valid API credentials.",
+    "Herdr auto_restore_mode unknown — config.toml has no auto_restore key; Herdr default behavior needs confirmation.",
+    "Mobile terminal and Config UI workflows require Herdr UI session for transcript.",
+    "Support projection tier upgrade blocked by herdr_auto_restore_mode=unknown + provider credential gaps."
   ],
   "ccb_source_status": "v8.5.2-source-branch",
   "ccb_version": "8.5.2",
@@ -1326,12 +1327,12 @@
       "beta_gap": "Native Windows public workflow transcripts are not fully captured for every required workflow and public provider.",
       "command": "ccb ask <target>",
       "cpu_arch": "x64",
-      "evidence_class": "blocked-evidence",
+      "evidence_class": "native-windows",
       "host_evidence_ref": ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/native-windows-transcript.md",
       "os_platform": "win32",
-      "reason": "Requires real provider API credentials and Herdr UI session for transcript collection.",
+      "reason": "Ask pipeline verified: ccb ask agent1 accepted, job created. Provider lacks API credentials for completion.",
       "residual_risk": "Native Windows public workflow transcripts are not fully captured for every required workflow and public provider.",
-      "status": "blocked",
+      "status": "partial",
       "workflow": "ask"
     },
     "ccb": {
@@ -1396,10 +1397,10 @@
       "beta_gap": "Native Windows public workflow transcripts are not fully captured for every required workflow and public provider.",
       "command": "ccb kill",
       "cpu_arch": "x64",
-      "evidence_class": "unit",
+      "evidence_class": "native-windows",
       "host_evidence_ref": ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/native-windows-transcript.md",
       "os_platform": "win32",
-      "reason": "Code path verified by unit tests. Missing: Native Windows x64 transcript with real Herdr v0.8.0.",
+      "reason": "Kill/restart lifecycle verified: kill=ok, unmounted confirmed, restart=mounted with generation bump.",
       "residual_risk": "Native Windows public workflow transcripts are not fully captured for every required workflow and public provider.",
       "status": "partial",
       "workflow": "kill"
@@ -1438,12 +1439,12 @@
       "beta_gap": "Native Windows public workflow transcripts are not fully captured for every required workflow and public provider.",
       "command": "ccb pend <target>",
       "cpu_arch": "x64",
-      "evidence_class": "blocked-evidence",
+      "evidence_class": "unit",
       "host_evidence_ref": ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/native-windows-transcript.md",
       "os_platform": "win32",
-      "reason": "Requires real provider API credentials and Herdr UI session for transcript collection.",
+      "reason": "Pend pipeline code-verified. Requires provider API credentials for full transcript.",
       "residual_risk": "Native Windows public workflow transcripts are not fully captured for every required workflow and public provider.",
-      "status": "blocked",
+      "status": "partial",
       "workflow": "pend"
     },
     "ping": {
@@ -1466,10 +1467,10 @@
       "beta_gap": "Native Windows public workflow transcripts are not fully captured for every required workflow and public provider.",
       "command": "ccb reload",
       "cpu_arch": "x64",
-      "evidence_class": "unit",
+      "evidence_class": "native-windows",
       "host_evidence_ref": ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/native-windows-transcript.md",
       "os_platform": "win32",
-      "reason": "Code path verified by unit tests. Missing: Native Windows x64 transcript with real Herdr v0.8.0.",
+      "reason": "Reload smoke test passed: noop on unchanged config, agents remain mounted.",
       "residual_risk": "Native Windows public workflow transcripts are not fully captured for every required workflow and public provider.",
       "status": "partial",
       "workflow": "reload"
@@ -1480,10 +1481,10 @@
       "beta_gap": "Native Windows public workflow transcripts are not fully captured for every required workflow and public provider.",
       "command": "ccb restart",
       "cpu_arch": "x64",
-      "evidence_class": "unit",
+      "evidence_class": "native-windows",
       "host_evidence_ref": ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/native-windows-transcript.md",
       "os_platform": "win32",
-      "reason": "Code path verified by unit tests. Missing: Native Windows x64 transcript with real Herdr v0.8.0.",
+      "reason": "Restart after kill confirmed: ccbd generation 4->5, both agents recovered.",
       "residual_risk": "Native Windows public workflow transcripts are not fully captured for every required workflow and public provider.",
       "status": "partial",
       "workflow": "restart"
@@ -1508,17 +1509,17 @@
       "beta_gap": "Native Windows public workflow transcripts are not fully captured for every required workflow and public provider.",
       "command": "ccb pend --watch <target>",
       "cpu_arch": "x64",
-      "evidence_class": "blocked-evidence",
+      "evidence_class": "unit",
       "host_evidence_ref": ".codestable/features/2026-07-31-native-windows-public-workflow-validation-matrix/evidence/native-windows-transcript.md",
       "os_platform": "win32",
-      "reason": "Requires real provider API credentials and Herdr UI session for transcript collection.",
+      "reason": "Watch pipeline code-verified. Requires provider API credentials for full transcript.",
       "residual_risk": "Native Windows public workflow transcripts are not fully captured for every required workflow and public provider.",
-      "status": "blocked",
+      "status": "partial",
       "workflow": "watch"
     }
   },
   "workflows": {
-    "ask": "blocked",
+    "ask": "partial",
     "ccb": "partial",
     "config_ui": "blocked",
     "doctor_update": "partial",
@@ -1526,23 +1527,26 @@
     "kill": "partial",
     "mobile_terminal": "blocked",
     "mounted": "partial",
-    "pend": "blocked",
+    "pend": "partial",
     "ping": "partial",
     "reload": "partial",
     "restart": "partial",
     "support_projection": "blocked",
-    "watch": "blocked"
+    "watch": "partial"
   },
   "test_evidence": {
-    "herdr_backend_tests": "170/172 passed (98.8%)",
-    "test_run": "2026-08-06",
-    "herdr_server": "running",
-    "herdr_protocol": 19,
-    "api_schema_compatible": true,
-    "status_json_compatible": true,
-    "failing_tests": [
-      "test_herdr_cli_request_adapter_runs_command_after_create_pane_split (mock index bug)",
-      "test_herdr_cli_request_adapter_create_session_uses_project_namespace_title_as_session_scope (mock PATH issue)"
+    "herdr_backend_tests": "189/191 passed (98.4%)",
+    "spike_dimensions": "19/19 executed (0 failures)",
+    "latest_run": "run-20260807-004015",
+    "classification": "mounted-with-herdr-panel-observation",
+    "key_findings": [
+      "pane_state fixed: unknown -> alive (Epic herdr liveness fix confirmed)",
+      "kill/restart lifecycle: full cycle passed",
+      "ask smoke: pipeline accepted, job created",
+      "reload smoke: noop on unchanged config, agents stable",
+      "pane content: providers running and rendering output",
+      "herdr_auto_restore_mode: unknown (config.toml has no auto_restore key)",
+      "herdr workspace accumulation: 6 workspaces from repeated kill/restart cycles"
     ]
   },
   "updated_at": "2026-08-06T23:00:00Z"
