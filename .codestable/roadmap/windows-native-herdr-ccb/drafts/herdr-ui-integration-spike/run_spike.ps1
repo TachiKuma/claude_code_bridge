@@ -10,9 +10,9 @@ param(
     [switch] $ObservedWindowsFlash,
     [switch] $AllowNonHerdrUi,
     [switch] $SelfTest,
-    [ValidateSet('herdr-baseline', 'wrapper-file-check', 'ccb-diagnose', 'process-samples', 'ccb-start', 'post-start-herdr', 'ccb-ping', 'ccb-layout', 'startup-state-files', 'pane-verification', 'backend-route', 'herdr-v0.8-probe')]
+    [ValidateSet('herdr-baseline', 'wrapper-file-check', 'ccb-diagnose', 'process-samples', 'ccb-start', 'post-start-herdr', 'ccb-ping', 'ccb-layout', 'startup-state-files', 'pane-verification', 'backend-route', 'herdr-v0.8-probe', 'ccb-live-diag')]
     [string[]] $OnlyDimension = @(),
-    [ValidateSet('herdr-baseline', 'wrapper-file-check', 'ccb-diagnose', 'process-samples', 'ccb-start', 'post-start-herdr', 'ccb-ping', 'ccb-layout', 'startup-state-files', 'pane-verification', 'backend-route', 'herdr-v0.8-probe')]
+    [ValidateSet('herdr-baseline', 'wrapper-file-check', 'ccb-diagnose', 'process-samples', 'ccb-start', 'post-start-herdr', 'ccb-ping', 'ccb-layout', 'startup-state-files', 'pane-verification', 'backend-route', 'herdr-v0.8-probe', 'ccb-live-diag')]
     [string[]] $SkipDimension = @(),
     [ValidateRange(1, 500)]
     [int] $PaneCaptureLines = 20,
@@ -35,7 +35,8 @@ $script:SpikeDimensions = @(
     'startup-state-files',
     'pane-verification',
     'backend-route',
-    'herdr-v0.8-probe'
+    'herdr-v0.8-probe',
+    'ccb-live-diag'
 )
 
 function Write-Utf8NoBom {
@@ -82,6 +83,14 @@ function Append-Utf8NoBom {
         New-Item -ItemType Directory -Force -Path $parent | Out-Null
     }
     [System.IO.File]::AppendAllText($Path, $Content, $script:Utf8NoBom)
+}
+
+function Read-Utf8Json {
+    param(
+        [string] $Path
+    )
+    $text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
+    return ($text | ConvertFrom-Json)
 }
 
 function Redact-Text {
@@ -708,6 +717,77 @@ function Get-HostContext {
     }
 }
 
+function Invoke-CcbLiveDiagnostics {
+    param(
+        [string] $ProjectRoot,
+        [string] $OutDir,
+        [string] $HerdrExe
+    )
+    $diagDir = Join-Path $OutDir 'ccb-live-diag'
+    New-Item -ItemType Directory -Force -Path $diagDir | Out-Null
+
+    $projectId = $null
+    $runtimeRoot = $null
+    $refPath = Join-Path $ProjectRoot '.ccb\runtime-root-ref.json'
+    if (Test-Path -LiteralPath $refPath) {
+        try {
+            $ref = Read-Utf8Json -Path $refPath
+            $projectId = [string]$ref.project_id
+            $runtimeRoot = [string]$ref.runtime_state_root
+        } catch {}
+    }
+
+    # 1. 进程全景（python/codex/pwsh/powershell/cmd/node + parent + cmdline）——区分 source-dev vs 旧 ccb
+    $procRecords = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -in @('python.exe','codex.exe','pwsh.exe','powershell.exe','cmd.exe','node.exe') } |
+        ForEach-Object {
+            [ordered]@{ pid=$_.ProcessId; parent_pid=$_.ParentProcessId; name=$_.Name; command_line=(Redact-Text -Text ([string]$_.CommandLine)) }
+        })
+    Write-Utf8NoBom -Path (Join-Path $diagDir 'processes.json') -Content (($procRecords | ConvertTo-Json -Depth 10) + "`r`n")
+
+    # 2. ccbd 状态文件 + agent runtime
+    $sessionName = $null
+    if ($runtimeRoot) {
+        $ccbdDir = Join-Path $runtimeRoot 'ccbd'
+        if (Test-Path -LiteralPath $ccbdDir) {
+            foreach ($f in @('lease.json','lifecycle.json','keeper.json','startup-report.json','shutdown-report.json','lifecycle.jsonl','state.json','ccbd.stderr.log','keeper.stderr.log','supervision.jsonl')) {
+                $src = Join-Path $ccbdDir $f
+                if (Test-Path -LiteralPath $src) { Copy-Item -LiteralPath $src -Destination (Join-Path $diagDir $f) -Force }
+            }
+            try { $ns = Read-Utf8Json -Path (Join-Path $ccbdDir 'state.json'); $sessionName = [string]$ns.namespace_session_name } catch {}
+        }
+        $agentsDir = Join-Path $runtimeRoot 'agents'
+        if (Test-Path -LiteralPath $agentsDir) {
+            Get-ChildItem -LiteralPath $agentsDir -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                $rt = Join-Path $_.FullName 'runtime.json'
+                if (Test-Path -LiteralPath $rt) { Copy-Item -LiteralPath $rt -Destination (Join-Path $diagDir ("agent-{0}-runtime.json" -f $_.Name)) -Force }
+            }
+        }
+    }
+
+    # 3. herdr CCB 会话 pane 前台进程 + pane read（codex 是否进 pane / 启动错误）
+    if ($sessionName -and $HerdrExe) {
+        $wsOut = & $HerdrExe workspace list --session $sessionName 2>$null | Out-String
+        Write-Utf8NoBom -Path (Join-Path $diagDir 'herdr-workspaces.json') -Content $wsOut
+        $paneOut = & $HerdrExe pane list --session $sessionName 2>$null | Out-String
+        Write-Utf8NoBom -Path (Join-Path $diagDir 'herdr-panes.json') -Content $paneOut
+        try {
+            $paneList = $paneOut | ConvertFrom-Json -ErrorAction Stop
+            foreach ($p in @($paneList.result.panes)) {
+                $paneId = [string]$p.pane_id
+                if (-not $paneId) { continue }
+                $safe = $paneId.Replace(':','_')
+                $pi = & $HerdrExe pane process-info --pane $paneId --session $sessionName 2>$null | Out-String
+                Write-Utf8NoBom -Path (Join-Path $diagDir ("pane-{0}-process-info.txt" -f $safe)) -Content $pi
+                $pr = & $HerdrExe pane read --pane $paneId --session $sessionName 2>$null | Out-String
+                Write-Utf8NoBom -Path (Join-Path $diagDir ("pane-{0}-read.txt" -f $safe)) -Content $pr
+            }
+        } catch {}
+    }
+
+    Write-Utf8NoBom -Path (Join-Path $diagDir 'meta.txt') -Content (("project_id: " + $projectId + "`r`n") + ("runtime_root: " + $runtimeRoot + "`r`n") + ("herdr_session: " + $sessionName + "`r`n"))
+}
+
 function Get-HerdrArgs {
     param([string] $Session)
     if ([string]::IsNullOrWhiteSpace($Session)) {
@@ -920,6 +1000,18 @@ if ($collectCcbStart) {
         if ($null -eq $oldNoAttach) { Remove-Item Env:CCB_NO_ATTACH -ErrorAction SilentlyContinue } else { $env:CCB_NO_ATTACH = $oldNoAttach }
         if ($null -eq $oldFault) { Remove-Item Env:CCB_CCBD_FAULTHANDLER -ErrorAction SilentlyContinue } else { $env:CCB_CCBD_FAULTHANDLER = $oldFault }
         if ($null -eq $oldUnbuffered) { Remove-Item Env:PYTHONUNBUFFERED -ErrorAction SilentlyContinue } else { $env:PYTHONUNBUFFERED = $oldUnbuffered }
+    }
+}
+
+# ccb-live-diag：ccbd 启动后采集 pane 前台进程 / pane read / agent runtime / 进程全景 / ccbd 日志，
+# 用于诊断"codex 是否进 pane"与 stop_all 触发源。
+$collectLiveDiag = Test-SpikeDimensionEnabled -Dimension 'ccb-live-diag' -EnabledDimensions $enabledDimensions
+if ($collectLiveDiag) {
+    Start-Sleep -Seconds 3
+    try {
+        Invoke-CcbLiveDiagnostics -ProjectRoot $resolvedProject -OutDir $resolvedOut -HerdrExe $resolvedHerdr
+    } catch {
+        Write-Warning ('ccb-live-diag failed: ' + $_.Exception.Message)
     }
 }
 
