@@ -213,3 +213,340 @@ def test_v3_runtime_mux_backend_absent() -> None:
 def test_v3_runtime_mux_backend_rejects_invalid(payload) -> None:
     with pytest.raises(ConfigValidationError):
         _parse_runtime_mux_backend_v3(payload, path='workflow.runtime.mux')
+
+
+# ═══════════════════════════════════════════════════════════════════
+# VA-1: 无 runtime.mux 配置 → env 检测回退
+# ═══════════════════════════════════════════════════════════════════
+
+
+def test_va1_config_absence_clears_env_and_falls_to_detection(monkeypatch) -> None:
+    """VA-1: 无 runtime.mux 配置时 env var 不被设置，get_backend 回退到终端检测。
+
+    验证链条：config 缺失 → _propagate_runtime_mux_backend(None)
+    → pop CCB_RUNTIME_MUX_BACKEND → get_backend() 因无 env var
+    回退到 detect_terminal()。
+    """
+    import os
+
+    from agents.config_loader_runtime.io_runtime.documents import _propagate_runtime_mux_backend
+    import terminal_runtime.api as terminal_api
+
+    # 清除 env var 和模块级缓存
+    monkeypatch.delenv('CCB_RUNTIME_MUX_BACKEND', raising=False)
+    monkeypatch.setattr(terminal_api, '_backend_cache', None)
+    monkeypatch.setattr(terminal_api, '_backend_cache_key', None)
+    monkeypatch.setattr(terminal_api, '_backend_config_preference', None)
+
+    # 模拟 config 缺失路径
+    _propagate_runtime_mux_backend(None)
+
+    # env var 被清除（设计保证不残留）
+    assert 'CCB_RUNTIME_MUX_BACKEND' not in os.environ
+
+    # 模拟终端检测被触发
+    detect_calls = []
+
+    def _fake_detect_terminal():
+        detect_calls.append(1)
+        return 'tmux'
+
+    monkeypatch.setattr(terminal_api, 'detect_terminal', _fake_detect_terminal)
+    monkeypatch.setattr(terminal_api, '_herdr_runtime_configured', lambda: False)
+
+    # 调用 get_backend（无显式 terminal_type）
+    terminal_api.get_backend()
+
+    # 因无 env var 也无 config preference，回退到终端检测
+    assert detect_calls == [1], (
+        'VA-1: get_backend 应在 env var / config preference 均为 None '
+        '时调用 detect_terminal()'
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# VA-2.1: _runtime_ref_prefix 返回正确后端前缀
+# ═══════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.parametrize(
+    'namespace_backend_impl, assigned_pane_ref, expected_prefix',
+    [
+        ('herdr', None, 'mux'),
+        ('HERDR', None, 'mux'),                      # 大小写不敏感
+        ('herdr', {}, 'mux'),
+        ('tmux', None, 'tmux'),
+        ('rmux', None, 'tmux'),
+        (None, {'backend_impl': 'herdr'}, 'mux'),
+        (None, {'backend_impl': 'HERDR'}, 'mux'),
+        (None, {'backend_impl': 'tmux'}, 'tmux'),
+        (None, None, 'tmux'),                         # 默认
+        (None, {}, 'tmux'),                           # 空 dict 无 backend_impl key
+        (None, {'backend_impl': None}, 'tmux'),
+    ],
+)
+def test_va2_runtime_ref_prefix(
+    namespace_backend_impl, assigned_pane_ref, expected_prefix,
+) -> None:
+    """VA-2: _runtime_ref_prefix 按后端类型返回 'mux' 或 'tmux'。
+
+    优先 namespace_backend_impl，其次 assigned_pane_ref['backend_impl']，
+    两个都无/空时默认 'tmux'。
+    """
+    from ccbd.start_runtime.agent_runtime import _runtime_ref_prefix
+
+    assert _runtime_ref_prefix(namespace_backend_impl, assigned_pane_ref) == expected_prefix
+
+
+def test_va2_runtime_ref_prefix_composes_with_pane_id() -> None:
+    """VA-2: _runtime_ref_prefix 返回值与 pane_id 组合成 runtime_ref。
+
+    验证 'mux:%pane_id' 和 'tmux:%pane_id' 两种模板正确复合。
+    """
+    from ccbd.start_runtime.agent_runtime import _runtime_ref_prefix
+
+    herdr_prefix = _runtime_ref_prefix('herdr', None)
+    assert herdr_prefix == 'mux'
+    assert f'{herdr_prefix}:%42' == 'mux:%42'
+
+    tmux_prefix = _runtime_ref_prefix(None, None)
+    assert tmux_prefix == 'tmux'
+    assert f'{tmux_prefix}:%42' == 'tmux:%42'
+
+
+# ═══════════════════════════════════════════════════════════════════
+# VA-2.2: env var 传播链
+# ═══════════════════════════════════════════════════════════════════
+
+
+def test_va2_propagate_runtime_mux_backend_sets_env_for_herdr(monkeypatch) -> None:
+    """VA-2: _propagate_runtime_mux_backend 将 herdr 写入 CCB_RUNTIME_MUX_BACKEND。"""
+    import os
+
+    from agents.config_loader_runtime.io_runtime.documents import _propagate_runtime_mux_backend
+
+    monkeypatch.delenv('CCB_RUNTIME_MUX_BACKEND', raising=False)
+
+    class _FakeConfig:
+        runtime_mux_backend = 'herdr'
+
+    _propagate_runtime_mux_backend(_FakeConfig())
+    assert os.environ.get('CCB_RUNTIME_MUX_BACKEND') == 'herdr'
+
+
+def test_va2_propagate_runtime_mux_backend_clears_env_for_none(monkeypatch) -> None:
+    """VA-2: _propagate_runtime_mux_backend(None) 清除 env var。"""
+    import os
+
+    from agents.config_loader_runtime.io_runtime.documents import _propagate_runtime_mux_backend
+
+    monkeypatch.setenv('CCB_RUNTIME_MUX_BACKEND', 'herdr')
+    _propagate_runtime_mux_backend(None)
+    assert 'CCB_RUNTIME_MUX_BACKEND' not in os.environ
+
+
+def test_va2_get_backend_reads_env_var(monkeypatch) -> None:
+    """VA-2: get_backend() 读取 CCB_RUNTIME_MUX_BACKEND 作为 env_pref。
+
+    env var 设为 herdr 时，backend 解析路径应被触发。
+    不要求真实 herdr 环境——验证的是 env var 被读取并传递。
+    """
+    import terminal_runtime.api as terminal_api
+
+    # 清除缓存
+    monkeypatch.setattr(terminal_api, '_backend_cache', None)
+    monkeypatch.setattr(terminal_api, '_backend_cache_key', None)
+    monkeypatch.setattr(terminal_api, '_backend_config_preference', None)
+
+    # 设置 env var
+    monkeypatch.setenv('CCB_RUNTIME_MUX_BACKEND', 'herdr')
+
+    # 捕获 terminal_type 以验证 env var 被消费
+    captured = []
+
+    def _fake_resolve_backend(*, terminal_type, **kwargs):
+        captured.append(terminal_type)
+        return None  # 后端创建失败不重要，只验证 terminal_type 被传递
+
+    monkeypatch.setattr(terminal_api, '_resolve_backend', _fake_resolve_backend)
+
+    terminal_api.get_backend()
+    assert captured == ['herdr'], (
+        'VA-2: get_backend 应将 CCB_RUNTIME_MUX_BACKEND=herdr '
+        '作为 terminal_type 传递到 _resolve_backend'
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# VA-2.3: overlay 保留 runtime_mux_backend
+# ═══════════════════════════════════════════════════════════════════
+
+
+def test_va2_loop_overlay_preserves_runtime_mux_backend(tmp_path) -> None:
+    """VA-2: apply_loop_capacity_overlays 传递 runtime_mux_backend，不丢失。"""
+    from agents.config_loader_runtime.loop_overlays import apply_loop_capacity_overlays
+    from agents.config_loader_runtime.parsing_runtime.validation import validate_project_config
+
+    doc = {
+        'version': 2,
+        'entry_window': 'main',
+        'windows': {'main': 'agent1:codex'},
+        'runtime': {'mux': {'backend': 'herdr'}},
+    }
+    config = validate_project_config(doc)
+    assert config.runtime_mux_backend == 'herdr'
+
+    # 应用 loop overlay（tmp_path 无活跃状态，直接返回原 config）
+    overlayed = apply_loop_capacity_overlays(config, tmp_path)
+    assert overlayed.runtime_mux_backend == 'herdr', (
+        'VA-2: loop overlay 必须保留 runtime_mux_backend'
+    )
+
+
+def test_va2_dynamic_agent_overlay_preserves_runtime_mux_backend(tmp_path) -> None:
+    """VA-2: apply_dynamic_agent_overlays 传递 runtime_mux_backend，不丢失。"""
+    from agents.config_loader_runtime.dynamic_agent_overlays import apply_dynamic_agent_overlays
+    from agents.config_loader_runtime.parsing_runtime.validation import validate_project_config
+
+    doc = {
+        'version': 2,
+        'entry_window': 'main',
+        'windows': {'main': 'agent1:codex'},
+        'runtime': {'mux': {'backend': 'herdr'}},
+    }
+    config = validate_project_config(doc)
+    assert config.runtime_mux_backend == 'herdr'
+
+    overlayed = apply_dynamic_agent_overlays(config, tmp_path)
+    assert overlayed.runtime_mux_backend == 'herdr', (
+        'VA-2: dynamic agent overlay 必须保留 runtime_mux_backend'
+    )
+
+
+def test_va2_load_project_config_preserves_runtime_mux_backend_through_overlays(
+    tmp_path,
+) -> None:
+    """VA-2: e2e — load_project_config 经过两个 overlay 后仍保留 runtime_mux_backend。
+
+    同时验证 _propagate_runtime_mux_backend 将值写入 CCB_RUNTIME_MUX_BACKEND。
+    """
+    import os
+    from pathlib import Path
+
+    from agents.config_loader_runtime.io_runtime.documents import load_project_config
+
+    project_root = tmp_path / 'repo'
+    config_dir = project_root / '.ccb'
+    config_dir.mkdir(parents=True)
+    config_path = config_dir / 'ccb.config'
+
+    config_path.write_text(
+        '''version = 2
+entry_window = "main"
+
+[windows]
+main = "agent1:codex"
+
+[runtime.mux]
+backend = "herdr"
+''',
+        encoding='utf-8',
+    )
+
+    os.environ.pop('CCB_RUNTIME_MUX_BACKEND', None)
+    result = load_project_config(project_root, include_loop_overlays=True)
+
+    # 断言 1: config 保留
+    assert result.config.runtime_mux_backend == 'herdr', (
+        'VA-2: load_project_config 在 overlay 后必须保留 runtime_mux_backend'
+    )
+
+    # 断言 2: env var 传播
+    assert os.environ.get('CCB_RUNTIME_MUX_BACKEND') == 'herdr', (
+        'VA-2: _propagate_runtime_mux_backend 应将 herdr 传播到 CCB_RUNTIME_MUX_BACKEND'
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# VA-7: 各 provider 的 launch_mode 矩阵
+# ═══════════════════════════════════════════════════════════════════
+
+_VA7_EXPECTED_LAUNCH_MODES = {
+    'codex': 'codex_tmux',
+    'claude': 'simple_tmux',
+    'gemini': 'simple_tmux',
+    'opencode': 'simple_tmux',
+    'droid': 'simple_tmux',
+    'agy': 'simple_tmux',
+    'kimi': 'simple_tmux',
+    'deepseek': 'simple_tmux',
+    'mimo': 'simple_tmux',
+    'qwen': 'simple_tmux',
+    'qoder': 'simple_tmux',
+    'qoderclicn': 'simple_tmux',
+    'cursor': 'simple_tmux',
+    'copilot': 'simple_tmux',
+    'crush': 'simple_tmux',
+    'grok': 'simple_tmux',
+    'kiro': 'simple_tmux',
+    'pi': 'simple_tmux',
+    'omp': 'simple_tmux',
+    'zai': 'simple_tmux',
+}
+
+
+def test_va7_all_providers_have_correct_launch_mode() -> None:
+    """VA-7: 20 providers — codex 唯一 codex_tmux，其余 19 均 simple_tmux。
+
+    验证 launch_mode 值有效且与预期注册表一致。
+    """
+    from provider_core.registry import build_default_runtime_launcher_map
+
+    launchers = build_default_runtime_launcher_map(include_optional=True)
+
+    # 断言 1: 恰好 20 个 provider
+    assert len(launchers) == 20, (
+        f'expected 20 providers with runtime launchers, got {len(launchers)}'
+    )
+
+    # 断言 2: 每个 provider 的 launch_mode 与预期一致
+    for provider, expected_mode in _VA7_EXPECTED_LAUNCH_MODES.items():
+        launcher = launchers.get(provider)
+        assert launcher is not None, f'VA-7: {provider} missing from runtime launcher map'
+        assert launcher.launch_mode == expected_mode, (
+            f'VA-7: {provider} expected launch_mode={expected_mode}, '
+            f'got {launcher.launch_mode}'
+        )
+
+    # 断言 3: 无多余的 provider（防御：未来新增时此测试会提醒更新）
+    assert set(launchers) == set(_VA7_EXPECTED_LAUNCH_MODES), (
+        'VA-7: runtime launcher map 包含未预期的 provider，'
+        '请更新 _VA7_EXPECTED_LAUNCH_MODES'
+    )
+
+
+def test_va7_codex_is_only_codex_tmux_provider() -> None:
+    """VA-7: codex 是唯一的 codex_tmux provider，无第二个。"""
+    from provider_core.registry import build_default_runtime_launcher_map
+
+    launchers = build_default_runtime_launcher_map(include_optional=True)
+    codex_tmux_providers = [
+        p for p, l in launchers.items() if l.launch_mode == 'codex_tmux'
+    ]
+    assert codex_tmux_providers == ['codex'], (
+        f'VA-7: 预期只有 codex 使用 codex_tmux，实际: {codex_tmux_providers}'
+    )
+
+
+def test_va7_launch_mode_is_valid_literal() -> None:
+    """VA-7: 所有 launch_mode 值均为有效 Literal（防御 schema 漂移）。"""
+    from provider_core.registry import build_default_runtime_launcher_map
+
+    VALID_MODES = {'simple_tmux', 'codex_tmux'}
+    launchers = build_default_runtime_launcher_map(include_optional=True)
+
+    for provider, launcher in launchers.items():
+        assert launcher.launch_mode in VALID_MODES, (
+            f'VA-7: {provider} 的 launch_mode={launcher.launch_mode!r} '
+            f'不是有效的 Literal 值 {VALID_MODES}'
+        )

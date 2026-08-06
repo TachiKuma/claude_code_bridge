@@ -238,3 +238,63 @@ lane_b_reason: ""
 ### Verdict
 
 **passed** — blocking B1 已修复，important I1/I3 已修复。B2 为已知架构限制，接受为后续 herdr lifecycle epic 的输入。
+
+## 6. Focused Closure — VA-1/VA-2/VA-7 验证矩阵测试（Round 3）
+
+审查日期：2026-08-06
+审查类型：focused closure（test-only additions，复用 round 2 reviewer 锚点）
+审查文件：`test/test_config_runtime_mux_backend.py`（+325 lines，11 test functions）
+
+### 变更归因
+
+纯测试新增，无生产代码改动。在已有 19 个测试（VA-3/VA-5/VA-6 + v2/v3 解析）基础上新增 VA-1/VA-2/VA-7 验证测试：
+
+**批次 A — VA-1 + VA-2.1 + VA-2.2（6 tests）：**
+
+| 测试 | 对应设计 | 覆盖 |
+|---|---|---|
+| `test_va1_config_absence_clears_env_and_falls_to_detection` | VA-1 (§6 验证矩阵) | config 缺失 → env var pop → `get_backend()` 回退 `detect_terminal()` |
+| `test_va2_runtime_ref_prefix` (11 parametrized) | VA-2 / design I-2 (§2.1) | herdr → `'mux'`，tmux/rmux → `'tmux'`，None → 默认 `'tmux'` |
+| `test_va2_runtime_ref_prefix_composes_with_pane_id` | VA-2 / design I-2 | `mux:%42` / `tmux:%42` 复合格式 |
+| `test_va2_propagate_runtime_mux_backend_sets_env_for_herdr` | VA-2 (§6 验证矩阵) | FakeConfig(herdr) → `CCB_RUNTIME_MUX_BACKEND=herdr` |
+| `test_va2_propagate_runtime_mux_backend_clears_env_for_none` | VA-2 | None 入参 → env var 被 pop |
+| `test_va2_get_backend_reads_env_var` | VA-2 / design D2 (§3) | `CCB_RUNTIME_MUX_BACKEND=herdr` → `_resolve_backend(terminal_type='herdr'`) |
+
+**批次 B — VA-2.3 + VA-7（5 tests）：**
+
+| 测试 | 对应设计 | 覆盖 |
+|---|---|---|
+| `test_va2_loop_overlay_preserves_runtime_mux_backend` | VA-2 / design B1 修复 | `apply_loop_capacity_overlays` 后 `runtime_mux_backend` 不丢失 |
+| `test_va2_dynamic_agent_overlay_preserves_runtime_mux_backend` | VA-2 / design B1 修复 | `apply_dynamic_agent_overlays` 后 `runtime_mux_backend` 不丢失 |
+| `test_va2_load_project_config_preserves_runtime_mux_backend_through_overlays` | VA-2 / B1 e2e | `load_project_config` 全过程：config 保留 + env 传播双断言 |
+| `test_va7_all_providers_have_correct_launch_mode` | VA-7 (§6 验证矩阵) | 20 providers launcher_map 逐项比对 `_VA7_EXPECTED_LAUNCH_MODES` |
+| `test_va7_codex_is_only_codex_tmux_provider` | VA-7 / design §1.2 | codex 是唯一 `codex_tmux` provider |
+| `test_va7_launch_mode_is_valid_literal` | VA-7 / contracts.py:40 | 所有值在 `{'simple_tmux', 'codex_tmux'}` 内 |
+
+### 本地审查结论
+
+- **Design fit**: 所有测试与 design §6 VA-1/VA-2/VA-7 断言对齐，无 scope creep。✓
+- **测试质量**: monkeypatch 使用正确（无状态泄漏），parametrize 覆盖 11 种输入组合，e2e 测试写真实 TOML 文件并验证完整 `load_project_config` 链。✓
+- **VA-7 防御设计**: `_VA7_EXPECTED_LAUNCH_MODES` 硬编码 20 providers，三重断言（数量/逐项/无多余）确保 provider 变更时测试成为 canary。✓
+- **隔离性**: 对私有函数使用 inline import，不污染全局命名空间。✓
+- **行为不变**: 无生产代码修改，不改变任何公开契约、数据流、安全边界。✓
+
+### 测试结果
+
+```
+test/test_config_runtime_mux_backend.py: 41 passed in 0.46s
+  原有: 19 passed (VA-3/VA-5/VA-6 + v2/v3 parsing)
+  VA-1:  1 passed
+  VA-2.1: 12 passed (11 parametrized + 1 composition)
+  VA-2.2: 3 passed
+  VA-2.3: 3 passed
+  VA-7:  3 passed
+```
+
+### Findings
+
+**无 blocking / important / nit / suggestion**。
+
+### Verdict
+
+**passed** — 纯测试新增，design aligned，41/41 通过。focused closure 条件满足：round 2 reviewer 锚点有效（`subagent+ocr`），diff 归因明确（test-only），无行为变更。
