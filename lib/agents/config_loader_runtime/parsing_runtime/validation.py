@@ -75,7 +75,7 @@ def validate_project_config(
         document,
         project_root=resolved_project_root,
     )
-    _validate_document_shape(document)
+    _validate_document_shape(document, source_path=source_path)
     validate_config_ui_settings(document.get('config_ui'))
     windows = parse_topology_windows(document.get('windows'))
     tool_windows = parse_tool_windows(document.get('tool_windows'))
@@ -110,11 +110,18 @@ def validate_project_config(
     )
 
 
-def _validate_document_shape(document: dict[str, Any]) -> None:
+def _validate_document_shape(document: dict[str, Any], *, source_path: Path | None = None) -> None:
     unknown_top = sorted(set(document) - ALLOWED_TOP_LEVEL_KEYS)
     if unknown_top:
+        location = f' at {source_path}' if source_path is not None else ''
+        hint = ''
+        if 'runtime' in unknown_top:
+            hint = (
+                "; v2 does not support top-level 'runtime' (possibly a v3 draft or legacy config); "
+                'migrate to loop / agent.runtime_mode or remove it'
+            )
         raise ConfigValidationError(
-            f'config contains unknown top-level fields: {", ".join(unknown_top)}'
+            f'config contains unknown top-level fields: {", ".join(unknown_top)}{location}{hint}'
         )
     if document.get('version') != 2:
         raise ConfigValidationError('version must be 2')

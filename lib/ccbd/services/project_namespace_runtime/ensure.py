@@ -143,14 +143,17 @@ def ensure_project_namespace(
             ),
         )
         setattr(controller, '_last_topology_pane_records', pane_records)
+        # topology materialize 成功即证明 Herdr 会话 socket 可用
+        setattr(controller, '_last_namespace_socket_verified', True)
     else:
-        prepare_namespace_root_pane(
+        verified = prepare_namespace_root_pane(
             controller,
             context,
             epoch=epoch,
             terminal_size=terminal_size,
             timeout_s=session_probe_timeout_s,
         )
+        setattr(controller, '_last_namespace_socket_verified', bool(verified))
         setattr(controller, '_last_materialized_agent_panes', {})
         setattr(controller, '_last_materialized_cmd_pane', None)
         setattr(controller, '_last_topology_active_panes', ())

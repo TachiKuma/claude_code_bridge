@@ -23,7 +23,7 @@ def prepare_namespace_root_pane(
     epoch: int,
     terminal_size: tuple[int, int] | None = None,
     timeout_s: float | None = None,
-) -> None:
+) -> bool:
     if not context.session_is_alive:
         create_session(
             context.backend,
@@ -33,11 +33,13 @@ def prepare_namespace_root_pane(
             terminal_size=terminal_size,
             timeout_s=timeout_s,
         )
-        _verify_herdr_session_socket(
+        verified = _verify_herdr_session_socket(
             context.backend,
             session_name=context.desired_session_name,
             timeout_s=timeout_s,
         )
+    else:
+        verified = True
     ensure_server_policy(context.backend, timeout_s=timeout_s)
     ensure_window(
         context.backend,
@@ -71,6 +73,7 @@ def prepare_namespace_root_pane(
         tmux_socket_path=context.desired_socket_path,
         tmux_session_name=context.desired_session_name,
     )
+    return bool(verified)
 
 
 def apply_namespace_identity(
@@ -102,16 +105,20 @@ def apply_namespace_identity(
         )
 
 
-def _verify_herdr_session_socket(backend, *, session_name: str, timeout_s: float | None = None) -> None:
+def _verify_herdr_session_socket(backend, *, session_name: str, timeout_s: float | None = None) -> bool:
     """After create_session for a Herdr backend, verify the session socket is
     actually reachable.  The Herdr server process may need a brief moment after
     the initial readiness probe before its IPC socket accepts requests.  We try
     a lightweight operation (list_windows) with retries; failures are logged but
-    not raised — the session may still become available later."""
+    not raised — the session may still become available later.
+
+    Returns True when the live socket was verified reachable, False otherwise.
+    Callers should surface False so a "mounted but not live" state is never
+    misreported as a fully verified mount."""
     if not _is_mux_backend(backend):
-        return
+        return True
     if timeout_s is not None and timeout_s <= 0:
-        return
+        return True
     deadline = time.monotonic() + (timeout_s if timeout_s is not None and timeout_s > 0 else 10.0)
     attempt = 0
     while True:
@@ -123,7 +130,7 @@ def _verify_herdr_session_socket(backend, *, session_name: str, timeout_s: float
             # dict would bypass _mux_namespace_ref and return [] immediately
             # without ever touching the Herdr socket.
             list_windows_for_session(backend, session_name=session_name)
-            return
+            return True
         except Exception:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -134,7 +141,7 @@ def _verify_herdr_session_socket(backend, *, session_name: str, timeout_s: float
                     "session may become available later",
                     session_name, attempt,
                 )
-                return
+                return False
             time.sleep(min(0.5, remaining))
 
 

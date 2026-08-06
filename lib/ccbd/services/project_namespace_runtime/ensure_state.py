@@ -175,7 +175,7 @@ def build_created_namespace(controller, context, *, timeout_s: float | None = No
         workspace_window_name=context.desired_workspace_window_name,
         workspace_window_id=workspace_window.window_id if workspace_window is not None else None,
         workspace_epoch=1,
-        ui_attachable=True,
+        ui_attachable=bool(getattr(controller, '_last_namespace_socket_verified', True)),
         last_started_at=occurred_at,
         **namespace_fields,
     )

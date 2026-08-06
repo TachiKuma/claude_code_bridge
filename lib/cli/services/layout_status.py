@@ -49,6 +49,11 @@ def layout_status(context) -> dict[str, object]:
         'project_root': str(context.project.project_root),
         'config_source': str(getattr(loaded, 'source_path', None) or context.paths.config_path),
         'ccbd_state': getattr(local, 'mount_state', None),
+        # 状态拆分：configured / runtime_store / live_ui_observed 三阶段独立判定，
+        # 避免"daemon mounted 但 Herdr 侧无 pane"（observe_status=skipped）被误读为强成功。
+        'configured_ok': _configured_ok(config, windows),
+        'runtime_store_ok': _runtime_store_ok(namespace),
+        'live_ui_observed_ok': str(observed.get('observe_status') or '') == 'ok',
         'windows_explicit': bool(getattr(config, 'windows_explicit', False)),
         'entry_window': getattr(config, 'entry_window', None),
         'topology_signature': getattr(config, 'topology_signature', None),
@@ -292,6 +297,20 @@ def _observe_project_namespace(namespace: dict[str, object]) -> dict[str, object
         'windows': windows,
         'agent_panes': agent_panes,
     }
+
+
+def _configured_ok(config, windows) -> bool:
+    """配置层：显式 windows 拓扑且至少声明了一个 window。"""
+    if not bool(getattr(config, 'windows_explicit', False)):
+        return False
+    return len(tuple(windows or ())) > 0
+
+
+def _runtime_store_ok(namespace: dict[str, object]) -> bool:
+    """runtime store 层：ccbd mounted 且 control-plane socket 可连接。"""
+    return str(namespace.get('status') or '') == 'mounted' and bool(
+        namespace.get('socket_connectable')
+    )
 
 
 def _observed_pane_record(line: str) -> dict[str, object] | None:

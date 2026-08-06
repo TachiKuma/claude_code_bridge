@@ -697,9 +697,12 @@ class HerdrCliRequestAdapter:
                     session_name=session_name,
                 )
             except MuxCommandErrorV2 as exc:
-                if exc.category != "not-found":
-                    raise
-                continue
+                # 幂等清理：workspace 已消失（not-found）或 Herdr server 未运行
+                # （server_not_running）在 destroy/kill 场景都应视为清理完成，
+                # 不冒泡为失败（2026-08-06-...-issue G4）。
+                if exc.category == "not-found" or _looks_like_missing_server(exc.detail):
+                    continue
+                raise
             closed.append(workspace_id)
         return {
             "status": "ok",
@@ -1443,6 +1446,8 @@ def _looks_like_missing_server(detail: str) -> bool:
         "kind: notfound" in lowered
         or "kind: not found" in lowered
         or "os { code: 2" in lowered
+        or "server_not_running" in lowered
+        or "no herdr server is running" in lowered
     )
 
 
