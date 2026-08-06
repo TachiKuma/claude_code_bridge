@@ -1,0 +1,33 @@
+# Herdr UI integration spike report
+
+- run_id: run-20260806-213116
+- classification: partial-dimension-complete
+- classification_scope: partial
+- output_dir: E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-ui-integration-spike/evidence/run-20260806-verify-ext
+- enabled_dimensions: process-samples, ccb-start, ccb-ping, ccb-layout, startup-state-files, ccb-live-diag
+- executed_dimensions: process-samples, ccb-start, ccb-ping, ccb-layout, startup-state-files, ccb-live-diag
+- skipped_dimensions: herdr-baseline, wrapper-file-check, ccb-diagnose, post-start-herdr, pane-verification, backend-route, herdr-v0.8-probe
+- pane_capture_lines: 20
+- command_failure_count: 0
+- process_samples: E:\GitHub开源项目\TachiKuma\claude_code_bridge\.codestable\roadmap\windows-native-herdr-ccb\drafts\herdr-ui-integration-spike\evidence\run-20260806-verify-ext\process-samples.jsonl
+- observed_windows_flash: False
+- observed_herdr_agents_panel_text: 
+
+## Commands
+
+- ccb8-start-project: exit=0 timed_out=False ref=E:\GitHub开源项目\TachiKuma\claude_code_bridge\.codestable\roadmap\windows-native-herdr-ccb\drafts\herdr-ui-integration-spike\evidence\run-20260806-verify-ext\raw-command-refs\ccb8-start-project.json
+- ccb8-ping-ccbd: exit=0 timed_out=False ref=E:\GitHub开源项目\TachiKuma\claude_code_bridge\.codestable\roadmap\windows-native-herdr-ccb\drafts\herdr-ui-integration-spike\evidence\run-20260806-verify-ext\raw-command-refs\ccb8-ping-ccbd.json
+- ccb8-ping-all-attempt-1: exit=0 timed_out=False ref=E:\GitHub开源项目\TachiKuma\claude_code_bridge\.codestable\roadmap\windows-native-herdr-ccb\drafts\herdr-ui-integration-spike\evidence\run-20260806-verify-ext\raw-command-refs\ccb8-ping-all-attempt-1.json
+- ccb8-ping-all: exit=0 timed_out=False ref=E:\GitHub开源项目\TachiKuma\claude_code_bridge\.codestable\roadmap\windows-native-herdr-ccb\drafts\herdr-ui-integration-spike\evidence\run-20260806-verify-ext\raw-command-refs\ccb8-ping-all-attempt-1.json
+- ccb8-ps: exit=0 timed_out=False ref=E:\GitHub开源项目\TachiKuma\claude_code_bridge\.codestable\roadmap\windows-native-herdr-ccb\drafts\herdr-ui-integration-spike\evidence\run-20260806-verify-ext\raw-command-refs\ccb8-ps.json
+- ccb8-doctor-ps: exit=0 timed_out=False ref=E:\GitHub开源项目\TachiKuma\claude_code_bridge\.codestable\roadmap\windows-native-herdr-ccb\drafts\herdr-ui-integration-spike\evidence\run-20260806-verify-ext\raw-command-refs\ccb8-doctor-ps.json
+- ccb8-layout-status: exit=0 timed_out=False ref=E:\GitHub开源项目\TachiKuma\claude_code_bridge\.codestable\roadmap\windows-native-herdr-ccb\drafts\herdr-ui-integration-spike\evidence\run-20260806-verify-ext\raw-command-refs\ccb8-layout-status.json
+- ccb8-doctor-output: exit=0 timed_out=False ref=E:\GitHub开源项目\TachiKuma\claude_code_bridge\.codestable\roadmap\windows-native-herdr-ccb\drafts\herdr-ui-integration-spike\evidence\run-20260806-verify-ext\raw-command-refs\ccb8-doctor-output.json
+
+## Interpretation
+
+- If `process-samples.jsonl` contains short-lived `cmd.exe` / `powershell.exe` children but CCB ping is not mounted, classify as startup wrapper failure.
+- If CCB ping is mounted but `ccb8 layout status --json` lacks expected provider pane ids, classify as layout/materialization projection gap.
+- Herdr CLI `workspace list` / `pane list` are intentionally not used here because Herdr 0.7.5 exposes machine-readable workspace/pane state through `api snapshot` instead.
+- If Herdr agents panel shows `claude` while CCB runtime state is failed, treat Herdr agent detection as diagnostics-only evidence, not completion authority.
+

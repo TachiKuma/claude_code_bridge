@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "record_type": "ccbd_keeper",
+  "project_id": "b72b0116880470ad0dad9ff7dabe6353cb83efc56e1c13688fac233f698c664e",
+  "keeper_pid": 16032,
+  "started_at": "2026-07-27T14:28:59.136280Z",
+  "last_check_at": "2026-07-27T16:39:22.265964Z",
+  "state": "running",
+  "restart_count": 1,
+  "last_restart_at": "2026-07-27T14:28:59.138649Z",
+  "last_failure_reason": null
+}

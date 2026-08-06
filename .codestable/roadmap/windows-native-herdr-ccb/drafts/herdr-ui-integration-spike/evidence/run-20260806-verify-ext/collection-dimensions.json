@@ -1,0 +1,35 @@
+{
+    "only_dimension":  [
+                           "ccb-start",
+                           "ccb-ping",
+                           "ccb-layout",
+                           "ccb-live-diag",
+                           "startup-state-files",
+                           "process-samples"
+                       ],
+    "skip_dimension":  [
+
+                       ],
+    "enabled_dimensions":  [
+                               "process-samples",
+                               "ccb-start",
+                               "ccb-ping",
+                               "ccb-layout",
+                               "startup-state-files",
+                               "ccb-live-diag"
+                           ],
+    "executed_dimensions":  [
+                                "process-samples",
+                                "ccb-start",
+                                "ccb-ping",
+                                "ccb-layout",
+                                "startup-state-files",
+                                "ccb-live-diag"
+                            ],
+    "implicit_dependencies":  {
+                                  "post_start_herdr_for_pane_verification":  false,
+                                  "ccb_layout_for_pane_verification":  false,
+                                  "ccb_diagnose_for_backend_route":  false
+                              },
+    "pane_capture_lines":  20
+}

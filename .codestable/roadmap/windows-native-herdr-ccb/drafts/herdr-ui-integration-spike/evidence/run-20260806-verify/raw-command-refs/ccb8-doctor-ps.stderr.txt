@@ -1,0 +1,2 @@
+command_status: failed
+error: cannot safely bind legacy project identity to the current root: project_id=b72b0116880470ad0dad9ff7dabe6353cb83efc56e1c13688fac233f698c664e recorded_roots=D:\Python\GitHub\claude_code_bridge current_root=E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge; repair the stale binding or use an explicit project-fork workflow

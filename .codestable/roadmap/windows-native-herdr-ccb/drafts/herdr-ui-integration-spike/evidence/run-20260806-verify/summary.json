@@ -1,0 +1,212 @@
+{
+    "schema_version":  1,
+    "spike":  "herdr-ui-integration-spike",
+    "run_id":  "run-20260806-213003",
+    "generated_at":  "2026-08-06T13:30:28.9469439Z",
+    "classification":  "partial-dimension-failed",
+    "classification_scope":  "partial",
+    "output_dir":  "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-ui-integration-spike/evidence/run-20260806-verify",
+    "collection_dimensions_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\collection-dimensions.json",
+    "enabled_dimensions":  [
+                               "ccb-start",
+                               "ccb-ping",
+                               "ccb-layout",
+                               "startup-state-files",
+                               "ccb-live-diag"
+                           ],
+    "executed_dimensions":  [
+                                "ccb-start",
+                                "ccb-ping",
+                                "ccb-layout",
+                                "startup-state-files",
+                                "ccb-live-diag"
+                            ],
+    "skipped_dimensions":  [
+                               "herdr-baseline",
+                               "wrapper-file-check",
+                               "ccb-diagnose",
+                               "process-samples",
+                               "post-start-herdr",
+                               "pane-verification",
+                               "backend-route",
+                               "herdr-v0.8-probe"
+                           ],
+    "partial_dimension_run":  true,
+    "pane_capture_lines":  30,
+    "command_failure_count":  6,
+    "failed_commands":  [
+                            {
+                                "name":  "ccb8-ping-ccbd",
+                                "exit_code":  1,
+                                "timed_out":  false,
+                                "ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ping-ccbd.json"
+                            },
+                            {
+                                "name":  "ccb8-ping-all",
+                                "exit_code":  1,
+                                "timed_out":  false,
+                                "ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ping-all-attempt-3.json"
+                            },
+                            {
+                                "name":  "ccb8-ps",
+                                "exit_code":  1,
+                                "timed_out":  false,
+                                "ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ps.json"
+                            },
+                            {
+                                "name":  "ccb8-doctor-ps",
+                                "exit_code":  1,
+                                "timed_out":  false,
+                                "ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-doctor-ps.json"
+                            },
+                            {
+                                "name":  "ccb8-layout-status",
+                                "exit_code":  1,
+                                "timed_out":  false,
+                                "ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-layout-status.json"
+                            },
+                            {
+                                "name":  "ccb8-doctor-output",
+                                "exit_code":  1,
+                                "timed_out":  false,
+                                "ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-doctor-output.json"
+                            }
+                        ],
+    "process_samples_ref":  null,
+    "host_context_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\host-context.json",
+    "manual_observation_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\manual-observation.md",
+    "observed_windows_flash":  false,
+    "observed_herdr_agents_panel_text":  "",
+    "has_herdr_ui_evidence":  false,
+    "expected_agents":  2,
+    "ping_all_success":  false,
+    "layout_configured_count":  0,
+    "layout_materialized_count":  0,
+    "layout_materialization_complete":  false,
+    "commands":  [
+                     {
+                         "name":  "ccb8-start-project",
+                         "exit_code":  0,
+                         "timed_out":  false,
+                         "elapsed_ms":  104,
+                         "ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-start-project.json",
+                         "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-start-project.stdout.txt",
+                         "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-start-project.stderr.txt",
+                         "stdout_tail":  "",
+                         "stderr_tail":  "",
+                         "status":  "running",
+                         "process_id":  18368,
+                         "create_no_window":  true,
+                         "use_shell_execute":  false
+                     },
+                     {
+                         "name":  "ccb8-ping-ccbd",
+                         "exit_code":  1,
+                         "timed_out":  false,
+                         "elapsed_ms":  730,
+                         "ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ping-ccbd.json",
+                         "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ping-ccbd.stdout.txt",
+                         "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ping-ccbd.stderr.txt",
+                         "stdout_tail":  "",
+                         "stderr_tail":  "command_status: failed\r\nerror: cannot safely bind legacy project identity to the current root: project_id=b72b0116880470ad0dad9ff7dabe6353cb83efc56e1c13688fac233f698c664e recorded_roots=D:\\Python\\GitHub\\claude_code_bridge current_root=E:\\GitHub寮€婧愰」鐩甛TachiKuma\\claude_code_bridge; repair the stale binding or use an explicit project-fork workflow\r\n"
+                     },
+                     {
+                         "name":  "ccb8-ping-all-attempt-1",
+                         "exit_code":  1,
+                         "timed_out":  false,
+                         "elapsed_ms":  720,
+                         "ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ping-all-attempt-1.json",
+                         "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ping-all-attempt-1.stdout.txt",
+                         "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ping-all-attempt-1.stderr.txt",
+                         "stdout_tail":  "",
+                         "stderr_tail":  "command_status: failed\r\nerror: cannot safely bind legacy project identity to the current root: project_id=b72b0116880470ad0dad9ff7dabe6353cb83efc56e1c13688fac233f698c664e recorded_roots=D:\\Python\\GitHub\\claude_code_bridge current_root=E:\\GitHub寮€婧愰」鐩甛TachiKuma\\claude_code_bridge; repair the stale binding or use an explicit project-fork workflow\r\n"
+                     },
+                     {
+                         "name":  "ccb8-ping-all-attempt-2",
+                         "exit_code":  1,
+                         "timed_out":  false,
+                         "elapsed_ms":  730,
+                         "ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ping-all-attempt-2.json",
+                         "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ping-all-attempt-2.stdout.txt",
+                         "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ping-all-attempt-2.stderr.txt",
+                         "stdout_tail":  "",
+                         "stderr_tail":  "command_status: failed\r\nerror: cannot safely bind legacy project identity to the current root: project_id=b72b0116880470ad0dad9ff7dabe6353cb83efc56e1c13688fac233f698c664e recorded_roots=D:\\Python\\GitHub\\claude_code_bridge current_root=E:\\GitHub寮€婧愰」鐩甛TachiKuma\\claude_code_bridge; repair the stale binding or use an explicit project-fork workflow\r\n"
+                     },
+                     {
+                         "name":  "ccb8-ping-all-attempt-3",
+                         "exit_code":  1,
+                         "timed_out":  false,
+                         "elapsed_ms":  722,
+                         "ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ping-all-attempt-3.json",
+                         "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ping-all-attempt-3.stdout.txt",
+                         "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ping-all-attempt-3.stderr.txt",
+                         "stdout_tail":  "",
+                         "stderr_tail":  "command_status: failed\r\nerror: cannot safely bind legacy project identity to the current root: project_id=b72b0116880470ad0dad9ff7dabe6353cb83efc56e1c13688fac233f698c664e recorded_roots=D:\\Python\\GitHub\\claude_code_bridge current_root=E:\\GitHub寮€婧愰」鐩甛TachiKuma\\claude_code_bridge; repair the stale binding or use an explicit project-fork workflow\r\n"
+                     },
+                     {
+                         "name":  "ccb8-ping-all",
+                         "exit_code":  1,
+                         "timed_out":  false,
+                         "elapsed_ms":  722,
+                         "ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ping-all-attempt-3.json",
+                         "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ping-all-attempt-3.stdout.txt",
+                         "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ping-all-attempt-3.stderr.txt",
+                         "stdout_tail":  "",
+                         "stderr_tail":  "command_status: failed\r\nerror: cannot safely bind legacy project identity to the current root: project_id=b72b0116880470ad0dad9ff7dabe6353cb83efc56e1c13688fac233f698c664e recorded_roots=D:\\Python\\GitHub\\claude_code_bridge current_root=E:\\GitHub寮€婧愰」鐩甛TachiKuma\\claude_code_bridge; repair the stale binding or use an explicit project-fork workflow\r\n"
+                     },
+                     {
+                         "name":  "ccb8-ps",
+                         "exit_code":  1,
+                         "timed_out":  false,
+                         "elapsed_ms":  721,
+                         "ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ps.json",
+                         "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ps.stdout.txt",
+                         "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-ps.stderr.txt",
+                         "stdout_tail":  "",
+                         "stderr_tail":  "command_status: failed\r\nerror: cannot safely bind legacy project identity to the current root: project_id=b72b0116880470ad0dad9ff7dabe6353cb83efc56e1c13688fac233f698c664e recorded_roots=D:\\Python\\GitHub\\claude_code_bridge current_root=E:\\GitHub寮€婧愰」鐩甛TachiKuma\\claude_code_bridge; repair the stale binding or use an explicit project-fork workflow\r\n"
+                     },
+                     {
+                         "name":  "ccb8-doctor-ps",
+                         "exit_code":  1,
+                         "timed_out":  false,
+                         "elapsed_ms":  719,
+                         "ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-doctor-ps.json",
+                         "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-doctor-ps.stdout.txt",
+                         "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-doctor-ps.stderr.txt",
+                         "stdout_tail":  "",
+                         "stderr_tail":  "command_status: failed\r\nerror: cannot safely bind legacy project identity to the current root: project_id=b72b0116880470ad0dad9ff7dabe6353cb83efc56e1c13688fac233f698c664e recorded_roots=D:\\Python\\GitHub\\claude_code_bridge current_root=E:\\GitHub寮€婧愰」鐩甛TachiKuma\\claude_code_bridge; repair the stale binding or use an explicit project-fork workflow\r\n"
+                     },
+                     {
+                         "name":  "ccb8-layout-status",
+                         "exit_code":  1,
+                         "timed_out":  false,
+                         "elapsed_ms":  715,
+                         "ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-layout-status.json",
+                         "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-layout-status.stdout.txt",
+                         "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-layout-status.stderr.txt",
+                         "stdout_tail":  "",
+                         "stderr_tail":  "command_status: failed\r\nerror: cannot safely bind legacy project identity to the current root: project_id=b72b0116880470ad0dad9ff7dabe6353cb83efc56e1c13688fac233f698c664e recorded_roots=D:\\Python\\GitHub\\claude_code_bridge current_root=E:\\GitHub寮€婧愰」鐩甛TachiKuma\\claude_code_bridge; repair the stale binding or use an explicit project-fork workflow\r\n"
+                     },
+                     {
+                         "name":  "ccb8-doctor-output",
+                         "exit_code":  1,
+                         "timed_out":  false,
+                         "elapsed_ms":  724,
+                         "ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-doctor-output.json",
+                         "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-doctor-output.stdout.txt",
+                         "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\raw-command-refs\\ccb8-doctor-output.stderr.txt",
+                         "stdout_tail":  "",
+                         "stderr_tail":  "command_status: failed\r\nerror: cannot safely bind legacy project identity to the current root: project_id=b72b0116880470ad0dad9ff7dabe6353cb83efc56e1c13688fac233f698c664e recorded_roots=D:\\Python\\GitHub\\claude_code_bridge current_root=E:\\GitHub寮€婧愰」鐩甛TachiKuma\\claude_code_bridge; repair the stale binding or use an explicit project-fork workflow\r\n"
+                     }
+                 ],
+    "startup_state_files_dir":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\startup-state-files",
+    "startup_state_files_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-verify\\startup-state-files-manifest.txt",
+    "pane_evidence_ref":  null,
+    "backend_route_evidence_ref":  null,
+    "herdr_v0_8_probe_ref":  null,
+    "notes":  [
+                  "Herdr agents panel text is manual observation unless Herdr exposes it through CLI metadata.",
+                  "Herdr agent detection is diagnostics evidence only; CCB provider completion/runtime authority remains CCB-owned.",
+                  "This spike does not claim Native Windows supported."
+              ]
+}

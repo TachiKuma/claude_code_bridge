@@ -597,30 +597,54 @@ def test_config_priority_clears_backend_config_preference_on_none(monkeypatch) -
     )
 
 
-def test_herdr_provider_gate_allows_codex() -> None:
-    """codex provider 在 herdr 下允许通过（不抛异常）。"""
+def test_herdr_provider_gate_allows_codex(monkeypatch) -> None:
+    """codex provider 在显式 config herdr 下允许通过。
+
+    显式 opt-in：CCB_RUNTIME_MUX_BACKEND=herdr + codex provider → 不抛异常。
+    """
     from cli.services.runtime_launch_runtime.ensure import _is_herdr_runtime_launch
 
+    monkeypatch.setenv('CCB_RUNTIME_MUX_BACKEND', 'herdr')
     result = _is_herdr_runtime_launch(
         namespace_backend_impl='herdr',
         assigned_pane_ref={'backend_impl': 'herdr', 'pane_id': 'w1:p1'},
     )
     assert result is True
-    # codex 通过条件：_is_herdr_runtime_launch → True, spec.provider == 'codex' → True
-    # → 不进入 fail-closed 分支
+    # codex: _explicit_herdr=True and spec.provider=='codex' → gate 不触发
 
 
-def test_herdr_provider_gate_blocks_non_codex() -> None:
-    """非 codex provider 在 herdr 下应被 fail-closed 阻止。
+def test_herdr_provider_gate_blocks_non_codex_with_explicit_config(monkeypatch) -> None:
+    """非 codex provider + 显式 config herdr → fail-closed。
 
-    通过 _is_herdr_runtime_launch 返回 True + provider != 'codex' → 抛 RuntimeError。
+    仅当 CCB_RUNTIME_MUX_BACKEND=herdr（config 显式声明）时才 gate。
+    自动检测的 herdr 不触发此 gate（设计 I-3：fail-closed 仅针对显式 opt-in）。
     """
     from cli.services.runtime_launch_runtime.ensure import _is_herdr_runtime_launch
+    import os
 
-    # claude provider 在 herdr 下
+    monkeypatch.setenv('CCB_RUNTIME_MUX_BACKEND', 'herdr')
     is_herdr = _is_herdr_runtime_launch(
         namespace_backend_impl='herdr',
         assigned_pane_ref={'backend_impl': 'herdr', 'pane_id': 'w1:p1'},
     )
     assert is_herdr is True
-    # gate 条件：is_herdr=True AND provider != 'codex' → fail-closed
+    assert os.environ.get('CCB_RUNTIME_MUX_BACKEND') == 'herdr'
+    # gate 条件：is_herdr=True + CCB_RUNTIME_MUX_BACKEND=herdr + provider!='codex' → fail-closed
+
+
+def test_herdr_provider_gate_allows_non_codex_when_auto_detected(monkeypatch) -> None:
+    """herdr 自动检测（无显式 config）→ 非 codex provider 不触发 gate。
+
+    CCB_RUNTIME_MUX_BACKEND 未设置 → 自动检测不会 fail-closed 非 codex provider。
+    """
+    from cli.services.runtime_launch_runtime.ensure import _is_herdr_runtime_launch
+    import os
+
+    monkeypatch.delenv('CCB_RUNTIME_MUX_BACKEND', raising=False)
+    is_herdr = _is_herdr_runtime_launch(
+        namespace_backend_impl='herdr',
+        assigned_pane_ref={'backend_impl': 'herdr', 'pane_id': 'w1:p1'},
+    )
+    assert is_herdr is True
+    assert 'CCB_RUNTIME_MUX_BACKEND' not in os.environ
+    # _explicit_herdr = False（env var 未设置） → gate 不触发
