@@ -1,0 +1,9 @@
+{
+  "schema_version": 2,
+  "record_type": "ccbd_start_policy",
+  "project_id": "823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d",
+  "auto_permission": true,
+  "recovery_restore": true,
+  "last_started_at": "2026-08-06T09:05:29.171532Z",
+  "source": "start_command"
+}

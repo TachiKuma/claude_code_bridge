@@ -1,0 +1,609 @@
+{
+  "schema_version": 1,
+  "record_type": "ccbd_diagnostic_bundle",
+  "generated_at": "2026-08-06T09:05:45.290069Z",
+  "project_root": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge",
+  "project_id": "823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d",
+  "bundle_id": "ccb-support-20260806t090545290069z-823aff2895b3",
+  "doctor_error": null,
+  "storage_error": null,
+  "herdr_surface_projection_sources": [
+    "generated/doctor.json:ccbd.herdr_surface_projection"
+  ],
+  "entries": [
+    {
+      "category": "project-config",
+      "source_path": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.ccb\\ccb.config",
+      "archive_path": "project/.ccb/ccb.config",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 168,
+      "error": null
+    },
+    {
+      "category": "ccbd-authority",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\lifecycle.json",
+      "archive_path": "project/.ccb/ccbd/lifecycle.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 1552,
+      "error": null
+    },
+    {
+      "category": "ccbd-authority",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\lease.json",
+      "archive_path": "project/.ccb/ccbd/lease.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 1339,
+      "error": null
+    },
+    {
+      "category": "ccbd-authority",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\keeper.json",
+      "archive_path": "project/.ccb/ccbd/keeper.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 400,
+      "error": null
+    },
+    {
+      "category": "ccbd-authority",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\shutdown-intent.json",
+      "archive_path": "project/.ccb/ccbd/shutdown-intent.json",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-authority",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\state.json",
+      "archive_path": "project/.ccb/ccbd/state.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 1008,
+      "error": null
+    },
+    {
+      "category": "ccbd-authority",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\start-policy.json",
+      "archive_path": "project/.ccb/ccbd/start-policy.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 293,
+      "error": null
+    },
+    {
+      "category": "ccbd-report",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\startup-report.json",
+      "archive_path": "project/.ccb/ccbd/startup-report.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 8943,
+      "error": null
+    },
+    {
+      "category": "ccbd-report",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\shutdown-report.json",
+      "archive_path": "project/.ccb/ccbd/shutdown-report.json",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-report",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\restore-report.json",
+      "archive_path": "project/.ccb/ccbd/restore-report.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 432,
+      "error": null
+    },
+    {
+      "category": "ccbd-events",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\submissions.jsonl",
+      "archive_path": "project/.ccb/ccbd/submissions.jsonl",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-events",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\messages\\messages.jsonl",
+      "archive_path": "project/.ccb/ccbd/messages/messages.jsonl",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-events",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\attempts\\attempts.jsonl",
+      "archive_path": "project/.ccb/ccbd/attempts/attempts.jsonl",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-events",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\replies\\replies.jsonl",
+      "archive_path": "project/.ccb/ccbd/replies/replies.jsonl",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-events",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\dead-letters\\dead_letters.jsonl",
+      "archive_path": "project/.ccb/ccbd/dead-letters/dead_letters.jsonl",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-events",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\supervision.jsonl",
+      "archive_path": "project/.ccb/ccbd/supervision.jsonl",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-events",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\lifecycle.jsonl",
+      "archive_path": "project/.ccb/ccbd/lifecycle.jsonl",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 689,
+      "error": null
+    },
+    {
+      "category": "ccbd-events",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\tmux-cleanup-history.jsonl",
+      "archive_path": "project/.ccb/ccbd/tmux-cleanup-history.jsonl",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 227,
+      "error": null
+    },
+    {
+      "category": "ccbd-log",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\ccbd.stdout.log",
+      "archive_path": "project/.ccb/ccbd/ccbd.stdout.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-log",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\ccbd.stderr.log",
+      "archive_path": "project/.ccb/ccbd/ccbd.stderr.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-log",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\keeper.stdout.log",
+      "archive_path": "project/.ccb/ccbd/keeper.stdout.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "ccbd-log",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\keeper.stderr.log",
+      "archive_path": "project/.ccb/ccbd/keeper.stderr.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "runtime-root",
+      "source_path": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.ccb\\runtime-root-ref.json",
+      "archive_path": "project/.ccb/runtime-root-ref.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 310,
+      "error": null
+    },
+    {
+      "category": "runtime-root",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\runtime-root.json",
+      "archive_path": "project/.ccb/runtime-root.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 462,
+      "error": null
+    },
+    {
+      "category": "agent-authority",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\agent.json",
+      "archive_path": "project/.ccb/agents/code_reviewer/agent.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 910,
+      "error": null
+    },
+    {
+      "category": "agent-authority",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\runtime.json",
+      "archive_path": "project/.ccb/agents/code_reviewer/runtime.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 1904,
+      "error": null
+    },
+    {
+      "category": "agent-authority",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\restore.json",
+      "archive_path": "project/.ccb/agents/code_reviewer/restore.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 305,
+      "error": null
+    },
+    {
+      "category": "agent-events",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\jobs.jsonl",
+      "archive_path": "project/.ccb/agents/code_reviewer/jobs.jsonl",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "agent-events",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\events.jsonl",
+      "archive_path": "project/.ccb/agents/code_reviewer/events.jsonl",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 505,
+      "error": null
+    },
+    {
+      "category": "agent-workspace",
+      "source_path": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.ccb\\workspaces\\code_reviewer\\.ccb-workspace.json",
+      "archive_path": "project/.ccb/workspaces/code_reviewer/.ccb-workspace.json",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\provider-runtime\\codex\\app-server.stderr.log",
+      "archive_path": "project/.ccb/agents/code_reviewer/provider-runtime/codex/app-server.stderr.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\provider-runtime\\codex\\app-server.stdout.log",
+      "archive_path": "project/.ccb/agents/code_reviewer/provider-runtime/codex/app-server.stdout.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\provider-runtime\\codex\\bridge.log",
+      "archive_path": "project/.ccb/agents/code_reviewer/provider-runtime/codex/bridge.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\provider-runtime\\codex\\bridge.pid",
+      "archive_path": "project/.ccb/agents/code_reviewer/provider-runtime/codex/bridge.pid",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 7,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\provider-runtime\\codex\\bridge.stderr.log",
+      "archive_path": "project/.ccb/agents/code_reviewer/provider-runtime/codex/bridge.stderr.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\provider-runtime\\codex\\bridge.stdout.log",
+      "archive_path": "project/.ccb/agents/code_reviewer/provider-runtime/codex/bridge.stdout.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 119,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\provider-runtime\\codex\\codex-memory-projection.json",
+      "archive_path": "project/.ccb/agents/code_reviewer/provider-runtime/codex/codex-memory-projection.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 303,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\provider-runtime\\codex\\provider-profile.json",
+      "archive_path": "project/.ccb/agents/code_reviewer/provider-runtime/codex/provider-profile.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 435,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\provider-state\\codex\\home\\.ccb-session-namespace.json",
+      "archive_path": "project/.ccb/agents/code_reviewer/provider-state/codex/home/.ccb-session-namespace.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 160,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\provider-state\\codex\\home\\config.toml",
+      "archive_path": "project/.ccb/agents/code_reviewer/provider-state/codex/home/config.toml",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 203,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\provider-state\\codex\\home\\hooks.json",
+      "archive_path": "project/.ccb/agents/code_reviewer/provider-state/codex/home/hooks.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 21,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\provider-state\\codex\\home\\skills\\ask.ccb-projection.json",
+      "archive_path": "project/.ccb/agents/code_reviewer/provider-state/codex/home/skills/ask.ccb-projection.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 280,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\provider-state\\codex\\home\\skills\\ccb-clear.ccb-projection.json",
+      "archive_path": "project/.ccb/agents/code_reviewer/provider-state/codex/home/skills/ccb-clear.ccb-projection.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 292,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\code_reviewer\\provider-state\\codex\\home\\skills\\reconnect.ccb-projection.json",
+      "archive_path": "project/.ccb/agents/code_reviewer/provider-state/codex/home/skills/reconnect.ccb-projection.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 292,
+      "error": null
+    },
+    {
+      "category": "agent-session",
+      "source_path": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.ccb\\.codex-code_reviewer-session",
+      "archive_path": "project/.ccb/.codex-code_reviewer-session",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 10912,
+      "error": null
+    },
+    {
+      "category": "agent-authority",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\agent.json",
+      "archive_path": "project/.ccb/agents/main_code/agent.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 906,
+      "error": null
+    },
+    {
+      "category": "agent-authority",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\runtime.json",
+      "archive_path": "project/.ccb/agents/main_code/runtime.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 1884,
+      "error": null
+    },
+    {
+      "category": "agent-authority",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\restore.json",
+      "archive_path": "project/.ccb/agents/main_code/restore.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 305,
+      "error": null
+    },
+    {
+      "category": "agent-events",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\jobs.jsonl",
+      "archive_path": "project/.ccb/agents/main_code/jobs.jsonl",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "agent-events",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\events.jsonl",
+      "archive_path": "project/.ccb/agents/main_code/events.jsonl",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 497,
+      "error": null
+    },
+    {
+      "category": "agent-workspace",
+      "source_path": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.ccb\\workspaces\\main_code\\.ccb-workspace.json",
+      "archive_path": "project/.ccb/workspaces/main_code/.ccb-workspace.json",
+      "status": "missing",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\provider-runtime\\codex\\app-server.stderr.log",
+      "archive_path": "project/.ccb/agents/main_code/provider-runtime/codex/app-server.stderr.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\provider-runtime\\codex\\app-server.stdout.log",
+      "archive_path": "project/.ccb/agents/main_code/provider-runtime/codex/app-server.stdout.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\provider-runtime\\codex\\bridge.log",
+      "archive_path": "project/.ccb/agents/main_code/provider-runtime/codex/bridge.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\provider-runtime\\codex\\bridge.pid",
+      "archive_path": "project/.ccb/agents/main_code/provider-runtime/codex/bridge.pid",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 7,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\provider-runtime\\codex\\bridge.stderr.log",
+      "archive_path": "project/.ccb/agents/main_code/provider-runtime/codex/bridge.stderr.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 0,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\provider-runtime\\codex\\bridge.stdout.log",
+      "archive_path": "project/.ccb/agents/main_code/provider-runtime/codex/bridge.stdout.log",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 119,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\provider-runtime\\codex\\codex-memory-projection.json",
+      "archive_path": "project/.ccb/agents/main_code/provider-runtime/codex/codex-memory-projection.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 299,
+      "error": null
+    },
+    {
+      "category": "agent-runtime",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\provider-runtime\\codex\\provider-profile.json",
+      "archive_path": "project/.ccb/agents/main_code/provider-runtime/codex/provider-profile.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 427,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\provider-state\\codex\\home\\.ccb-session-namespace.json",
+      "archive_path": "project/.ccb/agents/main_code/provider-state/codex/home/.ccb-session-namespace.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 160,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\provider-state\\codex\\home\\config.toml",
+      "archive_path": "project/.ccb/agents/main_code/provider-state/codex/home/config.toml",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 203,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\provider-state\\codex\\home\\hooks.json",
+      "archive_path": "project/.ccb/agents/main_code/provider-state/codex/home/hooks.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 21,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\provider-state\\codex\\home\\skills\\ask.ccb-projection.json",
+      "archive_path": "project/.ccb/agents/main_code/provider-state/codex/home/skills/ask.ccb-projection.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 280,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\provider-state\\codex\\home\\skills\\ccb-clear.ccb-projection.json",
+      "archive_path": "project/.ccb/agents/main_code/provider-state/codex/home/skills/ccb-clear.ccb-projection.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 292,
+      "error": null
+    },
+    {
+      "category": "agent-provider-state",
+      "source_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\agents\\main_code\\provider-state\\codex\\home\\skills\\reconnect.ccb-projection.json",
+      "archive_path": "project/.ccb/agents/main_code/provider-state/codex/home/skills/reconnect.ccb-projection.json",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 292,
+      "error": null
+    },
+    {
+      "category": "agent-session",
+      "source_path": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.ccb\\.codex-main_code-session",
+      "archive_path": "project/.ccb/.codex-main_code-session",
+      "status": "included",
+      "truncated": false,
+      "byte_count": 10744,
+      "error": null
+    }
+  ]
+}

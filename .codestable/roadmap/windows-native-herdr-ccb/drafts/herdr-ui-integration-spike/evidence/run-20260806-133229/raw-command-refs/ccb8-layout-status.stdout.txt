@@ -1,0 +1,138 @@
+{
+  "action": "status",
+  "ccbd_state": "unmounted",
+  "config_source": "E:\\GitHub寮€婧愰」鐩甛\TachiKuma\\claude_code_bridge\\.ccb\\ccb.config",
+  "configured_ok": true,
+  "dynamic_agent_count": 0,
+  "entry_window": "main",
+  "layout_status": "ok",
+  "live_ui_observed_ok": false,
+  "loop_agent_count": 0,
+  "namespace": {
+    "herdr_surface_projection": {
+      "backend_impl": "herdr",
+      "beta_gaps": [
+        "validation_pending"
+      ],
+      "blocking_gaps": [],
+      "capability_status": "partial",
+      "degraded_next_action": null,
+      "evidence_refs": {
+        "namespace_ref": {
+          "backend_family": "herdr-native",
+          "backend_impl": "herdr",
+          "ipc_kind": "herdr_socket",
+          "ipc_ref": "herdr://local",
+          "namespace_id": "w2",
+          "session_name": "ccb-claude_code_bridge-823aff28"
+        },
+        "provider_runtime_backend_ref": {}
+      },
+      "support_tier_projection": "experimental",
+      "support_tier_projection_source": "validation_pending"
+    },
+    "layout_signature": "f6daa08cdeaa17467fb2e839f44149c4de4b5a29ebb337a21222727ef6f6195c",
+    "layout_version": 3,
+    "namespace_epoch": 3,
+    "project_id": "823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d",
+    "socket_connectable": false,
+    "state_load_status": "ok",
+    "state_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\state.json",
+    "status": "unmounted",
+    "tmux_session_name": "ccb-claude_code_bridge-823aff28",
+    "tmux_socket_path": "",
+    "ui_attachable": false,
+    "workspace_window_id": "w2",
+    "workspace_window_name": "main"
+  },
+  "observed": {
+    "observe_status": "skipped",
+    "reason": "namespace_unmounted"
+  },
+  "pane_count": 2,
+  "project_id": "823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d",
+  "project_root": "E:\\GitHub寮€婧愰」鐩甛\TachiKuma\\claude_code_bridge",
+  "runtime_agent_count": 2,
+  "runtime_store_ok": false,
+  "topology_signature": "f6daa08cdeaa17467fb2e839f44149c4de4b5a29ebb337a21222727ef6f6195c",
+  "window_count": 1,
+  "windows": [
+    {
+      "agent_names": [
+        "main_code",
+        "code_reviewer"
+      ],
+      "agents": [
+        {
+          "agent": "main_code",
+          "agent_kind": "static",
+          "apply_plan_class": null,
+          "apply_stage": null,
+          "apply_status": null,
+          "ask_target": "main_code",
+          "dispatch_disabled": false,
+          "dispatch_state": "enabled",
+          "failed_apply": false,
+          "lifecycle_state": "configured",
+          "loop_id": null,
+          "node_id": null,
+          "observed": null,
+          "ownership_class": "static_configured",
+          "pane_id": null,
+          "pane_identity_source": "missing",
+          "pane_state": null,
+          "profile": null,
+          "provider": "codex",
+          "queue_depth": 0,
+          "retained_busy": false,
+          "role": null,
+          "role_class": null,
+          "runtime_state": "stopped",
+          "source": "configured",
+          "state_path": null,
+          "visibility_state": "visible",
+          "window_name": "main"
+        },
+        {
+          "agent": "code_reviewer",
+          "agent_kind": "static",
+          "apply_plan_class": null,
+          "apply_stage": null,
+          "apply_status": null,
+          "ask_target": "code_reviewer",
+          "dispatch_disabled": false,
+          "dispatch_state": "enabled",
+          "failed_apply": false,
+          "lifecycle_state": "configured",
+          "loop_id": null,
+          "node_id": null,
+          "observed": null,
+          "ownership_class": "static_configured",
+          "pane_id": null,
+          "pane_identity_source": "missing",
+          "pane_state": null,
+          "profile": null,
+          "provider": "codex",
+          "queue_depth": 0,
+          "retained_busy": false,
+          "role": null,
+          "role_class": null,
+          "runtime_state": "stopped",
+          "source": "configured",
+          "state_path": null,
+          "visibility_state": "visible",
+          "window_name": "main"
+        }
+      ],
+      "index": 0,
+      "layout_spec": "Main_Code:codex, code_reviewer:codex",
+      "name": "main",
+      "observed": null,
+      "order": 0,
+      "pane_count": 2,
+      "runtime_pane_count": 0,
+      "tool_names": []
+    }
+  ],
+  "windows_explicit": true
+}

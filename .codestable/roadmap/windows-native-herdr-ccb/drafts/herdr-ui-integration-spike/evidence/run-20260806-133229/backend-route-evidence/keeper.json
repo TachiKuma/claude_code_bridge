@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "record_type": "ccbd_keeper",
+  "project_id": "823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d",
+  "keeper_pid": 16420,
+  "started_at": "2026-08-06T05:31:06.294706Z",
+  "last_check_at": "2026-08-06T05:32:54.119813Z",
+  "state": "running",
+  "restart_count": 1,
+  "last_restart_at": "2026-08-06T05:31:06.296838Z",
+  "last_failure_reason": "config_check_failed:timed out"
+}

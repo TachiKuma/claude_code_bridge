@@ -1,0 +1,8 @@
+project_id: 823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d
+ccbd_state: mounted
+herdr_surface: capability_status=partial support_tier_projection=experimental source=validation_pending beta_gaps=validation_pending blocking_gaps=none next_action=None
+herdr_namespace_ref: backend_family=herdr-native,backend_impl=herdr,ipc_kind=herdr_socket,ipc_ref=herdr://local,namespace_id=w2,session_name=ccb-claude_code_bridge-823aff28
+agent: name=code_reviewer state=idle provider=codex queue=0
+binding: status=bound runtime=mux:w2:p3 session=E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\.ccb\.codex-code_reviewer-session source=provider-session workspace=E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge terminal=mux socket=None socket_path=None window=main window_id=None pane=w2:p3 active_pane=w2:p3 pane_state=alive marker=CCB-code_reviewer-823aff28
+agent: name=main_code state=idle provider=codex queue=0
+binding: status=bound runtime=mux:w2:p2 session=E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\.ccb\.codex-main_code-session source=provider-session workspace=E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge terminal=mux socket=None socket_path=None window=main window_id=None pane=w2:p2 active_pane=w2:p2 pane_state=alive marker=CCB-main_code-823aff28

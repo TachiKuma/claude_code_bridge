@@ -1,0 +1,12 @@
+{
+    "name":  "herdr-v0.8-version",
+    "command":  [
+                    "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Herdr\\herdr.exe",
+                    "--version"
+                ],
+    "exit_code":  0,
+    "timed_out":  false,
+    "elapsed_ms":  37,
+    "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-081057\\raw-command-refs\\herdr-v0.8-version.stdout.txt",
+    "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-081057\\raw-command-refs\\herdr-v0.8-version.stderr.txt"
+}

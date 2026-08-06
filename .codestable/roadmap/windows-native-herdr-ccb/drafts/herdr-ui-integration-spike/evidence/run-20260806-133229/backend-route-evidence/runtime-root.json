@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "record_type": "ccb_runtime_root",
+  "project_id": "823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d",
+  "project_root": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge",
+  "anchor_path": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.ccb",
+  "runtime_root_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d",
+  "created_at": "2026-08-06T05:32:36.740563Z"
+}

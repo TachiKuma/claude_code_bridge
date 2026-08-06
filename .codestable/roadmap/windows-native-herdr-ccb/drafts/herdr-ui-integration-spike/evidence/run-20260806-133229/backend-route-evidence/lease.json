@@ -1,0 +1,31 @@
+{
+  "schema_version": 2,
+  "record_type": "ccbd_lease",
+  "api_version": 2,
+  "project_id": "823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d",
+  "ccbd_pid": 9264,
+  "socket_path": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\ccbd.sock",
+  "owner_uid": -1,
+  "boot_id": "Fdyl-002",
+  "started_at": "2026-08-06T05:31:11.420520Z",
+  "last_heartbeat_at": "2026-08-06T05:32:42.896978Z",
+  "mount_state": "unmounted",
+  "generation": 1,
+  "config_signature": "84b064b4cef79eaeff07142352eafe30735c6fd5197f34250af69ef8bfe6b9f1",
+  "keeper_pid": 16420,
+  "daemon_instance_id": "188124724f194486946829e1a167bd80",
+  "control_plane_endpoint": {
+    "kind": "tcp_loopback",
+    "address": "127.0.0.1:64606",
+    "display": "127.0.0.1:64606",
+    "legacy_socket_path": null,
+    "auth_ref": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\control-plane-token-3a842035aaa8493b.json",
+    "fingerprint": "74201af7332085ae",
+    "socket_path": null,
+    "host": "127.0.0.1",
+    "port": 64606,
+    "token_ref": "D:\\.c8\\rs\\823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d\\ccbd\\control-plane-token-3a842035aaa8493b.json",
+    "generation": "6d5e01e8c64b2bb0",
+    "acl_status": "windows-icacls-user-read"
+  }
+}

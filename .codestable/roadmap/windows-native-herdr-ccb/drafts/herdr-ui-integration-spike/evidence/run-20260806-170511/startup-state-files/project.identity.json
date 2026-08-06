@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "record_type": "ccb_project_identity",
+  "project_id": "823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d",
+  "project_slug": "claude_code_bridge-823aff28",
+  "created_at": "2026-08-03T06:46:26.103631Z",
+  "bound_root": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge",
+  "binding_epoch": 1,
+  "identity_origin": "legacy-current-root",
+  "last_bound_at": "2026-08-03T06:46:26.103631Z",
+  "legacy_project_ids": []
+}

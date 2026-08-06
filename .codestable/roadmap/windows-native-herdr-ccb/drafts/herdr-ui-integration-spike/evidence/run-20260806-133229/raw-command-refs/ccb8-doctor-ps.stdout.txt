@@ -1,0 +1,8 @@
+project_id: 823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d
+ccbd_state: unmounted
+herdr_surface: capability_status=partial support_tier_projection=experimental source=validation_pending beta_gaps=validation_pending blocking_gaps=none next_action=None
+herdr_namespace_ref: backend_family=herdr-native,backend_impl=herdr,ipc_kind=herdr_socket,ipc_ref=herdr://local,namespace_id=w2,session_name=ccb-claude_code_bridge-823aff28
+agent: name=code_reviewer state=stopped provider=codex queue=0
+binding: status=partial runtime=None session=None source=provider-session workspace=E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\.ccb\workspaces\code_reviewer terminal=None socket=None socket_path=None window=None window_id=None pane=None active_pane=None pane_state=None marker=None
+agent: name=main_code state=stopped provider=codex queue=0
+binding: status=partial runtime=None session=None source=provider-session workspace=E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\.ccb\workspaces\main_code terminal=None socket=None socket_path=None window=None window_id=None pane=None active_pane=None pane_state=None marker=None

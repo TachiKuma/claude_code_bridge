@@ -1,0 +1,1 @@
+{"id":"cli:api:snapshot","error":{"code":"server_not_running","message":"no herdr server is running at C:\\Users\\Administrator\\AppData\\Roaming\\herdr\\sessions\\ccb-avaprintdesigner-575a971f\\herdr.sock; run `herdr session attach ccb-avaprintdesigner-575a971f` to start or attach it"}}

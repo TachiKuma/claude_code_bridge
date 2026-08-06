@@ -1,0 +1,15 @@
+{
+    "name":  "herdr-api-snapshot-ccb-namespace",
+    "command":  [
+                    "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Herdr\\herdr.exe",
+                    "api",
+                    "snapshot",
+                    "--session",
+                    "ccb-avaprintdesigner-575a971f"
+                ],
+    "exit_code":  1,
+    "timed_out":  false,
+    "elapsed_ms":  36,
+    "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-085134\\raw-command-refs\\herdr-api-snapshot-ccb-namespace.stdout.txt",
+    "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260806-085134\\raw-command-refs\\herdr-api-snapshot-ccb-namespace.stderr.txt"
+}

@@ -1,0 +1,10 @@
+doctor_bundle_status: ok
+project: E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge
+project_id: 823aff2895b36ba805a56933aa6c5db79d2cc7f8528b54e3fe02100debdb1d4d
+bundle_id: ccb-support-20260806t053256771808z-823aff2895b3
+bundle_path: E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\.codestable\roadmap\windows-native-herdr-ccb\drafts\herdr-ui-integration-spike\evidence\run-20260806-133229\doctor-output.tar.gz
+file_count: 36
+included_count: 23
+missing_count: 13
+truncated_count: 0
+doctor_error: None

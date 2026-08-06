@@ -1,0 +1,15 @@
+d-socket 'D:\.c8\rs\575a971fdf5a0c497a48228040a14841f
+b4529aaa476beb21d34e53f1629bc03\ccbd\ccbd.sock' --pro
+ject-root 'D:\C#Project\GitHub\AvaPrintDesigner' --pa
+ne-window main"
+sh : 鏃犳硶灏嗏€渟h鈥濋」璇嗗埆涓?cmdlet銆佸嚱鏁般€佽剼鏈枃浠舵垨鍙?杩愯绋嬪簭鐨勫悕绉般€傝妫€鏌ュ悕绉扮殑鎷煎啓锛屽鏋滃寘鎷矾寰勶紝璇风‘
+淇濊矾寰勬纭紝鐒跺悗鍐嶈瘯涓€娆°€?鎵€鍦ㄤ綅缃?琛?1 瀛楃: 1
++ sh -lc "CCB_SIDEBAR_THEME_PROFILE=default 'E:\GitH
+ub寮€婧愰」鐩甛TachiKuma\cl ...
++ ~~
+    + CategoryInfo          : ObjectNotFound: (sh:S
+   tring) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundExcept
+   ion
+
+PS D:\C#Project\GitHub\AvaPrintDesigner>
