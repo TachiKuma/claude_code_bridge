@@ -213,9 +213,20 @@ function Read-HerdrSnapshotCandidate {
     try {
         $snapshotPayload = $snapshotText | ConvertFrom-Json -ErrorAction Stop
     } catch {
+        # 解析失败时保存 raw 输出，避免证据丢失（可能因中文路径/编码导致）
+        $rawRef = $null
+        try {
+            $rawRef = $CommandResult.stdout_ref + '.raw.txt'
+            Write-Utf8NoBom -Path $rawRef -Content $snapshotText
+            # 写入失败时不返回悬空路径，避免消费方信任不存在的 raw 证据
+            if (-not (Test-Path -LiteralPath $rawRef)) { $rawRef = $null }
+        } catch {
+            $rawRef = $null
+        }
         return [ordered] @{
             ok = $false
             reason = ('json-parse-failed: ' + $_.Exception.Message)
+            raw_ref = $rawRef
             snapshot = $null
         }
     }
@@ -615,7 +626,7 @@ function Start-ProcessSampler {
             $value = [regex]::Replace($value, '(?i)(bearer)\s+[a-z0-9._~+/-]+', '$1 <redacted>')
             return $value
         }
-        $names = @('cmd.exe', 'powershell.exe', 'pwsh.exe', 'python.exe', 'pythonw.exe', 'node.exe', 'claude.exe', 'codex.exe', 'herdr.exe')
+        $herdrName = 'herdr.exe'
         $deadline = (Get-Date).AddSeconds($DurationSeconds)
         while ((Get-Date) -lt $deadline) {
             $now = (Get-Date).ToUniversalTime().ToString('o')
@@ -623,12 +634,13 @@ function Start-ProcessSampler {
                 Where-Object {
                     $name = [string] $_.Name
                     $cmd = [string] $_.CommandLine
-                    $names -contains $name.ToLowerInvariant() -or
-                        $cmd.IndexOf($ProjectRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
-                        $cmd.IndexOf($RepoRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
-                        $cmd.IndexOf('ccb', [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
-                        $cmd.IndexOf('herdr', [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
-                        $cmd.IndexOf('claude', [StringComparison]::OrdinalIgnoreCase) -ge 0
+                    $lowerName = $name.ToLowerInvariant()
+                    $projectRelated = $cmd.IndexOf($ProjectRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                        $cmd.IndexOf($RepoRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0
+                    # CCB 守护进程 marker：ccbd / keeper_main / ccb.py / ccb8 wrapper / CCB Herdr 会话
+                    $ccbRuntimeMarker = $cmd -match 'ccbd[\\/]|keeper_main\.py|ccb\.py|ccb8\.(cmd|ps1)|ccb-herdr'
+                    $isHerdr = $lowerName -eq $herdrName
+                    $projectRelated -or $ccbRuntimeMarker -or $isHerdr
                 } |
                 Select-Object ProcessId, ParentProcessId, Name, ExecutablePath, CommandLine
             foreach ($process in @($processes)) {
@@ -676,6 +688,14 @@ function Get-HostContext {
         user_domain = [Environment]::UserDomainName
         user_name = [Environment]::UserName
         current_directory = (Get-Location).ProviderPath
+        # 归因提示：spike 脚本在 repo 运行但操作外部项目时，current_directory 与 project_root 不一致；
+        # ccb8.cmd 通过 $PSScriptRoot 定位项目，但 ccb.py 的项目发现基于 cwd，两者可能解析到不同 config。
+        # 规范化路径（分隔符/尾斜杠/大小写）后再比较，避免同一物理目录被误判为不同。
+        working_directory_differs_from_project = (-not [string]::Equals(
+            [System.IO.Path]::GetFullPath((Get-Location).ProviderPath).TrimEnd('\'),
+            [System.IO.Path]::GetFullPath($ProjectRoot).TrimEnd('\'),
+            [System.StringComparison]::OrdinalIgnoreCase
+        ))
     }
 }
 
@@ -933,7 +953,25 @@ if ($collectCcbLayout) {
     $commands += Invoke-CapturedCommand -Name 'ccb8-layout-status' -Command @($resolvedCcb8, 'layout', 'status', '--json') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 30
 }
 if ((Test-SpikeDimensionEnabled -Dimension 'ccb-layout' -EnabledDimensions $enabledDimensions) -or $collectBackendRoute -or (Test-SpikeDimensionEnabled -Dimension 'startup-state-files' -EnabledDimensions $enabledDimensions)) {
-    $commands += Invoke-CapturedCommand -Name 'ccb8-doctor-output' -Command @($resolvedCcb8, 'doctor', '--output', (Join-Path $resolvedOut 'doctor-output')) -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 60
+    # doctor --output 产出的是 gzip tar 归档：带 .tar.gz 后缀便于人工识别，并解压供后续读取。
+    $doctorOutputArchive = Join-Path $resolvedOut 'doctor-output.tar.gz'
+    $doctorOutputExtractDir = Join-Path $resolvedOut 'doctor-output-extracted'
+    $commands += Invoke-CapturedCommand -Name 'ccb8-doctor-output' -Command @($resolvedCcb8, 'doctor', '--output', $doctorOutputArchive) -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 60
+    if (Test-Path -LiteralPath $doctorOutputArchive) {
+        New-Item -ItemType Directory -Force -Path $doctorOutputExtractDir | Out-Null
+        $extractFailed = $false
+        try {
+            & tar.exe -xzf $doctorOutputArchive -C $doctorOutputExtractDir
+            if ($LASTEXITCODE -ne 0) { $extractFailed = $true }
+        } catch {
+            $extractFailed = $true
+        }
+        # 解压失败或目录为空时回退旧布局，避免空目录优先于真实证据
+        if ($extractFailed -or -not (Get-ChildItem -LiteralPath $doctorOutputExtractDir -Recurse -File -ErrorAction SilentlyContinue)) {
+            Write-Host 'WARNING: doctor-output extraction failed or empty; falling back to legacy layout'
+            $doctorOutputExtractDir = $null
+        }
+    }
 }
 
 # --- Extract CCB actual Herdr session from ccb8-ps output ---
@@ -1041,11 +1079,24 @@ if (Test-SpikeDimensionEnabled -Dimension 'startup-state-files' -EnabledDimensio
     }
 
     # Also copy startup-report.json from doctor output if available
-    $startupReport = Join-Path $resolvedOut 'doctor-output/startup-report.json'
-    if (-not (Test-Path -LiteralPath $startupReport)) {
-        $startupReport = Join-Path $resolvedOut 'doctor-output/ccbd/startup-report.json'
+    # doctor-output 是 .tar.gz 归档，优先从解压目录搜索；回退到旧目录布局。
+    $startupReport = $null
+    if (-not [string]::IsNullOrWhiteSpace($doctorOutputExtractDir) -and (Test-Path -LiteralPath $doctorOutputExtractDir)) {
+        $foundStartupReport = Get-ChildItem -LiteralPath $doctorOutputExtractDir -Recurse -File -Filter 'startup-report.json' -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($null -ne $foundStartupReport) {
+            $startupReport = $foundStartupReport.FullName
+        }
     }
-    if (Test-Path -LiteralPath $startupReport) {
+    if ($null -eq $startupReport) {
+        $legacyStartupReport = Join-Path $resolvedOut 'doctor-output/startup-report.json'
+        if (-not (Test-Path -LiteralPath $legacyStartupReport)) {
+            $legacyStartupReport = Join-Path $resolvedOut 'doctor-output/ccbd/startup-report.json'
+        }
+        if (Test-Path -LiteralPath $legacyStartupReport) {
+            $startupReport = $legacyStartupReport
+        }
+    }
+    if ($null -ne $startupReport -and (Test-Path -LiteralPath $startupReport)) {
         try {
             Copy-Item -LiteralPath $startupReport -Destination (Join-Path $stateFilesDir 'startup-report.json') -Force
             Append-Utf8NoBom -Path (Join-Path $resolvedOut 'startup-state-files-manifest.txt') -Content "copied startup-report.json`r`n"
@@ -1146,8 +1197,13 @@ if ($collectPaneVerification) {
 if ($collectBackendRoute) {
     Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'collecting backend resolver route evidence' -PercentComplete 85
     New-Item -ItemType Directory -Force -Path $backendRouteDir | Out-Null
-    $doctorOutputDir = Join-Path $resolvedOut 'doctor-output'
-    if (Test-Path -LiteralPath $doctorOutputDir) {
+    $doctorOutputDir = $null
+    if (-not [string]::IsNullOrWhiteSpace($doctorOutputExtractDir) -and (Test-Path -LiteralPath $doctorOutputExtractDir)) {
+        $doctorOutputDir = $doctorOutputExtractDir
+    } elseif (Test-Path -LiteralPath (Join-Path $resolvedOut 'doctor-output')) {
+        $doctorOutputDir = Join-Path $resolvedOut 'doctor-output'
+    }
+    if ($null -ne $doctorOutputDir -and (Test-Path -LiteralPath $doctorOutputDir)) {
         # Collect ccbd startup log fragments for backend selection.
         Get-ChildItem -LiteralPath $doctorOutputDir -Recurse -File -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -like '*.log' -or $_.Name -like '*.json' -or $_.Name -like '*.txt' } |
