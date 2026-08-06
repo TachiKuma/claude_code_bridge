@@ -1,10 +1,10 @@
 ---
 doc_type: refactor-review
 refactor: 2026-08-06-launch-mode-runtime-mux-backend
-status: changes-requested
+status: passed
 reviewer: subagent+ocr
 reviewed: 2026-08-06
-round: 1
+round: 2
 lane_a_state: completed
 lane_a_ref: "aaa6b57a3673442f6"
 lane_a_reason: ""
@@ -196,3 +196,45 @@ lane_b_reason: ""
 **changes-requested** — B1（overlays 丢弃 `runtime_mux_backend`）是真实阻断性 bug，需在 review-fix 中修复。B2（`startswith('tmux:')` 硬编码）是已知架构限制，短期可接受但必须记录。I1（env var 持久化）和 I3（bridge 在 herdr 下可能阻断）应修复。
 
 下一步：回到 refactor 实施修复 B1 + I1 + I3，然后回到本审查做 focused closure 或完整复审。
+
+## 5. Review-Fix Closure（Round 2）
+
+修复 commit: `1be3af5c`
+
+### 已修复
+
+**B1 修复** — overlays `_copy_config` 保留 `runtime_mux_backend`
+- `loop_overlays.py:327`：`ProjectConfig(...)` 新增 `runtime_mux_backend=config.runtime_mux_backend`
+- `dynamic_agent_overlays.py:428`：同上
+- 验证：手动审查确认两处 `_copy_config` 调用均已传入该字段；`ProjectConfig` dataclass 正确定义此字段（`project.py:44`）
+
+**I1 修复** — `get_backend()` env var 不再持久化到模块全局
+- `api.py:156-159`：env var 值改为局部变量 `env_pref`，不再写入 `_backend_config_preference`
+- 验证：代码审查确认；config 重新加载时 env var 变更能正确反映
+
+**I3 修复** — `post_launch` 在 herdr backend 下跳过 bridge
+- `bridge.py:23-25`：新增 `_backend_is_herdr(backend)` 检测，herdr 下跳过 `spawn_codex_bridge` + `validate_bridge_bootstrap`
+- `bridge.py:98-103`：新增 `_backend_is_herdr()` helper，以 `_tmux_run` 缺失为信号（与 `write_pane_pid` 一致）
+- 验证：代码审查确认；设计 D3 决策 A "bridge 降级为辅助"语义满足
+
+### 已知限制（接受不修）
+
+**B2（`startswith('tmux:')` 硬编码）** 是已知架构限制：
+- 五处 `startswith('tmux:')` 检查为 tmux 专属生命周期操作
+- 对 herdr 需要新增对应的 herdr 生命周期实现（herdr liveness、herdr cleanup）
+- 不在本次 refactor 范围，作为后续 herdr lifecycle epic 的输入
+- 当前行为（herdr pane 被这些检查跳过）是安全的——herdr 有独立的生命周期管理
+
+### 测试结果
+
+```
+55 passed in 0.55s
+```
+- test_config_runtime_mux_backend.py: 9 passed
+- test_cli_runtime_launch_pane_runtime.py: 8 passed
+- test_mux_backend_contract.py: 8 passed
+- test_terminal_runtime_backend_selection.py: 30 passed
+
+### Verdict
+
+**passed** — blocking B1 已修复，important I1/I3 已修复。B2 为已知架构限制，接受为后续 herdr lifecycle epic 的输入。
