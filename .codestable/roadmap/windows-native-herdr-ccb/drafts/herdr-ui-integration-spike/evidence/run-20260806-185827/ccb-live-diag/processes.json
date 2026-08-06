@@ -1,0 +1,158 @@
+[
+    {
+        "pid":  6636,
+        "parent_pid":  8020,
+        "name":  "node.exe",
+        "command_line":  "\"C:\\Program Files\\Adobe\\Adobe Creative Cloud Experience\\libs\\node.exe\" \"C:\\Program Files\\Adobe\\Adobe Creative Cloud Experience\\js\\main.js\""
+    },
+    {
+        "pid":  8912,
+        "parent_pid":  10024,
+        "name":  "pwsh.exe",
+        "command_line":  "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\" -NoLogo"
+    },
+    {
+        "pid":  9896,
+        "parent_pid":  8912,
+        "name":  "cmd.exe",
+        "command_line":  "C:\\Windows\\system32\\cmd.exe /c \"\"C:\\Users\\Administrator\\AppData\\Local\\codex-dual\\bin\\ccb.bat\" -a\""
+    },
+    {
+        "pid":  9120,
+        "parent_pid":  9896,
+        "name":  "python.exe",
+        "command_line":  "python  \"C:\\Users\\Administrator\\AppData\\Local\\codex-dual\\bin\\..\\\\ccb\" -a"
+    },
+    {
+        "pid":  1092,
+        "parent_pid":  9120,
+        "name":  "python.exe",
+        "command_line":  "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\python.exe C:\\Users\\Administrator\\AppData\\Local\\codex-dual\\bin\\askd"
+    },
+    {
+        "pid":  2612,
+        "parent_pid":  10024,
+        "name":  "pwsh.exe",
+        "command_line":  "\"C:\\Program Files\\PowerShell\\7\\pwsh.EXE\" -Command \"$esc=[char]27; [Console]::Write(\\\"$esc]0;CCB-Opencode`a\\\"); $Host.UI.RawUI.WindowTitle = \u0027CCB-Opencode\u0027; $env:CCB_MANAGED = \u00271\u0027; $env:CCB_PARENT_PID = \u00279120\u0027; $env:CCB_RUN_DIR = \u0027C:\\Users\\Administrator\\.cache\\ccb\\projects\\26ac1d7cfc71c73f\u0027; $env:Path = \u0027C:\\Users\\Administrator\\AppData\\Local\\codex-dual\\bin;C:\\Program Files\\PowerShell\\7;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Program Files\\Git\\cmd;d:\\Program Files\\cursor\\resources\\app\\bin;C:\\Users\\Administrator\\AppData\\Roaming\\npm;C:\\Users\\Administrator\\AppData\\Roaming\\npm\\claude;C:\\Program Files\\dotnet\\;D:\\Tools\\AI Tools\\WezTerm;C:\\Users\\Administrator\\.bun\\bin;C:\\Users\\Administrator\\AppData\\Local\\cca;C:\\Users\\Administrator\\AppData\\Roaming\\cca;C:\\Program Files\\nodejs\\;C:\\Program Files\\PowerShell\\7\\;C:\\Program Files\\Microsoft SQL Server\\170\\Tools\\Binn\\;C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\;C:\\Users\\Administrator\\.cargo\\bin;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Launcher\\;C:\\Users\\Administrator\\.local\\bin;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Users\\Administrator\\AppData\\Roaming\\npm\\claude;C:\\Users\\Administrator\\.dotnet\\tools;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\Administrator\\.bun\\bin;C:\\Users\\Administrator\\bin;C:\\Users\\Administrator\\AppData\\Roaming\\npm;C:\\Users\\Administrator\\.dotnet\\tools;D:/C#Project/GitHub/FengDaGeniusForAvalonia/.dotnet-home\\.dotnet\\tools;C:\\Users\\Administrator\\AppData\\Local\\codex-dual\\bin;C:\\Users\\Administrator\\AppData\\Local\\psmux;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Links;;C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python314\\Scripts;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64;\u0027; opencode; $code = $LASTEXITCODE; Write-Host \\\"`n[opencode] exited with code $code. Press Enter to close...\\\"; Read-Host; exit $code\""
+    },
+    {
+        "pid":  2488,
+        "parent_pid":  10024,
+        "name":  "pwsh.exe",
+        "command_line":  "\"C:\\Program Files\\PowerShell\\7\\pwsh.EXE\" -Command \"$esc=[char]27; [Console]::Write(\\\"$esc]0;CCB-Gemini`a\\\"); $Host.UI.RawUI.WindowTitle = \u0027CCB-Gemini\u0027; $env:CCB_MANAGED = \u00271\u0027; $env:CCB_PARENT_PID = \u00279120\u0027; $env:CCB_RUN_DIR = \u0027C:\\Users\\Administrator\\.cache\\ccb\\projects\\26ac1d7cfc71c73f\u0027; $env:Path = \u0027C:\\Users\\Administrator\\AppData\\Local\\codex-dual\\bin;C:\\Program Files\\PowerShell\\7;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Program Files\\Git\\cmd;d:\\Program Files\\cursor\\resources\\app\\bin;C:\\Users\\Administrator\\AppData\\Roaming\\npm;C:\\Users\\Administrator\\AppData\\Roaming\\npm\\claude;C:\\Program Files\\dotnet\\;D:\\Tools\\AI Tools\\WezTerm;C:\\Users\\Administrator\\.bun\\bin;C:\\Users\\Administrator\\AppData\\Local\\cca;C:\\Users\\Administrator\\AppData\\Roaming\\cca;C:\\Program Files\\nodejs\\;C:\\Program Files\\PowerShell\\7\\;C:\\Program Files\\Microsoft SQL Server\\170\\Tools\\Binn\\;C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\;C:\\Users\\Administrator\\.cargo\\bin;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Launcher\\;C:\\Users\\Administrator\\.local\\bin;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Users\\Administrator\\AppData\\Roaming\\npm\\claude;C:\\Users\\Administrator\\.dotnet\\tools;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\Administrator\\.bun\\bin;C:\\Users\\Administrator\\bin;C:\\Users\\Administrator\\AppData\\Roaming\\npm;C:\\Users\\Administrator\\.dotnet\\tools;D:/C#Project/GitHub/FengDaGeniusForAvalonia/.dotnet-home\\.dotnet\\tools;C:\\Users\\Administrator\\AppData\\Local\\codex-dual\\bin;C:\\Users\\Administrator\\AppData\\Local\\psmux;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Links;;C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python314\\Scripts;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64;\u0027; gemini --yolo; $code = $LASTEXITCODE; Write-Host \\\"`n[gemini] exited with code $code. Press Enter to close...\\\"; Read-Host; exit $code\""
+    },
+    {
+        "pid":  9016,
+        "parent_pid":  10024,
+        "name":  "pwsh.exe",
+        "command_line":  "\"C:\\Program Files\\PowerShell\\7\\pwsh.EXE\" -Command \"$esc=[char]27; [Console]::Write(\\\"$esc]0;CCB-Codex`a\\\"); $Host.UI.RawUI.WindowTitle = \u0027CCB-Codex\u0027; $env:CCB_MANAGED = \u00271\u0027; $env:CCB_PARENT_PID = \u00279120\u0027; $env:CCB_RUN_DIR = \u0027C:\\Users\\Administrator\\.cache\\ccb\\projects\\26ac1d7cfc71c73f\u0027; $env:Path = \u0027C:\\Users\\Administrator\\AppData\\Local\\codex-dual\\bin;C:\\Program Files\\PowerShell\\7;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Program Files\\Git\\cmd;d:\\Program Files\\cursor\\resources\\app\\bin;C:\\Users\\Administrator\\AppData\\Roaming\\npm;C:\\Users\\Administrator\\AppData\\Roaming\\npm\\claude;C:\\Program Files\\dotnet\\;D:\\Tools\\AI Tools\\WezTerm;C:\\Users\\Administrator\\.bun\\bin;C:\\Users\\Administrator\\AppData\\Local\\cca;C:\\Users\\Administrator\\AppData\\Roaming\\cca;C:\\Program Files\\nodejs\\;C:\\Program Files\\PowerShell\\7\\;C:\\Program Files\\Microsoft SQL Server\\170\\Tools\\Binn\\;C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\;C:\\Users\\Administrator\\.cargo\\bin;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Launcher\\;C:\\Users\\Administrator\\.local\\bin;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Users\\Administrator\\AppData\\Roaming\\npm\\claude;C:\\Users\\Administrator\\.dotnet\\tools;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\Administrator\\.bun\\bin;C:\\Users\\Administrator\\bin;C:\\Users\\Administrator\\AppData\\Roaming\\npm;C:\\Users\\Administrator\\.dotnet\\tools;D:/C#Project/GitHub/FengDaGeniusForAvalonia/.dotnet-home\\.dotnet\\tools;C:\\Users\\Administrator\\AppData\\Local\\codex-dual\\bin;C:\\Users\\Administrator\\AppData\\Local\\psmux;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Links;;C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python314\\Scripts;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Helvesec.RMUX_Microsoft.Winget.Source_8wekyb3d8bbwe\\rmux-0.9.0-windows-x86_64;\u0027; codex -c disable_paste_burst=true -c trust_level=\\\"trusted\\\" -c approval_policy=\\\"never\\\" -c sandbox_mode=\\\"danger-full-access\\\"; $code = $LASTEXITCODE; Write-Host \\\"`n[codex] exited with code $code. Press Enter to close...\\\"; Read-Host; exit $code\""
+    },
+    {
+        "pid":  6012,
+        "parent_pid":  2488,
+        "name":  "node.exe",
+        "command_line":  "\"C:\\Program Files\\nodejs\\node.exe\" C:\\Users\\Administrator\\AppData\\Roaming\\npm/node_modules/@google/gemini-cli/bundle/gemini.js --yolo"
+    },
+    {
+        "pid":  7796,
+        "parent_pid":  9016,
+        "name":  "node.exe",
+        "command_line":  "\"C:\\Program Files\\nodejs\\node.exe\" C:\\Users\\Administrator\\AppData\\Roaming\\npm/node_modules/@openai/codex/bin/codex.js -c disable_paste_burst=true -c trust_level=trusted -c approval_policy=never -c sandbox_mode=danger-full-access"
+    },
+    {
+        "pid":  2800,
+        "parent_pid":  7796,
+        "name":  "codex.exe",
+        "command_line":  "C:\\Users\\Administrator\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe -c disable_paste_burst=true -c trust_level=trusted -c approval_policy=never -c sandbox_mode=danger-full-access"
+    },
+    {
+        "pid":  6940,
+        "parent_pid":  6012,
+        "name":  "node.exe",
+        "command_line":  "\"C:\\Program Files\\nodejs\\node.exe\" --max-old-space-size=32674 C:\\Users\\Administrator\\AppData\\Roaming\\npm\\node_modules\\@google\\gemini-cli\\bundle\\gemini.js --yolo"
+    },
+    {
+        "pid":  10668,
+        "parent_pid":  2800,
+        "name":  "cmd.exe",
+        "command_line":  "cmd.exe /e:ON /v:OFF /d /c \"\"C:\\Users\\Administrator\\AppData\\Roaming\\npm\\codegraph.cmd\" serve --mcp\""
+    },
+    {
+        "pid":  10720,
+        "parent_pid":  10668,
+        "name":  "node.exe",
+        "command_line":  "\"node\"   \"C:\\Users\\Administrator\\AppData\\Roaming\\npm\\\\node_modules\\@colbymchenry\\codegraph\\dist\\bin\\codegraph.js\" serve --mcp"
+    },
+    {
+        "pid":  11596,
+        "parent_pid":  8960,
+        "name":  "cmd.exe",
+        "command_line":  "C:\\Windows\\system32\\cmd.exe /d /s /c \"codegraph ^\"serve^\" ^\"--mcp^\"\""
+    },
+    {
+        "pid":  11716,
+        "parent_pid":  11596,
+        "name":  "node.exe",
+        "command_line":  "\"node\"   \"C:\\Users\\Administrator\\AppData\\Roaming\\npm\\\\node_modules\\@colbymchenry\\codegraph\\dist\\bin\\codegraph.js\" \"serve\" \"--mcp\""
+    },
+    {
+        "pid":  5424,
+        "parent_pid":  8816,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  10100,
+        "parent_pid":  8816,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  12688,
+        "parent_pid":  9488,
+        "name":  "python.exe",
+        "command_line":  "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\python.exe E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\lib\\ccbd\\keeper_main.py --project D:\\C#Project\\GitHub\\AvaPrintDesigner"
+    },
+    {
+        "pid":  6208,
+        "parent_pid":  15344,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  8936,
+        "parent_pid":  14768,
+        "name":  "powershell.exe",
+        "command_line":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"if ($null -eq $global:__HerdrOriginalPrompt) { $global:__HerdrOriginalPrompt = $function:prompt; function global:prompt { $out = @(\u0026 $global:__HerdrOriginalPrompt) -join \u0027 \u0027; $loc = $ExecutionContext.SessionState.Path.CurrentLocation; if ($loc.Provider.Name -eq \u0027FileSystem\u0027) { $esc = [string][char]27; $out += $esc + \u0027]9;9;\u0027 + $loc.ProviderPath + $esc + \u0027\\\u0027 }; $out } }\""
+    },
+    {
+        "pid":  16428,
+        "parent_pid":  10100,
+        "name":  "powershell.exe",
+        "command_line":  "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -Version 5.1 -s -NoLogo -NoProfile"
+    },
+    {
+        "pid":  14028,
+        "parent_pid":  10100,
+        "name":  "cmd.exe",
+        "command_line":  "\"C:\\Windows\\system32\\cmd.exe\" /d /s /c D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.cmd"
+    },
+    {
+        "pid":  16768,
+        "parent_pid":  14028,
+        "name":  "powershell.exe",
+        "command_line":  "powershell  -NoProfile -ExecutionPolicy Bypass -File \"D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.ps1\" "
+    },
+    {
+        "pid":  16252,
+        "parent_pid":  16768,
+        "name":  "python.exe",
+        "command_line":  "\"C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\python.exe\" E:\\GITHUB~1\\TACHIK~1\\claude_code_bridge\\ccb.py "
+    },
+    {
+        "pid":  15792,
+        "parent_pid":  5424,
+        "name":  "powershell.exe",
+        "command_line":  "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -Version 5.1 -s -NoLogo -NoProfile"
+    }
+]

@@ -1,0 +1,30 @@
+{
+  "schema_version": 2,
+  "record_type": "ccbd_lease",
+  "api_version": 2,
+  "project_id": "b72b0116880470ad0dad9ff7dabe6353cb83efc56e1c13688fac233f698c664e",
+  "ccbd_pid": 15504,
+  "socket_path": "D:\\Python\\GitHub\\claude_code_bridge\\.ccb\\ccbd\\ccbd.sock",
+  "owner_uid": -1,
+  "boot_id": "DESKTOP-Q8BCR5T",
+  "started_at": "2026-07-27T14:28:59.808069Z",
+  "last_heartbeat_at": "2026-07-27T16:39:22.891938Z",
+  "mount_state": "mounted",
+  "generation": 30,
+  "config_signature": "169d1ccbac469f8f6130af2e339a8fcc4c5e686708123dd06de3c694c844b69f",
+  "keeper_pid": 16032,
+  "daemon_instance_id": "05308e1e7d7d44498b27b977e339ba1c",
+  "control_plane_endpoint": {
+    "kind": "tcp_loopback",
+    "address": "127.0.0.1:57317",
+    "display": "127.0.0.1:57317",
+    "legacy_socket_path": null,
+    "auth_ref": "D:\\Python\\GitHub\\claude_code_bridge\\.ccb\\ccbd\\control-plane-token-ecbd32379d07466d.json",
+    "fingerprint": "76a9e9fee1c36ebf",
+    "host": "127.0.0.1",
+    "port": 57317,
+    "token_ref": "D:\\Python\\GitHub\\claude_code_bridge\\.ccb\\ccbd\\control-plane-token-ecbd32379d07466d.json",
+    "generation": "4bf984c204d102f6",
+    "acl_status": "windows-icacls-user-read"
+  }
+}

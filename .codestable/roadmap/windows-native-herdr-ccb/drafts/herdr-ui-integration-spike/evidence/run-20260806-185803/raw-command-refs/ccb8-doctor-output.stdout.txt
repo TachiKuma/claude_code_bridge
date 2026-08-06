@@ -1,0 +1,10 @@
+doctor_bundle_status: ok
+project: D:\C#Project\GitHub\AvaPrintDesigner
+project_id: 575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03
+bundle_id: ccb-support-20260806t105817035107z-575a971fdf5a
+bundle_path: E:\GitHub开源项目\TachiKuma\claude_code_bridge\.codestable\roadmap\windows-native-herdr-ccb\drafts\herdr-ui-integration-spike\evidence\run-20260806-185803\doctor-output.tar.gz
+file_count: 66
+included_count: 54
+missing_count: 12
+truncated_count: 6
+doctor_error: None

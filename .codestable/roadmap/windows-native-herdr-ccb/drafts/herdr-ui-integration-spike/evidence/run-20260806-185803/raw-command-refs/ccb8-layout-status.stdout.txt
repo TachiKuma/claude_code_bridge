@@ -1,0 +1,138 @@
+{
+  "action": "status",
+  "ccbd_state": "unmounted",
+  "config_source": "D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\ccb.config",
+  "configured_ok": false,
+  "dynamic_agent_count": 0,
+  "entry_window": "main",
+  "layout_status": "ok",
+  "live_ui_observed_ok": false,
+  "loop_agent_count": 0,
+  "namespace": {
+    "herdr_surface_projection": {
+      "backend_impl": "herdr",
+      "beta_gaps": [
+        "validation_pending"
+      ],
+      "blocking_gaps": [],
+      "capability_status": "partial",
+      "degraded_next_action": null,
+      "evidence_refs": {
+        "namespace_ref": {
+          "backend_family": "herdr-native",
+          "backend_impl": "herdr",
+          "ipc_kind": "herdr_socket",
+          "ipc_ref": "herdr://local",
+          "namespace_id": "w2",
+          "session_name": "ccb-avaprintdesigner-575a971f"
+        },
+        "provider_runtime_backend_ref": {}
+      },
+      "support_tier_projection": "experimental",
+      "support_tier_projection_source": "validation_pending"
+    },
+    "layout_signature": "44e838a64c4a26f232fb1ce94a2d1cccf514a22cd48954490ec65f697d8a2ad5",
+    "layout_version": 3,
+    "namespace_epoch": 19,
+    "project_id": "575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03",
+    "socket_connectable": false,
+    "state_load_status": "ok",
+    "state_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\state.json",
+    "status": "unmounted",
+    "tmux_session_name": "ccb-avaprintdesigner-575a971f",
+    "tmux_socket_path": "",
+    "ui_attachable": false,
+    "workspace_window_id": "w2",
+    "workspace_window_name": "main"
+  },
+  "observed": {
+    "observe_status": "skipped",
+    "reason": "namespace_unmounted"
+  },
+  "pane_count": 2,
+  "project_id": "575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03",
+  "project_root": "D:\\C#Project\\GitHub\\AvaPrintDesigner",
+  "runtime_agent_count": 2,
+  "runtime_store_ok": false,
+  "topology_signature": "44e838a64c4a26f232fb1ce94a2d1cccf514a22cd48954490ec65f697d8a2ad5",
+  "window_count": 1,
+  "windows": [
+    {
+      "agent_names": [
+        "agent1",
+        "agent2"
+      ],
+      "agents": [
+        {
+          "agent": "agent1",
+          "agent_kind": "static",
+          "apply_plan_class": null,
+          "apply_stage": null,
+          "apply_status": null,
+          "ask_target": "agent1",
+          "dispatch_disabled": false,
+          "dispatch_state": "enabled",
+          "failed_apply": false,
+          "lifecycle_state": "configured",
+          "loop_id": null,
+          "node_id": null,
+          "observed": null,
+          "ownership_class": "static_configured",
+          "pane_id": null,
+          "pane_identity_source": "missing",
+          "pane_state": null,
+          "profile": null,
+          "provider": "codex",
+          "queue_depth": 0,
+          "retained_busy": false,
+          "role": null,
+          "role_class": null,
+          "runtime_state": "stopped",
+          "source": "configured",
+          "state_path": null,
+          "visibility_state": "visible",
+          "window_name": "main"
+        },
+        {
+          "agent": "agent2",
+          "agent_kind": "static",
+          "apply_plan_class": null,
+          "apply_stage": null,
+          "apply_status": null,
+          "ask_target": "agent2",
+          "dispatch_disabled": false,
+          "dispatch_state": "enabled",
+          "failed_apply": false,
+          "lifecycle_state": "configured",
+          "loop_id": null,
+          "node_id": null,
+          "observed": null,
+          "ownership_class": "static_configured",
+          "pane_id": null,
+          "pane_identity_source": "missing",
+          "pane_state": null,
+          "profile": null,
+          "provider": "claude",
+          "queue_depth": 0,
+          "retained_busy": false,
+          "role": null,
+          "role_class": null,
+          "runtime_state": "stopped",
+          "source": "configured",
+          "state_path": null,
+          "visibility_state": "visible",
+          "window_name": "main"
+        }
+      ],
+      "index": 0,
+      "layout_spec": "cmd; agent1:codex, agent2:claude",
+      "name": "main",
+      "observed": null,
+      "order": 0,
+      "pane_count": 2,
+      "runtime_pane_count": 0,
+      "tool_names": []
+    }
+  ],
+  "windows_explicit": false
+}

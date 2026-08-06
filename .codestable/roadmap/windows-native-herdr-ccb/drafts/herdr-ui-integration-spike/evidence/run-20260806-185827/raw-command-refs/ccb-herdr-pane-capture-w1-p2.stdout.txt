@@ -1,0 +1,20 @@
+实际值是 -2。
+   在 System.Console.SetCursorPosition(Int32 left, Int32 top)
+   在 Microsoft.PowerShell.PSConsoleReadLine.ReallyRender(RenderData renderData, String defaultColor)
+   在 Microsoft.PowerShell.PSConsoleReadLine.ForceRender()
+   在 Microsoft.PowerShell.PSConsoleReadLine.Paste(Nullable`1 key, Object arg)
+   在 Microsoft.PowerShell.PSConsoleReadLine.ProcessOneKey(ConsoleKeyInfo key, Dictionary`2 dispatchTable, Boolean ignoreIfNoAction, Object ar
+g)
+   在 Microsoft.PowerShell.PSConsoleReadLine.InputLoop()
+   在 Microsoft.PowerShell.PSConsoleReadLine.ReadLine(Runspace runspace, EngineIntrinsics engineIntrinsics)
+-----------------------------------------------------------------------
+PS D:\C#Project\GitHub\AvaPrintDesigner> & "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codestable/roadmap/windows-native-herdr-ccb/drafts
+/herdr-ui-integration-spike/run_spike.ps1" ` -ProjectRoot "D:/C#Project/GitHub/AvaPrintDesigner" ` -Ccb8Path "D:/C#Project/GitHub/AvaPrintDesi
+gner/ccb8.cmd" ` -RepoRoot "E:/GitHub开源项目/TachiKuma/claude_code_bridge" ` -ExpectedAgents 2 ` -ObservedWindowsFlash ` -ObservedHerdrAgents
+PanelText "claude"
+wrote E:\GitHub开源项目\TachiKuma\claude_code_bridge\.codestable\roadmap\windows-native-herdr-ccb\drafts\herdr-ui-integration-spike\evidence\r
+un-20260806-182727\summary.json classification=mounted-with-herdr-panel-observation
+PS D:\C#Project\GitHub\AvaPrintDesigner> & "E:/GitHub开源项目/TachiKuma/claude_code_bridge/.codestable/roadmap/windows-native-herdr-ccb/drafts
+/herdr-ui-integration-spike/run_spike.ps1" ` -ProjectRoot "D:/C#Project/GitHub/AvaPrintDesigner" ` -Ccb8Path "D:/C#Project/GitHub/AvaPrintDesi
+gner/ccb8.cmd" ` -RepoRoot "E:/GitHub开源项目/TachiKuma/claude_code_bridge" ` -ExpectedAgents 2 ` -ObservedWindowsFlash ` -ObservedHerdrAgents
+PanelText "claude"
