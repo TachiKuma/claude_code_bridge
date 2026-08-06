@@ -105,6 +105,10 @@ def launch_runtime(
             namespace_backend_impl=namespace_backend_impl,
             assigned_pane_ref=assigned_pane_ref,
         )
+        # 将 backend 身份注入 prepared_state，供 build_start_cmd / build_session_payload
+        # 按实际后端设置终端类型（CODEX_TERMINAL 等），无需修改 ProviderRuntimeLauncher 签名。
+        prepared['ccb_backend_impl'] = str(getattr(backend, 'backend_impl', '') or '').strip() or 'tmux'
+        prepared['ccb_backend_family'] = str(getattr(backend, 'backend_family', '') or '').strip() or 'tmux-family'
         pane_title_marker = pane_title_marker_fn(context, spec)
 
         stage_started_ns = monotonic_ns()
