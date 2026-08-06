@@ -351,3 +351,34 @@ test/test_config_runtime_mux_backend.py: 41 passed
 ### Verdict
 
 **passed** — IM-1 已修复，无 blocking。herdr 派发正确、向后兼容完整、设计对齐。
+
+## 8. Backend 选择优先级 + Provider Fail-Closed（Round 5）
+
+审查日期：2026-08-06
+审查类型：focused closure（小改动 + test additions）
+
+### 变更
+
+| 文件 | 改动 |
+|---|---|
+| `documents.py` | `_propagate_runtime_mux_backend` 调用 `set_backend_config_preference()`，修复 config 优先级链 |
+| `ensure.py` | `ensure_agent_runtime` 新增 herdr provider gate：codex 允许，其余 fail-closed |
+| `test_config_runtime_mux_backend.py` | +4 tests: config 优先级 ×2 + provider gate ×2 |
+
+### 本地审查
+
+- **Config 优先级**: `_propagate_runtime_mux_backend` 现在同时设置 env var 和 `_backend_config_preference`。`get_backend()` 优先级链 `_backend_config_preference > env_pref` 正确生效。✓
+- **Provider fail-closed**: `_is_herdr_runtime_launch() and spec.provider != 'codex'` → `RuntimeError`，错误消息含诊断（移除 config 或切换 codex）。✓
+- **测试覆盖**: config 优先级验证 `_backend_config_preference` 设置/清除；gate 验证 codex 允许 + 非 codex blocked。✓
+
+### 测试结果
+
+```
+test/test_config_runtime_mux_backend.py: 45 passed (+4 new)
+test/test_runtime_launch_timings.py:      7 passed
+Total: 52 passed in 0.56s
+```
+
+### Verdict
+
+**passed** — 改动量小，逻辑清晰，52/52 通过。

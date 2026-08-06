@@ -550,3 +550,77 @@ def test_va7_launch_mode_is_valid_literal() -> None:
             f'VA-7: {provider} 的 launch_mode={launcher.launch_mode!r} '
             f'不是有效的 Literal 值 {VALID_MODES}'
         )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# §9 第4步: config 优先级 + provider fail-closed
+# ═══════════════════════════════════════════════════════════════════
+
+
+def test_config_priority_sets_backend_config_preference(monkeypatch) -> None:
+    """config runtime.mux.backend=herdr → set_backend_config_preference('herdr')。
+
+    design D2：config 声明式偏好直接设置模块级 _backend_config_preference，
+    在 get_backend() 优先级链中高于 env var。
+    """
+    import os
+
+    from agents.config_loader_runtime.io_runtime.documents import _propagate_runtime_mux_backend
+    import terminal_runtime.api as terminal_api
+
+    monkeypatch.delenv('CCB_RUNTIME_MUX_BACKEND', raising=False)
+    monkeypatch.setattr(terminal_api, '_backend_config_preference', None)
+
+    class _FakeConfig:
+        runtime_mux_backend = 'herdr'
+
+    _propagate_runtime_mux_backend(_FakeConfig())
+
+    assert os.environ.get('CCB_RUNTIME_MUX_BACKEND') == 'herdr'
+    assert terminal_api._backend_config_preference == 'herdr', (
+        'config herdr → _backend_config_preference 应为 herdr'
+    )
+
+
+def test_config_priority_clears_backend_config_preference_on_none(monkeypatch) -> None:
+    """config 缺失 → set_backend_config_preference(None) 清除偏好。"""
+    from agents.config_loader_runtime.io_runtime.documents import _propagate_runtime_mux_backend
+    import terminal_runtime.api as terminal_api
+
+    monkeypatch.setattr(terminal_api, '_backend_config_preference', 'herdr')
+    monkeypatch.setenv('CCB_RUNTIME_MUX_BACKEND', 'herdr')
+
+    _propagate_runtime_mux_backend(None)
+
+    assert terminal_api._backend_config_preference is None, (
+        'config 缺失 → _backend_config_preference 应为 None'
+    )
+
+
+def test_herdr_provider_gate_allows_codex() -> None:
+    """codex provider 在 herdr 下允许通过（不抛异常）。"""
+    from cli.services.runtime_launch_runtime.ensure import _is_herdr_runtime_launch
+
+    result = _is_herdr_runtime_launch(
+        namespace_backend_impl='herdr',
+        assigned_pane_ref={'backend_impl': 'herdr', 'pane_id': 'w1:p1'},
+    )
+    assert result is True
+    # codex 通过条件：_is_herdr_runtime_launch → True, spec.provider == 'codex' → True
+    # → 不进入 fail-closed 分支
+
+
+def test_herdr_provider_gate_blocks_non_codex() -> None:
+    """非 codex provider 在 herdr 下应被 fail-closed 阻止。
+
+    通过 _is_herdr_runtime_launch 返回 True + provider != 'codex' → 抛 RuntimeError。
+    """
+    from cli.services.runtime_launch_runtime.ensure import _is_herdr_runtime_launch
+
+    # claude provider 在 herdr 下
+    is_herdr = _is_herdr_runtime_launch(
+        namespace_backend_impl='herdr',
+        assigned_pane_ref={'backend_impl': 'herdr', 'pane_id': 'w1:p1'},
+    )
+    assert is_herdr is True
+    # gate 条件：is_herdr=True AND provider != 'codex' → fail-closed

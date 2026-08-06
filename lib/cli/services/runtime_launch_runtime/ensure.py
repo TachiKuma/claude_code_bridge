@@ -38,6 +38,20 @@ def ensure_agent_runtime(
     launcher = _pane_backed_launcher(spec)
     if launcher is None:
         return runtime_launch_result_cls(launched=False, binding=binding)
+    # design I-3: herdr 原生 launch 当前仅支持 codex，其他 provider fail-closed
+    if (
+        _is_herdr_runtime_launch(
+            namespace_backend_impl=namespace_backend_impl,
+            assigned_pane_ref=assigned_pane_ref,
+        )
+        and spec.provider != 'codex'
+    ):
+        raise RuntimeError(
+            f'provider {spec.provider!r} does not support herdr-native launch; '
+            f'only codex is currently supported for herdr runtime. '
+            f'remove [runtime.mux] backend = "herdr" from config to use tmux, '
+            f'or switch to codex provider'
+        )
     if _binding_is_reusable(
         binding=binding,
         assigned_pane_id=assigned_pane_id,
