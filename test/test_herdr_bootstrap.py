@@ -272,9 +272,10 @@ def test_daemon_running_and_backend_detects_herdr(monkeypatch) -> None:
     assert backend == 'herdr'
 
 
-def test_daemon_running_and_backend_returns_not_running_when_inspection_fails(
+def test_daemon_running_and_backend_fails_closed_on_inspection_error(
     monkeypatch,
 ) -> None:
+    """DEC-3: generic inspection errors → fail-closed (treat as potential conflict)."""
     from cli.phase2_runtime.handlers_start import _daemon_running_and_backend
 
     def _boom(context):
@@ -282,7 +283,7 @@ def test_daemon_running_and_backend_returns_not_running_when_inspection_fails(
 
     monkeypatch.setattr('cli.services.daemon.inspect_daemon', _boom)
     running, backend = _daemon_running_and_backend(SimpleNamespace(paths=SimpleNamespace()))
-    assert running is False
+    assert running is True, 'DEC-3: inspection error should be fail-closed'
     assert backend is None
 
 

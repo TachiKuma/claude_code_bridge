@@ -1262,6 +1262,7 @@ def parse_config(tokens: list[str], *, project: str | None, error_type):
         parser = argparse.ArgumentParser(prog='ccb config import-herdr', add_help=False)
         parser.add_argument('--output', dest='output_path')
         parser.add_argument('--no-dry-run', dest='no_dry_run', action='store_true')
+        parser.add_argument('--force', dest='force', action='store_true')
         namespace = parse_args(
             parser,
             tokens[1:],
@@ -1272,6 +1273,7 @@ def parse_config(tokens: list[str], *, project: str | None, error_type):
             project=project,
             output_path=str(namespace.output_path) if namespace.output_path else None,
             dry_run=not bool(namespace.no_dry_run),
+            force=bool(namespace.force),
         )
     raise error_type('config supports: validate, effective, migrate, ui, import-herdr')
 

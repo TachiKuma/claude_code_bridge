@@ -260,6 +260,7 @@ class ParsedConfigImportHerdrCommand:
     project: str | None
     output_path: str | None = None
     dry_run: bool = True
+    force: bool = False
     kind: str = 'config-import-herdr'
 
 

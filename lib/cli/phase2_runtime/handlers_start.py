@@ -176,15 +176,16 @@ def _daemon_running_and_backend(context):
         return False, None
     except Exception as exc:
         # Inspection raised unexpectedly — daemon state unknown.
-        # Log the error so it's not silently swallowed, then proceed
-        # conservatively (daemon may or may not be running).
+        # DEC-3: fail-closed.  Treat as a potential daemon conflict so the
+        # user is warned rather than silently proceeding into a collision.
         import sys
         print(
             f"ccb herdr open: daemon inspection failed ({exc}); "
-            "unable to confirm whether an existing daemon is running.",
+            "treating as potential conflict — stop any running CCB session "
+            "(`ccb kill`) before retrying.",
             file=sys.stderr,
         )
-        return False, None
+        return True, None
     running = bool(
         getattr(inspection, 'pid_alive', False)
         and getattr(inspection, 'socket_connectable', False)
@@ -222,6 +223,7 @@ def handle_config_import_herdr(context, command, out, services) -> int:
         project_dir=project_dir,
         output_path=command.output_path,
         dry_run=command.dry_run,
+        force=command.force,
     )
     if result.get("ok") is not True:
         msg = str(result.get("reason") or "import-herdr failed")
