@@ -906,6 +906,16 @@ try {
     exit 1
 }
 
+# -- one-click mode: bare `ccb8.cmd` opens WezTerm + Herdr + CCB together -----
+$isOneClick = ($CcbArgs.Count -eq 0)
+if ($isOneClick) {
+    Write-Host 'ccb8: one-click mode — starting Herdr + CCB managed environment...'
+    # Route through `herdr open` so CCB_HERDR_* env is injected and CCB uses
+    # the Herdr managed backend.  Keep --no-attach so the wrapper stays in
+    # control and launches the Herdr UI below.
+    $CcbArgs = @('herdr', 'open', '--no-attach')
+}
+
 if ($CcbArgs.Count -gt 0 -and $CcbArgs[0] -ieq '--diagnose') {
     Show-Diagnose
 }
@@ -915,7 +925,28 @@ if ($CcbArgs.Count -gt 0 -and $CcbArgs[0] -ieq '--log') {
     Show-WrapperLogs -Filter $filter
 }
 
-if (Test-ShouldPrestartKill -CliArgs $CcbArgs) {
+if ($isOneClick) {
+    # One-click mode: lightweight cleanup only.  The full Invoke-PrestartCleanup
+    # resets lifecycle state to unmounted, which can race with the subsequent
+    # herdr-open startup and produce "lease_unmounted".  Instead, just run a
+    # quick kill to stop any lingering daemon — the ensure_daemon_started
+    # machinery in CCB handles lease takeover correctly on its own.
+    try {
+        $scriptPath = Join-Path $env:CCB_SOURCE_ROOT 'ccb.py'
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $env:CCB_PYTHON
+        $psi.Arguments = "`"$scriptPath`" kill -f"
+        $psi.WorkingDirectory = $env:CCB_PROJECT_ROOT
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $process = [System.Diagnostics.Process]::Start($psi)
+        $process.WaitForExit(15000) | Out-Null
+    } catch {
+        Write-Stderr "Warning: pre-start kill failed; continuing. $($_.Exception.Message)"
+    }
+} elseif (Test-ShouldPrestartKill -CliArgs $CcbArgs) {
     try {
         Invoke-PrestartCleanup
     } catch {
@@ -940,7 +971,7 @@ $finalArgs = @($finalArgs)
 # Herdr v0.8.0: pre-start the CCB Herdr session server so that ccbd can
 # create workspaces and panes within it.  The server is started as a
 # detached process; it stays alive as long as ccbd runs.
-if (Test-ShouldPrestartKill -CliArgs $CcbArgs -or $CcbArgs.Count -eq 0) {
+if ($isOneClick -or (Test-ShouldPrestartKill -CliArgs $CcbArgs) -or $CcbArgs.Count -eq 0) {
     $herdrExe = $env:CCB_HERDR_EXE
     if (-not [string]::IsNullOrWhiteSpace($herdrExe) -and (Test-Path -LiteralPath $herdrExe)) {
         $projectId = Get-SourceDevProjectId
@@ -990,7 +1021,33 @@ if (Test-ShouldPrestartKill -CliArgs $CcbArgs -or $CcbArgs.Count -eq 0) {
 }
 
 & $env:CCB_PYTHON (Join-Path $env:CCB_SOURCE_ROOT 'ccb.py') @finalArgs
-if ($null -ne $LASTEXITCODE) {
-    exit $LASTEXITCODE
+$ccbExit = $LASTEXITCODE
+
+# One-click mode: after CCB starts, launch Herdr UI attached to the
+# CCB-managed session so the user sees the preset workspace (agent panes).
+# Launch unconditionally — CCB may have returned non-zero during initial
+# polling (e.g. lease_unmounted) while the keeper subsequently recovers
+# and mounts ccbd successfully.
+if ($isOneClick) {
+    if ($null -ne $ccbExit -and $ccbExit -ne 0) {
+        Write-Host "ccb8: CCB start had issues (exit=$ccbExit), but ccbd may recover via keeper — launching Herdr UI anyway..."
+    }
+    $herdrExe = $env:CCB_HERDR_EXE
+    if (-not [string]::IsNullOrWhiteSpace($herdrExe) -and (Test-Path -LiteralPath $herdrExe)) {
+        $projectId = Get-SourceDevProjectId
+        $projectName = Split-Path -Leaf $env:CCB_PROJECT_ROOT
+        $shortId = if ($projectId) { $projectId.Substring(0, [Math]::Min(8, $projectId.Length)) } else { '00000000' }
+        $ccbSession = "ccb-${projectName}-${shortId}"
+        Write-Host "ccb8: launching Herdr UI — session=$ccbSession"
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $herdrExe
+        $psi.Arguments = "--session $ccbSession"
+        $psi.UseShellExecute = $false
+        $null = [System.Diagnostics.Process]::Start($psi)
+    }
+}
+
+if ($null -ne $ccbExit) {
+    exit $ccbExit
 }
 exit 0
