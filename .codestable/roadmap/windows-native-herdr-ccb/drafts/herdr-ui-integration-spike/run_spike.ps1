@@ -449,12 +449,31 @@ function _ResolveCmdToPowerShell {
     }
     $ps1Path = $null
     foreach ($line in $lines) {
-        if ($line -match 'powershell\s+.*-File\s+"([^"]+\.ps1)"') {
+        # Capture whatever follows -File "..."; may be a literal path or %VAR%
+        if ($line -match 'powershell\s+.*-File\s+"([^"]+)"') {
             $ps1Path = $Matches[1]
             break
         }
     }
     if (-not $ps1Path) { return $null }
+    # Resolve %VAR% references (e.g. "%CCB8_PS1%" → "%~dp0ccb8.ps1" → actual path)
+    if ($ps1Path -match '%[^%]+%') {
+        $cmdDir = Split-Path -Parent $CmdPath
+        foreach ($line in $lines) {
+            if ($line -match '^\s*set\s+"([^"]+)=([^"]*)"') {
+                $varName = '%' + $Matches[1] + '%'
+                if ($varName -ne $ps1Path) { continue }
+                $varValue = $Matches[2]
+                # %~dp0<file>.ps1 → <cmdDir>\<file>.ps1
+                if ($varValue -match '%~dp0(.+\.ps1)') {
+                    $ps1Path = Join-Path $cmdDir $Matches[1]
+                } elseif ($varValue -notmatch '[%~]') {
+                    $ps1Path = $varValue
+                }
+                break
+            }
+        }
+    }
     # Resolve relative paths against the .cmd directory
     if (-not [System.IO.Path]::IsPathRooted($ps1Path)) {
         $ps1Path = Join-Path (Split-Path -Parent $CmdPath) $ps1Path
