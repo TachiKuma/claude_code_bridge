@@ -34,6 +34,7 @@ socket API 和插件系统。
 - C2 架构 ADR（含权威矩阵、信息流、冲突策略）
 - P2：A-lite（`ccb config import-herdr`）、B-lite（Herdr sidebar 只读插件）、
   `ccb-herdr-bridge.json` v1 schema
+- ITEM-7（2026-08-07 立项）：WezTerm-launched Herdr managed startup（一键启动）
 
 ## 非目标
 
@@ -164,6 +165,51 @@ socket API 和插件系统。
   `config_revision` 核心字段；有 JSON Schema 和 Python 类型
 - **设计约束**：API key、token、auth 文件等敏感字段不得进入 bridge config
 
+### ITEM-7 · WezTerm-launched Herdr managed startup（一键启动，2026-08-07 立项）
+- **owning skill**：cs-feat
+- **背景**：owner 目标是最简操作——预配置 WezTerm/Herdr/CCB 三份配置后，日常只运行
+  WezTerm 即进入 Herdr 双 pane（claude + codex）多 agent 协作环境。本 ITEM 是
+  2026-08-07 brainstorm 讨论收敛产物，方向与既有 C2 架构一致，不改变权威矩阵。
+- **分层契约（owner 已确认）**：
+  - WezTerm：唯一日常入口，打开终端窗口并运行 bootstrap；不参与 pane/provider 语义
+  - Herdr：物理 terminal workspace/pane owner（ConPTY/split/attach/UI）；不拥有
+    provider authority
+  - CCB：agent/provider/job/recovery/config authority，创建并标识 claude/codex pane
+- **关键决策**：
+  - **停用 CCB sidebar，采用 Herdr agent 面板**：CCB 仍为 authority，agent 状态只读
+    投影到 Herdr 面板，避免双状态源（owner 2026-08-07 确认）
+  - **CCB 创建 pane（managed）**：`.ccb/ccb.config` 是拓扑单一事实源；Herdr 配置
+    不长期直接启动 claude/codex（避免退化为 attached 模式）
+  - **显式 managed multi-provider 契约**：第一步修正 `ensure.py:52` 的 Herdr 显式
+    启动 gate——从 `provider != 'codex'` fail-closed 改为**已验证 provider allow-list**
+    （codex/claude 起步）；自动检测路径（`CCB_HERDR_SESSION` 触发）继续不触发 gate；
+    `test_config_runtime_mux_backend.py:616` 语义从 "block non-codex" 改为
+    "block unverified provider"。已核实事实：`ensure.py:42-58` 注释 design I-3 +
+    代码 gate 均在位，`test:616` 固化该行为。
+- **可交付结果**：
+  - `ccb herdr open`（bootstrap）命令：确保 Herdr server/session 存在并 attach →
+    设 `CCB_HERDR_SESSION`/`CCB_HERDR_EXE`/capability report env（Herdr 不作为
+    provider authority）→ 读 `.ccb/ccb.config` → socket API 创建/绑定 2 pane →
+    启动 claude/codex（CCB 注入 provider env/home）→ `set_pane_identity` 写入 C2
+    metadata tokens → 驻留控制面
+  - `ensure.py` gate 修正（已验证 provider allow-list）+ test:616 更新
+  - `ccb-herdr-bridge.json` 仅做诊断/映射（复用 ITEM-6 schema），不替代
+    `.ccb/ccb.config`
+  - WezTerm 配置：`default_prog = herdr`（launch_menu 保留 pwsh 入口）
+  - CCB sidebar 停用配置
+- **依赖**：ITEM-6（bridge schema）；Herdr `resume_agents_on_restore=false` 已生效
+  （epic 验收标准已确认）
+- **验收要点**：只运行 WezTerm → 进入 Herdr persistent session → CCB 创建双 pane
+  （claude+codex）并标识 → ask/pend/recovery 由 CCB 持有；Herdr 面板展示 agent
+  状态（只读投影）；Herdr 未持有 provider authority；未验证 provider 在显式 Herdr
+  config 下仍 fail-closed
+- **设计约束**：不做 attached 退化；不自动双向改配置；bridge 文件不含敏感字段；
+  gate 修改保持 fail-closed
+- **开放问题**：
+  - `ccb8.cmd` 直跑闪退根因是否已修复（bootstrap 走 socket 路径绕开，但需补验证）
+  - Herdr `resume_agents_on_restore` 已通过 config.toml 写入 disabled，确认不随
+    bootstrap 改变
+
 ## 最终交付索引
 
 | 子项 | 产物 | 类型 |
@@ -174,6 +220,7 @@ socket API 和插件系统。
 | ITEM-4 | `ccb config import-herdr` 命令 | code |
 | ITEM-5 | Herdr `ccb` sidebar 插件 | code |
 | ITEM-6 | `ccb-herdr-bridge.json` schema + Python types | code + schema |
+| ITEM-7 | `ccb herdr open` bootstrap + ensure.py gate 修正 + WezTerm 配置 | code + config |
 
 ## 整体验收
 

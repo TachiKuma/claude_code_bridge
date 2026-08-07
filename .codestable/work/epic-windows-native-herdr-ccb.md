@@ -16,6 +16,40 @@ remote_publish: final
 - [x] ITEM-4 · A-lite 导入模式（可选 P2）✅ 505f89bf
 - [x] ITEM-5 · B-lite Herdr 插件原型（可选 P2）✅ de344163
 - [x] ITEM-6 · Bridge config schema（可选 P2）✅ de344163
+- [x] ITEM-7 · WezTerm-launched Herdr managed startup（一键启动）✅ 2026-08-07 实现
+
+### ITEM-7 实现完成（2026-08-07）
+- **① ensure.py gate allow-list**：`_HERDR_NATIVE_VERIFIED_PROVIDERS = {codex, claude}`，
+  `_herdr_explicit_gate_error()`；显式 herdr 下未验证 provider 仍 fail-closed
+- **② `ccb herdr open` bootstrap**：`herdr_common.py`（exe/status/env，DRY 复用至
+  `config import-herdr`）+ `herdr_bootstrap.py`（定位 exe → server 校验 → 只读探测 →
+  运行时生成 capability report → 注入 `CCB_HERDR_*` env）+ daemon backend 冲突检测
+  （非 herdr daemon → 指引 `ccb kill` 后重试）；默认前台 attach，`--no-attach` 后台
+- **③ WezTerm 配置**：`~/.wezterm.lua` default_prog=herdr（形态 1）+ launch_menu 保留
+  pwsh；文档 `docs/native-windows-herdr-managed-launch.md`（形态 2 备选 + 前台/后台切换）
+- **验证**：120 tests pass（gate 51 + bootstrap 23 + cli-parser 46）；端到端
+  `ccb herdr open --no-attach` 干净环境成功创建 2 pane + mounted
+- **遗留**：`ccb kill` 在 herdr 模式下 CLI 侧也需 herdr env（既有行为，ITEM 范围外）；
+  Herdr 侧触发 `ccb herdr open` 的快捷键/插件（B-lite）待做
+- **采集脚本同步（2026-08-07）**：`herdr-ui-integration-spike/run_spike.ps1` 新增
+  `ccb-herdr-open` 维度（+45/-3）：`ValidateSet` 两处补维度、`ccb-start` 互斥、
+  采集块（`ccb8 herdr open --no-attach` + herdr-open-evidence.json）、startCommand
+  识别 + summary `herdr_open_ref`。验证：pwsh 7 语法 OK + SelfTest passed +
+  最小采集执行正常；采集脚本清理逻辑会终止 residual herdr/父 bash（既有行为）。
+- **采集脚本编码修复（2026-08-07）**：`run_spike.ps1` 补 **UTF-8 BOM**。根因：脚本原为
+  无 BOM UTF-8，Windows PowerShell 5.1 按 ANSI 读取导致中文错位、`L1230` 语法错误
+  （HEAD 在 5.1 下同样受影响，IT-1 采集用的是 pwsh 7）。加 BOM 后 powershell 5.1
+  与 pwsh 7 均 SelfTest passed。用户报的 PSReadLine Ctrl+v 崩溃是粘贴长命令的既有
+  PSReadLine bug，与脚本无关。
+- **采集脚本 3 处修复（2026-08-07，基于 run-20260807-135403 分析）**：
+  - **ask-smoke agent 名解析**：原依赖后定义的 `$pingAllText`（执行顺序 bug → 恒
+    fallback `agent1`，与 `agent_1` 不符）→ 改为自行读取 ping-all 输出解析
+    （模拟验证得到 `agent_1`）
+  - **启动前预清理**：ccb-start/ccb-herdr-open 前运行 `ccb8 kill -f`（不记入
+    $commands），缓解 "old ccbd did not shut down in time"
+  - **restart 后轮询**：ping-after-restart 改为最多 3 次重试（attempt 不记入
+    $commands，仅保留 canonical），缓解 "ccbd is starting" 时序
+  - 验证：pwsh 7 + powershell 5.1 SelfTest 均 passed
 
 ## 临时决策与证据
 
