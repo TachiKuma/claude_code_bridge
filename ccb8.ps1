@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]] $CcbArgs
 )
@@ -88,7 +88,7 @@ function Resolve-ExistingPath {
             continue
         }
         try {
-            $resolved = (Resolve-Path -LiteralPath $candidate -ErrorAction Stop).ProviderPath
+            $resolved = (Get-Item -LiteralPath $candidate -ErrorAction Stop).FullName
         } catch {
             continue
         }
@@ -720,31 +720,91 @@ function Initialize-WrapperEnvironment {
 }
 
 function Show-Diagnose {
-    Write-Host ('wrapper: ' + (Join-Path $PSScriptRoot 'ccb8.cmd'))
-    Write-Host ('powershell_wrapper: ' + $PSCommandPath)
-    Write-Host ('source_ccb: ' + (Join-Path $env:CCB_SOURCE_ROOT 'ccb.py'))
-    Write-Host ('project_root: ' + $env:CCB_PROJECT_ROOT)
-    Write-Host ('dev_root: ' + $env:CCB_DEV_ROOT)
-    Write-Host ('python: ' + $env:CCB_PYTHON)
-    Write-Host ('path_ccb_shim: ' + (Join-Path $env:CCB_DEV_BIN 'ccb.cmd'))
-    Write-Host ('CCB_HERDR_EXE: ' + $env:CCB_HERDR_EXE)
-    Write-Host ('CCB_HERDR_SESSION: ' + $env:CCB_HERDR_SESSION)
-    Write-Host ('CCB_HERDR_CAPABILITY_REPORT: ' + $env:CCB_HERDR_CAPABILITY_REPORT)
-    Write-Host ('CCB_SOURCE_ALLOWED_ROOTS: ' + $env:CCB_SOURCE_ALLOWED_ROOTS)
-    Write-Host ('CCB_SOURCE_HOME: ' + $env:CCB_SOURCE_HOME)
-    Write-Host ('CCB_RUNTIME_STATE_HOME: ' + $env:CCB_RUNTIME_STATE_HOME)
-    Write-Host ('CCB_LEGACY_RUNTIME_STATE_HOME: ' + $env:CCB_LEGACY_RUNTIME_STATE_HOME)
-    Write-Host ('HOME: ' + $env:HOME)
-    Write-Host ('USERPROFILE: ' + $env:USERPROFILE)
-    Write-Host ('CCB_NO_ATTACH: ' + $env:CCB_NO_ATTACH)
-    Write-Host ('CCB_CCBD_FAULTHANDLER: ' + $env:CCB_CCBD_FAULTHANDLER)
-    Write-Host ('PYTHONUNBUFFERED: ' + $env:PYTHONUNBUFFERED)
-    Write-Host ('CCB_PRESTART_KILL_TIMEOUT_MS: ' + $env:CCB_PRESTART_KILL_TIMEOUT_MS)
-    Write-Host ('powershell_version: ' + $PSVersionTable.PSVersion.ToString())
-    Write-Host ('default_encoding: ' + [System.Text.Encoding]::Default.WebName)
-    Write-Host ('ccb8_cmd_utf8_bom: ' + (Test-Utf8Bom -Path (Join-Path $PSScriptRoot 'ccb8.cmd')))
-    Write-Host ('ccb8_ps1_utf8_bom: ' + (Test-Utf8Bom -Path $PSCommandPath))
+    $sep = [string]::new('=', 56)
+    $div = [string]::new('-', 56)
+
+    Write-Host $sep
+    Write-Host '  CCB Source-Dev Wrapper -- Diagnostic'
+    Write-Host $sep
+    Write-Host ''
+
+    # -- Entry Points --
+    Write-Host '-- Entry Points --'
+    Write-Host ('  wrapper       ' + (Join-Path $PSScriptRoot 'ccb8.cmd'))
+    Write-Host ('  powershell    ' + $PSCommandPath)
+    Write-Host ('  source ccb    ' + (Join-Path $env:CCB_SOURCE_ROOT 'ccb.py'))
+    Write-Host ('  shim          ' + (Join-Path $env:CCB_DEV_BIN 'ccb.cmd'))
+    Write-Host ''
+
+    # -- Paths --
+    Write-Host '-- Paths --'
+    Write-Host ('  project root  ' + $env:CCB_PROJECT_ROOT)
+    Write-Host ('  dev root      ' + $env:CCB_DEV_ROOT)
+    Write-Host ('  python        ' + $env:CCB_PYTHON)
+    Write-Host ''
+
+    # -- Runtime State --
+    Write-Host '-- Runtime State --'
+    Write-Host ('  RUNTIME       ' + $env:CCB_RUNTIME_STATE_HOME)
+    $legacy = $env:CCB_LEGACY_RUNTIME_STATE_HOME
+    if ($legacy) {
+        Write-Host ('  legacy        ' + $legacy)
+    }
+    Write-Host ''
+
+    # -- Isolation (source-dev vs installed) --
+    Write-Host '-- Isolation --'
+    $devHome = $env:CCB_SOURCE_HOME
+    $isIsolated = ($env:HOME -eq $devHome)
+    $mark = if ($isIsolated) { '[OK]' } else { '[!!]' }
+    Write-Host ('  HOME          ' + $env:HOME + '   isolated ' + $mark)
+    Write-Host ('  USERPROFILE   ' + $env:USERPROFILE)
+    Write-Host ('  TEMP          ' + $env:TEMP)
+    Write-Host ('  XDG_CONFIG    ' + $env:XDG_CONFIG_HOME)
+    Write-Host ''
+
+    # -- Herdr --
+    Write-Host '-- Herdr --'
+    $herdrOk = $env:CCB_HERDR_EXE -and (Test-Path -LiteralPath $env:CCB_HERDR_EXE)
+    $herdrMark = if ($herdrOk) { '[OK]' } else { '[!!] not found' }
+    Write-Host ('  exe           ' + $env:CCB_HERDR_EXE + '   ' + $herdrMark)
+    Write-Host ('  session       ' + $env:CCB_HERDR_SESSION)
+    $cap = $env:CCB_HERDR_CAPABILITY_REPORT
+    if ($cap) {
+        Write-Host ('  capability    ' + $cap)
+    }
+    Write-Host ''
+
+    # -- Runtime Flags --
+    Write-Host '-- Runtime Flags --'
+    $flags = [ordered] @{
+        CCB_NO_ATTACH              = $env:CCB_NO_ATTACH
+        CCB_CCBD_FAULTHANDLER      = $env:CCB_CCBD_FAULTHANDLER
+        PYTHONUNBUFFERED           = $env:PYTHONUNBUFFERED
+        CCB_SKIP_STARTUP_UPDATE    = $env:CCB_SKIP_STARTUP_UPDATE_CHECK
+        CCB_PRESTART_KILL_TIMEOUT  = $env:CCB_PRESTART_KILL_TIMEOUT_MS
+    }
+    foreach ($flag in $flags.GetEnumerator()) {
+        $val = if ($flag.Value) { $flag.Value } else { '(unset)' }
+        Write-Host ('  ' + $flag.Key.PadRight(28) + $val)
+    }
+    Write-Host ''
+
+    # -- System --
+    Write-Host '-- System --'
+    Write-Host ('  powershell    ' + $PSVersionTable.PSVersion.ToString())
+    Write-Host ('  encoding      ' + [System.Text.Encoding]::Default.WebName)
+    $bomPs1 = Test-Utf8Bom -Path $PSCommandPath
+    $bomMark = if ($bomPs1) { '[OK]' } else { '[!!] ps1 missing UTF-8 BOM (required for PS 5.1)' }
+    Write-Host ('  ccb8 BOM      ' + $bomMark)
+    Write-Host ''
+
+    # -- CCB Version --
+    Write-Host '-- CCB Version --'
     & $env:CCB_PYTHON (Join-Path $env:CCB_SOURCE_ROOT 'ccb.py') --print-version
+    Write-Host ''
+
+    Write-Host $div
     if ($null -ne $LASTEXITCODE) {
         exit $LASTEXITCODE
     }
