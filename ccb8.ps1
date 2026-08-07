@@ -1076,15 +1076,30 @@ if ($isOneClick) {
             Start-Sleep -Seconds 2
         }
         if ($mounted) {
-            Write-Host "ccb8: ccbd ready — launching Herdr UI (session=$ccbSession)"
+            Write-Host "ccb8: ccbd ready"
+            # Agents dispatch AFTER Herdr connects — wait happens below
         } else {
-            Write-Host "ccb8: ccbd not ready after 90s — launching Herdr UI anyway (session=$ccbSession)"
+            Write-Host "ccb8: ccbd not ready after 90s"
         }
-        # Launch Herdr as a detached GUI process, replicating the
-        # documented manual step: type `herdr --session <name>` in
-        # the terminal.  Start-Process with UseShellExecute uses
-        # ShellExecuteEx which handles path quoting automatically.
-        Start-Process -FilePath $herdrExe -ArgumentList '--session', $ccbSession
+        # Agent dispatch only fires when herdr runs via interactive
+        # terminal input, not programmatic child-process invocation.
+        # Spawn a new WezTerm tab, then send the herdr command as
+        # simulated keystrokes via wezterm cli send-text.
+        $weztermDir = $env:WEZTERM_EXECUTABLE_DIR
+        if (-not $weztermDir) { $weztermDir = Split-Path $env:WEZTERM_EXECUTABLE -Parent -ErrorAction SilentlyContinue }
+        $weztermCli = if ($weztermDir) { Join-Path $weztermDir 'wezterm.exe' } else { '' }
+        if ($weztermCli -and (Test-Path -LiteralPath $weztermCli)) {
+            Write-Host "ccb8: opening Herdr session in WezTerm..."
+            $paneId = (& $weztermCli cli spawn --cwd $env:CCB_PROJECT_ROOT 2>&1).Trim()
+            Start-Sleep -Seconds 2
+            $herdrCmd = "& `"$herdrExe`" --session $ccbSession`r`n"
+            & $weztermCli cli send-text --pane-id $paneId --no-paste $herdrCmd
+            Write-Host "ccb8: agents starting — waiting 15s..."
+            Start-Sleep -Seconds 15
+        } else {
+            Write-Host "ccb8: WezTerm CLI not found, launching standalone..."
+            Start-Process -FilePath $herdrExe -ArgumentList '--session', $ccbSession
+        }
     }
 }
 
