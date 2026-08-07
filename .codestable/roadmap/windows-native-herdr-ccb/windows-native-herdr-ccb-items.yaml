@@ -93,7 +93,7 @@ items:
   - slug: herdr-supportability-projection
     description: 将 validation evidence 汇总到 support tier、README/docs、doctor 和 residual risk
     depends_on: [native-windows-public-workflow-validation-matrix]
-    status: in-progress
+    status: accepted
     feature: 2026-07-31-herdr-supportability-projection
     minimal_loop: false
     notes: "core workflows、所有公开 provider、Mobile/Config UI、Herdr auto restore disabled、strict v8.5.2、Windows npm install dry-run 未全 pass 前只能投影为 unsupported/experimental/beta；blocked 或 partial 不得宣称 supported。"

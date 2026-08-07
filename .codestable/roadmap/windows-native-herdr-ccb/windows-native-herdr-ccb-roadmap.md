@@ -524,7 +524,7 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
 12. **herdr-supportability-projection** — 将 validation evidence 汇总到 support tier、README/docs、doctor 和 residual risk。
     - 所属模块：Validation & Support
     - 依赖：`native-windows-public-workflow-validation-matrix`
-    - 状态：in-progress
+    - 状态：accepted
     - 对应 feature：`2026-07-31-herdr-supportability-projection`
     - 备注：core workflows、所有公开 provider、Mobile/Config UI、Herdr auto restore disabled、strict `v8.5.2`、Windows npm install dry-run 未全 pass 前只能是 experimental/beta/unsupported，不得宣称 supported。
 
