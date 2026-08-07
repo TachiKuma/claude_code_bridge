@@ -23,6 +23,40 @@ CCB v8.5.2 在 Native Windows x64 上需要 terminal multiplexer backend。经�
 - Herdr observed runtime state 不静默覆盖 `.ccb/ccb.config`
 - CCB-owned pane 只有一个 lifecycle/recovery owner
 
+### 配置权威与整合结论（2026-08-07）
+
+本次对 Herdr v0.8.0-preview.2026-08-04 的完整默认配置、当前用户配置和 CCB
+配置解析器进行核对后，确认**整合运行时能力，不整合完整配置文件**：
+
+| 配置/状态 | 权威方 | 规则 |
+|---|---|---|
+| `%APPDATA%\herdr\config.toml` | **Herdr** | 用户可编辑的 Herdr 全局配置；主题、Shell、快捷键、worktree、UI、toast、sound、remote、experimental、advanced 等继续由 Herdr 管理 |
+| 项目 `.ccb/ccb.config` | **CCB** | 项目 agent/provider/role/model/MCP、workflow、workspace、期望拓扑、queue、completion、cancel、recovery，以及 `runtime.mux.backend = "herdr"` |
+| CCB-Herdr bridge/runtime projection | **CCB 生成、Herdr 提供运行证据** | 只记录 session/pane/capability/版本/脱敏绑定和 owner metadata，不替代任一方的配置 authority |
+
+禁止将完整 `herdr config.toml` 复制或嵌套到 `.ccb/ccb.config`，也禁止通过
+CCB 配置加载器解释 Herdr 的 `theme`、`terminal`、`update`、`keys`、`session`、
+`remote`、`experimental` 或 `advanced` 字段。这样可以避免用户编辑 Herdr 配置
+后出现第二份 CCB 配置副本和双写冲突。
+
+CCB 可以只读探测 Herdr 配置中的 recovery 相关能力。当前 Herdr 默认
+`[session] resume_agents_on_restore = true`，CCB-owned pane 的 supported recovery
+前提仍是用户在 `%APPDATA%\herdr\config.toml` 中显式设置：
+
+```toml
+[session]
+resume_agents_on_restore = false
+```
+
+CCB 不应在普通启动、reload 或 reconcile 中静默改写该文件；如需提供修复动作，
+必须是显式、可审计、带备份的用户操作。
+
+现有 `ccb config import-herdr` 保留为显式 A-lite 草稿导入，不改变上述权威关系。
+该命令只能生成候选配置，不能自动激活或覆盖 `.ccb/ccb.config`。审计还发现当前
+实现生成的 `version = 3` + `agents` 结构不符合现行 v3 parser，后续必须改为合法
+的 v2 `[windows]` 配置草稿，或生成完整合法的 v3 `workflow` 文档后，才能把该命令
+视为可用的导入路径。
+
 ### 权威矩阵
 
 | 领域 | 权威方 | 理由 |
@@ -86,7 +120,7 @@ CCB 从 Herdr 回读物理运行证据：
 |---|---|---|
 | `managed` | `.ccb/ccb.config` 拥有期望拓扑；reload/reconcile 恢复 CCB 布局。CCB 创建 Herdr workspace/pane。 | ✅ 已实现（默认模式） |
 | `attached` | CCB 绑定现有 Herdr pane，不修改布局，能力明确降级。pane 不由 CCB 创建/销毁。 | 🟡 ADR 记录预期语义，精确 contract 留给后续 feature |
-| `import` | 用户显式把当前 Herdr 布局转换为 CCB 配置草稿。生成 `.ccb/ccb.config` candidate，不自动激活。 | 🟡 ADR 记录预期语义（对应 Epic ITEM-4 A-lite） |
+| `import` | 用户显式把当前 Herdr 布局转换为 CCB 配置草稿。生成 `.ccb/ccb.config` candidate，不自动激活。 | 🟡 命令已接线；当前生成结果尚未通过现行 v3 schema，需修复后再作为可用导入路径 |
 
 模式切换必须是**显式用户操作**，不得自动把 Herdr UI 操作写回 `.ccb/ccb.config`。
 
