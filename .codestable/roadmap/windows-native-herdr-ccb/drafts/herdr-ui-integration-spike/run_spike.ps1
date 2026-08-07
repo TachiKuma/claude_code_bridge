@@ -395,11 +395,13 @@ function Invoke-WrapperFileCheck {
     if (-not (Test-Path -LiteralPath $ps1Path)) {
         $errors += ('missing wrapper ps1: ' + $ps1Path)
     }
+    # cmd files are ASCII — BOM would break cmd.exe parsing
     if ((Test-Path -LiteralPath $cmdPath) -and (Test-Utf8Bom -Path $cmdPath)) {
-        $errors += ('wrapper cmd has UTF-8 BOM: ' + $cmdPath)
+        $errors += ('wrapper cmd has UTF-8 BOM (must be plain ASCII): ' + $cmdPath)
     }
-    if ((Test-Path -LiteralPath $ps1Path) -and (Test-Utf8Bom -Path $ps1Path)) {
-        $errors += ('wrapper ps1 has UTF-8 BOM: ' + $ps1Path)
+    # ps1 files with Chinese paths NEED UTF-8 BOM for PowerShell 5.1
+    if ((Test-Path -LiteralPath $ps1Path) -and -not (Test-Utf8Bom -Path $ps1Path)) {
+        $errors += ('wrapper ps1 missing UTF-8 BOM (required for PS 5.1 with Chinese paths): ' + $ps1Path)
     }
 
     $stdoutLines = @(
@@ -432,6 +434,35 @@ function Invoke-WrapperFileCheck {
     }
 }
 
+function _ResolveCmdToPowerShell {
+    param(
+        [string] $CmdPath,
+        [string[]] $Args
+    )
+    # Parse a .cmd wrapper that delegates to powershell -File <ps1>.
+    # Returns the resolved command array or $null if unparseable.
+    if (-not (Test-Path -LiteralPath $CmdPath)) { return $null }
+    try {
+        $lines = @([System.IO.File]::ReadAllLines($CmdPath))
+    } catch {
+        return $null
+    }
+    $ps1Path = $null
+    foreach ($line in $lines) {
+        if ($line -match 'powershell\s+.*-File\s+"([^"]+\.ps1)"') {
+            $ps1Path = $Matches[1]
+            break
+        }
+    }
+    if (-not $ps1Path) { return $null }
+    # Resolve relative paths against the .cmd directory
+    if (-not [System.IO.Path]::IsPathRooted($ps1Path)) {
+        $ps1Path = Join-Path (Split-Path -Parent $CmdPath) $ps1Path
+    }
+    if (-not (Test-Path -LiteralPath $ps1Path)) { return $null }
+    return @('powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ps1Path) + @($Args)
+}
+
 function Invoke-CapturedCommand {
     param(
         [string] $Name,
@@ -446,8 +477,16 @@ function Invoke-CapturedCommand {
 
     $actualCommand = @($Command)
     if ($actualCommand[0].ToLowerInvariant().EndsWith('.cmd') -or $actualCommand[0].ToLowerInvariant().EndsWith('.bat')) {
-        $cmdText = Join-WindowsProcessArguments -Arguments $actualCommand
-        $actualCommand = @($env:ComSpec, '/d', '/s', '/c', $cmdText)
+        # Resolve .cmd wrapper to direct PowerShell invocation to avoid
+        # cmd.exe creating a visible console window (observed flash source).
+        $resolved = _ResolveCmdToPowerShell -CmdPath $actualCommand[0] -Args ($actualCommand | Select-Object -Skip 1)
+        if ($resolved) {
+            $actualCommand = $resolved
+        } else {
+            # Fallback: go through cmd.exe if we can't parse the wrapper
+            $cmdText = Join-WindowsProcessArguments -Arguments $actualCommand
+            $actualCommand = @($env:ComSpec, '/d', '/s', '/c', $cmdText)
+        }
     }
 
     $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -528,8 +567,16 @@ function Invoke-DetachedCommand {
 
     $actualCommand = @($Command)
     if ($actualCommand[0].ToLowerInvariant().EndsWith('.cmd') -or $actualCommand[0].ToLowerInvariant().EndsWith('.bat')) {
-        $cmdText = Join-WindowsProcessArguments -Arguments $actualCommand
-        $actualCommand = @($env:ComSpec, '/d', '/s', '/c', $cmdText)
+        # Resolve .cmd wrapper to direct PowerShell invocation to avoid
+        # cmd.exe creating a visible console window (observed flash source).
+        $resolved = _ResolveCmdToPowerShell -CmdPath $actualCommand[0] -Args ($actualCommand | Select-Object -Skip 1)
+        if ($resolved) {
+            $actualCommand = $resolved
+        } else {
+            # Fallback: go through cmd.exe if we can't parse the wrapper
+            $cmdText = Join-WindowsProcessArguments -Arguments $actualCommand
+            $actualCommand = @($env:ComSpec, '/d', '/s', '/c', $cmdText)
+        }
     }
 
     $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -889,7 +936,9 @@ function Invoke-SelfTest {
         $cmdPath = Join-Path $tempDir 'ccb8.cmd'
         $ps1Path = Join-Path $tempDir 'ccb8.ps1'
         Write-Utf8NoBom -Path $cmdPath -Content "@echo off`r`n"
-        Write-Utf8NoBom -Path $ps1Path -Content "param()`r`n"
+        # ps1 with Chinese paths requires UTF-8 BOM for PS 5.1 compatibility
+        $utf8Bom = New-Object System.Text.UTF8Encoding($true)
+        [System.IO.File]::WriteAllText($ps1Path, "param()`r`n", $utf8Bom)
         $check = Invoke-WrapperFileCheck -Name 'wrapper-file-check-selftest' -Ccb8Path $cmdPath -RawDir $tempDir
         if ([int] $check.exit_code -ne 0) {
             throw 'wrapper file check self-test failed'
@@ -1813,11 +1862,14 @@ if (Test-SpikeDimensionEnabled -Dimension 'herdr-config-probe' -EnabledDimension
         }
     }
 
-    # Parse auto_restore setting
+    # Parse resume_agents_on_restore setting from [session] section.
+    # Herdr's actual config key is "resume_agents_on_restore" (not "auto_restore").
     $autoRestoreMode = 'unknown'
     if ($foundConfig) {
         $configText = [System.IO.File]::ReadAllText($foundConfig)
-        if ($configText -match 'auto_restore\s*=\s*(\w+)') { $autoRestoreMode = $Matches[1] }
+        if ($configText -match 'resume_agents_on_restore\s*=\s*(true|false)') {
+            $autoRestoreMode = if ($Matches[1] -eq 'false') { 'disabled' } else { 'enabled' }
+        }
     }
     $configProbe = [ordered] @{
         config_found = ($null -ne $foundConfig)
@@ -1880,21 +1932,33 @@ if (Test-SpikeDimensionEnabled -Dimension 'ccb-ask-smoke' -EnabledDimensions $en
         $targetAgent = 'agent1'
     }
 
-    $commands += Invoke-CapturedCommand `
+    $askResult = Invoke-CapturedCommand `
         -Name 'ccb8-ask-smoke' `
         -Command @($resolvedCcb8, 'ask', $targetAgent, 'echo ok') `
         -WorkingDirectory $resolvedProject `
         -RawDir $rawDir `
         -TimeoutSeconds 30
+    $commands += $askResult
 
     # Post-ask ping to verify agent state unchanged
     Start-Sleep -Seconds 3
-    $commands += Invoke-CapturedCommand `
+    $pingAfterAskResult = Invoke-CapturedCommand `
         -Name 'ccb8-ping-after-ask' `
         -Command @($resolvedCcb8, 'ping', $targetAgent) `
         -WorkingDirectory $resolvedProject `
         -RawDir $rawDir `
         -TimeoutSeconds 20
+    $commands += $pingAfterAskResult
+
+    # Write ask-smoke evidence
+    $askEvidence = [ordered] @{
+        target_agent = $targetAgent
+        ask_exit_code = [int] $askResult.exit_code
+        ask_stdout_tail = [string] $askResult.stdout_tail
+        ask_stderr_tail = [string] $askResult.stderr_tail
+        ping_after_ask_exit_code = [int] $pingAfterAskResult.exit_code
+    }
+    Write-Utf8NoBom -Path (Join-Path $askDir 'ask-smoke-evidence.json') -Content (($askEvidence | ConvertTo-Json -Depth 10) + [Environment]::NewLine)
 }
 
 # --- Dimension: ccb-reload-smoke (NEW 2026-08-07) ---
@@ -1904,20 +1968,31 @@ if (Test-SpikeDimensionEnabled -Dimension 'ccb-reload-smoke' -EnabledDimensions 
     $reloadDir = Join-Path $resolvedOut 'reload-smoke'
     New-Item -ItemType Directory -Force -Path $reloadDir | Out-Null
 
-    $commands += Invoke-CapturedCommand `
+    $reloadResult = Invoke-CapturedCommand `
         -Name 'ccb8-reload' `
         -Command @($resolvedCcb8, 'reload') `
         -WorkingDirectory $resolvedProject `
         -RawDir $rawDir `
         -TimeoutSeconds 30
+    $commands += $reloadResult
 
     Start-Sleep -Seconds 3
-    $commands += Invoke-CapturedCommand `
+    $pingAfterReloadResult = Invoke-CapturedCommand `
         -Name 'ccb8-ping-after-reload' `
         -Command @($resolvedCcb8, 'ping', 'all') `
         -WorkingDirectory $resolvedProject `
         -RawDir $rawDir `
         -TimeoutSeconds 20
+    $commands += $pingAfterReloadResult
+
+    # Write reload-smoke evidence
+    $reloadEvidence = [ordered] @{
+        reload_exit_code = [int] $reloadResult.exit_code
+        reload_stdout_tail = [string] $reloadResult.stdout_tail
+        reload_stderr_tail = [string] $reloadResult.stderr_tail
+        ping_after_reload_exit_code = [int] $pingAfterReloadResult.exit_code
+    }
+    Write-Utf8NoBom -Path (Join-Path $reloadDir 'reload-smoke-evidence.json') -Content (($reloadEvidence | ConvertTo-Json -Depth 10) + [Environment]::NewLine)
 }
 
 if ($null -ne $sampler) {
