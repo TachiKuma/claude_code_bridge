@@ -2746,6 +2746,8 @@ def test_herdr_backend_destroy_namespace_and_kill_server_delegate_and_drop_names
                     "arch": "x64",
                 },
             }
+        if operation == "close_workspace":
+            return {"status": "ok"}
         if operation in {"destroy_namespace", "kill_server"}:
             return {"status": "ok", "closed_workspace_ids": ["w1"]}
         raise AssertionError(operation)
@@ -2776,6 +2778,7 @@ def test_herdr_backend_destroy_namespace_and_kill_server_delegate_and_drop_names
     assert [operation for operation, _payload in operations] == [
         "server_info",
         "destroy_namespace",
+        "close_workspace",
         "server_info",
         "kill_server",
     ]

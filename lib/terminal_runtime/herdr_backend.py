@@ -337,6 +337,15 @@ class HerdrBackend(TerminalBackend):
         self._capability_gate.require_supported("destroy_namespace")
         self._client.server_info()
         evidence = self._client.destroy_namespace(namespace_ref)
+        # Best-effort workspace cleanup: close the Herdr workspace so that
+        # repeated kill/restart cycles do not accumulate orphan workspaces
+        # (run-20260807-004015 observed 6 ccb-avaprintdesigner workspaces).
+        session_name = namespace_ref.get("session_name", "")
+        if session_name:
+            try:
+                self._client.close_workspace(str(session_name))
+            except Exception:
+                pass
         self._drop_namespace_refs(namespace_ref)
         return evidence
 

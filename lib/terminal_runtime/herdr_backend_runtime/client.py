@@ -570,6 +570,36 @@ class HerdrSocketClient:
             detail="logical namespace destroyed",
         )
 
+    def close_workspace(self, session_name: str) -> MuxOperationEvidenceV2:
+        """Best-effort close of the Herdr workspace associated with *session_name*.
+
+        Workspace accumulation was observed during repeated kill/restart cycles
+        (run-20260807-004015: 6 ``ccb-avaprintdesigner`` workspaces).  This
+        method sends a ``close_workspace`` request to Herdr so that old
+        workspaces do not pile up.  Failures are logged but never block the
+        destroy flow — the workspace will be orphaned in Herdr and can be
+        manually cleaned up later.
+        """
+        try:
+            response = self._request(
+                "close_workspace",
+                {
+                    "session_name": session_name,
+                    "ipc_ref": self._socket_ref,
+                },
+                require_status=True,
+            )
+            status = "ok" if str(response.get("status") or "ok") == "ok" else "failed"
+        except Exception:
+            status = "failed"
+        return make_operation_evidence(
+            operation="close_workspace",
+            backend_impl="herdr",
+            pane_id=None,
+            status=status,
+            detail=f"workspace close attempted for session {session_name!r}",
+        )
+
     def kill_server(self, namespace: MuxNamespaceRefV2) -> MuxOperationEvidenceV2:
         response = self._request(
             "kill_server",
