@@ -907,12 +907,18 @@ try {
 }
 
 # -- one-click mode: bare `ccb8.cmd` opens WezTerm + Herdr + CCB together -----
+# PowerShell 5.1 may receive an empty string via ValueFromRemainingArguments
+# when the .cmd wrapper passes %* with zero arguments.  Filter out empty/blank
+# entries so that a bare invocation is reliably detected.
+$CcbArgs = @($CcbArgs | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 $isOneClick = ($CcbArgs.Count -eq 0)
 if ($isOneClick) {
     Write-Host 'ccb8: one-click mode — starting Herdr + CCB managed environment...'
-    # Route through `herdr open` so CCB_HERDR_* env is injected and CCB uses
-    # the Herdr managed backend.  Keep --no-attach so the wrapper stays in
-    # control and launches the Herdr UI below.
+    # Use `herdr open --no-attach`: the documented working flow from the
+    # WezTerm+Herdr+CCB joint startup milestone (2026-08-07).
+    # This calls ensure_herdr_bootstrap_env (locate Herdr, verify server,
+    # probe capabilities, inject CCB_HERDR_* env), then starts agents
+    # in detached daemon mode with Herdr backend.
     $CcbArgs = @('herdr', 'open', '--no-attach')
 }
 
@@ -925,33 +931,37 @@ if ($CcbArgs.Count -gt 0 -and $CcbArgs[0] -ieq '--log') {
     Show-WrapperLogs -Filter $filter
 }
 
-if ($isOneClick) {
-    # One-click mode: lightweight cleanup only.  The full Invoke-PrestartCleanup
-    # resets lifecycle state to unmounted, which can race with the subsequent
-    # herdr-open startup and produce "lease_unmounted".  Instead, just run a
-    # quick kill to stop any lingering daemon — the ensure_daemon_started
-    # machinery in CCB handles lease takeover correctly on its own.
-    try {
-        $scriptPath = Join-Path $env:CCB_SOURCE_ROOT 'ccb.py'
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = $env:CCB_PYTHON
-        $psi.Arguments = "`"$scriptPath`" kill -f"
-        $psi.WorkingDirectory = $env:CCB_PROJECT_ROOT
-        $psi.UseShellExecute = $false
-        $psi.CreateNoWindow = $true
-        $psi.RedirectStandardOutput = $true
-        $psi.RedirectStandardError = $true
-        $process = [System.Diagnostics.Process]::Start($psi)
-        $process.WaitForExit(15000) | Out-Null
-    } catch {
-        Write-Stderr "Warning: pre-start kill failed; continuing. $($_.Exception.Message)"
-    }
-} elseif (Test-ShouldPrestartKill -CliArgs $CcbArgs) {
+if ($isOneClick -or (Test-ShouldPrestartKill -CliArgs $CcbArgs)) {
     try {
         Invoke-PrestartCleanup
     } catch {
         Write-Stderr $_.Exception.Message
         exit 1
+    }
+    # One-click mode: after killing old processes, wait for the keeper to
+    # fully exit before herdr-open starts a fresh ccbd.  Otherwise the old
+    # keeper restarts ccbd in non-Herdr mode before herdr-open can take over.
+    if ($isOneClick) {
+        $projectId = Get-SourceDevProjectId
+        if ($projectId) {
+            $keeperPath = Join-Path (Join-Path (Join-Path $env:CCB_RUNTIME_STATE_HOME $projectId) 'ccbd') 'keeper.json'
+            $deadline = (Get-Date).AddSeconds(30)
+            Write-Host 'ccb8: waiting for keeper to stop...'
+            while ((Get-Date) -lt $deadline) {
+                $stopped = $true
+                if (Test-Path -LiteralPath $keeperPath) {
+                    try {
+                        $keeper = Get-Content -Raw -LiteralPath $keeperPath | ConvertFrom-Json
+                        $rawState = $keeper.state
+                        $state = if ($rawState) { [string] $rawState } else { '' }
+                        if ($state -ne 'stopped') { $stopped = $false }
+                    } catch { $stopped = $false }
+                }
+                if ($stopped) { break }
+                Start-Sleep -Seconds 1
+            }
+            Write-Host 'ccb8: keeper stopped — starting fresh ccbd with Herdr backend'
+        }
     }
 }
 
@@ -976,7 +986,9 @@ if ($isOneClick -or (Test-ShouldPrestartKill -CliArgs $CcbArgs) -or $CcbArgs.Cou
     if (-not [string]::IsNullOrWhiteSpace($herdrExe) -and (Test-Path -LiteralPath $herdrExe)) {
         $projectId = Get-SourceDevProjectId
         if (-not [string]::IsNullOrWhiteSpace($projectId)) {
-            $projectName = (Split-Path -Leaf $env:CCB_PROJECT_ROOT)
+            $projectName = (Split-Path -Leaf $env:CCB_PROJECT_ROOT).ToLowerInvariant() -replace '[^a-z0-9._-]+', '-'
+            $projectName = $projectName.Trim('-')
+            if ([string]::IsNullOrWhiteSpace($projectName)) { $projectName = 'project' }
             $shortId = $projectId.Substring(0, [Math]::Min(8, $projectId.Length))
             $ccbSession = "ccb-${projectName}-${shortId}"
             # Use Process.Start (CreateNoWindow) for the session-list probe
@@ -1023,27 +1035,56 @@ if ($isOneClick -or (Test-ShouldPrestartKill -CliArgs $CcbArgs) -or $CcbArgs.Cou
 & $env:CCB_PYTHON (Join-Path $env:CCB_SOURCE_ROOT 'ccb.py') @finalArgs
 $ccbExit = $LASTEXITCODE
 
-# One-click mode: after CCB starts, launch Herdr UI attached to the
-# CCB-managed session so the user sees the preset workspace (agent panes).
-# Launch unconditionally — CCB may have returned non-zero during initial
-# polling (e.g. lease_unmounted) while the keeper subsequently recovers
-# and mounts ccbd successfully.
+# One-click mode: after CCB starts, wait for ccbd to be ready, then
+# launch Herdr UI attached to the CCB-managed session.
 if ($isOneClick) {
-    if ($null -ne $ccbExit -and $ccbExit -ne 0) {
-        Write-Host "ccb8: CCB start had issues (exit=$ccbExit), but ccbd may recover via keeper — launching Herdr UI anyway..."
-    }
     $herdrExe = $env:CCB_HERDR_EXE
-    if (-not [string]::IsNullOrWhiteSpace($herdrExe) -and (Test-Path -LiteralPath $herdrExe)) {
+    if ([string]::IsNullOrWhiteSpace($herdrExe) -or -not (Test-Path -LiteralPath $herdrExe)) {
+        Write-Stderr 'ccb8: Herdr not found; cannot launch UI.'
+    } else {
+        # CCB derives the Herdr session name from project_slug
+        # (e.g., ccb-avaprintdesigner-575a971f), independently of
+        # CCB_HERDR_SESSION.  Match CCB's formula exactly so the
+        # UI attaches to the same session CCB is using.
         $projectId = Get-SourceDevProjectId
-        $projectName = Split-Path -Leaf $env:CCB_PROJECT_ROOT
+        $projectName = (Split-Path -Leaf $env:CCB_PROJECT_ROOT).ToLowerInvariant() -replace '[^a-z0-9._-]+', '-'
+        $projectName = $projectName.Trim('-')
+        if ([string]::IsNullOrWhiteSpace($projectName)) { $projectName = 'project' }
         $shortId = if ($projectId) { $projectId.Substring(0, [Math]::Min(8, $projectId.Length)) } else { '00000000' }
         $ccbSession = "ccb-${projectName}-${shortId}"
-        Write-Host "ccb8: launching Herdr UI — session=$ccbSession"
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = $herdrExe
-        $psi.Arguments = "--session $ccbSession"
-        $psi.UseShellExecute = $false
-        $null = [System.Diagnostics.Process]::Start($psi)
+
+        # Poll lifecycle.json until ccbd is mounted, so the Herdr UI
+        # launches into a ready workspace.  CCB's internal startup polling
+        # may time out (lease_unmounted) while the keeper is still
+        # recovering — this loop waits independently.
+        $lifecyclePath = Join-Path (Join-Path (Join-Path $env:CCB_RUNTIME_STATE_HOME $projectId) 'ccbd') 'lifecycle.json'
+        $deadline = (Get-Date).AddSeconds(90)
+        $mounted = $false
+        Write-Host 'ccb8: waiting for ccbd to be ready...'
+        while ((Get-Date) -lt $deadline) {
+            if (Test-Path -LiteralPath $lifecyclePath) {
+                try {
+                    $lifecycle = Get-Content -Raw -LiteralPath $lifecyclePath | ConvertFrom-Json
+                    $rawPhase = $lifecycle.phase
+                    $phase = if ($rawPhase) { [string] $rawPhase } else { '' }
+                    if ($phase -eq 'mounted') {
+                        $mounted = $true
+                        break
+                    }
+                } catch {}
+            }
+            Start-Sleep -Seconds 2
+        }
+        if ($mounted) {
+            Write-Host "ccb8: ccbd ready — launching Herdr UI (session=$ccbSession)"
+        } else {
+            Write-Host "ccb8: ccbd not ready after 90s — launching Herdr UI anyway (session=$ccbSession)"
+        }
+        # Launch Herdr as a detached GUI process, replicating the
+        # documented manual step: type `herdr --session <name>` in
+        # the terminal.  Start-Process with UseShellExecute uses
+        # ShellExecuteEx which handles path quoting automatically.
+        Start-Process -FilePath $herdrExe -ArgumentList '--session', $ccbSession
     }
 }
 
