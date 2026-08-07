@@ -1,7 +1,7 @@
 ---
-status: active
+status: accepted
 created: 2026-08-06
-work: ../work/epic-windows-native-herdr-ccb.md
+accepted: 2026-08-07
 ---
 # Native Windows CCB via Herdr — 从架构验证到可用性交付
 
@@ -49,16 +49,21 @@ socket API 和插件系统。
 
 - ✅ validation matrix 中 `workflow_rows` 从全 `blocked` → 11/14 partial + 3/14 blocked
   （run-20260807-004015: 19/19 维度, 0 failures, pane_state=alive 证实修复）
-- ✅ `herdr_version` 已填入（`0.8.0-preview.2026-08-04`）
+- ✅ `herdr_version` 已填入（`0.8.0-preview.2026-08-04-d78e3d3b5126`）
 - ✅ `ccb_source_status` 已填入（`v8.5.2-source-branch`）
 - ✅ `herdr_auto_restore_mode` = **disabled**（2026-08-07 双验证确认：
   文档 `herdr --default-config` 证实 `resume_agents_on_restore` 默认 true；
   实证 `config.toml` 写入 `resume_agents_on_restore = false` + `server reload-config` applied）
-- ⚠️ `ccb doctor --output` 展示 support tier — projection 核心模块已完成，doctor consumer
-  端待后续接入
+- ✅ `ccb doctor --output` 展示 support tier — consumer 端已接入（code-hardening Epic ITEM-3：
+  `5aea5f08`），输出含 `herdr.support_tier` 等 12 个字段
 - ✅ C2 架构 ADR 存在于 `.codestable/adr/001-c2-asymmetric-federation-ccb-herdr.md`
+- ✅ **配置权威边界已确认**：`%APPDATA%\herdr\config.toml` 继续由用户编辑并由
+  Herdr 管理；`.ccb/ccb.config` 继续由 CCB 管理项目拓扑与编排；只整合 Herdr
+  backend/capability/session-pane evidence，不复制 Herdr 全量配置
+- ✅ `ccb config import-herdr` 已修复（code-hardening Epic ITEM-1：`8fc5094c`）：
+  输出合法 v2 TOML（`version=2` + `[windows]` + `[agents.<name>]`），含 `--force` 覆盖支持
 - ❌ matrix 中无 pass 的 workflow/provider，`support_projection_allowed` 保持 `false`
-- ✅ 全部 6 子项完成（5 Epic commits + 2 修复 commits + 2 证据采集）
+- ✅ 全部 7 子项完成（ITEM-1 至 ITEM-7）
 - ✅ Kill/Restart 全周期验证通过（kill=ok → unmounted → restart=mounted, gen 4→5）
 - ✅ Ask smoke 管道通畅（job accepted target=agent1）
 - ✅ Reload smoke 稳定（noop on unchanged config, agents remain mounted）
@@ -88,6 +93,12 @@ socket API 和插件系统。
   Herdr auto-restore 全局 disabled 模式作为 recovery 前提，不向 Herdr upstream 提
   per-pane disable feature request。若后续 Herdr 原生支持 per-pane disable 则可在
   后续 feature 中升级 recovery capability。证据：owner 在 Epic planning gate 确认。
+- **DEC-8 · Herdr 配置不做全量并入**（2026-08-07 审计确认）：Herdr
+  `%APPDATA%\herdr\config.toml` 是 Herdr 自身配置 authority，`.ccb/ccb.config`
+  是 CCB 项目配置 authority；CCB 只读消费 recovery/capability 和 pane/session
+  证据，不复制 `theme`、`terminal`、`update`、`keys`、`ui`、`remote`、
+  `experimental`、`advanced` 等 Herdr 配置域。bridge/runtime projection 只能是
+  脱敏的诊断/运行时投影，不得成为第三份可写配置 authority。
 
 ## 子项契约
 
@@ -95,8 +106,8 @@ socket API 和插件系统。
 - **owning skill**：cs-issue（验证兼容性）+ cs-feat（transcript 采集工具/脚本）
 - **可交付结果**：
   - ✅ Herdr v0.8.0 环境中 `herdr status server --json` 输出兼容性确认（170/172 tests pass）
-  - ✅ `herdr_version` 填入 matrix（`0.8.0-preview.2026-08-04`）
-  - ⚠️ `herdr_auto_restore_mode` 仍 unknown（新 herdr-config-probe 维度待执行）
+  - ✅ `herdr_version` 填入 matrix（`0.8.0-preview.2026-08-04-d78e3d3b5126`）
+  - ✅ `herdr_auto_restore_mode` = **disabled**（2026-08-07 双验证确认）
   - ⚠️ 至少 1 个生产可用 provider 的全链路 transcript — **部分完成**：
     - Codex/Claude 已在 Herdr pane 中运行并输出内容（pane read 证实，两次采集一致）
     - ask 管道验证通过（job accepted），pend/completion/cancel 需 API 凭证
@@ -118,13 +129,13 @@ socket API 和插件系统。
 ### ITEM-2 · 完成 §12 herdr-supportability-projection
 - **owning skill**：cs-feat
 - **可交付结果**：
-  - ✅ Herdr support projection 单一 owner（`herdr_supportability_projection.py`，397 行）
-  - ✅ 消费 ITEM-1 更新后的 matrix，计算 support tier（19/19 unit tests pass）
+  - ✅ Herdr support projection 单一 owner（`herdr_supportability_projection.py`，624 行）
+  - ✅ 消费 ITEM-1 更新后的 matrix，计算 support tier（14 unit tests pass）
   - ✅ fail-closed tier 规则：`unsupported/experimental/beta/supported`
   - ✅ deterministic SHA-256 projection_hash
   - ⚠️ `ccb doctor --output` 集成 — **待后续完成**（核心模块已就绪，consumer 端未接入）
   - ⚠️ docs/README 同步 — **待后续完成**
-  - ⚠️ `support_tier` 当前为 `unsupported`（herdr_auto_restore=unknown + workflows=blocked 触发降级）
+  - ⚠️ `support_tier` 当前为 `unsupported`（`ccb_source_status` 为 `v8.5.2-source-branch` 被 projection 映射为 `unknown`，不满足 `strict-v8.5.2` 要求；matrix 中零 pass evidence 进一步锁定该 tier）
 - **依赖**：ITEM-1（需要更新后的 matrix 作为输入）
 - **验收要点**：projection 的 support tier 与 matrix 证据一致；doctor/docs/README 不互相矛盾
 - **设计约束**：fail-closed——任一 core workflow/provider row/Mobile/Config/npm dry-run 非
@@ -147,7 +158,10 @@ socket API 和插件系统。
 - **依赖**：无（可直接在 §1–§10 的代码上实现）
 - **验收要点**：生成的 config 草稿包含正确的 agent role/provider/pane 映射；
   不覆盖已存在的 `.ccb/ccb.config`
-- **设计约束**：只生成草稿，不做自动激活或静默写入
+- **设计约束**：只生成草稿，不做自动激活或静默写入；Herdr 配置保持在
+  `%APPDATA%\herdr\config.toml`，不得被导入器复制到 CCB 配置
+- **当前缺口**：现实现生成 `version = 3` + `agents` 的非法文档，必须先修复
+  schema 输出并通过 `validate_project_config` 验证
 
 ### ITEM-5 · B-lite Herdr 插件原型（可选 P2）
 - **owning skill**：cs-feat
@@ -206,8 +220,10 @@ socket API 和插件系统。
 - **设计约束**：不做 attached 退化；不自动双向改配置；bridge 文件不含敏感字段；
   gate 修改保持 fail-closed
 - **开放问题**：
-  - `ccb8.cmd` 直跑闪退根因是否已修复（bootstrap 走 socket 路径绕开，但需补验证）
-  - Herdr `resume_agents_on_restore` 已通过 config.toml 写入 disabled，确认不随
+  - ✅ `ccb8.cmd` 闪退已缓解（code-hardening Epic ITEM-2：`1118dc24`）：
+    Herdr session list 探测改为 `Process.Start(CreateNoWindow)`，ConPTY pane 不再
+    产生可见控制台窗口。`observed_windows_flash=false` 已由 spike 证据确认
+  - ✅ Herdr `resume_agents_on_restore` 已通过 config.toml 写入 disabled，确认不随
     bootstrap 改变
 
 ## 最终交付索引
@@ -228,7 +244,12 @@ socket API 和插件系统。
   由 machine-readable evidence 驱动的 support tier
 - C2 架构决策有正式的跨版本 ADR，不依赖 brainstorm 文档或聊天历史
 - `ccb doctor --output` 向用户准确报告 Native Windows Herdr 的可用性、限制和下一步操作
-- ITEM-4/5/6（若执行）不破坏 C2 核心契约
+- ITEM-4/5/6/7 不破坏 C2 核心契约
+- **已知 gap（已于 code-hardening Epic 解决，见下）**：
+  - ✅ `ccb doctor --output` consumer 端接入 → `5aea5f08`（ITEM-3）
+  - ✅ `ccb config import-herdr` schema 修复 → `8fc5094c`（ITEM-1）
+  - ✅ `ccb8.cmd` 闪退缓解 → `1118dc24`（ITEM-2）
+  - 以上三项来自 Epic `windows-native-herdr-ccb-code-hardening`（`accepted` 2026-08-07）
 
 ## 遗留风险
 
