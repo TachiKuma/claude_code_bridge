@@ -3,8 +3,8 @@ epic: ../epics/windows-native-herdr-ccb.md
 phase: acceptance
 approved_revision: d221483de0fa1cb1239fd24df96f42a9b6630d4b1afe0bfa8e4389112341848d
 current_item: null
-next_action: Final acceptance review — 全部 6 子项完成，进入 acceptance phase
-blocked_by: null
+next_action: blocked — OCR review 揭示 ITEM-4/ITEM-7 代码缺陷，移交新 Epic windows-native-herdr-ccb-code-hardening
+blocked_by: OCR review findings (2026-08-07) — herdr_config_import.py L71-73/73/115-119/138；handlers_start.py L170-175；herdr_common.py L45-52；herdr_bootstrap.py L63-71；roadmap §12 仍 in-progress
 item_progression: continuous
 milestone_commit: authorized
 remote_publish: final
@@ -89,6 +89,27 @@ remote_publish: final
 - CCB 为唯一 recovery owner（C2 DEC-7），Herdr agent auto-restore 显式禁用，互不冲突
 - 原始 config.toml 备份: `config.toml.bak-20260807`
 
+### 2026-08-07 Herdr 配置权威审计 ← 最新
+- **完整默认配置已读取**：Herdr v0.8.0-preview.2026-08-04；Windows 实际用户配置路径为
+  `%APPDATA%\herdr\config.toml`。
+- **配置边界结论**：
+  - Herdr `config.toml` 是用户可编辑的 Herdr authority，继续管理 theme、terminal、
+    update、keys、worktrees、ui、toast、sound、session、remote、experimental、advanced。
+  - `.ccb/ccb.config` 继续管理 CCB 项目 agent/provider/role/model/MCP、workflow、
+    queue/completion/cancel/recovery、期望拓扑和 `runtime.mux.backend = "herdr"`。
+  - bridge/runtime projection 只保存脱敏的 Herdr session/pane/capability 绑定和 owner
+    metadata，不复制 Herdr 全量配置，也不自动双向写入。
+- **恢复约束**：Herdr 默认 `resume_agents_on_restore = true`；CCB-owned pane 的 recovery
+  supported 路径要求用户显式设置 `false`。CCB 启动/reload/reconcile 不得静默改写 Herdr
+  配置文件。
+- **A-lite 审计结果**：`ccb config import-herdr` 已有 parser/handler/dispatch 接线，
+  但当前生成的 `version = 3` + `agents` 草稿会被现行 v3 parser 以
+  `v3_static_layout_field_forbidden` 拒绝。后续应改为合法 v2 `[windows]` 草稿或完整
+  v3 `workflow` 文档；在此之前不能把导入命令标记为可用的配置迁移路径。
+- **依据**：`.codestable/adr/001-c2-asymmetric-federation-ccb-herdr.md`；
+  `docs/ccb-config-layout-contract.md`；`lib/agents/config_loader_runtime/parsing_runtime/workflow_v3.py`；
+  `lib/cli/services/herdr_config_import.py`；实际执行 `herdr --default-config`。
+
 ### 2026-08-07 采集证据 v2（run-20260807-004015）
 - **19/19 维度全部执行，0 command failures**
   - classification: mounted-with-herdr-panel-observation ✅
@@ -111,3 +132,16 @@ remote_publish: final
 - 永久 Epic `ITEM-1`: 更新为 11/14 partial + 3 blocked + pane_state=alive 证实
 - 永久 Epic `遗留风险`: 新增 viewport 渲染 + auto_restore unknown + workspace 累积 + API 凭证
 - 验证矩阵: run-20260807-004015 证据更新 (e2ab233e)
+
+### Final acceptance review 结论（2026-08-07）
+- **Epic 文档审查**：通过（2 轮，8 finding → 全部 resolved）
+- **代码 OCR review**：揭示 ITEM-4/ITEM-7 代码缺陷，阻塞 acceptance
+  - `herdr_config_import.py:71-73` — `--output` 已存在时静默覆盖
+  - `herdr_config_import.py:73` — 输出 JSON 但 CCB 链路是 TOML
+  - `herdr_config_import.py:115-119` — 不检查 returncode，键类型假设不安全
+  - `herdr_config_import.py:138` — 生成非法 v3 schema
+  - `handlers_start.py:170-175` — daemon inspection 异常被吞，冲突检测 fail-open
+  - `herdr_common.py:45-52` — 无条件清除 XDG_*，非 Windows 平台读错配置
+  - `herdr_bootstrap.py:63-71` — 不处理嵌套 server shape
+  - roadmap §12 `herdr-supportability-projection` 仍 `in-progress`
+- **处置**：不标记 `accepted`；移交新 Epic `windows-native-herdr-ccb-code-hardening`
