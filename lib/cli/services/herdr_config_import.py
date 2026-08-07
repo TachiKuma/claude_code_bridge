@@ -7,6 +7,7 @@ Reads the current Herdr session's workspace/pane topology and generates a
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,7 @@ def import_herdr_config(
     herdr_executable: str | None = None,
     herdr_session: str | None = None,
     dry_run: bool = True,
+    force: bool = False,
 ) -> dict[str, object]:
     """Generate a CCB config draft from the current Herdr topology.
 
@@ -32,13 +34,12 @@ def import_herdr_config(
         herdr_session: Herdr session name.  Auto-detected if None.
         dry_run: If True (default), print to stdout and do NOT write to
             ``.ccb/ccb.config``.
+        force: If True, overwrite an existing output file.  Defaults to False
+            (fail-fast when the target already exists).
 
     Returns:
         A dict with keys ``ok``, ``config``, ``warnings``, ``written_path``.
     """
-    import subprocess
-    import sys
-
     exe = resolve_herdr_executable(explicit=herdr_executable)
     if not exe:
         return {"ok": False, "reason": "Herdr executable not found", "config": None, "warnings": []}
@@ -61,6 +62,18 @@ def import_herdr_config(
     target = Path(output_path) if output_path else Path(project_dir) / ".ccb" / "ccb.config.herdr-import"
     existing_config = Path(project_dir) / ".ccb" / "ccb.config"
 
+    if not dry_run and target.exists() and not force:
+        return {
+            "ok": False,
+            "reason": (
+                f"Output file already exists: {target}. "
+                "Use --force to overwrite or choose a different --output path."
+            ),
+            "config": config,
+            "warnings": warnings,
+            "written_path": str(target),
+        }
+
     result: dict[str, object] = {
         "ok": True,
         "config": config,
@@ -68,12 +81,12 @@ def import_herdr_config(
         "written_path": str(target),
     }
 
+    toml_text = _dump_toml(config)
     if not dry_run:
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
+        target.write_text(toml_text, encoding="utf-8")
     else:
-        json.dump(config, sys.stdout, indent=2, ensure_ascii=False)
-        print()  # trailing newline
+        sys.stdout.write(toml_text)
 
     if existing_config.exists():
         warnings.append(
@@ -111,12 +124,22 @@ def _herdr_snapshot(
     except (OSError, subprocess.SubprocessError):
         return None
 
+    if result.returncode != 0:
+        return None
+
     try:
         payload = json.loads(result.stdout or "{}")
     except json.JSONDecodeError:
         return None
 
-    snapshot = payload.get("result", payload).get("snapshot")
+    if not isinstance(payload, Mapping):
+        return None
+
+    inner = payload.get("result", payload)
+    if not isinstance(inner, Mapping):
+        return None
+
+    snapshot = inner.get("snapshot")
     if not isinstance(snapshot, Mapping):
         return None
     return dict(snapshot)
@@ -127,15 +150,16 @@ def _build_ccb_config(
     *,
     project_dir: str,
 ) -> tuple[dict[str, object], list[str]]:
-    """Map Herdr workspace/pane topology to CCB agent config."""
+    """Map Herdr workspace/pane topology to a v2 CCB agent config."""
     warnings: list[str] = []
-    agents: list[dict[str, object]] = []
+    agents: dict[str, dict[str, object]] = {}
+    window_entries: list[str] = []
 
     workspaces = snapshot.get("workspaces")
     panes = snapshot.get("panes")
 
     if not isinstance(workspaces, list) or not isinstance(panes, list):
-        return {"version": 3, "agents": []}, ["No workspaces or panes found in Herdr snapshot"]
+        return {"version": 2, "windows": {}, "agents": {}}, ["No workspaces or panes found in Herdr snapshot"]
 
     pane_by_id: dict[str, Mapping[str, object]] = {}
     for pane in panes:
@@ -144,6 +168,7 @@ def _build_ccb_config(
             if pid:
                 pane_by_id[pid] = pane
 
+    agent_index = 0
     for workspace in workspaces:
         if not isinstance(workspace, Mapping):
             continue
@@ -165,26 +190,35 @@ def _build_ccb_config(
                 cwd=cwd,
             )
             if agent_config is not None:
-                agents.append(agent_config)
+                agent_index += 1
+                agent_name = f"agent_{agent_index}"
+                agents[agent_name] = agent_config
+                provider = agent_config.get("provider", "unknown")
+                window_entries.append(f"{agent_name}:{provider}")
             else:
                 warnings.append(f"Skipped pane {pane.get('pane_id')}: unknown agent kind for label {pane_label!r}")
 
-    config: dict[str, object] = {
-        "version": 3,
-        "agents": agents,
-    }
-
     if not agents:
         warnings.append("No agent mappings generated — check Herdr pane labels")
-        config["agents"] = [
-            {
-                "role": "agentroles.architect",
-                "provider": "claude",
-                "workspace": project_dir,
-                "label": "imported-agent",
-                "layout": {"position": "main"},
-            }
-        ]
+        fallback_name = "imported_agent"
+        agents[fallback_name] = {
+            "role": "agentroles.architect",
+            "provider": "claude",
+            "workspace": project_dir,
+            "label": "imported-agent",
+            "layout": {"position": "main"},
+        }
+        window_entries.append(f"{fallback_name}:claude")
+
+    windows: dict[str, object] = {
+        "main": ", ".join(window_entries),
+    }
+
+    config: dict[str, object] = {
+        "version": 2,
+        "windows": windows,
+        "agents": agents,
+    }
 
     return config, warnings
 
@@ -199,7 +233,7 @@ def _pane_to_agent_config(
     label_lower = pane_label.lower()
 
     # Known provider keywords
-    provider_map: dict[str, str] = {
+    provider_map: dict[str, str | None] = {
         "claude": "claude",
         "codex": "codex",
         "gemini": "gemini",
@@ -250,6 +284,73 @@ def _pane_to_agent_config(
 def _now_iso() -> str:
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+# ---------------------------------------------------------------------------
+# TOML serializer (no tomli_w dependency — hand-rolled for the config subset
+# that import-herdr produces)
+# ---------------------------------------------------------------------------
+
+def _toml_value(val: object) -> str:
+    """Format a single value as a TOML literal."""
+    if isinstance(val, bool):
+        return "true" if val else "false"
+    if isinstance(val, (int, float)):
+        return str(val)
+    if isinstance(val, str):
+        escaped = val.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+    if isinstance(val, (list, tuple)):
+        items = ", ".join(_toml_value(v) for v in val)
+        return f"[{items}]"
+    if isinstance(val, Mapping):
+        pairs = ", ".join(f"{k} = {_toml_value(v)}" for k, v in val.items())
+        return f"{{ {pairs} }}"
+    return f'"{val}"'
+
+
+def _dump_toml(data: dict[str, object]) -> str:
+    """Serialize a v2 CCB config dict to TOML text."""
+    lines: list[str] = []
+
+    # version
+    version = data.get("version", 2)
+    lines.append(f"version = {_toml_value(version)}")
+    lines.append("")
+
+    # _herdr_import_meta as comment block
+    meta = data.get("_herdr_import_meta")
+    if isinstance(meta, Mapping):
+        lines.append("# Herdr import metadata")
+        for mk, mv in meta.items():
+            lines.append(f"#   {mk}: {mv}")
+        lines.append("")
+
+    # [windows]
+    windows = data.get("windows")
+    if isinstance(windows, Mapping):
+        lines.append("[windows]")
+        for wk, wv in windows.items():
+            lines.append(f"{wk} = {_toml_value(wv)}")
+        lines.append("")
+
+    # [agents.<name>]
+    agents = data.get("agents")
+    if isinstance(agents, Mapping):
+        for agent_name, agent_spec in agents.items():
+            if not isinstance(agent_spec, Mapping):
+                continue
+            lines.append(f"[agents.{agent_name}]")
+            for ak, av in agent_spec.items():
+                if isinstance(av, Mapping):
+                    # dotted sub-keys for nested tables like _herdr_source / layout
+                    for nk, nv in av.items():
+                        lines.append(f"{ak}.{nk} = {_toml_value(nv)}")
+                else:
+                    lines.append(f"{ak} = {_toml_value(av)}")
+            lines.append("")
+
+    return "\n".join(lines)
 
 
 __all__ = ["import_herdr_config"]
