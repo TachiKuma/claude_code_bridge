@@ -613,11 +613,12 @@ def test_herdr_provider_gate_allows_codex(monkeypatch) -> None:
     # codex: _explicit_herdr=True and spec.provider=='codex' → gate 不触发
 
 
-def test_herdr_provider_gate_blocks_non_codex_with_explicit_config(monkeypatch) -> None:
-    """非 codex provider + 显式 config herdr → fail-closed。
+def test_herdr_provider_gate_requires_explicit_config(monkeypatch) -> None:
+    """gate 前提：显式 config herdr（_is_herdr_runtime_launch + env）成立。
 
-    仅当 CCB_RUNTIME_MUX_BACKEND=herdr（config 显式声明）时才 gate。
+    gate 仅当 CCB_RUNTIME_MUX_BACKEND=herdr（config 显式声明）时触发。
     自动检测的 herdr 不触发此 gate（设计 I-3：fail-closed 仅针对显式 opt-in）。
+    具体 provider 是否 fail-closed 见 _herdr_explicit_gate_error 测试。
     """
     from cli.services.runtime_launch_runtime.ensure import _is_herdr_runtime_launch
     import os
@@ -629,7 +630,8 @@ def test_herdr_provider_gate_blocks_non_codex_with_explicit_config(monkeypatch) 
     )
     assert is_herdr is True
     assert os.environ.get('CCB_RUNTIME_MUX_BACKEND') == 'herdr'
-    # gate 条件：is_herdr=True + CCB_RUNTIME_MUX_BACKEND=herdr + provider!='codex' → fail-closed
+    # gate 条件：is_herdr=True + CCB_RUNTIME_MUX_BACKEND=herdr + provider 不在
+    # _HERDR_NATIVE_VERIFIED_PROVIDERS（allow-list）→ fail-closed
 
 
 def test_herdr_provider_gate_allows_non_codex_when_auto_detected(monkeypatch) -> None:
@@ -648,3 +650,93 @@ def test_herdr_provider_gate_allows_non_codex_when_auto_detected(monkeypatch) ->
     assert is_herdr is True
     assert 'CCB_RUNTIME_MUX_BACKEND' not in os.environ
     # _explicit_herdr = False（env var 未设置） → gate 不触发
+
+
+# --- design I-3: 显式 herdr gate allow-list（_HERDR_NATIVE_VERIFIED_PROVIDERS） ---
+
+
+def test_herdr_explicit_gate_allows_verified_providers() -> None:
+    """已验证 provider（codex/claude）通过显式 herdr gate。"""
+    from cli.services.runtime_launch_runtime.ensure import _herdr_explicit_gate_error
+
+    assert _herdr_explicit_gate_error('codex') is None
+    assert _herdr_explicit_gate_error('claude') is None
+
+
+def test_herdr_explicit_gate_blocks_unverified_provider() -> None:
+    """未验证 provider（gemini 等）在显式 herdr 下 fail-closed。"""
+    from cli.services.runtime_launch_runtime.ensure import _herdr_explicit_gate_error
+
+    reason = _herdr_explicit_gate_error('gemini')
+    assert reason is not None
+    assert 'gemini' in reason
+    assert 'does not support herdr-native launch' in reason
+
+
+def test_herdr_explicit_gate_is_case_insensitive() -> None:
+    """provider 名大小写不敏感。"""
+    from cli.services.runtime_launch_runtime.ensure import _herdr_explicit_gate_error
+
+    assert _herdr_explicit_gate_error('CODEX') is None
+    assert _herdr_explicit_gate_error(' Claude ') is None
+
+
+def test_herdr_gate_raises_on_unverified_provider_via_ensure(monkeypatch) -> None:
+    """ensure_agent_runtime 对未验证 provider + 显式 herdr → raise fail-closed。"""
+    from types import SimpleNamespace
+
+    from agents.models import RuntimeMode
+    from cli.services.runtime_launch_runtime.ensure import ensure_agent_runtime
+
+    monkeypatch.setenv('CCB_RUNTIME_MUX_BACKEND', 'herdr')
+    spec = SimpleNamespace(runtime_mode=RuntimeMode.PANE_BACKED, provider='gemini', name='agent1')
+    with pytest.raises(RuntimeError, match='does not support herdr-native launch'):
+        ensure_agent_runtime(
+            context=None,
+            command=None,
+            spec=spec,
+            plan=None,
+            binding=None,
+            runtime_launch_result_cls=None,
+            binding_runtime_alive_fn=None,
+            provider_executable_fn=None,
+            cleanup_stale_tmux_binding_fn=None,
+            launch_runtime_fn=None,
+            resolve_agent_binding_fn=None,
+            namespace_backend_impl='herdr',
+        )
+
+
+def test_herdr_gate_allows_verified_claude_via_ensure(monkeypatch) -> None:
+    """ensure_agent_runtime 对已验证 claude + 显式 herdr → 放行到 launch（不 raise gate）。"""
+    import os
+    import sys
+    from types import SimpleNamespace
+
+    from agents.models import RuntimeMode
+    from cli.services.runtime_launch_runtime.ensure import ensure_agent_runtime
+
+    monkeypatch.setenv('CCB_RUNTIME_MUX_BACKEND', 'herdr')
+
+    class _Sentinel(Exception):
+        pass
+
+    def _launch_fn(*args, **kwargs):
+        raise _Sentinel('passed gate')
+
+    spec = SimpleNamespace(runtime_mode=RuntimeMode.PANE_BACKED, provider='claude', name='agent1')
+    with pytest.raises(_Sentinel, match='passed gate'):
+        ensure_agent_runtime(
+            context=None,
+            command=None,
+            spec=spec,
+            plan=None,
+            binding=None,
+            runtime_launch_result_cls=SimpleNamespace,
+            binding_runtime_alive_fn=lambda binding: False,
+            provider_executable_fn=lambda provider: os.path.basename(sys.executable),
+            cleanup_stale_tmux_binding_fn=lambda binding: None,
+            launch_runtime_fn=_launch_fn,
+            resolve_agent_binding_fn=lambda **kwargs: SimpleNamespace(),
+            namespace_backend_impl='herdr',
+        )

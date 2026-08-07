@@ -7,10 +7,11 @@ Reads the current Herdr session's workspace/pane topology and generates a
 from __future__ import annotations
 
 import json
-import os
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
+
+from .herdr_common import herdr_command_env, resolve_herdr_executable
 
 
 def import_herdr_config(
@@ -35,11 +36,10 @@ def import_herdr_config(
     Returns:
         A dict with keys ``ok``, ``config``, ``warnings``, ``written_path``.
     """
-    import shutil
     import subprocess
     import sys
 
-    exe = str(herdr_executable or "").strip() or _resolve_herdr(shutil.which)
+    exe = resolve_herdr_executable(explicit=herdr_executable)
     if not exe:
         return {"ok": False, "reason": "Herdr executable not found", "config": None, "warnings": []}
 
@@ -85,21 +85,6 @@ def import_herdr_config(
     return result
 
 
-def _resolve_herdr(which_fn) -> str | None:
-    exe = which_fn("herdr")
-    if exe:
-        return exe
-    # Windows common paths
-    candidates = [
-        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Herdr", "herdr.exe"),
-        os.path.join(os.environ.get("ProgramFiles", ""), "Herdr", "herdr.exe"),
-    ]
-    for candidate in candidates:
-        if os.path.isfile(candidate):
-            return candidate
-    return None
-
-
 def _herdr_snapshot(
     exe: str,
     *,
@@ -120,7 +105,7 @@ def _herdr_snapshot(
             encoding="utf-8",
             errors="replace",
             timeout=15,
-            env=_herdr_env(),
+            env=herdr_command_env(),
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
@@ -260,18 +245,6 @@ def _pane_to_agent_config(
             "workspace_label": workspace_label,
         },
     }
-
-
-def _herdr_env() -> dict[str, str]:
-    env = dict(os.environ)
-    for key in ("XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"):
-        env.pop(key, None)
-    if "HERDR_CONFIG_PATH" not in env:
-        env["HERDR_CONFIG_PATH"] = os.path.join(
-            os.environ.get("USERPROFILE", os.path.expanduser("~")),
-            "AppData", "Roaming", "herdr", "config.toml",
-        )
-    return env
 
 
 def _now_iso() -> str:

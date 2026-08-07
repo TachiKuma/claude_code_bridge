@@ -11,6 +11,12 @@ from provider_core.registry import CORE_PROVIDER_NAMES, OPTIONAL_PROVIDER_NAMES,
 
 _PANE_BACKED_RUNTIME_PROVIDERS = frozenset(CORE_PROVIDER_NAMES + OPTIONAL_PROVIDER_NAMES)
 
+# design I-3: 显式 [runtime.mux] backend = "herdr" 时允许通过 gate 的 provider
+# allow-list。只收录有真实 Herdr 环境启动证据的 provider；新增 provider 前必须先
+# 有 Herdr pane 实际运行验证（见 epic windows-native-herdr-ccb ITEM-1：Codex/Claude
+# 已在 Herdr pane 运行并输出内容）。自动检测触发的 herdr 后端不经过此 allow-list。
+_HERDR_NATIVE_VERIFIED_PROVIDERS = frozenset({'codex', 'claude'})
+
 
 def runtime_launcher(provider: str):
     return build_default_runtime_launcher_map(include_optional=True).get(str(provider or '').strip().lower())
@@ -40,8 +46,8 @@ def ensure_agent_runtime(
     if launcher is None:
         return runtime_launch_result_cls(launched=False, binding=binding)
     # design I-3: 仅当 config 显式声明 [runtime.mux] backend = "herdr" 时，
-    # 非 codex provider fail-closed。自动检测（HERDR_ENV / CCB_HERDR_SESSION）
-    # 触发的 herdr 后端不触发此 gate。
+    # 未验证 provider fail-closed（allow-list 见 _HERDR_NATIVE_VERIFIED_PROVIDERS）。
+    # 自动检测（HERDR_ENV / CCB_HERDR_SESSION）触发的 herdr 后端不触发此 gate。
     _explicit_herdr = (
         _is_herdr_runtime_launch(
             namespace_backend_impl=namespace_backend_impl,
@@ -49,13 +55,10 @@ def ensure_agent_runtime(
         )
         and os.environ.get('CCB_RUNTIME_MUX_BACKEND', '').strip() == 'herdr'
     )
-    if _explicit_herdr and spec.provider != 'codex':
-        raise RuntimeError(
-            f'provider {spec.provider!r} does not support herdr-native launch; '
-            f'only codex is currently supported for herdr runtime. '
-            f'remove [runtime.mux] backend = "herdr" from config to use tmux, '
-            f'or switch to codex provider'
-        )
+    if _explicit_herdr:
+        gate_error = _herdr_explicit_gate_error(spec.provider)
+        if gate_error is not None:
+            raise RuntimeError(gate_error)
     if _binding_is_reusable(
         binding=binding,
         assigned_pane_id=assigned_pane_id,
@@ -179,6 +182,25 @@ def _is_herdr_runtime_launch(
     if isinstance(assigned_pane_ref, dict):
         return str(assigned_pane_ref.get('backend_impl') or '').strip() == 'herdr'
     return False
+
+
+def _herdr_explicit_gate_error(provider: str) -> str | None:
+    """显式 herdr + 未验证 provider → 返回 fail-closed 错误消息；通过返回 None。
+
+    仅作用于显式 opt-in（``[runtime.mux] backend = "herdr"``），自动检测的
+    herdr 后端不经过此 gate（design I-3）。allow-list 见
+    ``_HERDR_NATIVE_VERIFIED_PROVIDERS``。
+    """
+    key = str(provider or '').strip().lower()
+    if key in _HERDR_NATIVE_VERIFIED_PROVIDERS:
+        return None
+    verified = ', '.join(sorted(_HERDR_NATIVE_VERIFIED_PROVIDERS))
+    return (
+        f'provider {provider!r} does not support herdr-native launch; '
+        f'only {verified} are verified for explicit herdr runtime. '
+        f'remove [runtime.mux] backend = "herdr" from config to use tmux, '
+        f'or switch to a verified provider'
+    )
 
 
 def _resolve_refreshed_binding(*, context, spec, plan, resolve_agent_binding_fn):

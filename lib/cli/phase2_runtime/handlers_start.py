@@ -125,6 +125,82 @@ def _terminal_size_for_streams(*streams: object) -> tuple[int, int] | None:
     return None
 
 
+def handle_herdr_open(context, command, out, services) -> int:
+    """``ccb herdr open`` — WezTerm-launched Herdr managed startup bootstrap.
+
+    Locates Herdr, verifies the server is running, injects the herdr runtime
+    env, then starts agents through the herdr backend (managed mode; CCB stays
+    the provider/recovery authority). Foreground attach by default;
+    ``--no-attach`` starts headless.
+    """
+    from cli.models_start import ParsedStartCommand
+    from cli.services.herdr_bootstrap import ensure_herdr_bootstrap_env
+
+    result = ensure_herdr_bootstrap_env(
+        herdr_exe=command.herdr_exe,
+        herdr_session=command.herdr_session,
+    )
+    if result.get('ok') is not True:
+        print(str(result.get('reason') or 'herdr open failed'), file=sys.stderr)
+        return 1
+    for warning in (result.get('warnings') or ()):
+        print(f'Warning: {warning}', file=sys.stderr)
+    running, backend = _daemon_running_and_backend(context)
+    if running and backend != 'herdr':
+        _print_herdr_daemon_conflict(backend)
+        return 1
+    start_command = ParsedStartCommand(
+        project=command.project,
+        agent_names=(),
+        restore=True,
+        auto_permission=True,
+    )
+    if command.no_attach:
+        os.environ['CCB_NO_ATTACH'] = '1'
+    return handle_start(context, start_command, out, services)
+
+
+def _daemon_running_and_backend(context):
+    """Return ``(running, backend_impl)`` for the current project's daemon.
+
+    ``running`` reflects a live keeper/daemon (pid alive + socket connectable);
+    ``backend_impl`` is the recorded namespace backend (``herdr``/``tmux``) or
+    None when unknown or when no namespace state exists.
+    """
+    try:
+        from cli.services.daemon import inspect_daemon
+
+        _manager, _guard, inspection = inspect_daemon(context)
+    except Exception:
+        return False, None
+    running = bool(
+        getattr(inspection, 'pid_alive', False)
+        and getattr(inspection, 'socket_connectable', False)
+    )
+    if not running:
+        return False, None
+    try:
+        from ccbd.services.project_namespace_state_runtime.stores import (
+            ProjectNamespaceStateStore,
+        )
+
+        state = ProjectNamespaceStateStore(context.paths).load()
+    except Exception:
+        return True, None
+    if state is None:
+        return True, None
+    return True, str(getattr(state, 'backend_impl', '') or '').strip() or None
+
+
+def _print_herdr_daemon_conflict(backend: str | None) -> None:
+    if backend:
+        print(f'An existing CCB daemon is running with {backend} backend.', file=sys.stderr)
+    else:
+        print('An existing CCB daemon is running (backend unknown).', file=sys.stderr)
+    print('ccb herdr open requires the daemon in Herdr managed mode.', file=sys.stderr)
+    print('Stop the existing session first: `ccb kill`, then retry `ccb herdr open`.', file=sys.stderr)
+
+
 def handle_config_import_herdr(context, command, out, services) -> int:
     """A-lite: import Herdr workspace/pane topology as a CCB config draft."""
     from cli.services.herdr_config_import import import_herdr_config
@@ -155,5 +231,6 @@ __all__ = [
     'handle_config_import_herdr',
     'handle_config_ui',
     'handle_config_validate',
+    'handle_herdr_open',
     'handle_start',
 ]

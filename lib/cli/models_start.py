@@ -264,6 +264,15 @@ class ParsedConfigImportHerdrCommand:
 
 
 @dataclass(frozen=True)
+class ParsedHerdrOpenCommand:
+    project: str | None
+    herdr_exe: str | None = None
+    herdr_session: str | None = None
+    no_attach: bool = False
+    kind: str = 'herdr-open'
+
+
+@dataclass(frozen=True)
 class ParsedReloadCommand:
     project: str | None
     dry_run: bool = False
@@ -302,6 +311,7 @@ __all__ = [
     'ParsedConfigValidateCommand',
     'ParsedDoctorCommand',
     'ParsedFrontdeskCommand',
+    'ParsedHerdrOpenCommand',
     'ParsedKillCommand',
     'ParsedLayoutCommand',
     'ParsedLogsCommand',

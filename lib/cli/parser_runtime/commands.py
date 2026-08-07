@@ -14,6 +14,7 @@ from cli.models import (
     ParsedDoctorCommand,
     ParsedFrontdeskCommand,
     ParsedFollowupCommand,
+    ParsedHerdrOpenCommand,
     ParsedInboxCommand,
     ParsedKillCommand,
     ParsedLayoutCommand,
@@ -1273,6 +1274,30 @@ def parse_config(tokens: list[str], *, project: str | None, error_type):
             dry_run=not bool(namespace.no_dry_run),
         )
     raise error_type('config supports: validate, effective, migrate, ui, import-herdr')
+
+
+def parse_herdr(tokens: list[str], *, project: str | None, error_type) -> ParsedHerdrOpenCommand:
+    if not tokens:
+        raise error_type('herdr supports: open')
+    action = str(tokens[0]).strip().lower()
+    if action == 'open':
+        parser = argparse.ArgumentParser(prog='ccb herdr open', add_help=False)
+        parser.add_argument('--herdr-exe', dest='herdr_exe')
+        parser.add_argument('--herdr-session', dest='herdr_session')
+        parser.add_argument('--no-attach', dest='no_attach', action='store_true')
+        namespace = parse_args(
+            parser,
+            tokens[1:],
+            error_message='invalid herdr open command',
+            error_type=error_type,
+        )
+        return ParsedHerdrOpenCommand(
+            project=project,
+            herdr_exe=str(namespace.herdr_exe) if namespace.herdr_exe else None,
+            herdr_session=str(namespace.herdr_session) if namespace.herdr_session else None,
+            no_attach=bool(namespace.no_attach),
+        )
+    raise error_type('herdr supports: open')
 
 
 def parse_reload(tokens: list[str], *, project: str | None, error_type) -> ParsedReloadCommand:

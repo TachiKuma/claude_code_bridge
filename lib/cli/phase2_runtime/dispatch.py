@@ -44,6 +44,7 @@ from .handlers_start import (
     handle_config_import_herdr,
     handle_config_ui,
     handle_config_validate,
+    handle_herdr_open,
     handle_start,
 )
 
@@ -64,6 +65,7 @@ _HANDLERS = {
     'fault-clear': handle_fault_clear,
     'fault-list': handle_fault_list,
     'frontdesk': handle_frontdesk,
+    'herdr-open': handle_herdr_open,
     'inbox': handle_inbox,
     'kill': handle_kill,
     'layout': handle_layout,
