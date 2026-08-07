@@ -709,12 +709,13 @@ function Initialize-WrapperEnvironment {
     $env:PYTHONPATH = (Join-Path $sourceRoot 'lib') + ';' + $env:PYTHONPATH
 
     $shim = Join-Path $devBin 'ccb.cmd'
-    $shimLines = @(
+    $shimText = (
         '@echo off',
+        'chcp 65001 > nul',
         ('set "PYTHONPATH=' + (Join-Path $sourceRoot 'lib') + ';%PYTHONPATH%"'),
         ('"' + $python + '" "' + (Join-Path $sourceRoot 'ccb.py') + '" %*')
-    )
-    Set-Content -LiteralPath $shim -Value $shimLines -Encoding ASCII
+    ) -join [Environment]::NewLine
+    [System.IO.File]::WriteAllText($shim, $shimText, $script:utf8NoBom)
 
     Set-Location -LiteralPath $projectRoot
 }
