@@ -10,6 +10,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 
 
 def resolve_herdr_executable(explicit: str | None = None) -> str | None:
@@ -39,17 +40,20 @@ def resolve_herdr_executable(explicit: str | None = None) -> str | None:
 def herdr_command_env() -> dict[str, str]:
     """Environment for invoking the herdr CLI.
 
-    Drops XDG_* overrides and points ``HERDR_CONFIG_PATH`` at the default
-    Windows config location when unset, matching Herdr's config discovery.
+    On Windows, drops XDG_* overrides and points ``HERDR_CONFIG_PATH`` at the
+    default Windows config location when unset, matching Herdr's config
+    discovery.  On other platforms XDG_* variables are preserved so Herdr can
+    locate its own config/profile directories correctly.
     """
     env = dict(os.environ)
-    for key in ('XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_STATE_HOME'):
-        env.pop(key, None)
-    if 'HERDR_CONFIG_PATH' not in env:
-        env['HERDR_CONFIG_PATH'] = os.path.join(
-            os.environ.get('USERPROFILE', os.path.expanduser('~')),
-            'AppData', 'Roaming', 'herdr', 'config.toml',
-        )
+    if sys.platform == 'win32':
+        for key in ('XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_STATE_HOME'):
+            env.pop(key, None)
+        if 'HERDR_CONFIG_PATH' not in env:
+            env['HERDR_CONFIG_PATH'] = os.path.join(
+                os.environ.get('USERPROFILE', os.path.expanduser('~')),
+                'AppData', 'Roaming', 'herdr', 'config.toml',
+            )
     return env
 
 

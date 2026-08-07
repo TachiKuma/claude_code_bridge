@@ -60,7 +60,14 @@ def ensure_herdr_bootstrap_env(
             'ok': False,
             'reason': 'Failed to query Herdr server status.',
         }
-    if status.get('running') is not True:
+    # Unwrap nested server shape when Herdr returns
+    # {"result": {"server": {"running": true, ...}}} rather than a flat dict.
+    server = status
+    inner = status.get('result')
+    if isinstance(inner, dict):
+        nested = inner.get('server')
+        server = nested if isinstance(nested, dict) else inner
+    if server.get('running') is not True:
         return {
             'ok': False,
             'reason': (
@@ -68,12 +75,12 @@ def ensure_herdr_bootstrap_env(
                 'to attach the persistent session, then retry `ccb herdr open`.'
             ),
         }
-    if status.get('compatible') is not True:
+    if server.get('compatible') is not True:
         return {
             'ok': False,
             'reason': (
                 f'Herdr protocol is not compatible with CCB '
-                f'(server protocol={status.get("protocol")!r}). Upgrade Herdr.'
+                f'(server protocol={server.get("protocol")!r}). Upgrade Herdr.'
             ),
         }
     probe = _probe_herdr_read_capabilities(exe)
@@ -90,7 +97,7 @@ def ensure_herdr_bootstrap_env(
     capability_report = _build_capability_report(probe)
     report_path = _write_capability_report(capability_report)
     warnings: list[str] = []
-    live_session = str(status.get('session') or '').strip() or None
+    live_session = str(server.get('session') or '').strip() or None
     session = (
         str(herdr_session or '').strip()
         or os.environ.get('CCB_HERDR_SESSION', '').strip()

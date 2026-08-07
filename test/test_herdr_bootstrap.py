@@ -349,3 +349,133 @@ def test_query_herdr_server_status_malformed_json(monkeypatch) -> None:
 
     monkeypatch.setattr(subprocess, 'run', lambda *args, **kwargs: _FakeResult())
     assert query_herdr_server_status('/x/herdr.exe') is None
+
+
+# ---------------------------------------------------------------------------
+# ITEM-2 fix 3: nested server shape unwrapping
+# ---------------------------------------------------------------------------
+
+def test_bootstrap_handles_nested_result_server_shape(monkeypatch) -> None:
+    """Nested {"result":{"server":{"running":true,...}}} unwraps correctly."""
+    monkeypatch.delenv('CCB_HERDR_EXE', raising=False)
+    monkeypatch.delenv('CCB_HERDR_SESSION', raising=False)
+    monkeypatch.delenv('CCB_HERDR_CAPABILITY_REPORT', raising=False)
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap.resolve_herdr_executable',
+        lambda explicit=None: '/x/herdr.exe',
+    )
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap.query_herdr_server_status',
+        lambda exe: {
+            'result': {
+                'server': {
+                    'running': True,
+                    'compatible': True,
+                    'protocol': 19,
+                    'session': 'sess-nested',
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap._probe_herdr_read_capabilities',
+        lambda exe: {'session_attach': True, 'workspace_list': True, 'pane_list': True},
+    )
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap._write_capability_report',
+        lambda report: '/tmp/cap.json',
+    )
+    result = ensure_herdr_bootstrap_env()
+    assert result['ok'] is True, f'Nested shape should succeed, got: {result}'
+    assert result['herdr_session'] == 'sess-nested'
+
+
+def test_bootstrap_nested_shape_rejects_stopped(monkeypatch) -> None:
+    """Nested shape with running=False is correctly rejected."""
+    monkeypatch.delenv('CCB_HERDR_EXE', raising=False)
+    monkeypatch.delenv('CCB_HERDR_SESSION', raising=False)
+    monkeypatch.delenv('CCB_HERDR_CAPABILITY_REPORT', raising=False)
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap.resolve_herdr_executable',
+        lambda explicit=None: '/x/herdr.exe',
+    )
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap.query_herdr_server_status',
+        lambda exe: {
+            'result': {
+                'server': {
+                    'running': False,
+                    'compatible': True,
+                }
+            }
+        },
+    )
+    result = ensure_herdr_bootstrap_env()
+    assert result['ok'] is False
+    assert 'server is not running' in str(result['reason'])
+
+
+def test_bootstrap_nested_shape_rejects_incompatible(monkeypatch) -> None:
+    """Nested shape with compatible=False is correctly rejected."""
+    monkeypatch.delenv('CCB_HERDR_EXE', raising=False)
+    monkeypatch.delenv('CCB_HERDR_SESSION', raising=False)
+    monkeypatch.delenv('CCB_HERDR_CAPABILITY_REPORT', raising=False)
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap.resolve_herdr_executable',
+        lambda explicit=None: '/x/herdr.exe',
+    )
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap.query_herdr_server_status',
+        lambda exe: {
+            'result': {
+                'server': {
+                    'running': True,
+                    'compatible': False,
+                    'protocol': 2,
+                }
+            }
+        },
+    )
+    result = ensure_herdr_bootstrap_env()
+    assert result['ok'] is False
+    assert 'not compatible' in str(result['reason'])
+
+
+# ---------------------------------------------------------------------------
+# ITEM-2 fix 2: XDG platform gate
+# ---------------------------------------------------------------------------
+
+def test_herdr_command_env_clears_xdg_on_windows(monkeypatch) -> None:
+    """XDG_* is cleared on Windows, HERDR_CONFIG_PATH is set."""
+    import sys as _sys
+    from lib.cli.services.herdr_common import herdr_command_env
+
+    if _sys.platform != 'win32':
+        import pytest
+        pytest.skip('test only meaningful on Windows')
+
+    monkeypatch.setenv('XDG_CONFIG_HOME', '/fake/xdg/config')
+    monkeypatch.setenv('XDG_CACHE_HOME', '/fake/xdg/cache')
+    monkeypatch.setenv('XDG_STATE_HOME', '/fake/xdg/state')
+    monkeypatch.delenv('HERDR_CONFIG_PATH', raising=False)
+
+    env = herdr_command_env()
+    assert 'XDG_CONFIG_HOME' not in env
+    assert 'XDG_CACHE_HOME' not in env
+    assert 'XDG_STATE_HOME' not in env
+    assert 'HERDR_CONFIG_PATH' in env
+
+
+def test_herdr_command_env_preserves_xdg_on_non_windows(monkeypatch) -> None:
+    """XDG_* is preserved on non-Windows platforms."""
+    from lib.cli.services.herdr_common import herdr_command_env
+
+    monkeypatch.setattr('sys.platform', 'linux')
+    monkeypatch.setenv('XDG_CONFIG_HOME', '/fake/xdg/config')
+    monkeypatch.setenv('XDG_CACHE_HOME', '/fake/xdg/cache')
+
+    env = herdr_command_env()
+    assert env.get('XDG_CONFIG_HOME') == '/fake/xdg/config'
+    assert env.get('XDG_CACHE_HOME') == '/fake/xdg/cache'
+    # HERDR_CONFIG_PATH should NOT be forced on non-Windows
+    assert 'HERDR_CONFIG_PATH' not in env or env['HERDR_CONFIG_PATH'] == os.environ.get('HERDR_CONFIG_PATH', '')

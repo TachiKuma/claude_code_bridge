@@ -887,9 +887,33 @@ if (Test-ShouldPrestartKill -CliArgs $CcbArgs -or $CcbArgs.Count -eq 0) {
             $projectName = (Split-Path -Leaf $env:CCB_PROJECT_ROOT)
             $shortId = $projectId.Substring(0, [Math]::Min(8, $projectId.Length))
             $ccbSession = "ccb-${projectName}-${shortId}"
-            $statusCmd = & $herdrExe session list --json 2>$null | ConvertFrom-Json -ErrorAction SilentlyContinue
-            $existing = if ($statusCmd -and $statusCmd.sessions) {
-                $statusCmd.sessions | Where-Object { $_.name -eq $ccbSession -and $_.running }
+            # Use Process.Start (CreateNoWindow) for the session-list probe
+            # instead of direct invocation so that Herdr does not create a
+            # visible console window in the ConPTY pane (2026-08-07 fix).
+            $statusJson = $null
+            try {
+                $probePsi = New-Object System.Diagnostics.ProcessStartInfo
+                $probePsi.FileName = $herdrExe
+                $probePsi.Arguments = 'session list --json'
+                $probePsi.UseShellExecute = $false
+                $probePsi.CreateNoWindow = $true
+                $probePsi.RedirectStandardOutput = $true
+                $probePsi.RedirectStandardError = $true
+                $probeProcess = [System.Diagnostics.Process]::Start($probePsi)
+                if ($probeProcess) {
+                    $probeStdout = $probeProcess.StandardOutput.ReadToEnd()
+                    $probeProcess.WaitForExit(5000) | Out-Null
+                    if ($probeProcess.ExitCode -eq 0 -and $probeStdout) {
+                        $statusJson = $probeStdout | ConvertFrom-Json -ErrorAction SilentlyContinue
+                    }
+                }
+            } catch {
+                # Herdr probe failed silently — session may already exist or
+                # Herdr may not be running.  The server-start below is
+                # idempotent (herdr ignores duplicate session starts).
+            }
+            $existing = if ($statusJson -and $statusJson.sessions) {
+                $statusJson.sessions | Where-Object { $_.name -eq $ccbSession -and $_.running }
             } else { $null }
             if (-not $existing) {
                 $psi = New-Object System.Diagnostics.ProcessStartInfo

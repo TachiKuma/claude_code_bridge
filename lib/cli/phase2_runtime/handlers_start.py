@@ -171,7 +171,19 @@ def _daemon_running_and_backend(context):
         from cli.services.daemon import inspect_daemon
 
         _manager, _guard, inspection = inspect_daemon(context)
-    except Exception:
+    except (ImportError, ModuleNotFoundError):
+        # herdr/daemon module genuinely unavailable — safe to say "not running"
+        return False, None
+    except Exception as exc:
+        # Inspection raised unexpectedly — daemon state unknown.
+        # Log the error so it's not silently swallowed, then proceed
+        # conservatively (daemon may or may not be running).
+        import sys
+        print(
+            f"ccb herdr open: daemon inspection failed ({exc}); "
+            "unable to confirm whether an existing daemon is running.",
+            file=sys.stderr,
+        )
         return False, None
     running = bool(
         getattr(inspection, 'pid_alive', False)
