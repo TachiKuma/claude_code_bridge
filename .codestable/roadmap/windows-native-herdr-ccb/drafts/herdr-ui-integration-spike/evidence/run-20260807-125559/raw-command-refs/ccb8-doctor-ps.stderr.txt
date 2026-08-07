@@ -1,0 +1,53 @@
+command_status: failed
+error: [Errno 13] Permission denied: 'D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\lease.json'
+Traceback (most recent call last):
+  File "E:\GITHUB~1\TACHIK~1\claude_code_bridge\ccb.py", line 142, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "E:\GITHUB~1\TACHIK~1\claude_code_bridge\ccb.py", line 131, in main
+    return run_cli_entrypoint(
+        sys.argv[1:],
+    ...<4 lines>...
+        stderr=sys.stderr,
+    )
+  File "E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\lib\cli\entrypoint_runtime.py", line 317, in run_cli_entrypoint
+    return maybe_handle_phase2(tokens, cwd=cwd, stdout=stdout, stderr=stderr)
+  File "E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\lib\cli\phase2.py", line 89, in maybe_handle_phase2
+    return handle_phase2_exception(err, command_kind=command.kind, exc=exc)
+  File "E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\lib\cli\phase2_errors.py", line 92, in handle_phase2_exception
+    raise exc
+  File "E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\lib\cli\phase2.py", line 87, in maybe_handle_phase2
+    return _dispatch(context, command, out)
+  File "E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\lib\cli\phase2.py", line 152, in _dispatch
+    return _dispatch_impl(context, command, out, _dispatch_services())
+  File "E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\lib\cli\phase2_runtime\dispatch.py", line 102, in dispatch
+    return handler(context, command, out, services)
+  File "E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\lib\cli\phase2_runtime\handlers_ops.py", line 175, in handle_ps
+    payload = services.ps_summary(context, command)
+  File "E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\lib\cli\services\ps.py", line 18, in ps_summary
+    local = ping_local_state(context)
+  File "E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\lib\cli\services\daemon.py", line 245, in ping_local_state
+    _, _, inspection = inspect_daemon(context)
+                       ~~~~~~~~~~~~~~^^^^^^^^^
+  File "E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\lib\cli\services\daemon.py", line 59, in inspect_daemon
+    lease_inspection = guard.inspect(
+        assume_mounted_socket_connectable=assume_mounted_socket_connectable,
+    )
+  File "E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\lib\ccbd\services\ownership.py", line 49, in inspect
+    current = lease if lease is not None else self._mount_manager.load_state()
+                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\lib\ccbd\services\mount.py", line 37, in load_state
+    return self._store.load(path, loader=_lease_from_record)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\lib\storage\json_store.py", line 19, in load
+    payload = _load_json_object(target)
+  File "E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\lib\storage\json_store.py", line 64, in _load_json_object
+    return json.loads(path.read_text(encoding='utf-8'))
+                      ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python314\Lib\pathlib\__init__.py", line 787, in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:
+         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python314\Lib\pathlib\__init__.py", line 771, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\lease.json'

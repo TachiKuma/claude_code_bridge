@@ -1,0 +1,2 @@
+accepted job=job_9de38d9c81a3 target=agent_1
+[CCB_ASYNC_SUBMITTED job=job_9de38d9c81a3 target=agent_1]

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "record_type": "agent_restore_state",
+  "restore_mode": "auto",
+  "last_checkpoint": null,
+  "conversation_summary": "bootstrap placeholder",
+  "open_tasks": [],
+  "files_touched": [],
+  "base_commit": null,
+  "head_commit": null,
+  "last_restore_status": "fresh"
+}

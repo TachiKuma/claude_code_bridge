@@ -1,0 +1,13 @@
+{
+    "name":  "ccb8-doctor-ps",
+    "command":  [
+                    "D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.cmd",
+                    "doctor",
+                    "ps"
+                ],
+    "exit_code":  1,
+    "timed_out":  false,
+    "elapsed_ms":  2634,
+    "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260807-125559\\raw-command-refs\\ccb8-doctor-ps.stdout.txt",
+    "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260807-125559\\raw-command-refs\\ccb8-doctor-ps.stderr.txt"
+}

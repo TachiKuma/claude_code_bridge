@@ -1,0 +1,18 @@
+b寮€婧愰」鐩甛TachiKuma\claude_code_bridge\bin\ccb
+-agent-sidebar' --ccbd-socket 'D:\.c8\rs\575a9
+71fdf5a0c497a48228040a14841fb4529aaa476beb21d3
+4e53f1629bc03\ccbd\ccbd.sock' --project-root '
+D:\C#Project\GitHub\AvaPrintDesigner' --pane-w
+indow main"
+sh : 鏃犳硶灏嗏€渟h鈥濋」璇嗗埆涓?cmdlet銆佸嚱鏁般€佽剼鏈?鏂囦欢鎴栧彲杩愯绋嬪簭鐨勫悕绉般€傝妫€鏌ュ悕绉扮殑鎷煎啓锛屽
+鏋滃寘鎷矾寰勶紝璇风‘淇濊矾寰勬纭紝鐒跺悗鍐嶈瘯涓€娆°€?鎵€鍦ㄤ綅缃?琛?1 瀛楃: 1
++ sh -lc "CCB_SIDEBAR_THEME_PROFILE=default '
+E:\GitHub寮€婧愰」鐩甛TachiKuma\cl ...
++ ~~
+    + CategoryInfo          : ObjectNotFound
+   : (sh:String) [], CommandNotFoundExcepti
+  on
+    + FullyQualifiedErrorId : CommandNotFoun
+   dException
+
+PS D:\C#Project\GitHub\AvaPrintDesigner>

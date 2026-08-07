@@ -1,0 +1,81 @@
+{
+  "ccb_session_id": "ccb-agent_1-33e84b7d9bc1",
+  "agent_name": "agent_1",
+  "ccb_project_id": "575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03",
+  "project_root": "D:\\C#Project\\GitHub\\AvaPrintDesigner",
+  "project_anchor_path": "D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb",
+  "runtime_state_root": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03",
+  "runtime_dir": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex",
+  "completion_artifact_dir": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex\\completion",
+  "terminal": "mux",
+  "backend_family": "herdr-native",
+  "backend_impl": "herdr",
+  "tmux_session": "w5:p2",
+  "pane_id": "w5:p2",
+  "pane_title_marker": "CCB-agent_1-575a971f",
+  "provider_runtime_backend_ref": {
+    "provider": "codex",
+    "agent_slug": "agent_1",
+    "backend_impl": "herdr",
+    "completion_source": "provider_event_stream",
+    "completion_source_kind": "protocol_event_stream",
+    "namespace_ref": {
+      "backend_family": "herdr-native",
+      "backend_impl": "herdr",
+      "namespace_id": "w5",
+      "session_name": "ccb-avaprintdesigner-575a971f",
+      "ipc_kind": "herdr_socket",
+      "ipc_ref": "herdr://local"
+    },
+    "pane_ref": {
+      "backend_impl": "herdr",
+      "pane_id": "w5:p2",
+      "session_name": "ccb-avaprintdesigner-575a971f",
+      "window_name": null,
+      "agent_slug": "agent_1"
+    },
+    "managed_home": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-state\\codex\\home"
+  },
+  "managed_home": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-state\\codex\\home",
+  "completion_source": "provider_event_stream",
+  "completion_source_kind": "protocol_event_stream",
+  "namespace_restore_token_present": true,
+  "workspace_path": "D:\\C#Project\\GitHub\\AvaPrintDesigner",
+  "work_dir": "D:\\C#Project\\GitHub\\AvaPrintDesigner",
+  "work_dir_norm": "d:/C#Project/GitHub/AvaPrintDesigner",
+  "start_dir": "D:\\C#Project\\GitHub\\AvaPrintDesigner",
+  "active": true,
+  "started_at": "2026-08-07 13:54:21",
+  "start_cmd": "export AGY_CLI_DISABLE_AUTO_UPDATE=1 FACTORYD_DISABLE_AUTO_UPDATE=1 GROK_DISABLE_AUTOUPDATER=1 NO_UPDATE_NOTIFIER=1 RUST_LOG=off CODEX_RUNTIME_DIR='D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex' CODEX_INPUT_FIFO='D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex\\input.fifo' CODEX_OUTPUT_FIFO='D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex\\output.fifo' CODEX_TERMINAL=herdr CODEX_HOME='D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-state\\codex\\home' CODEX_SESSION_ROOT='D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-state\\codex\\home\\sessions' CODEX_SQLITE_HOME='D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-state\\codex\\home' CCB_SESSION_FILE='D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\.codex-agent_1-session' CCB_CALLER_ACTOR=agent_1 CCB_CALLER_RUNTIME_DIR='D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex' CCB_SESSION_ID=ccb-agent_1-33e84b7d9bc1 CCB_CALLER_PROJECT_ROOT='D:\\C#Project\\GitHub\\AvaPrintDesigner' CCB_CALLER_PROJECT_ID=575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03; export CCB_CODEX_MANAGED_REMOTE=1 CCB_CODEX_RESUME_ID=''; rm -f 'D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex\\app-server.remote'; _ccb_codex_wait=0; while [ ! -S '\\tmp\\ccb-runtime\\app-server-7f773eebd904a96c.sock' ] && [ \"$_ccb_codex_wait\" -lt 100 ]; do sleep 0.05; _ccb_codex_wait=$((_ccb_codex_wait + 1)); done; if [ -S '\\tmp\\ccb-runtime\\app-server-7f773eebd904a96c.sock' ]; then printf '%s\\n' '\\tmp\\ccb-runtime\\app-server-7f773eebd904a96c.sock' > 'D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex\\app-server.remote'; if [ -n \"$CCB_CODEX_RESUME_ID\" ]; then exec codex --remote 'unix://\\tmp\\ccb-runtime\\app-server-7f773eebd904a96c.sock' -c disable_paste_burst=true --ask-for-approval never --sandbox danger-full-access --dangerously-bypass-hook-trust resume \"$CCB_CODEX_RESUME_ID\"; else exec codex --remote 'unix://\\tmp\\ccb-runtime\\app-server-7f773eebd904a96c.sock' -c disable_paste_burst=true --ask-for-approval never --sandbox danger-full-access --dangerously-bypass-hook-trust; fi; fi; if [ -n \"$CCB_CODEX_RESUME_ID\" ]; then exec codex -c disable_paste_burst=true --ask-for-approval never --sandbox danger-full-access --dangerously-bypass-hook-trust resume \"$CCB_CODEX_RESUME_ID\"; else exec codex -c disable_paste_burst=true --ask-for-approval never --sandbox danger-full-access --dangerously-bypass-hook-trust; fi",
+  "namespace_ref": {
+    "backend_family": "herdr-native",
+    "backend_impl": "herdr",
+    "namespace_id": "w5",
+    "session_name": "ccb-avaprintdesigner-575a971f",
+    "ipc_kind": "herdr_socket",
+    "ipc_ref": "herdr://local"
+  },
+  "pane_ref": {
+    "backend_impl": "herdr",
+    "pane_id": "w5:p2",
+    "session_name": "ccb-avaprintdesigner-575a971f",
+    "window_name": null,
+    "agent_slug": "agent_1"
+  },
+  "input_fifo": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex\\input.fifo",
+  "output_fifo": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex\\output.fifo",
+  "tmux_log": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex\\bridge.log",
+  "bridge_log": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex\\bridge.log",
+  "codex_start_cmd": "export AGY_CLI_DISABLE_AUTO_UPDATE=1 FACTORYD_DISABLE_AUTO_UPDATE=1 GROK_DISABLE_AUTOUPDATER=1 NO_UPDATE_NOTIFIER=1 RUST_LOG=off CODEX_RUNTIME_DIR='D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex' CODEX_INPUT_FIFO='D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex\\input.fifo' CODEX_OUTPUT_FIFO='D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex\\output.fifo' CODEX_TERMINAL=herdr CODEX_HOME='D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-state\\codex\\home' CODEX_SESSION_ROOT='D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-state\\codex\\home\\sessions' CODEX_SQLITE_HOME='D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-state\\codex\\home' CCB_SESSION_FILE='D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\.codex-agent_1-session' CCB_CALLER_ACTOR=agent_1 CCB_CALLER_RUNTIME_DIR='D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex' CCB_SESSION_ID=ccb-agent_1-33e84b7d9bc1 CCB_CALLER_PROJECT_ROOT='D:\\C#Project\\GitHub\\AvaPrintDesigner' CCB_CALLER_PROJECT_ID=575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03; export CCB_CODEX_MANAGED_REMOTE=1 CCB_CODEX_RESUME_ID=''; rm -f 'D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex\\app-server.remote'; _ccb_codex_wait=0; while [ ! -S '\\tmp\\ccb-runtime\\app-server-7f773eebd904a96c.sock' ] && [ \"$_ccb_codex_wait\" -lt 100 ]; do sleep 0.05; _ccb_codex_wait=$((_ccb_codex_wait + 1)); done; if [ -S '\\tmp\\ccb-runtime\\app-server-7f773eebd904a96c.sock' ]; then printf '%s\\n' '\\tmp\\ccb-runtime\\app-server-7f773eebd904a96c.sock' > 'D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex\\app-server.remote'; if [ -n \"$CCB_CODEX_RESUME_ID\" ]; then exec codex --remote 'unix://\\tmp\\ccb-runtime\\app-server-7f773eebd904a96c.sock' -c disable_paste_burst=true --ask-for-approval never --sandbox danger-full-access --dangerously-bypass-hook-trust resume \"$CCB_CODEX_RESUME_ID\"; else exec codex --remote 'unix://\\tmp\\ccb-runtime\\app-server-7f773eebd904a96c.sock' -c disable_paste_burst=true --ask-for-approval never --sandbox danger-full-access --dangerously-bypass-hook-trust; fi; fi; if [ -n \"$CCB_CODEX_RESUME_ID\" ]; then exec codex -c disable_paste_burst=true --ask-for-approval never --sandbox danger-full-access --dangerously-bypass-hook-trust resume \"$CCB_CODEX_RESUME_ID\"; else exec codex -c disable_paste_burst=true --ask-for-approval never --sandbox danger-full-access --dangerously-bypass-hook-trust; fi",
+  "codex_session_root": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-state\\codex\\home\\sessions",
+  "codex_home": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-state\\codex\\home",
+  "codex_memory_projection_sha256": "73e9e2c3f8c94f28b1647d9d3bc53fd3322d4a553325bc67cedbb0e4665ca018",
+  "codex_app_server_enabled": true,
+  "codex_app_server_socket": "\\tmp\\ccb-runtime\\app-server-7f773eebd904a96c.sock",
+  "codex_app_server_remote_marker": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_1\\provider-runtime\\codex\\app-server.remote",
+  "provider_payload_conflicts": [
+    "pane_id",
+    "terminal",
+    "tmux_session"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+    "name":  "ccb8-ping-after-restart",
+    "command":  [
+                    "D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.cmd",
+                    "ping",
+                    "all"
+                ],
+    "exit_code":  1,
+    "timed_out":  false,
+    "elapsed_ms":  2510,
+    "stdout_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260807-125559\\raw-command-refs\\ccb8-ping-after-restart.stdout.txt",
+    "stderr_ref":  "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260807-125559\\raw-command-refs\\ccb8-ping-after-restart.stderr.txt"
+}
