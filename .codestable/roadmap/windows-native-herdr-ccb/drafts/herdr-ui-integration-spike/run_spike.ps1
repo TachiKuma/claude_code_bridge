@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string] $ProjectRoot = "",
     [string] $Ccb8Path = "",
     [string] $RepoRoot = "E:/GitHub开源项目/TachiKuma/claude_code_bridge",
@@ -10,9 +10,9 @@ param(
     [switch] $ObservedWindowsFlash,
     [switch] $AllowNonHerdrUi,
     [switch] $SelfTest,
-    [ValidateSet('herdr-baseline', 'wrapper-file-check', 'ccb-diagnose', 'process-samples', 'ccb-start', 'post-start-herdr', 'ccb-ping', 'ccb-layout', 'startup-state-files', 'pane-verification', 'backend-route', 'herdr-v0.8-probe', 'ccb-live-diag', 'provider-logs', 'ccb-lifecycle', 'herdr-config-probe', 'provider-session-files', 'ccb-ask-smoke', 'ccb-reload-smoke')]
+    [ValidateSet('herdr-baseline', 'wrapper-file-check', 'ccb-diagnose', 'process-samples', 'ccb-start', 'ccb-herdr-open', 'post-start-herdr', 'ccb-ping', 'ccb-layout', 'startup-state-files', 'pane-verification', 'backend-route', 'herdr-v0.8-probe', 'ccb-live-diag', 'provider-logs', 'ccb-lifecycle', 'herdr-config-probe', 'provider-session-files', 'ccb-ask-smoke', 'ccb-reload-smoke')]
     [string[]] $OnlyDimension = @(),
-    [ValidateSet('herdr-baseline', 'wrapper-file-check', 'ccb-diagnose', 'process-samples', 'ccb-start', 'post-start-herdr', 'ccb-ping', 'ccb-layout', 'startup-state-files', 'pane-verification', 'backend-route', 'herdr-v0.8-probe', 'ccb-live-diag', 'provider-logs', 'ccb-lifecycle', 'herdr-config-probe', 'provider-session-files', 'ccb-ask-smoke', 'ccb-reload-smoke')]
+    [ValidateSet('herdr-baseline', 'wrapper-file-check', 'ccb-diagnose', 'process-samples', 'ccb-start', 'ccb-herdr-open', 'post-start-herdr', 'ccb-ping', 'ccb-layout', 'startup-state-files', 'pane-verification', 'backend-route', 'herdr-v0.8-probe', 'ccb-live-diag', 'provider-logs', 'ccb-lifecycle', 'herdr-config-probe', 'provider-session-files', 'ccb-ask-smoke', 'ccb-reload-smoke')]
     [string[]] $SkipDimension = @(),
     [ValidateRange(1, 500)]
     [int] $PaneCaptureLines = 20,
@@ -29,6 +29,7 @@ $script:SpikeDimensions = @(
     'ccb-diagnose',
     'process-samples',
     'ccb-start',
+    'ccb-herdr-open',
     'post-start-herdr',
     'ccb-ping',
     'ccb-layout',
@@ -1124,6 +1125,10 @@ $collectCcbLayout = (Test-SpikeDimensionEnabled -Dimension 'ccb-layout' -Enabled
 $collectCcbDiagnose = (Test-SpikeDimensionEnabled -Dimension 'ccb-diagnose' -EnabledDimensions $enabledDimensions) -or $collectBackendRoute
 $collectProcessSamples = Test-SpikeDimensionEnabled -Dimension 'process-samples' -EnabledDimensions $enabledDimensions
 $collectCcbStart = Test-SpikeDimensionEnabled -Dimension 'ccb-start' -EnabledDimensions $enabledDimensions
+$collectHerdrOpen = Test-SpikeDimensionEnabled -Dimension 'ccb-herdr-open' -EnabledDimensions $enabledDimensions
+# ccb-herdr-open 与 ccb-start 是两种启动路径：herdr-open 用 ccb herdr open 以 Herdr
+# managed backend 启动，启用时跳过 ccb-start 避免 daemon backend 冲突。
+$collectCcbStart = $collectCcbStart -and -not $collectHerdrOpen
 $executedDimensions = @($enabledDimensions)
 foreach ($dimension in @('post-start-herdr', 'ccb-layout', 'ccb-diagnose')) {
     $isImplicitlyExecuted = (
@@ -1175,6 +1180,13 @@ if ($collectProcessSamples) {
     Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status ('sampler running for ' + $sampleSeconds + 's') -PercentComplete 20
 }
 
+# 预清理：确保无残留 CCB daemon，避免 "old ccbd did not shut down in time"。
+# 结果不加入 $commands（容忍失败，不污染 failed 计数）。
+if ($collectCcbStart -or $collectHerdrOpen) {
+    Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'cleaning stale CCB daemon before start' -PercentComplete 25
+    $null = Invoke-CapturedCommand -Name 'ccb8-pre-start-cleanup' -Command @($resolvedCcb8, 'kill', '-f') -WorkingDirectory $resolvedProject -RawDir $rawDir -TimeoutSeconds 30
+}
+
 if ($collectCcbStart) {
     $oldNoAttach = $env:CCB_NO_ATTACH
     $oldFault = $env:CCB_CCBD_FAULTHANDLER
@@ -1188,6 +1200,42 @@ if ($collectCcbStart) {
         $commands += $startResult
         $script:ccbStartPid = [int] $startResult.process_id
         Start-Sleep -Seconds $PostStartWaitSeconds
+    } finally {
+        if ($null -eq $oldNoAttach) { Remove-Item Env:CCB_NO_ATTACH -ErrorAction SilentlyContinue } else { $env:CCB_NO_ATTACH = $oldNoAttach }
+        if ($null -eq $oldFault) { Remove-Item Env:CCB_CCBD_FAULTHANDLER -ErrorAction SilentlyContinue } else { $env:CCB_CCBD_FAULTHANDLER = $oldFault }
+        if ($null -eq $oldUnbuffered) { Remove-Item Env:PYTHONUNBUFFERED -ErrorAction SilentlyContinue } else { $env:PYTHONUNBUFFERED = $oldUnbuffered }
+    }
+}
+
+# ccb-herdr-open：ITEM-7 —— 用 `ccb herdr open --no-attach` 以 Herdr managed backend 启动 CCB，
+# 采集 bootstrap 启动结果（env 注入 / capability report / daemon 冲突检测行为）。
+if ($collectHerdrOpen) {
+    $oldNoAttach = $env:CCB_NO_ATTACH
+    $oldFault = $env:CCB_CCBD_FAULTHANDLER
+    $oldUnbuffered = $env:PYTHONUNBUFFERED
+    try {
+        $env:CCB_NO_ATTACH = '1'
+        $env:CCB_CCBD_FAULTHANDLER = '1'
+        $env:PYTHONUNBUFFERED = '1'
+        Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'starting CCB via ccb herdr open' -PercentComplete 37 -CurrentOperation $resolvedCcb8
+        $herdrOpenResult = Invoke-DetachedCommand -Name 'ccb8-herdr-open' -Command @($resolvedCcb8, 'herdr', 'open', '--no-attach') -WorkingDirectory $resolvedProject -RawDir $rawDir
+        $commands += $herdrOpenResult
+        $script:ccbStartPid = [int] $herdrOpenResult.process_id
+        Start-Sleep -Seconds $PostStartWaitSeconds
+        $herdrOpenEvidence = [ordered] @{
+            command = 'ccb8 herdr open --no-attach'
+            exit_code = [int] $herdrOpenResult.exit_code
+            status = [string] $herdrOpenResult.status
+            timed_out = [bool] $herdrOpenResult.timed_out
+            stdout_tail = [string] $herdrOpenResult.stdout_tail
+            stderr_tail = [string] $herdrOpenResult.stderr_tail
+            notes = @(
+                'ccb herdr open 在 detached 子进程内注入 CCB_HERDR_EXE/SESSION/CAPABILITY_REPORT env',
+                '启动证据以 layout/ping 维度（backend=herdr + pane 创建）为准'
+            )
+        }
+        Write-Utf8NoBom -Path (Join-Path $resolvedOut 'herdr-open-evidence.json') -Content (($herdrOpenEvidence | ConvertTo-Json -Depth 10) + [Environment]::NewLine)
+        $script:herdrOpenEvidenceRef = Join-Path $resolvedOut 'herdr-open-evidence.json'
     } finally {
         if ($null -eq $oldNoAttach) { Remove-Item Env:CCB_NO_ATTACH -ErrorAction SilentlyContinue } else { $env:CCB_NO_ATTACH = $oldNoAttach }
         if ($null -eq $oldFault) { Remove-Item Env:CCB_CCBD_FAULTHANDLER -ErrorAction SilentlyContinue } else { $env:CCB_CCBD_FAULTHANDLER = $oldFault }
@@ -1678,13 +1726,39 @@ if (Test-SpikeDimensionEnabled -Dimension 'ccb-lifecycle' -EnabledDimensions $en
     $commands += $restartResult
     Start-Sleep -Seconds $PostStartWaitSeconds
 
-    # Step 5: Post-restart ping to verify agents recovered
-    $commands += Invoke-CapturedCommand `
-        -Name 'ccb8-ping-after-restart' `
-        -Command @($resolvedCcb8, 'ping', 'all') `
-        -WorkingDirectory $resolvedProject `
-        -RawDir $rawDir `
-        -TimeoutSeconds 30
+    # Step 5: Post-restart ping — poll until daemon finishes startup (restart
+    # spawns a new keeper/ccbd; a single ping right after is usually too early).
+    # Attempts are not recorded in $commands so failed probes do not inflate
+    # command_failure_count; only the canonical result is kept.
+    $restartPingResult = $null
+    for ($restartAttempt = 1; $restartAttempt -le 3; $restartAttempt++) {
+        $restartPingResult = Invoke-CapturedCommand `
+            -Name ('ccb8-ping-after-restart-attempt-' + $restartAttempt) `
+            -Command @($resolvedCcb8, 'ping', 'all') `
+            -WorkingDirectory $resolvedProject `
+            -RawDir $rawDir `
+            -TimeoutSeconds 30
+        if ($restartAttempt -lt 3 -and [int] $restartPingResult.exit_code -ne 0) {
+            Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status ('ping-after-restart retry ' + $restartAttempt + '/3') -PercentComplete 92
+            Start-Sleep -Seconds 5
+        } else {
+            break
+        }
+    }
+    if ($null -ne $restartPingResult) {
+        # Keep the last (best) ping as canonical evidence for classification.
+        $commands += [ordered] @{
+            name = 'ccb8-ping-after-restart'
+            exit_code = [int] $restartPingResult.exit_code
+            timed_out = [bool] $restartPingResult.timed_out
+            elapsed_ms = [int] $restartPingResult.elapsed_ms
+            ref = $restartPingResult.ref
+            stdout_ref = $restartPingResult.stdout_ref
+            stderr_ref = $restartPingResult.stderr_ref
+            stdout_tail = $restartPingResult.stdout_tail
+            stderr_tail = $restartPingResult.stderr_tail
+        }
+    }
 
     # Step 6: Post-restart herdr snapshot
     $commands += Invoke-CapturedCommand `
@@ -1791,10 +1865,19 @@ if (Test-SpikeDimensionEnabled -Dimension 'ccb-ask-smoke' -EnabledDimensions $en
     $askDir = Join-Path $resolvedOut 'ask-smoke'
     New-Item -ItemType Directory -Force -Path $askDir | Out-Null
 
-    # Determine an agent name from ping output
-    $targetAgent = 'agent1'
-    if ($pingAllText -match "agent_name[''']?\s*:\s*[''']?(\S+?)[''']?[\s,}]") {
-        $targetAgent = $Matches[1]
+    # Determine an agent name from ping output. Read ping-all output here
+    # independently: $pingAllText is defined later (for classification), so
+    # depending on it here always yields the hard-coded fallback.
+    $targetAgent = $null
+    $pingAllSmokeCmd = @($commands | Where-Object { $_.name -eq 'ccb8-ping-all' -or $_.name -like 'ccb8-ping-all-attempt-*' } | Select-Object -Last 1)
+    if ($pingAllSmokeCmd.Count -gt 0 -and (Test-Path -LiteralPath $pingAllSmokeCmd[0].stdout_ref)) {
+        $pingAllSmokeText = [System.IO.File]::ReadAllText($pingAllSmokeCmd[0].stdout_ref)
+        if ($pingAllSmokeText -match "agent_name[''']?\s*:\s*[''']?(\S+?)[''']?[\s,}]") {
+            $targetAgent = $Matches[1]
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($targetAgent)) {
+        $targetAgent = 'agent1'
     }
 
     $commands += Invoke-CapturedCommand `
@@ -1860,7 +1943,7 @@ Set-SpikeProgress -Activity 'Herdr UI integration spike' -Status 'writing eviden
 
 $startCommand = @(
     $commands |
-        Where-Object { $_.name -eq 'ccb8-start-project' -or $_.name -eq 'ccb8-start-new-context' } |
+        Where-Object { $_.name -eq 'ccb8-start-project' -or $_.name -eq 'ccb8-start-new-context' -or $_.name -eq 'ccb8-herdr-open' } |
         Select-Object -First 1
 )
 $pingCommand = @($commands | Where-Object { $_.name -eq 'ccb8-ping-ccbd' } | Select-Object -First 1)
@@ -1981,6 +2064,7 @@ $summary = [ordered] @{
     provider_sessions_ref = if (Test-SpikeDimensionEnabled -Dimension 'provider-session-files' -EnabledDimensions $enabledDimensions) { Join-Path $resolvedOut 'provider-sessions' } else { $null }
     ask_smoke_ref = if (Test-SpikeDimensionEnabled -Dimension 'ccb-ask-smoke' -EnabledDimensions $enabledDimensions) { Join-Path $resolvedOut 'ask-smoke' } else { $null }
     reload_smoke_ref = if (Test-SpikeDimensionEnabled -Dimension 'ccb-reload-smoke' -EnabledDimensions $enabledDimensions) { Join-Path $resolvedOut 'reload-smoke' } else { $null }
+    herdr_open_ref = if ($collectHerdrOpen) { $script:herdrOpenEvidenceRef } else { $null }
     notes = @(
         'Herdr agents panel text is manual observation unless Herdr exposes it through CLI metadata.',
         'Herdr agent detection is diagnostics evidence only; CCB provider completion/runtime authority remains CCB-owned.',
