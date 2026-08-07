@@ -494,11 +494,11 @@ class HerdrCliRequestAdapter:
             **{
                 str(key): ""
                 for key in existing_tokens
-                if str(key) not in {_NAMESPACE_TOKEN, _ROOT_PANE_TOKEN}
+                if str(key) not in {_NAMESPACE_TOKEN, _ROOT_PANE_TOKEN, _LOGICAL_WINDOW_TOKEN, _LOGICAL_WINDOW_ALIAS_TOKEN}
             },
             **tokens,
         }
-        for token_name in (_NAMESPACE_TOKEN, _ROOT_PANE_TOKEN):
+        for token_name in (_NAMESPACE_TOKEN, _ROOT_PANE_TOKEN, _LOGICAL_WINDOW_TOKEN, _LOGICAL_WINDOW_ALIAS_TOKEN):
             existing_value = str(existing_tokens.get(token_name) or "").strip()
             if existing_value:
                 tokens[token_name] = existing_value
