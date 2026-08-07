@@ -8,6 +8,8 @@ from agents.config_loader import load_project_config
 from ccbd.socket_client import CcbdClient
 from provider_core.catalog import build_default_provider_catalog
 from provider_execution.registry import build_default_execution_registry
+from terminal_runtime.herdr_supportability_projection import load_matrix as load_herdr_support_matrix
+from terminal_runtime.windows_herdr_public_workflow_matrix import MATRIX_RELATIVE_PATH as HERDR_MATRIX_PATH
 from terminal_runtime.windows_x64_release_surface import load_windows_x64_release_surface_projection
 
 from .daemon import ping_local_state
@@ -64,6 +66,7 @@ def doctor_summary(context) -> dict:
         'installation': installation,
         'entrypoint': entrypoint_summary(installation=installation),
         'windows_x64_release_surface': _windows_x64_release_surface_summary(installation),
+        'herdr': _herdr_supportability_summary(context),
         'runtime': runtime_identity_summary(
             context.project.project_root,
             ccb_dir=context.paths.ccb_dir,
@@ -97,6 +100,37 @@ def _windows_x64_release_surface_host_evidence() -> dict[str, object]:
         'python_executable': None,
         'python_bitness': 'unknown',
         'installer_entrypoint': 'doctor',
+    }
+
+
+def _herdr_supportability_summary(context) -> dict[str, object]:
+    """Compute the Herdr support tier from the validation matrix artifact.
+
+    When the matrix is unavailable or unreadable, returns a projection with
+    ``support_tier="unsupported"`` and ``support_tier_source="missing"`` so
+    that ``ccb doctor --output`` always includes a ``herdr`` key.
+    """
+    try:
+        repo_root = Path(str(getattr(context, 'project', None) and getattr(context.project, 'project_root', None) or ''))
+        if not repo_root.is_dir():
+            repo_root = Path.cwd()
+    except Exception:
+        repo_root = Path.cwd()
+    matrix_path = repo_root / HERDR_MATRIX_PATH
+    projection = load_herdr_support_matrix(str(matrix_path), repo_root=str(repo_root))
+    return {
+        'support_tier': projection.get('support_tier', 'unsupported'),
+        'support_tier_source': projection.get('support_tier_source', 'missing'),
+        'herdr_version': projection.get('herdr_version'),
+        'herdr_auto_restore_mode': projection.get('herdr_auto_restore_mode', 'unknown'),
+        'required_workflows_status': projection.get('required_workflows_status', 'missing'),
+        'provider_workflows_status': projection.get('provider_workflows_status', 'missing'),
+        'mobile_terminal_status': projection.get('mobile_terminal_status', 'not-run'),
+        'config_ui_status': projection.get('config_ui_status', 'not-run'),
+        'non_pass_workflows': projection.get('non_pass_workflows', {}),
+        'fallback_guidance': projection.get('fallback_guidance', ''),
+        'beta_gaps': projection.get('beta_gaps', []),
+        'residual_risks': projection.get('residual_risks', []),
     }
 
 
