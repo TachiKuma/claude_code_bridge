@@ -57,16 +57,20 @@ def herdr_command_env() -> dict[str, str]:
     return env
 
 
-def query_herdr_server_status(exe: str) -> dict[str, object] | None:
+def query_herdr_server_status(exe: str, session: str | None = None) -> dict[str, object] | None:
     """Query ``herdr status server --json``; returns the payload or None.
 
-    None means the status could not be queried (binary failure, timeout, or
-    malformed output). Callers should distinguish that from an explicit
-    ``running: false`` payload.
+    ``session`` selects a session-scoped server via ``--session <name>`` when
+    provided; when None the global (default) server is queried.  None means the
+    status could not be queried (binary failure, timeout, or malformed output).
+    Callers should distinguish that from an explicit ``running: false`` payload.
     """
+    cmd = [exe, 'status', 'server', '--json']
+    if session:
+        cmd += ['--session', session]
     try:
         result = subprocess.run(
-            [exe, 'status', 'server', '--json'],
+            cmd,
             capture_output=True,
             text=True,
             encoding='utf-8',

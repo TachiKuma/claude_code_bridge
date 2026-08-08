@@ -54,20 +54,18 @@ def ensure_herdr_bootstrap_env(
                 '(AppData/Local/Programs/Herdr) or set CCB_HERDR_EXE.'
             ),
         }
-    status = query_herdr_server_status(exe)
-    if status is None:
+    preferred_session = (
+        str(herdr_session or '').strip()
+        or os.environ.get('CCB_HERDR_SESSION', '').strip()
+        or None
+    )
+    server, detected_session, query_error = _resolve_running_server(exe, preferred_session)
+    if query_error:
         return {
             'ok': False,
-            'reason': 'Failed to query Herdr server status.',
+            'reason': query_error,
         }
-    # Unwrap nested server shape when Herdr returns
-    # {"result": {"server": {"running": true, ...}}} rather than a flat dict.
-    server = status
-    inner = status.get('result')
-    if isinstance(inner, dict):
-        nested = inner.get('server')
-        server = nested if isinstance(nested, dict) else inner
-    if server.get('running') is not True:
+    if server is None:
         return {
             'ok': False,
             'reason': (
@@ -83,7 +81,7 @@ def ensure_herdr_bootstrap_env(
                 f'(server protocol={server.get("protocol")!r}). Upgrade Herdr.'
             ),
         }
-    probe = _probe_herdr_read_capabilities(exe)
+    probe = _probe_herdr_read_capabilities(exe, session=detected_session)
     failed_probes = [name for name, ok in probe.items() if not ok]
     if failed_probes:
         return {
@@ -97,7 +95,7 @@ def ensure_herdr_bootstrap_env(
     capability_report = _build_capability_report(probe)
     report_path = _write_capability_report(capability_report)
     warnings: list[str] = []
-    live_session = str(server.get('session') or '').strip() or None
+    live_session = str(server.get('session') or '').strip() or detected_session or None
     session = (
         str(herdr_session or '').strip()
         or os.environ.get('CCB_HERDR_SESSION', '').strip()
@@ -120,13 +118,23 @@ def ensure_herdr_bootstrap_env(
     }
 
 
-def _probe_herdr_read_capabilities(exe: str) -> dict[str, bool]:
-    """Probe read-only herdr commands; returns ``{capability: ok}``."""
+def _probe_herdr_read_capabilities(exe: str, session: str | None = None) -> dict[str, bool]:
+    """Probe read-only herdr commands; returns ``{capability: ok}``.
+
+    ``session`` routes the probes to a session-scoped server via
+    ``--session <name>`` when provided; the probes otherwise target the
+    global server.  Herdr session-scoped servers do not answer global
+    (no ``--session``) commands, so the probe must match the server the
+    bootstrap resolved against.
+    """
     result: dict[str, bool] = {}
     for capability, args in _READ_PROBES:
+        cmd = [exe, *args]
+        if session:
+            cmd += ['--session', session]
         try:
             run = subprocess.run(
-                [exe, *args],
+                cmd,
                 capture_output=True,
                 text=True,
                 encoding='utf-8',
@@ -139,6 +147,90 @@ def _probe_herdr_read_capabilities(exe: str) -> dict[str, bool]:
         except (OSError, subprocess.SubprocessError):
             result[capability] = False
     return result
+
+
+def _discover_running_ccb_sessions(exe: str) -> list[str]:
+    """Return running ``ccb-`` prefixed session names via ``herdr session list``.
+
+    A session-scoped herdr server may be running while the global server is
+    not; ``herdr status server --json`` (without ``--session``) then reports
+    ``running: false`` even though CCB's namespace server is up.  ``herdr
+    session list --json`` exposes per-session running state, so the bootstrap
+    can find the live server instead of failing.
+    """
+    try:
+        result = subprocess.run(
+            [exe, 'session', 'list', '--json'],
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            timeout=10,
+            env=herdr_command_env(),
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0:
+        return []
+    try:
+        payload = json.loads(result.stdout or '{}')
+    except json.JSONDecodeError:
+        return []
+    sessions = payload.get('sessions') if isinstance(payload, dict) else None
+    if not isinstance(sessions, list):
+        return []
+    running: list[str] = []
+    for entry in sessions:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get('running') is not True:
+            continue
+        name = str(entry.get('name') or '').strip()
+        if name.startswith('ccb-'):
+            running.append(name)
+    return running
+
+
+def _unwrap_server_status(status: dict[str, object]) -> dict[str, object]:
+    """Unwrap nested ``{"result": {"server": {...}}}`` shapes to a flat dict."""
+    server = status
+    inner = status.get('result')
+    if isinstance(inner, dict):
+        nested = inner.get('server')
+        server = nested if isinstance(nested, dict) else inner
+    return server
+
+
+def _resolve_running_server(
+    exe: str,
+    preferred_session: str | None,
+) -> tuple[dict[str, object] | None, str | None, str | None]:
+    """Find a running herdr server, probing in priority order.
+
+    Order: explicit/preferred session -> running CCB session discovered via
+    ``herdr session list`` -> global server (no ``--session``).  Returns
+    ``(server, session, None)`` on success, ``(None, None, reason)`` on a
+    hard query failure, or ``(None, None, None)`` when nothing is running.
+    """
+    candidates: list[str | None] = []
+    if preferred_session:
+        candidates.append(preferred_session)
+    candidates.extend(_discover_running_ccb_sessions(exe))
+    candidates.append(None)
+    seen: set[str | None] = set()
+    for session in candidates:
+        if session in seen:
+            continue
+        seen.add(session)
+        status = query_herdr_server_status(exe, session)
+        if status is None:
+            return None, None, 'Failed to query Herdr server status.'
+        server = _unwrap_server_status(status)
+        if server.get('running') is not True:
+            continue
+        return server, session, None
+    return None, None, None
 
 
 def _build_capability_report(probe: dict[str, bool]) -> dict[str, object]:

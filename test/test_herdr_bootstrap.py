@@ -61,14 +61,22 @@ def test_bootstrap_rejects_missing_executable(monkeypatch) -> None:
     assert 'Herdr executable not found' in str(result['reason'])
 
 
+def _patch_discovery_empty(monkeypatch) -> None:
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap._discover_running_ccb_sessions',
+        lambda exe: [],
+    )
+
+
 def test_bootstrap_rejects_unqueryable_server(monkeypatch) -> None:
     monkeypatch.setattr(
         'cli.services.herdr_bootstrap.resolve_herdr_executable',
         lambda explicit=None: '/x/herdr.exe',
     )
+    _patch_discovery_empty(monkeypatch)
     monkeypatch.setattr(
         'cli.services.herdr_bootstrap.query_herdr_server_status',
-        lambda exe: None,
+        lambda exe, session=None: None,
     )
     result = ensure_herdr_bootstrap_env()
     assert result['ok'] is False
@@ -80,9 +88,10 @@ def test_bootstrap_rejects_stopped_server(monkeypatch) -> None:
         'cli.services.herdr_bootstrap.resolve_herdr_executable',
         lambda explicit=None: '/x/herdr.exe',
     )
+    _patch_discovery_empty(monkeypatch)
     monkeypatch.setattr(
         'cli.services.herdr_bootstrap.query_herdr_server_status',
-        lambda exe: {'status': 'stopped', 'running': False, 'compatible': True},
+        lambda exe, session=None: {'status': 'stopped', 'running': False, 'compatible': True},
     )
     result = ensure_herdr_bootstrap_env()
     assert result['ok'] is False
@@ -94,9 +103,10 @@ def test_bootstrap_rejects_incompatible_protocol(monkeypatch) -> None:
         'cli.services.herdr_bootstrap.resolve_herdr_executable',
         lambda explicit=None: '/x/herdr.exe',
     )
+    _patch_discovery_empty(monkeypatch)
     monkeypatch.setattr(
         'cli.services.herdr_bootstrap.query_herdr_server_status',
-        lambda exe: {'status': 'running', 'running': True, 'compatible': False, 'protocol': 3},
+        lambda exe, session=None: {'status': 'running', 'running': True, 'compatible': False, 'protocol': 3},
     )
     result = ensure_herdr_bootstrap_env()
     assert result['ok'] is False
@@ -111,9 +121,10 @@ def _bootstrap_success_mocks(monkeypatch, *, status=None):
         'cli.services.herdr_bootstrap.resolve_herdr_executable',
         lambda explicit=None: '/x/herdr.exe',
     )
+    _patch_discovery_empty(monkeypatch)
     monkeypatch.setattr(
         'cli.services.herdr_bootstrap.query_herdr_server_status',
-        lambda exe: status
+        lambda exe, session=None: status
         or {
             'status': 'running',
             'running': True,
@@ -124,7 +135,7 @@ def _bootstrap_success_mocks(monkeypatch, *, status=None):
     )
     monkeypatch.setattr(
         'cli.services.herdr_bootstrap._probe_herdr_read_capabilities',
-        lambda exe: {
+        lambda exe, session=None: {
             'session_attach': True,
             'workspace_list': True,
             'pane_list': True,
@@ -159,7 +170,7 @@ def test_bootstrap_rejects_failed_read_probes(monkeypatch) -> None:
     _bootstrap_success_mocks(monkeypatch)
     monkeypatch.setattr(
         'cli.services.herdr_bootstrap._probe_herdr_read_capabilities',
-        lambda exe: {
+        lambda exe, session=None: {
             'session_attach': True,
             'workspace_list': False,
             'pane_list': True,
@@ -352,6 +363,156 @@ def test_query_herdr_server_status_malformed_json(monkeypatch) -> None:
     assert query_herdr_server_status('/x/herdr.exe') is None
 
 
+def test_query_herdr_server_status_passes_session_flag(monkeypatch) -> None:
+    """``session`` is forwarded as ``--session <name>`` to the CLI."""
+    import subprocess
+
+    captured: dict[str, object] = {}
+
+    class _FakeResult:
+        returncode = 0
+        stdout = '{"running":true}'
+
+    def _fake_run(cmd, **kwargs):
+        captured['cmd'] = cmd
+        return _FakeResult()
+
+    monkeypatch.setattr(subprocess, 'run', _fake_run)
+    payload = query_herdr_server_status('/x/herdr.exe', session='ccb-proj-abc')
+    assert payload is not None
+    assert captured['cmd'] == [
+        '/x/herdr.exe',
+        'status',
+        'server',
+        '--json',
+        '--session',
+        'ccb-proj-abc',
+    ]
+
+
+def test_query_herdr_server_status_without_session_has_no_flag(monkeypatch) -> None:
+    """Without ``session`` the command must not carry ``--session``."""
+    import subprocess
+
+    captured: dict[str, object] = {}
+
+    class _FakeResult:
+        returncode = 0
+        stdout = '{"running":true}'
+
+    def _fake_run(cmd, **kwargs):
+        captured['cmd'] = cmd
+        return _FakeResult()
+
+    monkeypatch.setattr(subprocess, 'run', _fake_run)
+    query_herdr_server_status('/x/herdr.exe')
+    assert captured['cmd'] == ['/x/herdr.exe', 'status', 'server', '--json']
+
+
+def test_discover_running_ccb_sessions_parses_running(monkeypatch) -> None:
+    """``herdr session list`` running entries are parsed, ``ccb-`` filtered."""
+    import json as _json
+    import subprocess
+
+    from cli.services.herdr_bootstrap import _discover_running_ccb_sessions
+
+    payload = {
+        'sessions': [
+            {'name': 'default', 'running': False},
+            {'name': 'ccb-avaprintdesigner-575a971f', 'running': True},
+            {'name': 'ccb-herdr', 'running': False},
+            {'name': 'other-session', 'running': True},
+        ]
+    }
+
+    class _FakeResult:
+        returncode = 0
+        stdout = _json.dumps(payload)
+
+    monkeypatch.setattr(subprocess, 'run', lambda *args, **kwargs: _FakeResult())
+    assert _discover_running_ccb_sessions('/x/herdr.exe') == [
+        'ccb-avaprintdesigner-575a971f'
+    ]
+
+
+# ---------------------------------------------------------------------------
+# session-scoped server discovery (CCB 8.5.2 regression)
+# ---------------------------------------------------------------------------
+
+def test_bootstrap_uses_running_session_when_global_stopped(monkeypatch) -> None:
+    """A running session-scoped herdr server must be accepted even when the
+    global server (``herdr status server --json`` without ``--session``)
+    reports not running — the real AvaPrintDesigner failure mode."""
+    monkeypatch.delenv('CCB_HERDR_EXE', raising=False)
+    monkeypatch.delenv('CCB_HERDR_SESSION', raising=False)
+    monkeypatch.delenv('CCB_HERDR_CAPABILITY_REPORT', raising=False)
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap.resolve_herdr_executable',
+        lambda explicit=None: '/x/herdr.exe',
+    )
+    # Discovery surfaces the live CCB session.
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap._discover_running_ccb_sessions',
+        lambda exe: ['ccb-avaprintdesigner-575a971f'],
+    )
+    queried: list[str | None] = []
+
+    def _fake_status(exe, session=None):
+        queried.append(session)
+        if session is None:
+            return {'status': 'not_running', 'running': False, 'compatible': None}
+        return {
+            'status': 'running',
+            'running': True,
+            'compatible': True,
+            'protocol': 19,
+            'session': session,
+        }
+
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap.query_herdr_server_status',
+        _fake_status,
+    )
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap._probe_herdr_read_capabilities',
+        lambda exe, session=None: {
+            'session_attach': True,
+            'workspace_list': True,
+            'pane_list': True,
+        },
+    )
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap._write_capability_report',
+        lambda report: '/tmp/cap.json',
+    )
+    result = ensure_herdr_bootstrap_env()
+    assert result['ok'] is True, f'session-scoped server should be accepted: {result}'
+    assert result['herdr_session'] == 'ccb-avaprintdesigner-575a971f'
+    assert os.environ['CCB_HERDR_SESSION'] == 'ccb-avaprintdesigner-575a971f'
+    # The discovered session must have been probed directly.
+    assert queried == ['ccb-avaprintdesigner-575a971f']
+
+
+def test_bootstrap_still_rejects_when_only_global_stopped(monkeypatch) -> None:
+    """When nothing (session-scoped or global) is running, the bootstrap keeps
+    rejecting with the actionable "server is not running" reason."""
+    monkeypatch.delenv('CCB_HERDR_EXE', raising=False)
+    monkeypatch.delenv('CCB_HERDR_SESSION', raising=False)
+    monkeypatch.delenv('CCB_HERDR_CAPABILITY_REPORT', raising=False)
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap.resolve_herdr_executable',
+        lambda explicit=None: '/x/herdr.exe',
+    )
+    _patch_discovery_empty(monkeypatch)
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap.query_herdr_server_status',
+        lambda exe, session=None: {'status': 'not_running', 'running': False},
+    )
+    result = ensure_herdr_bootstrap_env()
+    assert result['ok'] is False
+    assert 'server is not running' in str(result['reason'])
+
+
 # ---------------------------------------------------------------------------
 # ITEM-2 fix 3: nested server shape unwrapping
 # ---------------------------------------------------------------------------
@@ -365,9 +526,10 @@ def test_bootstrap_handles_nested_result_server_shape(monkeypatch) -> None:
         'cli.services.herdr_bootstrap.resolve_herdr_executable',
         lambda explicit=None: '/x/herdr.exe',
     )
+    _patch_discovery_empty(monkeypatch)
     monkeypatch.setattr(
         'cli.services.herdr_bootstrap.query_herdr_server_status',
-        lambda exe: {
+        lambda exe, session=None: {
             'result': {
                 'server': {
                     'running': True,
@@ -380,7 +542,7 @@ def test_bootstrap_handles_nested_result_server_shape(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         'cli.services.herdr_bootstrap._probe_herdr_read_capabilities',
-        lambda exe: {'session_attach': True, 'workspace_list': True, 'pane_list': True},
+        lambda exe, session=None: {'session_attach': True, 'workspace_list': True, 'pane_list': True},
     )
     monkeypatch.setattr(
         'cli.services.herdr_bootstrap._write_capability_report',
@@ -400,9 +562,10 @@ def test_bootstrap_nested_shape_rejects_stopped(monkeypatch) -> None:
         'cli.services.herdr_bootstrap.resolve_herdr_executable',
         lambda explicit=None: '/x/herdr.exe',
     )
+    _patch_discovery_empty(monkeypatch)
     monkeypatch.setattr(
         'cli.services.herdr_bootstrap.query_herdr_server_status',
-        lambda exe: {
+        lambda exe, session=None: {
             'result': {
                 'server': {
                     'running': False,
@@ -425,9 +588,10 @@ def test_bootstrap_nested_shape_rejects_incompatible(monkeypatch) -> None:
         'cli.services.herdr_bootstrap.resolve_herdr_executable',
         lambda explicit=None: '/x/herdr.exe',
     )
+    _patch_discovery_empty(monkeypatch)
     monkeypatch.setattr(
         'cli.services.herdr_bootstrap.query_herdr_server_status',
-        lambda exe: {
+        lambda exe, session=None: {
             'result': {
                 'server': {
                     'running': True,
