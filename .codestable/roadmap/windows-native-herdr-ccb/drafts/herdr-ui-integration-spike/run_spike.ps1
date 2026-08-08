@@ -10,6 +10,21 @@
     [switch] $ObservedWindowsFlash,
     [switch] $AllowNonHerdrUi,
     [switch] $SelfTest,
+    [switch] $WatchMode,
+    [ValidateRange(100, 60000)]
+    [int] $WatchPollIntervalMs = 2000,
+    [ValidateRange(1, 100)]
+    [int] $WatchProcessInterval = 5,
+    [ValidateRange(0, 100)]
+    [int] $WatchHerdrStatusInterval = 0,
+    [ValidateRange(1, 50)]
+    [int] $WatchRecentEvents = 8,
+    [ValidateRange(0, 1000000)]
+    [int] $WatchMaxPolls = 0,
+    [switch] $WatchIncludeSelfPane,
+    [string[]] $WatchKeywords = @(),
+    [string] $WeztermCli = "",
+    [switch] $WatchSelfTest,
     [ValidateSet('herdr-baseline', 'wrapper-file-check', 'ccb-diagnose', 'process-samples', 'ccb-start', 'ccb-herdr-open', 'post-start-herdr', 'ccb-ping', 'ccb-layout', 'startup-state-files', 'pane-verification', 'backend-route', 'herdr-v0.8-probe', 'ccb-live-diag', 'provider-logs', 'ccb-lifecycle', 'herdr-config-probe', 'provider-session-files', 'ccb-ask-smoke', 'ccb-reload-smoke')]
     [string[]] $OnlyDimension = @(),
     [ValidateSet('herdr-baseline', 'wrapper-file-check', 'ccb-diagnose', 'process-samples', 'ccb-start', 'ccb-herdr-open', 'post-start-herdr', 'ccb-ping', 'ccb-layout', 'startup-state-files', 'pane-verification', 'backend-route', 'herdr-v0.8-probe', 'ccb-live-diag', 'provider-logs', 'ccb-lifecycle', 'herdr-config-probe', 'provider-session-files', 'ccb-ask-smoke', 'ccb-reload-smoke')]
@@ -18,7 +33,8 @@
     [int] $PaneCaptureLines = 20,
     [int] $StartTimeoutSeconds = 120,
     [int] $PostStartWaitSeconds = 5,
-    [int] $SampleIntervalMs = 200
+    [int] $SampleIntervalMs = 200,
+    [int] $ProcessSampleSeconds = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -437,7 +453,7 @@ function Invoke-WrapperFileCheck {
 function _ResolveCmdToPowerShell {
     param(
         [string] $CmdPath,
-        [string[]] $Args
+        [string[]] $CmdArgs
     )
     # Parse a .cmd wrapper that delegates to powershell -File <ps1>.
     # Returns the resolved command array or $null if unparseable.
@@ -479,7 +495,7 @@ function _ResolveCmdToPowerShell {
         $ps1Path = Join-Path (Split-Path -Parent $CmdPath) $ps1Path
     }
     if (-not (Test-Path -LiteralPath $ps1Path)) { return $null }
-    return @('powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ps1Path) + @($Args)
+    return @('powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ps1Path) + @($CmdArgs)
 }
 
 function Invoke-CapturedCommand {
@@ -498,7 +514,7 @@ function Invoke-CapturedCommand {
     if ($actualCommand[0].ToLowerInvariant().EndsWith('.cmd') -or $actualCommand[0].ToLowerInvariant().EndsWith('.bat')) {
         # Resolve .cmd wrapper to direct PowerShell invocation to avoid
         # cmd.exe creating a visible console window (observed flash source).
-        $resolved = _ResolveCmdToPowerShell -CmdPath $actualCommand[0] -Args ($actualCommand | Select-Object -Skip 1)
+        $resolved = _ResolveCmdToPowerShell -CmdPath $actualCommand[0] -CmdArgs ($actualCommand | Select-Object -Skip 1)
         if ($resolved) {
             $actualCommand = $resolved
         } else {
@@ -588,7 +604,7 @@ function Invoke-DetachedCommand {
     if ($actualCommand[0].ToLowerInvariant().EndsWith('.cmd') -or $actualCommand[0].ToLowerInvariant().EndsWith('.bat')) {
         # Resolve .cmd wrapper to direct PowerShell invocation to avoid
         # cmd.exe creating a visible console window (observed flash source).
-        $resolved = _ResolveCmdToPowerShell -CmdPath $actualCommand[0] -Args ($actualCommand | Select-Object -Skip 1)
+        $resolved = _ResolveCmdToPowerShell -CmdPath $actualCommand[0] -CmdArgs ($actualCommand | Select-Object -Skip 1)
         if ($resolved) {
             $actualCommand = $resolved
         } else {
@@ -969,6 +985,583 @@ function Invoke-SelfTest {
     }
 }
 
+# =====================================================================
+# Watch mode: continuous CCB observer (2026-08-08)
+#
+# 用户需求改造：不主动执行 ccb8.cmd、不自动清理 CCB 后台。
+# 利用 wezterm 多 tab：用户在第一个 tab 启动本脚本，脚本持续监控
+# 其他 tab/pane 中与 CCB 相关的信息并记录；提供肉眼可视的动态变化；
+# 直到用户按 Ctrl+C 结束采集。
+# =====================================================================
+
+function Resolve-WeztermCliPath {
+    param([string] $Explicit)
+    if (-not [string]::IsNullOrWhiteSpace($Explicit) -and (Test-Path -LiteralPath $Explicit)) {
+        return (Resolve-Path -LiteralPath $Explicit -ErrorAction Stop).ProviderPath
+    }
+    $dir = $env:WEZTERM_EXECUTABLE_DIR
+    if ([string]::IsNullOrWhiteSpace($dir)) {
+        $dir = Split-Path -Parent $env:WEZTERM_EXECUTABLE -ErrorAction SilentlyContinue
+    }
+    if (-not [string]::IsNullOrWhiteSpace($dir)) {
+        $candidate = Join-Path $dir 'wezterm.exe'
+        if (Test-Path -LiteralPath $candidate) {
+            return (Resolve-Path -LiteralPath $candidate -ErrorAction Stop).ProviderPath
+        }
+    }
+    $onPath = Get-Command 'wezterm.exe' -ErrorAction SilentlyContinue
+    if ($null -ne $onPath) {
+        return $onPath.Source
+    }
+    return 'wezterm'
+}
+
+# 以 UTF-8 原始字节捕获外部程序 stdout，避免 PowerShell 5.1 将外部程序
+# 的 UTF-8 输出按系统 ANSI 代码页（GBK）解码导致中文乱码。
+function Invoke-ExternalCaptureUtf8 {
+    param(
+        [string] $FilePath,
+        [string[]] $Arguments
+    )
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $FilePath
+        $psi.Arguments = Join-WindowsProcessArguments -Arguments @($Arguments)
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.CreateNoWindow = $true
+        $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+        $psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+        $p = [System.Diagnostics.Process]::Start($psi)
+        $stdoutTask = $p.StandardOutput.ReadToEndAsync()
+        try { $null = $p.StandardError.ReadToEndAsync() } catch {}
+        if (-not $p.WaitForExit(15000)) {
+            try { $p.Kill() } catch {}
+        }
+        $stdoutTask.Wait(5000) | Out-Null
+        return [string] $stdoutTask.Result
+    } catch {
+        return ''
+    }
+}
+
+function Get-PaneInventory {
+    param([string] $WeztermCli)
+    $raw = Invoke-ExternalCaptureUtf8 -FilePath $WeztermCli -Arguments @('cli', 'list', '--format', 'json')
+    if ([string]::IsNullOrWhiteSpace($raw)) { return @() }
+    try {
+        $payload = $raw | ConvertFrom-Json -ErrorAction Stop
+        if ($null -eq $payload) { return @() }
+        return @($payload)
+    } catch {
+        return @()
+    }
+}
+
+function Read-PaneText {
+    param([string] $WeztermCli, [int] $PaneId)
+    $text = Invoke-ExternalCaptureUtf8 -FilePath $WeztermCli -Arguments @('cli', 'get-text', '--pane-id', ([string] $PaneId))
+    return [string] $text
+}
+
+function Select-CcbRelevantLines {
+    param(
+        [string] $Text,
+        [string[]] $Keywords
+    )
+    $lines = @()
+    if ([string]::IsNullOrWhiteSpace($Text)) { return @() }
+    foreach ($line in ($Text -split "`r?`n")) {
+        $trimmed = ([string] $line).Trim()
+        if ([string]::IsNullOrWhiteSpace($trimmed)) { continue }
+        foreach ($kw in $Keywords) {
+            if ([string]::IsNullOrWhiteSpace($kw)) { continue }
+            if ($trimmed.IndexOf($kw, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                $lines += $trimmed
+                break
+            }
+        }
+    }
+    return @($lines | Select-Object -Unique)
+}
+
+function Get-CcbRelatedProcesses {
+    param(
+        [string] $ProjectRoot,
+        [string] $RepoRoot
+    )
+    $procRoot = if (-not [string]::IsNullOrWhiteSpace($ProjectRoot)) { $ProjectRoot } else { $RepoRoot }
+    return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            $name = [string] $_.Name
+            $cmd = [string] $_.CommandLine
+            $lowerName = $name.ToLowerInvariant()
+            if ($lowerName -in @('wezterm.exe', 'wezterm-gui.exe')) { return $false }
+            $legacyCcb = $cmd -match 'codex-dual|\.cache[\\/]ccb|CCB_PARENT_PID|CCB_RUN_DIR|CCB_CALLER'
+            if ($legacyCcb) { return $false }
+            $projectRelated = (-not [string]::IsNullOrWhiteSpace($procRoot) -and
+                $cmd.IndexOf($procRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0)
+            $sourceCcbMarker = $cmd -match 'ccbd[\\/]|keeper_main\.py|ccb\.py|ccb8\.(cmd|ps1)|ccb-herdr|provider_backends|provider-runtime|[\\/]\.c8[\\/]rs[\\/]'
+            $isHerdr = $lowerName -eq 'herdr.exe'
+            # CCB 启动的 agent CLI（codex/claude）在 pane 内运行；其命令行含 CCB
+            # 特有的启动参数（codex: --ask-for-approval / --dangerously-bypass-hook-trust；
+            # claude: --permission-mode / bypassPermissions）。避免误抓 codex-dual、
+            # 其他独立 codex/claude 进程。
+            $isAgentCli = $lowerName -in @('codex.exe', 'claude.exe') -and
+                $cmd -match '--ask-for-approval|--dangerously-bypass-hook-trust|--permission-mode|bypassPermissions'
+            ($projectRelated -or $sourceCcbMarker -or $isHerdr -or $isAgentCli)
+        })
+}
+
+function Show-WatchStatus {
+    param(
+        [hashtable] $State,
+        [string[]] $RecentEvents
+    )
+    $elapsed = [TimeSpan]::FromSeconds([int] $State.elapsed_seconds)
+    $border = '  ' + ('-' * 60)
+    $line = New-Object System.Collections.Generic.List[string]
+    $line.Add($border)
+    $line.Add('  CCB Watch 采集运行中  ' + [string] $State.spinner + '   按 Ctrl+C 结束采集')
+    $line.Add('  经过: ' + $elapsed.ToString('hh\:mm\:ss') + '   轮询: ' + [int] $State.poll_count + '   观察 pane: ' + [int] $State.pane_count)
+    $line.Add('  捕获事件: ' + [int] $State.event_count + '   去重命中: ' + [int] $State.duplicate_count + '   CCB 进程: ' + [int] $State.process_count)
+    $line.Add('  最近事件:')
+    if (@($RecentEvents).Count -eq 0) {
+        $line.Add('    （等待其他 tab 中出现 CCB 相关输出…）')
+    } else {
+        foreach ($e in $RecentEvents) {
+            $line.Add('   ' + $e)
+        }
+    }
+    $line.Add($border)
+    return (($line -join "`n"))
+}
+
+function Update-WatchUi {
+    param(
+        [string] $BlockText,
+        [int] $BlockLines
+    )
+    if (-not $script:WatchUiInteractive) { return }
+    try {
+        if (-not $script:WatchUiInited) {
+            [Console]::Write($BlockText)
+            $script:WatchUiStartRow = [Console]::CursorTop - ($BlockLines - 1)
+            $script:WatchUiInited = $true
+        } else {
+            $delta = [Console]::CursorTop - $script:WatchUiStartRow
+            if ($delta -gt 0) {
+                [Console]::Write([char]27 + ('[{0}A' -f $delta))
+            }
+            [Console]::Write($BlockText)
+            [Console]::Write([char]27 + '[J')
+        }
+    } catch {
+        $script:WatchUiInteractive = $false
+        if (-not $script:WatchUiFallbackLogged) {
+            $script:WatchUiFallbackLogged = $true
+            Write-Host 'watch: 终端光标控制不可用，降级为间隔输出（UI 实时刷新关闭）'
+        }
+    }
+}
+
+function Invoke-WatchSelfTest {
+    # 纯函数自检：不实际运行监控循环
+    $matched = @(Select-CcbRelevantLines -Text "line one`nccb8: config ui: run .\ccb8.cmd config ui`nunrelated plain text" -Keywords @('ccb8'))
+    if ($matched.Count -ne 1 -or $matched[0] -notmatch 'config ui') {
+        throw 'watch keyword filter self-test failed'
+    }
+    $empty = @(Select-CcbRelevantLines -Text '' -Keywords @('ccb'))
+    if ($empty.Count -ne 0) {
+        throw 'watch empty-text self-test failed'
+    }
+    $noHit = @(Select-CcbRelevantLines -Text 'nothing relevant here' -Keywords @('ccbd', 'herdr'))
+    if ($noHit.Count -ne 0) {
+        throw 'watch no-match self-test failed'
+    }
+    $procs = @(Get-CcbRelatedProcesses -ProjectRoot 'E:/GitHub开源项目/TachiKuma/claude_code_bridge' -RepoRoot 'E:/GitHub开源项目/TachiKuma/claude_code_bridge')
+    if ($null -eq $procs) {
+        throw 'watch process query self-test failed'
+    }
+    $jsonLine = ConvertTo-JsonLine -Value ([ordered] @{ a = 1 })
+    if (-not $jsonLine.EndsWith([Environment]::NewLine)) {
+        throw 'watch jsonline self-test failed'
+    }
+    $cliPath = Resolve-WeztermCliPath -Explicit ''
+    if ([string]::IsNullOrWhiteSpace($cliPath)) {
+        throw 'watch wezterm cli resolution self-test failed'
+    }
+    $cfgSnap = @(Get-ConfigFileSnapshot -Paths @('Z:\definitely-not-exists\ccb.config'))
+    if ($cfgSnap.Count -ne 1 -or [bool] $cfgSnap[0].exists) {
+        throw 'watch config snapshot self-test failed'
+    }
+    $cfgDiff = @(Compare-ConfigFileSnapshot -Previous @() -Current @())
+    if ($cfgDiff.Count -ne 0) {
+        throw 'watch config compare self-test failed'
+    }
+    Write-Host 'watch_self_test: passed'
+}
+
+# =====================================================================
+# 配置访问监控：探测 cli 加载配置的具体过程（2026-08-08）
+#
+# cli 的 load_project_config 读取 <project_root>/.ccb/ccb.config（或
+# user default）等文件，发生在 python 进程内部，pane 文本看不到。NTFS
+# 的 LastAccessTime 会随文件读取更新（已验证），因此轮询关键配置文件的
+# LastAccessTime / LastWriteTime 即可记录 cli 何时读/写了什么配置。
+# =====================================================================
+
+function Get-ConfigFileSnapshot {
+    param([string[]] $Paths)
+    $snapshot = @()
+    foreach ($path in $Paths) {
+        $record = [ordered] @{
+            path = $path
+            exists = $false
+            last_access = $null
+            last_write = $null
+            size = $null
+        }
+        if (Test-Path -LiteralPath $path) {
+            try {
+                $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop
+                $record.exists = $true
+                $record.last_access = $item.LastAccessTime.ToUniversalTime().ToString('o')
+                $record.last_write = $item.LastWriteTime.ToUniversalTime().ToString('o')
+                $record.size = $item.Length
+            } catch {}
+        }
+        $snapshot += $record
+    }
+    return $snapshot
+}
+
+function Compare-ConfigFileSnapshot {
+    param(
+        [object[]] $Previous,
+        [object[]] $Current
+    )
+    $events = @()
+    foreach ($prev in $Previous) {
+        $cur = @($Current | Where-Object { $_.path -eq $prev.path } | Select-Object -First 1)
+        if ($cur.Count -eq 0) { continue }
+        $cur = $cur[0]
+        if (-not [bool] $prev.exists -and [bool] $cur.exists) {
+            $events += [ordered] @{
+                type = 'config-appeared'
+                path = [string] $cur.path
+                last_access = [string] $cur.last_access
+                last_write = [string] $cur.last_write
+            }
+        } elseif ([bool] $prev.exists -and -not [bool] $cur.exists) {
+            $events += [ordered] @{ type = 'config-disappeared'; path = [string] $prev.path }
+        } elseif ([bool] $prev.exists -and [bool] $cur.exists) {
+            if ([string] $prev.last_write -ne [string] $cur.last_write) {
+                $events += [ordered] @{
+                    type = 'config-modified'
+                    path = [string] $cur.path
+                    last_write = [string] $cur.last_write
+                    size = [long] $cur.size
+                }
+            }
+            if ([string] $prev.last_access -ne [string] $cur.last_access) {
+                $events += [ordered] @{
+                    type = 'config-read'
+                    path = [string] $cur.path
+                    last_access = [string] $cur.last_access
+                    last_write = [string] $cur.last_write
+                }
+            }
+        }
+    }
+    return $events
+}
+
+function Invoke-WatchCollection {
+    param(
+        [string] $ProjectRoot,
+        [string] $RepoRoot,
+        [string] $HerdrExe,
+        [string] $HerdrSession,
+        [int] $WatchPollIntervalMs,
+        [int] $WatchProcessInterval,
+        [int] $WatchHerdrStatusInterval,
+        [int] $WatchRecentEvents,
+        [int] $WatchMaxPolls,
+        [switch] $WatchIncludeSelfPane,
+        [string[]] $WatchKeywords,
+        [string] $WeztermCli
+    )
+    $resolvedProject = Resolve-OptionalPath -Path $ProjectRoot -Fallback (Get-Location).ProviderPath
+    $resolvedRepo = Resolve-OptionalPath -Path $RepoRoot -Fallback (Get-RepoRootFromScript -ScriptRoot $PSScriptRoot)
+    if ([string]::IsNullOrWhiteSpace($resolvedRepo)) {
+        $resolvedRepo = (Get-Location).ProviderPath
+    }
+    $resolvedHerdr = Resolve-HerdrExe -Explicit $HerdrExe
+    $resolvedWeztermCli = Resolve-WeztermCliPath -Explicit $WeztermCli
+
+    # 每次采集写入独立子目录 watch\watch-<timestamp>，避免复用目录时
+    # events/samples 追加旧数据（与全量采集 evidence\run-<ts> 的语义一致）。
+    # watch 模式不使用 -OutputDir。
+    $runId = 'watch-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+    $watchBase = Join-Path $PSScriptRoot 'watch'
+    New-Item -ItemType Directory -Force -Path $watchBase | Out-Null
+    $resolvedOut = Join-Path $watchBase $runId
+    New-Item -ItemType Directory -Force -Path $resolvedOut | Out-Null
+
+    $selfPaneId = -1
+    [void] [int]::TryParse([string] $env:WEZTERM_PANE, [ref] $selfPaneId)
+
+    $defaultKeywords = @(
+        'ccb', 'ccbd', 'ccb8', 'herdr', 'HERDR', 'codex', 'claude',
+        'keeper', 'provider', 'mount', 'pane', 'session', 'runtime_mux', 'sidebar'
+    )
+    $effectiveKeywords = if (@($WatchKeywords).Count -gt 0) { @($WatchKeywords) } else { $defaultKeywords }
+
+    $eventsPath = Join-Path $resolvedOut 'watch-events.jsonl'
+    $samplesPath = Join-Path $resolvedOut 'process-samples-watch.jsonl'
+    $herdrPath = Join-Path $resolvedOut 'herdr-status-watch.jsonl'
+    $manifestPath = Join-Path $resolvedOut 'watch-manifest.json'
+    $livePath = Join-Path $resolvedOut 'watch-live.json'
+    $summaryPath = Join-Path $resolvedOut 'watch-summary.json'
+
+    # 配置访问监控：cli 加载配置的过程在 python 进程内不可见，
+    # 通过轮询关键配置文件的 LastAccessTime 探测 cli 读取时机。
+    $userDefaultConfig = Join-Path $env:USERPROFILE '.ccb\ccb.config'
+    $sourceDevHomeConfig = Join-Path (Join-Path $resolvedProject '.ccb-source-dev\home') '.ccb\ccb.config'
+    # 全局配置：claude / codex 在用户目录的配置文件（cli 加载配置的全局来源）
+    $claudeDir = Join-Path $env:USERPROFILE '.claude'
+    $codexDir = Join-Path $env:USERPROFILE '.codex'
+    $configPaths = @(
+        (Join-Path $resolvedProject '.ccb\ccb.config'),
+        (Join-Path $resolvedProject '.ccb\runtime-root-ref.json'),
+        (Join-Path $resolvedProject '.ccb\project.identity.json'),
+        $userDefaultConfig,
+        $sourceDevHomeConfig,
+        (Join-Path $claudeDir 'settings.json'),
+        (Join-Path $claudeDir 'config.json'),
+        (Join-Path $env:USERPROFILE '.claude.json'),
+        (Join-Path $codexDir 'config.toml'),
+        (Join-Path $codexDir 'auth.json')
+    ) | Select-Object -Unique
+    $configAccessPath = Join-Path $resolvedOut 'watch-config-access.jsonl'
+    $prevConfigSnapshot = @(Get-ConfigFileSnapshot -Paths $configPaths)
+
+    $startedAt = (Get-Date).ToUniversalTime().ToString('o')
+    $manifest = [ordered] @{
+        schema_version = 1
+        mode = 'watch'
+        run_id = $runId
+        started_at = $startedAt
+        project_root = $resolvedProject
+        repo_root = $resolvedRepo
+        herdr_exe = $resolvedHerdr
+        wezterm_cli = $resolvedWeztermCli
+        self_pane_id = $selfPaneId
+        include_self_pane = [bool] $WatchIncludeSelfPane
+        poll_interval_ms = $WatchPollIntervalMs
+        process_interval = $WatchProcessInterval
+        herdr_status_interval = $WatchHerdrStatusInterval
+        keywords = @($effectiveKeywords)
+        config_files = @($configPaths)
+        note = '本模式不主动执行 ccb8.cmd、不清理 CCB 后台；CCB 由你在其他 tab 启动，脚本持续观察并记录。'
+    }
+    Write-Utf8NoBom -Path $manifestPath -Content (($manifest | ConvertTo-Json -Depth 10) + [Environment]::NewLine)
+
+    $script:SeenLines = @{}
+    $script:KnownPaneIds = @{}
+    $recentEvents = New-Object System.Collections.Generic.List[string]
+    $duplicates = 0
+    $configReadCount = 0
+    $lastProcessCount = 0
+    $lastPaneCount = 0
+    $pollCount = 0
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    $script:WatchUiInteractive = -not [Console]::IsOutputRedirected
+    $script:WatchUiInited = $false
+    $script:WatchUiStartRow = 0
+    $script:WatchUiFallbackLogged = $false
+    $spinners = @('|', '/', '-', '\')
+
+    Write-Host ''
+    Write-Host '===================================================================='
+    Write-Host '  CCB Watch 采集已启动'
+    Write-Host '  · 请在 wezterm 的【其他 tab】中手动启动 CCB（如 .\ccb8.cmd）'
+    Write-Host '  · 本脚本持续监控这些 tab/pane 中的 CCB 相关信息并记录'
+    Write-Host '  · 按 Ctrl+C 结束采集（不会清理任何 CCB 后台进程）'
+    Write-Host ('  · 输出目录: ' + $resolvedOut)
+    Write-Host '===================================================================='
+    Write-Host ''
+
+    try {
+        while ($true) {
+            $pollCount++
+            if ($WatchMaxPolls -gt 0 -and $pollCount -gt $WatchMaxPolls) { break }
+            $now = (Get-Date).ToUniversalTime().ToString('o')
+            $localNow = (Get-Date).ToString('HH:mm:ss')
+
+            $panes = @(Get-PaneInventory -WeztermCli $resolvedWeztermCli)
+            $observedPanes = @()
+            $currentPaneIds = @{}
+            foreach ($p in $panes) {
+                $paneId = [int] $p.pane_id
+                $currentPaneIds[$paneId.ToString()] = $true
+                if (-not $WatchIncludeSelfPane -and $paneId -eq $selfPaneId) { continue }
+                $observedPanes += $p
+                if (-not $script:KnownPaneIds.ContainsKey($paneId.ToString())) {
+                    $script:KnownPaneIds[$paneId.ToString()] = $true
+                    $evt = [ordered] @{
+                        ts = $now
+                        pane_id = $paneId
+                        tab_id = [int] $p.tab_id
+                        window_id = [int] $p.window_id
+                        title = [string] $p.title
+                        line = ('[watch] 新 pane 出现 tab=' + [int] $p.tab_id + ' window=' + [int] $p.window_id + ' title=' + [string] $p.title)
+                    }
+                    Append-Utf8NoBom -Path $eventsPath -Content (ConvertTo-JsonLine -Value $evt)
+                    $recentEvents.Add($localNow + ' [pane ' + $paneId + '] 新 pane 出现')
+                    if ($recentEvents.Count -gt $WatchRecentEvents) { $recentEvents.RemoveAt(0) }
+                }
+            }
+            foreach ($knownId in @($script:KnownPaneIds.Keys)) {
+                if (-not $currentPaneIds.ContainsKey($knownId)) {
+                    $script:KnownPaneIds.Remove($knownId)
+                    $evt = [ordered] @{ ts = $now; pane_id = [int] $knownId; line = ('[watch] pane ' + $knownId + ' 已关闭/消失') }
+                    Append-Utf8NoBom -Path $eventsPath -Content (ConvertTo-JsonLine -Value $evt)
+                    $recentEvents.Add($localNow + ' [pane ' + $knownId + '] 已关闭')
+                    if ($recentEvents.Count -gt $WatchRecentEvents) { $recentEvents.RemoveAt(0) }
+                }
+            }
+            $lastPaneCount = $observedPanes.Count
+
+            foreach ($p in $observedPanes) {
+                $paneId = [int] $p.pane_id
+                $text = Read-PaneText -WeztermCli $resolvedWeztermCli -PaneId $paneId
+                if ([string]::IsNullOrWhiteSpace($text)) { continue }
+                $relevant = @(Select-CcbRelevantLines -Text $text -Keywords $effectiveKeywords)
+                foreach ($line in $relevant) {
+                    $key = $paneId.ToString() + '|' + $line
+                    if ($script:SeenLines.ContainsKey($key)) {
+                        $duplicates++
+                        continue
+                    }
+                    $script:SeenLines[$key] = $true
+                    $evt = [ordered] @{
+                        ts = $now
+                        pane_id = $paneId
+                        tab_id = [int] $p.tab_id
+                        window_id = [int] $p.window_id
+                        title = [string] $p.title
+                        line = $line
+                    }
+                    Append-Utf8NoBom -Path $eventsPath -Content (ConvertTo-JsonLine -Value $evt)
+                    $recentEvents.Add($localNow + ' [pane ' + $paneId + '] ' + $line)
+                    if ($recentEvents.Count -gt $WatchRecentEvents) { $recentEvents.RemoveAt(0) }
+                }
+            }
+
+            # 配置访问监控：探测 cli 读取/修改关键配置的时机（LastAccessTime）
+            $curConfigSnapshot = @(Get-ConfigFileSnapshot -Paths $configPaths)
+            $configEvents = @(Compare-ConfigFileSnapshot -Previous $prevConfigSnapshot -Current $curConfigSnapshot)
+            foreach ($cfgEvt in $configEvents) {
+                $payload = [ordered] @{ ts = $now; type = $cfgEvt.type; path = $cfgEvt.path; last_access = $cfgEvt.last_access; last_write = $cfgEvt.last_write }
+                Append-Utf8NoBom -Path $configAccessPath -Content (ConvertTo-JsonLine -Value $payload)
+                if ($cfgEvt.type -eq 'config-read') { $configReadCount++ }
+                $recentEvents.Add($localNow + ' [config] ' + $cfgEvt.type + ' ' + $cfgEvt.path)
+                if ($recentEvents.Count -gt $WatchRecentEvents) { $recentEvents.RemoveAt(0) }
+            }
+            $prevConfigSnapshot = $curConfigSnapshot
+
+            if ($pollCount % $WatchProcessInterval -eq 0) {
+                $procs = @(Get-CcbRelatedProcesses -ProjectRoot $resolvedProject -RepoRoot $resolvedRepo)
+                $lastProcessCount = $procs.Count
+                foreach ($proc in $procs) {
+                    $payload = [ordered] @{
+                        sampled_at = $now
+                        pid = $proc.ProcessId
+                        parent_pid = $proc.ParentProcessId
+                        name = $proc.Name
+                        executable_path = Redact-Text -Text ([string] $proc.ExecutablePath)
+                        command_line = Redact-Text -Text ([string] $proc.CommandLine)
+                    }
+                    Append-Utf8NoBom -Path $samplesPath -Content (ConvertTo-JsonLine -Value $payload)
+                }
+            }
+
+            if ($WatchHerdrStatusInterval -gt 0 -and ($pollCount % $WatchHerdrStatusInterval -eq 0)) {
+                $hArgs = @($resolvedHerdr, 'status', 'server', '--json')
+                if (-not [string]::IsNullOrWhiteSpace($HerdrSession)) { $hArgs += @('--session', $HerdrSession) }
+                try {
+                    $hOut = & $hArgs 2>$null | Out-String
+                    $hPayload = [ordered] @{ ts = $now; stdout = [string] $hOut }
+                    Append-Utf8NoBom -Path $herdrPath -Content (ConvertTo-JsonLine -Value $hPayload)
+                } catch {}
+            }
+
+            $elapsedSeconds = [int] $sw.Elapsed.TotalSeconds
+            $state = [ordered] @{
+                elapsed_seconds = $elapsedSeconds
+                poll_count = $pollCount
+                pane_count = $lastPaneCount
+                event_count = $script:SeenLines.Count
+                duplicate_count = $duplicates
+                process_count = $lastProcessCount
+                spinner = $spinners[$pollCount % $spinners.Count]
+            }
+            $block = Show-WatchStatus -State $state -RecentEvents $recentEvents
+            Update-WatchUi -BlockText $block -BlockLines (@($block -split "`n").Count)
+
+            $live = [ordered] @{
+                updated_at = $now
+                elapsed_seconds = $elapsedSeconds
+                poll_count = $pollCount
+                observed_pane_count = $lastPaneCount
+                event_count = $script:SeenLines.Count
+                duplicate_count = $duplicates
+                process_count = $lastProcessCount
+                recent_events = @($recentEvents)
+            }
+            Write-Utf8NoBom -Path $livePath -Content (($live | ConvertTo-Json -Depth 10) + [Environment]::NewLine)
+
+            Start-Sleep -Milliseconds $WatchPollIntervalMs
+        }
+    } finally {
+        $sw.Stop()
+        $elapsedTotal = if (Test-Path variable:sw) { [int] $sw.Elapsed.TotalSeconds } else { 0 }
+        $summary = [ordered] @{
+            schema_version = 1
+            mode = 'watch'
+            run_id = $runId
+            started_at = $startedAt
+            ended_at = (Get-Date).ToUniversalTime().ToString('o')
+            elapsed_seconds = $elapsedTotal
+            poll_count = $pollCount
+            observed_pane_count = $lastPaneCount
+            event_count = $script:SeenLines.Count
+            duplicate_count = $duplicates
+            events_ref = $eventsPath
+            process_samples_ref = $samplesPath
+            herdr_status_ref = if ($WatchHerdrStatusInterval -gt 0) { $herdrPath } else { $null }
+            config_access_ref = $configAccessPath
+            config_read_count = $configReadCount
+            self_pane_id = $selfPaneId
+            note = 'CCB 后台进程由用户在其他 tab 启动，本脚本未做任何清理。'
+        }
+        Write-Utf8NoBom -Path $summaryPath -Content (($summary | ConvertTo-Json -Depth 10) + [Environment]::NewLine)
+        if ($script:WatchUiInited) {
+            try { [Console]::Write("`r`n") } catch {}
+        }
+        Write-Host ''
+        Write-Host '===================================================================='
+        Write-Host '  CCB Watch 采集结束'
+        Write-Host ('  采集事件: ' + $script:SeenLines.Count + '（去重命中 ' + $duplicates + '）')
+        Write-Host ('  输出目录: ' + $resolvedOut)
+        Write-Host '  提示：未清理任何 CCB/ccbd/herdr 进程（它们由你在其他 tab 中启动）。'
+        Write-Host '===================================================================='
+    }
+}
+
 function Stop-SpikeResidualProcesses {
     param(
         [string] $ProjectRoot,
@@ -1153,6 +1746,28 @@ if ($SelfTest) {
     exit 0
 }
 
+if ($WatchSelfTest) {
+    Invoke-WatchSelfTest
+    exit 0
+}
+
+if ($WatchMode) {
+    Invoke-WatchCollection `
+        -ProjectRoot $ProjectRoot `
+        -RepoRoot $RepoRoot `
+        -HerdrExe $HerdrExe `
+        -HerdrSession $HerdrSession `
+        -WatchPollIntervalMs $WatchPollIntervalMs `
+        -WatchProcessInterval $WatchProcessInterval `
+        -WatchHerdrStatusInterval $WatchHerdrStatusInterval `
+        -WatchRecentEvents $WatchRecentEvents `
+        -WatchMaxPolls $WatchMaxPolls `
+        -WatchIncludeSelfPane:$WatchIncludeSelfPane `
+        -WatchKeywords $WatchKeywords `
+        -WeztermCli $WeztermCli
+    exit 0
+}
+
 $script:ccbStartPid = 0
 $script:insideHerdrUi = -not [string]::IsNullOrWhiteSpace($env:HERDR_ENV)
 
@@ -1241,7 +1856,13 @@ if ($collectCcbDiagnose) {
 }
 
 $samplerPath = Join-Path $resolvedOut 'process-samples.jsonl'
-$sampleSeconds = [Math]::Max($StartTimeoutSeconds + $PostStartWaitSeconds + 5, 15)
+# 默认按启动窗口采样；需要覆盖启动后 steady-state 时，把
+# ProcessSampleSeconds 设为更长的观察窗口。
+$sampleSeconds = if ($ProcessSampleSeconds -gt 0) {
+    $ProcessSampleSeconds
+} else {
+    [Math]::Max($StartTimeoutSeconds + $PostStartWaitSeconds + 5, 15)
+}
 $sampler = $null
 if ($collectProcessSamples) {
     $sampler = Start-ProcessSampler -OutPath $samplerPath -ProjectRoot $resolvedProject -RepoRoot $resolvedRepo -DurationSeconds $sampleSeconds -IntervalMs $SampleIntervalMs

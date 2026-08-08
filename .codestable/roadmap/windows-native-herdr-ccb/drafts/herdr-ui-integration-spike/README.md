@@ -29,6 +29,74 @@ $out = "$repo/.codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-ui-integ
   -ObservedHerdrAgentsPanelText "claude"
 ```
 
+### Watch 模式：持续采集（2026-08-08 新增，推荐）
+
+利用 wezterm 多 tab，持续观察其他 tab/pane 中的 CCB 相关信息，直到 Ctrl+C 结束：
+
+1. 在 wezterm 的**第一个 tab** 启动 Watch 模式。
+2. 在**其他 tab** 手动启动 CCB（如 `.\ccb8.cmd`）或操作 herdr。
+3. 脚本持续读取这些 tab/pane 的终端文本、采样 CCB 相关进程、可选查询 herdr
+   status，全部按时间序列记录。
+4. 按 Ctrl+C 结束采集。**不主动执行 `.\ccb8.cmd`，也不清理任何 CCB 后台进程**
+   （CCB 由你启动，归你所有）。
+
+```powershell
+& "$repo/.codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-ui-integration-spike/run_spike.ps1" `
+  -WatchMode `
+  -ProjectRoot "$project" `
+  -RepoRoot "$repo" `
+  -WatchPollIntervalMs 2000 `
+  -WatchProcessInterval 5
+```
+
+Watch 模式每次采集写入**独立子目录**
+`…/herdr-ui-integration-spike/watch/watch-<yyyyMMdd-HHmmss>/`（与全量采集
+`evidence/run-<ts>` 语义一致），不使用 `-OutputDir`。
+
+Watch 模式参数：
+
+- `-WatchMode`：启用持续采集模式。
+- `-WatchPollIntervalMs`：轮询间隔（默认 2000ms）。
+- `-WatchProcessInterval`：每 N 轮采样一次进程（默认 5）。
+- `-WatchHerdrStatusInterval`：每 N 轮查询一次 `herdr status server --json`
+  （默认 0 = 关闭）。
+- `-WatchRecentEvents`：UI 显示最近事件数（默认 8）。
+- `-WatchMaxPolls`：最多轮询 N 次后正常退出（默认 0 = 无限，直到 Ctrl+C）。
+- `-WatchIncludeSelfPane`：默认排除自身 pane，加此参数则一并监控。
+- `-WatchKeywords`：自定义文本过滤关键词，覆盖默认集（ccb/ccbd/herdr/codex/
+  claude/keeper/provider/mount/pane/session 等）。
+- `-WatchSelfTest`：watch 纯函数自检（不实际运行监控）。
+
+Watch 模式产物（`watch/watch-<timestamp>` 下）：
+
+- `watch-manifest.json`：启动配置（路径、关键词、自身 pane、轮询参数）。
+- `watch-events.jsonl`：逐条记录每个 pane 的 CCB 相关文本行，含 pane/tab/
+  window/title 归属。
+- `process-samples-watch.jsonl`：周期性进程采样（ccbd/keeper/provider/herdr 等）。
+- `herdr-status-watch.jsonl`：周期性 herdr status（开启 `-WatchHerdrStatusInterval` 时）。
+- `watch-live.json`：实时状态（轮询计数、事件数、进程数），可被外部工具读取。
+- `watch-config-access.jsonl`：**配置访问监控**（方案 A）——轮询关键配置文件的
+  `LastAccessTime`/`LastWriteTime`，记录 cli 读取/修改配置的时机（cli 加载
+  配置的过程在 python 进程内不可见，pane 文本看不到；NTFS `LastAccessTime`
+  随读取更新，以此探测）。监控文件：
+  - 项目：`<project>/.ccb/ccb.config`、`runtime-root-ref.json`、`project.identity.json`
+  - 用户：`~/.ccb/ccb.config`、`.ccb-source-dev/home/.ccb/ccb.config`
+  - 全局：`~/.claude/settings.json`、`~/.claude/config.json`、`~/.claude.json`、
+    `~/.codex/config.toml`、`~/.codex/auth.json`
+  事件类型：`config-read`（cli 读了该配置）、`config-modified`（配置被改写）、
+  `config-appeared`/`config-disappeared`。
+- `watch-summary.json`：Ctrl+C 结束时的汇总。
+
+**Watch 模式与一次性采集的区别：**
+
+| 维度 | 一次性采集（默认） | Watch 模式 |
+|---|---|---|
+| 启动 CCB | 主动执行 `.\ccb8.cmd` | 不主动执行，由你在其他 tab 启动 |
+| 结束方式 | 全部维度跑完自动结束 | 持续运行直到 Ctrl+C |
+| 清理后台 | finally 清理残留进程 | 不做任何清理（CCB 归你所有）|
+| 可视化 | Write-Progress 进度条 | 实时状态块 + 旋转动画 + 最近事件滚动 |
+| 采集粒度 | 一次性维度快照 | 持续时间序列记录 |
+
 如果只是检查脚本本身，不启动 CCB：
 
 ```powershell
@@ -42,7 +110,7 @@ $out = "$repo/.codestable/roadmap/windows-native-herdr-ccb/drafts/herdr-ui-integ
 - `summary.json`：机器可读结论和每条命令的引用。
 - `report.md`：人工阅读摘要。
 - `host-context.json`：Herdr/CCB 环境上下文，敏感字段会做基础脱敏。
-- `process-samples.jsonl`：运行 `ccb8.cmd` 前后的短周期进程采样，用来抓短暂 `cmd.exe` / `powershell.exe` / `python.exe` / provider 进程。
+- `process-samples.jsonl`：运行 `ccb8.cmd` 前后的进程采样，用来抓短暂 `cmd.exe` / `powershell.exe` / `python.exe` / provider 进程；需要覆盖启动后 steady-state 时，可把 `ProcessSampleSeconds` 设得更长。
 - `raw-command-refs/*.json|*.txt`：`herdr`、`ccb8 --diagnose`、`ccb8`、`ping`、`doctor ps`、`layout status`、`doctor --output` 等命令证据。
 - `manual-observation.md`：Herdr 左侧 agents panel 与窗口闪退的人工观察补充位。
 
