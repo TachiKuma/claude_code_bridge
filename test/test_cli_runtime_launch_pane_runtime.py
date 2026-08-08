@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 from cli.services.runtime_launch_runtime import pane_runtime
+from terminal_runtime import shell_launch
 
 
 class FakeRespawnBackend:
@@ -35,11 +36,11 @@ def test_herdr_launch_command_returns_argv_so_list2cmdline_does_not_quote_whole(
     会被整体加引号而在 pane 里被当作字符串字面量回显而不执行（2026-08-06 实测）。
     """
     monkeypatch.setattr(
-        pane_runtime,
-        '_resolve_sh_exe',
+        shell_launch,
+        'resolve_sh_executable',
         _fake_resolve_sh_exe(r'C:\Program Files\Git\bin\sh.exe'),
     )
-    monkeypatch.setattr(pane_runtime.tempfile, 'gettempdir', lambda: str(tmp_path))
+    monkeypatch.setattr(shell_launch.tempfile, 'gettempdir', lambda: str(tmp_path))
     command = pane_runtime._herdr_launch_command('export A=1 && codex', Path(r'D:\proj'), 'agent_1')
     assert command[0] == '&'
     assert command[1] == r'C:\Program Files\Git\bin\sh.exe'
@@ -52,11 +53,11 @@ def test_herdr_launch_command_returns_argv_so_list2cmdline_does_not_quote_whole(
 
 def test_herdr_launch_command_writes_bash_script_with_cd_and_start_cmd(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(
-        pane_runtime,
-        '_resolve_sh_exe',
+        shell_launch,
+        'resolve_sh_executable',
         _fake_resolve_sh_exe(r'C:\Program Files\Git\bin\sh.exe'),
     )
-    monkeypatch.setattr(pane_runtime.tempfile, 'gettempdir', lambda: str(tmp_path))
+    monkeypatch.setattr(shell_launch.tempfile, 'gettempdir', lambda: str(tmp_path))
     command = pane_runtime._herdr_launch_command('exec codex --remote', Path(r'D:\proj'), 'agent_1')
     script = Path(command[2]).read_text(encoding='utf-8')
     assert script.startswith("cd 'D:\\proj' && ")
@@ -64,7 +65,7 @@ def test_herdr_launch_command_writes_bash_script_with_cd_and_start_cmd(monkeypat
 
 
 def test_herdr_launch_command_falls_back_to_sh_lc_when_sh_missing(monkeypatch) -> None:
-    monkeypatch.setattr(pane_runtime, '_resolve_sh_exe', _fake_resolve_sh_exe(None))
+    monkeypatch.setattr(shell_launch, 'resolve_sh_executable', _fake_resolve_sh_exe(None))
     command = pane_runtime._herdr_launch_command('codex', Path(r'D:\proj'), 'agent_1')
     assert command == ['sh', '-lc', 'codex']
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+from pathlib import Path
 import time
 from typing import Callable
 
@@ -594,9 +595,14 @@ def respawn_pane(
 ) -> None:
     if _is_mux_backend(backend):
         _require_mux_operation(backend, operation='respawn_pane', methods=('respawn_pane',))
+        from terminal_runtime.shell_launch import herdr_respawn_command
         backend.respawn_pane(
             _mux_pane_ref(backend, pane_id),
-            command=['sh', '-lc', command],
+            command=herdr_respawn_command(
+                command,
+                Path(cwd),
+                f'pane-{pane_id.replace(":", "_")}',
+            ),
             cwd=str(cwd),
             env={},
         )
