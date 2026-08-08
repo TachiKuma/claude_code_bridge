@@ -370,6 +370,22 @@ class HerdrSocketClient:
         )
         return _operation_evidence("respawn_pane", pane, response, detail="pane command respawned")
 
+    def pane_process_info(
+        self,
+        pane: MuxPaneRefV2,
+    ) -> Mapping[str, object]:
+        """Return the pane's foreground process pid via ``pane process-info``.
+
+        Used to backfill ``runtime_pid`` for pane-backed agents (herdr respawns
+        the provider CLI into the pane; CCB does not track its pid via a
+        provider session).
+        """
+        return self._request(
+            "pane_process_info",
+            {"pane_id": pane["pane_id"], "session_name": pane["session_name"]},
+            require_status=False,
+        )
+
     def reflow_window(
         self,
         namespace: MuxNamespaceRefV2,

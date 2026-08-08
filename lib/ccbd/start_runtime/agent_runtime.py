@@ -44,6 +44,32 @@ def _binding_attr(binding, field_name: str):
     return getattr(binding, field_name, None) if binding is not None else None
 
 
+def _best_effort_resolve_pane_pid(*, binding, namespace_backend_impl, resolver) -> int | None:
+    """方向 A：herdr pane-backed agent 回填 runtime_pid。
+
+    binding.runtime_pid 来自 provider session（herdr pane respawn 不经
+    provider session，故为 None）。用注入的 resolver 从 herdr ``pane
+    process-info`` 查询 pane 前台进程 pid。best-effort：任何失败返回 None。
+    """
+    if resolver is None:
+        return None
+    if str(namespace_backend_impl or '').strip().lower() != 'herdr':
+        return None
+    pane_id = _binding_attr(binding, 'pane_id') or _binding_attr(binding, 'active_pane_id')
+    if not pane_id:
+        return None
+    try:
+        pid = resolver(pane_id)
+    except Exception:
+        return None
+    if pid is None:
+        return None
+    try:
+        return int(pid)
+    except (TypeError, ValueError):
+        return None
+
+
 def _runtime_ref_prefix(
     namespace_backend_impl: str | None,
     assigned_pane_ref: dict[str, object] | None,
@@ -92,6 +118,7 @@ def start_agent_runtime(
     effective_command=None,
     provider_prepare_ms: float = 0.0,
     binding_reject_reason: str | None = None,
+    pane_runtime_pid_resolver=None,
 ) -> StartAgentExecution:
     started_ns = monotonic_ns()
     timings_ms: dict[str, float] = {}
@@ -190,7 +217,14 @@ def start_agent_runtime(
             health=None if preserve_existing_success_health else binding_state.health,
             provider=spec.provider,
             runtime_root=_binding_attr(binding_state.binding, 'runtime_root'),
-            runtime_pid=_binding_attr(binding_state.binding, 'runtime_pid'),
+            runtime_pid=(
+                _binding_attr(binding_state.binding, 'runtime_pid')
+                or _best_effort_resolve_pane_pid(
+                    binding=binding_state.binding,
+                    namespace_backend_impl=namespace_backend_impl,
+                    resolver=pane_runtime_pid_resolver,
+                )
+            ),
             terminal_backend=(
                 _binding_attr(binding_state.binding, 'terminal')
                 or ('tmux' if namespace_pane_id else None)

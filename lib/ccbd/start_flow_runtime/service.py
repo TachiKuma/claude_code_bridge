@@ -217,6 +217,11 @@ def run_start_flow(
                     launch_binding_hint_fn=lambda **kwargs: launch_binding_hint(deps, **kwargs),
                     relabel_project_namespace_pane_fn=lambda **kwargs: relabel_project_namespace_pane(deps, **kwargs),
                     same_tmux_socket_path_fn=deps.same_tmux_socket_path_fn,
+                    pane_runtime_pid_resolver=(
+                        (lambda pane_id: _best_effort_query_pane_pid(tmux_backend, namespace_ref, pane_id))
+                        if hasattr(tmux_backend, 'pane_process_info')
+                        else None
+                    ),
                 )
             except Exception as exc:
                 if readiness_recorder is not None:
@@ -258,6 +263,16 @@ def run_start_flow(
                 execution=execution,
             )
             agent_results.append(execution.agent_result)
+            # 方向 B：binding 恢复失败（degraded，binding 无法解析）时清理已启动
+            # 的 pane，避免 codex/claude 在 pane 里空转（如登录界面）而 runtime 记
+            # degraded + pid=None。正常 binding（launched/attached/relaunched）不受影响。
+            if str(getattr(execution.agent_result, 'action', '') or '').strip() == 'degraded':
+                degraded_pane_id = getattr(execution, 'runtime_pane_id', None)
+                if degraded_pane_id and hasattr(tmux_backend, 'kill_pane'):
+                    try:
+                        tmux_backend.kill_pane(degraded_pane_id)
+                    except Exception:
+                        pass
     if readiness_recorder is not None:
         if provider_runtime_deferred:
             readiness_recorder.mark(
@@ -442,6 +457,26 @@ def _herdr_assigned_pane_ref(
         'window_name': str(window_name).strip() if str(window_name or '').strip() else None,
         'agent_slug': agent_name,
     }
+
+
+def _best_effort_query_pane_pid(tmux_backend, namespace_ref, pane_id: str) -> int | None:
+    """方向 A：查询 herdr pane 前台进程 pid（best-effort，不抛异常）。
+
+    供 agent_runtime 回填 runtime_pid 使用；pane 前台进程即 codex/claude
+    （respawn 后 codex 启动前可能是 shell，best-effort 单次查询）。
+    """
+    if not hasattr(tmux_backend, 'pane_process_info'):
+        return None
+    session_name = str((namespace_ref or {}).get('session_name') or '').strip() or None
+    pane_ref = {'backend_impl': 'herdr', 'pane_id': pane_id, 'session_name': session_name}
+    try:
+        info = tmux_backend.pane_process_info(pane_ref)
+    except Exception:
+        return None
+    if not isinstance(info, dict):
+        return None
+    pid = info.get('foreground_pid')
+    return int(pid) if pid else None
 
 
 def _herdr_deferred_agent_result(agent_name: str, *, prepared) -> CcbdStartupAgentResult:

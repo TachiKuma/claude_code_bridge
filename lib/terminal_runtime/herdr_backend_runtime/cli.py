@@ -74,6 +74,8 @@ class HerdrCliRequestAdapter:
             return self._set_pane_identity(payload)
         if operation == "respawn_pane":
             return self._respawn_pane(payload)
+        if operation == "pane_process_info":
+            return self._pane_process_info(payload)
         if operation == "move_pane":
             return self._move_pane(payload)
         if operation == "reflow_window":
@@ -546,6 +548,41 @@ class HerdrCliRequestAdapter:
                 session_name=session_name,
             )
         return {"status": "ok", "pane_id": pane_id}
+
+    def _pane_process_info(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        pane_id = str(payload.get("pane_id") or "").strip()
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        if not pane_id:
+            raise self._failed("pane_process_info", "requires pane_id", session_name=session_name)
+        result = self._command(
+            "pane_process_info",
+            ["pane", "process-info", "--pane", pane_id],
+            expect_json=True,
+            session_name=session_name,
+        )
+        foreground_pid = None
+        process_info: dict[str, object] = {}
+        stdout = (result.stdout or "").strip()
+        if stdout:
+            try:
+                payload_out = json.loads(stdout)
+                process_info = (
+                    payload_out.get("process_info")
+                    or (payload_out.get("result") or {}).get("process_info")
+                    or {}
+                )
+                if isinstance(process_info, dict):
+                    processes = process_info.get("foreground_processes") or []
+                    if processes and isinstance(processes[0], dict):
+                        foreground_pid = processes[0].get("pid")
+            except json.JSONDecodeError:
+                pass
+        return {
+            "status": "ok",
+            "pane_id": pane_id,
+            "foreground_pid": foreground_pid,
+            "process_info": process_info,
+        }
 
     def _move_pane(self, payload: Mapping[str, object]) -> Mapping[str, object]:
         source_pane_id = str(payload.get("source_pane_id") or "").strip()

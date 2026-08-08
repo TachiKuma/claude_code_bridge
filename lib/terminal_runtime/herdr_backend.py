@@ -501,6 +501,15 @@ class HerdrBackend(TerminalBackend):
             env=env or {},
         )
 
+    def pane_process_info(
+        self,
+        pane: MuxPaneRefV2,
+    ) -> Mapping[str, object]:
+        """Return the pane's foreground process info (``pane process-info``)."""
+        pane_ref = self._pane_ref(pane, operation="pane_process_info")
+        self._client.server_info()
+        return self._client.pane_process_info(pane_ref)
+
     def move_pane(
         self,
         source_pane: MuxPaneRefV2,

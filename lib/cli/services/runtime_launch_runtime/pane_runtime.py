@@ -53,6 +53,10 @@ def launch_runtime_pane(
             env={},
         )
         _best_effort_capture_pane(backend, pane_ref)
+        # 方向 A：respawn 后回填 pane 前台进程 pid，供 runtime_pid 使用。
+        # codex/claude 经 sh.exe 启动进 pane，CCB 不经 provider session 跟踪其
+        # pid；用 herdr `pane process-info` 拿前台进程，best-effort 不阻塞。
+        _best_effort_pane_runtime_pid(backend, pane_ref)
         return pane_ref
     return launch_pane(
         backend,
@@ -85,6 +89,31 @@ def _best_effort_capture_pane(backend, pane_ref: Mapping[str, object]) -> None:
         capture(dict(pane_ref), lines=1)
     except Exception:
         return
+
+
+def _best_effort_pane_runtime_pid(backend, pane_ref: Mapping[str, object]) -> None:
+    """Best-effort: query the pane's foreground process pid and record it.
+
+    Pane-backed (herdr) agents respawn the provider CLI into the pane; CCB does
+    not track its pid via a provider session.  ``pane process-info`` exposes the
+    foreground pid — record it on the pane ref so downstream can backfill
+    ``runtime_pid``.  Never raises; a transient failure simply leaves pid unset.
+    """
+    process_info = getattr(backend, 'pane_process_info', None)
+    if not callable(process_info):
+        return
+    try:
+        info = process_info(dict(pane_ref))
+    except Exception:
+        return
+    if not isinstance(info, dict):
+        return
+    pid = info.get('foreground_pid')
+    if pid:
+        try:
+            pane_ref['runtime_pid'] = int(pid)
+        except (TypeError, ValueError):
+            return
 
 
 __all__ = [

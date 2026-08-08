@@ -4141,3 +4141,32 @@ def _completed(stdout: str):
 
 def _called_process_error(command: list[str], *, stderr: str = "") -> Exception:
     return subprocess.CalledProcessError(1, command, stderr=stderr)
+
+
+def test_herdr_adapter_pane_process_info_parses_foreground_pid(monkeypatch) -> None:
+    """方向 A：pane process-info 解析前台进程 pid（供 runtime_pid 回填）。"""
+    adapter = HerdrCliRequestAdapter(session_name="ccb-test")
+    result = _completed(
+        json.dumps(
+            {
+                "id": "cli:pane:process_info",
+                "result": {
+                    "process_info": {
+                        "foreground_processes": [{"name": "codex.exe", "pid": 4321}]
+                    }
+                },
+                "type": "pane_process_info",
+            }
+        )
+    )
+    monkeypatch.setattr(adapter, "_command", lambda *args, **kwargs: result)
+    payload = adapter._pane_process_info({"pane_id": "wX:p1", "session_name": "ccb-test"})
+    assert payload["status"] == "ok"
+    assert payload["foreground_pid"] == 4321
+    assert payload["pane_id"] == "wX:p1"
+
+
+def test_herdr_adapter_pane_process_info_missing_pane_id_raises() -> None:
+    adapter = HerdrCliRequestAdapter(session_name="ccb-test")
+    with pytest.raises(MuxCommandErrorV2):
+        adapter._pane_process_info({"session_name": "ccb-test"})
