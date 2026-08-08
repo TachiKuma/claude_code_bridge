@@ -5,6 +5,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BOOTSTRAP_PS1 = REPO_ROOT / "scripts" / "bootstrap-windows-test-env.ps1"
+CCB8_PS1 = REPO_ROOT / "ccb8.ps1"
 
 
 def test_windows_bootstrap_script_installs_expected_prerequisites() -> None:
@@ -64,3 +65,12 @@ def test_windows_bootstrap_script_creates_four_provider_smoke_config() -> None:
     assert "'```'" in text
     assert 'ccswitch' in text
     assert 'bootstrap-logs' in text
+
+
+def test_windows_ccb8_wrapper_surfaces_config_ui_launcher_hint() -> None:
+    text = CCB8_PS1.read_text(encoding="utf-8")
+
+    assert 'Show-ConfigUiLauncherHint' in text
+    assert 'ccb8: config ui: run .\\ccb8.cmd config ui' in text
+    assert 'ccb8: config ui: after release run ccb config ui' in text
+    assert 'ccb8: config ui: the command prints http://127.0.0.1:PORT/?token=... for copy' in text

@@ -67,6 +67,40 @@ Project memory files are user context, not startup/layout authority.
   selected files such as `.ccb/ccb.config` must opt in with their own
   `.gitignore` whitelist.
 
+### 2.2 Native Windows Config UI Launch
+
+Native Windows does not require the old sidebar button as a launcher path.
+
+- The canonical local editor entrypoint is `ccb config ui`.
+- In source-dev / wrapper mode, `.\ccb8.cmd config ui` is the launch alias.
+- One-click startup output may surface both commands in the original tab so the
+  user can open the editor even when the sidebar is disabled.
+- `ccb config ui` prints the authenticated loopback URL
+  `http://127.0.0.1:PORT/?token=...` for copy/paste; wrappers must not invent
+  that URL.
+- Browser auto-open failure must still leave the manual URL visible in the
+  terminal.
+- For Native Windows projects that should not mount any CCB-owned sidebar pane,
+  the config should make the runtime explicit and turn the sidebar off:
+
+```toml
+version = 2
+entry_window = "main"
+
+[runtime.mux]
+backend = "herdr"
+
+[windows]
+main = "agent1:codex, agent2:claude"
+
+[ui.sidebar]
+mode = "off"
+```
+
+- `mode = "off"` disables CCB's sidebar materialization entirely.
+- `runtime.mux.backend = "herdr"` selects the Herdr runtime path used by the
+  Native Windows external-project launch.
+
 ## 3. Compact Layout Grammar
 
 The primary config format is compact text.

@@ -153,6 +153,12 @@ function Invoke-WrapperSelfTest {
     exit 0
 }
 
+function Show-ConfigUiLauncherHint {
+    Write-Host 'ccb8: config ui: run .\ccb8.cmd config ui'
+    Write-Host 'ccb8: config ui: after release run ccb config ui'
+    Write-Host 'ccb8: config ui: the command prints http://127.0.0.1:PORT/?token=... for copy'
+}
+
 function Set-DefaultEnv {
     param(
         [string] $Name,
@@ -1095,9 +1101,11 @@ if ($isOneClick) {
             $herdrCmd = "& `"$herdrExe`" --session $ccbSession`r`n"
             & $weztermCli cli send-text --pane-id $paneId --no-paste $herdrCmd
             Write-Host "ccb8: agents starting — waiting 15s..."
+            Show-ConfigUiLauncherHint
             Start-Sleep -Seconds 15
         } else {
             Write-Host "ccb8: WezTerm CLI not found, launching standalone..."
+            Show-ConfigUiLauncherHint
             Start-Process -FilePath $herdrExe -ArgumentList '--session', $ccbSession
         }
     }

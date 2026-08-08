@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from agents.config_loader_runtime.common import ConfigValidationError
+from ccbd.services.project_namespace_runtime import build_namespace_topology_plan
 from agents.config_loader_runtime.parsing_runtime.validation import validate_project_config
 from agents.config_loader_runtime.parsing_runtime.workflow_v3 import _parse_runtime_mux_backend_v3
 
@@ -29,6 +30,42 @@ def test_v2_runtime_mux_backend_absent() -> None:
     # 显式 null mux 视为 absent（raw_mux is None 分支）
     cfg2 = validate_project_config(_v2_doc({'mux': None}))
     assert cfg2.runtime_mux_backend is None
+
+
+def test_v2_herdr_with_sidebar_off_disables_sidebar_projection(tmp_path) -> None:
+    project_root = tmp_path / 'repo'
+    config_dir = project_root / '.ccb'
+    config_dir.mkdir(parents=True)
+    config_path = config_dir / 'ccb.config'
+    config_path.write_text(
+        '''version = 2
+entry_window = "main"
+
+[runtime.mux]
+backend = "herdr"
+
+[windows]
+main = "agent1:codex"
+
+[ui.sidebar]
+mode = "off"
+''',
+        encoding='utf-8',
+    )
+
+    from agents.config_loader_runtime.io_runtime.documents import load_project_config
+
+    result = load_project_config(project_root, include_loop_overlays=False)
+    assert result.config.runtime_mux_backend == 'herdr'
+
+    plan = build_namespace_topology_plan(
+        result.config,
+        ccbd_socket_path='/tmp/ccbd.sock',
+        project_root=str(project_root),
+    )
+    assert plan.sidebar_enabled is False
+    assert plan.windows[0].sidebar is None
+    assert plan.windows[0].realized_layout == 'agent1:codex'
 
 
 @pytest.mark.parametrize(
