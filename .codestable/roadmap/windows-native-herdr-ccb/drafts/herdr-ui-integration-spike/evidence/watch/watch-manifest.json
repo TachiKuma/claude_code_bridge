@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "mode": "watch",
+  "run_id": "watch-20260808-134855",
+  "started_at": "2026-08-08T05:48:55.6874578Z",
+  "project_root": "D:\\C#Project\\GitHub\\AvaPrintDesigner",
+  "repo_root": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge",
+  "herdr_exe": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Herdr\\herdr.exe",
+  "wezterm_cli": "D:\\Program Files\\WezTerm\\wezterm.exe",
+  "self_pane_id": 0,
+  "include_self_pane": false,
+  "poll_interval_ms": 2000,
+  "process_interval": 5,
+  "herdr_status_interval": 0,
+  "keywords": [
+    "ccb",
+    "ccbd",
+    "ccb8",
+    "herdr",
+    "HERDR",
+    "codex",
+    "claude",
+    "keeper",
+    "provider",
+    "mount",
+    "pane",
+    "session",
+    "runtime_mux",
+    "sidebar"
+  ],
+  "note": "本模式不主动执行 ccb8.cmd、不清理 CCB 后台；CCB 由你在其他 tab 启动，脚本持续观察并记录。"
+}

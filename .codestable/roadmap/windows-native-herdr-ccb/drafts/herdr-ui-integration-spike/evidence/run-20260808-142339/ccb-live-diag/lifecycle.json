@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "record_type": "ccbd_lifecycle",
+  "project_id": "575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03",
+  "desired_state": "running",
+  "phase": "starting",
+  "generation": 39,
+  "phase_started_at": "2026-08-08T06:24:53.829426Z",
+  "startup_id": "0c157f4dd446422987f56bcd35b990f1",
+  "startup_stage": "spawn_requested",
+  "last_progress_at": "2026-08-08T06:24:53.829426Z",
+  "startup_deadline_at": "2026-08-08T06:25:23.829426Z",
+  "keeper_pid": 16496,
+  "owner_pid": null,
+  "owner_daemon_instance_id": null,
+  "config_signature": "8882c8a0e9362ac27c64c91911f323c021f9608838af61c54efd3a989b6b5307",
+  "socket_path": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\ccbd\\ccbd.sock",
+  "socket_inode": null,
+  "control_plane_endpoint": null,
+  "namespace_epoch": 33,
+  "last_failure_reason": null,
+  "shutdown_intent": null
+}

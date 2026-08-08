@@ -1,0 +1,46 @@
+========================================================
+  CCB Source-Dev Wrapper -- Diagnostic
+========================================================
+
+-- Entry Points --
+  wrapper       D:\C#Project\GitHub\AvaPrintDesigner\ccb8.cmd
+  powershell    D:\C#Project\GitHub\AvaPrintDesigner\ccb8.ps1
+  source ccb    E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\ccb.py
+  shim          D:\C#Project\GitHub\AvaPrintDesigner\.ccb-source-dev\bin\ccb.cmd
+
+-- Paths --
+  project root  D:\C#Project\GitHub\AvaPrintDesigner
+  dev root      D:\C#Project\GitHub\AvaPrintDesigner\.ccb-source-dev
+  python        C:\Users\Administrator\AppData\Local\Programs\Python\Python314\python.exe
+
+-- Runtime State --
+  RUNTIME       D:\.c8\rs
+  legacy        D:\C#Project\GitHub\AvaPrintDesigner\.ccb-source-dev\state\runtime-state
+
+-- Isolation --
+  HOME          D:\C#Project\GitHub\AvaPrintDesigner\.ccb-source-dev\home   isolated [OK]
+  USERPROFILE   D:\C#Project\GitHub\AvaPrintDesigner\.ccb-source-dev\home
+  TEMP          D:\C#Project\GitHub\AvaPrintDesigner\.ccb-source-dev\tmp
+  XDG_CONFIG    D:\C#Project\GitHub\AvaPrintDesigner\.ccb-source-dev\state\xdg-config
+
+-- Herdr --
+  exe           C:\Users\Administrator\AppData\Local\Programs\Herdr\herdr.exe   [OK]
+  session       ccb-herdr-avaprintdesigner-source-dev
+  capability    E:\GitHub寮€婧愰」鐩甛TachiKuma\claude_code_bridge\.codestable\features\2026-07-31-herdr-backend-contract-spike\evidence\herdr-contract-spike-evidence.json
+
+-- Runtime Flags --
+  CCB_NO_ATTACH               (unset)
+  CCB_CCBD_FAULTHANDLER       1
+  PYTHONUNBUFFERED            1
+  CCB_SKIP_STARTUP_UPDATE     1
+  CCB_PRESTART_KILL_TIMEOUT   15000
+
+-- System --
+  powershell    5.1.19041.6157
+  encoding      gb2312
+  ccb8 BOM      [OK]
+
+-- CCB Version --
+v8.5.2
+
+--------------------------------------------------------

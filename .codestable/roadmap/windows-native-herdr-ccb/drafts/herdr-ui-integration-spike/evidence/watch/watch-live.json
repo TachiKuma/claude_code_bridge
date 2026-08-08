@@ -1,0 +1,19 @@
+{
+  "updated_at": "2026-08-08T05:50:57.9033263Z",
+  "elapsed_seconds": 122,
+  "poll_count": 56,
+  "observed_pane_count": 2,
+  "event_count": 83,
+  "duplicate_count": 1164,
+  "process_count": 5,
+  "recent_events": [
+    "13:50:39 [pane 22] ││                |=|*/\"|'                                                             ▕││ject/GitHub/AvaPrintDesigner/.ccb-source-dev/tmp/ccb-agent-launch/start-agent_2-15020 │",
+    "13:50:41 [pane 22] · ccb-avaprintdesigner-575a971f  ││             __,=+==+=+,__                                                           ▕││sh : 无法将“sh”项识别为 cmdlet、函数、脚本                                            │",
+    "13:50:41 [pane 22] ││         *=_ *\"*+:~~;:=*\"\"  -`                                                       ▕││ject/GitHub/AvaPrintDesigner/.ccb-source-dev/tmp/ccb-agent-launch/start-agent_2-15020 │",
+    "13:50:46 [pane 22] · ccb-avaprintdesigner-575a971f  ││             _.=;;+==++__                                                            ▕││sh : 无法将“sh”项识别为 cmdlet、函数、脚本                                            │",
+    "13:50:46 [pane 22] ││         `\"~*,\"+!;~__,+**!:;'                                                        ▕││ject/GitHub/AvaPrintDesigner/.ccb-source-dev/tmp/ccb-agent-launch/start-agent_2-15020 │",
+    "13:50:53 [pane 22] · ccb-avaprintdesigner-575a971f  ││               _==+==+;~,_                                                           ▕││sh : 无法将“sh”项识别为 cmdlet、函数、脚本                                            │",
+    "13:50:53 [pane 22] ││           '|.**++===^'*_/_,*                                                        ▕││ject/GitHub/AvaPrintDesigner/.ccb-source-dev/tmp/ccb-agent-launch/start-agent_2-15020 │",
+    "13:50:53 [pane 22] ││                    `                                                                ▕││Welcome to Claude Code v2.1.219                                                       │"
+  ]
+}

@@ -1,0 +1,3 @@
+project_id: 575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03
+runtime_root: D:\.c8\rs\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03
+herdr_session: ccb-avaprintdesigner-575a971f

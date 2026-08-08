@@ -1,0 +1,64 @@
+{
+  "schema_version": 2,
+  "record_type": "completion_snapshot",
+  "job_id": "job_9de38d9c81a3",
+  "agent_name": "agent_1",
+  "profile_family": "protocol_turn",
+  "state": {
+    "schema_version": 2,
+    "record_type": "completion_state",
+    "anchor_seen": false,
+    "reply_started": false,
+    "reply_stable": false,
+    "tool_active": false,
+    "subagent_activity_seen": false,
+    "last_reply_hash": null,
+    "last_reply_at": "2026-08-07T08:44:54.980808Z",
+    "stable_since": null,
+    "provider_turn_ref": null,
+    "latest_cursor": {
+      "schema_version": 2,
+      "record_type": "completion_cursor",
+      "source_kind": "protocol_event_stream",
+      "opaque_cursor": null,
+      "session_path": null,
+      "offset": null,
+      "line_no": null,
+      "event_seq": 0,
+      "updated_at": "2026-08-07T08:43:44.645481Z"
+    },
+    "terminal": true
+  },
+  "latest_decision": {
+    "schema_version": 2,
+    "record_type": "completion_decision",
+    "terminal": true,
+    "status": "incomplete",
+    "reason": "ccbd_restart_requires_resubmit",
+    "confidence": "degraded",
+    "reply": "",
+    "anchor_seen": false,
+    "reply_started": false,
+    "reply_stable": false,
+    "provider_turn_ref": null,
+    "source_cursor": {
+      "schema_version": 2,
+      "record_type": "completion_cursor",
+      "source_kind": "protocol_event_stream",
+      "opaque_cursor": null,
+      "session_path": null,
+      "offset": null,
+      "line_no": null,
+      "event_seq": 0,
+      "updated_at": "2026-08-07T08:43:44.645481Z"
+    },
+    "finished_at": "2026-08-07T08:44:54.980808Z",
+    "diagnostics": {
+      "restore_status": "missing",
+      "restore_reason": "state_missing",
+      "resume_capable": false
+    }
+  },
+  "latest_reply_preview": "",
+  "updated_at": "2026-08-07T08:44:54.980808Z"
+}

@@ -1,0 +1,1 @@
+{"status":"not_running","running":false,"version":null,"protocol":null,"capabilities":null,"compatible":null,"socket":"C:\\Users\\Administrator\\AppData\\Roaming\\herdr\\herdr.sock","session":null,"restart_needed":false}

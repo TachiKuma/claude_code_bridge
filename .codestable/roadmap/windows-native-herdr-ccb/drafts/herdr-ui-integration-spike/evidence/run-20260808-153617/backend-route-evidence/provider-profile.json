@@ -1,0 +1,14 @@
+{
+  "provider": "codex",
+  "agent_name": "agent_2",
+  "mode": "inherit",
+  "profile_root": null,
+  "runtime_home": "D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_2\\provider-state\\codex\\home",
+  "env": {},
+  "inherit_api": true,
+  "inherit_auth": true,
+  "inherit_config": true,
+  "inherit_skills": true,
+  "inherit_commands": true,
+  "inherit_memory": true
+}

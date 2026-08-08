@@ -1,0 +1,6 @@
+{
+  "reload_exit_code": 0,
+  "reload_stdout_tail": "reload_status: noop\r\ndry_run: false\r\nmutation_enabled: false\r\nplan_class: no_change\r\nsafe_to_apply: false\r\nfuture_safe_to_apply: true\r\nold_config_signature: 8882c8a0e9362ac27c64c91911f323c021f9608838af61c54efd3a989b6b5307\r\nnew_config_signature: 8882c8a0e9362ac27c64c91911f323c021f9608838af61c54efd3a989b6b5307\r\nreload_stage: no_op\r\nreload_old_graph_version: 1\r\nreload_diagnostic: reason=no_change\r\nreload_diagnostic: message=config identity and presentation fields are unchanged\r\nreload_diagnostic: graph_published=false\r\nreload_diagnostic: lease_or_lifecycle_written=false\r\nreload_diagnostic: config_watch_started=false\r\nreload_diagnostic: unload_or_replace_executed=false\r\nreload_drain_active_count: 0\r\nreload_namespace_patch_status: no_op\r\nreload_namespace_patch_apply_deferred: true\r\nreload_reason: config identity and presentation fields are unchanged\r\n",
+  "reload_stderr_tail": "",
+  "ping_after_reload_exit_code": 0
+}

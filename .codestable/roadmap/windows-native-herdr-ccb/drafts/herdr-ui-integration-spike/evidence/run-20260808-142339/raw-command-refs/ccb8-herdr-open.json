@@ -1,0 +1,17 @@
+{
+  "name": "ccb8-herdr-open",
+  "command": [
+    "D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.cmd",
+    "herdr",
+    "open",
+    "--no-attach"
+  ],
+  "status": "running",
+  "process_id": 5264,
+  "create_no_window": true,
+  "use_shell_execute": false,
+  "exit_code": 0,
+  "elapsed_ms": 118,
+  "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260808-142339\\raw-command-refs\\ccb8-herdr-open.stdout.txt",
+  "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260808-142339\\raw-command-refs\\ccb8-herdr-open.stderr.txt"
+}

@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "record_type": "ccbd_restore_report",
+  "api_version": 2,
+  "project_id": "575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03",
+  "generated_at": "2026-08-08T07:36:32.623385Z",
+  "running_job_count": 1,
+  "restored_execution_count": 0,
+  "replay_pending_count": 0,
+  "terminal_pending_count": 0,
+  "abandoned_execution_count": 0,
+  "already_active_count": 0,
+  "entries": [
+    {
+      "job_id": "job_a86eb665e115",
+      "agent_name": "agent_1",
+      "provider": "codex",
+      "status": "missing",
+      "reason": "state_missing",
+      "resume_capable": false,
+      "pending_items_count": 0
+    }
+  ]
+}

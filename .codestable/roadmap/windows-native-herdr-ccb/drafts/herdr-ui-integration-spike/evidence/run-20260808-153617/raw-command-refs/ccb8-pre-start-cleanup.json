@@ -1,0 +1,13 @@
+{
+  "name": "ccb8-pre-start-cleanup",
+  "command": [
+    "D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.cmd",
+    "kill",
+    "-f"
+  ],
+  "exit_code": 0,
+  "timed_out": false,
+  "elapsed_ms": 3843,
+  "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260808-153617\\raw-command-refs\\ccb8-pre-start-cleanup.stdout.txt",
+  "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260808-153617\\raw-command-refs\\ccb8-pre-start-cleanup.stderr.txt"
+}

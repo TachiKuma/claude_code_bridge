@@ -1,0 +1,19 @@
+{
+  "updated_at": "2026-08-08T08:36:08.3210445Z",
+  "elapsed_seconds": 154,
+  "poll_count": 68,
+  "observed_pane_count": 2,
+  "event_count": 176,
+  "duplicate_count": 2074,
+  "process_count": 6,
+  "recent_events": [
+    "16:36:08 [pane 35] · ccb-avaprintdesigner-575a971f  ││            /*_/||*\"=!_-\\_                                                           ▕││文件或可运行程序的名称。请检查名称的拼写，如                                          │",
+    "16:36:08 [pane 35] · ccb-avaprintdesigner-575a971f  ││           / ,||/*^^=/!\\_~,                                                          ▕││果包括路径，请确保路径正确，然后再试一次。                                            │",
+    "16:36:08 [pane 35] · ccb-avaprintdesigner-575a971f  ││          \" ||/;=_ _^,|\\^|+,                                                         ▕││所在位置 行:1 字符: 1                                                                 │",
+    "16:36:08 [pane 35] ○ ccb-avaprintdesigner-575a971f  ││         /*\";\\*\"|*,    +:+||                                                         ▕││+ sh -lc \"while :; do sleep 3600; done\"                                               │",
+    "16:36:08 [pane 35] ││            ^-\"\\_|*/+=;;*|`                                                          ▕││ject/GitHub/AvaPrintDesigner/.ccb-source-dev/tmp/ccb-agent-launch/start-agent_2-18604 │",
+    "16:36:08 [config] config-read D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\ccb.config",
+    "16:36:08 [config] config-read D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\runtime-root-ref.json",
+    "16:36:08 [config] config-read D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\project.identity.json"
+  ]
+}

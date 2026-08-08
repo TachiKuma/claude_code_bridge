@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "mode": "watch",
+  "run_id": "watch-20260808-163335",
+  "started_at": "2026-08-08T08:33:35.0543824Z",
+  "ended_at": "2026-08-08T08:36:09.6936099Z",
+  "elapsed_seconds": 155,
+  "poll_count": 68,
+  "observed_pane_count": 2,
+  "event_count": 176,
+  "duplicate_count": 2074,
+  "events_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\watch\\watch-20260808-163335\\watch-events.jsonl",
+  "process_samples_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\watch\\watch-20260808-163335\\process-samples-watch.jsonl",
+  "herdr_status_ref": null,
+  "config_access_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\watch\\watch-20260808-163335\\watch-config-access.jsonl",
+  "config_read_count": 196,
+  "self_pane_id": 0,
+  "note": "CCB 后台进程由用户在其他 tab 启动，本脚本未做任何清理。"
+}

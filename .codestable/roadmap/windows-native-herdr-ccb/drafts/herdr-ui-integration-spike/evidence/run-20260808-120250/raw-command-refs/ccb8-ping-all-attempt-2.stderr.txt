@@ -1,0 +1,2 @@
+command_status: failed
+error: ccbd is unavailable: lease_unmounted

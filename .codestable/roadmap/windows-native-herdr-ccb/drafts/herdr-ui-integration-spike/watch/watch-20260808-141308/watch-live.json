@@ -1,0 +1,19 @@
+{
+  "updated_at": "2026-08-08T06:14:51.4350899Z",
+  "elapsed_seconds": 103,
+  "poll_count": 46,
+  "observed_pane_count": 1,
+  "event_count": 173,
+  "duplicate_count": 1156,
+  "process_count": 4,
+  "recent_events": [
+    "14:14:28 [pane 23] │PS D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb-source-dev\\home>",
+    "14:14:28 [pane 23] ○ ccb-avaprintdesigner-575a971f  │",
+    "14:14:31 [pane 22] new                          menu│                                                        │ ~ — 1 pane                                                   │",
+    "14:14:31 [pane 23] new                          menu│                                                        │ ~ — 1 pane                                                   │",
+    "14:14:33 [pane 22] ○ ccb-avaprintdesigner-575a971f  ││                                                                                     ▕││PS D:\\C#Project\\GitHub\\AvaPrintDesigner>                                              │",
+    "14:14:33 [pane 23] ○ ccb-avaprintdesigner-575a971f  ││                                                                                     ▕││PS D:\\C#Project\\GitHub\\AvaPrintDesigner>                                              │",
+    "14:14:40 [pane 22] 已关闭",
+    "14:14:44 [pane 23] 已关闭"
+  ]
+}

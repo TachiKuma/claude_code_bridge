@@ -1,0 +1,25 @@
+ccb8: one-click mode 鈥?starting Herdr + CCB managed environment...
+Stopping source-dev CCB pid=18296
+Stopping source-dev CCB pid=17556
+ccb8: waiting for keeper to stop...
+ccb8: keeper stopped 鈥?starting fresh ccbd with Herdr backend
+start_status: ok
+project: D:\C#Project\GitHub\AvaPrintDesigner
+project_id: 575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03
+ccbd_started: true
+socket_path: D:\.c8\rs\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\ccbd\ccbd.sock
+agents: agent_1, agent_2
+startup_run_id: start_68dbdd35bfee497c86ad52d275af850b
+startup_cli_timings_ms: {"cli_post_rpc":127.833,"cli_pre_rpc":10.2653,"cli_total":12359.783,"daemon_ensure":6148.8786,"layout_status":19.4107,"maintenance_heartbeat":3.3722,"sidebar_helper_refresh":104.9456,"start_rpc":6072.6241}
+layout_summary_status: ok
+layout: windows=1 panes=2 runtime_panes=0 dynamic=0 loop=0 runtime=2 explicit=true entry_window=main ccbd_state=mounted observe_status=skipped observe_reason=namespace_tmux_scope_missing
+layout_window: name=main index=- panes=2 runtime_panes=0 agents=agent_1,agent_2
+layout_agent: name=agent_1 kind=static source=configured ownership=static_configured dispatch=enabled window=main pane=wS:p1 pane_identity=runtime runtime_state=idle apply_status=- failed_apply=false
+layout_agent: name=agent_2 kind=static source=configured ownership=static_configured dispatch=enabled window=main pane=wS:p2 pane_identity=runtime runtime_state=idle apply_status=- failed_apply=false
+ccb8: waiting for ccbd to be ready...
+ccb8: ccbd ready
+ccb8: opening Herdr session in WezTerm...
+ccb8: agents starting 鈥?waiting 15s...
+ccb8: config ui: run .\ccb8.cmd config ui
+ccb8: config ui: after release run ccb config ui
+ccb8: config ui: the command prints http://127.0.0.1:PORT/?token=<redacted> for copy

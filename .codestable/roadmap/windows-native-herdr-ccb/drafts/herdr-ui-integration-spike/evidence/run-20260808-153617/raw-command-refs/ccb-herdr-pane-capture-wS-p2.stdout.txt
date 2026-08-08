@@ -1,0 +1,20 @@
+   ndException
+
+PS D:\C#Project\GitHub\AvaPrintDesigner> & "C
+:\Program Files\Git\bin\sh.exe" D:/C#Project/
+GitHub/AvaPrintDesigner/.ccb-source-dev/tmp/c
+cb-agent-launch/start-agent_2-18212.sh
+Welcome to Claude Code v2.1.219
+
+ Unable to connect to Anthropic services
+
+ Failed to connect to api.anthropic.com:
+ ERR_BAD_REQUEST
+
+ Please check your internet connection and
+ network settings.
+
+ Note: Claude Code might not be available in
+ your country. Check supported countries at
+ https://anthropic.com/supported-countries
+PS D:\C#Project\GitHub\AvaPrintDesigner>

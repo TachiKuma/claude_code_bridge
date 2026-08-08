@@ -1,0 +1,19 @@
+{
+  "updated_at": "2026-08-08T06:22:23.8033248Z",
+  "elapsed_seconds": 48,
+  "poll_count": 23,
+  "observed_pane_count": 2,
+  "event_count": 48,
+  "duplicate_count": 545,
+  "process_count": 7,
+  "recent_events": [
+    "14:22:14 [pane 26] ││         ~||=_**\\;;=;,+=*+\\|*`                                                       ▕││ject/GitHub/AvaPrintDesigner/.ccb-source-dev/tmp/ccb-agent-launch/start-agent_2-17540 │",
+    "14:22:17 [pane 26] ││             \\-\\\"~+|;=*`_+\"_/                                                        ▕││ject/GitHub/AvaPrintDesigner/.ccb-source-dev/tmp/ccb-agent-launch/start-agent_2-17540 │",
+    "14:22:17 [pane 26] ││                   ```                                                               ▕││Welcome to Claude Code v2.1.219                                                       │",
+    "14:22:19 [pane 26] ││           \\.;\\\\_*=|**!*|*                                                           ▕││ject/GitHub/AvaPrintDesigner/.ccb-source-dev/tmp/ccb-agent-launch/start-agent_2-17540 │",
+    "14:22:21 [pane 26] ││             , ~*+=\\+`_;*:|'                                                         ▕││ject/GitHub/AvaPrintDesigner/.ccb-source-dev/tmp/ccb-agent-launch/start-agent_2-17540 │",
+    "14:22:21 [pane 26] ││                   `                                                                 ▕││Welcome to Claude Code v2.1.219                                                       │",
+    "14:22:23 [pane 26] ││           .:'|,*!;;+*;/=,|`                                                         ▕││ject/GitHub/AvaPrintDesigner/.ccb-source-dev/tmp/ccb-agent-launch/start-agent_2-17540 │",
+    "14:22:23 [pane 26] ││                  ``                                                                 ▕││Welcome to Claude Code v2.1.219                                                       │"
+  ]
+}

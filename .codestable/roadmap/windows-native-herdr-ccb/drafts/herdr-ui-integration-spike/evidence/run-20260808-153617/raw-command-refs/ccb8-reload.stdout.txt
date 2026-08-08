@@ -1,0 +1,20 @@
+reload_status: noop
+dry_run: false
+mutation_enabled: false
+plan_class: no_change
+safe_to_apply: false
+future_safe_to_apply: true
+old_config_signature: 8882c8a0e9362ac27c64c91911f323c021f9608838af61c54efd3a989b6b5307
+new_config_signature: 8882c8a0e9362ac27c64c91911f323c021f9608838af61c54efd3a989b6b5307
+reload_stage: no_op
+reload_old_graph_version: 1
+reload_diagnostic: reason=no_change
+reload_diagnostic: message=config identity and presentation fields are unchanged
+reload_diagnostic: graph_published=false
+reload_diagnostic: lease_or_lifecycle_written=false
+reload_diagnostic: config_watch_started=false
+reload_diagnostic: unload_or_replace_executed=false
+reload_drain_active_count: 0
+reload_namespace_patch_status: no_op
+reload_namespace_patch_apply_deferred: true
+reload_reason: config identity and presentation fields are unchanged

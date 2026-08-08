@@ -1,0 +1,84 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\bin\\ccb-provider-finish-hook' --provider claude --completion-dir 'D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_2\\provider-runtime\\claude\\completion' --agent-name agent_2 --workspace 'D:\\C#Project\\GitHub\\AvaPrintDesigner'"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\bin\\ccb-provider-activity-hook' --provider claude --project-id 575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03 --agent-name agent_2 --runtime-dir 'D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_2\\provider-runtime\\claude' --workspace 'D:\\C#Project\\GitHub\\AvaPrintDesigner'"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\bin\\ccb-provider-activity-hook' --provider claude --project-id 575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03 --agent-name agent_2 --runtime-dir 'D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_2\\provider-runtime\\claude' --workspace 'D:\\C#Project\\GitHub\\AvaPrintDesigner'"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\bin\\ccb-provider-activity-hook' --provider claude --project-id 575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03 --agent-name agent_2 --runtime-dir 'D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_2\\provider-runtime\\claude' --workspace 'D:\\C#Project\\GitHub\\AvaPrintDesigner'"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\bin\\ccb-provider-activity-hook' --provider claude --project-id 575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03 --agent-name agent_2 --runtime-dir 'D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_2\\provider-runtime\\claude' --workspace 'D:\\C#Project\\GitHub\\AvaPrintDesigner'"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\bin\\ccb-provider-activity-hook' --provider claude --project-id 575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03 --agent-name agent_2 --runtime-dir 'D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_2\\provider-runtime\\claude' --workspace 'D:\\C#Project\\GitHub\\AvaPrintDesigner'"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\bin\\ccb-provider-activity-hook' --provider claude --project-id 575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03 --agent-name agent_2 --runtime-dir 'D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_2\\provider-runtime\\claude' --workspace 'D:\\C#Project\\GitHub\\AvaPrintDesigner'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\bin\\ccb-provider-activity-hook' --provider claude --project-id 575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03 --agent-name agent_2 --runtime-dir 'D:\\.c8\\rs\\575a971fdf5a0c497a48228040a14841fb4529aaa476beb21d34e53f1629bc03\\agents\\agent_2\\provider-runtime\\claude' --workspace 'D:\\C#Project\\GitHub\\AvaPrintDesigner'"
+          }
+        ]
+      }
+    ]
+  },
+  "allowedTools": [],
+  "skipDangerousModePermissionPrompt": true
+}

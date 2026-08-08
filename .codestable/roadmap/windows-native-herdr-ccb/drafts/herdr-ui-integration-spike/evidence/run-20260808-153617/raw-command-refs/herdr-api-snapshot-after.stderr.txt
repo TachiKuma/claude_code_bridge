@@ -1,0 +1,1 @@
+{"id":"cli:api:snapshot","error":{"code":"server_not_running","message":"no herdr server is running at C:\\Users\\Administrator\\AppData\\Roaming\\herdr\\herdr.sock; run `herdr` to start or attach it"}}

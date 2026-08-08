@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "record_type": "mailbox_record",
+  "mailbox_id": "mbx_agent_1",
+  "agent_name": "agent_1",
+  "summary_version": 6,
+  "summary_source": "transition-terminal",
+  "summary_refreshed_at": "2026-08-08T07:36:32.627094Z",
+  "active_inbound_event_id": null,
+  "queue_depth": 0,
+  "pending_reply_count": 0,
+  "head_inbound_event_id": null,
+  "head_event_type": null,
+  "head_status": null,
+  "head_message_id": null,
+  "head_attempt_id": null,
+  "head_payload_ref": null,
+  "last_inbound_started_at": "2026-08-08T07:14:42.648921Z",
+  "last_inbound_finished_at": "2026-08-08T07:36:32.627094Z",
+  "mailbox_state": "idle",
+  "lease_version": 2,
+  "updated_at": "2026-08-08T07:36:32.627094Z"
+}

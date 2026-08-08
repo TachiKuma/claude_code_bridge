@@ -1,0 +1,19 @@
+{
+  "updated_at": "2026-08-08T07:41:15.2280115Z",
+  "elapsed_seconds": 77,
+  "poll_count": 35,
+  "observed_pane_count": 2,
+  "event_count": 63,
+  "duplicate_count": 541,
+  "process_count": 5,
+  "recent_events": [
+    "15:41:10 [config] config-read D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\runtime-root-ref.json",
+    "15:41:10 [config] config-read D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\project.identity.json",
+    "15:41:12 [config] config-read D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\ccb.config",
+    "15:41:12 [config] config-read D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\runtime-root-ref.json",
+    "15:41:12 [config] config-read D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\project.identity.json",
+    "15:41:15 [config] config-read D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\ccb.config",
+    "15:41:15 [config] config-read D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\runtime-root-ref.json",
+    "15:41:15 [config] config-read D:\\C#Project\\GitHub\\AvaPrintDesigner\\.ccb\\project.identity.json"
+  ]
+}

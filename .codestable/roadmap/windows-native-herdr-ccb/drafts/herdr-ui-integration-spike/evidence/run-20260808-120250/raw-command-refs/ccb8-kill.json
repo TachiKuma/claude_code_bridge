@@ -1,0 +1,12 @@
+{
+  "name": "ccb8-kill",
+  "command": [
+    "D:\\C#Project\\GitHub\\AvaPrintDesigner\\ccb8.cmd",
+    "kill"
+  ],
+  "exit_code": 124,
+  "timed_out": true,
+  "elapsed_ms": 30250,
+  "stdout_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260808-120250\\raw-command-refs\\ccb8-kill.stdout.txt",
+  "stderr_ref": "E:\\GitHub开源项目\\TachiKuma\\claude_code_bridge\\.codestable\\roadmap\\windows-native-herdr-ccb\\drafts\\herdr-ui-integration-spike\\evidence\\run-20260808-120250\\raw-command-refs\\ccb8-kill.stderr.txt"
+}
