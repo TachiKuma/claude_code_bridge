@@ -164,9 +164,22 @@ def launch_runtime(
                 order_index=style_index,
                 slot_key=spec.name,
                 session_id=launch_session_id,
+                provider_kind=spec.provider,
+                role='agent',
             )
         finally:
             _record_elapsed_ms(timings_ms, 'pane_identity', stage_started_ns)
+
+        stage_started_ns = monotonic_ns()
+        try:
+            _report_runtime_pane_agent(
+                backend,
+                pane,
+                provider_kind=spec.provider,
+                session_id=launch_session_id,
+            )
+        finally:
+            _record_elapsed_ms(timings_ms, 'pane_agent_report', stage_started_ns)
 
         stage_started_ns = monotonic_ns()
         try:
@@ -237,6 +250,8 @@ def _apply_runtime_pane_identity(
     order_index: int | None,
     slot_key: str,
     session_id: str,
+    provider_kind: str | None = None,
+    role: str | None = None,
 ) -> None:
     if isinstance(pane, dict) and str(pane.get('backend_impl') or '').strip() == 'herdr':
         backend.set_pane_identity(
@@ -248,6 +263,8 @@ def _apply_runtime_pane_identity(
             slot_key=slot_key,
             session_id=session_id,
             managed_by='ccbd',
+            role=role or 'agent',
+            provider_kind=provider_kind,
         )
         return
     apply_ccb_pane_identity(
@@ -258,6 +275,26 @@ def _apply_runtime_pane_identity(
         project_id=project_id,
         order_index=order_index,
         slot_key=slot_key,
+        session_id=session_id,
+    )
+
+
+def _report_runtime_pane_agent(
+    backend,
+    pane,
+    *,
+    provider_kind: str,
+    session_id: str,
+) -> None:
+    if not (isinstance(pane, dict) and str(pane.get('backend_impl') or '').strip() == 'herdr'):
+        return
+    reporter = getattr(backend, 'report_pane_agent', None)
+    if not callable(reporter):
+        raise RuntimeError('Herdr backend does not support report_pane_agent')
+    reporter(
+        dict(pane),
+        provider_kind=provider_kind,
+        state='unknown',
         session_id=session_id,
     )
 

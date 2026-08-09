@@ -474,19 +474,48 @@ class HerdrSocketClient:
         title: str,
         agent_label: str,
         tokens: Mapping[str, str],
+        role: str | None = None,
+        provider_kind: str | None = None,
     ) -> MuxOperationEvidenceV2:
+        payload: dict[str, object] = {
+            "pane_id": pane["pane_id"],
+            "session_name": pane["session_name"],
+            "title": title,
+            "agent_label": agent_label,
+            "tokens": dict(tokens),
+        }
         response = self._request(
             "set_pane_identity",
-            {
-                "pane_id": pane["pane_id"],
-                "session_name": pane["session_name"],
-                "title": title,
-                "agent_label": agent_label,
-                "tokens": dict(tokens),
-            },
+            payload,
             require_status=True,
         )
         return _operation_evidence("set_pane_identity", pane, response, detail="pane metadata updated")
+
+    def report_pane_agent(
+        self,
+        pane: MuxPaneRefV2,
+        *,
+        provider_kind: str,
+        state: str = "unknown",
+        session_id: str | None = None,
+        session_path: str | None = None,
+    ) -> MuxOperationEvidenceV2:
+        payload: dict[str, object] = {
+            "pane_id": pane["pane_id"],
+            "session_name": pane["session_name"],
+            "provider_kind": provider_kind,
+            "state": state,
+        }
+        if session_id:
+            payload["session_id"] = session_id
+        if session_path:
+            payload["session_path"] = session_path
+        response = self._request(
+            "report_pane_agent",
+            payload,
+            require_status=True,
+        )
+        return _operation_evidence("report_pane_agent", pane, response, detail="pane agent reported")
 
     def select_window(
         self,

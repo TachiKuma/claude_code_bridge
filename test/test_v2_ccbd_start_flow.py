@@ -670,6 +670,7 @@ def test_runtime_supervisor_start_persists_startup_report(tmp_path: Path, monkey
         'build_start_cmd',
         'tmux_respawn',
         'pane_identity',
+        'pane_agent_report',
         'session_write',
         'provider_post_launch',
         'binding_resolve',
@@ -689,6 +690,7 @@ def test_runtime_supervisor_start_persists_startup_report(tmp_path: Path, monkey
     assert report.timings_ms['agent_runtime_build_start_cmd'] >= 0
     assert report.timings_ms['agent_runtime_tmux_respawn'] >= 0
     assert report.timings_ms['agent_runtime_pane_identity'] >= 0
+    assert report.timings_ms['agent_runtime_pane_agent_report'] >= 0
     assert report.timings_ms['agent_runtime_session_write'] >= 0
     assert report.timings_ms['agent_runtime_provider_post_launch'] >= 0
     assert report.timings_ms['agent_runtime_binding_resolve'] >= 0

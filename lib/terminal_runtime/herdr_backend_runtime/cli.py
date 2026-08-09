@@ -72,6 +72,8 @@ class HerdrCliRequestAdapter:
             return self._create_pane(payload)
         if operation == "set_pane_identity":
             return self._set_pane_identity(payload)
+        if operation == "report_pane_agent":
+            return self._report_pane_agent(payload)
         if operation == "respawn_pane":
             return self._respawn_pane(payload)
         if operation == "pane_process_info":
@@ -518,18 +520,52 @@ class HerdrCliRequestAdapter:
             display_agent=agent_label or None,
             tokens=tokens,
         )
-        # Herdr v0.8.0+: notify the Herdr agent subsystem that a CCB-owned
-        # agent is now running in this pane.  This makes the agent visible
-        # in `herdr agent list` and the Herdr sidebar.
-        if agent_label and str(payload.get("role") or "").strip() == 'agent':
-            provider = str(payload.get("provider_kind") or "").strip()
-            self._notify_herdr_agent_start(
-                agent_label=agent_label,
-                pane_id=pane_id,
-                provider_kind=provider,
+        return {"status": "ok", "pane_id": pane_id}
+
+    def _report_pane_agent(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        pane_id = str(payload.get("pane_id") or "").strip()
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        provider_kind = str(payload.get("provider_kind") or "").strip()
+        state = str(payload.get("state") or "unknown").strip() or "unknown"
+        if state not in {"idle", "working", "blocked", "unknown"}:
+            raise self._failed(
+                "report_pane_agent",
+                f"invalid Herdr agent state {state!r}",
                 session_name=session_name,
             )
-        return {"status": "ok", "pane_id": pane_id}
+        if not pane_id:
+            raise self._failed("report_pane_agent", "requires pane_id", session_name=session_name)
+        if not provider_kind:
+            raise self._failed("report_pane_agent", "requires provider_kind", session_name=session_name)
+        args = [
+            "pane",
+            "report-agent",
+            pane_id,
+            "--source",
+            _METADATA_SOURCE,
+            "--agent",
+            provider_kind,
+            "--state",
+            state,
+        ]
+        session_id = str(payload.get("session_id") or "").strip()
+        if session_id:
+            args.extend(["--agent-session-id", session_id])
+        session_path = str(payload.get("session_path") or "").strip()
+        if session_path:
+            args.extend(["--agent-session-path", session_path])
+        self._command(
+            "report_pane_agent",
+            args,
+            expect_json=False,
+            session_name=session_name,
+        )
+        return {
+            "status": "ok",
+            "pane_id": pane_id,
+            "provider_kind": provider_kind,
+            "state": state,
+        }
 
     def _respawn_pane(self, payload: Mapping[str, object]) -> Mapping[str, object]:
         pane_id = str(payload.get("pane_id") or "").strip()
@@ -1053,29 +1089,6 @@ class HerdrCliRequestAdapter:
             expect_json=False,
             session_name=session_name,
         )
-
-    def _notify_herdr_agent_start(
-        self,
-        *,
-        agent_label: str,
-        pane_id: str,
-        provider_kind: str,
-        session_name: str,
-    ) -> None:
-        """Tell the Herdr agent subsystem that a CCB-owned agent is running
-        in *pane_id*.  On success the agent becomes visible in
-        ``herdr agent list`` and the Herdr sidebar."""
-        executable = self._resolve_executable()
-        args = ["agent", "start", agent_label, "--pane", pane_id]
-        if provider_kind:
-            args.extend(["--kind", provider_kind])
-        command = [executable, *args]
-        try:
-            self._run_fn(command, check=True, capture_output=True, timeout=15, env=_env_without_xdg_redirects())
-        except (OSError, subprocess.SubprocessError):
-            # herdr agent start is best-effort: agent metadata is already
-            # reported via _report_pane_metadata above.
-            pass
 
     def _json_command(
         self,

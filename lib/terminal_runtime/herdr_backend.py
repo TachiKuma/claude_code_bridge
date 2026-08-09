@@ -151,6 +151,7 @@ class HerdrBackend(TerminalBackend):
         session_id: str | None = None,
         namespace_epoch: int | None = None,
         managed_by: str | None = None,
+        provider_kind: str | None = None,
     ) -> MuxOperationEvidenceV2:
         pane_ref = self._pane_ref(pane, operation="set_pane_identity")
         self._capability_gate.require_supported("set_pane_identity")
@@ -188,6 +189,28 @@ class HerdrBackend(TerminalBackend):
             title=title,
             agent_label=agent_label,
             tokens=tokens,
+            role=role,
+            provider_kind=provider_kind,
+        )
+
+    def report_pane_agent(
+        self,
+        pane: MuxPaneRefV2,
+        *,
+        provider_kind: str,
+        state: str = "unknown",
+        session_id: str | None = None,
+        session_path: str | None = None,
+    ) -> MuxOperationEvidenceV2:
+        pane_ref = self._pane_ref(pane, operation="report_pane_agent")
+        self._capability_gate.require_supported("report_pane_agent")
+        self._client.server_info()
+        return self._client.report_pane_agent(
+            pane_ref,
+            provider_kind=provider_kind,
+            state=state,
+            session_id=session_id,
+            session_path=session_path,
         )
 
     def describe_pane(

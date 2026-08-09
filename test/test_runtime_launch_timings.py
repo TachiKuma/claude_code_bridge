@@ -130,6 +130,7 @@ def test_launch_tmux_runtime_records_additive_real_boundaries(tmp_path: Path, mo
         'build_start_cmd': 7.0,
         'tmux_respawn': 11.0,
         'pane_identity': 13.0,
+        'pane_agent_report': 0.0,
         'session_write': 36.0,
         'provider_post_launch': 23.0,
         'unattributed': 0.0,
@@ -163,6 +164,9 @@ def test_launch_tmux_runtime_uses_herdr_assigned_pane_ref_without_tmux_fallback(
 
         def set_pane_identity(self, pane, **kwargs):
             calls.append(('set_pane_identity', (dict(pane), dict(kwargs))))
+
+        def report_pane_agent(self, pane, **kwargs):
+            calls.append(('report_pane_agent', (dict(pane), dict(kwargs))))
 
         def capture_pane(self, pane, *, lines):
             calls.append(('capture_pane', (dict(pane), lines)))
@@ -224,6 +228,13 @@ def test_launch_tmux_runtime_uses_herdr_assigned_pane_ref_without_tmux_fallback(
     assert calls[2][0] == 'set_pane_identity'
     assert calls[2][1][0] == pane_ref
     assert calls[2][1][1]['project_id'] == 'project-test'
+    assert calls[3][0] == 'report_pane_agent'
+    assert calls[3][1][0] == pane_ref
+    assert calls[3][1][1] == {
+        'provider_kind': 'codex',
+        'state': 'unknown',
+        'session_id': 'ccb-demo-session',
+    }
     assert ('build_session_payload', 'herdr-pane-1') in calls
     assert ('write_session_file', 'herdr-pane-1') in calls
 
