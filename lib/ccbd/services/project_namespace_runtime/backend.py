@@ -557,7 +557,7 @@ def split_pane(
             pane,
             direction=direction,
             percent=max(1, min(99, int(percent))),
-            command=pane_placeholder_argv(),
+            command=None,
             cwd=str(project_root),
             env={},
             title='',
@@ -727,6 +727,7 @@ def apply_pane_identity(
             session_id=session_id,
             namespace_epoch=namespace_epoch,
             managed_by=managed_by,
+            provider_kind=provider_kind or None,
         )
         return
     from terminal_runtime.tmux_identity import apply_ccb_pane_identity
