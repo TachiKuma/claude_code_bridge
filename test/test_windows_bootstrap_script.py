@@ -74,3 +74,13 @@ def test_windows_ccb8_wrapper_surfaces_config_ui_launcher_hint() -> None:
     assert 'ccb8: config ui: run .\\ccb8.cmd config ui' in text
     assert 'ccb8: config ui: after release run ccb config ui' in text
     assert 'ccb8: config ui: the command prints http://127.0.0.1:PORT/?token=... for copy' in text
+
+
+def test_windows_ccb8_wrapper_stops_one_click_after_ccb_start_failure() -> None:
+    text = CCB8_PS1.read_text(encoding="utf-8")
+
+    failure_guard = "if ($isOneClick -and $null -ne $ccbExit -and $ccbExit -ne 0)"
+    assert failure_guard in text
+    assert "ccb8: ccb startup failed with exit code " in text
+    assert text.index(failure_guard) < text.index("# One-click mode: after CCB starts")
+    assert text.index(failure_guard) < text.index("ccb8: waiting for ccbd to be ready...")

@@ -1061,6 +1061,11 @@ if ($isOneClick -or (Test-ShouldPrestartKill -CliArgs $CcbArgs) -or $CcbArgs.Cou
 & $env:CCB_PYTHON (Join-Path $env:CCB_SOURCE_ROOT 'ccb.py') @finalArgs
 $ccbExit = $LASTEXITCODE
 
+if ($isOneClick -and $null -ne $ccbExit -and $ccbExit -ne 0) {
+    Write-Stderr ('ccb8: ccb startup failed with exit code ' + $ccbExit + '; skipping Herdr UI launch.')
+    exit $ccbExit
+}
+
 # One-click mode: after CCB starts, wait for ccbd to be ready, then
 # launch Herdr UI attached to the CCB-managed session.
 if ($isOneClick) {
