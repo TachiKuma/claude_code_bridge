@@ -644,6 +644,10 @@ function Initialize-WrapperEnvironment {
     $devHome = Join-Path $devRoot 'home'
     $devTmp = Join-Path $devRoot 'tmp'
     $devState = Join-Path $devRoot 'state'
+    # 获取真实用户主目录（不受 HOME/USERPROFILE 覆盖影响），
+    # 用于 CCB_SOURCE_HOME / CODEX_HOME 等"配置来源"变量，
+    # 确保 provider 能从 C:\Users\<account> 继承 settings、auth、MCP 等配置。
+    $realUserProfile = [Environment]::GetFolderPath('UserProfile')
     try {
         $runtimeStateHome = if ([string]::IsNullOrWhiteSpace($env:CCB_RUNTIME_STATE_HOME)) { 'D:\.c8\rs' } else { [System.IO.Path]::GetFullPath($env:CCB_RUNTIME_STATE_HOME) }
     } catch {
@@ -692,12 +696,28 @@ function Initialize-WrapperEnvironment {
     } else {
         $env:CCB_HERDR_CAPABILITY_REPORT = $herdrCapabilityReport
     }
+    # 显式指定 Git Bash sh.exe 路径，确保 Herdr pane（PowerShell）中能通过
+    # resolve_sh_executable() 正确定位 sh.exe 来执行 .sh 启动脚本。
+    $gitShExe = $null
+    foreach ($candidate in @(
+        (Join-Path $env:ProgramFiles 'Git\bin\sh.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Git\bin\sh.exe'),
+        'C:\Program Files\Git\bin\sh.exe'
+    )) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            $gitShExe = $candidate
+            break
+        }
+    }
+    if ($gitShExe) {
+        $env:CCB_SH_EXECUTABLE = $gitShExe
+    }
     $env:CCB_SOURCE_ALLOWED_ROOTS = $projectRoot
     $env:CCB_TEST_ROOTS = $projectRoot
     $env:CCB_SKIP_STARTUP_UPDATE_CHECK = '1'
     $env:CCB_RUNTIME_STATE_HOME = $runtimeStateHome
     $env:CCB_LEGACY_RUNTIME_STATE_HOME = $legacyRuntimeStateHome
-    $env:CCB_SOURCE_HOME = $devHome
+    $env:CCB_SOURCE_HOME = $realUserProfile
     $env:HOME = $devHome
     $env:USERPROFILE = $devHome
     $env:XDG_CONFIG_HOME = Join-Path $devState 'xdg-config'
@@ -705,7 +725,7 @@ function Initialize-WrapperEnvironment {
     $env:XDG_STATE_HOME = Join-Path $devState 'xdg-state'
     $env:TEMP = $devTmp
     $env:TMP = $devTmp
-    $env:CODEX_HOME = Join-Path $devHome '.codex'
+    $env:CODEX_HOME = Join-Path $realUserProfile '.codex'
 
     Set-DefaultEnv -Name 'CCB_CCBD_FAULTHANDLER' -Value '1'
     Set-DefaultEnv -Name 'PYTHONUNBUFFERED' -Value '1'
@@ -761,7 +781,7 @@ function Show-Diagnose {
 
     # -- Isolation (source-dev vs installed) --
     Write-Host '-- Isolation --'
-    $devHome = $env:CCB_SOURCE_HOME
+    $devHome = $env:CCB_DEV_HOME
     $isIsolated = ($env:HOME -eq $devHome)
     $mark = if ($isIsolated) { '[OK]' } else { '[!!]' }
     Write-Host ('  HOME          ' + $env:HOME + '   isolated ' + $mark)
