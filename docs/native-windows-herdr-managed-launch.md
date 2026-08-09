@@ -14,7 +14,13 @@ CCB 只能“观察/绑定”已有 pane。正确分层是 CCB 创建并标识 p
 
 ## 前置条件
 
-- 已安装并运行 Herdr（`herdr status server` 显示 `running`）。
+- Herdr 已安装，基准路径：
+  ```
+  C:\Users\Administrator\AppData\Local\Programs\Herdr\herdr.exe
+  ```
+  所有 `CCB_HERDR_EXE` 默认值、ccb8 wrapper、spike 脚本、diagnose 脚本均以此路径为
+  fallback。若路径不同，通过环境变量 `CCB_HERDR_EXE` 覆盖。
+- Herdr server 已运行（`herdr status server` 显示 `running`）。
 - CCB 的 `.ccb/ccb.config` 声明期望 agent 拓扑（如 `main = "Main_Code:claude, code_reviewer:codex"`）。
 - 使用的 provider 必须在 herdr 显式启动 allow-list 内（当前 `codex`、`claude`；
   见 `lib/cli/services/runtime_launch_runtime/ensure.py::_HERDR_NATIVE_VERIFIED_PROVIDERS`）。

@@ -75,3 +75,14 @@ Herdr UI 客户端连接到已存在的 session server。左侧 session 面板�
 
 简化到一键启动：WezTerm 打开 → 一条命令 → 预设编程环境就绪。
 CCB sidebar 需要在实际使用中禁用（架构设计中其不工作，功能由 Herdr 侧边栏替代）。
+
+## 固化环境路径
+
+上述所有命令基于以下固化路径。wrapper 脚本（`ccb8.ps1`、`run_spike.ps1`）的默认
+fallback 与这些路径一致；环境变量优先：
+
+| 组件 | 固化路径 |
+|---|---|
+| **Herdr 可执行文件** | `C:\Users\Administrator\AppData\Local\Programs\Herdr\herdr.exe` |
+| CCB 源码根 | `E:\GitHub开源项目\TachiKuma\claude_code_bridge` |
+| CCB Runtime State | `D:\.c8\rs` |

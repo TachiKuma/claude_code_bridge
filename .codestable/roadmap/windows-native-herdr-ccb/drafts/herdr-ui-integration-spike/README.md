@@ -1,5 +1,17 @@
 # Herdr UI integration spike
 
+## 固化环境路径
+
+本 spike 的所有脚本、diagnose 工具和 evidence 采集均以下列路径为默认约定：
+
+| 组件 | 固化路径 | 覆盖变量 |
+|---|---|---|
+| **Herdr 可执行文件** | `C:\Users\Administrator\AppData\Local\Programs\Herdr\herdr.exe` | `CCB_HERDR_EXE` |
+| Herdr 配置目录 | `C:\Users\Administrator\AppData\Roaming\herdr\` | `HERDR_CONFIG_PATH` |
+| WezTerm 可执行文件 | `C:\Program Files\WezTerm\wezterm.exe` | `WEZTERM_EXECUTABLE` |
+| CCB 源码根 | `E:\GitHub开源项目\TachiKuma\claude_code_bridge` | `CCB_SOURCE_ROOT` |
+| CCB Runtime State | `D:\.c8\rs` | `CCB_RUNTIME_STATE_HOME` |
+
 ## 目标
 
 这个 spike 用来采集真实 Herdr UI 内运行外部项目 `.\ccb8.cmd` 时的证据，重点区分三类情况：

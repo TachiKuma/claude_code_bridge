@@ -45,6 +45,22 @@ socket API 和插件系统。
 - 不修改 CCB v8.5.2 的 provider completion/recovery owner 语义
 - 不实现 Herdr upstream 功能（如 per-pane auto-restore disable 取决于 Herdr 侧支持）
 
+## 固化环境路径
+
+本 Epic 所有子项的开发、测试与 evidence 采集均以下列路径为基准约定：
+
+| 组件 | 固化路径 |
+|---|---|
+| **Herdr 可执行文件** | `C:\Users\Administrator\AppData\Local\Programs\Herdr\herdr.exe` |
+| Herdr 配置目录 | `C:\Users\Administrator\AppData\Roaming\herdr\` |
+| WezTerm 可执行文件 | `C:\Program Files\WezTerm\wezterm.exe` |
+| CCB 源码根 | `E:\GitHub开源项目\TachiKuma\claude_code_bridge` |
+| CCB Runtime State | `D:\.c8\rs` |
+| Python | `C:\Users\Administrator\AppData\Local\Programs\Python\Python314\python.exe` |
+| Git Bash (sh.exe) | `C:\Program Files\Git\bin\sh.exe` |
+
+优先级：环境变量 > 固化默认值。具体覆盖变量见 `ccb8.ps1` 和 roadmap §开发环境基准。
+
 ## 验收标准
 
 - ✅ validation matrix 中 `workflow_rows` 从全 `blocked` → 11/14 partial + 3/14 blocked
@@ -226,6 +242,40 @@ socket API 和插件系统。
   - ✅ Herdr `resume_agents_on_restore` 已通过 config.toml 写入 disabled，确认不随
     bootstrap 改变
 
+### ITEM-8 · Bootstrap shim 优雅化（2026-08-10 立项）
+- **owning skill**：cs-feat
+- **背景**：ccb8.ps1 一键启动链路经 2026-08-10 综合分析（见
+  `.codestable/compound/2026-08-10-ccb8-bootstrap-shim-analysis.md`），确认当前
+  PowerShell wrapper 在 4 个维度上与 Python 侧存在职责重叠，最关键的
+  `wezterm cli send-text` 键盘注入是 Herdr dispatch 交互终端约束下的 workaround。
+  本 ITEM 将把 dispatch 语义从 PowerShell bootstrap shim 渐进迁移到 CCB/Herdr
+  结构化边界。
+- **分层目标**：
+  - P0：删除 ccb8.ps1 中与 Python `HerdrCliRequestAdapter` 重复的 server 启动、
+    session 探活逻辑（~80 行）。Python 侧 `_command()` 已实现 NotFound → 自动起
+    server → 重试闭环。
+  - P1：给 `ccb herdr open` 加 `--wait-ready` flag，ccbd 就绪等待从 PowerShell
+    轮询 `lifecycle.json`（~20 行）移入 Python `handle_herdr_open()`。
+  - P2：将 Herdr UI attach 从 `wezterm cli send-text --no-paste` 键盘注入迁移为
+    结构化 `herdr agent start` 调用或 `herdr session attach`（依赖交互终端上下文）。
+  - P3：对齐 WezTerm `default_prog` 与"形态 2"文档（备选路径升级为推荐路径）。
+  - 长期：新增 `ccb herdr dispatch` 结构化原语，dispatch 语义完全归位到 CCB/Herdr
+    边界，PowerShell 退化为最薄 env 引导层。
+- **依赖**：ITEM-7（一键启动已交付）；`.codestable/lessons/2026-08-10-herdr-dispatch-interactive-terminal.md`
+  （dispatch 触发条件经验规则）；Herdr `agent start` CLI 可用性
+- **验收要点**：
+  - ccb8.ps1 代码量从 ~200 行（Phase 0-4 编排）降至 ~50 行（纯 env 引导 + 单次
+    `ccb herdr open` 调用）
+  - `ccb herdr open --wait-ready` 阻塞到 ccbd mounted，不再依赖外部 lifecycle.json 轮询
+  - Herdr UI attach 不通过 wezterm send-text 键盘注入（或明确标记为 P2 遗留 workaround）
+  - 一键启动端到端行为不变（用户裸调 `ccb8.cmd` → WezTerm → 双 agent 就绪）
+- **设计约束**：
+  - 不做 attached 退化；CCB 不接管 Herdr 的 pane/UI 权威
+  - `send-text` 在当前 Herdr 约束下是有效 workaround，在 Herdr 提供 dispatch API 之前
+    不被当作 bug
+  - P0/P1 不依赖 Herdr 侧变更，仅消除 CCB 内部的重复逻辑
+  - P2/P3/长期依赖 Herdr agent start API 或交互终端上下文
+
 ## 最终交付索引
 
 | 子项 | 产物 | 类型 |
@@ -237,6 +287,7 @@ socket API 和插件系统。
 | ITEM-5 | Herdr `ccb` sidebar 插件 | code |
 | ITEM-6 | `ccb-herdr-bridge.json` schema + Python types | code + schema |
 | ITEM-7 | `ccb herdr open` bootstrap + ensure.py gate 修正 + WezTerm 配置 | code + config |
+| ITEM-8 | Bootstrap shim 优雅化（P0-P3 渐进 + dispatch 原语） | code + docs |
 
 ## 整体验收
 
@@ -244,7 +295,8 @@ socket API 和插件系统。
   由 machine-readable evidence 驱动的 support tier
 - C2 架构决策有正式的跨版本 ADR，不依赖 brainstorm 文档或聊天历史
 - `ccb doctor --output` 向用户准确报告 Native Windows Herdr 的可用性、限制和下一步操作
-- ITEM-4/5/6/7 不破坏 C2 核心契约
+- ITEM-4/5/6/7/8 不破坏 C2 核心契约
+- ITEM-8 P0/P1 交付后，ccb8.ps1 退化为 env 引导 + 单次调用，代码量降至 ~50 行
 - **已知 gap（已于 code-hardening Epic 解决，见下）**：
   - ✅ `ccb doctor --output` consumer 端接入 → `5aea5f08`（ITEM-3）
   - ✅ `ccb config import-herdr` schema 修复 → `8fc5094c`（ITEM-1）

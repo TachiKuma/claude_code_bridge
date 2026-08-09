@@ -52,6 +52,25 @@ Herdr 的价值在于它已经面向 agentic terminal multiplexer，具备 Windo
 | roadmap 边界 | 只覆盖 CCB public workflow parity 的 Native Windows x64 Herdr backend；不做 32-bit/arm64/remote handoff/Herdr 插件化路线。 |
 | 最小闭环 | `herdr-backend-contract-spike` 完成后，用 Python/CCB 侧客户端通过 Herdr socket API 创建 session/pane、发送输入、捕获输出、kill pane 并验证 restore identity，证明 Herdr 能提供 CCB 所需 terminal primitive；它不代表 Windows supported。 |
 
+### 开发环境基准
+
+本 roadmap 所有 feature 的 Native Windows 开发、测试、spike 与 evidence 采集均以
+以下环境为基准。除非 feature 文档另有声明，以下路径为固化约定：
+
+| 组件 | 固化路径 | 覆盖方式 |
+|---|---|---|
+| **Herdr 可执行文件** | `C:\Users\Administrator\AppData\Local\Programs\Herdr\herdr.exe` | `CCB_HERDR_EXE` 环境变量可覆盖 |
+| Herdr 配置目录 | `C:\Users\Administrator\AppData\Roaming\herdr\` | `HERDR_CONFIG_PATH` 可覆盖 |
+| Herdr session 目录 | `C:\Users\Administrator\AppData\Roaming\herdr\sessions\` | 由 Herdr 管理 |
+| WezTerm 可执行文件 | `C:\Program Files\WezTerm\wezterm.exe` | `WEZTERM_EXECUTABLE` / `WEZTERM_EXECUTABLE_DIR` 可覆盖 |
+| CCB 源码根 | `E:\GitHub开源项目\TachiKuma\claude_code_bridge` | `CCB_SOURCE_ROOT` 可覆盖 |
+| CCB Runtime State | `D:\.c8\rs` | `CCB_RUNTIME_STATE_HOME` 可覆盖 |
+| Python | `C:\Users\Administrator\AppData\Local\Programs\Python\Python314\python.exe` | `CCB_PYTHON` / `CCB_PYTHON_BIN` 可覆盖 |
+| Git Bash (sh.exe) | `C:\Program Files\Git\bin\sh.exe` | `CCB_SH_EXECUTABLE` 可覆盖 |
+
+所有 wrapper 脚本（`ccb8.ps1`、`run_spike.ps1`、`diagnose_*.ps1`）的默认 fallback
+均为上表中的固化路径。环境变量优先于固化默认值。
+
 ## 3. 模块拆分（概设）
 
 ```text
@@ -527,6 +546,21 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
     - 状态：accepted
     - 对应 feature：`2026-07-31-herdr-supportability-projection`
     - 备注：core workflows、所有公开 provider、Mobile/Config UI、Herdr auto restore disabled、strict `v8.5.2`、Windows npm install dry-run 未全 pass 前只能是 experimental/beta/unsupported，不得宣称 supported。
+
+13. **ccb8-bootstrap-shim-slimming** — 消除 ccb8.ps1 与 Python 侧的职责重叠，将 dispatch 语义从 PowerShell bootstrap shim 渐进迁移到 CCB/Herdr 结构化边界。
+    - 所属模块：Validation & Support（一键启动体验优化）
+    - 依赖：ITEM-7（`ccb herdr open` 一键启动已交付）
+    - 状态：planned（2026-08-10 立项）
+    - 对应 epic 子项：ITEM-8
+    - 对应 compound：`2026-08-10-ccb8-bootstrap-shim-analysis`
+    - 对应 lesson：`2026-08-10-herdr-dispatch-interactive-terminal`
+    - 优先级：
+      - P0：删 PowerShell 中与 `HerdrCliRequestAdapter._start_server()` 重复的 server 启动 + session 探活逻辑（~80 行）
+      - P1：`ccb herdr open --wait-ready`，ccbd 就绪等待从 PowerShell `lifecycle.json` 轮询移入 Python `handle_herdr_open()`
+      - P2：Herddr UI attach 从 `wezterm cli send-text --no-paste` 键盘注入迁移为结构化 `herdr agent start` 或 `herdr session attach`
+      - P3：对齐 WezTerm `default_prog` 与"形态 2"文档
+      - 长期：新增 `ccb herdr dispatch` 结构化原语，PowerShell 退化为 ~50 行 env 引导层
+    - 备注：P0/P1 不依赖 Herdr 侧变更，仅消除 CCB 内部重复；P2 依赖 Herdr agent start API 可用性。`send-text` 在当前 Herdr 约束下是已接受的有效 workaround，不是 bug。
 
 **最小闭环**：第 2 条 `herdr-backend-contract-spike` 做完后，能够在 Native Windows x64 上通过 Herdr socket/CLI API 证明 CCB 最小 backend 语义可行；它不代表 public workflow parity 完成，只决定是否继续投入正式 adapter。当前 Restore Capability Matrix v2 证明基础 primitive 与 server restart layout restore 可用，route recommendation 为 `continue-with-gaps`；goal driver 可以继续正式 Herdr adapter，但必须把 restart restore 限定为 layout-only，并把 UI detach/reattach 留给 follow-up harness。
 
