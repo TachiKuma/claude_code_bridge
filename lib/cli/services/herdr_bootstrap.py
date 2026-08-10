@@ -31,12 +31,22 @@ def ensure_herdr_bootstrap_env(
     *,
     herdr_exe: str | None = None,
     herdr_session: str | None = None,
+    auto_start_server: bool = False,
+    start_session: str | None = None,
 ) -> dict[str, object]:
-    """Locate herdr, verify the server, probe capabilities, inject runtime env.
+    """Locate herdr, ensure the server, probe capabilities, inject runtime env.
 
     Args:
         herdr_exe: Explicit herdr executable path (``--herdr-exe``).
         herdr_session: Explicit Herdr session name (``--herdr-session``).
+        auto_start_server: When no running server is found, start one
+            (session-scoped) and wait for readiness instead of failing.  This
+            lets ``ccb herdr open`` own the server lifecycle the same way
+            ``HerdrCliRequestAdapter`` does at runtime, removing the duplicate
+            pre-start in ``ccb8.ps1``.
+        start_session: The session name to start when ``auto_start_server`` is
+            set and nothing is running.  Defaults to ``herdr_session`` /
+            ``CCB_HERDR_SESSION`` / ``ccb-herdr``.
 
     Returns:
         A dict with ``ok``; on failure ``reason`` carries actionable guidance.
@@ -66,13 +76,36 @@ def ensure_herdr_bootstrap_env(
             'reason': query_error,
         }
     if server is None:
-        return {
-            'ok': False,
-            'reason': (
-                'Herdr server is not running. Start Herdr first — run `herdr` '
-                'to attach the persistent session, then retry `ccb herdr open`.'
-            ),
-        }
+        if not auto_start_server:
+            return {
+                'ok': False,
+                'reason': (
+                    'Herdr server is not running. Start Herdr first — run `herdr` '
+                    'to attach the persistent session, then retry `ccb herdr open`.'
+                ),
+            }
+        target = (
+            str(start_session or '').strip()
+            or preferred_session
+            or _DEFAULT_HERDR_SESSION
+        )
+        started = _start_herdr_server(exe, target)
+        if started.get('ok') is not True:
+            return started
+        server, detected_session, query_error = _resolve_running_server(exe, preferred_session)
+        if query_error:
+            return {
+                'ok': False,
+                'reason': query_error,
+            }
+        if server is None:
+            return {
+                'ok': False,
+                'reason': (
+                    'Herdr server was started but did not become reachable; '
+                    'check the Herdr process and retry `ccb herdr open`.'
+                ),
+            }
     if server.get('compatible') is not True:
         return {
             'ok': False,
@@ -116,6 +149,26 @@ def ensure_herdr_bootstrap_env(
         'capability_report': report_path,
         'warnings': warnings,
     }
+
+
+def _start_herdr_server(exe: str, session: str) -> dict[str, object]:
+    """Start a session-scoped herdr server and wait for readiness.
+
+    Reuses ``HerdrCliRequestAdapter.ensure_server_started`` so the bootstrap and
+    the runtime adapter share the same server-start + 20x poll logic — there is
+    no third copy of ``herdr --session <name> server`` startup.
+    """
+    from terminal_runtime.herdr_backend_runtime.cli import HerdrCliRequestAdapter
+
+    adapter = HerdrCliRequestAdapter(session_name=session, herdr_executable=exe)
+    try:
+        adapter.ensure_server_started(session)
+    except Exception as exc:
+        return {
+            'ok': False,
+            'reason': f'failed to start Herdr server for session {session!r}: {exc}',
+        }
+    return {'ok': True, 'herdr_session': session}
 
 
 def _probe_herdr_read_capabilities(exe: str, session: str | None = None) -> dict[str, bool]:

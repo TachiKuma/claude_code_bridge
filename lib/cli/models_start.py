@@ -270,6 +270,7 @@ class ParsedHerdrOpenCommand:
     herdr_exe: str | None = None
     herdr_session: str | None = None
     no_attach: bool = False
+    wait_ready: bool = False
     kind: str = 'herdr-open'
 
 

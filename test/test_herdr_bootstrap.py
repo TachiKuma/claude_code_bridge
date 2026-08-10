@@ -34,6 +34,17 @@ def test_parse_herdr_open_with_flags(parser: CliParser) -> None:
         herdr_exe='/x/herdr.exe',
         herdr_session='sess-1',
         no_attach=True,
+        wait_ready=False,
+        kind='herdr-open',
+    )
+
+
+def test_parse_herdr_open_wait_ready(parser: CliParser) -> None:
+    parsed = parser.parse(['herdr', 'open', '--no-attach', '--wait-ready'])
+    assert parsed == ParsedHerdrOpenCommand(
+        project=None,
+        no_attach=True,
+        wait_ready=True,
         kind='herdr-open',
     )
 
@@ -181,6 +192,89 @@ def test_bootstrap_rejects_failed_read_probes(monkeypatch) -> None:
     assert 'workspace_list' in str(result['reason'])
 
 
+# --- P0: auto-start server when nothing is running ------------------------
+
+
+def _auto_start_resolve(monkeypatch) -> list[str]:
+    """Patch _resolve_running_server to be empty before and live after start."""
+    calls: list[str] = []
+    started: list[str] = []
+    live_server = {
+        'status': 'running',
+        'running': True,
+        'compatible': True,
+        'protocol': 19,
+        'session': 'sess-live',
+    }
+
+    def _resolve(exe, preferred_session):
+        calls.append('resolve')
+        if started:
+            return (live_server, 'sess-live', None)
+        return (None, None, None)
+
+    def _start(exe, session):
+        started.append(session)
+        return {'ok': True, 'herdr_session': session}
+
+    monkeypatch.setattr('cli.services.herdr_bootstrap._resolve_running_server', _resolve)
+    monkeypatch.setattr('cli.services.herdr_bootstrap._start_herdr_server', _start)
+    return started
+
+
+def test_bootstrap_auto_starts_server_when_nothing_running(monkeypatch) -> None:
+    """P0: with auto_start_server, a missing server is started instead of failing."""
+    _bootstrap_success_mocks(monkeypatch)
+    started = _auto_start_resolve(monkeypatch)
+    result = ensure_herdr_bootstrap_env(auto_start_server=True, start_session='ccb-proj-abc12345')
+    assert result['ok'] is True
+    assert started == ['ccb-proj-abc12345']
+    assert os.environ['CCB_HERDR_SESSION'] == 'sess-live'
+
+
+def test_bootstrap_auto_start_uses_default_session(monkeypatch) -> None:
+    """P0: auto-start falls back to default session when none given."""
+    _bootstrap_success_mocks(monkeypatch)
+    started = _auto_start_resolve(monkeypatch)
+    result = ensure_herdr_bootstrap_env(auto_start_server=True)
+    assert result['ok'] is True
+    # No preferred session env is set (_bootstrap_success_mocks clears it), so
+    # the fallback is _DEFAULT_HERDR_SESSION ('ccb-herdr').
+    assert started == ['ccb-herdr']
+
+
+def test_bootstrap_auto_start_propagates_start_failure(monkeypatch) -> None:
+    """P0: a failed auto-start surfaces the start error instead of proceeding."""
+    _bootstrap_success_mocks(monkeypatch)
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap._resolve_running_server',
+        lambda exe, preferred_session: (None, None, None),
+    )
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap._start_herdr_server',
+        lambda exe, session: {'ok': False, 'reason': 'boom'},
+    )
+    result = ensure_herdr_bootstrap_env(auto_start_server=True)
+    assert result['ok'] is False
+    assert 'boom' in str(result['reason'])
+
+
+def test_bootstrap_auto_start_still_fails_when_not_reachable(monkeypatch) -> None:
+    """P0: if auto-start does not make the server reachable, fail with guidance."""
+    _bootstrap_success_mocks(monkeypatch)
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap._resolve_running_server',
+        lambda exe, preferred_session: (None, None, None),
+    )
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap._start_herdr_server',
+        lambda exe, session: {'ok': True, 'herdr_session': session},
+    )
+    result = ensure_herdr_bootstrap_env(auto_start_server=True)
+    assert result['ok'] is False
+    assert 'started but did not become reachable' in str(result['reason'])
+
+
 def test_build_capability_report_covers_known_capabilities() -> None:
     from cli.services.herdr_bootstrap import _build_capability_report
 
@@ -254,6 +348,80 @@ def test_handle_herdr_open_proceeds_when_daemon_is_herdr(monkeypatch) -> None:
     rc = handle_herdr_open(None, ParsedHerdrOpenCommand(project=None), sys.stdout, None)
     assert rc == 0
     assert started.get('started') is True
+
+
+def test_handle_herdr_open_wait_ready_blocks_until_mounted(monkeypatch) -> None:
+    """P1: --wait-ready makes handle_herdr_open poll ccbd lifecycle to mounted."""
+    from cli.phase2_runtime.handlers_start import handle_herdr_open
+
+    _stub_bootstrap_ok(monkeypatch)
+    monkeypatch.setattr(
+        'cli.phase2_runtime.handlers_start._daemon_running_and_backend',
+        lambda context: (True, 'herdr'),
+    )
+
+    def _fake_handle_start(context, command, out, services) -> int:
+        return 0
+
+    monkeypatch.setattr(
+        'cli.phase2_runtime.handlers_start.handle_start',
+        _fake_handle_start,
+    )
+    waited: list[object] = []
+
+    class _FakeLifecycle:
+        phase = 'mounted'
+
+    class _FakeStore:
+        def load(self):
+            return _FakeLifecycle()
+
+    def _fake_wait(context, *args, **kwargs):
+        waited.append(context)
+        return (True, 'mounted')
+
+    monkeypatch.setattr(
+        'cli.phase2_runtime.handlers_start._wait_for_ccbd_mounted',
+        _fake_wait,
+    )
+    command = ParsedHerdrOpenCommand(project=None, no_attach=True, wait_ready=True)
+    rc = handle_herdr_open(None, command, sys.stdout, None)
+    assert rc == 0
+    assert waited, '--wait-ready must call the ccbd-mounted wait'
+
+
+def test_handle_herdr_open_wait_ready_reports_timeout(monkeypatch, capsys) -> None:
+    """P1: --wait-ready timeout surfaces a diagnostic but keeps the rc."""
+    from cli.phase2_runtime.handlers_start import handle_herdr_open
+
+    _stub_bootstrap_ok(monkeypatch)
+    monkeypatch.setattr(
+        'cli.phase2_runtime.handlers_start._daemon_running_and_backend',
+        lambda context: (True, 'herdr'),
+    )
+    monkeypatch.setattr(
+        'cli.phase2_runtime.handlers_start.handle_start',
+        lambda context, command, out, services: 0,
+    )
+    monkeypatch.setattr(
+        'cli.phase2_runtime.handlers_start._wait_for_ccbd_mounted',
+        lambda context, *args, **kwargs: (False, 'starting'),
+    )
+    command = ParsedHerdrOpenCommand(project=None, no_attach=True, wait_ready=True)
+    rc = handle_herdr_open(None, command, sys.stdout, None)
+    assert rc == 0
+    assert 'not ready after waiting' in capsys.readouterr().err
+
+
+def test_ccbd_herdr_session_name_defensive() -> None:
+    """P0: _ccbd_herdr_session_name tolerates a missing context/paths."""
+    from cli.phase2_runtime.handlers_start import _ccbd_herdr_session_name
+
+    assert _ccbd_herdr_session_name(None) is None
+    assert _ccbd_herdr_session_name(SimpleNamespace(paths=None)) is None
+    assert _ccbd_herdr_session_name(
+        SimpleNamespace(paths=SimpleNamespace(ccbd_tmux_session_name='ccb-proj-abc12345'))
+    ) == 'ccb-proj-abc12345'
 
 
 def test_daemon_running_and_backend_detects_herdr(monkeypatch) -> None:

@@ -1287,6 +1287,12 @@ def parse_herdr(tokens: list[str], *, project: str | None, error_type) -> Parsed
         parser.add_argument('--herdr-exe', dest='herdr_exe')
         parser.add_argument('--herdr-session', dest='herdr_session')
         parser.add_argument('--no-attach', dest='no_attach', action='store_true')
+        parser.add_argument(
+            '--wait-ready',
+            dest='wait_ready',
+            action='store_true',
+            help='block until ccbd is mounted before returning (no-attach mode)',
+        )
         namespace = parse_args(
             parser,
             tokens[1:],
@@ -1298,6 +1304,7 @@ def parse_herdr(tokens: list[str], *, project: str | None, error_type) -> Parsed
             herdr_exe=str(namespace.herdr_exe) if namespace.herdr_exe else None,
             herdr_session=str(namespace.herdr_session) if namespace.herdr_session else None,
             no_attach=bool(namespace.no_attach),
+            wait_ready=bool(namespace.wait_ready),
         )
     raise error_type('herdr supports: open')
 

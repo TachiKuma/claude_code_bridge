@@ -550,20 +550,20 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
 13. **ccb8-bootstrap-shim-slimming** — 消除 ccb8.ps1 与 Python 侧的职责重叠，将 dispatch 语义从 PowerShell bootstrap shim 渐进迁移到 CCB/Herdr 结构化边界。
     - 所属模块：Validation & Support（一键启动体验优化）
     - 依赖：ITEM-7（`ccb herdr open` 一键启动已交付）
-    - 状态：planned（2026-08-10 立项）
+    - 状态：delivered（2026-08-10 实施完成）
     - 对应 epic 子项：ITEM-8
     - 对应 compound：`2026-08-10-ccb8-bootstrap-shim-analysis`
     - 对应 lesson：`2026-08-10-herdr-dispatch-interactive-terminal`
     - 优先级：
-      - P0：删 PowerShell 中与 `HerdrCliRequestAdapter._start_server()` 重复的 server 启动 + session 探活逻辑（~80 行）
-      - P1：`ccb herdr open --wait-ready`，ccbd 就绪等待从 PowerShell `lifecycle.json` 轮询移入 Python `handle_herdr_open()`
-      - P2：Herddr UI attach 从 `wezterm cli send-text --no-paste` 键盘注入迁移为结构化 `herdr agent start` 或 `herdr session attach`
-      - P3：对齐 WezTerm `default_prog` 与"形态 2"文档
-      - 长期：新增 `ccb herdr dispatch` 结构化原语，PowerShell 退化为 ~50 行 env 引导层
+      - P0：删 PowerShell 中与 `HerdrCliRequestAdapter._start_server()` 重复的 server 启动 + session 探活逻辑（~80 行）——已落地：ccb8.ps1 预启动块整体移除；`ensure_herdr_bootstrap_env` 新增 `auto_start_server`/`start_session`，复用 `HerdrCliRequestAdapter.ensure_server_started`，Python 统一接管 server 生命周期。
+      - P1：`ccb herdr open --wait-ready`，ccbd 就绪等待从 PowerShell `lifecycle.json` 轮询移入 Python `handle_herdr_open()`——已落地：新增 `--wait-ready` flag 与 `ParsedHerdrOpenCommand.wait_ready`；`handle_herdr_open` 在 `handle_start` 后经 `_wait_for_ccbd_mounted` 轮询 `CcbdLifecycleStore` 至 `mounted`（90s 超时）；ccb8.ps1 删除 lifecycle.json 轮询。
+      - P2：Herdr UI attach 从 `wezterm cli send-text --no-paste` 键盘注入迁移为结构化 `herdr session attach`——已落地：ccb8.ps1 one-click 用 `wezterm cli spawn -- <herdr.exe> session attach <session>` 作为 tab 前台 ConPTY 进程；wezterm 无法直接 spawn 时回退 send-text。未走 `herdr agent start`：CCB 用 `pane run`/`respawn_pane` 直接注入 provider 命令（非交互 shell prompt），`agent start` 不适用当前形态。
+      - P3：对齐 WezTerm `default_prog` 与"形态 2"文档——已落地：`docs/native-windows-herdr-managed-launch.md` 形态 2 明确必须是前台 attach（去 `--no-attach`），并补充 `--no-attach --wait-ready` 仅配合单独打开 Herdr UI 使用。
+      - 长期：新增 `ccb herdr dispatch` 结构化原语，PowerShell 退化为 ~50 行 env 引导层——未实施，保留为 follow-up。
     - 相关文档补充：
-      - `ccb config ui` / `.\ccb8.cmd config ui` 的 Windows 编辑区应与 Herdr tabs 共用同一组 window 名称；如果 `main` 是启动时默认显示的首个 tab，那么它就是配置里 `main` 窗口的可见投影，用户在控制面板里新增窗口后，Herdr 侧也应对应新增 tab。
-      - Config Control 的运行时摘要必须反映当前 OS 环境与有效的 `runtime.mux.backend`，让用户在编辑前能看见自己是在面向 `tmux`、`rmux` 还是 `herdr` 语义。
-    - 备注：P0/P1 不依赖 Herdr 侧变更，仅消除 CCB 内部重复；P2 依赖 Herdr agent start API 可用性。`send-text` 在当前 Herdr 约束下是已接受的有效 workaround，不是 bug。
+      - `ccb config ui` / `.\ccb8.cmd config ui` 的 Windows 编辑区应与 Herdr tabs 共用同一组 window 名称；如果 `main` 是启动时默认显示的首个 tab，那么它就是配置里 `main` 窗口的可见投影，用户在控制面板里新增窗口后，Herdr 侧也应对应新增 tab——`docs/ccb-config-layout-contract.md` §2.3 已明确 windows/tabs 投影关系。
+      - Config Control 的运行时摘要必须反映当前 OS 环境与有效的 `runtime.mux.backend`，让用户在编辑前能看见自己是在面向 `tmux`、`rmux` 还是 `herdr` 语义——`_config_ui_session_payload` 新增 `runtime_summary`（`os_platform` + `effective_mux_backend`）。
+    - 备注：P0/P1 不依赖 Herdr 侧变更，仅消除 CCB 内部重复；P2 采用 `herdr session attach` 结构化路径（`herdr agent start` 依赖 pane 处于交互 shell prompt，与 CCB `pane run` 注入形态不兼容）。`send-text` 保留为 wezterm 直接 spawn 失败时的 fallback，仍是当前 Herdr 约束下的有效 workaround，不是 bug。
 
 **最小闭环**：第 2 条 `herdr-backend-contract-spike` 做完后，能够在 Native Windows x64 上通过 Herdr socket/CLI API 证明 CCB 最小 backend 语义可行；它不代表 public workflow parity 完成，只决定是否继续投入正式 adapter。当前 Restore Capability Matrix v2 证明基础 primitive 与 server restart layout restore 可用，route recommendation 为 `continue-with-gaps`；goal driver 可以继续正式 Herdr adapter，但必须把 restart restore 限定为 layout-only，并把 UI detach/reattach 留给 follow-up harness。
 

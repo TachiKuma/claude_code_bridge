@@ -284,11 +284,46 @@ def _config_ui_session_payload(
         'config_path': str(config_path),
         'config_exists': config_path.is_file(),
     }
+    payload['runtime_summary'] = _config_ui_runtime_summary(project_root)
     projection = _config_ui_herdr_surface_projection(context)
     if projection is not None:
         payload['herdr_surface_projection'] = projection
         payload['config_ui_readonly_status'] = _config_ui_readonly_status(projection)
     return payload
+
+
+def _config_ui_runtime_summary(project_root: Path) -> dict[str, object]:
+    """Detected OS and effective ``runtime.mux.backend`` for the Config Control.
+
+    Lets the user see before editing whether the current config targets
+    ``tmux``, ``rmux``, or ``herdr`` semantics, and on which OS.  ``backend``
+    is the effective ``runtime.mux.backend`` from the loaded config
+    (``None`` when the config does not declare one — meaning the platform
+    default backend applies).
+    """
+    backend: str | None = None
+    try:
+        from agents.config_loader import load_project_config
+
+        loaded = load_project_config(project_root)
+        config = getattr(loaded, 'config', None)
+        backend = str(getattr(config, 'runtime_mux_backend', '') or '').strip() or None
+    except Exception:
+        backend = None
+    return {
+        'os_platform': _config_ui_os_platform(),
+        'effective_mux_backend': backend,
+    }
+
+
+def _config_ui_os_platform() -> str:
+    if sys.platform == 'win32':
+        return 'windows'
+    if sys.platform == 'darwin':
+        return 'darwin'
+    if sys.platform.startswith('linux'):
+        return 'linux'
+    return sys.platform
 
 
 def _config_ui_herdr_surface_projection(context: CliContext) -> dict[str, object] | None:

@@ -1265,6 +1265,15 @@ class HerdrCliRequestAdapter:
             evidence=_command_evidence("start_server", command),
         )
 
+    def ensure_server_started(self, session_name: str | None = None) -> None:
+        """Ensure a session-scoped Herdr server is running, starting it if needed.
+
+        Public wrapper around ``_ensure_server_ready`` so callers outside the
+        adapter (e.g. the ``ccb herdr open`` bootstrap) can reuse the canonical
+        server-start + readiness-poll logic instead of reimplementing it.
+        """
+        self._ensure_server_ready(session_name or self._session_name)
+
     def _ensure_server_ready(self, session_name: str) -> None:
         executable = self._resolve_executable()
         if self._server_status_running(executable, session_name=session_name,

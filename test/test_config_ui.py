@@ -135,13 +135,13 @@ def test_config_ui_serves_token_guarded_page_and_project_session(tmp_path: Path)
         session_url = f'{parsed.scheme}://{parsed.netloc}/api/session?{urlencode({"token": token})}'
         with urlopen(session_url, timeout=2) as response:
             payload = json.loads(response.read())
-        assert payload == {
-            'schema_version': 2,
-            'mode': 'editor',
-            'project_root': str(project_root.resolve()),
-            'config_path': str(config_path.resolve()),
-            'config_exists': True,
-        }
+        assert payload['schema_version'] == 2
+        assert payload['mode'] == 'editor'
+        assert payload['project_root'] == str(project_root.resolve())
+        assert payload['config_path'] == str(config_path.resolve())
+        assert payload['config_exists'] is True
+        assert payload['runtime_summary']['os_platform'] in {'windows', 'linux', 'darwin'}
+        assert payload['runtime_summary']['effective_mux_backend'] is None
 
         capabilities_url = f'{parsed.scheme}://{parsed.netloc}/api/capabilities?{urlencode({"token": token})}'
         with urlopen(capabilities_url, timeout=2) as response:
@@ -315,6 +315,35 @@ def test_config_ui_session_projects_herdr_readonly_status(tmp_path: Path) -> Non
         'degraded_next_action': None,
     }
     assert 'raw-secret-token' not in json.dumps(payload)
+
+
+def test_config_ui_runtime_summary_reports_os_and_effective_mux_backend(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-mux'
+    config_path = project_root / '.ccb' / 'ccb.config'
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        'version = 2\nentry_window = "main"\n\n[runtime.mux]\nbackend = "herdr"\n\n'
+        '[windows]\nmain = "agent1:codex"\n',
+        encoding='utf-8',
+    )
+    paths = PathLayout(project_root)
+    context = SimpleNamespace(project=SimpleNamespace(project_root=project_root), paths=paths)
+    payload = config_ui_module._config_ui_session_payload(
+        context,
+        project_root=project_root.resolve(),
+        config_path=config_path.resolve(),
+    )
+    summary = payload['runtime_summary']
+    assert summary['effective_mux_backend'] == 'herdr'
+    assert summary['os_platform'] in {'windows', 'linux', 'darwin'}
+    assert 'config_exists' in payload
+
+
+def test_config_ui_runtime_summary_tolerates_missing_or_invalid_config(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-empty'
+    payload = config_ui_module._config_ui_runtime_summary(project_root.resolve())
+    assert payload['effective_mux_backend'] is None
+    assert payload['os_platform'] in {'windows', 'linux', 'darwin'}
 
 
 def test_config_ui_herdr_readonly_status_fails_closed_for_contradictory_projection() -> None:

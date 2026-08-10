@@ -218,3 +218,18 @@ def dispatch_agents(
 | DEC-2 | 优雅化的方向是**架构归位**，不是**字符串美化** | Python 侧已有 server 生命周期、session 探活、NotFound 自动恢复能力 |
 | DEC-3 | dispatch 语义的最终归属是 **CCB/Herdr 结构化边界**（长期 `ccb herdr dispatch`），短中期用 P0-P3 渐进 | code_reviewer agent 独立分析与本文分析一致 |
 | DEC-4 | `send-text` 键盘注入在当前 Herdr 约束下是**有效的 workaround**，不应在 Herdr 支持 agent start API dispatch 之前被当作 bug 修复 | herdr-backend-client-acceptance 已接受此适配决策 |
+
+## 7. 实施状态（2026-08-10）
+
+ITEM-13 `ccb8-bootstrap-shim-slimming` 已实施，P0-P3 落地：
+
+| 项 | compound 预判 | 实际落地 | 差异 |
+|---|---|---|---|
+| P0 | Python 改动量 0（已有能力） | `ensure_herdr_bootstrap_env` 新增 `auto_start_server` / `start_session`，复用 `HerdrCliRequestAdapter.ensure_server_started`；ccb8.ps1 预启动块移除 | **有 Python 改动**：bootstrap 原在 server 未运行时直接拒绝，P0 删 PowerShell 预启动后必须由 Python 自动启动 server，否则 one-click 冷启动失败 |
+| P1 | `--wait-ready` ~30 行新 flag + 轮询 | `ParsedHerdrOpenCommand.wait_ready`、parser flag、`handle_herdr_open` 内 `_wait_for_ccbd_mounted`（`CcbdLifecycleStore` 轮询至 `mounted`，90s 超时）；ccb8.ps1 删 lifecycle.json 轮询 | 与预判一致 |
+| P2-A | `herdr agent start` 替代 send-text | **未采用**；改用 `wezterm cli spawn -- <herdr.exe> session attach <session>` | `herdr agent start` 要求 pane 处于交互 shell prompt；CCB 用 `pane run`/`respawn_pane` 直接注入 provider 命令，不满足该前提。`herdr session attach` 作为 tab 前台 ConPTY 进程同样满足交互终端约束 |
+| P2-B | `herdr session attach` 直接调用 | 与 P2-A 合并为结构化 spawn，send-text 保留为 wezterm 直接 spawn 失败的 fallback | 采用 |
+| P3 | `default_prog` 对齐 | 形态 2 文档明确必须前台 attach（去 `--no-attach`）；`--no-attach --wait-ready` 仅配合单独打开 Herdr UI | 文档修正：原文档 `--no-attach` 与"打开 WezTerm 即进入环境"矛盾 |
+| 文档 | config ui / runtime.mux / main tab 投影 | `ccb-config-layout-contract.md` §2.3 明确 windows/tabs 投影；`_config_ui_session_payload` 新增 `runtime_summary`（`os_platform` + `effective_mux_backend`） | 实现与文档同步 |
+
+长期 `ccb herdr dispatch` 结构化原语未实施，保留为 follow-up（依赖 Herdr 对非交互 dispatch 的进一步支持或 CCB 侧新增原生）。

@@ -128,17 +128,23 @@ def _terminal_size_for_streams(*streams: object) -> tuple[int, int] | None:
 def handle_herdr_open(context, command, out, services) -> int:
     """``ccb herdr open`` — WezTerm-launched Herdr managed startup bootstrap.
 
-    Locates Herdr, verifies the server is running, injects the herdr runtime
-    env, then starts agents through the herdr backend (managed mode; CCB stays
-    the provider/recovery authority). Foreground attach by default;
-    ``--no-attach`` starts headless.
+    Locates Herdr, ensures the server is running (auto-starting it when
+    ``--wait-ready`` is used so ``ccb8.ps1`` no longer pre-starts it), injects
+    the herdr runtime env, then starts agents through the herdr backend
+    (managed mode; CCB stays the provider/recovery authority). Foreground
+    attach by default; ``--no-attach`` starts headless.  ``--wait-ready`` blocks
+    until ccbd is mounted (replacing the ``ccb8.ps1`` lifecycle.json poll).
     """
     from cli.models_start import ParsedStartCommand
     from cli.services.herdr_bootstrap import ensure_herdr_bootstrap_env
 
+    # P0: let Python own the Herdr server lifecycle.  When nothing is running,
+    # start the ccbd-derived session server here instead of in ccb8.ps1.
     result = ensure_herdr_bootstrap_env(
         herdr_exe=command.herdr_exe,
         herdr_session=command.herdr_session,
+        auto_start_server=True,
+        start_session=_ccbd_herdr_session_name(context),
     )
     if result.get('ok') is not True:
         print(str(result.get('reason') or 'herdr open failed'), file=sys.stderr)
@@ -157,7 +163,55 @@ def handle_herdr_open(context, command, out, services) -> int:
     )
     if command.no_attach:
         os.environ['CCB_NO_ATTACH'] = '1'
-    return handle_start(context, start_command, out, services)
+    rc = handle_start(context, start_command, out, services)
+    if rc == 0 and command.wait_ready:
+        ready, phase = _wait_for_ccbd_mounted(context)
+        if not ready:
+            print(
+                f'ccb herdr open: ccbd not ready after waiting (phase={phase}); '
+                'check `ccb ping` and the keeper/lifecycle state.',
+                file=sys.stderr,
+            )
+    return rc
+
+
+def _ccbd_herdr_session_name(context) -> str | None:
+    """Return the ccbd-derived Herdr session name for this project.
+
+    The ccbd namespace uses ``ccb-<project_slug>`` (e.g. ``ccb-myproj-abc12345``)
+    as its Herdr session; the bootstrap must start that session's server so the
+    daemon's ``HerdrCliRequestAdapter`` connects to the same server.  Defensive:
+    tests may pass ``context=None`` or a context without ``paths``.
+    """
+    try:
+        return str(getattr(context, 'paths', None).ccbd_tmux_session_name or '').strip() or None
+    except Exception:
+        return None
+
+
+def _wait_for_ccbd_mounted(
+    context,
+    *,
+    timeout_s: float = 90.0,
+    sleep_s: float = 2.0,
+) -> tuple[bool, str]:
+    """Poll lifecycle state until ``phase == 'mounted'`` (or timeout)."""
+    import time
+
+    from ccbd.services.lifecycle import CcbdLifecycleStore
+
+    deadline = time.monotonic() + timeout_s
+    lifecycle = None
+    while time.monotonic() < deadline:
+        try:
+            lifecycle = CcbdLifecycleStore(context.paths).load()
+        except Exception:
+            lifecycle = None
+        if lifecycle is not None and lifecycle.phase == 'mounted':
+            return True, 'mounted'
+        time.sleep(sleep_s)
+    phase = str(getattr(lifecycle, 'phase', '') or '').strip() or 'unknown'
+    return False, phase
 
 
 def _daemon_running_and_backend(context):

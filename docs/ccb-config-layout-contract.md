@@ -112,7 +112,15 @@ as tabs.
   Herdr tab when the draft is applied.
 - The panel runtime summary must show the detected OS and effective
   `runtime.mux.backend`, so users can see whether the current config target is
-  `tmux`, `rmux`, or `herdr`.
+  `tmux`, `rmux`, or `herdr`.  The session payload carries
+  `runtime_summary = { "os_platform": ..., "effective_mux_backend": ... }`;
+  `effective_mux_backend` is the effective `runtime.mux.backend` from the
+  loaded config (`null` when the config does not declare one — the platform
+  default backend applies).
+- Windows and tabs are a projection, not a rename: every `[windows]` name
+  (including `main`) maps one-to-one onto a Herdr window/tab in the
+  Herdr-backed flow, so a window added in the control panel appears as a new
+  Herdr tab, and the `main` entry window is the first tab shown at startup.
 
 ## 3. Compact Layout Grammar
 

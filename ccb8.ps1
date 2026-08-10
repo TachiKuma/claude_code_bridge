@@ -978,12 +978,14 @@ $isOneClick = ($CcbArgs.Count -eq 0)
 if ($isOneClick) {
     Write-Host 'ccb8: one-click mode — starting Herdr + CCB managed environment...'
     [void] (Install-HerdrAgentStateHook)
-    # Use `herdr open --no-attach`: the documented working flow from the
-    # WezTerm+Herdr+CCB joint startup milestone (2026-08-07).
-    # This calls ensure_herdr_bootstrap_env (locate Herdr, verify server,
-    # probe capabilities, inject CCB_HERDR_* env), then starts agents
-    # in detached daemon mode with Herdr backend.
-    $CcbArgs = @('herdr', 'open', '--no-attach')
+    # Use `herdr open --no-attach --wait-ready`: the documented working flow
+    # from the WezTerm+Herdr+CCB joint startup milestone (2026-08-07).
+    # This calls ensure_herdr_bootstrap_env (locate Herdr, ensure server —
+    # auto-starting the ccbd-derived session server when needed — probe
+    # capabilities, inject CCB_HERDR_* env), then starts agents in detached
+    # daemon mode with Herdr backend.  `--wait-ready` makes Python block until
+    # ccbd is mounted, replacing the lifecycle.json poll below.
+    $CcbArgs = @('herdr', 'open', '--no-attach', '--wait-ready')
 }
 
 if ($CcbArgs.Count -gt 0 -and $CcbArgs[0] -ieq '--diagnose') {
@@ -1042,59 +1044,10 @@ $finalArgs = if ($CcbArgs.Count -gt 0 -and $CcbArgs[0] -ieq 'start') {
 # single-element arrays back to scalars.  Re-wrap right before the call.
 $finalArgs = @($finalArgs)
 
-# Herdr v0.8.0: pre-start the CCB Herdr session server so that ccbd can
-# create workspaces and panes within it.  The server is started as a
-# detached process; it stays alive as long as ccbd runs.
-if ($isOneClick -or (Test-ShouldPrestartKill -CliArgs $CcbArgs) -or $CcbArgs.Count -eq 0) {
-    $herdrExe = $env:CCB_HERDR_EXE
-    if (-not [string]::IsNullOrWhiteSpace($herdrExe) -and (Test-Path -LiteralPath $herdrExe)) {
-        $projectId = Get-SourceDevProjectId
-        if (-not [string]::IsNullOrWhiteSpace($projectId)) {
-            $projectName = (Split-Path -Leaf $env:CCB_PROJECT_ROOT).ToLowerInvariant() -replace '[^a-z0-9._-]+', '-'
-            $projectName = $projectName.Trim('-')
-            if ([string]::IsNullOrWhiteSpace($projectName)) { $projectName = 'project' }
-            $shortId = $projectId.Substring(0, [Math]::Min(8, $projectId.Length))
-            $ccbSession = "ccb-${projectName}-${shortId}"
-            # Use Process.Start (CreateNoWindow) for the session-list probe
-            # instead of direct invocation so that Herdr does not create a
-            # visible console window in the ConPTY pane (2026-08-07 fix).
-            $statusJson = $null
-            try {
-                $probePsi = New-Object System.Diagnostics.ProcessStartInfo
-                $probePsi.FileName = $herdrExe
-                $probePsi.Arguments = 'session list --json'
-                $probePsi.UseShellExecute = $false
-                $probePsi.CreateNoWindow = $true
-                $probePsi.RedirectStandardOutput = $true
-                $probePsi.RedirectStandardError = $true
-                $probeProcess = [System.Diagnostics.Process]::Start($probePsi)
-                if ($probeProcess) {
-                    $probeStdout = $probeProcess.StandardOutput.ReadToEnd()
-                    $probeProcess.WaitForExit(5000) | Out-Null
-                    if ($probeProcess.ExitCode -eq 0 -and $probeStdout) {
-                        $statusJson = $probeStdout | ConvertFrom-Json -ErrorAction SilentlyContinue
-                    }
-                }
-            } catch {
-                # Herdr probe failed silently — session may already exist or
-                # Herdr may not be running.  The server-start below is
-                # idempotent (herdr ignores duplicate session starts).
-            }
-            $existing = if ($statusJson -and $statusJson.sessions) {
-                $statusJson.sessions | Where-Object { $_.name -eq $ccbSession -and $_.running }
-            } else { $null }
-            if (-not $existing) {
-                $psi = New-Object System.Diagnostics.ProcessStartInfo
-                $psi.FileName = $herdrExe
-                $psi.Arguments = "--session $ccbSession server"
-                $psi.UseShellExecute = $false
-                $psi.CreateNoWindow = $true
-                $null = [System.Diagnostics.Process]::Start($psi)
-                Start-Sleep -Milliseconds 500
-            }
-        }
-    }
-}
+# Herdr server startup and session probing are owned by Python
+# (`ccb herdr open` -> ensure_herdr_bootstrap_env -> HerdrCliRequestAdapter).
+# `handle_herdr_open --wait-ready` auto-starts the ccbd-derived session server
+# and waits for ccbd mounted, so no PowerShell pre-start/probe is needed.
 
 & $env:CCB_PYTHON (Join-Path $env:CCB_SOURCE_ROOT 'ccb.py') @finalArgs
 $ccbExit = $LASTEXITCODE
@@ -1122,47 +1075,31 @@ if ($isOneClick) {
         $shortId = if ($projectId) { $projectId.Substring(0, [Math]::Min(8, $projectId.Length)) } else { '00000000' }
         $ccbSession = "ccb-${projectName}-${shortId}"
 
-        # Poll lifecycle.json until ccbd is mounted, so the Herdr UI
-        # launches into a ready workspace.  CCB's internal startup polling
-        # may time out (lease_unmounted) while the keeper is still
-        # recovering — this loop waits independently.
-        $lifecyclePath = Join-Path (Join-Path (Join-Path $env:CCB_RUNTIME_STATE_HOME $projectId) 'ccbd') 'lifecycle.json'
-        $deadline = (Get-Date).AddSeconds(90)
-        $mounted = $false
-        Write-Host 'ccb8: waiting for ccbd to be ready...'
-        while ((Get-Date) -lt $deadline) {
-            if (Test-Path -LiteralPath $lifecyclePath) {
-                try {
-                    $lifecycle = Get-Content -Raw -LiteralPath $lifecyclePath | ConvertFrom-Json
-                    $rawPhase = $lifecycle.phase
-                    $phase = if ($rawPhase) { [string] $rawPhase } else { '' }
-                    if ($phase -eq 'mounted') {
-                        $mounted = $true
-                        break
-                    }
-                } catch {}
-            }
-            Start-Sleep -Seconds 2
-        }
-        if ($mounted) {
-            Write-Host "ccb8: ccbd ready"
-            # Agents dispatch AFTER Herdr connects — wait happens below
-        } else {
-            Write-Host "ccb8: ccbd not ready after 90s"
-        }
-        # Agent dispatch only fires when herdr runs via interactive
-        # terminal input, not programmatic child-process invocation.
-        # Spawn a new WezTerm tab, then send the herdr command as
-        # simulated keystrokes via wezterm cli send-text.
+        # ccbd readiness is owned by Python (`ccb herdr open --wait-ready`
+        # blocks until lifecycle phase == mounted), so no lifecycle.json poll
+        # is needed here.  Open the Herdr UI attached to the CCB-managed
+        # session.  Herdr's agent dispatch requires the herdr process to run
+        # in an interactive terminal; `wezterm cli spawn -- <prog>` runs the
+        # program as that tab's foreground process (a real ConPTY), which
+        # satisfies the same interactive-terminal requirement as the former
+        # send-text keyboard injection.
         $weztermDir = $env:WEZTERM_EXECUTABLE_DIR
         if (-not $weztermDir) { $weztermDir = Split-Path $env:WEZTERM_EXECUTABLE -Parent -ErrorAction SilentlyContinue }
         $weztermCli = if ($weztermDir) { Join-Path $weztermDir 'wezterm.exe' } else { '' }
         if ($weztermCli -and (Test-Path -LiteralPath $weztermCli)) {
             Write-Host "ccb8: opening Herdr session in WezTerm..."
-            $paneId = (& $weztermCli cli spawn --cwd $env:CCB_PROJECT_ROOT 2>&1).Trim()
-            Start-Sleep -Seconds 2
-            $herdrCmd = "& `"$herdrExe`" --session $ccbSession`r`n"
-            & $weztermCli cli send-text --pane-id $paneId --no-paste $herdrCmd
+            # Structured attach: `herdr session attach <name>` as the tab's
+            # program, replacing the old `spawn` + `send-text --no-paste`
+            # keyboard injection.  Fall back to send-text if wezterm cannot
+            # spawn the program directly.
+            $paneId = (& $weztermCli cli spawn --cwd $env:CCB_PROJECT_ROOT -- $herdrExe session attach $ccbSession 2>&1).Trim()
+            if (-not $paneId -or $paneId -match 'error') {
+                Write-Host "ccb8: direct spawn failed; falling back to send-text..."
+                $paneId = (& $weztermCli cli spawn --cwd $env:CCB_PROJECT_ROOT 2>&1).Trim()
+                Start-Sleep -Seconds 2
+                $herdrCmd = "& `"$herdrExe`" session attach $ccbSession`r`n"
+                & $weztermCli cli send-text --pane-id $paneId --no-paste $herdrCmd
+            }
             Write-Host "ccb8: agents starting — waiting 15s..."
             Show-ConfigUiLauncherHint
             Start-Sleep -Seconds 15
