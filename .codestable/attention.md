@@ -33,3 +33,5 @@ CodeGraph 项目规则已将 `.codestable/**/*.md` 纳入 include。当前本机
 ### 环境变量与凭证
 
 ### 其他
+
+- Herdr dispatch 结构化原语后续迭代必须先核对现有边界：`dispatch` 在本项目同时可能指 CCB job dispatcher、legacy topology dispatch、Herdr agent activation。`ccb herdr dispatch` 只能作为 Herdr terminal agent activation primitive 设计，不得拥有 job / queue / completion / cancel 权威，不得复活 topology communication DSL；当前代码状态标记见 `.codestable/epics/windows-native-herdr-ccb.md` 的 ITEM-8 和 `.codestable/lessons/2026-08-10-herdr-dispatch-interactive-terminal.md`。

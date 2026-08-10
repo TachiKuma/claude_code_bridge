@@ -275,6 +275,23 @@ socket API 和插件系统。
     不被当作 bug
   - P0/P1 不依赖 Herdr 侧变更，仅消除 CCB 内部的重复逻辑
   - P2/P3/长期依赖 Herdr agent start API 或交互终端上下文
+- **当前代码状态标记（2026-08-10，后续任意 dispatch 原语迭代必须先核对）**：
+  - P0/P1/P2/P3 已落地：`handle_herdr_open()` 通过 `ensure_herdr_bootstrap_env(auto_start_server=True)`
+    接管 Herdr server 生命周期，`--wait-ready` 由 Python 轮询 ccbd lifecycle 到 `mounted`；
+    `HerdrCliRequestAdapter._command()` 已有缺 server 自动启动与重试闭环；`attach_namespace`
+    已走 `workspace focus` + `herdr session attach` 的结构化路径。
+  - `parse_herdr()` 当前只接受 `open`，`ParsedHerdrOpenCommand` 只表达 `herdr_exe` /
+    `herdr_session` / `no_attach` / `wait_ready`；仓库内尚无 `ccb herdr dispatch`
+    子命令、模型或 handler。
+  - Herdr capability 当前没有 `agent_dispatch` / `agent_start` 逻辑能力；现有 Herdr facade
+    只派生 `pane_run`、`send_input`、`attach_namespace`、`pane_metadata` 等 terminal primitive。
+  - `ccb herdr dispatch` 的目标语义只能是 **Herdr terminal agent activation primitive**：
+    只负责触发/验证 Herdr pane 内 agent activation，不拥有 CCB job / queue / completion /
+    cancel / followup 权威，不写 provider payload 到 Herdr metadata，不复活 legacy
+    topology dispatch / communication DSL。
+  - 在 Herdr 原生程序化 dispatch 能力未探测到之前，任何实现必须 capability-gated
+    返回 structured `blocked`；不得用 `Start-Process`、`subprocess.Popen(detached)` 或
+    后台 child process 伪装成功 dispatch。
 
 ## 最终交付索引
 
