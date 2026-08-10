@@ -560,6 +560,9 @@ class WindowsHerdrPublicWorkflowEvidence(TypedDict):
       - P2：Herddr UI attach 从 `wezterm cli send-text --no-paste` 键盘注入迁移为结构化 `herdr agent start` 或 `herdr session attach`
       - P3：对齐 WezTerm `default_prog` 与"形态 2"文档
       - 长期：新增 `ccb herdr dispatch` 结构化原语，PowerShell 退化为 ~50 行 env 引导层
+    - 相关文档补充：
+      - `ccb config ui` / `.\ccb8.cmd config ui` 的 Windows 编辑区应与 Herdr tabs 共用同一组 window 名称；如果 `main` 是启动时默认显示的首个 tab，那么它就是配置里 `main` 窗口的可见投影，用户在控制面板里新增窗口后，Herdr 侧也应对应新增 tab。
+      - Config Control 的运行时摘要必须反映当前 OS 环境与有效的 `runtime.mux.backend`，让用户在编辑前能看见自己是在面向 `tmux`、`rmux` 还是 `herdr` 语义。
     - 备注：P0/P1 不依赖 Herdr 侧变更，仅消除 CCB 内部重复；P2 依赖 Herdr agent start API 可用性。`send-text` 在当前 Herdr 约束下是已接受的有效 workaround，不是 bug。
 
 **最小闭环**：第 2 条 `herdr-backend-contract-spike` 做完后，能够在 Native Windows x64 上通过 Herdr socket/CLI API 证明 CCB 最小 backend 语义可行；它不代表 public workflow parity 完成，只决定是否继续投入正式 adapter。当前 Restore Capability Matrix v2 证明基础 primitive 与 server restart layout restore 可用，route recommendation 为 `continue-with-gaps`；goal driver 可以继续正式 Herdr adapter，但必须把 restart restore 限定为 layout-only，并把 UI detach/reattach 留给 follow-up harness。

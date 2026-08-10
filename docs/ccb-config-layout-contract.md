@@ -101,6 +101,19 @@ mode = "off"
 - `runtime.mux.backend = "herdr"` selects the Herdr runtime path used by the
   Native Windows external-project launch.
 
+### 2.3 Config Control Runtime Projection
+
+The config control panel edits the same `[windows]` topology that Herdr renders
+as tabs.
+
+- `main` is the default first tab / window label in the Herdr-backed startup
+  flow.
+- Adding a window in the config control panel must surface a corresponding new
+  Herdr tab when the draft is applied.
+- The panel runtime summary must show the detected OS and effective
+  `runtime.mux.backend`, so users can see whether the current config target is
+  `tmux`, `rmux`, or `herdr`.
+
 ## 3. Compact Layout Grammar
 
 The primary config format is compact text.
