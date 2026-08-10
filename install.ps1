@@ -583,7 +583,12 @@ function Install-Native {
     New-Item -ItemType Directory -Path $binDir -Force | Out-Null
   }
 
-  $items = @("ccb", "lib", "bin", "commands", "mcp", "inherit_skills")
+  # ccb.py is the Python entrypoint that the installed `ccb` bash launcher execs
+  # (source layout resolves symlinks then runs ccb.py).  Omitting it produced an
+  # installed tree whose `ccb` launcher failed with a Python SyntaxError because
+  # the wrapper pointed at the bash script itself.  Keep `ccb` (launcher) and
+  # `ccb.py` (entrypoint) together so installed layout matches the launcher.
+  $items = @("ccb", "ccb.py", "lib", "bin", "commands", "mcp", "inherit_skills")
   foreach ($item in $items) {
     $src = Join-Path $repoRoot $item
     $dst = Join-Path $InstallPrefix $item
@@ -622,7 +627,9 @@ function Install-Native {
   # Windows typically has `python` but not `python3`, so rewrite shebangs for compatibility.
   foreach ($script in $scripts) {
     if ($script -eq "ccb") {
-      Fix-PythonShebang (Join-Path $InstallPrefix "ccb")
+      # The installed Windows entrypoint is ccb.py (the bash `ccb` launcher is
+      # not executable by Python); fix its shebang too.
+      Fix-PythonShebang (Join-Path $InstallPrefix "ccb.py")
     } else {
       Fix-PythonShebang (Join-Path $InstallPrefix ("bin\\" + $script))
     }
@@ -632,7 +639,11 @@ function Install-Native {
     $batPath = Join-Path $binDir "$script.bat"
     $cmdPath = Join-Path $binDir "$script.cmd"
     if ($script -eq "ccb") {
-      $relPath = "..\\ccb"
+      # The repo `ccb` is a bash launcher (source-dev shape); on Windows the
+      # .bat/.cmd wrapper must invoke the Python entrypoint ccb.py (installed
+      # beside `ccb`), not the bash script, or the wrapper fails with a Python
+      # SyntaxError on the bash source.
+      $relPath = "..\\ccb.py"
     } else {
       # Script is installed alongside the wrapper under $InstallPrefix\bin
       $relPath = $script
