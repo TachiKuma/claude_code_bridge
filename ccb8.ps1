@@ -1092,17 +1092,48 @@ if ($isOneClick) {
             # program, replacing the old `spawn` + `send-text --no-paste`
             # keyboard injection.  Fall back to send-text if wezterm cannot
             # spawn the program directly.
-            $paneId = (& $weztermCli cli spawn --cwd $env:CCB_PROJECT_ROOT -- $herdrExe session attach $ccbSession 2>&1).Trim()
-            if (-not $paneId -or $paneId -match 'error') {
-                Write-Host "ccb8: direct spawn failed; falling back to send-text..."
-                $paneId = (& $weztermCli cli spawn --cwd $env:CCB_PROJECT_ROOT 2>&1).Trim()
-                Start-Sleep -Seconds 2
-                $herdrCmd = "& `"$herdrExe`" session attach $ccbSession`r`n"
-                & $weztermCli cli send-text --pane-id $paneId --no-paste $herdrCmd
+            #
+            # XDG isolation guard: ccb8 redirects XDG_CONFIG_HOME/CACHE/STATE to
+            # .ccb-source-dev/state/xdg-*, and `wezterm cli spawn -- <prog>`
+            # hands the child THIS process env (unlike a bare default_prog spawn,
+            # which gets the GUI instance env).  Herdr resolves its data dir from
+            # XDG_CONFIG_HOME, so without this guard `herdr session attach` joins
+            # the empty devState server instead of the real one holding the CCB
+            # agent panes.  Mirror lib/cli/services/herdr_common.py
+            # (herdr_command_env) for the spawn, then restore the redirected env
+            # so later CCB processes keep their source-dev isolation.
+            $herdrSpawnEnvNames = @('XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_STATE_HOME', 'HERDR_CONFIG_PATH')
+            $savedHerdrSpawnEnv = @{}
+            foreach ($name in $herdrSpawnEnvNames) {
+                $savedHerdrSpawnEnv[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+                Remove-Item -LiteralPath ("Env:" + $name) -ErrorAction SilentlyContinue
             }
-            Write-Host "ccb8: agents starting — waiting 15s..."
-            Show-ConfigUiLauncherHint
-            Start-Sleep -Seconds 15
+            # Explicitly point at the real Windows config dir as a fallback, so
+            # Herdr resolves the real data dir even if XDG detection prefers an
+            # override path.
+            $env:HERDR_CONFIG_PATH = Join-Path (Join-Path ([Environment]::GetFolderPath('UserProfile')) 'AppData\Roaming') 'herdr\config.toml'
+            try {
+                $paneId = (& $weztermCli cli spawn --cwd $env:CCB_PROJECT_ROOT -- $herdrExe session attach $ccbSession 2>&1).Trim()
+                if (-not $paneId -or $paneId -match 'error') {
+                    Write-Host "ccb8: direct spawn failed; falling back to send-text..."
+                    $paneId = (& $weztermCli cli spawn --cwd $env:CCB_PROJECT_ROOT 2>&1).Trim()
+                    Start-Sleep -Seconds 2
+                    $herdrCmd = "& `"$herdrExe`" session attach $ccbSession`r`n"
+                    & $weztermCli cli send-text --pane-id $paneId --no-paste $herdrCmd
+                }
+                Write-Host "ccb8: agents starting — waiting 15s..."
+                Show-ConfigUiLauncherHint
+                Start-Sleep -Seconds 15
+            } finally {
+                foreach ($name in $herdrSpawnEnvNames) {
+                    $savedValue = $savedHerdrSpawnEnv[$name]
+                    if ($null -eq $savedValue) {
+                        Remove-Item -LiteralPath ("Env:" + $name) -ErrorAction SilentlyContinue
+                    } else {
+                        [Environment]::SetEnvironmentVariable($name, $savedValue, 'Process')
+                    }
+                }
+            }
         } else {
             Write-Host "ccb8: WezTerm CLI not found, launching standalone..."
             Show-ConfigUiLauncherHint
