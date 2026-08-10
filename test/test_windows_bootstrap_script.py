@@ -84,3 +84,14 @@ def test_windows_ccb8_wrapper_stops_one_click_after_ccb_start_failure() -> None:
     assert "ccb8: ccb startup failed with exit code " in text
     assert text.index(failure_guard) < text.index("# One-click mode: after CCB starts")
     assert text.index(failure_guard) < text.index("ccb8: waiting for ccbd to be ready...")
+
+
+def test_windows_ccb8_wrapper_installs_herdr_agent_state_hook_for_one_click() -> None:
+    text = CCB8_PS1.read_text(encoding="utf-8")
+
+    assert "function Install-HerdrAgentStateHook" in text
+    assert r"lib\terminal_runtime\herdr_backend_runtime\ccb\herdr-agent-state.ps1" in text
+    assert "CCB_SOURCE_HOME" in text
+    assert r".ccb\hooks" in text
+    assert "Install-HerdrAgentStateHook" in text
+    assert "ccb8: Herdr agent-state hook ready:" in text

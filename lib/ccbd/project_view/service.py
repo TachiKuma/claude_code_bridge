@@ -905,7 +905,9 @@ def _agent_view(
     )
     record = {
         'name': agent_name,
+        'display_name': _agent_display_name(agent_name),
         'provider': spec.provider,
+        'provider_display_name': _display_name_token(spec.provider),
         'window': window_name,
         'order': order,
         'pane_id': getattr(runtime, 'pane_id', None) if runtime is not None else None,
@@ -931,6 +933,18 @@ def _agent_view(
     if provider_runtime_status is not None:
         record['provider_runtime_status'] = provider_runtime_status.to_record()
     return record
+
+
+def _agent_display_name(agent_name: object) -> str:
+    return _display_name_token(agent_name)
+
+
+def _display_name_token(value: object) -> str:
+    text = str(value or '').strip()
+    if not text:
+        return ''
+    words = text.replace('_', ' ').replace('-', ' ').split()
+    return ' '.join(word[:1].upper() + word[1:].lower() for word in words)
 
 
 def _is_codex_provider(provider: object) -> bool:

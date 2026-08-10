@@ -106,6 +106,43 @@ function Resolve-CcbSourceRoot {
         -Validate { param([string] $Path) Test-Path -LiteralPath (Join-Path $Path 'ccb.py') }
 }
 
+function Install-HerdrAgentStateHook {
+    $sourcePath = Join-Path $env:CCB_SOURCE_ROOT 'lib\terminal_runtime\herdr_backend_runtime\ccb\herdr-agent-state.ps1'
+    if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
+        Write-Warning ('Herdr agent-state hook source not found: ' + $sourcePath)
+        return $false
+    }
+    $userProfile = [string] $env:CCB_SOURCE_HOME
+    if ([string]::IsNullOrWhiteSpace($userProfile)) {
+        $userProfile = [Environment]::GetFolderPath('UserProfile')
+    }
+    if ([string]::IsNullOrWhiteSpace($userProfile)) {
+        Write-Warning 'Cannot resolve the real user profile for Herdr hook installation.'
+        return $false
+    }
+    $targetDir = Join-Path $userProfile '.ccb\hooks'
+    $targetPath = Join-Path $targetDir 'herdr-agent-state.ps1'
+    try {
+        if (-not (Test-Path -LiteralPath $targetDir -PathType Container)) {
+            New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+        }
+        $sourceText = [System.IO.File]::ReadAllText($sourcePath, $script:utf8Strict)
+        $targetText = if (Test-Path -LiteralPath $targetPath -PathType Leaf) {
+            [System.IO.File]::ReadAllText($targetPath, $script:utf8Strict)
+        } else {
+            $null
+        }
+        if ($sourceText -ne $targetText) {
+            [System.IO.File]::WriteAllText($targetPath, $sourceText, $script:utf8NoBom)
+        }
+        Write-Host ('ccb8: Herdr agent-state hook ready: ' + $targetPath)
+        return $true
+    } catch {
+        Write-Warning ('failed to install Herdr agent-state hook: ' + $_.Exception.Message)
+        return $false
+    }
+}
+
 function Resolve-HerdrCapabilityReport {
     param([string] $SourceRoot)
     return Resolve-ExistingPath `
@@ -940,6 +977,7 @@ $CcbArgs = @($CcbArgs | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 $isOneClick = ($CcbArgs.Count -eq 0)
 if ($isOneClick) {
     Write-Host 'ccb8: one-click mode — starting Herdr + CCB managed environment...'
+    [void] (Install-HerdrAgentStateHook)
     # Use `herdr open --no-attach`: the documented working flow from the
     # WezTerm+Herdr+CCB joint startup milestone (2026-08-07).
     # This calls ensure_herdr_bootstrap_env (locate Herdr, verify server,

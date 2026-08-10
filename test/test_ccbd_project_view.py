@@ -1943,6 +1943,8 @@ def test_project_view_returns_minimal_windows_agents_and_comms(tmp_path: Path) -
     assert [window['name'] for window in view['windows']] == ['main', 'ops']
     assert view['windows'][0]['agents'] == ['agent1', 'agent2']
     assert [agent['name'] for agent in view['agents']] == ['agent1', 'agent2', 'agent3']
+    assert [agent['display_name'] for agent in view['agents']] == ['Agent1', 'Agent2', 'Agent3']
+    assert [agent['provider_display_name'] for agent in view['agents']] == ['Codex', 'Claude', 'Codex']
     assert view['agents'][0]['activity_state'] == 'active'
     assert view['agents'][0]['activity_source'] == 'ccb_job'
     assert view['agents'][0]['activity_reason'] == 'job_running'
