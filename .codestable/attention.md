@@ -35,3 +35,4 @@ CodeGraph 项目规则已将 `.codestable/**/*.md` 纳入 include。当前本机
 ### 其他
 
 - Herdr dispatch 结构化原语后续迭代必须先核对现有边界：`dispatch` 在本项目同时可能指 CCB job dispatcher、legacy topology dispatch、Herdr agent activation。`ccb herdr dispatch` 只能作为 Herdr terminal agent activation primitive 设计，不得拥有 job / queue / completion / cancel 权威，不得复活 topology communication DSL；当前代码状态标记见 `.codestable/epics/windows-native-herdr-ccb.md` 的 ITEM-8 和 `.codestable/lessons/2026-08-10-herdr-dispatch-interactive-terminal.md`。
+- `ccb herdr dispatch` capability-gated 结构化原语的可行性已验证（CCB 侧可行，无需 Herdr 改动），详细迭代方案（迭代 0-4）固化在 `.codestable/work/feat-herdr-dispatch.md`；核心机制是 `HerdrCapabilityGate.require_supported("dispatch_agent")` + `MuxCommandErrorV2(category="unsupported")`，能力不存在时返回 structured blocked，不得静默退回后台子进程。
