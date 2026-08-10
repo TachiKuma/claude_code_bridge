@@ -812,3 +812,90 @@ def test_herdr_command_env_preserves_xdg_on_non_windows(monkeypatch) -> None:
     assert env.get('XDG_CACHE_HOME') == '/fake/xdg/cache'
     # HERDR_CONFIG_PATH should NOT be forced on non-Windows
     assert 'HERDR_CONFIG_PATH' not in env or env['HERDR_CONFIG_PATH'] == os.environ.get('HERDR_CONFIG_PATH', '')
+
+
+# --- handle_start herdr evidence auto-probe (installed ccb parity) -------
+
+
+def _clear_herdr_report_env(monkeypatch) -> None:
+    monkeypatch.delenv('CCB_HERDR_CAPABILITY_REPORT', raising=False)
+
+
+def test_start_auto_probes_herdr_evidence_when_backend_herdr_and_report_missing(
+    monkeypatch,
+) -> None:
+    """Installed `ccb` (bare start) with herdr backend probes and injects evidence."""
+    from cli.phase2_runtime.handlers_start import _ensure_herdr_runtime_evidence
+
+    monkeypatch.setenv('CCB_RUNTIME_MUX_BACKEND', 'herdr')
+    _clear_herdr_report_env(monkeypatch)
+    called: dict[str, object] = {}
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap.ensure_herdr_bootstrap_env',
+        lambda **kwargs: called.update(kwargs) or {'ok': True, 'warnings': []},
+    )
+    monkeypatch.setattr(
+        'cli.phase2_runtime.handlers_start._herdr_capability_evidence_usable',
+        lambda: False,
+    )
+    _ensure_herdr_runtime_evidence(SimpleNamespace(paths=SimpleNamespace()))
+    assert called.get('auto_start_server') is True
+
+
+def test_start_skips_probe_when_backend_not_herdr(monkeypatch) -> None:
+    from cli.phase2_runtime.handlers_start import _ensure_herdr_runtime_evidence
+
+    monkeypatch.setenv('CCB_RUNTIME_MUX_BACKEND', 'tmux')
+    called: dict[str, object] = {}
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap.ensure_herdr_bootstrap_env',
+        lambda **kwargs: called.update(kwargs) or {'ok': True},
+    )
+    _ensure_herdr_runtime_evidence(SimpleNamespace(paths=SimpleNamespace()))
+    assert called == {}
+
+
+def test_start_skips_probe_when_evidence_already_usable(monkeypatch) -> None:
+    from cli.phase2_runtime.handlers_start import _ensure_herdr_runtime_evidence
+
+    monkeypatch.setenv('CCB_RUNTIME_MUX_BACKEND', 'herdr')
+    monkeypatch.setenv('CCB_HERDR_CAPABILITY_REPORT', 'C:/tmp/report.json')
+    called: dict[str, object] = {}
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap.ensure_herdr_bootstrap_env',
+        lambda **kwargs: called.update(kwargs) or {'ok': True},
+    )
+    monkeypatch.setattr(
+        'cli.phase2_runtime.handlers_start._herdr_capability_evidence_usable',
+        lambda: True,
+    )
+    _ensure_herdr_runtime_evidence(SimpleNamespace(paths=SimpleNamespace()))
+    assert called == {}
+
+
+def test_herdr_capability_evidence_usable_detects_missing_and_invalid() -> None:
+    from cli.phase2_runtime.handlers_start import _herdr_capability_evidence_usable
+
+    # no env
+    import os as _os
+
+    _os.environ.pop('CCB_HERDR_CAPABILITY_REPORT', None)
+    assert _herdr_capability_evidence_usable() is False
+
+
+def test_start_probe_failure_is_non_fatal(monkeypatch) -> None:
+    """A failed evidence probe must not raise — selection will fail-closed."""
+    from cli.phase2_runtime.handlers_start import _ensure_herdr_runtime_evidence
+
+    monkeypatch.setenv('CCB_RUNTIME_MUX_BACKEND', 'herdr')
+    _clear_herdr_report_env(monkeypatch)
+    monkeypatch.setattr(
+        'cli.services.herdr_bootstrap.ensure_herdr_bootstrap_env',
+        lambda **kwargs: {'ok': False, 'reason': 'boom'},
+    )
+    monkeypatch.setattr(
+        'cli.phase2_runtime.handlers_start._herdr_capability_evidence_usable',
+        lambda: False,
+    )
+    # Must not raise even though probe failed.
+    _ensure_herdr_runtime_evidence(SimpleNamespace(paths=SimpleNamespace()))

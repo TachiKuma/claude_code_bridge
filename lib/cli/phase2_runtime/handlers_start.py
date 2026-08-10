@@ -83,6 +83,15 @@ def handle_config_ui(context, command, out, services) -> int:
 
 
 def handle_start(context, command, out, services) -> int:
+    # When the project config selects the Herdr backend, make sure a usable
+    # capability report is injected before backend selection.  The installed
+    # `ccb` (source-dev-independent) entrypoint does not run
+    # ``ensure_herdr_bootstrap_env`` the way ``ccb herdr open`` does, so a bare
+    # `ccb` under `[runtime.mux] backend = "herdr"` used to fail-closed with
+    # "capability evidence is unavailable" unless a stale/foreign
+    # CCB_HERDR_CAPABILITY_REPORT happened to be exported.  Probe here and set
+    # the env so selection has real evidence (matches ccb8 one-click behavior).
+    _ensure_herdr_runtime_evidence(context)
     interactive_attach = (
         not _env_truthy('CCB_NO_ATTACH')
         and _stream_is_tty(sys.stdin)
@@ -98,6 +107,49 @@ def handle_start(context, command, out, services) -> int:
         return 0
     services.write_lines(out, services.render_start(summary))
     return 0
+
+
+def _ensure_herdr_runtime_evidence(context) -> None:
+    """Probe Herdr and inject ``CCB_HERDR_CAPABILITY_REPORT`` when needed.
+
+    Only acts when the effective backend is Herdr and the current capability
+    report (if any) is unusable.  Reuses ``ensure_herdr_bootstrap_env`` so the
+    plain ``ccb`` start path and ``ccb herdr open`` share one evidence source
+    (runtime probe -> temp report), never a stale source-dev spike file.
+    """
+    if os.environ.get('CCB_RUNTIME_MUX_BACKEND', '').strip().lower() != 'herdr':
+        return
+    if _herdr_capability_evidence_usable():
+        return
+    from cli.services.herdr_bootstrap import ensure_herdr_bootstrap_env
+
+    result = ensure_herdr_bootstrap_env(
+        auto_start_server=True,
+        start_session=_ccbd_herdr_session_name(context),
+    )
+    if result.get('ok') is not True:
+        # Non-fatal: selection will still fail-closed with an actionable
+        # diagnostic; the daemon start below must not be silently hijacked.
+        return
+    for warning in (result.get('warnings') or ()):
+        print(f'Warning: {warning}', file=sys.stderr)
+
+
+def _herdr_capability_evidence_usable() -> bool:
+    path = os.environ.get('CCB_HERDR_CAPABILITY_REPORT', '').strip()
+    if not path:
+        return False
+    try:
+        import json as _json
+
+        from terminal_runtime.herdr_backend_runtime.capabilities import (
+            herdr_capability_report_supported,
+        )
+
+        payload = _json.loads(open(path, encoding='utf-8').read())
+    except Exception:
+        return False
+    return isinstance(payload, dict) and herdr_capability_report_supported(payload)
 
 
 def _env_truthy(name: str) -> bool:

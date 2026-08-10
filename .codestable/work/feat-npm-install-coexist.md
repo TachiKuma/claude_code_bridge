@@ -60,7 +60,14 @@ created: 2026-08-10
 
 ## 状态与未决
 
-- 状态：迭代 A、B 完成并验证（ccb v8.5.2 / ccb5 v5.2.9 共存）。
+- 状态：迭代 A、B 完成并验证（ccb v8.5.2 / ccb5 v5.2.9 共存）；安装后裸 `ccb`
+  报 "Herdr capability evidence is unavailable" 的 issue 已修复。
+- 修复（2026-08-10）：`handle_start` 在 `[runtime.mux] backend = "herdr"` 且无
+  可用 capability report 时调用 `ensure_herdr_bootstrap_env` 自动探测并注入
+  `CCB_HERDR_CAPABILITY_REPORT`，使 installed 版裸 `ccb` 与源码版 one-click
+  行为一致。根因：installed `ccb`（普通 start）不跑 `ensure_herdr_bootstrap_env`，
+  backend selection 读 `CCB_HERDR_CAPABILITY_REPORT` 缺失 → `herdr-capability-missing`
+  fail-closed。测试：test_herdr_bootstrap 新增 5 个 evidence 探测用例。
 - 未决：
   - 用户 PATH 注册表已含 `ccb-new\bin`（新终端生效）；`codex-dual\bin` 仍在
     其它 PATH 层，`ccb5` 可用。
