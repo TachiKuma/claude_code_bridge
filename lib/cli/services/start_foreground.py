@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import os
 import shutil
 import subprocess
+import sys
 import time
 from typing import Mapping
 
@@ -197,6 +198,14 @@ def _attach_herdr_project_namespace(context: CliContext, payload: dict[str, obje
             f'(backend_impl={backend_selection.get("backend_impl")}, ipc_kind={namespace_ref.get("ipc_kind")})'
             f'{projection_detail}'
         )
+    # Spawn WezTerm to display the Herdr UI BEFORE calling attach_namespace.
+    # attach_namespace internally runs ``herdr session attach`` (a foreground
+    # terminal op) which only succeeds from WezTerm; on bare ``ccb`` launched
+    # from PowerShell it would otherwise block for 5 s and fail silently with
+    # no visible UI.  Spawning WezTerm first gives the user an immediate
+    # visual session while the backend-side ``workspace focus`` completes
+    # during attach.
+    _launch_herdr_ui(namespace_ref)
     try:
         attach(namespace_ref, window_name=_clean_optional_payload_text(payload.get('namespace_workspace_window_name')))
     except Exception as exc:
@@ -207,6 +216,52 @@ def _attach_herdr_project_namespace(context: CliContext, payload: dict[str, obje
             f'{projection_detail}'
         ) from exc
     return _foreground_attach_summary_from_payload(context, payload)
+
+
+def _launch_herdr_ui(namespace_ref: dict[str, object]) -> None:
+    """Spawn WezTerm (or a standalone herdr process) to display the Herdr UI.
+
+    Mirrors the ccb8.ps1 one-click WezTerm launch: resolves herdr + wezterm
+    paths, derives the session name from the namespace ref, and spawns
+    ``wezterm cli spawn -- <herdr> session attach <session>``.  Falls back
+    to a detached ``herdr session attach`` if WezTerm CLI is unavailable.
+    """
+    session_name = str(namespace_ref.get('session_name') or '').strip()
+    if not session_name:
+        return
+
+    herdr_exe = os.environ.get('CCB_HERDR_EXE', '').strip()
+    if not herdr_exe:
+        herdr_exe = shutil.which('herdr') or ''
+    if not herdr_exe:
+        return
+
+    wezterm_cli = shutil.which('wezterm')
+    if wezterm_cli:
+        cwd = os.getcwd()
+        try:
+            subprocess.Popen(
+                [wezterm_cli, 'cli', 'spawn', '--cwd', cwd, '--', herdr_exe, 'session', 'attach', session_name],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                **_subprocess_kwargs_herdr_ui(),
+            )
+            return
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+    # Fallback: launch herdr as a standalone detached process.
+    # Fire-and-forget with DEVNULL stdio — Herdr connects to the session server
+    # and opens its own GUI/TUI window independently.
+    try:
+        subprocess.Popen(
+            [herdr_exe, 'session', 'attach', session_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            **_subprocess_kwargs_herdr_ui(),
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
 
 
 def _herdr_attach_target_ready(payload: dict[str, object]) -> tuple[bool, str]:
@@ -536,6 +591,13 @@ def _tmux_select_window(tmux_socket_path: str, target: str, *, env: dict[str, st
         stderr=subprocess.DEVNULL,
     )
     return probe.returncode == 0
+
+
+def _subprocess_kwargs_herdr_ui() -> dict[str, object]:
+    """subprocess kwargs for Herdr UI launch (prevents flash console windows on Windows)."""
+    if sys.platform == 'win32':
+        return {'creationflags': getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000)}
+    return {}
 
 
 __all__ = [

@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import tempfile
 
 from terminal_runtime.herdr_backend_runtime.capabilities import _KNOWN_CAPABILITIES
@@ -19,6 +20,14 @@ from terminal_runtime.herdr_backend_runtime.capabilities import _KNOWN_CAPABILIT
 from .herdr_common import herdr_command_env, query_herdr_server_status, resolve_herdr_executable
 
 _DEFAULT_HERDR_SESSION = 'ccb-herdr'
+
+
+def _herdr_run(*args, **kwargs):
+    """subprocess.run wrapper with Windows CREATE_NO_WINDOW to prevent flash consoles."""
+    if sys.platform == 'win32':
+        kwargs.setdefault('creationflags', getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000))
+    return subprocess.run(*args, **kwargs)
+
 
 _READ_PROBES = (
     ('session_attach', ('api', 'snapshot')),
@@ -160,7 +169,11 @@ def _start_herdr_server(exe: str, session: str) -> dict[str, object]:
     """
     from terminal_runtime.herdr_backend_runtime.cli import HerdrCliRequestAdapter
 
-    adapter = HerdrCliRequestAdapter(session_name=session, herdr_executable=exe)
+    adapter = HerdrCliRequestAdapter(
+        session_name=session,
+        herdr_executable=exe,
+        run_fn=_herdr_run,
+    )
     try:
         adapter.ensure_server_started(session)
     except Exception as exc:

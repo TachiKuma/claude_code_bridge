@@ -54,13 +54,15 @@ def sh_quote(value: str) -> str:
 def herdr_respawn_command(command: str, cwd: Path, name: str) -> list[str]:
     """Build the herdr respawn argv for a bash-style command payload.
 
-    With Git Bash present, writes the payload to a ``.sh`` script and returns
-    ``['cmd', '/d', '/c', <sh.exe>, <script>]`` so ``cmd.exe`` invokes sh.exe
-    directly.  This avoids the PowerShell ``&`` call operator which Herdr's
-    ``pane run`` may not handle reliably (2026-08-09 实测：手动在 pane 中键入
-    ``& <sh.exe> <script>`` 可执行，但经 ``herdr pane run`` 注入后 agent2
-    报 ``sh : 无法识别``).  Without Git Bash, falls back to ``['sh', '-lc',
-    command]`` (the historical tmux behavior).
+    With Git Bash present, writes the payload to a ``.sh`` script, wraps it in
+    a ``.ps1`` helper, and returns ``['powershell', '-File', <ps1>]`` so the
+    pane's native PowerShell shell invokes sh.exe via ``&`` inside the script.
+    Avoids ``cmd.exe`` entirely (every ``cmd /d /c`` spawn triggers a conhost
+    console host flash on Windows; 2026-08-10 diagnostic captured 64 conhost
+    flashes all parented by a single cmd.exe in the launch chain).
+
+    Without Git Bash, falls back to ``['sh', '-lc', command]`` (the historical
+    tmux behavior).
     """
     sh_exe = resolve_sh_executable()
     if not sh_exe:
@@ -78,11 +80,23 @@ def herdr_respawn_command(command: str, cwd: Path, name: str) -> list[str]:
     script_dir.mkdir(parents=True, exist_ok=True)
     script_path = script_dir / f'start-{name}-{os.getpid()}.sh'
     script_path.write_text(f'cd {sh_quote(str(cwd))} && {command}\n', encoding='utf-8')
+    # Wrap in a .ps1 so PowerShell (the pane shell) invokes sh.exe via the
+    # `&` call operator — no cmd.exe, no conhost flash.
+    # Use $PSScriptRoot to reference the .sh file by name only (relative to
+    # the .ps1's directory), avoiding hardcoded Chinese/Unicode paths in the
+    # script content.  utf-8-sig (BOM) is required for PowerShell 5.1.
+    sh_filename = script_path.name
+    ps1_path = script_dir / f'start-{name}-{os.getpid()}.ps1'
+    ps1_path.write_text(
+        f'$shScript = Join-Path $PSScriptRoot "{sh_filename}"\n'
+        f'& "{sh_exe}" $shScript\n',
+        encoding='utf-8-sig',
+    )
     import sys
     print(
         f'[shell_launch] herdr_respawn: name={name} sh_exe={sh_exe!r} '
-        f'script={script_path.as_posix()!r}',
+        f'script={script_path.as_posix()!r} ps1={ps1_path.as_posix()!r}',
         file=sys.stderr,
         flush=True,
     )
-    return ['cmd', '/d', '/c', sh_exe, str(script_path)]
+    return ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(ps1_path)]

@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import secrets
 import subprocess
+import sys
 import time
 
 _AUTH_MARKER = 'ccbd-control-plane-token-v1'
@@ -287,10 +288,17 @@ def _decode_auth_payload(raw: bytes) -> dict:
     return payload
 
 
+def _sp_run_win(*args, **kwargs):
+    """``subprocess.run`` with ``CREATE_NO_WINDOW`` on Windows to prevent console flashes."""
+    if sys.platform == 'win32':
+        kwargs.setdefault('creationflags', getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000))
+    return subprocess.run(*args, **kwargs)
+
+
 def _current_windows_user() -> str:
     if os.name == 'nt':
         try:
-            result = subprocess.run(
+            result = _sp_run_win(
                 ['whoami'],
                 capture_output=True,
                 text=True,
@@ -439,7 +447,8 @@ def _windows_acl_rights_prove_read(rights: str) -> bool:
 
 
 def _run_checked_command(command_runner, command) -> None:
-    result = command_runner(
+    runner = command_runner if command_runner is not None else _sp_run_win
+    result = runner(
         command,
         capture_output=True,
         text=True,

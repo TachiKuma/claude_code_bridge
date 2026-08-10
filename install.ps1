@@ -231,6 +231,13 @@ function Get-Msg {
     "cancelled" = @{ en = "Installation cancelled"; zh = "安装已取消" }
     "windows_warning" = @{ en = "You are installing ccb in native Windows environment"; zh = "你正在 Windows 原生环境安装 ccb" }
     "same_env" = @{ en = "ccb/ask/ping/pend must run in the same environment as codex/gemini."; zh = "ccb/ask/ping/pend 必须与 codex/gemini 在同一环境运行。" }
+    "herdr_required" = @{ en = "Native Windows CCB requires Herdr >= v0.8.0 as terminal backend"; zh = "Windows 原生 CCB 需要 Herdr >= v0.8.0 作为终端后端" }
+    "herdr_not_found" = @{ en = "Herdr not found. Please install Herdr first."; zh = "未找到 Herdr，请先安装 Herdr。" }
+    "herdr_version_old" = @{ en = "Herdr version too old: $Arg1. Minimum required: >= v0.8.0 stable or preview >= 2026-08-04-d78e3d3b5126"; zh = "Herdr 版本过旧: $Arg1。最低要求: >= v0.8.0 稳定版或预览版 >= 2026-08-04-d78e3d3b5126" }
+    "herdr_version_ok" = @{ en = "Herdr $Arg1 is ready"; zh = "Herdr $Arg1 已就绪" }
+    "herdr_version_unknown" = @{ en = "Herdr found at $Arg1 but version cannot be determined"; zh = "Herdr 已找到 ($Arg1)，但无法确定版本" }
+    "herdr_download" = @{ en = "Download: https://herdr.dev/ or https://github.com/herdrdev/herdr"; zh = "下载: https://herdr.dev/ 或 https://github.com/herdrdev/herdr" }
+    "herdr_setup_steps" = @{ en = "Setup steps:`n  1. Download Herdr from https://herdr.dev/`n  2. Install to a known location (e.g. %LOCALAPPDATA%\Programs\Herdr)`n  3. Ensure herdr.exe is in PATH`n  4. Verify: herdr --version"; zh = "配置步骤:`n  1. 从 https://herdr.dev/ 下载 Herdr`n  2. 安装到已知位置 (如 %LOCALAPPDATA%\Programs\Herdr)`n  3. 确保 herdr.exe 在 PATH 中`n  4. 验证: herdr --version" }
   }
   if ($msgs.ContainsKey($Key)) {
     return $msgs[$Key][$script:CCBLang]
@@ -508,6 +515,206 @@ function Install-Tomli {
   Write-Host "   $PythonCmd -m pip install --user tomli>=2.0.0"
 }
 
+# ── OS Platform Detection ─────────────────────────────────────────────────
+
+function Detect-OSPlatform {
+  <#
+  .SYNOPSIS
+    Detect the current OS platform.
+  .DESCRIPTION
+    Returns one of: NativeWindows, WSL, Linux, macOS, Unknown
+  #>
+  # Check for WSL environment markers (can be set even on Windows-side processes)
+  $isWslEnv = $env:WSL_DISTRO_NAME -or $env:WSL_INTEROP
+
+  # If running on Windows, distinguish WSL-interop vs Native Windows
+  if ($isWslEnv) {
+    # WSL environment variables are set — likely running under WSL interop
+    # or a Windows process launched from WSL
+    return "WSL"
+  }
+
+  # Check if running on actual Windows
+  if ($env:OS -eq "Windows_NT" -or [Environment]::OSVersion.Platform -eq "Win32NT") {
+    return "NativeWindows"
+  }
+
+  return "Unknown"
+}
+
+# ── Herdr Detection & Version Check ───────────────────────────────────────
+
+function Get-HerdrExecutable {
+  param([string]$ExplicitPath = "")
+
+  if ($ExplicitPath -and (Test-Path -LiteralPath $ExplicitPath)) {
+    return $ExplicitPath
+  }
+
+  if ($env:CCB_HERDR_EXE -and (Test-Path -LiteralPath $env:CCB_HERDR_EXE)) {
+    return $env:CCB_HERDR_EXE
+  }
+
+  # Check PATH
+  $pathExe = (Get-Command herdr -ErrorAction SilentlyContinue).Source
+  if ($pathExe) {
+    return $pathExe
+  }
+
+  # Known install locations
+  $candidates = @(
+    (Join-Path $env:LOCALAPPDATA "Programs\Herdr\herdr.exe"),
+    (Join-Path $env:ProgramFiles "Herdr\herdr.exe"),
+    (Join-Path ${env:ProgramFiles(x86)} "Herdr\herdr.exe"),
+    (Join-Path $env:USERPROFILE "AppData\Local\Programs\Herdr\herdr.exe")
+  )
+  foreach ($candidate in $candidates) {
+    if (Test-Path -LiteralPath $candidate) {
+      return $candidate
+    }
+  }
+
+  return $null
+}
+
+function Get-HerdrVersion {
+  param([string]$ExePath)
+
+  if (-not $ExePath -or -not (Test-Path -LiteralPath $ExePath)) {
+    return $null
+  }
+
+  try {
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $ExePath
+    $psi.Arguments = "--version"
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $psi
+    [void] $process.Start()
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $stderr = $process.StandardError.ReadToEnd()
+    $process.WaitForExit(10000) | Out-Null
+
+    $output = if ($stdout) { $stdout } else { $stderr }
+    return $output.Trim()
+  } catch {
+    return $null
+  }
+}
+
+function Test-HerdrVersionOk {
+  <#
+  .SYNOPSIS
+    Check if Herdr meets the minimum version requirement.
+  .DESCRIPTION
+    Returns a hashtable with: ok, message, version, exe
+  #>
+  param([string]$ExePath = "")
+
+  $exe = Get-HerdrExecutable -ExplicitPath $ExePath
+  if (-not $exe) {
+    return @{
+      ok = $false
+      message = (Get-Msg "herdr_not_found") + "`n" + (Get-Msg "herdr_download") + "`n" + (Get-Msg "herdr_setup_steps")
+      version = $null
+      exe = $null
+    }
+  }
+
+  $rawVersion = Get-HerdrVersion -ExePath $exe
+  if (-not $rawVersion) {
+    return @{
+      ok = $false
+      message = (Get-Msg "herdr_version_unknown" -Arg1 $exe)
+      version = $null
+      exe = $exe
+    }
+  }
+
+  # Parse version: stable "v0.8.0", preview "0.8.0-preview.YYYY-MM-DD-COMMIT" or "preview YYYY-MM-DD-COMMIT"
+  $minStable = @(0, 8, 0)
+  $minPreviewDate = "2026-08-04"
+  $minPreviewCommitPrefix = "d78e3d3b"
+
+  # Try dotted preview pattern first: "0.8.0-preview.YYYY-MM-DD-COMMIT"
+  if ($rawVersion -match 'preview\.(\d{4}-\d{2}-\d{2})-([a-f0-9]{7,})') {
+    $previewDate = $Matches[1]
+    $previewCommit = $Matches[2]
+    if (($previewDate -ge $minPreviewDate) -or ($previewCommit.StartsWith($minPreviewCommitPrefix))) {
+      return @{
+        ok = $true
+        message = (Get-Msg "herdr_version_ok" -Arg1 $rawVersion)
+        version = $rawVersion
+        exe = $exe
+      }
+    }
+    return @{
+      ok = $false
+      message = (Get-Msg "herdr_version_old" -Arg1 $rawVersion) + "`n" + (Get-Msg "herdr_download")
+      version = $rawVersion
+      exe = $exe
+    }
+  }
+
+  # Try space-separated preview pattern: "preview YYYY-MM-DD-COMMIT"
+  if ($rawVersion -match 'preview\s+(\d{4}-\d{2}-\d{2})-([a-f0-9]{7,})') {
+    $previewDate = $Matches[1]
+    $previewCommit = $Matches[2]
+    if (($previewDate -ge $minPreviewDate) -or ($previewCommit.StartsWith($minPreviewCommitPrefix))) {
+      return @{
+        ok = $true
+        message = (Get-Msg "herdr_version_ok" -Arg1 $rawVersion)
+        version = $rawVersion
+        exe = $exe
+      }
+    }
+    return @{
+      ok = $false
+      message = (Get-Msg "herdr_version_old" -Arg1 $rawVersion) + "`n" + (Get-Msg "herdr_download")
+      version = $rawVersion
+      exe = $exe
+    }
+  }
+
+  # Try stable pattern
+  if ($rawVersion -match 'v?(\d+)\.(\d+)\.(\d+)') {
+    $major = [int]$Matches[1]
+    $minor = [int]$Matches[2]
+    $patch = [int]$Matches[3]
+    $ver = @($major, $minor, $patch)
+
+    if (($ver[0] -gt $minStable[0]) -or
+        ($ver[0] -eq $minStable[0] -and $ver[1] -gt $minStable[1]) -or
+        ($ver[0] -eq $minStable[0] -and $ver[1] -eq $minStable[1] -and $ver[2] -ge $minStable[2])) {
+      return @{
+        ok = $true
+        message = (Get-Msg "herdr_version_ok" -Arg1 $rawVersion)
+        version = $rawVersion
+        exe = $exe
+      }
+    }
+    return @{
+      ok = $false
+      message = (Get-Msg "herdr_version_old" -Arg1 $rawVersion) + "`n" + (Get-Msg "herdr_download")
+      version = $rawVersion
+      exe = $exe
+    }
+  }
+
+  # Unknown format
+  return @{
+    ok = $false
+    message = (Get-Msg "herdr_version_unknown" -Arg1 $exe) + "`n  raw: $rawVersion"
+    version = $rawVersion
+    exe = $exe
+  }
+}
+
 function Confirm-BackendEnv {
   if ($Yes -or $env:CCB_INSTALL_ASSUME_YES -eq "1") { return }
 
@@ -535,8 +742,56 @@ function Confirm-BackendEnv {
   }
 }
 
+function Confirm-HerdrReady {
+  <#
+  .SYNOPSIS
+    Check Herdr availability and version, prompt user if not ready.
+  #>
+  $platform = Detect-OSPlatform
+  if ($platform -ne "NativeWindows") {
+    return
+  }
+
+  Write-Host ""
+  Write-Host (Get-Msg "herdr_required")
+  Write-Host "  最低要求: >= v0.8.0 (稳定版) 或 preview >= 2026-08-04-d78e3d3b5126"
+  Write-Host ""
+
+  $herdr = Test-HerdrVersionOk
+  if ($herdr.ok) {
+    Write-Host "[OK] $($herdr.message)"
+    Write-Host "  位置: $($herdr.exe)"
+    return
+  }
+
+  Write-Host "[WARN] $($herdr.message)"
+  if ($herdr.exe) {
+    Write-Host "  找到位置: $($herdr.exe)"
+  }
+  Write-Host ""
+
+  # In non-interactive mode, just warn
+  if (-not [Environment]::UserInteractive) {
+    Write-Host "[INFO] 非交互模式: 请先手动安装/升级 Herdr 后重试。"
+    Write-Host "[INFO] 设置 CCB_SKIP_HERDR_CHECK=1 可跳过此检查（仅限诊断）"
+    return
+  }
+
+  Write-Host "Herdr 未满足最低版本要求。是否继续安装 CCB？"
+  Write-Host "  注意: 没有 Herdr 时 CCB 启动将失败（除非使用 --help/--version）。"
+  $reply = Read-Host "继续安装? (y/N)"
+  if ($reply.Trim().ToLower() -notin @("y", "yes")) {
+    Write-Host "安装已取消"
+    Write-Host ""
+    Write-Host (Get-Msg "herdr_setup_steps")
+    exit 1
+  }
+  Write-Host "[INFO] 继续安装 CCB，但启动时可能需要先配置 Herdr。"
+}
+
 function Install-Native {
   Confirm-BackendEnv
+  Confirm-HerdrReady
 
   Show-WindowsX64ReleaseSurfaceProjection
 
@@ -649,7 +904,7 @@ function Install-Native {
       $relPath = $script
     }
     $escapedPythonExecutable = $pythonExecutable.Replace('"', '""')
-    $wrapperContent = "@echo off`r`nset `"PYTHON=$escapedPythonExecutable`"`r`nif not exist `"%PYTHON%`" set `"PYTHON=python`"`r`nwhere python >NUL 2>&1 || if /I `"%PYTHON%`"==`"python`" set `"PYTHON=py -3`"`r`n%PYTHON% `"%~dp0$relPath`" %*"
+    $wrapperContent = "@echo off`r`nset `"PYTHON=$escapedPythonExecutable`"`r`nif not exist `"%PYTHON%`" set `"PYTHON=python`"`r`nwhere python >NUL 2>&1 || if /I `"%PYTHON%`"==`"python`" set `"PYTHON=py -3`"`r`nstart `"`" /B /WAIT %PYTHON% `"%~dp0$relPath`" %*"
     [System.IO.File]::WriteAllText($batPath, $wrapperContent, $script:utf8NoBom)
     # .cmd wrapper for PowerShell/CMD users (and tools preferring .cmd over raw shebang scripts)
     [System.IO.File]::WriteAllText($cmdPath, $wrapperContent, $script:utf8NoBom)
