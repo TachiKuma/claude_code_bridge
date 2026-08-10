@@ -172,6 +172,10 @@ class HerdrCliRequestAdapter:
                     _ROOT_PANE_TOKEN: "1",
                 },
             )
+        # New workspaces get a default tab named after the tab number;
+        # rename it to match the window name so the Herdr tab bar shows a
+        # meaningful label instead of "1", "2", …
+        self._rename_workspace_tab(namespace_id, title, session_name=session_name)
         return {
             "namespace_id": namespace_id,
             "session_name": session_name,
@@ -283,6 +287,12 @@ class HerdrCliRequestAdapter:
                         _ROOT_PANE_TOKEN: "1",
                     },
                 )
+            # When reusing an existing workspace (anchor or metadata-match),
+            # also rename the tab to the current window name — the workspace
+            # may have been created with a different label (e.g. the session
+            # name for the anchor) and the tab bar should reflect the
+            # configured [windows] name.
+            self._rename_workspace_tab(workspace_id, window_name, session_name=session_name)
             existing = {
                 **dict(existing),
                 "workspace_id": workspace_id,
@@ -328,6 +338,10 @@ class HerdrCliRequestAdapter:
                         _ROOT_PANE_TOKEN: "1",
                     },
                 )
+            # New workspaces get a default tab named after the tab number;
+            # rename it to match the window name so the Herdr tab bar shows a
+            # meaningful label instead of "1", "2", …
+            self._rename_workspace_tab(workspace_id, window_name, session_name=session_name)
             existing = {
                 "workspace_id": workspace_id,
                 "window_name": window_name,
@@ -1038,6 +1052,33 @@ class HerdrCliRequestAdapter:
                 if pane_id:
                     return pane_id
         return None
+
+    def _rename_workspace_tab(
+        self,
+        workspace_id: str,
+        title: str,
+        *,
+        session_name: str,
+    ) -> None:
+        """Rename the default tab of a newly created workspace.
+
+        Herdr names the first tab after its number (``"1"``, ``"2"``, …);
+        this renames it to *title* so the tab bar shows a meaningful label.
+        The rename is best-effort — a failure leaves the default number and
+        does not block workspace creation.
+        """
+        if not isinstance(title, str) or not title.strip():
+            return
+        tab_id = f"{workspace_id}:t1"
+        try:
+            self._command(
+                "rename_tab",
+                ["tab", "rename", tab_id, title],
+                expect_json=False,
+                session_name=session_name,
+            )
+        except Exception:
+            pass
 
     def _report_workspace_metadata(
         self,

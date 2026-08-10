@@ -112,14 +112,20 @@ def handle_start(context, command, out, services) -> int:
 def _ensure_herdr_runtime_evidence(context) -> None:
     """Probe Herdr and inject ``CCB_HERDR_CAPABILITY_REPORT`` when needed.
 
-    Only acts when the effective backend is Herdr and the current capability
-    report (if any) is unusable.  Reuses ``ensure_herdr_bootstrap_env`` so the
+    Probes when the effective backend is or may become Herdr — explicitly via
+    ``CCB_RUNTIME_MUX_BACKEND=herdr``, or implicitly when running on native
+    Windows x64 (where the platform gate auto-selects Herdr and an existing
+    ccbd may already use it).  Reuses ``ensure_herdr_bootstrap_env`` so the
     plain ``ccb`` start path and ``ccb herdr open`` share one evidence source
     (runtime probe -> temp report), never a stale source-dev spike file.
     """
-    if os.environ.get('CCB_RUNTIME_MUX_BACKEND', '').strip().lower() != 'herdr':
-        return
     if _herdr_capability_evidence_usable():
+        return
+    env_backend = os.environ.get('CCB_RUNTIME_MUX_BACKEND', '').strip().lower()
+    if env_backend and env_backend != 'herdr':
+        # Explicit non-Herdr backend — user has opted out.
+        return
+    if not _is_herdr_relevant_platform():
         return
     from cli.services.herdr_bootstrap import ensure_herdr_bootstrap_env
 
@@ -132,7 +138,37 @@ def _ensure_herdr_runtime_evidence(context) -> None:
         # diagnostic; the daemon start below must not be silently hijacked.
         return
     for warning in (result.get('warnings') or ()):
+        # Bare `ccb` auto-detects the session from the project name — the
+        # "Using Herdr session … pass --herdr-session to override" hint is
+        # only actionable under `ccb herdr open`; suppress it here so the
+        # user gets a clean start with zero manual handling.
+        if isinstance(warning, str) and warning.startswith('Using Herdr session '):
+            continue
         print(f'Warning: {warning}', file=sys.stderr)
+
+
+def _is_herdr_relevant_platform() -> bool:
+    """Check whether native Windows x64 — where Herdr auto-selection applies.
+
+    Mirrors the platform-gate logic in ``resolve_mux_backend_v2`` so the
+    evidence probe matches the same platform the backend selector uses.
+    Only native Windows x64 (not WSL) with 64-bit Python is relevant.
+    """
+    import platform as _platform
+    from terminal_runtime.env import is_wsl as _is_wsl
+    try:
+        if sys.platform != 'win32':
+            return False
+        if _is_wsl():
+            return False
+        machine = _platform.machine().lower()
+        if machine not in ('amd64', 'x86_64'):
+            return False
+        if _platform.architecture()[0] != '64bit':
+            return False
+    except Exception:
+        return False
+    return True
 
 
 def _herdr_capability_evidence_usable() -> bool:

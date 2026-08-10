@@ -99,6 +99,143 @@ function Resolve-ExistingPath {
     throw ($Description + ' not found')
 }
 
+# ── Herdr Detection & Version Check (shared with install.ps1 pattern) ────
+
+$script:HERDR_MIN_STABLE = @(0, 8, 0)
+$script:HERDR_MIN_PREVIEW_DATE = "2026-08-04"
+$script:HERDR_MIN_PREVIEW_COMMIT = "d78e3d3b"
+
+function Resolve-HerdrExe {
+    param([string]$ExplicitPath = "")
+
+    if ($ExplicitPath -and (Test-Path -LiteralPath $ExplicitPath)) {
+        return $ExplicitPath
+    }
+    if ($env:CCB_HERDR_EXE -and (Test-Path -LiteralPath $env:CCB_HERDR_EXE)) {
+        return $env:CCB_HERDR_EXE
+    }
+
+    # PATH lookup
+    $pathExe = (Get-Command herdr -ErrorAction SilentlyContinue).Source
+    if ($pathExe) { return $pathExe }
+
+    # Known install locations
+    foreach ($candidate in @(
+        (Join-Path $env:LOCALAPPDATA 'Programs\Herdr\herdr.exe'),
+        (Join-Path $env:ProgramFiles 'Herdr\herdr.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Herdr\herdr.exe'),
+        (Join-Path $env:USERPROFILE 'AppData\Local\Programs\Herdr\herdr.exe')
+    )) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate)) {
+            return $candidate
+        }
+    }
+    return $null
+}
+
+function Get-HerdrVersionString {
+    param([string]$ExePath)
+
+    if (-not $ExePath -or -not (Test-Path -LiteralPath $ExePath)) {
+        return $null
+    }
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $ExePath
+        $psi.Arguments = '--version'
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+
+        $process = New-Object System.Diagnostics.Process
+        $process.StartInfo = $psi
+        [void] $process.Start()
+        $stdout = $process.StandardOutput.ReadToEnd()
+        $stderr = $process.StandardError.ReadToEnd()
+        $process.WaitForExit(10000) | Out-Null
+
+        $output = if ($stdout) { $stdout } else { $stderr }
+        return $output.Trim()
+    } catch {
+        return $null
+    }
+}
+
+function Test-HerdrVersionMeetsMinimum {
+    param([string]$VersionString)
+
+    if (-not $VersionString) { return $false }
+
+    # Dotted preview: "0.8.0-preview.YYYY-MM-DD-<commit>" (check BEFORE stable)
+    if ($VersionString -match 'preview\.(\d{4}-\d{2}-\d{2})-([a-f0-9]{7,})') {
+        $previewDate = $Matches[1]
+        $previewCommit = $Matches[2]
+        return (($previewDate -ge $script:HERDR_MIN_PREVIEW_DATE) -or
+                ($previewCommit.StartsWith($script:HERDR_MIN_PREVIEW_COMMIT)))
+    }
+
+    # Space-separated preview: "preview YYYY-MM-DD-<commit>"
+    if ($VersionString -match 'preview\s+(\d{4}-\d{2}-\d{2})-([a-f0-9]{7,})') {
+        $previewDate = $Matches[1]
+        $previewCommit = $Matches[2]
+        return (($previewDate -ge $script:HERDR_MIN_PREVIEW_DATE) -or
+                ($previewCommit.StartsWith($script:HERDR_MIN_PREVIEW_COMMIT)))
+    }
+
+    # Stable: "v0.8.0" or "0.8.0" (without preview markers)
+    if ($VersionString -match 'v?(\d+)\.(\d+)\.(\d+)') {
+        $major = [int]$Matches[1]
+        $minor = [int]$Matches[2]
+        $patch = [int]$Matches[3]
+        # Double-check: if "preview" appears ANYWHERE, treat as preview, not stable
+        if ($VersionString -match 'preview|nightly') {
+            # Has preview marker but didn't match the date patterns above —
+            # it's a preview build with unrecognized format. Still accept if
+            # version number meets the minimum.
+            return (($major -gt $script:HERDR_MIN_STABLE[0]) -or
+                    ($major -eq $script:HERDR_MIN_STABLE[0] -and $minor -gt $script:HERDR_MIN_STABLE[1]) -or
+                    ($major -eq $script:HERDR_MIN_STABLE[0] -and $minor -eq $script:HERDR_MIN_STABLE[1] -and $patch -ge $script:HERDR_MIN_STABLE[2]))
+        }
+        return (($major -gt $script:HERDR_MIN_STABLE[0]) -or
+                ($major -eq $script:HERDR_MIN_STABLE[0] -and $minor -gt $script:HERDR_MIN_STABLE[1]) -or
+                ($major -eq $script:HERDR_MIN_STABLE[0] -and $minor -eq $script:HERDR_MIN_STABLE[1] -and $patch -ge $script:HERDR_MIN_STABLE[2]))
+    }
+
+    return $false
+}
+
+function Write-HerdrDiagnostic {
+    <#
+    .SYNOPSIS
+        Print Herdr readiness diagnostic and guidance.
+    #>
+    $exe = Resolve-HerdrExe
+    if (-not $exe) {
+        Write-Host 'ccb8: Herdr 未找到。Native Windows 上 CCB 需要 Herdr。'
+        Write-Host 'ccb8:   下载: https://herdr.dev/ 或 https://github.com/herdrdev/herdr'
+        Write-Host 'ccb8:   要求: >= v0.8.0 (stable) 或 preview >= 2026-08-04-d78e3d3b5126'
+        Write-Host 'ccb8:   安装后请确保 herdr.exe 在 PATH 中。'
+        return
+    }
+
+    $version = Get-HerdrVersionString -ExePath $exe
+    if (-not $version) {
+        Write-Host "ccb8: Herdr 已找到 ($exe)，但无法获取版本信息。"
+        Write-Host 'ccb8:   请手动运行 herdr --version 确认版本。'
+        return
+    }
+
+    $ok = Test-HerdrVersionMeetsMinimum -VersionString $version
+    $mark = if ($ok) { '[OK]' } else { '[!!] too old' }
+    Write-Host "ccb8: Herdr $version ($exe) $mark"
+    if (-not $ok) {
+        $minV = "$($script:HERDR_MIN_STABLE[0]).$($script:HERDR_MIN_STABLE[1]).$($script:HERDR_MIN_STABLE[2])"
+        Write-Host "ccb8:   最低要求: >= v$minV (stable) 或 preview >= $script:HERDR_MIN_PREVIEW_DATE"
+        Write-Host 'ccb8:   请升级: https://herdr.dev/'
+    }
+}
+
 function Resolve-CcbSourceRoot {
     return Resolve-ExistingPath `
         -Description 'CCB source checkout' `
@@ -696,7 +833,7 @@ function Initialize-WrapperEnvironment {
     if ([string]::IsNullOrWhiteSpace($python)) {
         $python = 'C:\Users\Administrator\AppData\Local\Programs\Python\Python314\python.exe'
     }
-    $herdrExe = if ([string]::IsNullOrWhiteSpace($env:CCB_HERDR_EXE)) { 'C:\Users\Administrator\AppData\Local\Programs\Herdr\herdr.exe' } else { $env:CCB_HERDR_EXE }
+    $herdrExe = Resolve-HerdrExe
     try {
         $herdrCapabilityReport = Resolve-HerdrCapabilityReport -SourceRoot $sourceRoot
     } catch {
@@ -977,6 +1114,7 @@ $CcbArgs = @($CcbArgs | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 $isOneClick = ($CcbArgs.Count -eq 0)
 if ($isOneClick) {
     Write-Host 'ccb8: one-click mode — starting Herdr + CCB managed environment...'
+    Write-HerdrDiagnostic
     [void] (Install-HerdrAgentStateHook)
     # Use `herdr open --no-attach --wait-ready`: the documented working flow
     # from the WezTerm+Herdr+CCB joint startup milestone (2026-08-07).
