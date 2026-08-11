@@ -594,7 +594,7 @@ def _tmux_select_window(tmux_socket_path: str, target: str, *, env: dict[str, st
 
 
 def _subprocess_kwargs_herdr_ui() -> dict[str, object]:
-    """subprocess kwargs for Herdr UI launch (prevents flash console windows on Windows)."""
+    """Hide only the control wrapper; WezTerm/Herdr attach remains intentional UI."""
     if sys.platform == 'win32':
         return {'creationflags': getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000)}
     return {}

@@ -12,6 +12,8 @@ import shutil
 import subprocess
 import sys
 
+from process_background import no_window_process_kwargs
+
 
 def resolve_herdr_executable(explicit: str | None = None) -> str | None:
     """Resolve the herdr executable path.
@@ -78,6 +80,7 @@ def query_herdr_server_status(exe: str, session: str | None = None) -> dict[str,
             timeout=10,
             env=herdr_command_env(),
             check=False,
+            **no_window_process_kwargs(),
         )
     except (OSError, subprocess.SubprocessError):
         return None

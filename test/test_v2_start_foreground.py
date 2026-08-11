@@ -103,6 +103,7 @@ def test_start_foreground_herdr_attach_uses_builder_without_tmux_binary(monkeypa
         'Popen',
         lambda *_, **__: (_ for _ in ()).throw(AssertionError('tmux subprocess should not run')),
     )
+    monkeypatch.setattr(start_foreground_service, '_launch_herdr_ui', lambda _namespace_ref: None)
     monkeypatch.setattr(start_foreground_service, '_build_herdr_attach_backend', _build_herdr_attach_backend)
 
     summary = attach_started_project_namespace(context)  # type: ignore[arg-type]
@@ -198,6 +199,7 @@ def test_start_foreground_herdr_attach_real_builder_accepts_matching_backend_ref
         'Popen',
         lambda *_, **__: (_ for _ in ()).throw(AssertionError('tmux subprocess should not run')),
     )
+    monkeypatch.setattr(start_foreground_service, '_launch_herdr_ui', lambda _namespace_ref: None)
     monkeypatch.setattr(
         'terminal_runtime.api.get_backend',
         lambda terminal_type=None: backend_calls.append(terminal_type) or _MatchingHerdrBackend(),
@@ -219,6 +221,52 @@ def test_start_foreground_herdr_attach_real_builder_accepts_matching_backend_ref
                 'restore_token': None,
             },
             'main',
+        )
+    ]
+
+
+def test_launch_herdr_ui_hides_windows_control_wrapper(monkeypatch) -> None:
+    popen_calls: list[tuple[list[str], dict[str, object]]] = []
+
+    class _FakeProcess:
+        pid = 1234
+
+    def _fake_popen(args, **kwargs):
+        popen_calls.append((list(args), dict(kwargs)))
+        return _FakeProcess()
+
+    monkeypatch.setattr(start_foreground_service.sys, 'platform', 'win32')
+    monkeypatch.setattr(start_foreground_service.subprocess, 'CREATE_NO_WINDOW', 0x08000000, raising=False)
+    monkeypatch.setenv('CCB_HERDR_EXE', 'C:/Herdr/herdr.exe')
+    monkeypatch.setattr(
+        start_foreground_service.shutil,
+        'which',
+        lambda name: 'C:/WezTerm/wezterm.exe' if name == 'wezterm' else None,
+    )
+    monkeypatch.setattr(start_foreground_service.os, 'getcwd', lambda: 'C:/repo')
+    monkeypatch.setattr(start_foreground_service.subprocess, 'Popen', _fake_popen)
+
+    start_foreground_service._launch_herdr_ui({'session_name': 'ccb-proj-abc'})
+
+    assert popen_calls == [
+        (
+            [
+                'C:/WezTerm/wezterm.exe',
+                'cli',
+                'spawn',
+                '--cwd',
+                'C:/repo',
+                '--',
+                'C:/Herdr/herdr.exe',
+                'session',
+                'attach',
+                'ccb-proj-abc',
+            ],
+            {
+                'stdout': start_foreground_service.subprocess.DEVNULL,
+                'stderr': start_foreground_service.subprocess.DEVNULL,
+                'creationflags': 0x08000000,
+            },
         )
     ]
 

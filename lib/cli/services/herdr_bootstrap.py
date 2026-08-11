@@ -12,9 +12,9 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 import tempfile
 
+from process_background import no_window_process_kwargs
 from terminal_runtime.herdr_backend_runtime.capabilities import _KNOWN_CAPABILITIES
 
 from .herdr_common import herdr_command_env, query_herdr_server_status, resolve_herdr_executable
@@ -24,8 +24,7 @@ _DEFAULT_HERDR_SESSION = 'ccb-herdr'
 
 def _herdr_run(*args, **kwargs):
     """subprocess.run wrapper with Windows CREATE_NO_WINDOW to prevent flash consoles."""
-    if sys.platform == 'win32':
-        kwargs.setdefault('creationflags', getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000))
+    kwargs.update({key: value for key, value in no_window_process_kwargs().items() if key not in kwargs})
     return subprocess.run(*args, **kwargs)
 
 
@@ -208,6 +207,7 @@ def _probe_herdr_read_capabilities(exe: str, session: str | None = None) -> dict
                 timeout=10,
                 env=herdr_command_env(),
                 check=False,
+                **no_window_process_kwargs(),
             )
             result[capability] = run.returncode == 0 and bool((run.stdout or '').strip())
         except (OSError, subprocess.SubprocessError):
@@ -234,6 +234,7 @@ def _discover_running_ccb_sessions(exe: str) -> list[str]:
             timeout=10,
             env=herdr_command_env(),
             check=False,
+            **no_window_process_kwargs(),
         )
     except (OSError, subprocess.SubprocessError):
         return []

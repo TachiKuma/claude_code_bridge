@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import process_background
 from cli.models import ParsedHerdrOpenCommand
 from cli.parser import CliParser, CliUsageError
 from cli.services.herdr_bootstrap import ensure_herdr_bootstrap_env
@@ -577,6 +578,29 @@ def test_query_herdr_server_status_without_session_has_no_flag(monkeypatch) -> N
     assert captured['cmd'] == ['/x/herdr.exe', 'status', 'server', '--json']
 
 
+def test_query_herdr_server_status_hides_windows_console(monkeypatch) -> None:
+    """Startup hot-path Herdr status probes must not create flash consoles."""
+    import subprocess
+
+    captured: dict[str, object] = {}
+
+    class _FakeResult:
+        returncode = 0
+        stdout = '{"running":true}'
+
+    def _fake_run(cmd, **kwargs):
+        del cmd
+        captured.update(kwargs)
+        return _FakeResult()
+
+    monkeypatch.setattr(process_background.os, 'name', 'nt')
+    monkeypatch.setattr(process_background.subprocess, 'CREATE_NO_WINDOW', 0x08000000, raising=False)
+    monkeypatch.setattr(subprocess, 'run', _fake_run)
+
+    assert query_herdr_server_status('/x/herdr.exe') is not None
+    assert captured['creationflags'] == 0x08000000
+
+
 def test_discover_running_ccb_sessions_parses_running(monkeypatch) -> None:
     """``herdr session list`` running entries are parsed, ``ccb-`` filtered."""
     import json as _json
@@ -601,6 +625,55 @@ def test_discover_running_ccb_sessions_parses_running(monkeypatch) -> None:
     assert _discover_running_ccb_sessions('/x/herdr.exe') == [
         'ccb-avaprintdesigner-575a971f'
     ]
+
+
+def test_discover_running_ccb_sessions_hides_windows_console(monkeypatch) -> None:
+    import json as _json
+    import subprocess
+
+    from cli.services.herdr_bootstrap import _discover_running_ccb_sessions
+
+    captured: dict[str, object] = {}
+
+    class _FakeResult:
+        returncode = 0
+        stdout = _json.dumps({'sessions': []})
+
+    def _fake_run(cmd, **kwargs):
+        del cmd
+        captured.update(kwargs)
+        return _FakeResult()
+
+    monkeypatch.setattr(process_background.os, 'name', 'nt')
+    monkeypatch.setattr(process_background.subprocess, 'CREATE_NO_WINDOW', 0x08000000, raising=False)
+    monkeypatch.setattr(subprocess, 'run', _fake_run)
+
+    assert _discover_running_ccb_sessions('/x/herdr.exe') == []
+    assert captured['creationflags'] == 0x08000000
+
+
+def test_probe_herdr_read_capabilities_hides_windows_console(monkeypatch) -> None:
+    import subprocess
+
+    from cli.services.herdr_bootstrap import _probe_herdr_read_capabilities
+
+    captured_flags: list[int] = []
+
+    class _FakeResult:
+        returncode = 0
+        stdout = '{}'
+
+    def _fake_run(cmd, **kwargs):
+        del cmd
+        captured_flags.append(int(kwargs['creationflags']))
+        return _FakeResult()
+
+    monkeypatch.setattr(process_background.os, 'name', 'nt')
+    monkeypatch.setattr(process_background.subprocess, 'CREATE_NO_WINDOW', 0x08000000, raising=False)
+    monkeypatch.setattr(subprocess, 'run', _fake_run)
+
+    _probe_herdr_read_capabilities('/x/herdr.exe', session='ccb-proj-abc')
+    assert captured_flags == [0x08000000, 0x08000000, 0x08000000]
 
 
 # ---------------------------------------------------------------------------

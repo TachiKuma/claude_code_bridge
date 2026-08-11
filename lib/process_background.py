@@ -16,8 +16,14 @@ def background_process_kwargs() -> dict[str, object]:
     return kwargs
 
 
+def no_window_process_kwargs() -> dict[str, object]:
+    if os.name != 'nt':
+        return {}
+    return {'creationflags': _subprocess_flag('CREATE_NO_WINDOW', 0x08000000)}
+
+
 def _subprocess_flag(name: str, fallback: int) -> int:
     return int(getattr(subprocess, name, fallback) or fallback)
 
 
-__all__ = ['background_process_kwargs']
+__all__ = ['background_process_kwargs', 'no_window_process_kwargs']
