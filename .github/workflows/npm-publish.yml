@@ -64,6 +64,7 @@ jobs:
             "SHA256SUMS",
             "ccb-linux-x86_64.tar.gz",
             "ccb-macos-universal.tar.gz",
+            "ccb-windows-x86_64.zip",
             `ccb-mobile-${tag}.apk`,
             `ccb-mobile-${tag}.json`,
           ]));

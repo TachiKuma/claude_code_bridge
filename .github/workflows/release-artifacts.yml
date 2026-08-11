@@ -34,6 +34,10 @@ jobs:
             os: macos-latest
             script: scripts/build_macos_release.py
             artifact: ccb-macos-universal.tar.gz
+          - platform: windows
+            os: windows-2022
+            script: scripts/build_windows_release.py
+            artifact: ccb-windows-x86_64.zip
 
     steps:
       - name: Checkout release ref
@@ -60,15 +64,27 @@ jobs:
           rm -rf dist-release
           python "${{ matrix.script }}" --output-dir dist-release --git-ref HEAD
           test -f "dist-release/${{ matrix.artifact }}"
-          tar -tzf "dist-release/${{ matrix.artifact }}" | grep -F BUILD_INFO.json
-          tar -tzf "dist-release/${{ matrix.artifact }}" | grep -F assets/weixin.png
+          if [[ "${{ matrix.artifact }}" == *.zip ]]; then
+            python -m zipfile -l "dist-release/${{ matrix.artifact }}" | tee dist-release/archive-list.txt
+          else
+            tar -tzf "dist-release/${{ matrix.artifact }}" | tee dist-release/archive-list.txt
+          fi
+          grep -F BUILD_INFO.json dist-release/archive-list.txt
+          grep -F assets/weixin.png dist-release/archive-list.txt
 
       - name: Verify Rust helpers
         shell: bash
         run: |
           set -euo pipefail
           verify_dir="$(mktemp -d)"
-          tar -xzf "dist-release/${{ matrix.artifact }}" -C "$verify_dir"
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            export VERIFY_DIR="$verify_dir"
+            powershell -NoProfile -Command 'Expand-Archive -LiteralPath "dist-release/${{ matrix.artifact }}" -DestinationPath "$env:VERIFY_DIR" -Force'
+            helper="$verify_dir/ccb-windows-x86_64/bin/ccb-agent-sidebar.exe"
+            rs_helper="$verify_dir/ccb-windows-x86_64/bin/ccb-rs-helper.exe"
+          else
+            tar -xzf "dist-release/${{ matrix.artifact }}" -C "$verify_dir"
+          fi
           if [ "${{ matrix.platform }}" = "macos" ]; then
             helper="$verify_dir/ccb-macos-universal/bin/ccb-agent-sidebar"
             rs_helper="$verify_dir/ccb-macos-universal/bin/ccb-rs-helper"
@@ -79,7 +95,7 @@ jobs:
             grep -F 'universal binary' "$verify_dir/sidebar-file.txt"
             grep -F 'universal binary' "$verify_dir/rs-helper-file.txt"
             grep -F 'universal binary' "$verify_dir/runtime-accelerator-file.txt"
-          else
+          elif [ "${{ matrix.platform }}" = "linux" ]; then
             helper="$verify_dir/ccb-linux-x86_64/bin/ccb-agent-sidebar"
             rs_helper="$verify_dir/ccb-linux-x86_64/bin/ccb-rs-helper"
             accelerator="$verify_dir/ccb-linux-x86_64/bin/ccb-runtime-accelerator"
@@ -94,15 +110,17 @@ jobs:
             exit "$rc"
           fi
           "$rs_helper" --capabilities | grep -F 'native.output.observe'
-          accelerator_socket="$("$accelerator" socket-path --project-root "$verify_dir")"
-          case "$accelerator_socket" in
-            */.ccb/runtime-accelerator/accelerator.sock|*/ccb-runtime/accelerator-*.sock)
-              ;;
-            *)
-              echo "Unexpected runtime accelerator socket path: $accelerator_socket" >&2
-              exit 1
-              ;;
-          esac
+          if [ "${{ matrix.platform }}" != "windows" ]; then
+            accelerator_socket="$("$accelerator" socket-path --project-root "$verify_dir")"
+            case "$accelerator_socket" in
+              */.ccb/runtime-accelerator/accelerator.sock|*/ccb-runtime/accelerator-*.sock)
+                ;;
+              *)
+                echo "Unexpected runtime accelerator socket path: $accelerator_socket" >&2
+                exit 1
+                ;;
+            esac
+          fi
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
@@ -257,10 +275,11 @@ jobs:
           cd dist-release
           test -f ccb-linux-x86_64.tar.gz
           test -f ccb-macos-universal.tar.gz
+          test -f ccb-windows-x86_64.zip
           test -f "ccb-mobile-${TAG_NAME}.apk"
           test -f "ccb-mobile-${TAG_NAME}.json"
           test -f "ccb-mobile-latest.json"
-          sha256sum ccb-*.tar.gz ccb-mobile-*.apk ccb-mobile-*.json | sort -k2 > SHA256SUMS
+          sha256sum ccb-*.tar.gz ccb-*.zip ccb-mobile-*.apk ccb-mobile-*.json | sort -k2 > SHA256SUMS
           sha256sum -c SHA256SUMS
           notes_file="$GITHUB_WORKSPACE/docs/releases/${TAG_NAME}.md"
           test -s "$notes_file"
@@ -279,6 +298,6 @@ jobs:
               --title "$TAG_NAME" \
               --notes-file "$notes_file"
           fi
-          gh release upload "$TAG_NAME" ccb-linux-x86_64.tar.gz ccb-macos-universal.tar.gz "ccb-mobile-${TAG_NAME}.apk" "ccb-mobile-${TAG_NAME}.json" ccb-mobile-latest.json SHA256SUMS \
+          gh release upload "$TAG_NAME" ccb-linux-x86_64.tar.gz ccb-macos-universal.tar.gz ccb-windows-x86_64.zip "ccb-mobile-${TAG_NAME}.apk" "ccb-mobile-${TAG_NAME}.json" ccb-mobile-latest.json SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" \
             --clobber

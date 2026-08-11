@@ -291,6 +291,13 @@ def test_release_artifact_name_uses_macos_universal_bundle(monkeypatch) -> None:
     assert update_runtime._release_artifact_name() == "ccb-macos-universal.tar.gz"
 
 
+def test_release_artifact_name_uses_windows_x64_zip(monkeypatch) -> None:
+    monkeypatch.setattr(update_runtime.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(update_runtime.platform, "machine", lambda: "AMD64")
+
+    assert update_runtime._release_artifact_name() == "ccb-windows-x86_64.zip"
+
+
 def test_release_artifact_url_points_to_release_download() -> None:
     url = update_runtime._release_artifact_url("6.0.0", artifact_name="ccb-linux-x86_64.tar.gz")
 
