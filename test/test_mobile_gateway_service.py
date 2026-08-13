@@ -319,10 +319,24 @@ class _FakeCcbdClientWithConversationComms(_FakeCcbdClient):
         return payload
 
 
+class _FakePiCcbdClientWithConversationComms(_FakeCcbdClientWithConversationComms):
+    def project_view(self, *, schema_version: int = 1) -> dict[str, object]:
+        payload = super().project_view(schema_version=schema_version)
+        payload['view']['agents'][0]['provider'] = 'pi'
+        return payload
+
+
 class _FakeClaudeCcbdClient(_FakeCcbdClient):
     def project_view(self, *, schema_version: int = 1) -> dict[str, object]:
         payload = super().project_view(schema_version=schema_version)
         payload['view']['agents'][0]['provider'] = 'claude'
+        return payload
+
+
+class _FakePiCcbdClient(_FakeCcbdClient):
+    def project_view(self, *, schema_version: int = 1) -> dict[str, object]:
+        payload = super().project_view(schema_version=schema_version)
+        payload['view']['agents'][0]['provider'] = 'pi'
         return payload
 
 
@@ -421,6 +435,7 @@ def _service(
     terminal_session_factory=None,
     terminal_history_factory=None,
     terminal_message_sender=None,
+    host_terminal_manager=None,
     provider_quota_service=None,
     clock=None,
 ) -> MobileGatewayService:
@@ -434,6 +449,7 @@ def _service(
         terminal_session_factory=terminal_session_factory,
         terminal_history_factory=terminal_history_factory,
         terminal_message_sender=terminal_message_sender,
+        host_terminal_manager=host_terminal_manager,
         provider_quota_service=provider_quota_service,
     )
 
@@ -2317,6 +2333,74 @@ def test_codex_native_user_file_link_has_download_attachment(tmp_path: Path) -> 
     ]
 
 
+def test_codex_native_agent_workspace_file_link_is_downloadable(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo'
+    report_path = (
+        project_root
+        / '.ccb'
+        / 'workspaces'
+        / 'mobile'
+        / 'tmp'
+        / 'workspace-report.pdf'
+    )
+    report_path.parent.mkdir(parents=True)
+    report_path.write_bytes(b'workspace pdf body\n')
+    _write_codex_rollout(
+        project_root,
+        agent='mobile',
+        thread_id='thread-native-workspace-file',
+        records=[
+            {
+                'timestamp': '2026-06-25T12:00:01.000Z',
+                'type': 'response_item',
+                'payload': {
+                    'type': 'message',
+                    'role': 'assistant',
+                    'content': [
+                        {
+                            'type': 'output_text',
+                            'text': f'[workspace report]({report_path})',
+                        }
+                    ],
+                },
+            },
+        ],
+    )
+    service = _service(
+        _FakeCcbdClient(),
+        project_root=project_root,
+        mobile_dir=tmp_path / 'mobile',
+    )
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view', 'file_download'),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
+
+    _, payload = service.dispatch_get(
+        '/v1/projects/proj-demo/agents/mobile/conversation?namespace_epoch=4&limit=20',
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+
+    item = payload['conversation']['items'][0]
+    assert item['kind'] == 'agent_reply'
+    assert item['body'].startswith('[workspace report](ccb-artifact://')
+    assert [attachment['file_name'] for attachment in item['attachments']] == [
+        'workspace-report.pdf',
+    ]
+    attachment = item['attachments'][0]
+    status, content, headers = service.dispatch_file_download(
+        f'/v1/projects/proj-demo/agents/mobile/files/{attachment["file_id"]}',
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+    assert status == 200
+    assert content == b'workspace pdf body\n'
+    assert headers['content-type'] == 'application/pdf'
+
+
 def test_agent_conversation_completes_codex_response_assistant_from_task_marker(
     tmp_path: Path,
 ) -> None:
@@ -2382,6 +2466,275 @@ def test_agent_conversation_completes_codex_response_assistant_from_task_marker(
     assert native_items[1]['completed_at'] == '2026-06-25T12:00:05.000Z'
     assert native_items[1]['sent_at'] == '2026-06-25T12:00:05.000Z'
     assert native_items[1]['duration_ms'] == 4000
+
+
+def test_agent_conversation_prefers_pi_native_transcript_and_refreshes_cache(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / 'repo'
+    jobs_dir = project_root / '.ccb' / 'agents' / 'mobile'
+    jobs_dir.mkdir(parents=True)
+    (jobs_dir / 'jobs.jsonl').write_text(
+        json.dumps(
+            {
+                'job_id': 'stale-pi-job',
+                'status': 'completed',
+                'agent_name': 'mobile',
+                'request': {'body': 'stale structured prompt'},
+            }
+        )
+        + '\n',
+        encoding='utf-8',
+    )
+    transcript_path = _write_pi_transcript(
+        project_root,
+        agent='mobile',
+        session_id='pi-session-native',
+        records=[
+            {
+                'type': 'model_change',
+                'id': 'pi-config',
+                'parentId': None,
+                'timestamp': '2026-06-25T12:00:00.000Z',
+            },
+            {
+                'type': 'message',
+                'id': 'pi-user-1',
+                'parentId': 'pi-config',
+                'timestamp': '2026-06-25T12:00:01.000Z',
+                'message': {
+                    'role': 'user',
+                    'content': [{'type': 'text', 'text': 'pi native question'}],
+                },
+            },
+            {
+                'type': 'message',
+                'id': 'pi-assistant-1',
+                'parentId': 'pi-user-1',
+                'timestamp': '2026-06-25T12:00:02.000Z',
+                'message': {
+                    'role': 'assistant',
+                    'content': [
+                        {'type': 'thinking', 'thinking': 'hidden pi thinking'},
+                        {'type': 'text', 'text': 'pi native answer'},
+                        {
+                            'type': 'toolCall',
+                            'id': 'call-hidden',
+                            'name': 'bash',
+                            'arguments': {'command': 'hidden tool command'},
+                        },
+                    ],
+                },
+            },
+            {
+                'type': 'message',
+                'id': 'pi-branch-user',
+                'parentId': 'pi-user-1',
+                'timestamp': '2026-06-25T12:00:03.000Z',
+                'message': {
+                    'role': 'user',
+                    'content': [{'type': 'text', 'text': 'inactive branch question'}],
+                },
+            },
+            {
+                'type': 'message',
+                'id': 'pi-branch-assistant',
+                'parentId': 'pi-branch-user',
+                'timestamp': '2026-06-25T12:00:04.000Z',
+                'message': {
+                    'role': 'assistant',
+                    'content': [{'type': 'text', 'text': 'inactive branch answer'}],
+                },
+            },
+            {
+                'type': 'message',
+                'id': 'pi-user-2',
+                'parentId': 'pi-assistant-1',
+                'timestamp': '2026-06-25T12:00:05.000Z',
+                'message': {
+                    'role': 'user',
+                    'content': [
+                        {
+                            'type': 'text',
+                            'text': (
+                                'CCB_REQ_ID: pi-request\n\n'
+                                'clean pi prompt\n\n'
+                                'CCB reply guidance:\n'
+                                '- Answer directly and concisely.\n'
+                            ),
+                        }
+                    ],
+                },
+            },
+            {
+                'type': 'message',
+                'id': 'pi-assistant-2a',
+                'parentId': 'pi-user-2',
+                'timestamp': '2026-06-25T12:00:06.000Z',
+                'message': {
+                    'role': 'assistant',
+                    'content': [{'type': 'text', 'text': 'step one'}],
+                },
+            },
+            {
+                'type': 'message',
+                'id': 'pi-tool-result',
+                'parentId': 'pi-assistant-2a',
+                'timestamp': '2026-06-25T12:00:07.000Z',
+                'message': {
+                    'role': 'toolResult',
+                    'content': [{'type': 'text', 'text': 'hidden tool result'}],
+                },
+            },
+            {
+                'type': 'message',
+                'id': 'pi-assistant-2b',
+                'parentId': 'pi-tool-result',
+                'timestamp': '2026-06-25T12:00:08.000Z',
+                'message': {
+                    'role': 'assistant',
+                    'content': [{'type': 'text', 'text': 'step two'}],
+                },
+            },
+        ],
+        partial_tail='{"type":"message","id":"partial"',
+    )
+    _write_pi_transcript(
+        project_root,
+        agent='mobile',
+        session_id='wrong-project',
+        cwd=tmp_path / 'other-repo',
+        records=[
+            {
+                'type': 'message',
+                'id': 'wrong-user',
+                'parentId': None,
+                'timestamp': '2026-06-25T11:00:01.000Z',
+                'message': {
+                    'role': 'user',
+                    'content': [{'type': 'text', 'text': 'wrong project history'}],
+                },
+            },
+        ],
+    )
+
+    service = _service(
+        _FakePiCcbdClient(),
+        project_root=project_root,
+        mobile_dir=tmp_path / 'mobile',
+    )
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view',),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
+    route = '/v1/projects/proj-demo/agents/mobile/conversation?namespace_epoch=4&limit=20'
+    headers = {'Authorization': f'Bearer {claim["device_token"]}'}
+
+    status, payload = service.dispatch_get(route, headers)
+
+    assert status == 200
+    items = payload['conversation']['items']
+    assert [item.get('source') for item in items] == ['provider_native/pi'] * 4
+    assert [(item['kind'], item['body']) for item in items] == [
+        ('user_message', 'pi native question'),
+        ('agent_reply', 'pi native answer'),
+        ('user_message', 'clean pi prompt'),
+        ('agent_reply', 'step one\n\nstep two'),
+    ]
+    assert items[0]['sent_at'] == '2026-06-25T12:00:01.000Z'
+    assert items[1]['completed_at'] == '2026-06-25T12:00:02.000Z'
+    public_json = json.dumps(payload)
+    for hidden in (
+        'hidden pi thinking',
+        'hidden tool command',
+        'hidden tool result',
+        'inactive branch question',
+        'inactive branch answer',
+        'wrong project history',
+        'CCB_REQ_ID',
+        'CCB reply guidance',
+        'stale structured prompt',
+    ):
+        assert hidden not in public_json
+
+    with transcript_path.open('a', encoding='utf-8') as stream:
+        stream.write('\n')
+        stream.write(json.dumps({
+            'type': 'message',
+            'id': 'pi-user-3',
+            'parentId': 'pi-assistant-2b',
+            'timestamp': '2026-06-25T12:00:09.000Z',
+            'message': {
+                'role': 'user',
+                'content': [{'type': 'text', 'text': 'new pi question'}],
+            },
+        }) + '\n')
+        stream.write(json.dumps({
+            'type': 'message',
+            'id': 'pi-assistant-3',
+            'parentId': 'pi-user-3',
+            'timestamp': '2026-06-25T12:00:10.000Z',
+            'message': {
+                'role': 'assistant',
+                'content': [{'type': 'text', 'text': 'new pi answer'}],
+            },
+        }) + '\n')
+
+    _, refreshed = service.dispatch_get(route, headers)
+    assert [(item['kind'], item['body']) for item in refreshed['conversation']['items'][-2:]] == [
+        ('user_message', 'new pi question'),
+        ('agent_reply', 'new pi answer'),
+    ]
+
+
+def test_agent_conversation_does_not_fallback_for_pi_without_native_transcript(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / 'repo'
+    snapshot_dir = project_root / '.ccb' / 'ccbd' / 'snapshots'
+    snapshot_dir.mkdir(parents=True)
+    (snapshot_dir / 'job_mobile_reply.json').write_text(
+        json.dumps({'latest_decision': {'reply': 'stale pi completion'}}),
+        encoding='utf-8',
+    )
+    jobs_dir = project_root / '.ccb' / 'agents' / 'mobile'
+    jobs_dir.mkdir(parents=True)
+    (jobs_dir / 'jobs.jsonl').write_text(
+        json.dumps({
+            'job_id': 'stale-pi-job',
+            'status': 'completed',
+            'agent_name': 'mobile',
+            'request': {'body': 'stale pi job prompt'},
+        }) + '\n',
+        encoding='utf-8',
+    )
+    service = _service(
+        _FakePiCcbdClientWithConversationComms(),
+        project_root=project_root,
+        mobile_dir=tmp_path / 'mobile',
+    )
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view',),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
+
+    _, payload = service.dispatch_get(
+        '/v1/projects/proj-demo/agents/mobile/conversation?namespace_epoch=4&limit=20',
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+
+    assert payload['conversation']['items'] == []
+    assert 'stale pi completion' not in json.dumps(payload)
+    assert 'stale pi job prompt' not in json.dumps(payload)
+    assert 'question from phone' not in json.dumps(payload)
 
 
 def test_agent_conversation_prefers_claude_native_transcript(tmp_path: Path) -> None:
@@ -3587,18 +3940,33 @@ def test_non_native_conversation_resolves_project_file_links(tmp_path: Path) -> 
     outside_dir = tmp_path / 'downloads'
     snapshot_dir = project_root / '.ccb' / 'ccbd' / 'snapshots'
     jobs_dir = project_root / '.ccb' / 'agents' / 'mobile'
+    agent_workspace_dir = project_root / '.ccb' / 'workspaces' / 'mobile'
+    other_workspace_dir = project_root / '.ccb' / 'workspaces' / 'other'
     docs_dir = project_root / 'docs'
     snapshot_dir.mkdir(parents=True)
     jobs_dir.mkdir(parents=True)
+    agent_workspace_dir.mkdir(parents=True)
+    other_workspace_dir.mkdir(parents=True)
     docs_dir.mkdir(parents=True)
     outside_dir.mkdir()
     report_path = docs_dir / 'report.txt'
+    workspace_report_path = agent_workspace_dir / 'tmp' / 'workspace-report.pdf'
+    other_workspace_report_path = other_workspace_dir / 'tmp' / 'other-report.pdf'
+    workspace_metadata_path = agent_workspace_dir / '.git'
+    workspace_hidden_path = agent_workspace_dir / 'tmp' / '.private' / 'state.json'
     release_path = outside_dir / 'ccb-mobile-release.apk'
     notes_path = outside_dir / 'release-notes.txt'
     oversized_path = outside_dir / 'oversized.bin'
     hidden_path = project_root / '.ccb' / 'secret.txt'
     encoded_percent_path = docs_dir / 'a%2Fb.txt'
     report_path.write_text('report body\n', encoding='utf-8')
+    workspace_report_path.parent.mkdir()
+    workspace_report_path.write_bytes(b'workspace pdf body\n')
+    other_workspace_report_path.parent.mkdir()
+    other_workspace_report_path.write_bytes(b'other workspace pdf body\n')
+    workspace_metadata_path.write_text('gitdir: private\n', encoding='utf-8')
+    workspace_hidden_path.parent.mkdir()
+    workspace_hidden_path.write_text('{"secret": true}\n', encoding='utf-8')
     release_path.write_bytes(b'release apk body\n')
     notes_path.write_text('release notes\n', encoding='utf-8')
     encoded_percent_path.write_text('percent path\n', encoding='utf-8')
@@ -3624,6 +3992,10 @@ def test_non_native_conversation_resolves_project_file_links(tmp_path: Path) -> 
                     'reply': (
                         'Generated files:\n'
                         '- [report](docs/report.txt)\n'
+                        f'- [workspace report]({workspace_report_path})\n'
+                        f'- [other workspace report]({other_workspace_report_path})\n'
+                        f'- [workspace metadata]({workspace_metadata_path})\n'
+                        f'- [workspace hidden state]({workspace_hidden_path})\n'
                         '- [hidden](.ccb/secret.txt)\n'
                         f'- [outside]({release_path})\n'
                         f'- [file URI]({notes_path.as_uri()})\n'
@@ -3670,15 +4042,32 @@ def test_non_native_conversation_resolves_project_file_links(tmp_path: Path) -> 
     )
     assert 'ccb-artifact://' in reply['body']
     assert '[hidden](.ccb/secret.txt)' in reply['body']
+    assert f'[other workspace report]({other_workspace_report_path})' in reply['body']
+    assert f'[workspace metadata]({workspace_metadata_path})' in reply['body']
+    assert f'[workspace hidden state]({workspace_hidden_path})' in reply['body']
     assert '[directory]' in reply['body']
     assert f'[oversized]({oversized_path})' in reply['body']
     assert '[remote file URI](file://remote-host/etc/hosts)' in reply['body']
     assert [item['file_name'] for item in reply['attachments']] == [
         'report.txt',
+        'workspace-report.pdf',
         'ccb-mobile-release.apk',
         'release-notes.txt',
         'a%2Fb.txt',
     ]
+
+    workspace_report = next(
+        item
+        for item in reply['attachments']
+        if item['file_name'] == 'workspace-report.pdf'
+    )
+    status, content, headers = service.dispatch_file_download(
+        f'/v1/projects/proj-demo/agents/mobile/files/{workspace_report["file_id"]}',
+        {'Authorization': f'Bearer {claim["device_token"]}'},
+    )
+    assert status == 200
+    assert content == b'workspace pdf body\n'
+    assert headers['x-ccb-file-name'] == 'workspace-report.pdf'
 
     release = next(
         item
@@ -4357,6 +4746,7 @@ def test_pairing_claim_creates_hashed_device_records_and_audit(tmp_path: Path) -
         'file_download',
         'file_upload',
         'focus',
+        'host_terminal',
         'lifecycle',
         'message_submit',
         'notify',
@@ -4801,6 +5191,120 @@ def test_terminal_open_requires_terminal_scope_and_mints_hashed_token(tmp_path: 
     assert str(handle['terminal_token']) not in stored_audit
     assert 'sha256:' in stored_tokens
     assert '"last_input_seq": 0' in stored_tokens
+
+
+def test_host_terminal_open_and_terminate_are_device_scoped(tmp_path: Path) -> None:
+    class RecordingHostTerminalManager:
+        def __init__(self) -> None:
+            self.attach_calls: list[dict[str, object]] = []
+            self.terminate_calls: list[dict[str, str]] = []
+
+        def attach_target(self, **kwargs):
+            self.attach_calls.append(dict(kwargs))
+            slot = str(kwargs['client_session_id'])
+            return terminal_module.TerminalAttachTarget(
+                terminal_id=str(kwargs['terminal_id']),
+                socket_path='/tmp/private-host-terminal.sock',
+                session_name=f'private-{slot}',
+                pane_id='%9',
+                geometry=kwargs['geometry'],
+                target_summary={
+                    'kind': 'host_shell',
+                    'project_id': '@host',
+                    'client_session_id': slot,
+                    'display_name': str(kwargs['display_name']),
+                    'working_directory': '~',
+                },
+                include_history=bool(kwargs['include_history']),
+            )
+
+        def terminate(self, **kwargs):
+            self.terminate_calls.append({key: str(value) for key, value in kwargs.items()})
+            return True
+
+    manager = RecordingHostTerminalManager()
+    service = _service(
+        _FakeCcbdClient(),
+        mobile_dir=tmp_path / 'mobile',
+        host_terminal_manager=manager,
+    )
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view', 'host_terminal'),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code']), 'device_name': 'Phone A'},
+    )
+    headers = {
+        'Authorization': f'Bearer {claim["device_token"]}',
+        'Host': '127.0.0.1:8787',
+    }
+
+    status, handle = service.dispatch_post(
+        '/v1/terminals',
+        {
+            'schema_version': 1,
+            'client_session_id': 'shell-2',
+            'display_name': 'Shell 2',
+            'geometry': {'columns': 100, 'rows': 30},
+        },
+        headers,
+    )
+
+    assert status == 201
+    assert handle['target_epoch'] == 0
+    assert handle['target_summary'] == {
+        'kind': 'host_shell',
+        'project_id': '@host',
+        'client_session_id': 'shell-2',
+        'display_name': 'Shell 2',
+        'working_directory': '~',
+    }
+    assert '/tmp/private-host-terminal.sock' not in json.dumps(handle)
+    assert manager.attach_calls[0]['device_id'] == claim['device']['device_id']
+
+    status, terminated = service.dispatch_post(
+        '/v1/terminals/terminate',
+        {'client_session_id': 'shell-2'},
+        headers,
+    )
+    assert status == 200
+    assert terminated['terminated'] is True
+    assert terminated['revoked_terminal_count'] == 1
+    assert manager.terminate_calls == [
+        {
+            'device_id': str(claim['device']['device_id']),
+            'client_session_id': 'shell-2',
+        }
+    ]
+    with pytest.raises(MobileGatewayPairingError) as revoked:
+        MobileGatewayPairingStore(tmp_path / 'mobile').authenticate_terminal_token(
+            terminal_id=str(handle['terminal_id']),
+            terminal_token=str(handle['terminal_token']),
+        )
+    assert revoked.value.reason == 'revoked'
+
+
+def test_host_terminal_requires_dedicated_scope(tmp_path: Path) -> None:
+    service = _service(_FakeCcbdClient(), mobile_dir=tmp_path / 'mobile')
+    pairing = service.create_pairing_payload(
+        gateway_url='http://127.0.0.1:8787',
+        scopes=('view', 'terminal_input'),
+    )
+    _, claim = service.dispatch_post(
+        '/v1/pairing/claim',
+        {'pairing_code': str(pairing['pairing_code'])},
+    )
+
+    with pytest.raises(MobileGatewayError) as denied:
+        service.dispatch_post(
+            '/v1/terminals',
+            {'client_session_id': 'shell-1', 'display_name': 'Shell 1'},
+            {'Authorization': f'Bearer {claim["device_token"]}'},
+        )
+
+    assert denied.value.status_code == 403
 
 
 @pytest.mark.parametrize(
@@ -5898,6 +6402,37 @@ def test_http_server_exposes_g1_get_endpoints(tmp_path: Path) -> None:
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def _write_pi_transcript(
+    project_root: Path,
+    *,
+    agent: str,
+    session_id: str,
+    records: list[dict[str, object]],
+    cwd: Path | None = None,
+    partial_tail: str | None = None,
+) -> Path:
+    session_dir = (
+        project_root / '.ccb' / 'agents' / agent / 'provider-state' / 'pi' / 'sessions'
+    )
+    transcript_path = session_dir / f'2026-06-25T12-00-00-000Z_{session_id}.jsonl'
+    transcript_path.parent.mkdir(parents=True, exist_ok=True)
+    header = {
+        'type': 'session',
+        'version': 3,
+        'id': session_id,
+        'timestamp': '2026-06-25T12:00:00.000Z',
+        'cwd': str(cwd or project_root),
+    }
+    content = ''.join(
+        f'{json.dumps(record)}\n'
+        for record in (header, *records)
+    )
+    if partial_tail is not None:
+        content += partial_tail
+    transcript_path.write_text(content, encoding='utf-8')
+    return transcript_path
 
 
 def _write_codex_rollout(

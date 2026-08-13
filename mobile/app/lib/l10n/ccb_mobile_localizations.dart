@@ -273,6 +273,27 @@ class CcbMobileLocalizations {
 
   String get openTerminal => isChinese ? '打开终端' : 'Open Terminal';
 
+  String get computerTerminal => isChinese ? '电脑终端' : 'Computer terminal';
+
+  String get newTerminal => isChinese ? '新建终端' : 'New terminal';
+
+  String get closeTerminal => isChinese ? '关闭当前终端' : 'Close terminal';
+
+  String closeTerminalQuestion(String name) =>
+      isChinese
+          ? '终止 $name 中运行的 shell？'
+          : 'Terminate the shell running in $name?';
+
+  String shellName(int index) => isChinese ? '终端 $index' : 'Shell $index';
+
+  String get maximumTerminalsReached =>
+      isChinese ? '最多可同时打开 6 个终端' : 'Up to 6 terminals can be open';
+
+  String get hostTerminalAccessUnavailable =>
+      isChinese
+          ? '当前配对未启用电脑终端权限，请重新配对'
+          : 'Re-pair to enable computer terminal access';
+
   String get chooseTerminalProject =>
       isChinese ? '选择项目和终端' : 'Choose a project and terminal';
 
@@ -319,6 +340,8 @@ class CcbMobileLocalizations {
 
   String get cancel => isChinese ? '取消' : 'Cancel';
 
+  String get close => isChinese ? '关闭' : 'Close';
+
   String get open => isChinese ? '打开' : 'Open';
 
   String get removeAttachment => isChinese ? '移除附件' : 'Remove attachment';
@@ -348,6 +371,8 @@ class CcbMobileLocalizations {
   String get providerControl => isChinese ? '模型与用量' : 'Model and usage';
 
   String get providerModel => isChinese ? '模型' : 'Model';
+
+  String get providerSelectModel => isChinese ? '选择模型' : 'Select model';
 
   String get providerThinking => isChinese ? '思考强度' : 'Thinking';
 
@@ -382,13 +407,15 @@ class CcbMobileLocalizations {
 
   String get providerSave => isChinese ? '保存选择' : 'Save selection';
 
+  String get providerApply => isChinese ? '应用' : 'Apply';
+
   String get providerSaving => isChinese ? '正在保存' : 'Saving';
 
   String get providerRefresh =>
       isChinese ? '刷新模型与用量' : 'Refresh model and usage';
 
   String get providerConfirmTitle =>
-      isChinese ? '保存模型选择？' : 'Save model selection?';
+      isChinese ? '应用模型设置？' : 'Apply model settings?';
 
   String get providerConfirmBody =>
       isChinese
@@ -399,6 +426,49 @@ class CcbMobileLocalizations {
       isChinese
           ? '当前配对未授权修改模型，请重新配对后再试。'
           : 'This pairing cannot change models. Re-pair to grant access.';
+
+  String get providerHostUpdateRequired =>
+      isChinese
+          ? '电脑端 CCB 版本不支持模型控制。请在电脑执行 ccb update，然后重新连接。'
+          : 'The computer CCB version does not support model controls. Run ccb update on the computer, then reconnect.';
+
+  String get providerRequestRejected =>
+      isChinese
+          ? '电脑端拒绝了这次设置。请刷新模型状态后重试。'
+          : 'The computer rejected this setting. Refresh the model state and try again.';
+
+  String get providerNoModels => isChinese ? '没有可选模型' : 'No selectable models';
+
+  String get providerUsageDetails =>
+      isChinese ? '查看用量详情' : 'View usage details';
+
+  String providerThinkingOption(String option) {
+    final normalized = option.trim().toLowerCase();
+    if (isChinese) {
+      return switch (normalized) {
+        'off' => '关闭',
+        'minimal' => '最低',
+        'low' => '低',
+        'medium' => '中',
+        'high' => '高',
+        'xhigh' || 'extra_high' || 'extra-high' => '超高',
+        'max' => '最高',
+        'ultra' => '极致',
+        _ => option,
+      };
+    }
+    return switch (normalized) {
+      'off' => 'Off',
+      'minimal' => 'Minimal',
+      'low' => 'Low',
+      'medium' => 'Medium',
+      'high' => 'High',
+      'xhigh' || 'extra_high' || 'extra-high' => 'Extra high',
+      'max' => 'Max',
+      'ultra' => 'Ultra',
+      _ => option,
+    };
+  }
 
   String get searchModels => isChinese ? '搜索模型' : 'Search models';
 

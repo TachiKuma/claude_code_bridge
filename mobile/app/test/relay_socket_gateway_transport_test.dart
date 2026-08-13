@@ -8,6 +8,33 @@ import 'package:ccb_mobile/ccb_mobile.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:test/test.dart';
 
+const _relayHarnessUnaryOperations = {
+  'pair_claim',
+  'health',
+  'device',
+  'list_projects',
+  'get_project_view',
+  'get_agent_provider_control',
+  'get_agent_provider_quota',
+  'update_agent_provider_settings',
+  'focus_agent',
+  'focus_window',
+  'terminal_history',
+  'agent_conversation',
+  'submit_agent_message',
+  'lifecycle',
+  'open_terminal',
+  'open_host_terminal',
+  'terminate_host_terminal',
+};
+
+const _relayHarnessStreamOperations = {
+  'terminal',
+  'notifications',
+  'file_upload',
+  'file_download',
+};
+
 void main() {
   test(
     'socket relay transport handshakes and opens encrypted project view',
@@ -197,6 +224,47 @@ void main() {
     },
   );
 
+  test(
+    'rejects provider controls before sending to an older relay host',
+    () async {
+      final hostSeed = List<int>.generate(32, (index) => index + 101);
+      final hostPublicKeyB64 = await _publicKeyB64(hostSeed);
+      final hostFingerprint = await hostFingerprintForPublicKey(
+        hostPublicKeyB64,
+      );
+      final relay = await _RelaySocketHarness.start(
+        hostSeed: hostSeed,
+        hostFingerprint: hostFingerprint,
+        unaryOperations: const {'health', 'get_project_view'},
+      );
+      addTearDown(relay.stop);
+      final transport = RelaySocketGatewayTransport(
+        profile: await _profile(
+          relayOrigin: relay.origin,
+          hostFingerprint: hostFingerprint,
+        ),
+        deviceToken: 'device-secret',
+        allowInsecureLoopbackForTests: true,
+      );
+      addTearDown(() => transport.close(force: true));
+
+      await expectLater(
+        transport.getAgentProviderControl(
+          projectId: 'proj-demo',
+          agentName: 'worker1',
+        ),
+        throwsA(
+          isA<RelayGatewayException>().having(
+            (error) => error.message,
+            'message',
+            'operation_not_allowed',
+          ),
+        ),
+      );
+      expect(relay.requests, isEmpty);
+    },
+  );
+
   test('fails closed on host fingerprint mismatch', () async {
     final hostSeed = List<int>.generate(32, (index) => index + 101);
     final hostPublicKeyB64 = await _publicKeyB64(hostSeed);
@@ -310,6 +378,40 @@ void main() {
         'bytes_b64': base64Encode(utf8.encode('relay-input')),
       },
     ]);
+  });
+
+  test('host terminal open and terminate use relay unary operations', () async {
+    final hostSeed = List<int>.generate(32, (index) => index + 101);
+    final hostPublicKeyB64 = await _publicKeyB64(hostSeed);
+    final hostFingerprint = await hostFingerprintForPublicKey(hostPublicKeyB64);
+    final relay = await _RelaySocketHarness.start(
+      hostSeed: hostSeed,
+      hostFingerprint: hostFingerprint,
+    );
+    addTearDown(relay.stop);
+    final transport = RelaySocketGatewayTransport(
+      profile: await _profile(
+        relayOrigin: relay.origin,
+        hostFingerprint: hostFingerprint,
+      ),
+      deviceToken: 'device-secret',
+      allowInsecureLoopbackForTests: true,
+    );
+    addTearDown(() => transport.close(force: true));
+
+    final handle = await transport.openHostTerminal(
+      const GatewayHostTerminalOpenRequest(
+        clientSessionId: 'shell-2',
+        displayName: 'Shell 2',
+      ),
+    );
+    await transport.terminateHostTerminal(clientSessionId: 'shell-2');
+
+    expect(handle.targetSummary.projectId, '@host');
+    expect(
+      relay.requests.map((request) => request['operation']),
+      containsAllInOrder(['open_host_terminal', 'terminate_host_terminal']),
+    );
   });
 
   test(
@@ -635,6 +737,8 @@ class _RelaySocketHarness {
     required this.hostSeed,
     required this.hostFingerprint,
     required this.closeAfterFirstUnaryResponse,
+    required this.unaryOperations,
+    required this.streamOperations,
   });
 
   final HttpServer server;
@@ -642,6 +746,8 @@ class _RelaySocketHarness {
   final List<int> hostSeed;
   final String hostFingerprint;
   final bool closeAfterFirstUnaryResponse;
+  final Set<String> unaryOperations;
+  final Set<String> streamOperations;
   final visibleFrames = <String>[];
   final requests = <Map<String, Object?>>[];
   final streamOpens = <Map<String, Object?>>[];
@@ -656,6 +762,8 @@ class _RelaySocketHarness {
     required List<int> hostSeed,
     required String hostFingerprint,
     bool closeAfterFirstUnaryResponse = false,
+    Set<String> unaryOperations = _relayHarnessUnaryOperations,
+    Set<String> streamOperations = _relayHarnessStreamOperations,
   }) async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final harness = _RelaySocketHarness._(
@@ -664,6 +772,8 @@ class _RelaySocketHarness {
       hostSeed: hostSeed,
       hostFingerprint: hostFingerprint,
       closeAfterFirstUnaryResponse: closeAfterFirstUnaryResponse,
+      unaryOperations: unaryOperations,
+      streamOperations: streamOperations,
     );
     server.listen(harness._handle);
     return harness;
@@ -696,6 +806,8 @@ class _RelaySocketHarness {
       hostId: _text(clientHello.payload['host_id']),
       serverFingerprint: hostFingerprint,
       hostPublicKeyB64: hostPublicKeyB64,
+      unaryOperations: unaryOperations,
+      streamOperations: streamOperations,
     );
     final schedule = await RelayV2KeySchedule.derive(
       localPrivateKeyBytes: hostSeed,
@@ -843,6 +955,21 @@ class _RelaySocketHarness {
                       'agent': 'worker1',
                       'window': 'main',
                     },
+                  },
+                  'open_host_terminal' => {
+                    'terminal_id': 'terminal-host-demo',
+                    'terminal_token': 'terminal-host-token-demo',
+                    'expires_at': '2026-07-22T01:00:00Z',
+                    'websocket_url':
+                        'wss://loopback.invalid/v1/terminals/terminal-host-demo',
+                    'target_epoch': 0,
+                    'target_summary': {'project_id': '@host'},
+                  },
+                  'terminate_host_terminal' => {
+                    'schema_version': 1,
+                    'status': 'ok',
+                    'client_session_id': 'shell-2',
+                    'terminated': true,
                   },
                   'pair_claim' => {
                     'device_token': 'paired-device-secret',

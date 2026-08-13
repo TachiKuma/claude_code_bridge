@@ -33,7 +33,10 @@ class RelayGatewayException implements Exception {
 }
 
 class RelaySocketGatewayTransport
-    implements GatewayTransport, GatewayProviderControlTransport {
+    implements
+        GatewayTransport,
+        GatewayProviderControlTransport,
+        GatewayHostTerminalTransport {
   static const _fileChunkBytes = 32 * 1024;
   static const _maxUploadBytes = 25 * 1024 * 1024;
   static const _maxDownloadBytes = 128 * 1024 * 1024;
@@ -306,6 +309,22 @@ class RelaySocketGatewayTransport
   }
 
   @override
+  Future<GatewayTerminalHandle> openHostTerminal(
+    GatewayHostTerminalOpenRequest request,
+  ) async {
+    final body = await _requestBody('open_host_terminal', request.toJson());
+    return _terminalHandle(body);
+  }
+
+  @override
+  Future<void> terminateHostTerminal({required String clientSessionId}) async {
+    await _requestBody('terminate_host_terminal', {
+      'schema_version': 1,
+      'client_session_id': clientSessionId,
+    });
+  }
+
+  @override
   Stream<GatewayTerminalFrame> terminalFrames(
     GatewayTerminalHandle handle, {
     int? resumeCursor,
@@ -570,6 +589,10 @@ class RelaySocketGatewayTransport
       throw const RelayGatewayException('relay transport is closed');
     }
     final session = await _ensureSession();
+    if (session.advertisesUnaryOperations &&
+        !session.unaryOperations.contains(operation)) {
+      throw const RelayGatewayException('operation_not_allowed');
+    }
     final requestId = _identifier('request');
     final completer = Completer<Map<String, Object?>>();
     session.pendingRequests[requestId] = completer;
@@ -712,6 +735,14 @@ class RelaySocketGatewayTransport
         socket: socket,
         reader: reader,
         crypto: crypto,
+        unaryOperations: _stringSet(hostHello.payload['unary_operations']),
+        streamOperations: _stringSet(hostHello.payload['stream_operations']),
+        advertisesUnaryOperations: hostHello.payload.containsKey(
+          'unary_operations',
+        ),
+        advertisesStreamOperations: hostHello.payload.containsKey(
+          'stream_operations',
+        ),
       );
       crypto = null;
       _session = session;
@@ -764,6 +795,10 @@ class RelaySocketGatewayTransport
     void Function()? onReady,
   }) async {
     final session = await _ensureSession();
+    if (session.advertisesStreamOperations &&
+        !session.streamOperations.contains(operation)) {
+      throw const RelayGatewayException('operation_not_allowed');
+    }
     final streamId = _identifier('stream');
     late final _RelayClientStream stream;
     stream = _RelayClientStream(
@@ -1050,11 +1085,19 @@ class _RelaySocketSession {
     required this.socket,
     required this.reader,
     required this.crypto,
+    required this.unaryOperations,
+    required this.streamOperations,
+    required this.advertisesUnaryOperations,
+    required this.advertisesStreamOperations,
   });
 
   final WebSocket socket;
   final StreamIterator<dynamic> reader;
   final RelayCryptoSession crypto;
+  final Set<String> unaryOperations;
+  final Set<String> streamOperations;
+  final bool advertisesUnaryOperations;
+  final bool advertisesStreamOperations;
   final sendSerial = _SerialExecutor();
   final pendingRequests = <String, Completer<Map<String, Object?>>>{};
   final streams = <String, _RelayClientStream>{};

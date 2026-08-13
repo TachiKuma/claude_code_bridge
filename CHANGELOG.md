@@ -1,5 +1,34 @@
 # Changelog
 
+## v8.6.3 (2026-08-13)
+
+- CCB Mobile now turns ordinary file links under the current Agent's
+  `.ccb/workspaces/<agent>/...` tree into authenticated download attachments,
+  including generated PDF reports.
+- The workspace exception remains fail-closed: other Agent workspaces, hidden
+  workspace paths, and the rest of `.ccb` runtime state are not exposed.
+- No project configuration, pairing, or stored-state migration is required.
+
+## v8.6.2 (2026-08-13)
+
+- Added fail-closed, exact command approvals for project-local tool-window
+  commands and Provider command templates, including the explicit
+  `ccb config approve-commands` workflow (Issue #299).
+- Preserved managed Codex conversation context when the current session record
+  is corrupt by selecting the latest valid recoverable session instead of
+  silently starting fresh.
+- Added visible-pane Cursor dispatch and completion evidence, Pi native session
+  history, and OMP Provider-configuration inheritance into managed homes.
+- Expanded CCB Mobile with multi-session host terminals and Relay
+  capability-negotiated Provider controls, while hardening native Windows
+  project registration, endpoint markers, TCP descriptors, and readiness.
+- Improved native Windows process liveness and command-line handling, Herdr
+  namespace teardown, and background launcher behavior; integrated PRs #298,
+  #300, #301, and #302.
+- Projects without the newly protected command fields require no migration.
+  Intentional configured commands must be approved once and reapproved after
+  an exact value change. Windows x64 remains beta.
+
 ## v8.6.1 (2026-08-12)
 
 - Added capability-driven CCB Mobile Provider controls with explicit
