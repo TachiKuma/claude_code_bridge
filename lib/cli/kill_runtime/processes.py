@@ -13,6 +13,9 @@ def kill_pid(pid: int, *, force: bool = False) -> bool:
         return False
     try:
         if os.name == "nt":
+            # Windows: taskkill /F 强制终止进程。
+            # capture_output=True 会捕获子进程输出，若 Python 默认使用 gbk 解码可能报错。
+            # 依赖 stdio_runtime.setup_windows_encoding() 设置 PYTHONIOENCODING=utf-8 规避。
             if force:
                 subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True)
             else:
@@ -100,6 +103,8 @@ def _kill_pid_tree_once(pid: int, *, force: bool) -> bool:
 
 def _kill_pid_tree_windows(pid: int, *, force: bool) -> bool:
     try:
+        # Windows: taskkill /T 终止进程树，/F 强制终止。
+        # 输出捕获依赖 PYTHONIOENCODING=utf-8 规避 gbk 解码错误。
         subprocess.run(_taskkill_tree_args(pid, force=force), capture_output=True)
         return True
     except Exception:

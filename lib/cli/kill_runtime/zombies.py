@@ -31,6 +31,8 @@ def _list_tmux_sessions() -> list[str]:
     if os.name == "nt" or not shutil.which("tmux"):
         return []
     try:
+                # Windows 下 tmux 可能输出非 gbk 字符，依赖 PYTHONIOENCODING=utf-8 规避解码错误。
+        # 若未设置环境变量，subprocess 默认使用 gbk，可能抛出 UnicodeDecodeError。
         result = subprocess.run(
             ["tmux", "list-sessions", "-F", "#{session_name}"],
             capture_output=True,
@@ -128,6 +130,8 @@ def _cleanup_zombie_sessions(
 
 def _kill_tmux_session(session_name: str) -> bool:
     try:
+                # Windows 下 tmux 可能输出非 gbk 字符，依赖 PYTHONIOENCODING=utf-8 规避解码错误。
+        # 若未设置环境变量，subprocess 默认使用 gbk，可能抛出 UnicodeDecodeError。
         result = subprocess.run(
             ["tmux", "kill-session", "-t", session_name],
             capture_output=True,
@@ -146,3 +150,5 @@ def _print_cleanup_result(*, killed: int, failed: int) -> None:
 
 
 __all__ = ["find_all_zombie_sessions", "kill_global_zombies"]
+
+
