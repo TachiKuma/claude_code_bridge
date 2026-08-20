@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 
@@ -202,11 +203,15 @@ def test_reset_project_state_preserves_relocated_same_named_provider_history(
     (ccb_dir / 'ccb.config').write_text('agent1:codex\n', encoding='utf-8')
     initial_layout = PathLayout(project_root)
     (ccb_dir / 'runtime-root-ref.json').write_text(
-        '{"schema_version":1,"record_type":"ccb_runtime_root_ref","project_id":"'
-        + initial_layout.project_id
-        + '","runtime_state_root":"'
-        + str(relocated_root)
-        + '","created_at":"2026-05-22T00:00:00Z"}',
+        json.dumps(
+            {
+                'schema_version': 1,
+                'record_type': 'ccb_runtime_root_ref',
+                'project_id': initial_layout.project_id,
+                'runtime_state_root': str(relocated_root),
+                'created_at': '2026-05-22T00:00:00Z',
+            }
+        ),
         encoding='utf-8',
     )
     reset_layout = PathLayout(project_root)
