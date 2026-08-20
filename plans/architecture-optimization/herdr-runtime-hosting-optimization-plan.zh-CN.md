@@ -431,6 +431,35 @@ Windows live validation：
 - **Windows 行为回归**：所有真实运行时变更先走 characterization tests，再在独立
   Windows 项目做 live validation。
 
+### Windows 闪窗治理
+
+目标：尽量消除 CCB 自己制造的可见中转窗口和控制台闪现，降低 Windows 原生启动
+时的“闪窗”体感。
+
+约束：
+
+- 只允许在 CCB 侧配合 Herdr，不修改 Herdr 源码。
+- 不承诺把 Herdr 自身窗口行为改成无 UI；Herdr 作为宿主/终端前台展示仍然是其职责。
+- 不把用户主动打开 WezTerm、Herdr 主窗口的可见切换当作缺陷；这里仅治理 CCB 触发的
+  transient window。
+
+策略：
+
+- 保留 CCB 原生 launcher 对子进程的无控制台启动策略，避免 Python 或脚本子进程短暂
+  弹出控制台。
+- 尽量移除 `.ps1` 作为主启动中转层，改为 CCB 内部直接调度可执行文件和 runtime
+  adapter。
+- 将需要等待 Herdr/CCB 就绪的动作放到后台 ensure 流程中，前台只在最终 attach 时
+  进入可见 UI。
+- 避免“先起一个可见 shell，再在其中拉起 agent CLI”的双层中转；如果必须保留兼容
+  路径，也应退化为诊断/手工路径，而不是默认启动路径。
+
+验收：
+
+- CCB 默认启动路径不再依赖可见 PowerShell 中转窗口。
+- 在可观测的 Windows live validation 中，CCB 侧不产生额外控制台闪现。
+- 若 Herdr 或 WezTerm 本身需要展示窗口，则只出现一次预期前台窗口，不出现重复闪烁。
+
 ## 推荐优先级
 
 Immediate：
