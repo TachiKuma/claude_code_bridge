@@ -209,3 +209,25 @@ def test_remove_clean_worktree_rechecks_for_user_file_before_removal(
 
     assert plan.workspace_path.exists()
     assert (plan.workspace_path / 'late-user-artifact.txt').read_text(encoding='utf-8') == 'keep me\n'
+
+
+def test_git_worktree_text_commands_use_utf8_encoding(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls: list[tuple[tuple[str, ...], dict[str, object]]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append((tuple(cmd), dict(kwargs)))
+        stdout = ''
+        if 'list' in cmd:
+            stdout = f'worktree {tmp_path / "worktree"}\n'
+        return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr='')
+
+    monkeypatch.setattr(git_worktree_runtime.subprocess, 'run', fake_run)
+
+    worktrees = git_worktree_runtime.list_registered_worktrees(tmp_path)
+
+    assert worktrees == (tmp_path / 'worktree',)
+    assert calls
+    for _cmd, kwargs in calls:
+        if kwargs.get('text'):
+            assert kwargs.get('encoding') == 'utf-8'
+            assert kwargs.get('errors') == 'replace'

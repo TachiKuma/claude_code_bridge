@@ -298,6 +298,8 @@ def _git(repo_root: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding='utf-8',
+        errors='replace',
     )
 
 
