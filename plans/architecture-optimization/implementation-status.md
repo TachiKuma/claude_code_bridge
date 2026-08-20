@@ -4,15 +4,23 @@ Date: 2026-05-18
 
 ## Current Phase
 
-Phase 1 through Phase 4 are complete, reviewed, and verified.
-The follow-up release checker GitHub split and post-review hotspot iterations are
-implemented and locally verified.
+Phase 1 through Phase 4 of the original May optimization pass are complete,
+reviewed, and verified. The follow-up release checker GitHub split and
+post-review hotspot iterations are implemented and locally verified.
+
+A new Herdr runtime-hosting optimization planning pass is active for Herdr
+`v0.8.2`; see
+[herdr-runtime-hosting-optimization-plan.zh-CN.md](herdr-runtime-hosting-optimization-plan.zh-CN.md).
 
 ## Active TODO
 
-- None. The current pass has reached diminishing returns; remaining hotspots
-  are distributed across several runtime/tooling files instead of one dominant
-  giant module.
+- Freeze `HerdrRuntimeManifest`, `HerdrRuntimeBinding`, and
+  `HerdrRuntimeEvent` models.
+- Add characterization tests for the current import-time Herdr gate,
+  temporary capability report, repeated `server_info()` calls, and
+  pane-agent registration behavior before changing startup behavior.
+- Re-run `archi .` when the Architec auth portal certificate issue is resolved;
+  the current environment failed with `CERTIFICATE_VERIFY_FAILED`.
 
 ## Done This Phase
 

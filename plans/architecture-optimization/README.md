@@ -23,6 +23,9 @@ Baseline evidence:
 - [implementation-status.md](implementation-status.md) records the active
   handoff state for the first implementation pass.
 - [open-questions.md](open-questions.md) lists unresolved choices only.
+- [herdr-runtime-hosting-optimization-plan.zh-CN.md](herdr-runtime-hosting-optimization-plan.zh-CN.md)
+  defines the Herdr `v0.8.2` runtime-hosting optimization plan and phased
+  migration path.
 - [topics/architec-baseline-diagnosis.md](topics/architec-baseline-diagnosis.md)
   summarizes the score, hotspots, and interpretation.
 - [topics/provider-materialization-boundary-plan.md](topics/provider-materialization-boundary-plan.md)
@@ -42,6 +45,10 @@ Baseline evidence:
 - [decisions/003-keep-reviewed-install-and-watch-fallback-surfaces.md](decisions/003-keep-reviewed-install-and-watch-fallback-surfaces.md)
   records the Phase 3 cleanup review decision for `install.ps1` and
   `watch_fallback.py`.
+- [decisions/004-delegate-runtime-hosting-to-herdr.md](decisions/004-delegate-runtime-hosting-to-herdr.md)
+  records the CCB/Herdr runtime ownership boundary and migration order.
+- [decisions/004-delegate-runtime-hosting-to-herdr.zh-CN.md](decisions/004-delegate-runtime-hosting-to-herdr.zh-CN.md)
+  provides the Simplified Chinese copy of the same decision.
 
 ## Authority Boundaries
 

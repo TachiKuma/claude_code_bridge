@@ -42,10 +42,17 @@ Date: 2026-05-18
 
 ## In Progress
 
-- None for this optimization pass.
+- Herdr runtime-hosting optimization planning:
+  [herdr-runtime-hosting-optimization-plan.zh-CN.md](herdr-runtime-hosting-optimization-plan.zh-CN.md)
+  turns decision 004 and the current Herdr `v0.8.2` surface into a phased
+  manifest, binding, event-projection, and compatibility-adapter migration.
 
 ## Next
 
+- Phase 0 for the Herdr pass: freeze `HerdrRuntimeManifest`,
+  `HerdrRuntimeBinding`, and `HerdrRuntimeEvent`; add characterization tests for
+  the current import-time Herdr gate, temporary capability report, repeated
+  `server_info()` calls, and pane-agent registration behavior.
 - Future pass: consider a narrower Claude binary cache scan-helper cleanup
   only if new tests are added for unreadable, ignored-entry, and source-active
   edge cases.
