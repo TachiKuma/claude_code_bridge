@@ -1784,7 +1784,9 @@ def test_materialize_codex_profile_writes_agent_local_provider_config_for_explic
     assert '[model_providers.custom]' in config_text
     assert 'base_url = "https://api.rootflowai.com"' in config_text
     assert 'wire_api = "responses"' in config_text
-    assert 'requires_openai_auth = false' in config_text
+    config = tomllib.loads(config_text)
+    assert config['model_provider'] == 'custom'
+    assert config['model_providers']['custom']['requires_openai_auth'] is True
     assert 'external_migration = false' in config_text
     assert 'https://stale.example.test/v1' not in config_text
     assert 'env_key' not in config_text

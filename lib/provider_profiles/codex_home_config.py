@@ -113,7 +113,7 @@ class CodexApiAuthority:
     provider_id: str
     base_url: str
     wire_api: str = 'responses'
-    requires_openai_auth: bool = False
+    requires_openai_auth: bool = True
 
 
 @dataclass(frozen=True)

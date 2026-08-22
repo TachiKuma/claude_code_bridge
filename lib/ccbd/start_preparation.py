@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from contextlib import nullcontext
 from pathlib import Path
+from types import SimpleNamespace
 import time
 
 from agents.policy import resolve_agent_launch_policy
@@ -16,6 +17,7 @@ from ccbd.start_runtime.binding_runtime.common import (
     runtime_ref_backend,
 )
 from provider_backends.codex.session_runtime.live_identity import process_parent_snapshot
+from provider_profiles.codex_home_config import codex_api_authority, codex_source_authority_config_payload
 from provider_profiles import (
     load_resolved_provider_profile,
     provider_api_env_keys,
@@ -40,6 +42,7 @@ class PreparedStartAgent:
     provider_prepared: bool = False
     provider_prepare_ms: float = 0.0
     binding_reject_reason: str | None = None
+    binding_reject_details: tuple[str, ...] = ()
     effective_command: object | None = None
 
 
@@ -87,6 +90,7 @@ def prepare_start_agents(
             spec = config.agents[agent_name]
             window_name = _window_name_for_agent(config, agent_name)
             binding_window_name = window_name if bool(getattr(config, 'windows_explicit', False)) else None
+            previous_spec = _load_previous_agent_spec(spec_store, agent_name)
             spec_store.save(spec)
             policy = resolve_agent_launch_policy(
                 spec,
@@ -150,14 +154,32 @@ def prepare_start_agents(
             if force_restart:
                 binding = None
             profile_reject_reason = None
+            launch_config_reject_reason = None
+            binding_reject_details: tuple[str, ...] = ()
             if binding is not None:
-                profile_reject_reason = _provider_profile_reject_reason(
-                    paths=paths,
-                    spec=spec,
-                    agent_name=agent_name,
+                launch_config_reject_reason = _provider_launch_config_reject_reason(
+                    previous_spec=previous_spec,
+                    current_spec=spec,
                 )
-                if profile_reject_reason is not None:
+                if launch_config_reject_reason is not None:
+                    binding_reject_details = _provider_launch_config_reject_details(
+                        previous_spec=previous_spec,
+                        current_spec=spec,
+                    )
                     binding = None
+                else:
+                    profile_reject_reason = _provider_profile_reject_reason(
+                        paths=paths,
+                        spec=spec,
+                        agent_name=agent_name,
+                    )
+                    if profile_reject_reason is not None:
+                        binding_reject_details = _provider_profile_reject_details(
+                            paths=paths,
+                            spec=spec,
+                            agent_name=agent_name,
+                        )
+                        binding = None
 
             if restore_store.load(agent_name) is None:
                 restore_store.save(agent_name, restore_state_builder(policy.restore_mode.value))
@@ -182,10 +204,11 @@ def prepare_start_agents(
                         window_name=binding_window_name,
                         namespace_epoch=namespace_epoch,
                         assigned_pane_id=(namespace_agent_panes or {}).get(agent_name),
-                    namespace_pane_records=namespace_pane_records,
-                    ) if not force_restart and profile_reject_reason is None else (
-                        'manual_restart' if force_restart else profile_reject_reason
+                        namespace_pane_records=namespace_pane_records,
+                    ) if not force_restart and launch_config_reject_reason is None and profile_reject_reason is None else (
+                        'manual_restart' if force_restart else launch_config_reject_reason or profile_reject_reason
                     ),
+                    binding_reject_details=binding_reject_details,
                 )
             )
 
@@ -245,8 +268,73 @@ def _provider_profile_reject_reason(*, paths, spec, agent_name: str) -> str | No
     if str(getattr(current, 'agent_name', '') or '').strip().lower() != str(agent_name).strip().lower():
         return 'provider_profile_changed'
     desired = _provider_profile_signature(spec, paths=paths)
-    actual = _resolved_provider_profile_signature(current, desired_home=desired['home'])
+    actual = _resolved_provider_profile_signature(
+        current,
+        desired_home=desired['home'],
+        desired_codex_home_authority=desired['codex_home_authority'],
+    )
     return None if actual == desired else 'provider_profile_changed'
+
+
+def _provider_profile_reject_details(*, paths, spec, agent_name: str) -> tuple[str, ...]:
+    runtime_dir = paths.agent_provider_runtime_dir(agent_name, spec.provider)
+    current = load_resolved_provider_profile(runtime_dir)
+    if current is None:
+        return ()
+    details: list[str] = []
+    if str(getattr(current, 'provider', '') or '').strip().lower() != str(spec.provider).strip().lower():
+        details.append('provider_profile.provider')
+    if str(getattr(current, 'agent_name', '') or '').strip().lower() != str(agent_name).strip().lower():
+        details.append('provider_profile.agent_name')
+    desired = _provider_profile_signature(spec, paths=paths)
+    actual = _resolved_provider_profile_signature(
+        current,
+        desired_home=desired['home'],
+        desired_codex_home_authority=desired['codex_home_authority'],
+    )
+    details.extend(_changed_signature_paths('provider_profile', desired, actual))
+    return tuple(dict.fromkeys(details))
+
+
+def _load_previous_agent_spec(spec_store: AgentSpecStore, agent_name: str):
+    try:
+        return spec_store.load(agent_name)
+    except Exception:
+        return None
+
+
+def _provider_launch_config_reject_reason(*, previous_spec, current_spec) -> str | None:
+    if previous_spec is None:
+        return None
+    if _provider_launch_config_signature(previous_spec) == _provider_launch_config_signature(current_spec):
+        return None
+    return 'provider_launch_config_changed'
+
+
+def _provider_launch_config_reject_details(*, previous_spec, current_spec) -> tuple[str, ...]:
+    if previous_spec is None:
+        return ()
+    previous = _provider_launch_config_signature(previous_spec)
+    current = _provider_launch_config_signature(current_spec)
+    return tuple(_changed_signature_paths('launch_config', current, previous))
+
+
+def _provider_launch_config_signature(spec) -> dict[str, object]:
+    return {
+        'provider': str(getattr(spec, 'provider', '') or '').strip().lower(),
+        'provider_command_template': str(getattr(spec, 'provider_command_template', '') or ''),
+        'runtime_mode': _enum_value(getattr(spec, 'runtime_mode', None)),
+        'permission_default': _enum_value(getattr(spec, 'permission_default', None)),
+        'model': str(getattr(spec, 'model', '') or ''),
+        'thinking': str(getattr(spec, 'thinking', '') or ''),
+        'startup_args': tuple(str(value) for value in tuple(getattr(spec, 'startup_args', ()) or ())),
+        'env': {str(key): str(value) for key, value in dict(getattr(spec, 'env', {}) or {}).items()},
+    }
+
+
+def _enum_value(value) -> str:
+    enum_value = getattr(value, 'value', value)
+    return str(enum_value or '')
 
 
 def _provider_profile_signature(spec, *, paths) -> dict[str, object]:
@@ -266,6 +354,7 @@ def _provider_profile_signature(spec, *, paths) -> dict[str, object]:
         'inherited_skill_include': tuple(getattr(profile, 'inherited_skill_include', ()) or ()),
         'inherited_skill_exclude': tuple(getattr(profile, 'inherited_skill_exclude', ()) or ()),
         'skill_overlays': _skill_overlay_signature(getattr(profile, 'skill_overlays', {}) or {}),
+        'codex_home_authority': _desired_codex_home_authority_signature(spec),
     }
 
 
@@ -279,7 +368,12 @@ def _normalized_desired_profile_home(*, paths, profile) -> str | None:
     return str(path.resolve())
 
 
-def _resolved_provider_profile_signature(profile, *, desired_home: str | None) -> dict[str, object]:
+def _resolved_provider_profile_signature(
+    profile,
+    *,
+    desired_home: str | None,
+    desired_codex_home_authority: object | None,
+) -> dict[str, object]:
     return {
         'mode': str(getattr(profile, 'mode', 'inherit') or 'inherit').strip().lower(),
         'home': (
@@ -297,12 +391,50 @@ def _resolved_provider_profile_signature(profile, *, desired_home: str | None) -
         'inherited_skill_include': tuple(getattr(profile, 'inherited_skill_include', ()) or ()),
         'inherited_skill_exclude': tuple(getattr(profile, 'inherited_skill_exclude', ()) or ()),
         'skill_overlays': _skill_overlay_signature(getattr(profile, 'skill_overlays', {}) or {}),
+        'codex_home_authority': _resolved_codex_home_authority_signature(
+            profile,
+            expected=desired_codex_home_authority,
+        ),
     }
+
+
+def _desired_codex_home_authority_signature(spec) -> dict[str, object] | None:
+    if str(getattr(spec, 'provider', '') or '').strip().lower() != 'codex':
+        return None
+    authority = codex_api_authority(SimpleNamespace(env=_desired_provider_profile_env(spec)))
+    if authority is None:
+        return None
+    return {
+        'model_provider': authority.provider_id,
+        'model_provider_config': {
+            'name': authority.provider_id,
+            'base_url': authority.base_url,
+            'wire_api': authority.wire_api,
+            'requires_openai_auth': authority.requires_openai_auth,
+        },
+    }
+
+
+def _resolved_codex_home_authority_signature(profile, *, expected: object | None) -> dict[str, object] | None:
+    if expected is None or str(getattr(profile, 'provider', '') or '').strip().lower() != 'codex':
+        return None
+    runtime_home = str(getattr(profile, 'runtime_home', '') or '').strip()
+    if not runtime_home:
+        return None
+    try:
+        return codex_source_authority_config_payload(
+            Path(runtime_home) / 'config.toml',
+            include_route=True,
+            include_login=False,
+        )
+    except Exception:
+        return None
 
 
 def _desired_provider_profile_env(spec) -> dict[str, str]:
     profile = spec.provider_profile
-    api_keys = provider_api_env_keys(str(spec.provider))
+    provider = str(spec.provider)
+    api_keys = provider_api_env_keys(provider)
     env = dict(getattr(profile, 'env', {}) or {})
     # `agents.<name>.env` takes precedence over `provider_profile.env` for API
     # credentials, mirroring `_profile_spec_with_agent_api_env` in the
@@ -311,7 +443,8 @@ def _desired_provider_profile_env(spec) -> dict[str, str]:
     for key, value in dict(getattr(spec, 'env', {}) or {}).items():
         if str(key) in api_keys and str(value).strip():
             env[str(key)] = str(value)
-    if str(getattr(profile, 'mode', 'inherit') or 'inherit').strip().lower() != 'inherit':
+    mode = str(getattr(profile, 'mode', 'inherit') or 'inherit').strip().lower()
+    if mode != 'inherit' or provider.strip().lower() == 'codex':
         return {str(key): str(value) for key, value in env.items()}
     return {str(key): str(value) for key, value in env.items() if str(key) in api_keys}
 
@@ -322,6 +455,19 @@ def _skill_overlay_signature(overlays: dict[str, object]) -> dict[str, object]:
         to_record = getattr(overlay, 'to_record', None)
         signature[str(name)] = to_record() if callable(to_record) else overlay
     return signature
+
+
+def _changed_signature_paths(prefix: str, desired: object, actual: object) -> tuple[str, ...]:
+    if isinstance(desired, dict) and isinstance(actual, dict):
+        changed: list[str] = []
+        for key in sorted(set(desired) | set(actual)):
+            child_prefix = f'{prefix}.{key}'
+            if key not in desired or key not in actual:
+                changed.append(child_prefix)
+                continue
+            changed.extend(_changed_signature_paths(child_prefix, desired[key], actual[key]))
+        return tuple(changed)
+    return () if desired == actual else (prefix,)
 
 
 def _binding_reject_reason(

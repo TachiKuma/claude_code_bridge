@@ -501,6 +501,7 @@ def test_start_agent_runtime_relaunches_and_tracks_project_socket_pane() -> None
         provider_prepared=True,
         provider_prepare_ms=12.5,
         binding_reject_reason='namespace_epoch_mismatch',
+        binding_reject_details=('provider_profile.env.OPENAI_API_KEY',),
     )
 
     assert execution.agent_result.action == 'relaunched'
@@ -516,6 +517,13 @@ def test_start_agent_runtime_relaunches_and_tracks_project_socket_pane() -> None
     assert execution.agent_result.provider_prepare_count == 1
     assert execution.agent_result.provider_prepare_ms == 12.5
     assert execution.agent_result.binding_reject_reason == 'namespace_epoch_mismatch'
+    assert execution.agent_result.binding_reject_details == ('provider_profile.env.OPENAI_API_KEY',)
+    record = execution.agent_result.to_record()
+    assert record['binding_reject_details'] == ['provider_profile.env.OPENAI_API_KEY']
+    assert (
+        type(execution.agent_result).from_record(record).binding_reject_details
+        == execution.agent_result.binding_reject_details
+    )
 
 
 def test_start_agent_runtime_launches_herdr_assigned_pane_even_with_existing_binding() -> None:

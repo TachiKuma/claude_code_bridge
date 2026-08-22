@@ -213,6 +213,7 @@ def run_start_flow(
                     effective_command=getattr(prepared, 'effective_command', None),
                     provider_prepare_ms=prepared.provider_prepare_ms,
                     binding_reject_reason=prepared.binding_reject_reason,
+                    binding_reject_details=prepared.binding_reject_details,
                     ensure_agent_runtime_fn=deps.ensure_agent_runtime_fn,
                     launch_binding_hint_fn=lambda **kwargs: launch_binding_hint(deps, **kwargs),
                     relabel_project_namespace_pane_fn=lambda **kwargs: relabel_project_namespace_pane(deps, **kwargs),

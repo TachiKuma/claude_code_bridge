@@ -121,6 +121,7 @@ def start_agent_runtime(
     effective_command=None,
     provider_prepare_ms: float = 0.0,
     binding_reject_reason: str | None = None,
+    binding_reject_details: tuple[str, ...] = (),
     pane_runtime_pid_resolver=None,
 ) -> StartAgentExecution:
     started_ns = monotonic_ns()
@@ -175,6 +176,7 @@ def start_agent_runtime(
             spec=spec,
             plan=plan,
             binding_reject_reason=binding_reject_reason,
+            binding_reject_details=binding_reject_details,
             provider_prepare_ms=provider_prepare_ms,
             provider_prepared=provider_prepared,
         )
@@ -268,6 +270,7 @@ def start_agent_runtime(
             spec=spec,
             plan=plan,
             binding_reject_reason=binding_reject_reason,
+            binding_reject_details=binding_reject_details,
             provider_prepare_ms=provider_prepare_ms,
             provider_prepared=provider_prepared,
         )
@@ -305,6 +308,7 @@ def start_agent_runtime(
             spec=spec,
             plan=plan,
             binding_reject_reason=binding_reject_reason,
+            binding_reject_details=binding_reject_details,
             provider_prepare_ms=provider_prepare_ms,
             provider_prepared=provider_prepared,
         )
@@ -335,6 +339,7 @@ def start_agent_runtime(
             spec=spec,
             plan=plan,
             binding_reject_reason=binding_reject_reason,
+            binding_reject_details=binding_reject_details,
             provider_prepare_ms=provider_prepare_ms,
             provider_prepared=provider_prepared,
         )
@@ -370,6 +375,11 @@ def start_agent_runtime(
                 if binding_state.agent_action in {'launched', 'relaunched', 'degraded'}
                 else None
             ),
+            binding_reject_details=(
+                binding_reject_details
+                if binding_state.agent_action in {'launched', 'relaunched', 'degraded'}
+                else ()
+            ),
         )
         duration_ms = (monotonic_ns() - started_ns) / 1_000_000
         _finish_agent_timings(timings_ms, duration_ms=duration_ms)
@@ -397,6 +407,7 @@ def start_agent_runtime(
             spec=spec,
             plan=plan,
             binding_reject_reason=binding_reject_reason,
+            binding_reject_details=binding_reject_details,
             provider_prepare_ms=provider_prepare_ms,
             provider_prepared=provider_prepared,
         )
@@ -523,6 +534,7 @@ def _record_failed_agent_result(
     spec,
     plan,
     binding_reject_reason: str | None,
+    binding_reject_details: tuple[str, ...],
     provider_prepare_ms: float,
     provider_prepared: bool,
 ) -> None:
@@ -538,6 +550,7 @@ def _record_failed_agent_result(
             workspace_path=str(plan.workspace_path),
             failure_reason=str(exc) or type(exc).__name__,
             binding_reject_reason=binding_reject_reason,
+            binding_reject_details=binding_reject_details,
             duration_ms=duration_ms,
             provider_prepare_ms=provider_prepare_ms,
             provider_prepare_count=int(bool(provider_prepared)),

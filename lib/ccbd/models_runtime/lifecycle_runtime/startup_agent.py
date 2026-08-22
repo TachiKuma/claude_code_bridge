@@ -34,6 +34,7 @@ class CcbdStartupAgentResult:
     runtime_root: str | None = None
     failure_reason: str | None = None
     binding_reject_reason: str | None = None
+    binding_reject_details: tuple[str, ...] = ()
     duration_ms: float | None = None
     provider_prepare_ms: float | None = None
     provider_prepare_count: int = 0
@@ -72,6 +73,7 @@ class CcbdStartupAgentResult:
             'runtime_root': self.runtime_root,
             'failure_reason': self.failure_reason,
             'binding_reject_reason': self.binding_reject_reason,
+            'binding_reject_details': list(self.binding_reject_details),
             'duration_ms': self.duration_ms,
             'provider_prepare_ms': self.provider_prepare_ms,
             'provider_prepare_count': self.provider_prepare_count,
@@ -107,6 +109,7 @@ class CcbdStartupAgentResult:
             runtime_root=clean_text(record.get('runtime_root')),
             failure_reason=clean_text(record.get('failure_reason')),
             binding_reject_reason=clean_text(record.get('binding_reject_reason')),
+            binding_reject_details=_clean_text_tuple(record.get('binding_reject_details')),
             duration_ms=_coerce_float(record.get('duration_ms')),
             provider_prepare_ms=_coerce_float(record.get('provider_prepare_ms')),
             provider_prepare_count=max(0, coerce_int(record.get('provider_prepare_count')) or 0),
@@ -133,6 +136,17 @@ def _clean_timings(value: object) -> dict[str, float]:
         if parsed is not None:
             timings[str(key)] = parsed
     return timings
+
+
+def _clean_text_tuple(value: object) -> tuple[str, ...]:
+    if isinstance(value, str):
+        items = (value,)
+    else:
+        try:
+            items = tuple(value)  # type: ignore[arg-type]
+        except TypeError:
+            items = ()
+    return tuple(text for item in items if (text := clean_text(item)))
 
 
 __all__ = ['CcbdStartupAgentResult']

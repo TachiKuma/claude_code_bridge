@@ -182,6 +182,293 @@ def test_prepare_start_agents_restarts_reused_binding_when_provider_profile_drif
     assert prepared[0].binding_reject_reason == 'provider_profile_changed'
 
 
+def test_prepare_start_agents_reports_redacted_provider_profile_drift_fields(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / 'repo-start-prep-profile-drift-fields'
+    (project_root / '.ccb').mkdir(parents=True)
+    (project_root / '.ccb' / 'ccb.config').write_text(
+        '\n'.join(
+            [
+                'version = 2',
+                'default_agents = ["codex_aspai"]',
+                '',
+                '[agents.codex_aspai]',
+                'provider = "codex"',
+                'target = "."',
+                'workspace_mode = "inplace"',
+                'restore = "auto"',
+                'permission = "manual"',
+                'model = "deepseek-v4-pro"',
+                'model_catalog_json = "models.json"',
+                '',
+                '[agents.codex_aspai.provider_profile.env]',
+                'OPENAI_API_KEY = "sk-new-secret"',
+                'OPENAI_BASE_URL = "https://new.example.test/v1"',
+                '',
+            ]
+        ),
+        encoding='utf-8',
+    )
+    bootstrap_project(project_root)
+    command = ParsedStartCommand(project=None, agent_names=('codex_aspai',), restore=True, auto_permission=False)
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+    config = load_project_config(project_root).config
+    paths = PathLayout(project_root)
+    runtime_dir = paths.agent_provider_runtime_dir('codex_aspai', 'codex')
+    runtime_dir.mkdir(parents=True)
+    (runtime_dir / 'provider-profile.json').write_text(
+        json.dumps(
+            {
+                'provider': 'codex',
+                'agent_name': 'codex_aspai',
+                'mode': 'inherit',
+                'profile_root': None,
+                'runtime_home': str(paths.agent_provider_state_dir('codex_aspai', 'codex') / 'home'),
+                'env': {
+                    'OPENAI_API_KEY': 'sk-old-secret',
+                    'OPENAI_BASE_URL': 'https://old.example.test/v1',
+                },
+                'inherit_api': True,
+                'inherit_auth': True,
+                'inherit_config': True,
+                'inherit_skills': True,
+                'inherit_commands': True,
+                'inherit_memory': True,
+            }
+        ),
+        encoding='utf-8',
+    )
+    binding = SimpleNamespace(runtime_ref='mux:w1:p4')
+    monkeypatch.setattr('ccbd.start_preparation.prepare_provider_workspace', lambda **kwargs: None)
+
+    prepared = prepare_start_agents(
+        targets=('codex_aspai',),
+        config=config,
+        paths=paths,
+        context=context,
+        project_root=project_root,
+        project_id=context.project.project_id,
+        tmux_socket_path=None,
+        tmux_session_name=None,
+        workspace_window_id=None,
+        resolve_agent_binding_fn=lambda **kwargs: binding,
+        project_binding_filter_fn=lambda candidate, **kwargs: candidate,
+        restore_state_builder=lambda restore_mode: AgentRestoreState(
+            restore_mode=RestoreMode(restore_mode),
+            last_checkpoint=None,
+            conversation_summary='pending restore',
+        ),
+    )
+
+    assert prepared[0].binding_reject_reason == 'provider_profile_changed'
+    assert {
+        'provider_profile.env.OPENAI_API_KEY',
+        'provider_profile.env.OPENAI_BASE_URL',
+        'provider_profile.env.model_catalog_json',
+    }.issubset(set(prepared[0].binding_reject_details))
+    assert 'sk-new-secret' not in repr(prepared[0].binding_reject_details)
+    assert 'sk-old-secret' not in repr(prepared[0].binding_reject_details)
+
+
+def test_prepare_start_agents_restarts_reused_binding_when_codex_home_authority_drifts(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / 'repo-start-prep-codex-home-authority-drift'
+    (project_root / '.ccb').mkdir(parents=True)
+    (project_root / '.ccb' / 'ccb.config').write_text(
+        '\n'.join(
+            [
+                'version = 2',
+                'default_agents = ["codex_aspai"]',
+                '',
+                '[agents.codex_aspai]',
+                'provider = "codex"',
+                'target = "."',
+                'workspace_mode = "inplace"',
+                'restore = "auto"',
+                'permission = "manual"',
+                'model = "deepseek-v4-pro"',
+                '',
+                '[agents.codex_aspai.provider_profile.env]',
+                'OPENAI_API_KEY = "sk-profile-secret"',
+                'OPENAI_BASE_URL = "https://new.example.test/v1"',
+                '',
+            ]
+        ),
+        encoding='utf-8',
+    )
+    bootstrap_project(project_root)
+    command = ParsedStartCommand(project=None, agent_names=('codex_aspai',), restore=True, auto_permission=False)
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+    config = load_project_config(project_root).config
+    paths = PathLayout(project_root)
+    runtime_dir = paths.agent_provider_runtime_dir('codex_aspai', 'codex')
+    runtime_home = paths.agent_provider_state_dir('codex_aspai', 'codex') / 'home'
+    runtime_dir.mkdir(parents=True)
+    runtime_home.mkdir(parents=True)
+    (runtime_home / 'config.toml').write_text(
+        '\n'.join(
+            [
+                'model_provider = "custom"',
+                '',
+                '[model_providers.custom]',
+                'name = "custom"',
+                'base_url = "https://new.example.test/v1"',
+                'wire_api = "responses"',
+                'requires_openai_auth = false',
+                '',
+            ]
+        ),
+        encoding='utf-8',
+    )
+    (runtime_dir / 'provider-profile.json').write_text(
+        json.dumps(
+            {
+                'provider': 'codex',
+                'agent_name': 'codex_aspai',
+                'mode': 'inherit',
+                'profile_root': None,
+                'runtime_home': str(runtime_home),
+                'env': {
+                    'OPENAI_API_KEY': 'sk-profile-secret',
+                    'OPENAI_BASE_URL': 'https://new.example.test/v1',
+                },
+                'inherit_api': True,
+                'inherit_auth': True,
+                'inherit_config': True,
+                'inherit_skills': True,
+                'inherit_commands': True,
+                'inherit_memory': True,
+            }
+        ),
+        encoding='utf-8',
+    )
+    binding = SimpleNamespace(runtime_ref='mux:w1:p4')
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr('ccbd.start_preparation.prepare_provider_workspace', lambda **kwargs: calls.append(kwargs))
+
+    prepared = prepare_start_agents(
+        targets=('codex_aspai',),
+        config=config,
+        paths=paths,
+        context=context,
+        project_root=project_root,
+        project_id=context.project.project_id,
+        tmux_socket_path=None,
+        tmux_session_name=None,
+        workspace_window_id=None,
+        resolve_agent_binding_fn=lambda **kwargs: binding,
+        project_binding_filter_fn=lambda candidate, **kwargs: candidate,
+        restore_state_builder=lambda restore_mode: AgentRestoreState(
+            restore_mode=RestoreMode(restore_mode),
+            last_checkpoint=None,
+            conversation_summary='pending restore',
+        ),
+    )
+
+    assert [call['agent_name'] for call in calls] == ['codex_aspai']
+    assert prepared[0].binding_reject_reason == 'provider_profile_changed'
+    assert prepared[0].binding_reject_details == (
+        'provider_profile.codex_home_authority.model_provider_config.requires_openai_auth',
+    )
+    assert 'sk-profile-secret' not in repr(prepared[0].binding_reject_details)
+
+
+def test_prepare_start_agents_restarts_reused_binding_when_launch_config_drifts(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / 'repo-start-prep-launch-drift'
+    (project_root / '.ccb').mkdir(parents=True)
+    (project_root / '.ccb' / 'ccb.config').write_text(
+        '\n'.join(
+            [
+                'version = 2',
+                'default_agents = ["agent1"]',
+                '',
+                '[agents.agent1]',
+                'provider = "codex"',
+                'target = "."',
+                'workspace_mode = "inplace"',
+                'restore = "auto"',
+                'permission = "manual"',
+                'model = "deepseek-v4-pro"',
+                '',
+                '[agents.agent1.env]',
+                'CODEX_MODEL = "deepseek-v4-pro-0813"',
+                '',
+            ]
+        ),
+        encoding='utf-8',
+    )
+    bootstrap_project(project_root)
+    command = ParsedStartCommand(project=None, agent_names=('agent1',), restore=True, auto_permission=False)
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+    config = load_project_config(project_root).config
+    paths = PathLayout(project_root)
+    previous = config.agents['agent1'].to_record()
+    previous['env'] = {'CODEX_MODEL': 'deepseek-v4-pro'}
+    paths.agent_spec_path('agent1').parent.mkdir(parents=True, exist_ok=True)
+    paths.agent_spec_path('agent1').write_text(json.dumps(previous), encoding='utf-8')
+    runtime_dir = paths.agent_provider_runtime_dir('agent1', 'codex')
+    runtime_dir.mkdir(parents=True)
+    (runtime_dir / 'provider-profile.json').write_text(
+        json.dumps(
+            {
+                'provider': 'codex',
+                'agent_name': 'agent1',
+                'mode': 'inherit',
+                'profile_root': str(paths.provider_profiles_dir / 'agent1' / 'codex'),
+                'runtime_home': None,
+                'env': {},
+                'inherit_api': True,
+                'inherit_auth': True,
+                'inherit_config': True,
+                'inherit_skills': True,
+                'inherit_commands': True,
+                'inherit_memory': True,
+            }
+        ),
+        encoding='utf-8',
+    )
+    binding = SimpleNamespace(runtime_ref='mux:w1:p1')
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        'ccbd.start_preparation.prepare_provider_workspace',
+        lambda **kwargs: calls.append(kwargs),
+    )
+
+    prepared = prepare_start_agents(
+        targets=('agent1',),
+        config=config,
+        paths=paths,
+        context=context,
+        project_root=project_root,
+        project_id=context.project.project_id,
+        tmux_socket_path=None,
+        tmux_session_name=None,
+        workspace_window_id=None,
+        resolve_agent_binding_fn=lambda **kwargs: binding,
+        project_binding_filter_fn=lambda candidate, **kwargs: candidate,
+        restore_state_builder=lambda restore_mode: AgentRestoreState(
+            restore_mode=RestoreMode(restore_mode),
+            last_checkpoint=None,
+            conversation_summary='pending restore',
+        ),
+    )
+
+    assert [call['agent_name'] for call in calls] == ['agent1']
+    assert calls[0]['refresh_profile'] is True
+    assert prepared[0].binding is None
+    assert prepared[0].raw_binding is binding
+    assert prepared[0].stale_binding is True
+    assert prepared[0].provider_prepared is True
+    assert prepared[0].binding_reject_reason == 'provider_launch_config_changed'
+
+
 def test_provider_profile_reject_reason_accepts_agent_env_api_credentials(
     tmp_path: Path,
 ) -> None:

@@ -3994,6 +3994,10 @@ def test_codex_launcher_build_start_cmd_api_override_clears_global_route_config(
     monkeypatch.setenv('CODEX_HOME', str(source_home))
     monkeypatch.setenv('OPENAI_API_KEY', 'ambient-key')
     monkeypatch.setenv('OPENAI_BASE_URL', 'https://ambient.example.test/v1')
+    monkeypatch.setattr(
+        'provider_backends.codex.launcher_runtime.command.supports_managed_app_server',
+        lambda _parts: False,
+    )
     _write_provider_profile(
         runtime_dir,
         ResolvedProviderProfile(
@@ -4035,7 +4039,9 @@ def test_codex_launcher_build_start_cmd_api_override_clears_global_route_config(
     assert '[model_providers.custom]' in config_text
     assert 'base_url = "https://api.rootflowai.com"' in config_text
     assert 'wire_api = "responses"' in config_text
-    assert 'requires_openai_auth = false' in config_text
+    config = tomllib.loads(config_text)
+    assert config['model_provider'] == 'custom'
+    assert config['model_providers']['custom']['requires_openai_auth'] is True
     assert 'external_migration = false' in config_text
     assert 'https://api.ikuncode.cc/v1' not in config_text
     assert 'env_key' not in config_text
