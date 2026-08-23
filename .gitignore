@@ -32,6 +32,8 @@ opencode.json
 tmp/
 .tmp_pytest/
 .tmp_test_env_*/
+# pytest 校验运行产生的带日期后缀临时目录，不提交
+.pytest-tmp-validation-*/
 compare_with_mcp/
 CLAUDE.md
 AGENTS.md
