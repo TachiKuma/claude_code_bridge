@@ -21,9 +21,12 @@ gate 仍保留。Phase 5 的删除收口需要逐项 characterization test、Her
 Windows live validation，以及可重跑的 architecture 证据。
 
 - [x] 删除 `CCB_HERDR_CAPABILITY_REPORT` 正常启动路径
-- [ ] 删除 bootstrap capability probe 与临时文件写入
+- [x] 删除 bootstrap capability probe 与临时文件写入
 - [ ] 收窄宽 CLI 操作白名单，仅保留诊断/兼容 fallback
 - [ ] 移除 backend_resolver 低层 capability 组合判断
 - [ ] 移除 tmux_runtime 中 CCB 主动建 Herdr Agent 身份的补丁（Herdr 稳定返回 agent_id 后）
 - [ ] 每处删除前均有等价 characterization test 与 Windows live validation
 - [ ] `archi .` 可重跑时，治理分数与 Herdr/CLI runtime hotspot 继续改善
+
+说明：bootstrap 现在只负责解析 Herdr 可执行文件、确认运行中的会话并返回 socket ref，不再做
+read-only capability probe，也不再写临时 capability report。

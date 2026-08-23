@@ -184,7 +184,7 @@ def test_bootstrap_prefers_explicit_session(monkeypatch) -> None:
     assert os.environ['CCB_HERDR_SOCKET_REF'] == 'herdr://sess-explicit'
 
 
-def test_bootstrap_rejects_failed_read_probes(monkeypatch) -> None:
+def test_bootstrap_ignores_read_probes_and_still_succeeds(monkeypatch) -> None:
     _bootstrap_success_mocks(monkeypatch)
     monkeypatch.setattr(
         'platforms.windows.herdr.bootstrap._probe_herdr_read_capabilities',
@@ -195,8 +195,9 @@ def test_bootstrap_rejects_failed_read_probes(monkeypatch) -> None:
         },
     )
     result = ensure_herdr_bootstrap_env()
-    assert result['ok'] is False
-    assert 'workspace_list' in str(result['reason'])
+    assert result['ok'] is True
+    assert result['socket_ref'] == 'herdr://sess-live'
+    assert 'CCB_HERDR_CAPABILITY_REPORT' not in os.environ
 
 
 # --- P0: auto-start server when nothing is running ------------------------

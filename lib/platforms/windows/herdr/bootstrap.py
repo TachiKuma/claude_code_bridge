@@ -122,17 +122,6 @@ def ensure_herdr_bootstrap_env(
                 f'(server protocol={server.get("protocol")!r}). Upgrade Herdr.'
             ),
         }
-    probe = _probe_herdr_read_capabilities(exe, session=detected_session)
-    failed_probes = [name for name, ok in probe.items() if not ok]
-    if failed_probes:
-        return {
-            'ok': False,
-            'reason': (
-                'Herdr read-only capability probes failed: '
-                + ', '.join(sorted(failed_probes))
-                + '. Herdr server may be degraded.'
-            ),
-        }
     warnings: list[str] = []
     live_session = str(server.get('session') or '').strip() or detected_session or None
     session = (
