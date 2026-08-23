@@ -39,12 +39,19 @@ class HerdrRuntimeEventProjector:
         self._binding = binding
         self._statuses = self._seed_statuses(binding)
 
-    def refresh(self, binding: HerdrRuntimeBinding, *, snapshot: Mapping[str, object] | None = None) -> None:
+    def refresh(
+        self,
+        binding: HerdrRuntimeBinding,
+        *,
+        snapshot: Mapping[str, object] | None = None,
+    ) -> tuple[str, ...]:
+        previous = self._statuses
         self._binding = binding
         if snapshot is None:
             self._statuses = self._seed_statuses(binding)
         else:
             self._statuses = self._seed_statuses_from_snapshot(binding, snapshot)
+        return self._changed_pane_ids(previous, self._statuses)
 
     def apply_event(self, event: HerdrRuntimeEvent) -> bool:
         current = self._statuses.get(event.pane_id)
@@ -107,20 +114,33 @@ class HerdrRuntimeEventProjector:
             statuses[pane.pane_id] = _status_from_snapshot_pane(binding, pane, snapshot_pane)
         return statuses
 
+    @staticmethod
+    def _changed_pane_ids(
+        previous: Mapping[str, HerdrRuntimePaneStatus],
+        current: Mapping[str, HerdrRuntimePaneStatus],
+    ) -> tuple[str, ...]:
+        changed: list[str] = []
+        for pane_id, status in current.items():
+            if previous.get(pane_id) != status:
+                changed.append(pane_id)
+        for pane_id in previous:
+            if pane_id not in current:
+                changed.append(pane_id)
+        return tuple(changed)
+
 
 def poll_runtime_snapshot(
     projector: HerdrRuntimeEventProjector,
     binding: HerdrRuntimeBinding,
     backend: object,
-) -> bool:
+) -> tuple[str, ...]:
     snapshot_fn = getattr(backend, "runtime_snapshot", None)
     if not callable(snapshot_fn):
-        return False
+        return ()
     snapshot = snapshot_fn()
     if not isinstance(snapshot, Mapping):
-        return False
-    projector.refresh(binding, snapshot=snapshot)
-    return True
+        return ()
+    return projector.refresh(binding, snapshot=snapshot)
 
 
 def runtime_status_from_binding(

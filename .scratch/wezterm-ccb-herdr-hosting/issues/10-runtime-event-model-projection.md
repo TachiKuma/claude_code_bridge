@@ -20,7 +20,8 @@ snapshot polling 循环、断线重连后的自动重读 snapshot 尚未接入�
 重连后重读 snapshot，避免旧 pane 状态继续残留；事件订阅与 polling 闭环仍待后续接入。
 
 补充：`poll_runtime_snapshot(projector, binding, backend)` 已提供 snapshot polling 的正式入口，
-可由后续循环调度器直接调用；本轮仍未接入持续轮询线程或订阅循环。
+返回本次快照导致变化的 `pane_id` 序列，可由后续循环调度器直接调用；本轮仍未接入持续轮询线程
+或订阅循环。
 
 - [x] 新增 `HerdrRuntimeEvent` 模型与事件 projector 基础
 - [ ] 接入真正运行时事件订阅；无上游事件时 snapshot polling 兜底

@@ -413,8 +413,9 @@ def test_herdr_runtime_event_projector_refreshes_from_snapshot_and_drops_missing
             {"pane_id": "w1:p1", "workspace_id": "w1", "state": "working", "state_seq": 7},
         ]
     }
-    projector.refresh(binding, snapshot=snapshot)
+    changed_pane_ids = projector.refresh(binding, snapshot=snapshot)
 
+    assert changed_pane_ids == ("w1:p1", "w1:p2")
     assert projector.status_for_pane("w1:p1").to_record()["runtime_state"] == "working"  # type: ignore[union-attr]
     assert projector.status_for_pane("w1:p1").to_record()["seq"] == 7  # type: ignore[union-attr]
     assert projector.status_for_pane("w1:p2") is None
@@ -452,7 +453,9 @@ def test_poll_runtime_snapshot_refreshes_projector_from_backend_snapshot() -> No
                 ]
             }
 
-    assert poll_runtime_snapshot(projector, binding, _Backend()) is True
+    changed_pane_ids = poll_runtime_snapshot(projector, binding, _Backend())
+
+    assert changed_pane_ids == ("w1:p1",)
     status = projector.status_for_pane("w1:p1")
     assert status is not None
     assert status.runtime_state == "blocked"
