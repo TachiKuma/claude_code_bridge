@@ -29,6 +29,9 @@ unknown，避免旧 pane 状态在重连/迁移后回流。
 补充：`runtime_status` 现在把 `callback_wait` 的 `chain_*` 元数据并入同一读模型，便于 Herdr 视图
 直接消费运行时、job 与 callback 的合并结果，而不必再回看顶层散字段。
 
+补充：`runtime_status` 现在也带上 `reload_drain` 与 `provider_control`，把生命周期阻断和恢复控制
+边界一起收进同一读模型里。
+
 - [ ] 完整合并运行时/Provider/pane/job/lifecycle/前台三态为单一读模型
 - [x] 状态映射：`working→working`、`blocked→waiting_for_user`、`idle→idle`、
       `done→idle+unseen_done=true`、`unknown→unknown`（不降级为 idle）

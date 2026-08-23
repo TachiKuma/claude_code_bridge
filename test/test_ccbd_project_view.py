@@ -670,6 +670,12 @@ def test_project_view_herdr_runtime_status_merges_callback_metadata() -> None:
         diagnostics={'child_agent': 'agent2'},
         updated_at='2026-05-20T12:00:30Z',
     )
+    reload_drain = {'agent': 'agent1', 'intent_kind': 'unload', 'phase': 'draining'}
+    provider_control = {
+        'schema_version': 1,
+        'provider': 'codex',
+        'restart_pending': True,
+    }
 
     status = project_view_service._merged_runtime_status(
         deps=SimpleNamespace(project_id=project_id),
@@ -678,6 +684,8 @@ def test_project_view_herdr_runtime_status_merges_callback_metadata() -> None:
         runtime=runtime,
         job=SimpleNamespace(status=JobStatus.RUNNING, job_id='job-parent'),
         callback_wait=callback_wait,
+        reload_drain=reload_drain,
+        provider_control=provider_control,
         provider_runtime_status=SimpleNamespace(state='working', source='pane'),
     )
 
@@ -689,6 +697,9 @@ def test_project_view_herdr_runtime_status_merges_callback_metadata() -> None:
     assert status['chain_waiting_child_job_id'] == 'job-child'
     assert status['chain_waiting_child_agent'] == 'agent2'
     assert status['chain_updated_at'] == '2026-05-20T12:00:30Z'
+    assert status['reload_drain'] == reload_drain
+    assert status['dispatch_blocked_by_reload_drain'] is True
+    assert status['provider_control'] == provider_control
     assert status['provider_runtime_state'] == 'working'
     assert status['provider_runtime_source'] == 'pane'
 

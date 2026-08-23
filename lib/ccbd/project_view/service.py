@@ -984,6 +984,8 @@ def _agent_view(
         runtime=runtime,
         job=job,
         callback_wait=callback_wait,
+        reload_drain=reload_drain,
+        provider_control=record.get('provider_control'),
         provider_runtime_status=provider_runtime_status,
     )
     if merged_runtime_status is not None:
@@ -1028,6 +1030,8 @@ def _merged_runtime_status(
     runtime,
     job,
     callback_wait=None,
+    reload_drain=None,
+    provider_control=None,
     provider_runtime_status,
 ) -> dict[str, object] | None:
     if not _namespace_is_herdr(namespace):
@@ -1050,6 +1054,9 @@ def _merged_runtime_status(
         'chain_waiting_child_job_id': callback_wait.child_job_id if callback_wait is not None else None,
         'chain_waiting_child_agent': _callback_child_agent(callback_wait),
         'chain_updated_at': callback_wait.updated_at if callback_wait is not None else None,
+        'reload_drain': dict(reload_drain) if reload_drain is not None else None,
+        'dispatch_blocked_by_reload_drain': reload_drain is not None,
+        'provider_control': dict(provider_control) if provider_control is not None else None,
         'provider_runtime_state': getattr(provider_runtime_status, 'state', None),
         'provider_runtime_source': getattr(provider_runtime_status, 'source', None),
         'pane_id': pane_id,
