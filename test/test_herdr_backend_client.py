@@ -258,6 +258,60 @@ def test_herdr_socket_client_schema_gate_passes_and_records_server_info() -> Non
     assert server_info["socket_ref"] == "herdr://local"
 
 
+def test_herdr_socket_client_handshake_caches_server_info_until_refresh() -> None:
+    operations: list[str] = []
+
+    def request(operation: str, payload: dict[str, object]) -> dict[str, object]:
+        operations.append(operation)
+        if operation == "server_info":
+            return {
+                "version": "0.7.5-preview",
+                "api_schema": "Herdr API",
+                "platform": "windows",
+                "arch": "x64",
+            }
+        raise AssertionError(operation)
+
+    client = HerdrSocketClient(request_fn=request, socket_ref="herdr://local")
+
+    first = client.handshake()
+    second = client.handshake()
+    refreshed = client.handshake(force_refresh=True)
+
+    assert first is second
+    assert refreshed is not first
+    assert first.server_info["socket_ref"] == "herdr://local"
+    assert operations == ["server_info", "server_info"]
+
+
+def test_herdr_cli_request_adapter_default_run_hides_windows_control_wrapper(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_run(command, **kwargs):
+        captured['command'] = list(command)
+        captured['kwargs'] = dict(kwargs)
+        return subprocess.CompletedProcess(command, 0, stdout='ok', stderr='')
+
+    monkeypatch.setattr(herdr_cli.sys, 'platform', 'win32')
+    monkeypatch.setattr(herdr_cli.subprocess, 'CREATE_NO_WINDOW', 0x08000000, raising=False)
+    adapter = HerdrCliRequestAdapter(
+        session_name='ccb-test',
+        herdr_executable='C:/Herdr/herdr.exe',
+        run_fn=_fake_run,
+    )
+
+    result = adapter._run_command_once(
+        'server_info',
+        ['C:/Herdr/herdr.exe', '--session', 'ccb-test', '--version'],
+        expect_json=False,
+        session_name='ccb-test',
+    )
+
+    assert result.stdout == 'ok'
+    assert captured['command'] == ['C:/Herdr/herdr.exe', '--session', 'ccb-test', '--version']
+    assert captured['kwargs']['creationflags'] == 0x08000000
+
+
 def test_herdr_socket_client_schema_mismatch_is_structured_error() -> None:
     client = HerdrSocketClient(
         request_fn=_fake_herdr_request(server_info={"api_schema": "Unexpected API"}),
@@ -1812,6 +1866,25 @@ def test_terminal_api_get_backend_herdr_defaults_fail_closed(monkeypatch) -> Non
     assert exc_info.value.operation == "select_backend"
 
 
+def test_terminal_api_get_backend_uses_socket_runtime_env_without_capability_file(monkeypatch) -> None:
+    monkeypatch.setattr(terminal_api, "_backend_cache", None)
+    monkeypatch.setattr(terminal_api, "_backend_cache_key", None)
+    monkeypatch.delenv("CCB_HERDR_CAPABILITY_REPORT", raising=False)
+    monkeypatch.setenv("CCB_HERDR_SESSION", "ccb-demo")
+    monkeypatch.setenv("CCB_HERDR_SOCKET_REF", "herdr://ccb-demo")
+    monkeypatch.setattr(terminal_api, "_herdr_platform_gate", _windows_x64_platform_gate)
+
+    class _SocketEnvAdapter(_FakeRequestAdapter):
+        socket_ref = "herdr://ccb-demo"
+
+    monkeypatch.setattr(terminal_api, "_herdr_request_adapter", lambda: _SocketEnvAdapter())
+
+    backend = terminal_api.get_backend("herdr")
+
+    assert isinstance(backend, HerdrBackend)
+    assert backend._client.socket_ref == "herdr://ccb-demo"
+
+
 def test_terminal_api_get_backend_auto_preserves_non_windows_tmux(monkeypatch) -> None:
     monkeypatch.setattr(terminal_api, "_backend_cache", None)
     monkeypatch.setattr(terminal_api, "_backend_cache_key", None)
@@ -2919,7 +2992,6 @@ def test_herdr_backend_destroy_namespace_and_kill_server_delegate_and_drop_names
         "server_info",
         "destroy_namespace",
         "close_workspace",
-        "server_info",
         "kill_server",
     ]
     assert operations[1][1]["namespace_id"] == "w1"

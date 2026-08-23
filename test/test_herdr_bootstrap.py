@@ -135,6 +135,7 @@ def _bootstrap_success_mocks(monkeypatch, *, status=None):
     monkeypatch.delenv('CCB_HERDR_EXE', raising=False)
     monkeypatch.delenv('CCB_HERDR_SESSION', raising=False)
     monkeypatch.delenv('CCB_HERDR_CAPABILITY_REPORT', raising=False)
+    monkeypatch.delenv('CCB_HERDR_SOCKET_REF', raising=False)
     monkeypatch.setattr(
         'platforms.windows.herdr.bootstrap.resolve_herdr_executable',
         lambda explicit=None: '/x/herdr.exe',
@@ -159,10 +160,6 @@ def _bootstrap_success_mocks(monkeypatch, *, status=None):
             'pane_list': True,
         },
     )
-    monkeypatch.setattr(
-        'platforms.windows.herdr.bootstrap._write_capability_report',
-        lambda report: 'C:/tmp/ccb-herdr-capability-test.json',
-    )
 
 
 def test_bootstrap_sets_env_and_succeeds(monkeypatch) -> None:
@@ -171,9 +168,11 @@ def test_bootstrap_sets_env_and_succeeds(monkeypatch) -> None:
     assert result['ok'] is True
     assert result['herdr_exe'] == '/x/herdr.exe'
     assert result['herdr_session'] == 'sess-live'
+    assert result['socket_ref'] == 'herdr://sess-live'
     assert os.environ['CCB_HERDR_EXE'] == '/x/herdr.exe'
     assert os.environ['CCB_HERDR_SESSION'] == 'sess-live'
-    assert os.environ['CCB_HERDR_CAPABILITY_REPORT'] == 'C:/tmp/ccb-herdr-capability-test.json'
+    assert os.environ['CCB_HERDR_SOCKET_REF'] == 'herdr://sess-live'
+    assert 'CCB_HERDR_CAPABILITY_REPORT' not in os.environ
 
 
 def test_bootstrap_prefers_explicit_session(monkeypatch) -> None:
@@ -182,6 +181,7 @@ def test_bootstrap_prefers_explicit_session(monkeypatch) -> None:
     assert result['ok'] is True
     assert result['herdr_session'] == 'sess-explicit'
     assert os.environ['CCB_HERDR_SESSION'] == 'sess-explicit'
+    assert os.environ['CCB_HERDR_SOCKET_REF'] == 'herdr://sess-explicit'
 
 
 def test_bootstrap_rejects_failed_read_probes(monkeypatch) -> None:
@@ -301,8 +301,8 @@ def test_build_capability_report_covers_known_capabilities() -> None:
 
 def _stub_bootstrap_ok(monkeypatch) -> None:
     monkeypatch.setattr(
-        'platforms.windows.herdr.bootstrap.ensure_herdr_bootstrap_env',
-        lambda **kwargs: {'ok': True, 'warnings': []},
+        'cli.phase2_runtime.handlers_start._submit_herdr_runtime_manifest',
+        lambda *args, **kwargs: SimpleNamespace(ok=True, warnings=(), reason=None),
     )
 
 
@@ -926,92 +926,93 @@ def test_herdr_command_env_preserves_xdg_on_non_windows(monkeypatch) -> None:
     assert 'HERDR_CONFIG_PATH' not in env or env['HERDR_CONFIG_PATH'] == os.environ.get('HERDR_CONFIG_PATH', '')
 
 
-# --- handle_start herdr evidence auto-probe (installed ccb parity) -------
+# --- handle_start Herdr manifest submission --------------------------------
 
 
-def _clear_herdr_report_env(monkeypatch) -> None:
+def _patch_manifest_submit(monkeypatch):
+    from platforms.windows.herdr.runtime.contracts import HerdrRuntimeManifest
+
+    monkeypatch.delenv('CCB_HERDR_SESSION', raising=False)
+    monkeypatch.delenv('CCB_HERDR_SOCKET_REF', raising=False)
     monkeypatch.delenv('CCB_HERDR_CAPABILITY_REPORT', raising=False)
+    manifest = HerdrRuntimeManifest(
+        project_id='proj-1',
+        project_root='E:/repo',
+        session_name='ccb-proj-1',
+        generation=1,
+        workspaces=(),
+    )
+    writes: list[object] = []
+    ensures: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        'platforms.windows.herdr.runtime.manifest.build_herdr_runtime_manifest_for_start',
+        lambda *_args, **_kwargs: manifest,
+    )
+    monkeypatch.setattr(
+        'platforms.windows.herdr.runtime.manifest.write_herdr_runtime_manifest',
+        lambda _paths, item: writes.append(item),
+    )
+    monkeypatch.setattr(
+        'platforms.windows.herdr.runtime.ensure.ensure_runtime',
+        lambda item, **kwargs: ensures.append({'manifest': item, **kwargs})
+        or SimpleNamespace(ok=True, warnings=(), reason=None),
+    )
+    return manifest, writes, ensures
 
 
-def test_start_auto_probes_herdr_evidence_when_backend_herdr_and_report_missing(
-    monkeypatch,
-) -> None:
-    """Installed `ccb` (bare start) with herdr backend probes and injects evidence."""
-    from cli.phase2_runtime.handlers_start import _ensure_herdr_runtime_evidence
+def test_start_submits_manifest_when_backend_herdr(monkeypatch) -> None:
+    from cli.phase2_runtime.handlers_start import _submit_herdr_runtime_manifest
 
+    manifest, writes, ensures = _patch_manifest_submit(monkeypatch)
     monkeypatch.setenv('CCB_RUNTIME_MUX_BACKEND', 'herdr')
-    _clear_herdr_report_env(monkeypatch)
-    called: dict[str, object] = {}
-    monkeypatch.setattr(
-        'platforms.windows.herdr.bootstrap.ensure_herdr_bootstrap_env',
-        lambda **kwargs: called.update(kwargs) or {'ok': True, 'warnings': []},
-    )
-    monkeypatch.setattr(
-        'cli.phase2_runtime.handlers_start._herdr_capability_evidence_usable',
-        lambda: False,
-    )
-    monkeypatch.setattr(
-        'cli.phase2_runtime.handlers_start._is_herdr_relevant_platform',
-        lambda: True,
-    )
-    _ensure_herdr_runtime_evidence(SimpleNamespace(paths=SimpleNamespace()))
-    assert called.get('auto_start_server') is True
+
+    result = _submit_herdr_runtime_manifest(SimpleNamespace(paths=SimpleNamespace()), SimpleNamespace())
+
+    assert result.ok is True
+    assert writes == [manifest]
+    assert ensures == [{'manifest': manifest, 'restore_token': None, 'herdr_exe': None, 'herdr_session': None}]
 
 
-def test_start_skips_probe_when_backend_not_herdr(monkeypatch) -> None:
-    from cli.phase2_runtime.handlers_start import _ensure_herdr_runtime_evidence
+def test_start_writes_manifest_but_skips_submit_when_backend_not_herdr(monkeypatch) -> None:
+    from cli.phase2_runtime.handlers_start import _submit_herdr_runtime_manifest
 
+    manifest, writes, ensures = _patch_manifest_submit(monkeypatch)
     monkeypatch.setenv('CCB_RUNTIME_MUX_BACKEND', 'tmux')
-    called: dict[str, object] = {}
-    monkeypatch.setattr(
-        'platforms.windows.herdr.bootstrap.ensure_herdr_bootstrap_env',
-        lambda **kwargs: called.update(kwargs) or {'ok': True},
-    )
-    _ensure_herdr_runtime_evidence(SimpleNamespace(paths=SimpleNamespace()))
-    assert called == {}
+
+    result = _submit_herdr_runtime_manifest(SimpleNamespace(paths=SimpleNamespace()), SimpleNamespace())
+
+    assert result is None
+    assert writes == [manifest]
+    assert ensures == []
 
 
-def test_start_skips_probe_when_evidence_already_usable(monkeypatch) -> None:
-    from cli.phase2_runtime.handlers_start import _ensure_herdr_runtime_evidence
+def test_start_skips_submit_when_runtime_env_already_usable(monkeypatch) -> None:
+    from cli.phase2_runtime.handlers_start import _submit_herdr_runtime_manifest
 
+    manifest, writes, ensures = _patch_manifest_submit(monkeypatch)
     monkeypatch.setenv('CCB_RUNTIME_MUX_BACKEND', 'herdr')
-    monkeypatch.setenv('CCB_HERDR_CAPABILITY_REPORT', 'C:/tmp/report.json')
-    called: dict[str, object] = {}
-    monkeypatch.setattr(
-        'platforms.windows.herdr.bootstrap.ensure_herdr_bootstrap_env',
-        lambda **kwargs: called.update(kwargs) or {'ok': True},
-    )
-    monkeypatch.setattr(
-        'cli.phase2_runtime.handlers_start._herdr_capability_evidence_usable',
-        lambda: True,
-    )
-    _ensure_herdr_runtime_evidence(SimpleNamespace(paths=SimpleNamespace()))
-    assert called == {}
+    monkeypatch.setenv('CCB_HERDR_SESSION', 'ccb-proj-1')
+    monkeypatch.setenv('CCB_HERDR_SOCKET_REF', 'herdr://ccb-proj-1')
+
+    result = _submit_herdr_runtime_manifest(SimpleNamespace(paths=SimpleNamespace()), SimpleNamespace())
+
+    assert result is None
+    assert writes == [manifest]
+    assert ensures == []
 
 
-def test_herdr_capability_evidence_usable_detects_missing_and_invalid() -> None:
-    from cli.phase2_runtime.handlers_start import _herdr_capability_evidence_usable
+def test_start_manifest_submit_failure_is_non_fatal(monkeypatch) -> None:
+    from cli.phase2_runtime.handlers_start import _submit_herdr_runtime_manifest
 
-    # no env
-    import os as _os
-
-    _os.environ.pop('CCB_HERDR_CAPABILITY_REPORT', None)
-    assert _herdr_capability_evidence_usable() is False
-
-
-def test_start_probe_failure_is_non_fatal(monkeypatch) -> None:
-    """A failed evidence probe must not raise — selection will fail-closed."""
-    from cli.phase2_runtime.handlers_start import _ensure_herdr_runtime_evidence
-
+    _manifest, writes, ensures = _patch_manifest_submit(monkeypatch)
     monkeypatch.setenv('CCB_RUNTIME_MUX_BACKEND', 'herdr')
-    _clear_herdr_report_env(monkeypatch)
     monkeypatch.setattr(
-        'platforms.windows.herdr.bootstrap.ensure_herdr_bootstrap_env',
-        lambda **kwargs: {'ok': False, 'reason': 'boom'},
+        'platforms.windows.herdr.runtime.ensure.ensure_runtime',
+        lambda *_args, **_kwargs: SimpleNamespace(ok=False, warnings=(), reason='boom'),
     )
-    monkeypatch.setattr(
-        'cli.phase2_runtime.handlers_start._herdr_capability_evidence_usable',
-        lambda: False,
-    )
-    # Must not raise even though probe failed.
-    _ensure_herdr_runtime_evidence(SimpleNamespace(paths=SimpleNamespace()))
+
+    result = _submit_herdr_runtime_manifest(SimpleNamespace(paths=SimpleNamespace()), SimpleNamespace())
+
+    assert result.ok is False
+    assert writes
+    assert ensures == []

@@ -21,20 +21,10 @@ if not exist "%TARGET%" (
     exit /b 127
 )
 
-rem ---- CCB-compatible Python validation snippet (written to %TEMP%) ----
+rem ---- CCB-compatible Python validation ----
 rem Mirrors the heredoc check in bin\_ccb-python: Python >= 3.10 plus
 rem tomllib/tomli, aiohttp and the cryptography primitives.
-set "VALIDATE_SCRIPT=%TEMP%\_ccb_python_validate_%RANDOM%.py"
->  "%VALIDATE_SCRIPT%" echo import sys
->> "%VALIDATE_SCRIPT%" echo if sys.version_info ^< (3, 10):
->> "%VALIDATE_SCRIPT%" echo     sys.exit(1)
->> "%VALIDATE_SCRIPT%" echo try:
->> "%VALIDATE_SCRIPT%" echo     import tomllib  # noqa
->> "%VALIDATE_SCRIPT%" echo except ImportError:
->> "%VALIDATE_SCRIPT%" echo     import tomli  # noqa
->> "%VALIDATE_SCRIPT%" echo import aiohttp  # noqa
->> "%VALIDATE_SCRIPT%" echo from cryptography.hazmat.primitives.asymmetric import ed25519, x25519  # noqa
->> "%VALIDATE_SCRIPT%" echo from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305  # noqa
+set "VALIDATE_CODE=import sys, importlib.util; assert sys.version_info >= (3, 10); assert importlib.util.find_spec('tomllib') or importlib.util.find_spec('tomli'); import aiohttp; from cryptography.hazmat.primitives.asymmetric import ed25519, x25519; from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305"
 
 set "PYEXE="
 set "WRITE_CACHE=0"
@@ -84,8 +74,6 @@ if not defined PYEXE (
     )
 )
 
-del "%VALIDATE_SCRIPT%" >nul 2>&1
-
 if not defined PYEXE (
     echo ccb.cmd: cannot find a Python interpreter compatible with CCB.
     echo     Required: Python ^>= 3.10 with tomllib/tomli, aiohttp, and cryptography.
@@ -114,6 +102,6 @@ rem ============================================================
 set "VALID=0"
 set "CAND=%~1"
 if "%CAND%"=="" exit /b 0
-"%CAND%" "%VALIDATE_SCRIPT%" >nul 2>&1
+"%CAND%" -c "%VALIDATE_CODE%" >nul 2>&1
 if not errorlevel 1 set "VALID=1"
 exit /b 0

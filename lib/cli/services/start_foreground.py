@@ -6,10 +6,11 @@ import shutil
 import subprocess
 import sys
 import time
-from typing import Mapping
+from typing import Callable, Mapping
 
 from cli.context import CliContext
 from ccbd.socket_client import CcbdClient, CcbdClientError
+from ccbd.services.project_namespace_state import ProjectNamespaceStateStore
 from terminal_runtime.env import tmux_compatible_env
 from terminal_runtime.tmux import tmux_base
 from .daemon_runtime.policy import (
@@ -22,6 +23,27 @@ _ATTACH_ESTABLISH_POLL_INTERVAL_S = 0.05
 _ATTACH_TARGET_READY_TIMEOUT_S = FOREGROUND_ATTACH_TARGET_READY_TIMEOUT_S
 _ATTACH_TARGET_READY_POLL_INTERVAL_S = 0.05
 _MIN_ATTACH_RPC_TIMEOUT_S = 0.1
+_WEZTERM_CLI_TIMEOUT_S = 5.0
+
+
+@dataclass(frozen=True)
+class HerdrFrontendCommandRunner:
+    which_fn: Callable[[str], str | None] | None = None
+    run_fn: Callable[..., subprocess.CompletedProcess] | None = None
+    popen_fn: Callable[..., subprocess.Popen] | None = None
+    getcwd_fn: Callable[[], str] | None = None
+
+    def which(self, name: str) -> str | None:
+        return (self.which_fn or shutil.which)(name)
+
+    def run(self, command: list[str], **kwargs) -> subprocess.CompletedProcess:
+        return (self.run_fn or subprocess.run)(command, **kwargs)
+
+    def popen(self, command: list[str], **kwargs) -> subprocess.Popen:
+        return (self.popen_fn or subprocess.Popen)(command, **kwargs)
+
+    def getcwd(self) -> str:
+        return (self.getcwd_fn or os.getcwd)()
 
 
 @dataclass(frozen=True)
@@ -205,7 +227,8 @@ def _attach_herdr_project_namespace(context: CliContext, payload: dict[str, obje
     # no visible UI.  Spawning WezTerm first gives the user an immediate
     # visual session while the backend-side ``workspace focus`` completes
     # during attach.
-    _launch_herdr_ui(namespace_ref)
+    frontend = _launch_herdr_ui(namespace_ref)
+    _record_herdr_frontend(context, frontend)
     try:
         attach(namespace_ref, window_name=_clean_optional_payload_text(payload.get('namespace_workspace_window_name')))
     except Exception as exc:
@@ -218,50 +241,185 @@ def _attach_herdr_project_namespace(context: CliContext, payload: dict[str, obje
     return _foreground_attach_summary_from_payload(context, payload)
 
 
-def _launch_herdr_ui(namespace_ref: dict[str, object]) -> None:
+def _launch_herdr_ui(
+    namespace_ref: dict[str, object],
+    *,
+    runner: HerdrFrontendCommandRunner | None = None,
+) -> dict[str, object]:
     """Spawn WezTerm (or a standalone herdr process) to display the Herdr UI.
 
     Mirrors the ccb8.ps1 one-click WezTerm launch: resolves herdr + wezterm
     paths, derives the session name from the namespace ref, and spawns
     ``wezterm cli spawn -- <herdr> session attach <session>``.  Falls back
-    to a detached ``herdr session attach`` if WezTerm CLI is unavailable.
+    to a detached ``herdr session attach`` if WezTerm CLI or its GUI mux is
+    unavailable.  The returned frontend fact is diagnostic state only; it does
+    not imply business completion.
     """
     session_name = str(namespace_ref.get('session_name') or '').strip()
     if not session_name:
-        return
+        return _herdr_frontend_fact(status='frontend_not_ready', reason='missing_session_name')
+    runner = runner or HerdrFrontendCommandRunner()
 
     herdr_exe = os.environ.get('CCB_HERDR_EXE', '').strip()
     if not herdr_exe:
-        herdr_exe = shutil.which('herdr') or ''
+        herdr_exe = runner.which('herdr') or ''
     if not herdr_exe:
-        return
+        return _herdr_frontend_fact(status='frontend_not_ready', reason='herdr_executable_unavailable')
 
-    wezterm_cli = shutil.which('wezterm')
+    wezterm_cli = runner.which('wezterm')
     if wezterm_cli:
-        cwd = os.getcwd()
-        try:
-            subprocess.Popen(
-                [wezterm_cli, 'cli', 'spawn', '--cwd', cwd, '--', herdr_exe, 'session', 'attach', session_name],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                **_subprocess_kwargs_herdr_ui(),
+        cwd = runner.getcwd()
+        mux_available, mux_reason = _wezterm_mux_available(wezterm_cli, runner=runner)
+        if mux_available:
+            spawn = _run_wezterm_spawn(
+                wezterm_cli,
+                cwd=cwd,
+                herdr_exe=herdr_exe,
+                session_name=session_name,
+                runner=runner,
             )
-            return
-        except (OSError, subprocess.SubprocessError):
-            pass
+            if spawn.returncode == 0:
+                return _herdr_frontend_fact(
+                    status='wezterm_tab_attached',
+                    mux_available=True,
+                    launch_mode='wezterm_spawn',
+                    fallback=False,
+                )
+            return _launch_detached_herdr_ui(
+                herdr_exe,
+                session_name,
+                mux_available=True,
+                fallback_reason='wezterm_spawn_failed',
+                runner=runner,
+            )
+        return _launch_detached_herdr_ui(
+            herdr_exe,
+            session_name,
+            mux_available=False,
+            fallback_reason=mux_reason or 'wezterm_mux_unavailable',
+            runner=runner,
+        )
 
-    # Fallback: launch herdr as a standalone detached process.
-    # Fire-and-forget with DEVNULL stdio — Herdr connects to the session server
-    # and opens its own GUI/TUI window independently.
+    return _launch_detached_herdr_ui(
+        herdr_exe,
+        session_name,
+        mux_available=None,
+        fallback_reason='wezterm_cli_unavailable',
+        runner=runner,
+    )
+
+
+@dataclass(frozen=True)
+class _WezTermSpawnResult:
+    returncode: int
+
+
+def _wezterm_mux_available(
+    wezterm_cli: str,
+    *,
+    runner: HerdrFrontendCommandRunner,
+) -> tuple[bool, str | None]:
     try:
-        subprocess.Popen(
+        result = runner.run(
+            [wezterm_cli, 'cli', 'list'],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=_WEZTERM_CLI_TIMEOUT_S,
+            **_subprocess_kwargs_herdr_ui(),
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False, 'wezterm_mux_probe_failed'
+    return (result.returncode == 0, None if result.returncode == 0 else 'wezterm_mux_unavailable')
+
+
+def _run_wezterm_spawn(
+    wezterm_cli: str,
+    *,
+    cwd: str,
+    herdr_exe: str,
+    session_name: str,
+    runner: HerdrFrontendCommandRunner,
+) -> _WezTermSpawnResult:
+    try:
+        result = runner.run(
+            [wezterm_cli, 'cli', 'spawn', '--cwd', cwd, '--', herdr_exe, 'session', 'attach', session_name],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=_WEZTERM_CLI_TIMEOUT_S,
+            **_subprocess_kwargs_herdr_ui(),
+        )
+    except (OSError, subprocess.SubprocessError):
+        return _WezTermSpawnResult(returncode=1)
+    return _WezTermSpawnResult(returncode=int(result.returncode))
+
+
+def _launch_detached_herdr_ui(
+    herdr_exe: str,
+    session_name: str,
+    *,
+    mux_available: bool | None,
+    fallback_reason: str,
+    runner: HerdrFrontendCommandRunner,
+) -> dict[str, object]:
+    try:
+        runner.popen(
             [herdr_exe, 'session', 'attach', session_name],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             **_subprocess_kwargs_herdr_ui(),
         )
     except (OSError, subprocess.SubprocessError):
-        pass
+        return _herdr_frontend_fact(
+            status='frontend_not_ready',
+            mux_available=mux_available,
+            launch_mode='detached_fallback',
+            fallback=True,
+            fallback_reason=fallback_reason,
+            reason='detached_fallback_failed',
+        )
+    return _herdr_frontend_fact(
+        status='detached_fallback',
+        mux_available=mux_available,
+        launch_mode='detached_fallback',
+        fallback=True,
+        fallback_reason=fallback_reason,
+    )
+
+
+def _herdr_frontend_fact(
+    *,
+    status: str,
+    mux_available: bool | None = None,
+    launch_mode: str | None = None,
+    fallback: bool | None = None,
+    fallback_reason: str | None = None,
+    reason: str | None = None,
+) -> dict[str, object]:
+    fact: dict[str, object] = {'kind': 'wezterm', 'status': status}
+    if mux_available is not None:
+        fact['mux_available'] = bool(mux_available)
+    if launch_mode:
+        fact['launch_mode'] = launch_mode
+    if fallback is not None:
+        fact['fallback'] = bool(fallback)
+    if fallback_reason:
+        fact['fallback_reason'] = fallback_reason
+    if reason:
+        fact['reason'] = reason
+    return fact
+
+
+def _record_herdr_frontend(context: CliContext, frontend: dict[str, object]) -> None:
+    try:
+        store = ProjectNamespaceStateStore(context.paths)
+        state = store.load()
+        if state is None:
+            return
+        store.save(state.with_frontend(frontend))
+    except Exception:
+        return
 
 
 def _herdr_attach_target_ready(payload: dict[str, object]) -> tuple[bool, str]:

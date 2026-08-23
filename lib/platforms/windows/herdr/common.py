@@ -11,11 +11,16 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 
 from process_background import no_window_process_kwargs
 
 
-def resolve_herdr_executable(explicit: str | None = None) -> str | None:
+def resolve_herdr_executable(
+    explicit: str | None = None,
+    *,
+    which_fn: Callable[[str], str | None] | None = None,
+) -> str | None:
     """Resolve the herdr executable path.
 
     Priority: explicit argument > ``CCB_HERDR_EXE`` env > ``herdr`` on PATH
@@ -28,7 +33,8 @@ def resolve_herdr_executable(explicit: str | None = None) -> str | None:
     for candidate in candidates:
         if candidate and os.path.isfile(candidate):
             return candidate
-    exe = shutil.which('herdr')
+    resolver = which_fn or shutil.which
+    exe = resolver('herdr')
     if exe:
         return exe
     local = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Herdr', 'herdr.exe')

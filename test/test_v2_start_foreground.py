@@ -226,14 +226,11 @@ def test_start_foreground_herdr_attach_real_builder_accepts_matching_backend_ref
 
 
 def test_launch_herdr_ui_hides_windows_control_wrapper(monkeypatch) -> None:
-    popen_calls: list[tuple[list[str], dict[str, object]]] = []
+    run_calls: list[tuple[list[str], dict[str, object]]] = []
 
-    class _FakeProcess:
-        pid = 1234
-
-    def _fake_popen(args, **kwargs):
-        popen_calls.append((list(args), dict(kwargs)))
-        return _FakeProcess()
+    def _fake_run(args, **kwargs):
+        run_calls.append((list(args), dict(kwargs)))
+        return subprocess.CompletedProcess(args, 0)
 
     monkeypatch.setattr(start_foreground_service.sys, 'platform', 'win32')
     monkeypatch.setattr(start_foreground_service.subprocess, 'CREATE_NO_WINDOW', 0x08000000, raising=False)
@@ -244,11 +241,28 @@ def test_launch_herdr_ui_hides_windows_control_wrapper(monkeypatch) -> None:
         lambda name: 'C:/WezTerm/wezterm.exe' if name == 'wezterm' else None,
     )
     monkeypatch.setattr(start_foreground_service.os, 'getcwd', lambda: 'C:/repo')
-    monkeypatch.setattr(start_foreground_service.subprocess, 'Popen', _fake_popen)
+    monkeypatch.setattr(start_foreground_service.subprocess, 'run', _fake_run)
 
-    start_foreground_service._launch_herdr_ui({'session_name': 'ccb-proj-abc'})
+    frontend = start_foreground_service._launch_herdr_ui({'session_name': 'ccb-proj-abc'})
 
-    assert popen_calls == [
+    assert frontend == {
+        'kind': 'wezterm',
+        'status': 'wezterm_tab_attached',
+        'mux_available': True,
+        'launch_mode': 'wezterm_spawn',
+        'fallback': False,
+    }
+    assert run_calls == [
+        (
+            ['C:/WezTerm/wezterm.exe', 'cli', 'list'],
+            {
+                'check': False,
+                'stdout': start_foreground_service.subprocess.DEVNULL,
+                'stderr': start_foreground_service.subprocess.DEVNULL,
+                'timeout': start_foreground_service._WEZTERM_CLI_TIMEOUT_S,
+                'creationflags': 0x08000000,
+            },
+        ),
         (
             [
                 'C:/WezTerm/wezterm.exe',
@@ -263,12 +277,123 @@ def test_launch_herdr_ui_hides_windows_control_wrapper(monkeypatch) -> None:
                 'ccb-proj-abc',
             ],
             {
+                'check': False,
                 'stdout': start_foreground_service.subprocess.DEVNULL,
                 'stderr': start_foreground_service.subprocess.DEVNULL,
+                'timeout': start_foreground_service._WEZTERM_CLI_TIMEOUT_S,
                 'creationflags': 0x08000000,
             },
         )
     ]
+
+
+def test_launch_herdr_ui_uses_injected_runner_without_real_processes(monkeypatch) -> None:
+    run_calls: list[list[str]] = []
+    popen_calls: list[list[str]] = []
+
+    def _fake_run(args, **kwargs):
+        run_calls.append(list(args))
+        return subprocess.CompletedProcess(args, 0)
+
+    def _fake_popen(args, **kwargs):
+        popen_calls.append(list(args))
+        raise AssertionError('detached fallback should not run when WezTerm spawn succeeds')
+
+    runner = start_foreground_service.HerdrFrontendCommandRunner(
+        which_fn=lambda name: {
+            'herdr': 'C:/Herdr/herdr.exe',
+            'wezterm': 'C:/WezTerm/wezterm.exe',
+        }.get(name),
+        run_fn=_fake_run,
+        popen_fn=_fake_popen,
+        getcwd_fn=lambda: 'C:/repo',
+    )
+    monkeypatch.delenv('CCB_HERDR_EXE', raising=False)
+
+    frontend = start_foreground_service._launch_herdr_ui(
+        {'session_name': 'ccb-proj-abc'},
+        runner=runner,
+    )
+
+    assert frontend['status'] == 'wezterm_tab_attached'
+    assert run_calls == [
+        ['C:/WezTerm/wezterm.exe', 'cli', 'list'],
+        [
+            'C:/WezTerm/wezterm.exe',
+            'cli',
+            'spawn',
+            '--cwd',
+            'C:/repo',
+            '--',
+            'C:/Herdr/herdr.exe',
+            'session',
+            'attach',
+            'ccb-proj-abc',
+        ],
+    ]
+    assert popen_calls == []
+
+
+def test_launch_herdr_ui_falls_back_when_wezterm_mux_is_missing(monkeypatch) -> None:
+    popen_calls: list[list[str]] = []
+
+    class _FakeProcess:
+        pid = 1234
+
+    def _fake_run(args, **kwargs):
+        return subprocess.CompletedProcess(args, 1)
+
+    def _fake_popen(args, **kwargs):
+        popen_calls.append(list(args))
+        return _FakeProcess()
+
+    monkeypatch.setenv('CCB_HERDR_EXE', 'C:/Herdr/herdr.exe')
+    monkeypatch.setattr(
+        start_foreground_service.shutil,
+        'which',
+        lambda name: 'C:/WezTerm/wezterm.exe' if name == 'wezterm' else None,
+    )
+    monkeypatch.setattr(start_foreground_service.subprocess, 'run', _fake_run)
+    monkeypatch.setattr(start_foreground_service.subprocess, 'Popen', _fake_popen)
+
+    frontend = start_foreground_service._launch_herdr_ui({'session_name': 'ccb-proj-abc'})
+
+    assert frontend['status'] == 'detached_fallback'
+    assert frontend['mux_available'] is False
+    assert frontend['fallback_reason'] == 'wezterm_mux_unavailable'
+    assert popen_calls == [['C:/Herdr/herdr.exe', 'session', 'attach', 'ccb-proj-abc']]
+
+
+def test_launch_herdr_ui_falls_back_when_wezterm_spawn_fails(monkeypatch) -> None:
+    popen_calls: list[list[str]] = []
+    run_returncodes = iter([0, 7])
+
+    class _FakeProcess:
+        pid = 1234
+
+    def _fake_run(args, **kwargs):
+        return subprocess.CompletedProcess(args, next(run_returncodes))
+
+    def _fake_popen(args, **kwargs):
+        popen_calls.append(list(args))
+        return _FakeProcess()
+
+    monkeypatch.setenv('CCB_HERDR_EXE', 'C:/Herdr/herdr.exe')
+    monkeypatch.setattr(
+        start_foreground_service.shutil,
+        'which',
+        lambda name: 'C:/WezTerm/wezterm.exe' if name == 'wezterm' else None,
+    )
+    monkeypatch.setattr(start_foreground_service.os, 'getcwd', lambda: 'C:/repo')
+    monkeypatch.setattr(start_foreground_service.subprocess, 'run', _fake_run)
+    monkeypatch.setattr(start_foreground_service.subprocess, 'Popen', _fake_popen)
+
+    frontend = start_foreground_service._launch_herdr_ui({'session_name': 'ccb-proj-abc'})
+
+    assert frontend['status'] == 'detached_fallback'
+    assert frontend['mux_available'] is True
+    assert frontend['fallback_reason'] == 'wezterm_spawn_failed'
+    assert popen_calls == [['C:/Herdr/herdr.exe', 'session', 'attach', 'ccb-proj-abc']]
 
 
 def test_start_foreground_herdr_attach_rejects_missing_payload_without_tmux_fallback(monkeypatch) -> None:

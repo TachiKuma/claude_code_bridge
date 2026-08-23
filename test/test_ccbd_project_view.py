@@ -361,6 +361,14 @@ def test_project_view_namespace_view_redacts_herdr_restore_token() -> None:
         namespace_ipc_kind='herdr_socket',
         namespace_ipc_ref='herdr://ccb-herdr',
         namespace_restore_token='ccb-herdr::workspace-1',
+        frontend={
+            'kind': 'wezterm',
+            'status': 'detached_fallback',
+            'mux_available': False,
+            'launch_mode': 'detached_fallback',
+            'fallback': True,
+            'fallback_reason': 'wezterm_mux_unavailable',
+        },
         layout_version=3,
         workspace_window_name='workspace',
         ui_attachable=True,
@@ -390,8 +398,127 @@ def test_project_view_namespace_view_redacts_herdr_restore_token() -> None:
         'ipc_kind': 'herdr_socket',
         'ipc_ref': 'herdr://ccb-herdr',
     }
+    assert view['frontend_status'] == {
+        'kind': 'wezterm',
+        'state': 'detached_fallback',
+        'mux_available': False,
+        'launch_mode': 'detached_fallback',
+        'fallback': True,
+        'fallback_reason': 'wezterm_mux_unavailable',
+    }
     assert 'namespace_restore_token' not in view
     assert 'ccb-herdr::workspace-1' not in str(view)
+
+
+def test_project_view_herdr_namespace_without_frontend_binding_is_explicit_unknown() -> None:
+    config = _config()
+    namespace = ProjectNamespaceState(
+        project_id='proj-herdr',
+        namespace_epoch=5,
+        tmux_socket_path='',
+        tmux_session_name='ccb-herdr',
+        namespace_backend_family='herdr-native',
+        backend_impl='herdr',
+        namespace_id='workspace-1',
+        namespace_session_name='ccb-herdr',
+        namespace_ipc_kind='herdr_socket',
+        namespace_ipc_ref='herdr://ccb-herdr',
+        layout_version=3,
+        workspace_window_name='workspace',
+        ui_attachable=True,
+    )
+
+    view = project_view_service._namespace_view(
+        config=config,
+        sidebar_view_result=(config.sidebar_view, None),
+        namespace=namespace,
+        focus={},
+    )
+
+    assert view['frontend_status'] == {
+        'kind': 'wezterm',
+        'state': 'unknown',
+        'reason': 'missing_frontend_binding',
+    }
+
+
+def test_project_view_herdr_runtime_status_maps_done_without_closing_job() -> None:
+    project_id = 'proj-herdr'
+    namespace = ProjectNamespaceState(
+        project_id=project_id,
+        namespace_epoch=5,
+        tmux_socket_path='',
+        tmux_session_name='ccb-herdr',
+        namespace_backend_family='herdr-native',
+        backend_impl='herdr',
+        namespace_id='workspace-1',
+        namespace_session_name='ccb-herdr',
+        namespace_ipc_kind='herdr_socket',
+        namespace_ipc_ref='herdr://ccb-herdr',
+        frontend={'kind': 'wezterm', 'status': 'wezterm_tab_attached', 'mux_available': True},
+        layout_version=3,
+        workspace_window_name='workspace',
+        ui_attachable=True,
+    )
+    runtime = _runtime('agent1', project_id=project_id)
+    runtime.runtime_generation = 12
+    runtime.pane_ref = {'state': 'done'}
+    job = SimpleNamespace(status=JobStatus.RUNNING, job_id='job-1')
+
+    status = project_view_service._merged_runtime_status(
+        deps=SimpleNamespace(project_id=project_id),
+        namespace=namespace,
+        agent_name='agent1',
+        runtime=runtime,
+        job=job,
+        provider_runtime_status=None,
+    )
+
+    assert status['state'] == 'idle'
+    assert status['runtime_state'] == 'done'
+    assert status['unseen_done'] is True
+    assert status['job_status'] == 'running'
+    assert status['frontend_state'] == 'wezterm_tab_attached'
+    assert status['cache_key'] == {
+        'project_id': project_id,
+        'agent_name': 'agent1',
+        'runtime_generation': 12,
+        'pane_id': '%1',
+    }
+
+
+def test_project_view_herdr_runtime_status_keeps_unknown_unknown() -> None:
+    project_id = 'proj-herdr'
+    namespace = ProjectNamespaceState(
+        project_id=project_id,
+        namespace_epoch=5,
+        tmux_socket_path='',
+        tmux_session_name='ccb-herdr',
+        namespace_backend_family='herdr-native',
+        backend_impl='herdr',
+        namespace_id='workspace-1',
+        namespace_session_name='ccb-herdr',
+        namespace_ipc_kind='herdr_socket',
+        namespace_ipc_ref='herdr://ccb-herdr',
+        layout_version=3,
+        workspace_window_name='workspace',
+        ui_attachable=True,
+    )
+    runtime = _runtime('agent1', project_id=project_id)
+    runtime.pane_ref = {'state': 'unknown'}
+
+    status = project_view_service._merged_runtime_status(
+        deps=SimpleNamespace(project_id=project_id),
+        namespace=namespace,
+        agent_name='agent1',
+        runtime=runtime,
+        job=None,
+        provider_runtime_status=None,
+    )
+
+    assert status['state'] == 'unknown'
+    assert status['runtime_state'] == 'unknown'
+    assert status['unseen_done'] is False
 
 
 def test_project_view_herdr_namespace_skips_tmux_project_view_facts() -> None:

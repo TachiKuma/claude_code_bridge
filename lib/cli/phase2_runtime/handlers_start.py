@@ -88,15 +88,7 @@ def handle_config_ui(context, command, out, services) -> int:
 
 def handle_start(context, command, out, services) -> int:
     _ensure_project_commands_approved(context, out, services)
-    # When the project config selects the Herdr backend, make sure a usable
-    # capability report is injected before backend selection.  The installed
-    # `ccb` (source-dev-independent) entrypoint does not run
-    # ``ensure_herdr_bootstrap_env`` the way ``ccb herdr open`` does, so a bare
-    # `ccb` under `[runtime.mux] backend = "herdr"` used to fail-closed with
-    # "capability evidence is unavailable" unless a stale/foreign
-    # CCB_HERDR_CAPABILITY_REPORT happened to be exported.  Probe here and set
-    # the env so selection has real evidence (matches ccb8 one-click behavior).
-    _ensure_herdr_runtime_evidence(context)
+    _submit_herdr_runtime_manifest(context, command)
     interactive_attach = (
         not _env_truthy('CCB_NO_ATTACH')
         and _stream_is_tty(sys.stdin)
@@ -119,6 +111,53 @@ def _ensure_project_commands_approved(context, out, services) -> None:
     if not approval.required:
         return
     _approve_project_commands(context, out, services, require_output_tty=True, approval=approval)
+
+
+def _submit_herdr_runtime_manifest(
+    context,
+    command,
+    *,
+    herdr_exe: str | None = None,
+    herdr_session: str | None = None,
+    require_ready: bool = False,
+):
+    try:
+        from platforms.windows.herdr.runtime.ensure import ensure_runtime
+        from platforms.windows.herdr.runtime.manifest import (
+            build_herdr_runtime_manifest_for_start,
+            write_herdr_runtime_manifest,
+        )
+
+        manifest = build_herdr_runtime_manifest_for_start(
+            context,
+            command,
+            session_name=herdr_session or _ccbd_herdr_session_name(context),
+        )
+        write_herdr_runtime_manifest(context.paths, manifest)
+    except Exception as exc:
+        print(
+            f'Warning: Herdr runtime manifest was not written: {exc}',
+            file=sys.stderr,
+        )
+        return None
+    if not _should_submit_herdr_runtime():
+        return None
+    if _herdr_runtime_env_usable() and not require_ready:
+        return None
+    result = ensure_runtime(
+        manifest,
+        restore_token=None,
+        herdr_exe=herdr_exe,
+        herdr_session=herdr_session,
+    )
+    if result.ok:
+        for warning in result.warnings:
+            if not require_ready and warning.startswith('Using Herdr session '):
+                continue
+            print(f'Warning: {warning}', file=sys.stderr)
+    elif require_ready:
+        print(result.reason or 'herdr runtime ensure failed', file=sys.stderr)
+    return result
 
 
 def _approve_project_commands(
@@ -172,42 +211,22 @@ def _render_project_command_approval(approval) -> tuple[str, ...]:
     )
 
 
-def _ensure_herdr_runtime_evidence(context) -> None:
-    """Probe Herdr and inject ``CCB_HERDR_CAPABILITY_REPORT`` when needed.
-
-    Probes when the effective backend is or may become Herdr — explicitly via
-    ``CCB_RUNTIME_MUX_BACKEND=herdr``, or implicitly when running on native
-    Windows x64 (where the platform gate auto-selects Herdr and an existing
-    ccbd may already use it).  Reuses ``ensure_herdr_bootstrap_env`` so the
-    plain ``ccb`` start path and ``ccb herdr open`` share one evidence source
-    (runtime probe -> temp report), never a stale source-dev spike file.
-    """
-    if _herdr_capability_evidence_usable():
-        return
+def _should_submit_herdr_runtime() -> bool:
     env_backend = os.environ.get('CCB_RUNTIME_MUX_BACKEND', '').strip().lower()
     if env_backend and env_backend != 'herdr':
-        # Explicit non-Herdr backend — user has opted out.
-        return
-    if not _is_herdr_relevant_platform():
-        return
-    from platforms.windows.herdr.bootstrap import ensure_herdr_bootstrap_env
+        return False
+    if env_backend == 'herdr':
+        return True
+    if _herdr_runtime_env_usable():
+        return True
+    return _is_herdr_relevant_platform()
 
-    result = ensure_herdr_bootstrap_env(
-        auto_start_server=True,
-        start_session=_ccbd_herdr_session_name(context),
+
+def _herdr_runtime_env_usable() -> bool:
+    return bool(
+        os.environ.get('CCB_HERDR_SOCKET_REF', '').strip()
+        and os.environ.get('CCB_HERDR_SESSION', '').strip()
     )
-    if result.get('ok') is not True:
-        # Non-fatal: selection will still fail-closed with an actionable
-        # diagnostic; the daemon start below must not be silently hijacked.
-        return
-    for warning in (result.get('warnings') or ()):
-        # Bare `ccb` auto-detects the session from the project name — the
-        # "Using Herdr session … pass --herdr-session to override" hint is
-        # only actionable under `ccb herdr open`; suppress it here so the
-        # user gets a clean start with zero manual handling.
-        if isinstance(warning, str) and warning.startswith('Using Herdr session '):
-            continue
-        print(f'Warning: {warning}', file=sys.stderr)
 
 
 def _is_herdr_relevant_platform() -> bool:
@@ -232,23 +251,6 @@ def _is_herdr_relevant_platform() -> bool:
     except Exception:
         return False
     return True
-
-
-def _herdr_capability_evidence_usable() -> bool:
-    path = os.environ.get('CCB_HERDR_CAPABILITY_REPORT', '').strip()
-    if not path:
-        return False
-    try:
-        import json as _json
-
-        from platforms.windows.herdr.runtime.capabilities import (
-            herdr_capability_report_supported,
-        )
-
-        payload = _json.loads(open(path, encoding='utf-8').read())
-    except Exception:
-        return False
-    return isinstance(payload, dict) and herdr_capability_report_supported(payload)
 
 
 def _env_truthy(name: str) -> bool:
@@ -287,31 +289,26 @@ def handle_herdr_open(context, command, out, services) -> int:
     until ccbd is mounted (replacing the ``ccb8.ps1`` lifecycle.json poll).
     """
     from cli.models_start import ParsedStartCommand
-    from platforms.windows.herdr.bootstrap import ensure_herdr_bootstrap_env
 
-    # P0: let Python own the Herdr server lifecycle.  When nothing is running,
-    # start the ccbd-derived session server here instead of in ccb8.ps1.
-    result = ensure_herdr_bootstrap_env(
-        herdr_exe=command.herdr_exe,
-        herdr_session=command.herdr_session,
-        auto_start_server=True,
-        start_session=_ccbd_herdr_session_name(context),
-    )
-    if result.get('ok') is not True:
-        print(str(result.get('reason') or 'herdr open failed'), file=sys.stderr)
-        return 1
-    for warning in (result.get('warnings') or ()):
-        print(f'Warning: {warning}', file=sys.stderr)
-    running, backend = _daemon_running_and_backend(context)
-    if running and backend != 'herdr':
-        _print_herdr_daemon_conflict(backend)
-        return 1
     start_command = ParsedStartCommand(
         project=command.project,
         agent_names=(),
         restore=True,
         auto_permission=True,
     )
+    result = _submit_herdr_runtime_manifest(
+        context,
+        start_command,
+        herdr_exe=command.herdr_exe,
+        herdr_session=command.herdr_session,
+        require_ready=True,
+    )
+    if result is None or getattr(result, 'ok', False) is not True:
+        return 1
+    running, backend = _daemon_running_and_backend(context)
+    if running and backend != 'herdr':
+        _print_herdr_daemon_conflict(backend)
+        return 1
     previous_no_attach = os.environ.get('CCB_NO_ATTACH')
     if command.no_attach:
         os.environ['CCB_NO_ATTACH'] = '1'

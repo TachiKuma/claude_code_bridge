@@ -177,7 +177,7 @@ def get_backend(terminal_type: Optional[str] = None) -> Optional[TerminalBackend
         tmux_backend_factory=TmuxBackend,
         herdr_backend_factory=_herdr_backend_factory,
         platform_gate_fn=_herdr_platform_gate,
-        herdr_capability_report_fn=_herdr_capability_report,
+        herdr_capability_report_fn=_herdr_selection_capability_report,
         herdr_capability_report_ref_fn=_herdr_capability_report_ref,
     )
     if use_cache:
@@ -224,7 +224,7 @@ def create_auto_layout(
 
 
 def _herdr_backend_factory() -> HerdrBackend:
-    capabilities = _herdr_capability_report()
+    capabilities = _herdr_selection_capability_report()
     request_adapter = _herdr_request_adapter()
     return HerdrBackend(
         client=HerdrSocketClient(
@@ -235,6 +235,20 @@ def _herdr_backend_factory() -> HerdrBackend:
             ),
         ),
         capability_gate=_herdr_capability_gate(capabilities),
+    )
+
+
+def _herdr_selection_capability_report() -> dict[str, object] | None:
+    capabilities = _herdr_capability_report()
+    if capabilities is None and _herdr_socket_runtime_env_configured():
+        return _herdr_persisted_session_capability_report()
+    return capabilities
+
+
+def _herdr_socket_runtime_env_configured() -> bool:
+    return bool(
+        os.environ.get("CCB_HERDR_SESSION", "").strip()
+        and os.environ.get("CCB_HERDR_SOCKET_REF", "").strip()
     )
 
 

@@ -12,6 +12,7 @@ import time
 _CCB_TEST_PROCESS_ENTRY_NS = time.perf_counter_ns()
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -204,6 +205,8 @@ def main() -> int:
         for key in _STARTUP_TRACE_ENV_KEYS:
             env.pop(key, None)
 
+    if os.name == "nt":
+        return subprocess.call([sys.executable, str(SOURCE_CCB), *argv], env=env)
     os.execvpe(sys.executable, [sys.executable, str(SOURCE_CCB), *argv], env)
     raise AssertionError("unreachable")
 

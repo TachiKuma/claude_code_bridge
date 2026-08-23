@@ -34,12 +34,15 @@ class HerdrBackend(TerminalBackend):
         self._known_namespaces: dict[tuple[str, str], MuxNamespaceRefV2] = {}
         self._logical_windows: dict[tuple[str, str, str], dict[str, object]] = {}
 
+    def _ensure_handshake(self) -> None:
+        self._client.handshake()
+
     def capabilities(self) -> MuxCapabilitiesV2:
         return self._capability_gate.require_supported("capabilities")
 
     def prepare_server(self) -> None:
         self._capability_gate.require_supported("prepare_server")
-        self._client.server_info()
+        self._ensure_handshake()
 
     def ensure_server_policy(self) -> None:
         self.prepare_server()
@@ -52,20 +55,20 @@ class HerdrBackend(TerminalBackend):
         title: str,
     ) -> MuxNamespaceRefV2:
         self._capability_gate.require_supported("create_session")
-        self._client.server_info()
+        self._ensure_handshake()
         return self._register_namespace(
             self._client.create_session(project_id=project_id, cwd=cwd, title=title)
         )
 
     def restore_session(self, *, restore_token: str) -> MuxNamespaceRefV2:
         self._capability_gate.require_supported("restore_session")
-        self._client.server_info()
+        self._ensure_handshake()
         return self._register_namespace(self._client.restore_session(restore_token=restore_token))
 
     def namespace_alive(self, namespace: MuxNamespaceRefV2) -> bool:
         namespace_ref = self._namespace_ref_from_mapping(namespace, operation="namespace_alive")
         self._capability_gate.require_supported("namespace_alive")
-        self._client.server_info()
+        self._ensure_handshake()
         try:
             self._client.list_panes(namespace_ref)
         except MuxCommandErrorV2 as exc:
@@ -77,7 +80,7 @@ class HerdrBackend(TerminalBackend):
     def list_windows(self, namespace: MuxNamespaceRefV2) -> list[Mapping[str, object]]:
         namespace_ref = self._namespace_ref_from_mapping(namespace, operation="list_windows")
         self._capability_gate.require_supported("list_windows")
-        self._client.server_info()
+        self._ensure_handshake()
         return self._client.list_windows(namespace_ref)
 
     def ensure_window(
@@ -90,7 +93,7 @@ class HerdrBackend(TerminalBackend):
     ) -> Mapping[str, object]:
         namespace_ref = self._namespace_ref_from_mapping(namespace, operation="ensure_window")
         self._capability_gate.require_supported("ensure_window")
-        self._client.server_info()
+        self._ensure_handshake()
         record = dict(
             self._client.ensure_window(
                 namespace_ref,
@@ -116,7 +119,7 @@ class HerdrBackend(TerminalBackend):
     ) -> MuxPaneRefV2:
         namespace_ref = self._namespace_ref_from_mapping(namespace, operation="window_root_pane")
         self._capability_gate.require_supported("window_root_pane")
-        self._client.server_info()
+        self._ensure_handshake()
         try:
             pane = self._client.window_root_pane(namespace_ref, window_name=window_name)
         except MuxCommandErrorV2 as exc:
@@ -205,7 +208,7 @@ class HerdrBackend(TerminalBackend):
     ) -> MuxOperationEvidenceV2:
         pane_ref = self._pane_ref(pane, operation="report_pane_agent")
         self._capability_gate.require_supported("report_pane_agent")
-        self._client.server_info()
+        self._ensure_handshake()
         return self._client.report_pane_agent(
             pane_ref,
             provider_kind=provider_kind,
@@ -226,7 +229,7 @@ class HerdrBackend(TerminalBackend):
     ) -> MuxOperationEvidenceV2:
         pane_ref = self._pane_ref(pane, operation="report_pane_agent_session")
         self._capability_gate.require_supported("report_pane_agent_session")
-        self._client.server_info()
+        self._ensure_handshake()
         return self._client.report_pane_agent_session(
             pane_ref,
             provider_kind=provider_kind,
@@ -244,7 +247,7 @@ class HerdrBackend(TerminalBackend):
     ) -> MuxOperationEvidenceV2:
         pane_ref = self._pane_ref(pane, operation="release_pane_agent")
         self._capability_gate.require_supported("release_pane_agent")
-        self._client.server_info()
+        self._ensure_handshake()
         return self._client.release_pane_agent(
             pane_ref,
             provider_kind=provider_kind,
@@ -261,7 +264,7 @@ class HerdrBackend(TerminalBackend):
         if not pane_text:
             return None
         self._capability_gate.require_supported("describe_pane")
-        self._client.server_info()
+        self._ensure_handshake()
         namespace = getattr(self, "_ccb_project_namespace_ref", None)
         namespace_ref = namespace if isinstance(namespace, dict) else None
         panes = self._client.list_panes(namespace_ref)
@@ -306,7 +309,7 @@ class HerdrBackend(TerminalBackend):
 
     def list_panes_by_user_options(self, expected: dict[str, str]) -> list[str]:
         self._capability_gate.require_supported("list_panes_by_user_options")
-        self._client.server_info()
+        self._ensure_handshake()
         namespace = getattr(self, "_ccb_project_namespace_ref", None)
         panes = self._client.list_panes(namespace if isinstance(namespace, dict) else None)
         normalized = {str(key).lstrip("@"): str(value) for key, value in expected.items()}
@@ -333,7 +336,7 @@ class HerdrBackend(TerminalBackend):
     ) -> MuxOperationEvidenceV2:
         namespace_ref = self._namespace_ref_from_mapping(namespace, operation="select_window")
         self._capability_gate.require_supported("select_window")
-        self._client.server_info()
+        self._ensure_handshake()
         return self._client.select_window(namespace_ref, window_id=window_id, target=target)
 
     def kill_window(
@@ -345,7 +348,7 @@ class HerdrBackend(TerminalBackend):
     ) -> MuxOperationEvidenceV2:
         namespace_ref = self._namespace_ref_from_mapping(namespace, operation="kill_window")
         self._capability_gate.require_supported("kill_window")
-        self._client.server_info()
+        self._ensure_handshake()
         evidence = self._client.kill_window(namespace_ref, window_id=window_id, target=target)
         if window_id:
             self._panes.pop(window_id, None)
@@ -375,7 +378,7 @@ class HerdrBackend(TerminalBackend):
     ) -> MuxOperationEvidenceV2:
         namespace_ref = self._namespace_ref_from_mapping(namespace, operation="rename_window")
         self._capability_gate.require_supported("rename_window")
-        self._client.server_info()
+        self._ensure_handshake()
         evidence = self._client.rename_window(
             namespace_ref,
             window_id=window_id,
@@ -396,7 +399,7 @@ class HerdrBackend(TerminalBackend):
     def destroy_namespace(self, namespace: MuxNamespaceRefV2) -> MuxOperationEvidenceV2:
         namespace_ref = self._namespace_ref_from_mapping(namespace, operation="destroy_namespace")
         self._capability_gate.require_supported("destroy_namespace")
-        self._client.server_info()
+        self._ensure_handshake()
         evidence = self._client.destroy_namespace(namespace_ref)
         # Best-effort workspace cleanup: close the Herdr workspace so that
         # repeated kill/restart cycles do not accumulate orphan workspaces
@@ -413,7 +416,7 @@ class HerdrBackend(TerminalBackend):
     def kill_server(self, namespace: MuxNamespaceRefV2) -> MuxOperationEvidenceV2:
         namespace_ref = self._namespace_ref_from_mapping(namespace, operation="kill_server")
         self._capability_gate.require_supported("kill_server")
-        self._client.server_info()
+        self._ensure_handshake()
         evidence = self._client.kill_server(namespace_ref)
         self._drop_namespace_refs(namespace_ref)
         return evidence
@@ -579,7 +582,7 @@ class HerdrBackend(TerminalBackend):
     ) -> MuxOperationEvidenceV2:
         pane_ref = self._pane_ref(pane, operation="respawn_pane")
         self._capability_gate.require_supported("respawn_pane")
-        self._client.server_info()
+        self._ensure_handshake()
         return self._client.respawn_pane(
             pane_ref,
             command=command,
@@ -593,7 +596,7 @@ class HerdrBackend(TerminalBackend):
     ) -> Mapping[str, object]:
         """Return the pane's foreground process info (``pane process-info``)."""
         pane_ref = self._pane_ref(pane, operation="pane_process_info")
-        self._client.server_info()
+        self._ensure_handshake()
         return self._client.pane_process_info(pane_ref)
 
     def move_pane(
@@ -606,7 +609,7 @@ class HerdrBackend(TerminalBackend):
         source_ref = self._pane_ref(source_pane, operation="move_pane")
         anchor_ref = self._pane_ref(anchor_pane, operation="move_pane")
         self._capability_gate.require_supported("move_pane")
-        self._client.server_info()
+        self._ensure_handshake()
         return self._client.move_pane(source_ref, anchor_ref, direction=direction)
 
     def reflow_window(
@@ -620,7 +623,7 @@ class HerdrBackend(TerminalBackend):
     ) -> MuxOperationEvidenceV2:
         namespace_ref = self._namespace_ref_from_mapping(namespace, operation="reflow_window")
         self._capability_gate.require_supported("reflow_window")
-        self._client.server_info()
+        self._ensure_handshake()
         return self._client.reflow_window(
             namespace_ref,
             window_name=window_name,
@@ -643,7 +646,7 @@ class HerdrBackend(TerminalBackend):
     ) -> MuxPaneRefV2:
         namespace = self._register_namespace(namespace)
         self._capability_gate.require_supported("create_pane")
-        self._client.server_info()
+        self._ensure_handshake()
         pane = self._client.create_pane(
             namespace,
             command=command,
@@ -661,7 +664,7 @@ class HerdrBackend(TerminalBackend):
     def send_text(self, pane_id, text: str) -> MuxOperationEvidenceV2 | None:
         pane = self._pane_ref(pane_id, operation="send_text")
         self._capability_gate.require_supported("send_text")
-        self._client.server_info()
+        self._ensure_handshake()
         evidence = self._client.send_text(pane, text)
         return evidence if isinstance(pane_id, dict) else None
 
@@ -673,13 +676,13 @@ class HerdrBackend(TerminalBackend):
         ) -> tuple[str, MuxOperationEvidenceV2]:
         pane = self._pane_ref(pane, operation="capture_pane")
         self._capability_gate.require_supported("capture_pane")
-        self._client.server_info()
+        self._ensure_handshake()
         return self._client.capture_pane(pane, lines=lines)
 
     def kill_pane(self, pane_id) -> MuxOperationEvidenceV2 | None:
         pane = self._pane_ref(pane_id, operation="kill_pane")
         self._capability_gate.require_supported("kill_pane")
-        self._client.server_info()
+        self._ensure_handshake()
         evidence = self._client.kill_pane(pane)
         self._panes.pop(pane["pane_id"], None)
         self._pane_namespaces.pop(pane["pane_id"], None)
@@ -693,7 +696,7 @@ class HerdrBackend(TerminalBackend):
     ) -> MuxOperationEvidenceV2:
         namespace_ref = self._namespace_ref_from_mapping(namespace, operation="attach_namespace")
         self._capability_gate.require_supported("attach_namespace")
-        self._client.server_info()
+        self._ensure_handshake()
         return self._client.attach_namespace(namespace_ref, window_name=window_name)
 
     def is_alive(self, pane_id) -> bool:
@@ -706,7 +709,7 @@ class HerdrBackend(TerminalBackend):
         cached = pane["pane_id"] in self._panes
         try:
             self._capability_gate.require_supported("capture_pane")
-            self._client.server_info()
+            self._ensure_handshake()
             self._client.capture_pane(pane, lines=1)
         except MuxCommandErrorV2 as exc:
             if exc.category == "not-found":

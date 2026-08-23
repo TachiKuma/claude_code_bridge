@@ -102,6 +102,15 @@ def test_project_namespace_state_round_trips_herdr_namespace_without_public_rest
         namespace_ipc_kind='herdr_socket',
         namespace_ipc_ref='herdr://ccb-herdr',
         namespace_restore_token='ccb-herdr::workspace-1',
+        frontend={
+            'kind': 'wezterm',
+            'status': 'detached_fallback',
+            'mux_available': False,
+            'launch_mode': 'detached_fallback',
+            'fallback': True,
+            'fallback_reason': 'wezterm_mux_unavailable',
+            'command': 'must-not-persist',
+        },
         layout_version=3,
         workspace_window_name='workspace',
         ui_attachable=True,
@@ -121,8 +130,17 @@ def test_project_namespace_state_round_trips_herdr_namespace_without_public_rest
     assert summary['namespace_backend_impl'] == 'herdr'
     assert summary['namespace_ipc_kind'] == 'herdr_socket'
     assert summary['namespace_restore_token_present'] is True
+    assert summary['namespace_frontend'] == {
+        'kind': 'wezterm',
+        'status': 'detached_fallback',
+        'mux_available': False,
+        'launch_mode': 'detached_fallback',
+        'fallback': True,
+        'fallback_reason': 'wezterm_mux_unavailable',
+    }
     assert 'namespace_restore_token' not in summary
     assert 'ccb-herdr::workspace-1' not in str(summary)
+    assert 'must-not-persist' not in str(record)
 
 
 def test_project_namespace_event_summary_redacts_herdr_restore_token() -> None:
@@ -185,6 +203,7 @@ def test_project_namespace_runtime_dto_preserves_internal_herdr_namespace_ref() 
         namespace_ipc_kind='herdr_socket',
         namespace_ipc_ref='herdr://ccb-herdr',
         namespace_restore_token='ccb-herdr::workspace-1',
+        frontend={'kind': 'wezterm', 'status': 'wezterm_tab_attached', 'mux_available': True},
         layout_version=3,
         workspace_window_name='workspace',
         ui_attachable=True,
@@ -203,6 +222,7 @@ def test_project_namespace_runtime_dto_preserves_internal_herdr_namespace_ref() 
         'ipc_ref': 'herdr://ccb-herdr',
         'restore_token': 'ccb-herdr::workspace-1',
     }
+    assert namespace.frontend == {'kind': 'wezterm', 'status': 'wezterm_tab_attached', 'mux_available': True}
 
 
 def test_project_namespace_state_reads_legacy_tmux_record_without_namespace_fields() -> None:

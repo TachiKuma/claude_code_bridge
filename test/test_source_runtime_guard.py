@@ -1,15 +1,27 @@
 from __future__ import annotations
 
 import os
+import importlib.util
+import io
 import runpy
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CCB = REPO_ROOT / "ccb.py"
 CCB_TEST = REPO_ROOT / "ccb_test"
+
+
+def _load_ccb_entry_module():
+    spec = importlib.util.spec_from_file_location("ccb_entry_under_test", CCB)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _run_source_ccb(args: list[str], *, cwd: Path, extra_env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -26,6 +38,8 @@ def _run_source_ccb(args: list[str], *, cwd: Path, extra_env: dict[str, str] | N
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
 
 
@@ -52,6 +66,68 @@ def test_source_ccb_allows_introspection_outside_test_roots() -> None:
 
     assert proc.returncode == 0
     assert proc.stdout.strip()
+
+
+def test_native_windows_introspection_does_not_probe_herdr(monkeypatch, capsys) -> None:
+    ccb_entry = _load_ccb_entry_module()
+    import platforms.windows.os_platform as os_platform
+
+    calls: list[tuple[str, ...]] = []
+
+    def fail_if_called():
+        raise AssertionError("introspection command must not probe Herdr")
+
+    def fake_entrypoint(argv, **_kwargs):
+        calls.append(tuple(argv))
+        return 0
+
+    monkeypatch.setattr(ccb_entry, "is_native_windows", lambda: True)
+    monkeypatch.setattr(os_platform, "check_herdr_ready", fail_if_called)
+    monkeypatch.setattr(ccb_entry, "run_cli_entrypoint", fake_entrypoint)
+
+    for argv in (
+        ["ccb.py", "--help"],
+        ["ccb.py", "version"],
+        ["ccb.py", "config", "validate"],
+    ):
+        monkeypatch.setattr(ccb_entry.sys, "argv", argv)
+        assert ccb_entry.main() == 0
+
+    assert calls == [("--help",), ("version",), ("config", "validate")]
+    assert "Herdr" not in capsys.readouterr().err
+
+
+def test_native_windows_runtime_command_probes_herdr_at_operation_time(
+    monkeypatch,
+    capsys,
+) -> None:
+    ccb_entry = _load_ccb_entry_module()
+    import platforms.windows.os_platform as os_platform
+
+    calls: list[str] = []
+
+    def fake_check():
+        calls.append("check")
+        return False, "Herdr executable not found", SimpleNamespace()
+
+    monkeypatch.setattr(ccb_entry, "is_native_windows", lambda: True)
+    monkeypatch.setattr(os_platform, "check_herdr_ready", fake_check)
+    monkeypatch.setattr(
+        ccb_entry,
+        "run_cli_entrypoint",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("runtime command must fail before CLI dispatch")
+        ),
+    )
+    stderr = io.StringIO()
+    monkeypatch.setattr(ccb_entry.sys, "stderr", stderr)
+    monkeypatch.setattr(ccb_entry.sys, "argv", ["ccb.py", "start"])
+
+    assert ccb_entry.main() == 1
+    assert calls == ["check"]
+    err = stderr.getvalue()
+    assert "Herdr executable not found" in err
+    assert "Herdr 未就绪" in err
 
 
 def test_source_ccb_rejects_stateful_commands_outside_test_roots() -> None:

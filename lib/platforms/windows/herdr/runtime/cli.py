@@ -1306,16 +1306,18 @@ class HerdrCliRequestAdapter:
         expect_json: bool,
         session_name: str,
     ) -> subprocess.CompletedProcess:
+        kwargs: dict[str, object] = {
+            "capture_output": True,
+            "text": True,
+            "encoding": "utf-8",
+            "errors": "replace",
+            "check": True,
+            "env": _env_without_xdg_redirects(),
+        }
+        if sys.platform.startswith("win"):
+            kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         try:
-            return self._run_fn(
-                command,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                check=True,
-                env=_env_without_xdg_redirects(),
-            )
+            return self._run_fn(command, **kwargs)
         except (OSError, subprocess.SubprocessError) as exc:
             detail = f"Herdr command failed for {operation}"
             if isinstance(exc, subprocess.CalledProcessError):
@@ -1432,9 +1434,7 @@ class HerdrCliRequestAdapter:
     def _resolve_executable(self) -> str:
         executable = (self._herdr_executable or "").strip()
         if not executable:
-            executable = resolve_herdr_executable()
-        if not executable:
-            executable = self._which_fn("herdr")
+            executable = resolve_herdr_executable(which_fn=self._which_fn)
         if executable:
             return executable
         raise MuxCommandErrorV2(

@@ -24,8 +24,6 @@ from terminal_runtime.backend_env import get_backend_env
 from platforms.windows.os_platform import (
     detect_os_platform,
     detect_os_platform_string,
-    platform_needs_herdr,
-    check_herdr_ready,
     is_native_windows,
 )
 from cli.entrypoint import run_cli_entrypoint
@@ -38,26 +36,6 @@ setup_windows_encoding()
 _detected_platform = detect_os_platform()
 _detected_platform_str = detect_os_platform_string()
 os.environ["CCB_OS_PLATFORM"] = _detected_platform_str
-
-# ── Native Windows: Herdr gate ────────────────────────────────────────────
-# On native Windows, CCB requires Herdr as the terminal multiplexer backend.
-# Probe early for actionable diagnostics; the actual blocking gate runs in
-# main() so it can respect safe-introspection (--help/--version/etc.).
-
-_herdr_ok: bool = True
-_herdr_message: str = ""
-if is_native_windows():
-    if os.environ.get("CCB_SKIP_HERDR_CHECK"):
-        print("[CCB] Herdr 检查已跳过 (CCB_SKIP_HERDR_CHECK=1)", file=sys.stderr)
-    else:
-        _herdr_ok, _herdr_message, _ = check_herdr_ready()
-        if not _herdr_ok:
-            print(f"[CCB] OS 平台: {_detected_platform_str}", file=sys.stderr)
-            print(f"[CCB] {_herdr_message}", file=sys.stderr)
-            print(
-                "[CCB] 提示: 设置 CCB_SKIP_HERDR_CHECK=1 可跳过此检查（仅限诊断）",
-                file=sys.stderr,
-            )
 
 backend_env = get_backend_env()
 if backend_env and not os.environ.get("CCB_BACKEND_ENV"):
@@ -76,7 +54,37 @@ def _is_safe_introspection(argv: list[str]) -> bool:
     if not argv:
         return False
     first = argv[0]
-    return first in {"--help", "-h", "--print-version", "version"} or "--help" in argv or "-h" in argv
+    return (
+        first in {"--help", "-h", "--print-version", "version"}
+        or "--help" in argv
+        or "-h" in argv
+        or argv[:2] == ["config", "validate"]
+    )
+
+
+def _ensure_herdr_ready_for_command(argv: list[str]) -> bool:
+    if not is_native_windows() or _is_safe_introspection(argv):
+        return True
+    if os.environ.get("CCB_SKIP_HERDR_CHECK"):
+        print("[CCB] Herdr 检查已跳过 (CCB_SKIP_HERDR_CHECK=1)", file=sys.stderr)
+        return True
+
+    from platforms.windows.os_platform import check_herdr_ready
+
+    herdr_ok, herdr_message, _ = check_herdr_ready()
+    if herdr_ok:
+        return True
+    print(f"[CCB] OS 平台: {_detected_platform_str}", file=sys.stderr)
+    print(f"[CCB] {herdr_message}", file=sys.stderr)
+    print(
+        "[CCB] 提示: 设置 CCB_SKIP_HERDR_CHECK=1 可跳过此检查（仅限诊断）",
+        file=sys.stderr,
+    )
+    print(
+        "[CCB] Herdr 未就绪，无法启动。请先安装并配置 Herdr 后重试。",
+        file=sys.stderr,
+    )
+    return False
 
 
 def _split_roots(value: str) -> list[Path]:
@@ -158,19 +166,15 @@ def _source_runtime_allowed(root: Path, cwd: Path, argv: list[str]) -> tuple[boo
 
 def main():
     mark_ccb_main(time.perf_counter_ns())
-    allowed, reason = _source_runtime_allowed(script_dir, Path.cwd(), sys.argv[1:])
+    argv = sys.argv[1:]
+    allowed, reason = _source_runtime_allowed(script_dir, Path.cwd(), argv)
     if not allowed:
         print(reason, file=sys.stderr)
         return 1
-    # Herdr gate: on native Windows without Herdr, block non-introspection commands.
-    if not _herdr_ok and not _is_safe_introspection(sys.argv[1:]):
-        print(
-            "[CCB] Herdr 未就绪，无法启动。请先安装并配置 Herdr 后重试。",
-            file=sys.stderr,
-        )
+    if not _ensure_herdr_ready_for_command(argv):
         return 1
     return run_cli_entrypoint(
-        sys.argv[1:],
+        argv,
         version=VERSION,
         script_root=script_dir,
         cwd=Path.cwd(),

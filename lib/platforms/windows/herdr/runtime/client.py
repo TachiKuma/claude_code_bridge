@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from collections.abc import Callable, Mapping
 from typing import Literal, TypedDict
 
@@ -27,6 +28,13 @@ class HerdrServerInfo(TypedDict):
 HerdrRequestFn = Callable[[str, dict[str, object]], Mapping[str, object]]
 
 
+@dataclass(frozen=True)
+class HerdrRuntimeHandshake:
+    server_info: HerdrServerInfo
+    socket_ref: str
+    session_name: str | None
+
+
 class HerdrSocketClient:
     def __init__(
         self,
@@ -40,6 +48,7 @@ class HerdrSocketClient:
         self._socket_ref = socket_ref
         self._expected_api_schema = expected_api_schema
         self._allow_session_scoped_ipc_refs = allow_session_scoped_ipc_refs
+        self._handshake: HerdrRuntimeHandshake | None = None
 
     @property
     def socket_ref(self) -> str:
@@ -90,6 +99,18 @@ class HerdrSocketClient:
             "arch": "x64",
             "socket_ref": self._socket_ref,
         }
+
+    def handshake(self, *, force_refresh: bool = False) -> HerdrRuntimeHandshake:
+        if self._handshake is None or force_refresh:
+            self._handshake = HerdrRuntimeHandshake(
+                server_info=self.server_info(),
+                socket_ref=self._socket_ref,
+                session_name=self.session_name or None,
+            )
+        return self._handshake
+
+    def invalidate_handshake(self) -> None:
+        self._handshake = None
 
     def create_session(
         self,
@@ -923,4 +944,5 @@ __all__ = [
     "HerdrRequestFn",
     "HerdrServerInfo",
     "HerdrSocketClient",
+    "HerdrRuntimeHandshake",
 ]

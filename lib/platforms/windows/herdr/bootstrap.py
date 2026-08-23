@@ -2,9 +2,9 @@
 
 Locates the Herdr runtime, verifies its server is running, probes read-only
 capabilities, and injects the ``CCB_HERDR_*`` env the CCB herdr backend
-consumes (executable, session, and a runtime capability report). Herdr stays
-the physical pane owner; CCB remains the agent/provider/recovery authority
-(managed mode, never an attached-mode degradation).
+consumes (executable, session, and socket ref). Herdr stays the physical pane
+owner; CCB remains the agent/provider/recovery authority (managed mode, never
+an attached-mode degradation).
 """
 
 from __future__ import annotations
@@ -59,8 +59,8 @@ def ensure_herdr_bootstrap_env(
     Returns:
         A dict with ``ok``; on failure ``reason`` carries actionable guidance.
         On success also returns ``herdr_exe``, ``herdr_session``, ``warnings``
-        and ``capability_report``. Successful calls set ``CCB_HERDR_EXE``,
-        ``CCB_HERDR_SESSION`` and ``CCB_HERDR_CAPABILITY_REPORT`` in the process
+        and ``socket_ref``. Successful calls set ``CCB_HERDR_EXE``,
+        ``CCB_HERDR_SESSION`` and ``CCB_HERDR_SOCKET_REF`` in the process
         environment so downstream CCB startup picks the herdr backend.
     """
     exe = resolve_herdr_executable(explicit=herdr_exe)
@@ -133,8 +133,6 @@ def ensure_herdr_bootstrap_env(
                 + '. Herdr server may be degraded.'
             ),
         }
-    capability_report = _build_capability_report(probe)
-    report_path = _write_capability_report(capability_report)
     warnings: list[str] = []
     live_session = str(server.get('session') or '').strip() or detected_session or None
     session = (
@@ -143,18 +141,20 @@ def ensure_herdr_bootstrap_env(
         or live_session
         or _DEFAULT_HERDR_SESSION
     )
+    socket_ref = f'herdr://{session}'
     if not herdr_session and not os.environ.get('CCB_HERDR_SESSION', '').strip():
         warnings.append(
             f'Using Herdr session {session!r}; pass --herdr-session to override.'
         )
     os.environ['CCB_HERDR_EXE'] = exe
     os.environ['CCB_HERDR_SESSION'] = session
-    os.environ['CCB_HERDR_CAPABILITY_REPORT'] = report_path
+    os.environ['CCB_HERDR_SOCKET_REF'] = socket_ref
+    os.environ.pop('CCB_HERDR_CAPABILITY_REPORT', None)
     return {
         'ok': True,
         'herdr_exe': exe,
         'herdr_session': session,
-        'capability_report': report_path,
+        'socket_ref': socket_ref,
         'warnings': warnings,
     }
 

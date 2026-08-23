@@ -42,6 +42,7 @@ class ProjectNamespaceState:
     workspace_window_id: str | None = None
     workspace_epoch: int = 1
     ui_attachable: bool = True
+    frontend: dict[str, object] | None = None
     last_started_at: str | None = None
     last_destroyed_at: str | None = None
     last_destroy_reason: str | None = None
@@ -73,6 +74,8 @@ class ProjectNamespaceState:
         if self.workspace_window_id is not None:
             require_non_empty_text(self.workspace_window_id, field_name='workspace_window_id')
         require_positive_int(self.workspace_epoch, field_name='workspace_epoch')
+        if self.frontend is not None:
+            object.__setattr__(self, 'frontend', _redacted_frontend(self.frontend))
 
     def with_started(self, *, occurred_at: str, ui_attachable: bool = True) -> ProjectNamespaceState:
         return replace(
@@ -80,6 +83,9 @@ class ProjectNamespaceState:
             ui_attachable=bool(ui_attachable),
             last_started_at=str(occurred_at),
         )
+
+    def with_frontend(self, frontend: dict[str, object] | None) -> ProjectNamespaceState:
+        return replace(self, frontend=_redacted_frontend(frontend))
 
     def with_destroyed(self, *, occurred_at: str, reason: str) -> ProjectNamespaceState:
         return replace(
@@ -115,6 +121,7 @@ class ProjectNamespaceState:
             'workspace_window_id': self.workspace_window_id,
             'workspace_epoch': self.workspace_epoch,
             'ui_attachable': self.ui_attachable,
+            'frontend': _redacted_frontend(self.frontend),
             'last_started_at': self.last_started_at,
             'last_destroyed_at': self.last_destroyed_at,
             'last_destroy_reason': self.last_destroy_reason,
@@ -147,6 +154,7 @@ class ProjectNamespaceState:
             workspace_window_id=clean_text(payload.get('workspace_window_id')),
             workspace_epoch=int(payload.get('workspace_epoch', 1)),
             ui_attachable=bool(payload.get('ui_attachable', True)),
+            frontend=_redacted_frontend(payload.get('frontend')),
             last_started_at=clean_text(payload.get('last_started_at')),
             last_destroyed_at=clean_text(payload.get('last_destroyed_at')),
             last_destroy_reason=clean_text(payload.get('last_destroy_reason')),
@@ -165,6 +173,7 @@ class ProjectNamespaceState:
             'namespace_workspace_window_id': self.workspace_window_id,
             'namespace_workspace_epoch': self.workspace_epoch,
             'namespace_ui_attachable': self.ui_attachable,
+            'namespace_frontend': _redacted_frontend(self.frontend),
             'namespace_last_started_at': self.last_started_at,
             'namespace_last_destroyed_at': self.last_destroyed_at,
             'namespace_last_destroy_reason': self.last_destroy_reason,
@@ -320,6 +329,36 @@ def record_details(payload: dict[str, Any]) -> dict[str, object]:
     if not isinstance(details, dict):
         raise ValueError('details must be an object')
     return dict(details)
+
+
+def _redacted_frontend(value: object) -> dict[str, object] | None:
+    if not isinstance(value, dict):
+        return None
+    allowed = {
+        'kind',
+        'status',
+        'mux_available',
+        'window_id',
+        'spawn_target',
+        'launch_mode',
+        'fallback',
+        'fallback_reason',
+        'reason',
+    }
+    result: dict[str, object] = {}
+    for key in allowed:
+        item = value.get(key)
+        if item is None:
+            continue
+        if isinstance(item, bool):
+            result[key] = item
+        elif isinstance(item, int):
+            result[key] = item
+        else:
+            text = str(item).strip()
+            if text:
+                result[key] = text
+    return result or None
 
 
 __all__ = [

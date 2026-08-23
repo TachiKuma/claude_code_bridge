@@ -31,6 +31,7 @@ def build_active_state(
     namespace_ipc_kind: str | None = None,
     namespace_ipc_ref: str | None = None,
     namespace_restore_token: str | None = None,
+    frontend: dict[str, object] | None = None,
 ):
     return ProjectNamespaceState(
         project_id=project_id,
@@ -57,6 +58,7 @@ def build_active_state(
             if namespace_restore_token is not None
             else (current.namespace_restore_token if current is not None else None)
         ),
+        frontend=frontend if frontend is not None else (current.frontend if current is not None else None),
         layout_version=layout_version,
         layout_signature=layout_signature,
         control_window_name=control_window_name,

@@ -31,6 +31,7 @@ class ProjectNamespace:
     namespace_ipc_kind: str | None = None
     namespace_ipc_ref: str | None = None
     namespace_restore_token: str | None = None
+    frontend: dict[str, object] | None = None
     created_this_call: bool = False
     workspace_recreated_this_call: bool = False
 
@@ -48,6 +49,7 @@ class ProjectNamespace:
             namespace_ipc_kind=state.namespace_ipc_kind,
             namespace_ipc_ref=state.namespace_ipc_ref,
             namespace_restore_token=state.namespace_restore_token,
+            frontend=dict(state.frontend) if isinstance(state.frontend, dict) else None,
             layout_version=state.layout_version,
             layout_signature=state.layout_signature,
             control_window_name=state.control_window_name,
