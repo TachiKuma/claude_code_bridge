@@ -6,10 +6,15 @@
 
 **Blocked by：** 无（立即可开）
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] 新增 `HerdrRuntimeManifest` 模型，描述 project/session/generation/services/workspaces/panes
-- [ ] CCB start path 生成并写出 manifest
-- [ ] manifest 只允许 `env_refs`，无原始 API key / OAuth token / 完整 prompt/reply
-- [ ] manifest 与现有启动路径并存，不改变现有行为（expand，不 contract）
-- [ ] manifest 无 secrets（有测试佐证）
+**Implementation:** `3b4f75b4`
+
+**Evidence:** `lib/platforms/windows/herdr/runtime/contracts.py`、
+`lib/platforms/windows/herdr/runtime/manifest.py`、`test/test_herdr_runtime_contracts.py`
+
+- [x] 新增 `HerdrRuntimeManifest` 模型，描述 project/session/generation/services/workspaces/panes
+- [x] CCB start path 生成并写出 manifest
+- [x] manifest 只允许 `env_refs`，无原始 API key / OAuth token / 完整 prompt/reply
+- [x] manifest 与现有启动路径并存，不改变现有行为（expand，不 contract）
+- [x] manifest 无 secrets（有测试佐证）

@@ -7,10 +7,19 @@
 
 **Blocked by：** 09（ensure_runtime 兼容层）、11（合并读模型）
 
-**Status:** ready-for-agent
+**Status:** partial-blocked
+
+**Implementation:** `3b4f75b4`
+
+**Evidence:** `lib/platforms/windows/herdr/runtime/manifest.py`、
+`lib/platforms/windows/herdr/runtime/ensure.py`、`lib/cli/phase2_runtime/handlers_start.py`、
+`test/test_herdr_runtime_contracts.py`
+
+**Notes:** CCB 已改为声明 manifest 并通过兼容层收敛 runtime；真正把通用生命周期下放给 Herdr
+仍依赖上游原生 `runtime.ensure/event/agent_id` 能力与 Windows live validation。
 
 - [ ] pane readiness/liveness/通用 restart/backoff/workspace 清理由 Herdr 负责
 - [ ] CCB 不再通过 shell/PowerShell/lifecycle 文件间接管理通用 pane 进程存活
-- [ ] Provider session restore 仍由 CCB 的 Provider-specific contract 保护
-- [ ] 通用 pane 崩溃重启不会伪造 Provider session 已恢复
+- [x] Provider session restore 仍由 CCB 的 Provider-specific contract 保护
+- [x] 通用 pane 崩溃重启不会伪造 Provider session 已恢复
 - [ ] 如上游支持，则将 Phase 2 兼容层替换为原生 runtime.ensure/event 调用

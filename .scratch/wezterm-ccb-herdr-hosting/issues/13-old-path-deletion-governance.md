@@ -8,9 +8,19 @@ fallback）、backend_resolver 面向低层 operation 的 capability 组合判�
 
 **Blocked by：** 09（manifest 提交路径）、11（合并读模型）、12（生命周期下放）
 
-**Status:** ready-for-agent
+**Status:** partial-blocked
 
-- [ ] 删除 `CCB_HERDR_CAPABILITY_REPORT` 正常启动路径
+**Implementation:** `3b4f75b4`
+
+**Evidence:** `lib/platforms/windows/herdr/bootstrap.py`、
+`lib/platforms/windows/herdr/runtime/ensure.py`、`test/test_herdr_runtime_contracts.py`、
+`test/test_herdr_bootstrap.py`
+
+**Notes:** 正常启动路径已不再依赖 `CCB_HERDR_CAPABILITY_REPORT` 临时文件；兼容函数与低层 capability
+gate 仍保留。Phase 5 的删除收口需要逐项 characterization test、Herdr 上游稳定 `agent_id` 返回、
+Windows live validation，以及可重跑的 architecture 证据。
+
+- [x] 删除 `CCB_HERDR_CAPABILITY_REPORT` 正常启动路径
 - [ ] 删除 bootstrap capability probe 与临时文件写入
 - [ ] 收窄宽 CLI 操作白名单，仅保留诊断/兼容 fallback
 - [ ] 移除 backend_resolver 低层 capability 组合判断

@@ -7,10 +7,17 @@ slot/provider kind/session/runtime generation，并对过期 generation 做校�
 
 **Blocked by：** 无（立即可开）
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Runtime Binding 能持久化并回读可选 `frontend` 段
-- [ ] `frontend` 缺失或 `kind != "wezterm"` 时按「无前台事实」处理，不报错
-- [ ] `window_id` 仅作诊断记录，不作重连锚点
-- [ ] binding 按 project/session/workspace/pane/generation 复合键校验归属，过期 generation 被拒
-- [ ] `frontend` 段不含任何原始凭据或 provider transcript 内容
+**Implementation:** `3b4f75b4`
+
+**Evidence:** `lib/platforms/windows/herdr/runtime/contracts.py`、
+`lib/ccbd/services/project_namespace_runtime/models.py`、
+`lib/ccbd/services/project_namespace_state_runtime/models.py`、`test/test_herdr_runtime_contracts.py`、
+`test/test_v2_project_namespace_state.py`
+
+- [x] Runtime Binding 能持久化并回读可选 `frontend` 段
+- [x] `frontend` 缺失或 `kind != "wezterm"` 时按「无前台事实」处理，不报错
+- [x] `window_id` 仅作诊断记录，不作重连锚点
+- [x] binding 按 project/session/workspace/pane/generation 复合键校验归属，过期 generation 被拒
+- [x] `frontend` 段不含任何原始凭据或 provider transcript 内容

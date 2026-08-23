@@ -10,6 +10,35 @@
 
 ---
 
+## Implementation Status（实现状态，2026-08-24）
+
+实现提交：`3b4f75b4 实现 WezTerm CCB Herdr 宿主优化 v2`。
+
+本轮已经完成 CCB 侧的前台启动 runner seam、Runtime Binding `frontend` 段、WezTerm mux 探活与可观测
+回退、`project_view` 前台三态、no-window 兜底、import-time Herdr gate 移除、runtime manifest、
+`ensure_runtime(manifest)` 兼容层，以及 Herdr runtime event/model/projector 与读模型映射基础。
+
+仍未完全关闭的范围：
+
+- 运行时事件目前是 CCB 侧模型与 projector 基础；真正的上游事件订阅、snapshot polling 循环、断线
+  重连后自动重读 snapshot 仍需后续实现。
+- 通用 pane readiness/liveness/restart/backoff/workspace cleanup 尚未真正下放给 Herdr；当前仍是
+  CCB 兼容层承接，需等待或接入 Herdr 上游原生 `runtime.ensure/event/agent_id` 能力。
+- 旧路径删除只完成了正常启动路径的 capability 文件治理；宽 CLI 白名单、backend capability 组合
+  gate、tmux_runtime 主动补 agent 身份等收口仍需逐项 characterization test 与 Windows live validation。
+- 尚未执行无预启动 WezTerm GUI/有 mux/多项目 attach/mobile gateway 的 Windows live validation。
+
+已记录的验证：
+
+- `python -m compileall ...` 通过。
+- `git diff --check` 通过。
+- 聚焦回归：`434 passed`。
+- 追加回归：`266 passed`。
+- 全量 `pytest -q` 在 Windows 收集阶段因既有 Unix-only `fcntl` 导入失败，未完成全量验证；该失败不由
+  本轮改动引入。
+
+---
+
 ## Problem Statement（问题陈述）
 
 在 Native Windows 上，用户通过 WezTerm 启动 CCB 项目、观察多个 agent（如 codex、claude）的

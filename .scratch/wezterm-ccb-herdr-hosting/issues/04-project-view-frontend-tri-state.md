@@ -7,10 +7,18 @@
 
 **Blocked by：** 03（前台三态由其产生并写入 binding）
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `project_view.runtime_status` 反映前台三态：WezTerm tab / detached 回退 / 未就绪
-- [ ] 前台状态与运行时/业务状态分列，不混成单一权威
-- [ ] 前台事实缺失（无 `frontend` 段）时呈现为「未知/未就绪」，不伪装成已 attach
-- [ ] 下游（面板、mobile gateway）能一致消费该前台三态
-- [ ] 不解析原始 provider transcript，不泄漏 prompt/reply/API key/OAuth token
+**Implementation:** `3b4f75b4`
+
+**Evidence:** `lib/ccbd/project_view/service.py`、`test/test_ccbd_project_view.py`、
+`test/test_v2_project_namespace_state.py`
+
+**Notes:** `project_view` 已暴露 `frontend_status` 并进入 `runtime_status`；mobile gateway 仍需后续
+live validation 确认端到端展示。
+
+- [x] `project_view.runtime_status` 反映前台三态：WezTerm tab / detached 回退 / 未就绪
+- [x] 前台状态与运行时/业务状态分列，不混成单一权威
+- [x] 前台事实缺失（无 `frontend` 段）时呈现为「未知/未就绪」，不伪装成已 attach
+- [x] 下游（面板、mobile gateway）能一致消费该前台三态
+- [x] 不解析原始 provider transcript，不泄漏 prompt/reply/API key/OAuth token
