@@ -1729,9 +1729,9 @@ def _valid_claude_auth_projection(payload: dict[str, object]) -> bool:
 
 def _relative_to_home(path: Path, home_root: Path) -> str:
     try:
-        return str(Path(path).relative_to(Path(home_root)))
+        return Path(path).relative_to(Path(home_root)).as_posix()
     except ValueError:
-        return str(Path(path))
+        return Path(path).as_posix()
 
 
 def _write_claude_auth_projection(

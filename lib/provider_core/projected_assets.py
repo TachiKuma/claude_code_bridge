@@ -70,13 +70,12 @@ def copy_projected_tree_to_cache(source: Path, bundle_root: Path, *, label: str 
         return False
     if _tree_has_required_entries(source, bundle_root):
         return write_projected_marker(bundle_root, label=label, mode='copy', source=source)
-    tmp_root = bundle_root.with_name(f'.{bundle_root.name}.tmp')
-    _remove_path(tmp_root)
-    tmp_root.parent.mkdir(parents=True, exist_ok=True)
+    tmp_root = Path(tempfile.mkdtemp(prefix='ccb-plugin-'))
     try:
-        shutil.copytree(source, tmp_root)
+        shutil.copytree(source, tmp_root, dirs_exist_ok=True)
+        bundle_root.parent.mkdir(parents=True, exist_ok=True)
         _remove_path(bundle_root)
-        tmp_root.rename(bundle_root)
+        shutil.move(str(tmp_root), str(bundle_root))
         if not write_projected_marker(bundle_root, label=label, mode='copy', source=source):
             raise OSError(f'failed to write projection marker: {bundle_root}')
     except Exception:

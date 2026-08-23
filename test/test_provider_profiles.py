@@ -838,7 +838,7 @@ def test_materialize_codex_profile_disables_external_migration_without_toml_read
     assert config['check_for_update_on_startup'] is False
     assert '[projects."/tmp/demo"]' in config_text
     assert 'trust_level = "trusted"' in config_text
-    assert f'[projects."{project_root.resolve()}"]' in config_text
+    assert config['projects'][str(project_root.resolve())]['trust_level'] == 'trusted'
 
 
 def test_materialize_codex_profile_merges_final_features_without_toml_reader(
@@ -4926,7 +4926,8 @@ def test_materialize_claude_home_config_removes_only_source_owned_auth_after_log
     assert layout.auth_path.is_file()
     manifest_path = target_home / '.ccb-auth-projection.json'
     first_manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
-    assert manifest_path.stat().st_mode & 0o777 == 0o600
+    if os.name != 'nt':
+        assert manifest_path.stat().st_mode & 0o777 == 0o600
     assert first_manifest['status'] == 'inherited_auth'
     assert first_manifest['projected_files'] == [
         '.claude/.credentials.json',
@@ -4960,10 +4961,10 @@ def test_materialize_claude_home_config_removes_only_source_owned_auth_after_log
     assert second_manifest['projected_files'] == []
     assert second_manifest['projected_env_keys'] == []
     assert source_settings.read_text(encoding='utf-8') == '{}\n'
-    assert source_snapshot[source_credentials][0] == (
+    assert source_snapshot[source_credentials][0].replace(b'\r\n', b'\n') == (
         b'{"claudeAiOauth":{"refreshToken":"source-refresh"}}\n'
     )
-    assert source_snapshot[source_auth][0] == b'{"accessToken":"source-access"}\n'
+    assert source_snapshot[source_auth][0].replace(b'\r\n', b'\n') == b'{"accessToken":"source-access"}\n'
 
 
 def test_materialize_claude_home_config_preserves_unmarked_auth_with_malformed_manifest(
@@ -5332,7 +5333,8 @@ def test_materialize_gemini_home_config_removes_only_source_owned_auth_after_log
 
     manifest_path = target_home / '.ccb-auth-projection.json'
     manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
-    assert manifest_path.stat().st_mode & 0o777 == 0o600
+    if os.name != 'nt':
+        assert manifest_path.stat().st_mode & 0o777 == 0o600
     assert manifest['status'] == 'inherited_auth'
     assert manifest['projected_files'] == ['google_accounts.json', 'oauth_creds.json']
     assert manifest['projected_selected_type'] == 'oauth-personal'

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 try:
     import tomllib
@@ -129,6 +130,8 @@ main = "agentroles.mother:codex"
             'getpwuid',
             lambda _uid: type('PwdEntry', (), {'pw_dir': str(account_home)})(),
         )
+    else:
+        monkeypatch.setenv('AGENT_ROLES_STORE', str(account_home / '.roles'))
 
     loaded = load_project_config(project_root).config
 
@@ -211,6 +214,8 @@ main = "agentroles.mother:codex"
             'getpwuid',
             lambda _uid: type('PwdEntry', (), {'pw_dir': str(account_home)})(),
         )
+    else:
+        monkeypatch.setenv('AGENT_ROLES_STORE', str(account_home / '.roles'))
 
     with pytest.raises(ConfigValidationError) as exc_info:
         load_project_config(project_root)
@@ -785,7 +790,7 @@ default_agents = ["agent1", "agent2"]
 provider = "codex"
 target = "."
 workspace_mode = "git-worktree"
-workspace_path = "{external}"
+workspace_path = {json.dumps(str(external))}
 restore = "auto"
 permission = "manual"
 

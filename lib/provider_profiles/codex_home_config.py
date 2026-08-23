@@ -327,7 +327,7 @@ def _bind_source_test_command_path(
     path_parts = [str(command_dir)]
     path_parts.extend(
         item
-        for item in inherited_path.split(os.pathsep)
+        for item in _split_shell_path(inherited_path)
         if item and item != str(command_dir)
     )
     configured['PATH'] = os.pathsep.join(path_parts)
@@ -1869,6 +1869,15 @@ def _split_codex_inherited_hook_env(value: object) -> tuple[str, ...]:
         return ()
     parts = re.split(f'[,{re.escape(os.pathsep)}]+', raw)
     return tuple(part.strip() for part in parts if part.strip())
+
+
+def _split_shell_path(value: str) -> tuple[str, ...]:
+    raw = str(value or '')
+    if os.pathsep != ';' or ';' in raw or ':' not in raw:
+        return tuple(part for part in raw.split(os.pathsep) if part)
+    if re.match(r'^[A-Za-z]:[\\/]', raw):
+        return (raw,)
+    return tuple(part for part in raw.split(':') if part)
 
 
 def _allowed_inherited_codex_hook_group(
