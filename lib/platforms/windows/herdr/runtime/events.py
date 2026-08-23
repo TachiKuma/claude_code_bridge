@@ -108,6 +108,21 @@ class HerdrRuntimeEventProjector:
         return statuses
 
 
+def poll_runtime_snapshot(
+    projector: HerdrRuntimeEventProjector,
+    binding: HerdrRuntimeBinding,
+    backend: object,
+) -> bool:
+    snapshot_fn = getattr(backend, "runtime_snapshot", None)
+    if not callable(snapshot_fn):
+        return False
+    snapshot = snapshot_fn()
+    if not isinstance(snapshot, Mapping):
+        return False
+    projector.refresh(binding, snapshot=snapshot)
+    return True
+
+
 def runtime_status_from_binding(
     binding: HerdrRuntimeBinding,
     *,
@@ -213,5 +228,6 @@ __all__ = [
     "HerdrRuntimeEventProjector",
     "HerdrRuntimePaneStatus",
     "map_herdr_state_to_ccb",
+    "poll_runtime_snapshot",
     "runtime_status_from_binding",
 ]

@@ -22,6 +22,7 @@ from platforms.windows.herdr.runtime.ensure import ensure_runtime
 from platforms.windows.herdr.runtime.events import (
     HerdrRuntimeEventProjector,
     map_herdr_state_to_ccb,
+    poll_runtime_snapshot,
 )
 
 
@@ -417,6 +418,46 @@ def test_herdr_runtime_event_projector_refreshes_from_snapshot_and_drops_missing
     assert projector.status_for_pane("w1:p1").to_record()["runtime_state"] == "working"  # type: ignore[union-attr]
     assert projector.status_for_pane("w1:p1").to_record()["seq"] == 7  # type: ignore[union-attr]
     assert projector.status_for_pane("w1:p2") is None
+
+
+def test_poll_runtime_snapshot_refreshes_projector_from_backend_snapshot() -> None:
+    binding = HerdrRuntimeBinding(
+        project_id="proj-1",
+        server_id="server-1",
+        server_version="0.8.2",
+        api_schema="Herdr API",
+        session_name="ccb-project-1",
+        workspace_id="w1",
+        runtime_generation=13,
+        ready=True,
+        capabilities={},
+        panes=(
+            HerdrRuntimeBoundPane(
+                slot="codex",
+                pane_id="w1:p1",
+                agent_id="codex",
+                provider_kind="codex",
+                state="idle",
+                state_seq=1,
+            ),
+        ),
+    )
+    projector = HerdrRuntimeEventProjector(binding)
+
+    class _Backend:
+        def runtime_snapshot(self) -> dict[str, object]:
+            return {
+                "panes": [
+                    {"pane_id": "w1:p1", "workspace_id": "w1", "state": "blocked", "seq": 9},
+                ]
+            }
+
+    assert poll_runtime_snapshot(projector, binding, _Backend()) is True
+    status = projector.status_for_pane("w1:p1")
+    assert status is not None
+    assert status.runtime_state == "blocked"
+    assert status.state == "waiting_for_user"
+    assert status.seq == 9
 
 
 def test_herdr_state_mapping_preserves_done_and_unknown_semantics() -> None:
