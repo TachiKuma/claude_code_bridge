@@ -440,7 +440,7 @@ def test_start_foreground_herdr_attach_blocked_error_includes_projection() -> No
     assert 'next_action=collect-validation-transcript' in error
 
 
-def test_start_foreground_herdr_attach_builder_rejects_backend_ipc_ref_mismatch(monkeypatch) -> None:
+def test_start_foreground_herdr_attach_builder_rejects_backend_session_name_mismatch(monkeypatch) -> None:
     namespace_ref = {
         'backend_family': 'herdr-native',
         'backend_impl': 'herdr',
@@ -464,7 +464,7 @@ def test_start_foreground_herdr_attach_builder_rejects_backend_ipc_ref_mismatch(
                 'backend_family': 'herdr-native',
                 'backend_impl': 'herdr',
                 'namespace_id': namespace_id,
-                'session_name': session_name,
+                'session_name': 'other-session',
                 'ipc_kind': 'herdr_socket',
                 'ipc_ref': 'herdr://other-session',
                 'restore_token': None,
@@ -480,6 +480,49 @@ def test_start_foreground_herdr_attach_builder_rejects_backend_ipc_ref_mismatch(
             namespace_ref=namespace_ref,
             backend_selection=backend_selection,
         )
+
+
+def test_start_foreground_herdr_attach_builder_ignores_backend_ipc_ref_difference(monkeypatch) -> None:
+    namespace_ref = {
+        'backend_family': 'herdr-native',
+        'backend_impl': 'herdr',
+        'namespace_id': 'workspace-1',
+        'session_name': 'ccb-herdr',
+        'ipc_kind': 'herdr_socket',
+        'ipc_ref': 'herdr://workspace-1',
+        'restore_token': None,
+    }
+    backend_selection = {
+        'backend_family': 'herdr-native',
+        'backend_impl': 'herdr',
+        'ipc_kind': 'herdr_socket',
+        'ipc_ref_present': True,
+        'namespace_restore_token_present': True,
+    }
+
+    class _SessionRefHerdrBackend:
+        def namespace_ref(self, session_name: str, namespace_id: str) -> dict[str, object]:
+            return {
+                'backend_family': 'herdr-native',
+                'backend_impl': 'herdr',
+                'namespace_id': namespace_id,
+                'session_name': session_name,
+                'ipc_kind': 'herdr_socket',
+                'ipc_ref': 'herdr://normalized-session',
+                'restore_token': None,
+            }
+
+    monkeypatch.setattr(
+        'terminal_runtime.api.get_backend',
+        lambda terminal_type=None: _SessionRefHerdrBackend(),
+    )
+
+    backend = start_foreground_service._build_herdr_attach_backend(
+        namespace_ref=namespace_ref,
+        backend_selection=backend_selection,
+    )
+
+    assert isinstance(backend, _SessionRefHerdrBackend)
 
 
 class _FakeAttachProcess:

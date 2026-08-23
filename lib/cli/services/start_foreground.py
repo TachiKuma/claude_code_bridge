@@ -544,9 +544,12 @@ def _build_herdr_attach_backend(*, namespace_ref: dict[str, object], backend_sel
             'foreground attach failed: Herdr backend namespace validation returned an invalid ref '
             f'(backend_impl={backend_selection.get("backend_impl")}, ipc_kind={namespace_ref.get("ipc_kind")})'
         )
+    # ``ipc_ref`` is transport-local evidence and may be normalized by the
+    # backend when the namespace is reattached.  The attach path only needs
+    # the namespace identity and IPC kind to line up.
     mismatched_fields = [
         field
-        for field in ('backend_impl', 'namespace_id', 'session_name', 'ipc_kind', 'ipc_ref')
+        for field in ('backend_impl', 'namespace_id', 'session_name', 'ipc_kind')
         if _clean_optional_payload_text(resolved_ref.get(field)) != _clean_optional_payload_text(namespace_ref.get(field))
     ]
     if mismatched_fields:
