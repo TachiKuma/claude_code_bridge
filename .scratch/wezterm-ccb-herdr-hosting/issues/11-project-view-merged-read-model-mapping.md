@@ -23,6 +23,9 @@ Provider/pane/job/lifecycle 来源、以及 pane 重启/迁移/重连端到端�
 补充：当快照里已经出现目标 `pane_id` 但未命中任何 pane 记录时，不再回退 root summary，直接返回
 unknown，避免旧 pane 状态在重连/迁移后回流。
 
+补充：`project_view` 缓存现在会跟随 `AgentRegistry` 的 `project_view_revision` 失效，避免 runtime
+更新后继续回放旧响应。
+
 - [ ] 完整合并运行时/Provider/pane/job/lifecycle/前台三态为单一读模型
 - [x] 状态映射：`working→working`、`blocked→waiting_for_user`、`idle→idle`、
       `done→idle+unseen_done=true`、`unknown→unknown`（不降级为 idle）

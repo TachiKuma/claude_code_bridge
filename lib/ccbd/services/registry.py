@@ -41,6 +41,7 @@ class AgentRegistry:
         self._runtime_store = runtime_store or AgentRuntimeStore(layout)
         self._cache: dict[str, AgentRuntime] = {}
         self._lock = RLock()
+        self._project_view_revision = 0
         self._load_existing()
 
     def _load_existing(self) -> None:
@@ -135,6 +136,11 @@ class AgentRegistry:
     def list_known_agents(self) -> tuple[str, ...]:
         return tuple(sorted(self._config.agents))
 
+    @property
+    def project_view_revision(self) -> int:
+        with self._lock:
+            return int(self._project_view_revision)
+
     def _get_locked(self, agent_name: str) -> AgentRuntime | None:
         normalized = normalize_agent_name(agent_name)
         cached = self._cache.get(normalized)
@@ -159,6 +165,7 @@ class AgentRegistry:
             return current
         if current is not None and changed_fields == ('last_seen_at',):
             self._cache[runtime.agent_name] = runtime
+            self._project_view_revision += 1
             return runtime
         if changed_fields and not authority_write:
             authority_fields = tuple(sorted(set(changed_fields) - _STATE_MUTATION_FIELDS))
@@ -171,6 +178,7 @@ class AgentRegistry:
         self._runtime_store.save(runtime)
         sync_runtime_helper_manifest(self._layout, runtime)
         self._cache[runtime.agent_name] = runtime
+        self._project_view_revision += 1
         return runtime
 
 

@@ -3711,6 +3711,65 @@ def test_project_view_cache_hit_skips_tmux_calls(tmp_path: Path) -> None:
     assert backend.calls == []
 
 
+def test_project_view_cache_invalidates_when_registry_runtime_changes(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-cache-runtime'
+    project_root.mkdir()
+    layout = PathLayout(project_root)
+    project_id = compute_project_id(project_root)
+    config = _config()
+    registry = AgentRegistry(layout, config)
+    runtime = _runtime('agent1', project_id=project_id)
+    registry.upsert(runtime)
+    mount_manager = MountManager(layout, clock=lambda: NOW)
+    mount_manager.mark_mounted(project_id=project_id, pid=123, socket_path=layout.ccbd_socket_path, generation=1, started_at=NOW)
+    ProjectNamespaceStateStore(layout).save(
+        ProjectNamespaceState(
+            project_id=project_id,
+            namespace_epoch=3,
+            tmux_socket_path=str(layout.ccbd_tmux_socket_path),
+            tmux_session_name='ccb-cache-runtime',
+            layout_version=2,
+        )
+    )
+    dispatcher = JobDispatcher(layout, config, registry, clock=lambda: NOW)
+    backend = _SnapshotBackend()
+    controller = ProjectNamespaceController(
+        layout,
+        project_id,
+        backend_factory=lambda socket_path=None: backend,
+    )
+    service = ProjectViewService(
+        ProjectViewDependencies(
+            project_root=project_root,
+            project_id=project_id,
+            config=config,
+            registry=registry,
+            mount_manager=mount_manager,
+            namespace_state_store=ProjectNamespaceStateStore(layout),
+            dispatcher=dispatcher,
+            namespace_controller=controller,
+            clock=lambda: NOW,
+        )
+    )
+
+    first = service.build_response()
+    backend.calls.clear()
+    registry.upsert(
+        replace(
+            runtime,
+            state=AgentState.DEGRADED,
+            health='pane-dead',
+            pane_state='dead',
+            last_seen_at='2026-05-20T12:00:30Z',
+        )
+    )
+    second = service.build_response()
+
+    assert second is not first
+    assert backend.calls != []
+    assert second['view']['agents'][0]['runtime_health'] == 'pane-dead'
+
+
 def test_project_view_uses_longer_idle_cache_ttl(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-idle-cache-ttl'
     project_root.mkdir()

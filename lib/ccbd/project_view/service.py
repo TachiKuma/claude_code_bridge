@@ -339,6 +339,7 @@ class _CachedProjectViewResponse:
     expires_at: float
     dispatcher_revision: int
     drain_revision: tuple[int, int] | None
+    registry_revision: int
 
 
 @dataclass
@@ -539,6 +540,7 @@ class ProjectViewService:
         now = monotonic()
         dispatcher_revision = _dispatcher_project_view_revision(self._deps.dispatcher)
         drain_revision = reload_drain_revision(self._deps)
+        registry_revision = _registry_project_view_revision(self._deps.registry)
         did_refresh_sidebar = False
         if ttl_s > 0:
             cached = self._cached_response
@@ -547,6 +549,7 @@ class ProjectViewService:
                 and now < cached.expires_at
                 and cached.dispatcher_revision == dispatcher_revision
                 and cached.drain_revision == drain_revision
+                and cached.registry_revision == registry_revision
             ):
                 did_refresh_sidebar = self._consume_sidebar_refresh_request()
                 if did_refresh_sidebar:
@@ -583,6 +586,7 @@ class ProjectViewService:
                 expires_at=monotonic() + ttl_s,
                 dispatcher_revision=dispatcher_revision,
                 drain_revision=drain_revision,
+                registry_revision=registry_revision,
             )
         _record_project_view_cache_miss(
             self._deps.metrics,
@@ -710,6 +714,14 @@ def build_project_view(
 
 def _dispatcher_project_view_revision(dispatcher: object | None) -> int:
     value = getattr(dispatcher, 'project_view_revision', 0)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _registry_project_view_revision(registry: object | None) -> int:
+    value = getattr(registry, 'project_view_revision', 0)
     try:
         return int(value)
     except (TypeError, ValueError):
