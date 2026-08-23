@@ -983,6 +983,7 @@ def _agent_view(
         agent_name=agent_name,
         runtime=runtime,
         job=job,
+        callback_wait=callback_wait,
         provider_runtime_status=provider_runtime_status,
     )
     if merged_runtime_status is not None:
@@ -1026,6 +1027,7 @@ def _merged_runtime_status(
     agent_name: str,
     runtime,
     job,
+    callback_wait=None,
     provider_runtime_status,
 ) -> dict[str, object] | None:
     if not _namespace_is_herdr(namespace):
@@ -1044,6 +1046,10 @@ def _merged_runtime_status(
         'unseen_done': runtime_state == 'done',
         'job_status': getattr(getattr(job, 'status', None), 'value', None) if job is not None else None,
         'job_id': getattr(job, 'job_id', None) if job is not None else None,
+        'chain_waiting_state': callback_wait.state.value if callback_wait is not None else None,
+        'chain_waiting_child_job_id': callback_wait.child_job_id if callback_wait is not None else None,
+        'chain_waiting_child_agent': _callback_child_agent(callback_wait),
+        'chain_updated_at': callback_wait.updated_at if callback_wait is not None else None,
         'provider_runtime_state': getattr(provider_runtime_status, 'state', None),
         'provider_runtime_source': getattr(provider_runtime_status, 'source', None),
         'pane_id': pane_id,

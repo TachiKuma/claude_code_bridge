@@ -645,6 +645,54 @@ def test_project_view_herdr_runtime_status_ignores_root_summary_when_target_pane
     assert status['source'] == 'missing_herdr_runtime_state'
 
 
+def test_project_view_herdr_runtime_status_merges_callback_metadata() -> None:
+    project_id = 'proj-herdr'
+    namespace = ProjectNamespaceState(
+        project_id=project_id,
+        namespace_epoch=5,
+        tmux_socket_path='',
+        tmux_session_name='ccb-herdr',
+        namespace_backend_family='herdr-native',
+        backend_impl='herdr',
+        namespace_id='workspace-1',
+        namespace_session_name='ccb-herdr',
+        namespace_ipc_kind='herdr_socket',
+        namespace_ipc_ref='herdr://ccb-herdr',
+        layout_version=3,
+        workspace_window_name='workspace',
+        ui_attachable=True,
+    )
+    runtime = _runtime('agent1', project_id=project_id)
+    runtime.pane_ref = {'state': 'working'}
+    callback_wait = SimpleNamespace(
+        state=CallbackEdgeState.PENDING,
+        child_job_id='job-child',
+        diagnostics={'child_agent': 'agent2'},
+        updated_at='2026-05-20T12:00:30Z',
+    )
+
+    status = project_view_service._merged_runtime_status(
+        deps=SimpleNamespace(project_id=project_id),
+        namespace=namespace,
+        agent_name='agent1',
+        runtime=runtime,
+        job=SimpleNamespace(status=JobStatus.RUNNING, job_id='job-parent'),
+        callback_wait=callback_wait,
+        provider_runtime_status=SimpleNamespace(state='working', source='pane'),
+    )
+
+    assert status['state'] == 'working'
+    assert status['runtime_state'] == 'working'
+    assert status['job_status'] == 'running'
+    assert status['job_id'] == 'job-parent'
+    assert status['chain_waiting_state'] == 'pending'
+    assert status['chain_waiting_child_job_id'] == 'job-child'
+    assert status['chain_waiting_child_agent'] == 'agent2'
+    assert status['chain_updated_at'] == '2026-05-20T12:00:30Z'
+    assert status['provider_runtime_state'] == 'working'
+    assert status['provider_runtime_source'] == 'pane'
+
+
 def test_project_view_herdr_namespace_skips_tmux_project_view_facts() -> None:
     namespace = ProjectNamespaceState(
         project_id='proj-herdr',
