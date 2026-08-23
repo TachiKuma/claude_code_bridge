@@ -36,3 +36,8 @@ read-only capability probe，也不再写临时 capability report。
 
 说明：本轮将 `report_pane_agent_session` 收口为 unsupported，Herdr 侧仅保留 `report_pane_agent`
 与 `release_pane_agent` 这条当前仍在使用的生命周期路径。
+
+说明：实机验证（`E:\GitHub开源项目\TachiKuma\Herdr_Guides`，2026-08-23）显示：
+`startup-report.json` 仍记录 `pane_agent_report`，而 `.ccb/agents/*/runtime.json` 里尚未出现稳定
+`agent_id`。因此 `tmux_runtime` 中 CCB 主动补 Herdr Agent 身份的补丁仍然不能删除，当前节点继续
+保持阻塞状态。
