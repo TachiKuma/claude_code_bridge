@@ -16,8 +16,8 @@ generation 的事件；`pane_id` 变化视为新运行时所有权，旧状态�
 
 **Notes:** CCB 侧事件模型、snapshot 初始投影与去重/过期丢弃规则已落地；真正上游事件订阅、后台
 snapshot polling 循环、断线重连后的自动重读 snapshot 尚未接入。
-补充：`HerdrRuntimeEventProjector` 现已支持 `refresh(binding)` 重新种子，用于重连后重读 snapshot，
-避免旧 pane 状态继续残留；事件订阅与 polling 闭环仍待后续接入。
+补充：`HerdrRuntimeEventProjector` 现已支持 `refresh(binding, snapshot=...)` 用快照重新种子，用于
+重连后重读 snapshot，避免旧 pane 状态继续残留；事件订阅与 polling 闭环仍待后续接入。
 
 - [x] 新增 `HerdrRuntimeEvent` 模型与事件 projector 基础
 - [ ] 接入真正运行时事件订阅；无上游事件时 snapshot polling 兜底

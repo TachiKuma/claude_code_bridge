@@ -375,6 +375,50 @@ def test_herdr_runtime_event_projector_refreshes_snapshot_without_leaking_old_st
     assert projector.status_for_pane("w1:p1").to_record()["runtime_state"] == "working"  # type: ignore[union-attr]
 
 
+def test_herdr_runtime_event_projector_refreshes_from_snapshot_and_drops_missing_panes() -> None:
+    binding = HerdrRuntimeBinding(
+        project_id="proj-1",
+        server_id="server-1",
+        server_version="0.8.2",
+        api_schema="Herdr API",
+        session_name="ccb-project-1",
+        workspace_id="w1",
+        runtime_generation=13,
+        ready=True,
+        capabilities={},
+        panes=(
+            HerdrRuntimeBoundPane(
+                slot="codex",
+                pane_id="w1:p1",
+                agent_id="codex",
+                provider_kind="codex",
+                state="idle",
+                state_seq=1,
+            ),
+            HerdrRuntimeBoundPane(
+                slot="claude",
+                pane_id="w1:p2",
+                agent_id="claude",
+                provider_kind="claude",
+                state="blocked",
+                state_seq=2,
+            ),
+        ),
+    )
+    projector = HerdrRuntimeEventProjector(binding)
+
+    snapshot = {
+        "panes": [
+            {"pane_id": "w1:p1", "workspace_id": "w1", "state": "working", "state_seq": 7},
+        ]
+    }
+    projector.refresh(binding, snapshot=snapshot)
+
+    assert projector.status_for_pane("w1:p1").to_record()["runtime_state"] == "working"  # type: ignore[union-attr]
+    assert projector.status_for_pane("w1:p1").to_record()["seq"] == 7  # type: ignore[union-attr]
+    assert projector.status_for_pane("w1:p2") is None
+
+
 def test_herdr_state_mapping_preserves_done_and_unknown_semantics() -> None:
     assert map_herdr_state_to_ccb("working") == "working"
     assert map_herdr_state_to_ccb("blocked") == "waiting_for_user"

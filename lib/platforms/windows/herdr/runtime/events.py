@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
 from .contracts import HerdrRuntimeBinding, HerdrRuntimeBoundPane, HerdrRuntimeEvent
@@ -38,9 +39,12 @@ class HerdrRuntimeEventProjector:
         self._binding = binding
         self._statuses = self._seed_statuses(binding)
 
-    def refresh(self, binding: HerdrRuntimeBinding) -> None:
+    def refresh(self, binding: HerdrRuntimeBinding, *, snapshot: Mapping[str, object] | None = None) -> None:
         self._binding = binding
-        self._statuses = self._seed_statuses(binding)
+        if snapshot is None:
+            self._statuses = self._seed_statuses(binding)
+        else:
+            self._statuses = self._seed_statuses_from_snapshot(binding, snapshot)
 
     def apply_event(self, event: HerdrRuntimeEvent) -> bool:
         current = self._statuses.get(event.pane_id)
@@ -86,6 +90,22 @@ class HerdrRuntimeEventProjector:
             pane.pane_id: _status_from_bound_pane(binding, pane, source="snapshot")
             for pane in binding.panes
         }
+
+    @staticmethod
+    def _seed_statuses_from_snapshot(
+        binding: HerdrRuntimeBinding,
+        snapshot: Mapping[str, object],
+    ) -> dict[str, HerdrRuntimePaneStatus]:
+        panes = snapshot.get("panes")
+        if not isinstance(panes, list):
+            return {}
+        statuses: dict[str, HerdrRuntimePaneStatus] = {}
+        for pane in binding.panes:
+            snapshot_pane = _snapshot_pane_for_id(panes, pane.pane_id)
+            if snapshot_pane is None:
+                continue
+            statuses[pane.pane_id] = _status_from_snapshot_pane(binding, pane, snapshot_pane)
+        return statuses
 
 
 def runtime_status_from_binding(
@@ -133,6 +153,53 @@ def _status_from_bound_pane(
         seq=pane.state_seq,
         unseen_done=_herdr_state(pane.state) == "done",
     )
+
+
+def _status_from_snapshot_pane(
+    binding: HerdrRuntimeBinding,
+    pane: HerdrRuntimeBoundPane,
+    snapshot_pane: Mapping[str, object],
+) -> HerdrRuntimePaneStatus:
+    runtime_state = _herdr_state(snapshot_pane.get("runtime_state") or snapshot_pane.get("state"))
+    seq = _snapshot_seq(snapshot_pane, fallback=pane.state_seq)
+    return HerdrRuntimePaneStatus(
+        slot=pane.slot,
+        pane_id=pane.pane_id,
+        agent_id=pane.agent_id,
+        provider_kind=pane.provider_kind,
+        runtime_generation=binding.runtime_generation,
+        runtime_state=runtime_state,
+        state=map_herdr_state_to_ccb(runtime_state),
+        source="snapshot",
+        seq=seq,
+        unseen_done=runtime_state == "done",
+    )
+
+
+def _snapshot_pane_for_id(panes: list[object], pane_id: str) -> Mapping[str, object] | None:
+    target = str(pane_id or "").strip()
+    if not target:
+        return None
+    for pane in panes:
+        if not isinstance(pane, Mapping):
+            continue
+        current = str(pane.get("pane_id") or "").strip()
+        if current == target:
+            return pane
+    return None
+
+
+def _snapshot_seq(snapshot_pane: Mapping[str, object], *, fallback: int) -> int:
+    for key in ("state_seq", "seq"):
+        value = snapshot_pane.get(key)
+        try:
+            if value is not None:
+                seq = int(value)
+                if seq >= 0:
+                    return seq
+        except (TypeError, ValueError):
+            continue
+    return fallback
 
 
 def _herdr_state(state: object) -> str:
