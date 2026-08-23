@@ -17,6 +17,9 @@ Provider hook 状态、pane/status-line 状态、CCB job/callback 元数据、li
 **Notes:** `project_view` 已新增 Herdr runtime/前台三态的读模型基础与状态映射；完整替换所有
 Provider/pane/job/lifecycle 来源、以及 pane 重启/迁移/重连端到端验证仍未关闭。
 
+补充：`_herdr_runtime_state_from_snapshot` 现在优先读取目标 `pane_id` 对应的局部快照，再回退到根级
+摘要，避免迁移后仍被旧的 root summary 盖掉局部 pane 状态。
+
 - [ ] 完整合并运行时/Provider/pane/job/lifecycle/前台三态为单一读模型
 - [x] 状态映射：`working→working`、`blocked→waiting_for_user`、`idle→idle`、
       `done→idle+unseen_done=true`、`unknown→unknown`（不降级为 idle）
