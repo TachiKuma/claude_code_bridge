@@ -13,8 +13,9 @@ from storage.paths import PathLayout
 
 
 class _Registry:
-    def __init__(self, runtime: AgentRuntime) -> None:
+    def __init__(self, runtime: AgentRuntime, *, provider: str = 'codex') -> None:
         self._runtime = runtime
+        self._provider = provider
         self._config = SimpleNamespace(default_agents=('agent1',))
 
     def get(self, agent_name: str):
@@ -23,7 +24,7 @@ class _Registry:
 
     def spec_for(self, agent_name: str):
         assert agent_name == 'agent1'
-        return SimpleNamespace(name='agent1', provider='codex')
+        return SimpleNamespace(name='agent1', provider=self._provider)
 
 
 class _FakeBackend:
@@ -39,6 +40,12 @@ class _FakeBackend:
 
     def is_alive(self, pane_id: str) -> bool:
         return pane_id in {'%root', '%55'}
+
+    def runtime_snapshot(self) -> dict[str, object]:
+        return {
+            'workspaces': [{'workspace_id': 'workspace-1'}],
+            'panes': [{'pane_id': '%55', 'workspace_id': 'workspace-1', 'state': 'working'}],
+        }
 
     def create_pane(
         self,
@@ -201,3 +208,50 @@ def test_refresh_provider_binding_replaces_missing_project_pane_inside_workspace
     assert ('%55', 'cmd') not in backend.titles
     assert ('%55', 'agent1') in backend.titles
     assert ('%55', '@ccb_session_id', 'ccb-session-new') in backend.options
+
+
+def test_refresh_provider_binding_captures_herdr_runtime_snapshot(tmp_path: Path) -> None:
+    layout = PathLayout(tmp_path / 'repo-refresh-herdr')
+    runtime = _runtime(layout)
+    runtime.provider = 'herdr'
+    registry = _Registry(runtime, provider='herdr')
+    backend = _FakeBackend()
+    session_file = layout.ccb_dir / 'agent1.session.json'
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_text('{}\n', encoding='utf-8')
+    session = _Session(
+        session_file=session_file,
+        data={
+            'terminal': 'mux',
+            'pane_id': '%41',
+            'agent_name': 'agent1',
+            'ccb_project_id': 'proj-1',
+            'ccb_session_id': 'ccb-session-new',
+            'work_dir': str(layout.workspace_path('agent1')),
+            'start_cmd': 'herdr --continue',
+            'fake_session_id': 'session-new',
+        },
+        _backend=backend,
+    )
+    session.ensure_pane = lambda: (True, '%55')  # type: ignore[method-assign]
+    binding = ProviderSessionBinding(
+        provider='herdr',
+        load_session=lambda workspace_path, instance: session,
+        session_id_attr='fake_session_id',
+        session_path_attr='fake_session_path',
+    )
+
+    refreshed = refresh_provider_binding(
+        layout=layout,
+        registry=registry,
+        session_bindings={'herdr': binding},
+        attach_runtime_fn=lambda **kwargs: SimpleNamespace(**kwargs),
+        agent_name='agent1',
+        recover=True,
+    )
+
+    assert refreshed is not None
+    assert refreshed.herdr_runtime_snapshot == {
+        'workspaces': [{'workspace_id': 'workspace-1'}],
+        'panes': [{'pane_id': '%55', 'workspace_id': 'workspace-1', 'state': 'working'}],
+    }

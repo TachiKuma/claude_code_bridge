@@ -521,6 +521,45 @@ def test_project_view_herdr_runtime_status_keeps_unknown_unknown() -> None:
     assert status['unseen_done'] is False
 
 
+def test_project_view_herdr_runtime_status_reads_snapshot_when_state_fields_are_missing() -> None:
+    project_id = 'proj-herdr'
+    namespace = ProjectNamespaceState(
+        project_id=project_id,
+        namespace_epoch=5,
+        tmux_socket_path='',
+        tmux_session_name='ccb-herdr',
+        namespace_backend_family='herdr-native',
+        backend_impl='herdr',
+        namespace_id='workspace-1',
+        namespace_session_name='ccb-herdr',
+        namespace_ipc_kind='herdr_socket',
+        namespace_ipc_ref='herdr://ccb-herdr',
+        layout_version=3,
+        workspace_window_name='workspace',
+        ui_attachable=True,
+    )
+    runtime = _runtime('agent1', project_id=project_id)
+    runtime.pane_ref = None
+    runtime.provider_runtime_backend_ref = None
+    runtime.herdr_runtime_snapshot = {
+        'workspaces': [{'workspace_id': 'workspace-1'}],
+        'panes': [{'pane_id': '%1', 'workspace_id': 'workspace-1', 'state': 'blocked'}],
+    }
+
+    status = project_view_service._merged_runtime_status(
+        deps=SimpleNamespace(project_id=project_id),
+        namespace=namespace,
+        agent_name='agent1',
+        runtime=runtime,
+        job=None,
+        provider_runtime_status=None,
+    )
+
+    assert status['state'] == 'waiting_for_user'
+    assert status['runtime_state'] == 'blocked'
+    assert status['source'] == 'herdr_runtime'
+
+
 def test_project_view_herdr_namespace_skips_tmux_project_view_facts() -> None:
     namespace = ProjectNamespaceState(
         project_id='proj-herdr',

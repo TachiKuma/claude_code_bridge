@@ -42,6 +42,7 @@ def resolve_attach_runtime_values(
     namespace_restore_token_present: bool | None,
     herdr_auto_restore_mode: str | None,
     herdr_agent_state_ref: str | None,
+    herdr_runtime_snapshot: Mapping[str, object] | None,
     pane_id: str | None,
     active_pane_id: str | None,
     pane_title_marker: str | None,
@@ -120,6 +121,11 @@ def resolve_attach_runtime_values(
         'herdr_agent_state_ref',
         herdr_agent_state_ref,
     )
+    herdr_runtime_snapshot_value = preferred_mapping(
+        existing,
+        'herdr_runtime_snapshot',
+        herdr_runtime_snapshot,
+    )
     active_pane_id_value = preferred_active_pane_id(existing, active_pane_id=active_pane_id, pane_id_value=pane_id_value)
     tmux_socket_name_value = preferred_text(existing, 'tmux_socket_name', tmux_socket_name)
     tmux_socket_path_value = preferred_text(existing, 'tmux_socket_path', tmux_socket_path)
@@ -161,6 +167,7 @@ def resolve_attach_runtime_values(
         namespace_restore_token_present=namespace_restore_token_present_value,
         herdr_auto_restore_mode=herdr_auto_restore_mode_value,
         herdr_agent_state_ref=herdr_agent_state_ref_value,
+        herdr_runtime_snapshot=herdr_runtime_snapshot_value,
         pane_id=pane_id_value,
         active_pane_id=active_pane_id_value,
         pane_title_marker=preferred_text(existing, 'pane_title_marker', pane_title_marker),

@@ -23,6 +23,7 @@ class AttachRuntimeValues:
     namespace_restore_token_present: bool
     herdr_auto_restore_mode: str | None
     herdr_agent_state_ref: str | None
+    herdr_runtime_snapshot: dict[str, object] | None
     pane_id: str | None
     active_pane_id: str | None
     pane_title_marker: str | None

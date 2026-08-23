@@ -1066,6 +1066,12 @@ def _herdr_runtime_state_fact(runtime) -> str | None:
         value = str(getattr(runtime, attr, '') or '').strip().lower()
         if value:
             return value
+    snapshot_state = _herdr_runtime_state_from_snapshot(
+        getattr(runtime, 'herdr_runtime_snapshot', None),
+        pane_id=getattr(runtime, 'pane_id', None),
+    )
+    if snapshot_state is not None:
+        return snapshot_state
     for container in (
         getattr(runtime, 'pane_ref', None),
         getattr(runtime, 'provider_runtime_backend_ref', None),
@@ -1074,6 +1080,30 @@ def _herdr_runtime_state_fact(runtime) -> str | None:
             continue
         for key in ('herdr_runtime_state', 'runtime_state', 'state'):
             value = str(container.get(key) or '').strip().lower()
+            if value:
+                return value
+    return None
+
+
+def _herdr_runtime_state_from_snapshot(snapshot, *, pane_id: object | None) -> str | None:
+    if not isinstance(snapshot, dict):
+        return None
+    for key in ('runtime_state', 'state'):
+        value = str(snapshot.get(key) or '').strip().lower()
+        if value:
+            return value
+    panes = snapshot.get('panes')
+    if not isinstance(panes, list):
+        return None
+    target_pane_id = str(pane_id or '').strip()
+    for pane in panes:
+        if not isinstance(pane, dict):
+            continue
+        current_pane_id = str(pane.get('pane_id') or '').strip()
+        if target_pane_id and current_pane_id and current_pane_id != target_pane_id:
+            continue
+        for key in ('runtime_state', 'state'):
+            value = str(pane.get(key) or '').strip().lower()
             if value:
                 return value
     return None

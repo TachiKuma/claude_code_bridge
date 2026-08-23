@@ -134,6 +134,7 @@ def _attach_healthy_runtime(
         namespace_restore_token_present=facts.namespace_restore_token_present,
         herdr_auto_restore_mode=facts.herdr_auto_restore_mode,
         herdr_agent_state_ref=facts.herdr_agent_state_ref,
+        herdr_runtime_snapshot=facts.herdr_runtime_snapshot,
         pane_id=facts.pane_id,
         active_pane_id=active_pane_id,
         pane_title_marker=facts.pane_title_marker,

@@ -48,6 +48,7 @@ class ProviderRuntimeFacts:
     namespace_restore_token_present: bool = False
     herdr_auto_restore_mode: str | None = None
     herdr_agent_state_ref: str | None = None
+    herdr_runtime_snapshot: dict[str, object] | None = None
 
 
 def load_provider_session(binding, workspace_path: Path, agent_name: str):
@@ -104,6 +105,7 @@ def build_provider_runtime_facts(
         session_data.get('herdr_agent_state_ref')
         or (backend_ref or {}).get('herdr_agent_state_ref')
     )
+    runtime_snapshot = _runtime_snapshot(session, provider=provider)
     return ProviderRuntimeFacts(
         runtime_ref=session_runtime_ref(session, pane_id_override=pane_id),
         session_ref=session_ref(
@@ -120,6 +122,7 @@ def build_provider_runtime_facts(
         namespace_restore_token_present=restore_token_present,
         herdr_auto_restore_mode=auto_restore_mode,
         herdr_agent_state_ref=agent_state_ref,
+        herdr_runtime_snapshot=runtime_snapshot,
         pane_id=pane_id,
         pane_title_marker=session_pane_title_marker(session),
         pane_state='alive' if pane_id else None,
@@ -134,6 +137,26 @@ def build_provider_runtime_facts(
 def _optional_text(value: object) -> str | None:
     text = str(value or '').strip()
     return text or None
+
+
+def _runtime_snapshot(session, *, provider: str) -> dict[str, object] | None:
+    if str(provider or '').strip().lower() != 'herdr':
+        return None
+    backend_factory = getattr(session, 'backend', None)
+    if not callable(backend_factory):
+        return None
+    try:
+        backend = backend_factory()
+    except Exception:
+        return None
+    snapshot_fn = getattr(backend, 'runtime_snapshot', None)
+    if not callable(snapshot_fn):
+        return None
+    try:
+        snapshot = snapshot_fn()
+    except Exception:
+        return None
+    return dict(snapshot) if isinstance(snapshot, Mapping) else None
 
 
 __all__ = [

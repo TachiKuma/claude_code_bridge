@@ -34,6 +34,7 @@ class AgentRuntime:
     namespace_restore_token_present: bool = False
     herdr_auto_restore_mode: str | None = None
     herdr_agent_state_ref: str | None = None
+    herdr_runtime_snapshot: dict[str, Any] | None = None
     pane_id: str | None = None
     active_pane_id: str | None = None
     pane_title_marker: str | None = None
