@@ -284,6 +284,32 @@ def test_herdr_socket_client_handshake_caches_server_info_until_refresh() -> Non
     assert operations == ["server_info", "server_info"]
 
 
+def test_herdr_socket_client_handshake_refreshes_when_generation_changes() -> None:
+    operations: list[str] = []
+
+    def request(operation: str, payload: dict[str, object]) -> dict[str, object]:
+        operations.append(operation)
+        if operation == "server_info":
+            return {
+                "version": "0.7.5-preview",
+                "api_schema": "Herdr API",
+                "platform": "windows",
+                "arch": "x64",
+            }
+        raise AssertionError(operation)
+
+    client = HerdrSocketClient(request_fn=request, socket_ref="herdr://local")
+
+    first = client.handshake(runtime_generation=1)
+    second = client.handshake(runtime_generation=1)
+    refreshed = client.handshake(runtime_generation=2)
+
+    assert first is second
+    assert refreshed is not first
+    assert refreshed.runtime_generation == 2
+    assert operations == ["server_info", "server_info"]
+
+
 def test_herdr_cli_request_adapter_default_run_hides_windows_control_wrapper(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
@@ -3172,6 +3198,57 @@ def test_herdr_backend_set_pane_identity_rehydrates_pane_namespace_from_known_na
             },
         },
     )
+
+
+def test_herdr_backend_set_pane_identity_refreshes_handshake_when_namespace_epoch_changes() -> None:
+    requests: list[tuple[str, dict[str, object]]] = []
+
+    def request(operation: str, payload: dict[str, object]):
+        requests.append((operation, dict(payload)))
+        if operation == "server_info":
+            return {
+                "version": "0.7.5-preview",
+                "api_schema": "Herdr API",
+                "platform": "windows",
+                "arch": "x64",
+            }
+        if operation == "set_pane_identity":
+            return {"status": "ok", "pane_id": payload["pane_id"]}
+        raise AssertionError(operation)
+
+    backend = HerdrBackend(
+        client=HerdrSocketClient(request_fn=request, socket_ref="herdr://local"),
+        capability_gate=_supported_gate(),
+    )
+    backend.namespace_ref("ccb-herdr", "w1")
+    pane = {
+        "backend_impl": "herdr",
+        "pane_id": "w1:p2",
+        "session_name": "ccb-herdr",
+    }
+
+    for epoch in (1, 1, 2):
+        backend.set_pane_identity(
+            pane,
+            title="agent2",
+            agent_label="agent2",
+            project_id="project-1",
+            role="agent",
+            slot_key="agent2",
+            window_name="main",
+            namespace_epoch=epoch,
+            managed_by="ccbd",
+        )
+
+    assert [operation for operation, _ in requests] == [
+        "server_info",
+        "set_pane_identity",
+        "set_pane_identity",
+        "server_info",
+        "set_pane_identity",
+    ]
+
+
 def test_herdr_backend_kill_window_drops_only_current_namespace_cache() -> None:
     def request(operation: str, payload: dict[str, object]) -> dict[str, object]:
         if operation == "server_info":

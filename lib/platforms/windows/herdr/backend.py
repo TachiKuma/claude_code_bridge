@@ -34,8 +34,8 @@ class HerdrBackend(TerminalBackend):
         self._known_namespaces: dict[tuple[str, str], MuxNamespaceRefV2] = {}
         self._logical_windows: dict[tuple[str, str, str], dict[str, object]] = {}
 
-    def _ensure_handshake(self) -> None:
-        self._client.handshake()
+    def _ensure_handshake(self, *, runtime_generation: int | None = None) -> None:
+        self._client.handshake(runtime_generation=runtime_generation)
 
     def capabilities(self) -> MuxCapabilitiesV2:
         return self._capability_gate.require_supported("capabilities")
@@ -187,6 +187,7 @@ class HerdrBackend(TerminalBackend):
             "ccb_namespace_epoch": str(namespace_epoch) if namespace_epoch is not None else "",
             "ccb_managed_by": managed_by or "",
         }
+        self._ensure_handshake(runtime_generation=namespace_epoch)
         return self._client.set_pane_identity(
             pane_ref,
             title=title,

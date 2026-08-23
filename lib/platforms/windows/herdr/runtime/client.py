@@ -33,6 +33,7 @@ class HerdrRuntimeHandshake:
     server_info: HerdrServerInfo
     socket_ref: str
     session_name: str | None
+    runtime_generation: int | None = None
 
 
 class HerdrSocketClient:
@@ -100,12 +101,24 @@ class HerdrSocketClient:
             "socket_ref": self._socket_ref,
         }
 
-    def handshake(self, *, force_refresh: bool = False) -> HerdrRuntimeHandshake:
-        if self._handshake is None or force_refresh:
+    def handshake(
+        self,
+        *,
+        force_refresh: bool = False,
+        runtime_generation: int | None = None,
+    ) -> HerdrRuntimeHandshake:
+        expected_generation = _runtime_generation(runtime_generation)
+        generation_changed = (
+            expected_generation is not None
+            and self._handshake is not None
+            and self._handshake.runtime_generation != expected_generation
+        )
+        if self._handshake is None or force_refresh or generation_changed:
             self._handshake = HerdrRuntimeHandshake(
                 server_info=self.server_info(),
                 socket_ref=self._socket_ref,
                 session_name=self.session_name or None,
+                runtime_generation=expected_generation,
             )
         return self._handshake
 
@@ -937,6 +950,15 @@ def _split_restore_token(restore_token: str) -> tuple[str, str]:
             detail="Herdr restore_token must include non-empty session and workspace",
         )
     return session_name, namespace_id
+
+
+def _runtime_generation(value: int | None) -> int | None:
+    if value is None:
+        return None
+    generation = int(value)
+    if generation <= 0:
+        raise ValueError("runtime_generation must be positive when set")
+    return generation
 
 
 __all__ = [
