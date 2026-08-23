@@ -291,6 +291,90 @@ def test_herdr_runtime_event_projector_drops_duplicate_stale_and_foreign_events(
     assert projector.status_for_pane("w1:p1").to_record()["runtime_state"] == "working"  # type: ignore[union-attr]
 
 
+def test_herdr_runtime_event_projector_refreshes_snapshot_without_leaking_old_state() -> None:
+    binding = HerdrRuntimeBinding(
+        project_id="proj-1",
+        server_id="server-1",
+        server_version="0.8.2",
+        api_schema="Herdr API",
+        session_name="ccb-project-1",
+        workspace_id="w1",
+        runtime_generation=12,
+        ready=True,
+        capabilities={},
+        panes=(
+            HerdrRuntimeBoundPane(
+                slot="codex",
+                pane_id="w1:p1",
+                agent_id="codex",
+                provider_kind="codex",
+                state="idle",
+                state_seq=1,
+            ),
+        ),
+    )
+    projector = HerdrRuntimeEventProjector(binding)
+
+    def event(**overrides):
+        values = {
+            "event_type": "agent_state_changed",
+            "event_id": "evt",
+            "server_id": "server-1",
+            "session_name": "ccb-project-1",
+            "workspace_id": "w1",
+            "pane_id": "w1:p1",
+            "agent_id": "codex",
+            "provider_kind": "codex",
+            "runtime_generation": 12,
+            "seq": 2,
+            "state": "working",
+            "occurred_at": "2026-08-20T12:00:00Z",
+        }
+        values.update(overrides)
+        return HerdrRuntimeEvent(**values)
+
+    assert projector.apply_event(event()) is True
+    assert projector.status_for_pane("w1:p1").to_record()["runtime_state"] == "working"  # type: ignore[union-attr]
+
+    refreshed_binding = HerdrRuntimeBinding(
+        project_id="proj-1",
+        server_id="server-1",
+        server_version="0.8.2",
+        api_schema="Herdr API",
+        session_name="ccb-project-1",
+        workspace_id="w1",
+        runtime_generation=12,
+        ready=True,
+        capabilities={},
+        panes=(
+            HerdrRuntimeBoundPane(
+                slot="codex",
+                pane_id="w1:p1",
+                agent_id="codex",
+                provider_kind="codex",
+                state="idle",
+                state_seq=10,
+            ),
+            HerdrRuntimeBoundPane(
+                slot="claude",
+                pane_id="w1:p2",
+                agent_id="claude",
+                provider_kind="claude",
+                state="blocked",
+                state_seq=3,
+            ),
+        ),
+    )
+    projector.refresh(refreshed_binding)
+
+    assert projector.status_for_pane("w1:p1").to_record()["runtime_state"] == "idle"  # type: ignore[union-attr]
+    assert projector.status_for_pane("w1:p1").to_record()["seq"] == 10  # type: ignore[union-attr]
+    assert projector.status_for_pane("w1:p2").to_record()["runtime_state"] == "blocked"  # type: ignore[union-attr]
+    assert projector.apply_event(event(seq=9, state="blocked")) is False
+    assert projector.apply_event(event(event_id="fresh", seq=11, state="working")) is True
+    assert projector.status_for_pane("w1:p1").to_record()["runtime_state"] == "working"  # type: ignore[union-attr]
+
+
 def test_herdr_state_mapping_preserves_done_and_unknown_semantics() -> None:
     assert map_herdr_state_to_ccb("working") == "working"
     assert map_herdr_state_to_ccb("blocked") == "waiting_for_user"

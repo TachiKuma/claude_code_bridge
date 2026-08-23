@@ -36,10 +36,11 @@ class HerdrRuntimePaneStatus:
 class HerdrRuntimeEventProjector:
     def __init__(self, binding: HerdrRuntimeBinding) -> None:
         self._binding = binding
-        self._statuses: dict[str, HerdrRuntimePaneStatus] = {
-            pane.pane_id: _status_from_bound_pane(binding, pane, source="snapshot")
-            for pane in binding.panes
-        }
+        self._statuses = self._seed_statuses(binding)
+
+    def refresh(self, binding: HerdrRuntimeBinding) -> None:
+        self._binding = binding
+        self._statuses = self._seed_statuses(binding)
 
     def apply_event(self, event: HerdrRuntimeEvent) -> bool:
         current = self._statuses.get(event.pane_id)
@@ -78,6 +79,13 @@ class HerdrRuntimeEventProjector:
             and event.agent_id == current.agent_id
             and event.provider_kind == current.provider_kind
         )
+
+    @staticmethod
+    def _seed_statuses(binding: HerdrRuntimeBinding) -> dict[str, HerdrRuntimePaneStatus]:
+        return {
+            pane.pane_id: _status_from_bound_pane(binding, pane, source="snapshot")
+            for pane in binding.panes
+        }
 
 
 def runtime_status_from_binding(
