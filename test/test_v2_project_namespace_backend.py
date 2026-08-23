@@ -494,6 +494,41 @@ def test_v2_mux_backend_helper_capability_gap_fails_closed(tmp_path: Path) -> No
     assert [call[0] for call in backend.calls] == ['create_session']
 
 
+def test_v2_mux_backend_helper_ignores_semantic_status_for_operation_gate(tmp_path: Path) -> None:
+    backend = _FakeHerdrNamespaceBackend()
+
+    def _capabilities() -> dict[str, object]:
+        status = {
+            'session_attach': 'supported',
+            'pane_spawn': 'supported',
+            'send_input': 'supported',
+            'read_output': 'supported',
+            'kill_pane': 'supported',
+            'workspace_create': 'supported',
+            'workspace_list': 'supported',
+            'workspace_focus': 'supported',
+            'workspace_close': 'supported',
+            'workspace_metadata': 'supported',
+            'pane_metadata': 'supported',
+            'pane_list': 'supported',
+            'pane_split': 'supported',
+            'pane_run': 'supported',
+        }
+        semantic = dict(status)
+        semantic['session_attach'] = 'unsupported'
+        return make_capabilities(
+            backend_impl='herdr',
+            command_status=status,  # type: ignore[arg-type]
+            semantic_status=semantic,  # type: ignore[arg-type]
+        )
+
+    backend.capabilities = _capabilities  # type: ignore[method-assign]
+
+    prepare_server(backend)
+
+    assert backend.calls == [('prepare_server', None)]
+
+
 def test_prepare_server_then_create_session_and_server_policy_retry_transient_tmux_failures(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv('CCB_TMUX_OBJECT_READY_POLL_INTERVAL_S', '0')
     monkeypatch.setenv('DISPLAY', ':99')

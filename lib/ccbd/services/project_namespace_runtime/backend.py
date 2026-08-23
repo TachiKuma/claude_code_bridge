@@ -825,16 +825,11 @@ def _require_mux_operation(
     if not isinstance(capabilities, dict):
         _raise_mux_unsupported(backend, operation=operation, detail='mux backend capabilities must be an object')
     command_status = capabilities.get('command_status')
-    semantic_status = capabilities.get('semantic_status')
-    if not isinstance(command_status, dict) or not isinstance(semantic_status, dict):
+    if not isinstance(command_status, dict):
         _raise_mux_unsupported(backend, operation=operation, detail='mux backend capability statuses are missing')
     keys = _capability_keys_for_operation(operation)
-    missing = [key for key in keys if key not in command_status and key not in semantic_status]
-    unsupported = [
-        key
-        for key in keys
-        if str(command_status.get(key) or semantic_status.get(key) or '').strip() != 'supported'
-    ]
+    missing = [key for key in keys if key not in command_status]
+    unsupported = [key for key in keys if str(command_status.get(key) or '').strip() != 'supported']
     if missing or unsupported:
         _raise_mux_unsupported(
             backend,
