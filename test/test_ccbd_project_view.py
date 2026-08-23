@@ -603,6 +603,48 @@ def test_project_view_herdr_runtime_status_prefers_target_pane_snapshot_over_roo
     assert status['source'] == 'herdr_runtime'
 
 
+def test_project_view_herdr_runtime_status_ignores_root_summary_when_target_pane_missing() -> None:
+    project_id = 'proj-herdr'
+    namespace = ProjectNamespaceState(
+        project_id=project_id,
+        namespace_epoch=5,
+        tmux_socket_path='',
+        tmux_session_name='ccb-herdr',
+        namespace_backend_family='herdr-native',
+        backend_impl='herdr',
+        namespace_id='workspace-1',
+        namespace_session_name='ccb-herdr',
+        namespace_ipc_kind='herdr_socket',
+        namespace_ipc_ref='herdr://ccb-herdr',
+        layout_version=3,
+        workspace_window_name='workspace',
+        ui_attachable=True,
+    )
+    runtime = _runtime('agent1', project_id=project_id)
+    runtime.pane_ref = None
+    runtime.provider_runtime_backend_ref = None
+    runtime.herdr_runtime_snapshot = {
+        'runtime_state': 'working',
+        'panes': [
+            {'pane_id': '%0', 'workspace_id': 'workspace-1', 'state': 'working'},
+        ],
+    }
+    runtime.pane_id = '%1'
+
+    status = project_view_service._merged_runtime_status(
+        deps=SimpleNamespace(project_id=project_id),
+        namespace=namespace,
+        agent_name='agent1',
+        runtime=runtime,
+        job=None,
+        provider_runtime_status=None,
+    )
+
+    assert status['state'] == 'unknown'
+    assert status['runtime_state'] == 'unknown'
+    assert status['source'] == 'missing_herdr_runtime_state'
+
+
 def test_project_view_herdr_namespace_skips_tmux_project_view_facts() -> None:
     namespace = ProjectNamespaceState(
         project_id='proj-herdr',

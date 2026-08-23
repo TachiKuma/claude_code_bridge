@@ -1088,14 +1088,23 @@ def _herdr_runtime_state_fact(runtime) -> str | None:
 def _herdr_runtime_state_from_snapshot(snapshot, *, pane_id: object | None) -> str | None:
     if not isinstance(snapshot, dict):
         return None
-    panes = snapshot.get('panes')
     target_pane_id = str(pane_id or '').strip()
-    if isinstance(panes, list) and target_pane_id:
+    panes = snapshot.get('panes')
+    if isinstance(panes, list):
+        if target_pane_id:
+            for pane in panes:
+                if not isinstance(pane, dict):
+                    continue
+                current_pane_id = str(pane.get('pane_id') or '').strip()
+                if current_pane_id != target_pane_id:
+                    continue
+                for key in ('runtime_state', 'state'):
+                    value = str(pane.get(key) or '').strip().lower()
+                    if value:
+                        return value
+            return None
         for pane in panes:
             if not isinstance(pane, dict):
-                continue
-            current_pane_id = str(pane.get('pane_id') or '').strip()
-            if current_pane_id != target_pane_id:
                 continue
             for key in ('runtime_state', 'state'):
                 value = str(pane.get(key) or '').strip().lower()
@@ -1105,18 +1114,6 @@ def _herdr_runtime_state_from_snapshot(snapshot, *, pane_id: object | None) -> s
         value = str(snapshot.get(key) or '').strip().lower()
         if value:
             return value
-    if not isinstance(panes, list):
-        return None
-    for pane in panes:
-        if not isinstance(pane, dict):
-            continue
-        current_pane_id = str(pane.get('pane_id') or '').strip()
-        if target_pane_id and current_pane_id and current_pane_id != target_pane_id:
-            continue
-        for key in ('runtime_state', 'state'):
-            value = str(pane.get(key) or '').strip().lower()
-            if value:
-                return value
     return None
 
 
