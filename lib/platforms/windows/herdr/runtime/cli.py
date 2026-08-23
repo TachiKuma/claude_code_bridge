@@ -105,6 +105,8 @@ class HerdrCliRequestAdapter:
             return self._kill_pane(payload)
         if operation == "attach_namespace":
             return self._attach_namespace(payload)
+        if operation == "runtime_snapshot":
+            return self._runtime_snapshot(payload)
         if operation == "is_alive":
             return self._is_alive(payload)
         raise MuxCommandErrorV2(
@@ -983,6 +985,12 @@ class HerdrCliRequestAdapter:
                 }
             raise
         return {"status": "ok", "pane_id": captured["pane_id"], "alive": True}
+
+    def _runtime_snapshot(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
+        result = self._json_command("runtime_snapshot", ["api", "snapshot"], session_name=session_name)
+        snapshot = _mapping(result.get("snapshot"))
+        return dict(snapshot)
 
     def _workspaces(self, *, session_name: str | None = None) -> list[Mapping[str, object]]:
         try:

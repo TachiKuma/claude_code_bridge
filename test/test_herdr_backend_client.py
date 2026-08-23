@@ -2151,6 +2151,8 @@ def test_herdr_cli_request_adapter_maps_server_info_and_core_operations() -> Non
             return _completed("ready")
         if "pane close" in joined:
             return _completed('{"result":{"type":"ok"}}')
+        if "api snapshot" in joined:
+            return _completed('{"result":{"snapshot":{"workspaces":[{"workspace_id":"w1"}],"panes":[{"pane_id":"w1:p1","workspace_id":"w1"}]}}}')
         raise AssertionError(joined)
 
     adapter = HerdrCliRequestAdapter(
@@ -2166,6 +2168,7 @@ def test_herdr_cli_request_adapter_maps_server_info_and_core_operations() -> Non
     pane = adapter("create_pane", {"namespace_id": namespace["namespace_id"], "cwd": "D:/demo"})
     sent = adapter("send_text", {"pane_id": pane["pane_id"], "text": "hello"})
     captured = adapter("capture_pane", {"pane_id": pane["pane_id"], "lines": 10})
+    snapshot = adapter("runtime_snapshot", {})
     killed = adapter("kill_pane", {"pane_id": pane["pane_id"]})
 
     assert namespace["namespace_id"] == "w1"
@@ -2177,6 +2180,7 @@ def test_herdr_cli_request_adapter_maps_server_info_and_core_operations() -> Non
     assert pane["session_name"] == "ccb-demo"
     assert sent["status"] == "ok"
     assert captured["text"] == "ready"
+    assert snapshot["panes"][0]["pane_id"] == "w1:p1"
     assert killed["status"] == "ok"
     assert commands
     joined_commands = [" ".join(command) for command in commands]
@@ -2184,6 +2188,19 @@ def test_herdr_cli_request_adapter_maps_server_info_and_core_operations() -> Non
     assert any("pane list" in command for command in joined_commands)
     assert not any("workspace list --json" in command for command in joined_commands)
     assert not any("pane list --json" in command for command in joined_commands)
+    assert any("api snapshot" in command for command in joined_commands)
+
+
+def test_herdr_backend_exposes_runtime_snapshot() -> None:
+    backend = HerdrBackend(
+        client=HerdrSocketClient(request_fn=_fake_herdr_request(), socket_ref="herdr://local"),
+        capability_gate=_supported_gate(),
+    )
+
+    snapshot = backend.runtime_snapshot()
+
+    assert snapshot["workspaces"][0]["workspace_id"] == "w1"
+    assert snapshot["panes"][0]["pane_id"] == "w1:p1"
 
 
 def test_herdr_cli_request_adapter_falls_back_to_api_snapshot_when_list_output_is_not_json() -> None:
@@ -4736,6 +4753,13 @@ def _fake_herdr_request(
             return {"status": "ok", "pane_id": payload["pane_id"]}
         if operation in {"report_pane_agent", "report_pane_agent_session", "release_pane_agent"}:
             return {"status": "ok", "pane_id": payload["pane_id"]}
+        if operation == "runtime_snapshot":
+            return {
+                "snapshot": {
+                    "workspaces": [{"workspace_id": "w1"}],
+                    "panes": [{"pane_id": "w1:p1", "workspace_id": "w1"}],
+                }
+            }
         raise AssertionError(f"unexpected fake Herdr operation {operation}")
 
     return request

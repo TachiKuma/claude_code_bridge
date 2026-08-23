@@ -777,6 +777,11 @@ class HerdrSocketClient:
             detail="namespace attached",
         )
 
+    def runtime_snapshot(self) -> Mapping[str, object]:
+        response = self._request("runtime_snapshot", {}, require_result=True)
+        snapshot = response.get("snapshot")
+        return dict(snapshot) if isinstance(snapshot, Mapping) else {}
+
     def _request(
         self,
         operation: str,

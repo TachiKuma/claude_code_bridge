@@ -65,6 +65,10 @@ class HerdrBackend(TerminalBackend):
         self._ensure_handshake()
         return self._register_namespace(self._client.restore_session(restore_token=restore_token))
 
+    def runtime_snapshot(self) -> Mapping[str, object]:
+        self._ensure_handshake()
+        return self._client.runtime_snapshot()
+
     def namespace_alive(self, namespace: MuxNamespaceRefV2) -> bool:
         namespace_ref = self._namespace_ref_from_mapping(namespace, operation="namespace_alive")
         self._capability_gate.require_supported("namespace_alive")
