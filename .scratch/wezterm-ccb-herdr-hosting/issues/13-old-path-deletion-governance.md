@@ -22,7 +22,7 @@ Windows live validation，以及可重跑的 architecture 证据。
 
 - [x] 删除 `CCB_HERDR_CAPABILITY_REPORT` 正常启动路径
 - [x] 删除 bootstrap capability probe 与临时文件写入
-- [ ] 收窄宽 CLI 操作白名单，仅保留诊断/兼容 fallback
+- [x] 收窄宽 CLI 操作白名单，仅保留诊断/兼容 fallback
 - [x] 移除 backend_resolver 低层 capability 组合判断
 - [ ] 移除 tmux_runtime 中 CCB 主动建 Herdr Agent 身份的补丁（Herdr 稳定返回 agent_id 后）
 - [ ] 每处删除前均有等价 characterization test 与 Windows live validation
@@ -33,3 +33,6 @@ read-only capability probe，也不再写临时 capability report。
 
 说明：`project_namespace_runtime` 的 mux 选择门槛现在只看 `command_status`，不再把 `semantic_status`
 作为低层 operation gate 的并列条件。
+
+说明：本轮将 `report_pane_agent_session` 收口为 unsupported，Herdr 侧仅保留 `report_pane_agent`
+与 `release_pane_agent` 这条当前仍在使用的生命周期路径。

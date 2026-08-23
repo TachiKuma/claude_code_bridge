@@ -75,8 +75,6 @@ class HerdrCliRequestAdapter:
             return self._set_pane_identity(payload)
         if operation == "report_pane_agent":
             return self._report_pane_agent(payload)
-        if operation == "report_pane_agent_session":
-            return self._report_pane_agent_session(payload)
         if operation == "release_pane_agent":
             return self._release_pane_agent(payload)
         if operation == "respawn_pane":
@@ -585,47 +583,6 @@ class HerdrCliRequestAdapter:
             "pane_id": pane_id,
             "provider_kind": provider_kind,
             "state": state,
-        }
-
-    def _report_pane_agent_session(self, payload: Mapping[str, object]) -> Mapping[str, object]:
-        pane_id = str(payload.get("pane_id") or "").strip()
-        session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
-        provider_kind = str(payload.get("provider_kind") or "").strip()
-        if not pane_id:
-            raise self._failed("report_pane_agent_session", "requires pane_id", session_name=session_name)
-        if not provider_kind:
-            raise self._failed("report_pane_agent_session", "requires provider_kind", session_name=session_name)
-        args = [
-            "pane",
-            "report-agent-session",
-            pane_id,
-            "--source",
-            _METADATA_SOURCE,
-            "--agent",
-            provider_kind,
-        ]
-        try:
-            seq = _optional_non_negative_int(payload.get("seq"), operation="report_pane_agent_session")
-        except ValueError as exc:
-            raise self._failed("report_pane_agent_session", str(exc), session_name=session_name) from exc
-        if seq is not None:
-            args.extend(["--seq", str(seq)])
-        session_id = str(payload.get("session_id") or "").strip()
-        if session_id:
-            args.extend(["--agent-session-id", session_id])
-        session_path = str(payload.get("session_path") or "").strip()
-        if session_path:
-            args.extend(["--agent-session-path", session_path])
-        self._command(
-            "report_pane_agent_session",
-            args,
-            expect_json=False,
-            session_name=session_name,
-        )
-        return {
-            "status": "ok",
-            "pane_id": pane_id,
-            "provider_kind": provider_kind,
         }
 
     def _release_pane_agent(self, payload: Mapping[str, object]) -> Mapping[str, object]:
