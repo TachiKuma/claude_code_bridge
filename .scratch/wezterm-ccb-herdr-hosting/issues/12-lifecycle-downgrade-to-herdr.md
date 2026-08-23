@@ -18,6 +18,9 @@
 **Notes:** CCB 已改为声明 manifest 并通过兼容层收敛 runtime；真正把通用生命周期下放给 Herdr
 仍依赖上游原生 `runtime.ensure/event/agent_id` 能力与 Windows live validation。
 
+补充：`refresh_provider_binding` 现在会读取 Herdr `runtime_snapshot` 的 pane 归属，至少不再把目标 pane
+缺失的情况盲目视为 healthy；缺 pane 时会降为 `pane-missing`。
+
 - [ ] pane readiness/liveness/通用 restart/backoff/workspace 清理由 Herdr 负责
 - [ ] CCB 不再通过 shell/PowerShell/lifecycle 文件间接管理通用 pane 进程存活
 - [x] Provider session restore 仍由 CCB 的 Provider-specific contract 保护

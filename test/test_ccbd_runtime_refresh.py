@@ -255,3 +255,62 @@ def test_refresh_provider_binding_captures_herdr_runtime_snapshot(tmp_path: Path
         'workspaces': [{'workspace_id': 'workspace-1'}],
         'panes': [{'pane_id': '%55', 'workspace_id': 'workspace-1', 'state': 'working'}],
     }
+    assert refreshed.pane_state == 'alive'
+    assert refreshed.health == 'healthy'
+
+
+def test_refresh_provider_binding_marks_herdr_missing_pane_from_snapshot(tmp_path: Path) -> None:
+    layout = PathLayout(tmp_path / 'repo-refresh-herdr-missing')
+    runtime = _runtime(layout)
+    runtime.provider = 'herdr'
+    registry = _Registry(runtime, provider='herdr')
+
+    class _MissingPaneBackend(_FakeBackend):
+        def runtime_snapshot(self) -> dict[str, object]:
+            return {
+                'workspaces': [{'workspace_id': 'workspace-1'}],
+                'panes': [{'pane_id': '%99', 'workspace_id': 'workspace-1', 'state': 'working'}],
+            }
+
+    backend = _MissingPaneBackend()
+    session_file = layout.ccb_dir / 'agent1.session.json'
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_text('{}\n', encoding='utf-8')
+    session = _Session(
+        session_file=session_file,
+        data={
+            'terminal': 'mux',
+            'pane_id': '%41',
+            'agent_name': 'agent1',
+            'ccb_project_id': 'proj-1',
+            'ccb_session_id': 'ccb-session-new',
+            'work_dir': str(layout.workspace_path('agent1')),
+            'start_cmd': 'herdr --continue',
+            'fake_session_id': 'session-new',
+        },
+        _backend=backend,
+    )
+    session.ensure_pane = lambda: (True, '%55')  # type: ignore[method-assign]
+    binding = ProviderSessionBinding(
+        provider='herdr',
+        load_session=lambda workspace_path, instance: session,
+        session_id_attr='fake_session_id',
+        session_path_attr='fake_session_path',
+    )
+
+    refreshed = refresh_provider_binding(
+        layout=layout,
+        registry=registry,
+        session_bindings={'herdr': binding},
+        attach_runtime_fn=lambda **kwargs: SimpleNamespace(**kwargs),
+        agent_name='agent1',
+        recover=True,
+    )
+
+    assert refreshed is not None
+    assert refreshed.herdr_runtime_snapshot == {
+        'workspaces': [{'workspace_id': 'workspace-1'}],
+        'panes': [{'pane_id': '%99', 'workspace_id': 'workspace-1', 'state': 'working'}],
+    }
+    assert refreshed.pane_state == 'missing'
+    assert refreshed.health == 'pane-missing'

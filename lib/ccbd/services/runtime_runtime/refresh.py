@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from agents.models import AgentState, RuntimeBindingSource, normalize_runtime_binding_source
+from ccbd.services.health_assessment.provider_pane import health_from_pane_state
 from ccbd.services.runtime_recovery_policy import (
     PROVIDER_AUTH_REVOKED_RUNTIME_HEALTH,
     PROVIDER_RECOVERY_BLOCKED_RUNTIME_HEALTH,
@@ -115,6 +116,8 @@ def _attach_healthy_runtime(
     slot_key: str | None,
     window_id: str | None,
     workspace_epoch: int | None,
+    health: str,
+    pane_state: str | None,
 ) -> object:
     return attach_runtime_fn(
         agent_name=agent_name,
@@ -123,7 +126,7 @@ def _attach_healthy_runtime(
         pid=runtime.pid,
         runtime_ref=facts.runtime_ref or runtime.runtime_ref,
         session_ref=facts.session_ref or runtime.session_ref,
-        health='healthy',
+        health=health,
         provider=provider,
         runtime_root=facts.runtime_root,
         runtime_pid=facts.runtime_pid,
@@ -138,7 +141,7 @@ def _attach_healthy_runtime(
         pane_id=facts.pane_id,
         active_pane_id=active_pane_id,
         pane_title_marker=facts.pane_title_marker,
-        pane_state=facts.pane_state,
+        pane_state=pane_state,
         tmux_socket_name=facts.tmux_socket_name,
         tmux_socket_path=facts.tmux_socket_path,
         session_file=facts.session_file,
@@ -216,6 +219,15 @@ def refresh_provider_binding(
         provider=spec.provider,
         pane_id_override=pane_id,
     )
+    pane_state = facts.pane_state
+    health = 'healthy'
+    if str(spec.provider or '').strip().lower() == 'herdr':
+        pane_state = _herdr_snapshot_pane_state(
+            facts.herdr_runtime_snapshot,
+            pane_id=pane_id,
+        ) or pane_state
+        if pane_state is not None:
+            health = health_from_pane_state(pane_state)
     return _attach_healthy_runtime(
         attach_runtime_fn=attach_runtime_fn,
         agent_name=agent_name,
@@ -229,6 +241,8 @@ def refresh_provider_binding(
         workspace_epoch=(
             replacement_context.workspace_epoch if replacement_context is not None else getattr(runtime, 'workspace_epoch', None)
         ),
+        health=health,
+        pane_state=pane_state,
     )
 
 
@@ -242,3 +256,21 @@ def _session_ccb_session_id(session) -> str | None:
         if text:
             return text
     return None
+
+
+def _herdr_snapshot_pane_state(snapshot, *, pane_id: str | None) -> str | None:
+    if not isinstance(snapshot, dict):
+        return None
+    panes = snapshot.get('panes')
+    if not isinstance(panes, list):
+        return None
+    target_pane_id = str(pane_id or '').strip()
+    if not target_pane_id:
+        return 'alive' if any(isinstance(pane, dict) for pane in panes) else None
+    for pane in panes:
+        if not isinstance(pane, dict):
+            continue
+        current_pane_id = str(pane.get('pane_id') or '').strip()
+        if current_pane_id == target_pane_id:
+            return 'alive'
+    return 'missing'
