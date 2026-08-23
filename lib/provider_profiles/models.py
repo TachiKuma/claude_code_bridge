@@ -36,6 +36,9 @@ class ProviderProfileSpec:
     mode: str = "inherit"
     home: str | None = None
     env: dict[str, str] = field(default_factory=dict)
+    codex_config: dict[str, Any] = field(default_factory=dict)
+    codex_model_aliases: dict[str, str] = field(default_factory=dict)
+    codex_requires_openai_auth: bool | None = None
     mcp_servers: dict[str, dict[str, Any]] = field(default_factory=dict)
     plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
     inherited_skill_include: tuple[str, ...] = ()
@@ -56,6 +59,10 @@ class ProviderProfileSpec:
         home = str(self.home).strip() if self.home is not None else None
         object.__setattr__(self, 'home', home or None)
         object.__setattr__(self, 'env', {str(key): str(value) for key, value in dict(self.env).items()})
+        object.__setattr__(self, 'codex_config', _normalize_jsonish_mapping(self.codex_config))
+        object.__setattr__(self, 'codex_model_aliases', _normalize_string_mapping(self.codex_model_aliases))
+        if self.codex_requires_openai_auth is not None:
+            object.__setattr__(self, 'codex_requires_openai_auth', bool(self.codex_requires_openai_auth))
         object.__setattr__(self, 'mcp_servers', _normalize_mcp_servers(self.mcp_servers))
         object.__setattr__(self, 'plugins', _normalize_plugins(self.plugins))
         object.__setattr__(
@@ -75,6 +82,9 @@ class ProviderProfileSpec:
             'mode': self.mode,
             'home': self.home,
             'env': dict(self.env),
+            'codex_config': _clone_jsonish_mapping(self.codex_config),
+            'codex_model_aliases': dict(self.codex_model_aliases),
+            'codex_requires_openai_auth': self.codex_requires_openai_auth,
             'inherit_api': bool(self.inherit_api),
             'inherit_auth': bool(self.inherit_auth),
             'inherit_config': bool(self.inherit_config),
@@ -84,6 +94,12 @@ class ProviderProfileSpec:
         }
         if self.mcp_servers:
             payload['mcp_servers'] = _clone_jsonish_mapping(self.mcp_servers)
+        if not self.codex_config:
+            payload.pop('codex_config', None)
+        if not self.codex_model_aliases:
+            payload.pop('codex_model_aliases', None)
+        if self.codex_requires_openai_auth is None:
+            payload.pop('codex_requires_openai_auth', None)
         if self.plugins:
             payload['plugins'] = _clone_jsonish_mapping(self.plugins)
         if self.inherited_skill_include:
@@ -105,6 +121,9 @@ class ResolvedProviderProfile:
     profile_root: str | None = None
     runtime_home: str | None = None
     env: dict[str, str] = field(default_factory=dict)
+    codex_config: dict[str, Any] = field(default_factory=dict)
+    codex_model_aliases: dict[str, str] = field(default_factory=dict)
+    codex_requires_openai_auth: bool | None = None
     mcp_servers: dict[str, dict[str, Any]] = field(default_factory=dict)
     plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
     inherited_skill_include: tuple[str, ...] = ()
@@ -133,6 +152,10 @@ class ResolvedProviderProfile:
         object.__setattr__(self, 'profile_root', _normalize_path_text(self.profile_root))
         object.__setattr__(self, 'runtime_home', _normalize_path_text(self.runtime_home))
         object.__setattr__(self, 'env', {str(key): str(value) for key, value in dict(self.env).items()})
+        object.__setattr__(self, 'codex_config', _normalize_jsonish_mapping(self.codex_config))
+        object.__setattr__(self, 'codex_model_aliases', _normalize_string_mapping(self.codex_model_aliases))
+        if self.codex_requires_openai_auth is not None:
+            object.__setattr__(self, 'codex_requires_openai_auth', bool(self.codex_requires_openai_auth))
         object.__setattr__(self, 'mcp_servers', _normalize_mcp_servers(self.mcp_servers))
         object.__setattr__(self, 'plugins', _normalize_plugins(self.plugins))
         object.__setattr__(
@@ -167,6 +190,9 @@ class ResolvedProviderProfile:
             'profile_root': self.profile_root,
             'runtime_home': self.runtime_home,
             'env': dict(self.env),
+            'codex_config': _clone_jsonish_mapping(self.codex_config),
+            'codex_model_aliases': dict(self.codex_model_aliases),
+            'codex_requires_openai_auth': self.codex_requires_openai_auth,
             'inherit_api': bool(self.inherit_api),
             'inherit_auth': bool(self.inherit_auth),
             'inherit_config': bool(self.inherit_config),
@@ -176,6 +202,12 @@ class ResolvedProviderProfile:
         }
         if self.mcp_servers:
             payload['mcp_servers'] = _clone_jsonish_mapping(self.mcp_servers)
+        if not self.codex_config:
+            payload.pop('codex_config', None)
+        if not self.codex_model_aliases:
+            payload.pop('codex_model_aliases', None)
+        if self.codex_requires_openai_auth is None:
+            payload.pop('codex_requires_openai_auth', None)
         if self.plugins:
             payload['plugins'] = _clone_jsonish_mapping(self.plugins)
         if self.inherited_skill_include:
@@ -197,6 +229,9 @@ class ResolvedProviderProfile:
             profile_root=record.get('profile_root'),
             runtime_home=record.get('runtime_home'),
             env=dict(record.get('env') or {}),
+            codex_config=dict(record.get('codex_config') or {}),
+            codex_model_aliases=dict(record.get('codex_model_aliases') or {}),
+            codex_requires_openai_auth=record.get('codex_requires_openai_auth'),
             mcp_servers=dict(record.get('mcp_servers') or {}),
             plugins=dict(record.get('plugins') or {}),
             inherited_skill_include=tuple(record.get('inherited_skill_include') or ()),
@@ -289,6 +324,24 @@ def _normalize_plugins(value: object) -> dict[str, dict[str, Any]]:
             normalized[name] = _clone_jsonish_mapping(raw_payload)
         else:
             normalized[name] = {'enabled': bool(raw_payload)}
+    return normalized
+
+
+def _normalize_jsonish_mapping(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return _clone_jsonish_mapping(value)
+
+
+def _normalize_string_mapping(value: object) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    normalized: dict[str, str] = {}
+    for raw_key, raw_value in value.items():
+        key = str(raw_key or '').strip()
+        mapped = str(raw_value or '').strip()
+        if key and mapped:
+            normalized[key] = mapped
     return normalized
 
 

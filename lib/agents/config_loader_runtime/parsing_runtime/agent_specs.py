@@ -23,7 +23,14 @@ from provider_profiles import (
 
 from ..common import ALLOWED_AGENT_KEYS, ConfigValidationError
 from .agent_api import parse_agent_api_shortcut
-from .expectations import expect_bool, expect_mapping, expect_string, expect_string_list, expect_string_mapping
+from .expectations import (
+    expect_bool,
+    expect_jsonish_mapping,
+    expect_mapping,
+    expect_string,
+    expect_string_list,
+    expect_string_mapping,
+)
 from .provider_profiles import parse_provider_profile
 
 
@@ -61,6 +68,58 @@ def build_agent_spec(agent_name: str, raw: dict[str, Any]) -> AgentSpec:
                 provider_profile,
                 env={**provider_profile.env, 'model_catalog_json': model_catalog_json},
             )
+    if raw.get('model_aliases') is not None:
+        if provider != 'codex':
+            raise ConfigValidationError(
+                f'agents.{agent_name}.model_aliases is supported only for codex'
+            )
+        model_aliases = expect_string_mapping(
+            raw['model_aliases'],
+            field_name=f'agents.{agent_name}.model_aliases',
+        )
+        overlapping = sorted(set(provider_profile.codex_model_aliases) & set(model_aliases))
+        conflicts = [
+            alias
+            for alias in overlapping
+            if provider_profile.codex_model_aliases.get(alias) != model_aliases.get(alias)
+        ]
+        if conflicts:
+            joined = ', '.join(conflicts)
+            raise ConfigValidationError(
+                f'agents.{agent_name}.model_aliases conflicts with '
+                f'agents.{agent_name}.provider_profile.model_aliases: {joined}'
+            )
+        provider_profile = replace(
+            provider_profile,
+            codex_model_aliases={**provider_profile.codex_model_aliases, **model_aliases},
+        )
+    if raw.get('codex_config') is not None:
+        if provider != 'codex':
+            raise ConfigValidationError(
+                f'agents.{agent_name}.codex_config is supported only for codex'
+            )
+        provider_profile = replace(
+            provider_profile,
+            codex_config=_merge_mapping(
+                provider_profile.codex_config,
+                expect_jsonish_mapping(raw['codex_config'], field_name=f'agents.{agent_name}.codex_config'),
+            ),
+        )
+    if raw.get('requires_openai_auth') is not None:
+        if provider != 'codex':
+            raise ConfigValidationError(
+                f'agents.{agent_name}.requires_openai_auth is supported only for codex'
+            )
+        configured = expect_bool(raw['requires_openai_auth'], field_name=f'agents.{agent_name}.requires_openai_auth')
+        if (
+            provider_profile.codex_requires_openai_auth is not None
+            and provider_profile.codex_requires_openai_auth != configured
+        ):
+            raise ConfigValidationError(
+                f'agents.{agent_name}.requires_openai_auth conflicts with '
+                f'agents.{agent_name}.provider_profile.requires_openai_auth'
+            )
+        provider_profile = replace(provider_profile, codex_requires_openai_auth=configured)
     _validate_provider_profile_runtime_home(agent_name, provider=provider, provider_profile=provider_profile)
     if api != AgentApiSpec():
         provider_profile = _apply_agent_api_shortcut(
@@ -235,6 +294,11 @@ def _apply_agent_api_shortcut(
         mode=provider_profile.mode,
         home=provider_profile.home,
         env={**provider_profile.env, **api_env},
+        codex_config=dict(provider_profile.codex_config),
+        codex_model_aliases=dict(provider_profile.codex_model_aliases),
+        codex_requires_openai_auth=provider_profile.codex_requires_openai_auth,
+        mcp_servers=dict(provider_profile.mcp_servers),
+        plugins=dict(provider_profile.plugins),
         inherit_api=False,
         inherit_auth=inherit_auth,
         inherit_config=inherit_config,
@@ -245,6 +309,17 @@ def _apply_agent_api_shortcut(
         inherit_commands=provider_profile.inherit_commands,
         inherit_memory=provider_profile.inherit_memory,
     )
+
+
+def _merge_mapping(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in override.items():
+        existing = merged.get(key)
+        if isinstance(existing, dict) and isinstance(value, dict):
+            merged[key] = _merge_mapping(existing, value)
+        else:
+            merged[key] = value
+    return merged
 
 
 def _ensure_no_api_env_conflict(

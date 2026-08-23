@@ -42,6 +42,12 @@ def update_optional_agent_fields(payload: dict[str, object], spec) -> None:
     model_catalog_json = spec.provider_profile.env.get('model_catalog_json')
     if model_catalog_json is not None:
         payload['model_catalog_json'] = model_catalog_json
+    if spec.provider == 'codex' and spec.provider_profile.codex_model_aliases:
+        payload['model_aliases'] = dict(spec.provider_profile.codex_model_aliases)
+    if spec.provider == 'codex' and spec.provider_profile.codex_config:
+        payload['codex_config'] = dict(spec.provider_profile.codex_config)
+    if spec.provider == 'codex' and spec.provider_profile.codex_requires_openai_auth is not None:
+        payload['requires_openai_auth'] = spec.provider_profile.codex_requires_openai_auth
     if spec.thinking is not None:
         payload['thinking'] = spec.thinking
     startup_args = _config_startup_args(spec)
@@ -111,6 +117,12 @@ def _provider_profile_config_dict(spec) -> dict[str, object] | None:
         payload['home'] = profile.home
     if filtered_env:
         payload['env'] = filtered_env
+    if spec.provider != 'codex' and profile.codex_model_aliases:
+        payload['model_aliases'] = dict(profile.codex_model_aliases)
+    if spec.provider != 'codex' and profile.codex_config:
+        payload['codex_config'] = dict(profile.codex_config)
+    if spec.provider != 'codex' and profile.codex_requires_openai_auth is not None:
+        payload['requires_openai_auth'] = profile.codex_requires_openai_auth
     if profile.mcp_servers:
         payload['mcp_servers'] = dict(profile.mcp_servers)
     if profile.plugins:

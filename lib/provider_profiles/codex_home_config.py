@@ -137,6 +137,7 @@ def materialize_codex_home_config(
     memory_projection_event_path: Path | None = None,
     memory_projection_marker_path: Path | None = None,
     model: str | None = None,
+    model_aliases: dict[str, str] | None = None,
     model_catalog_json: str | None = None,
 ) -> Path:
     target_home = Path(target_home).expanduser()
@@ -191,6 +192,7 @@ def materialize_codex_home_config(
             workspace_path=workspace_path,
         )
 
+    _merge_codex_config_overrides(target_config, _profile_codex_config(profile))
     _install_role_command_mcp_server(
         target_config,
         command_policy=command_policy,
@@ -216,6 +218,7 @@ def materialize_codex_home_config(
             source_home,
             target_home,
             required_names=(model_catalog_name,),
+            model_aliases=model_aliases or _profile_codex_model_aliases(profile),
         )
     if model is not None:
         _set_codex_model(target_config, model)
@@ -357,9 +360,12 @@ def codex_api_authority(profile) -> CodexApiAuthority | None:
     base_url = env.get('OPENAI_BASE_URL') or env.get('OPENAI_API_BASE') or ''
     if not base_url:
         return None
+    configured_openai_auth = getattr(profile, 'codex_requires_openai_auth', None)
     return CodexApiAuthority(
         provider_id=_CODEX_CUSTOM_PROVIDER_ID,
         base_url=base_url,
+        # 未显式配置时保留 CodexApiAuthority 的默认 True，仅在 profile 显式设置时覆盖
+        requires_openai_auth=(bool(configured_openai_auth) if configured_openai_auth is not None else True),
     )
 
 
@@ -918,6 +924,30 @@ def _merge_codex_plugin_overrides(payload: dict[str, object], *, profile) -> Non
     payload['plugins'] = existing
 
 
+def _merge_codex_config_overrides(target_config: Path, overrides: dict[str, object]) -> None:
+    if not overrides:
+        return
+    payload = _read_source_config_payload(target_config)
+    merged = _deep_merge_mapping(payload, overrides)
+    target_config.write_text(_render_toml_document(merged), encoding='utf-8')
+
+
+def _profile_codex_config(profile) -> dict[str, object]:
+    raw = getattr(profile, 'codex_config', {}) if profile is not None else {}
+    return _clone_mapping(raw) if isinstance(raw, dict) else {}
+
+
+def _profile_codex_model_aliases(profile) -> dict[str, str]:
+    raw = getattr(profile, 'codex_model_aliases', {}) if profile is not None else {}
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        str(alias).strip(): str(source).strip()
+        for alias, source in raw.items()
+        if str(alias).strip() and str(source).strip()
+    }
+
+
 def _profile_plugins(profile) -> dict[str, dict[str, object]]:
     raw = getattr(profile, 'plugins', {}) if profile is not None else {}
     if not isinstance(raw, dict):
@@ -1063,6 +1093,18 @@ def _clone_mapping(payload: dict[str, object]) -> dict[str, object]:
     return {str(key): _clone_payload(value) for key, value in payload.items()}
 
 
+def _deep_merge_mapping(base: dict[str, object], override: dict[str, object]) -> dict[str, object]:
+    merged = _clone_mapping(base)
+    for raw_key, value in override.items():
+        key = str(raw_key)
+        existing = merged.get(key)
+        if isinstance(existing, dict) and isinstance(value, dict):
+            merged[key] = _deep_merge_mapping(existing, value)
+        else:
+            merged[key] = _clone_payload(value)
+    return merged
+
+
 def _clone_payload(value: object) -> object:
     if isinstance(value, dict):
         return _clone_mapping(value)
@@ -1194,6 +1236,7 @@ def _materialize_config_sidecars(
     target_home: Path,
     *,
     required_names: tuple[str, ...],
+    model_aliases: dict[str, str] | None = None,
 ) -> None:
     for name in sorted(set(required_names)):
         source = Path(source_home).expanduser() / name
@@ -1212,6 +1255,63 @@ def _materialize_config_sidecars(
                 f'Codex model catalog file is missing: {source} '
                 f'(expected managed file: {target})'
             )
+        _materialize_model_catalog_aliases(target, model_aliases or {})
+
+
+def _materialize_model_catalog_aliases(catalog_path: Path, aliases: dict[str, str]) -> None:
+    normalized_aliases = {
+        str(alias).strip(): str(source).strip()
+        for alias, source in dict(aliases).items()
+        if str(alias).strip() and str(source).strip()
+    }
+    if not normalized_aliases:
+        return
+    try:
+        payload = json.loads(Path(catalog_path).read_text(encoding='utf-8'))
+    except Exception as exc:
+        raise RuntimeError(f'Codex model catalog is not valid JSON: {catalog_path}') from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get('models'), list):
+        raise RuntimeError(f'Codex model catalog does not contain a models list: {catalog_path}')
+    models = payload['models']
+    by_slug = {
+        str(item.get('slug') or ''): item
+        for item in models
+        if isinstance(item, dict) and str(item.get('slug') or '').strip()
+    }
+    changed = False
+    for alias, source_slug in normalized_aliases.items():
+        source_model = by_slug.get(source_slug)
+        if source_model is None:
+            raise RuntimeError(
+                f'Codex model alias {alias} references missing catalog model {source_slug}: {catalog_path}'
+            )
+        aliased_model = _clone_mapping(source_model)
+        aliased_model['slug'] = alias
+        aliased_model.setdefault('display_name', alias)
+        if by_slug.get(alias) == aliased_model:
+            continue
+        if alias in by_slug:
+            models[:] = [
+                aliased_model if isinstance(item, dict) and str(item.get('slug') or '') == alias else item
+                for item in models
+            ]
+        else:
+            try:
+                source_index = next(
+                    index
+                    for index, item in enumerate(models)
+                    if isinstance(item, dict) and str(item.get('slug') or '') == source_slug
+                )
+            except StopIteration:  # pragma: no cover - guarded by by_slug above
+                source_index = len(models) - 1
+            models.insert(source_index + 1, aliased_model)
+        by_slug[alias] = aliased_model
+        changed = True
+    if changed:
+        atomic_write_text(
+            Path(catalog_path),
+            json.dumps(payload, ensure_ascii=False, indent=2) + '\n',
+        )
 
 
 def _set_codex_model_catalog_json(target_config: Path, name: str) -> None:

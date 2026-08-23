@@ -53,8 +53,38 @@ def expect_string_mapping(value: Any, *, field_name: str) -> dict[str, str]:
     return result
 
 
+def expect_jsonish_mapping(value: Any, *, field_name: str) -> dict[str, Any]:
+    raw = expect_mapping(value, field_name=field_name)
+    return {
+        str(key): _expect_jsonish(item, field_name=f'{field_name}.{key}')
+        for key, item in raw.items()
+        if _validate_jsonish_key(key, field_name=field_name)
+    }
+
+
+def _validate_jsonish_key(key: object, *, field_name: str) -> bool:
+    if not isinstance(key, str) or not key.strip():
+        raise ConfigValidationError(f'{field_name} keys must be non-empty strings')
+    return True
+
+
+def _expect_jsonish(value: Any, *, field_name: str) -> Any:
+    if isinstance(value, (str, bool, int, float)) or value is None:
+        return value
+    if isinstance(value, list):
+        return [_expect_jsonish(item, field_name=f'{field_name}[]') for item in value]
+    if isinstance(value, dict):
+        return {
+            str(key): _expect_jsonish(item, field_name=f'{field_name}.{key}')
+            for key, item in value.items()
+            if _validate_jsonish_key(key, field_name=field_name)
+        }
+    raise ConfigValidationError(f'{field_name} must be a TOML scalar, list, or table')
+
+
 __all__ = [
     'expect_bool',
+    'expect_jsonish_mapping',
     'expect_mapping',
     'expect_string',
     'expect_string_list',

@@ -1264,6 +1264,53 @@ startup_args = ["--search"]
     assert spec.startup_args == ('-m', 'gpt-5', '--search')
 
 
+def test_load_project_config_supports_codex_model_aliases_and_config_overrides(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-codex-config-overrides'
+    _write(
+        project_root / '.ccb' / 'ccb.config',
+        '''cmd; agent1:codex
+
+[agents.agent1]
+model = "deepseek-v4-flash"
+model_catalog_json = "models.json"
+model_aliases = { "deepseek-v4-flash" = "deepseek-v4-flash-0731" }
+requires_openai_auth = true
+key = "profile-key"
+url = "https://api.rootflowai.com"
+
+[agents.agent1.codex_config]
+model_reasoning_effort = "high"
+disable_response_storage = true
+
+[agents.agent1.codex_config.tui.model_availability_nux]
+"gpt-5.5" = 4
+"gpt-5.6-sol" = 4
+''',
+    )
+
+    spec = load_project_config(project_root).config.agents['agent1']
+
+    assert spec.model == 'deepseek-v4-flash'
+    assert spec.provider_profile.env['model_catalog_json'] == 'models.json'
+    assert spec.provider_profile.codex_model_aliases == {
+        'deepseek-v4-flash': 'deepseek-v4-flash-0731',
+    }
+    assert spec.provider_profile.codex_requires_openai_auth is True
+    assert spec.provider_profile.codex_config == {
+        'model_reasoning_effort': 'high',
+        'disable_response_storage': True,
+        'tui': {
+            'model_availability_nux': {
+                'gpt-5.5': 4,
+                'gpt-5.6-sol': 4,
+            },
+        },
+    }
+    assert spec.provider_profile.inherit_api is False
+    assert spec.provider_profile.inherit_auth is False
+    assert spec.provider_profile.inherit_config is False
+
+
 @pytest.mark.parametrize(
     ('provider', 'model_name', 'thinking', 'expected_startup_args'),
     [
@@ -2700,6 +2747,64 @@ ANTHROPIC_BASE_URL = "https://claude.example.test"
     assert spec.provider_profile.env == {
         'ANTHROPIC_API_KEY': 'claude-key',
         'ANTHROPIC_BASE_URL': 'https://claude.example.test',
+    }
+
+
+def test_render_project_config_text_round_trips_codex_model_aliases_and_config_overrides(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / 'repo-render-codex-profile'
+    config_path = project_root / '.ccb' / 'ccb.config'
+    _write(
+        config_path,
+        '''cmd; agent1:codex
+
+[agents.agent1]
+model = "deepseek-v4-flash"
+model_catalog_json = "models.json"
+model_aliases = { "deepseek-v4-flash" = "deepseek-v4-flash-0731" }
+requires_openai_auth = true
+
+[agents.agent1.codex_config]
+model_reasoning_effort = "high"
+disable_response_storage = true
+
+[agents.agent1.codex_config.tui.model_availability_nux]
+"gpt-5.5" = 4
+"gpt-5.6-sol" = 4
+''',
+    )
+
+    loaded = load_project_config(project_root)
+    rendered = render_project_config_text(loaded.config)
+
+    assert '[agents.agent1.codex_config]' in rendered
+    assert '[agents.agent1.model_aliases]' in rendered
+    assert 'deepseek-v4-flash = "deepseek-v4-flash-0731"' in rendered
+    assert 'requires_openai_auth = true' in rendered
+    assert 'model_reasoning_effort = "high"' in rendered
+    assert 'disable_response_storage = true' in rendered
+
+    rewritten_path = tmp_path / 'repo-render-codex-profile-roundtrip' / '.ccb' / 'ccb.config'
+    _write(rewritten_path, rendered)
+
+    round_tripped = load_project_config(rewritten_path.parents[1])
+    spec = round_tripped.config.agents['agent1']
+    assert spec.model == 'deepseek-v4-flash'
+    assert spec.provider_profile.env['model_catalog_json'] == 'models.json'
+    assert spec.provider_profile.codex_model_aliases == {
+        'deepseek-v4-flash': 'deepseek-v4-flash-0731',
+    }
+    assert spec.provider_profile.codex_requires_openai_auth is True
+    assert spec.provider_profile.codex_config == {
+        'model_reasoning_effort': 'high',
+        'disable_response_storage': True,
+        'tui': {
+            'model_availability_nux': {
+                'gpt-5.5': 4,
+                'gpt-5.6-sol': 4,
+            },
+        },
     }
 
 

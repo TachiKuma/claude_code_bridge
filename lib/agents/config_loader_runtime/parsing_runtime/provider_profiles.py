@@ -5,7 +5,14 @@ from typing import Any
 from agents.models import ProviderProfileSpec, SkillOverlaySpec
 
 from ..common import ALLOWED_PROVIDER_PROFILE_KEYS, ConfigValidationError
-from .expectations import expect_bool, expect_mapping, expect_string, expect_string_list, expect_string_mapping
+from .expectations import (
+    expect_bool,
+    expect_jsonish_mapping,
+    expect_mapping,
+    expect_string,
+    expect_string_list,
+    expect_string_mapping,
+)
 
 
 def parse_provider_profile(agent_name: str, value: Any) -> ProviderProfileSpec:
@@ -30,6 +37,22 @@ def parse_provider_profile(agent_name: str, value: Any) -> ProviderProfileSpec:
             env=expect_string_mapping(
                 raw.get('env', {}),
                 field_name=f'agents.{agent_name}.provider_profile.env',
+            ),
+            codex_config=expect_jsonish_mapping(
+                raw.get('codex_config', {}),
+                field_name=f'agents.{agent_name}.provider_profile.codex_config',
+            ),
+            codex_model_aliases=expect_string_mapping(
+                raw.get('codex_model_aliases', raw.get('model_aliases', {})),
+                field_name=f'agents.{agent_name}.provider_profile.model_aliases',
+            ),
+            codex_requires_openai_auth=(
+                expect_bool(
+                    raw.get('codex_requires_openai_auth', raw.get('requires_openai_auth')),
+                    field_name=f'agents.{agent_name}.provider_profile.requires_openai_auth',
+                )
+                if raw.get('codex_requires_openai_auth') is not None or raw.get('requires_openai_auth') is not None
+                else None
             ),
             mcp_servers=expect_mapping(
                 raw.get('mcp_servers', {}),

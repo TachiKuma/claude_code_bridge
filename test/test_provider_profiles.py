@@ -1804,6 +1804,86 @@ def test_materialize_codex_profile_writes_agent_local_provider_config_for_explic
     assert (runtime_home / '.tmp' / 'plugins' / 'plugins' / 'weatherpromise' / 'skills' / 'weatherpromise' / 'SKILL.md').read_text(encoding='utf-8') == 'plugin skill explicit\n'
 
 
+def test_materialize_codex_profile_applies_config_overrides_and_model_aliases(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project_root = tmp_path / 'repo'
+    source_home = tmp_path / 'system-codex-home'
+    source_home.mkdir(parents=True, exist_ok=True)
+    (source_home / 'config.toml').write_text('model = "gpt-5"\n', encoding='utf-8')
+    (source_home / 'models.json').write_text(
+        json.dumps(
+            {
+                'models': [
+                    {
+                        'slug': 'deepseek-v4-flash-0731',
+                        'display_name': 'DeepSeek V4 Flash 0731',
+                        'context_window': 1048576,
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        )
+        + '\n',
+        encoding='utf-8',
+    )
+    monkeypatch.setenv('CODEX_HOME', str(source_home))
+
+    profile = materialize_provider_profile(
+        layout=PathLayout(project_root),
+        spec=_spec(
+            'agent2',
+            provider_profile=ProviderProfileSpec(
+                mode='isolated',
+                env={
+                    'OPENAI_API_KEY': 'profile-key',
+                    'OPENAI_BASE_URL': 'https://api.rootflowai.com',
+                    'model_catalog_json': 'models.json',
+                },
+                codex_model_aliases={
+                    'deepseek-v4-flash': 'deepseek-v4-flash-0731',
+                },
+                codex_requires_openai_auth=True,
+                codex_config={
+                    'model_reasoning_effort': 'high',
+                    'disable_response_storage': True,
+                    'tui': {
+                        'model_availability_nux': {
+                            'gpt-5.5': 4,
+                            'gpt-5.6-sol': 4,
+                        },
+                    },
+                },
+                inherit_api=False,
+                inherit_auth=False,
+                inherit_config=False,
+            ),
+            model='deepseek-v4-flash',
+        ),
+        workspace_path=project_root,
+    )
+
+    runtime_home = Path(profile.runtime_home or '')
+    config_payload = tomllib.loads((runtime_home / 'config.toml').read_text(encoding='utf-8'))
+    assert config_payload['model_provider'] == 'custom'
+    assert config_payload['model'] == 'deepseek-v4-flash'
+    assert config_payload['model_catalog_json'] == 'models.json'
+    assert config_payload['model_reasoning_effort'] == 'high'
+    assert config_payload['disable_response_storage'] is True
+    assert config_payload['model_providers']['custom']['requires_openai_auth'] is True
+    assert config_payload['tui']['model_availability_nux'] == {
+        'gpt-5.5': 4,
+        'gpt-5.6-sol': 4,
+    }
+    catalog_payload = json.loads((runtime_home / 'models.json').read_text(encoding='utf-8'))
+    slugs = [model['slug'] for model in catalog_payload['models']]
+    assert slugs == ['deepseek-v4-flash-0731', 'deepseek-v4-flash']
+    aliased = catalog_payload['models'][1]
+    assert aliased['display_name'] == 'DeepSeek V4 Flash 0731'
+    assert aliased['context_window'] == 1048576
+
+
 def test_materialize_codex_profile_projects_explicit_model_catalog_without_api_base(
     tmp_path: Path,
 ) -> None:
