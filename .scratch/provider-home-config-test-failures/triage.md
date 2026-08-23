@@ -6,14 +6,19 @@
 - 关联：`.scratch/wezterm-ccb-herdr-hosting/spec.md`（v2，**不含**本文件内容）
 - 语言：简体中文（见 `AGENTS.md`）
 
+> ⚠️ **订正（2026-08-23，据并发 archi/codex 线的 `followup.md`）**：本文件对 **#4** 的根因判断
+> （「指纹不一致」）**已被证伪**。实测真因是 **Windows 长路径（MAX_PATH 260）**——详见下文 #4 条目
+> 与同目录 `followup.md`。其余条目结论不变。
+
 ## 一句话结论
 
 这 12 个失败全部落在 **CCB 层的 provider-home 物化 / project-config 权威 / 凭据所有权 / shell-path
 子域**，**没有一个**触及 WezTerm（Frontend Surface）或 Herdr（Host Runtime）运行时托管边界。
 它们**对 v2 spec 零影响**（代码不重叠、无 blocking edge），**不并入 v2 范围**。
 
-其中 **10 个是仅本机环境导致**（Windows / Py3.14 下测试的 posix 假设失配），**2 个是疑似真·跨平台
-bug**（#4、#5）。
+初判 **10 环境 + 2 真 bug（#4、#5）**；**经 `followup.md` 订正后为 11 环境/平台相关 + 1 真跨平台
+bug**——**#4 实为 Windows 长路径（MAX_PATH）**问题（归环境/平台），仅 **#5** 是与 OS 无关的可移植性
+真 bug。
 
 ## 分类表
 
@@ -22,7 +27,7 @@ bug**（#4、#5）。
 | 1 | shell_path_prefers_project_command_shims | shell-path | 环境 | Windows `os.pathsep=';'`，源策略冒号路径不被拆 |
 | 2 | shell_path_supports_missing_user_policy | shell-path | 环境 | 同 #1 |
 | 3 | codex…disables_external_migration_without_toml_reader | provider-home 物化 | 环境 | Windows 反斜杠 TOML 转义 vs 断言单反斜杠 |
-| 4 | **codex…refreshes_plugin_projection_without_sha_marker** | provider-home 物化 | **真 bug** | 插件 bundle 内容寻址不一致：`plugins.sha` 与目录名用了两个不同指纹 |
+| 4 | **codex…refreshes_plugin_projection_without_sha_marker** | provider-home 物化 | **真 bug（订正）** | ~~指纹不一致~~ → 真因：**Windows 长路径**，深层 basetemp 达 277 字符，`copytree` 抛 WinError 206 → bundle 未创建。详见 `followup.md` |
 | 5 | **claude…owned_credentials_symlink_during_keychain_refresh** | 凭据所有权 | **真 bug（边界/低危）** | `_relative_to_home` 未 posix 归一，反斜杠 vs manifest `/` → keychain `-U` 刷新被跳过 |
 | 6 | claude…removes_only_source_owned_auth_after_logout | 凭据所有权 | 环境 | Windows 无 POSIX 权限位，`chmod(0o600)` 不生效 |
 | 7 | gemini…removes_only_source_owned_auth_after_logout | 凭据所有权 | 环境 | 同 #6 |
@@ -41,10 +46,13 @@ bug**（#4、#5）。
 
 ### 真 bug（2 个）→ `/diagnosing-bugs`
 
-- **#4（较确定，复现稳、与 OS 无关）**：codex 插件 bundle 目录命名与写入 `plugins.sha` 的指纹来源
-  不一致，产生「marker 存在但 bundle 目录不存在」。
-  - 入手 seam：`lib/provider_profiles/codex_home_config.py` 的 `_codex_plugin_bundle_sha` 与插件
-    投影例程（约 1721–1786 行）——让**目录命名与 `plugins.sha` 用同一指纹**（一次计算、同值复用）。
+- **#4（根因已订正，见 `followup.md`）**：**并非**指纹不一致；真因是 **Windows 长路径（MAX_PATH
+  260）**——HEAD 版 `copy_projected_tree_to_cache` 在 bundle 同目录建 `.name.tmp`，pytest 深层
+  basetemp 使路径达 277 字符，`shutil.copytree` 抛 WinError 206 → bundle 目录未创建 → 测试红。
+  故它其实是 **Windows 环境相关**，非「与 OS 无关」。
+  - 修复（archi/codex 线已在工作区完成，未入库）：改用系统 TEMP 短路径 `tempfile.mkdtemp` + `shutil.move`
+    （避开 206，同时规避跨盘 rename 的 WinError 18）。seam：`lib/provider_core/projected_assets.py`
+    的 `copy_projected_tree_to_cache`。
 - **#5（边界、低危）**：auth-projection manifest 相对路径未 posix 归一，连带 keychain `-U` 刷新被
   跳过。
   - 入手 seam：claude launcher 的 `_relative_to_home`——manifest key 统一 `Path.as_posix()`，读写
