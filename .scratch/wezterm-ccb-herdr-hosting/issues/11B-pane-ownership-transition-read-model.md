@@ -5,19 +5,25 @@
 
 **Blocked by：** 10C（重连重读 snapshot）、11A（runtime_status 组装边界）
 
-**Status:** ready-for-agent-after-10C
+**Status:** done
 
-**Evidence to inspect：** `lib/ccbd/project_view/service.py`、
-`lib/ccbd/services/runtime_runtime/refresh.py`、`test/test_ccbd_project_view.py`、
-`test/test_ccbd_runtime_refresh.py`
+**Evidence to inspect：** `lib/ccbd/project_view/runtime_status.py`、
+`lib/ccbd/project_view/service.py`、
+`lib/ccbd/services/runtime_runtime/refresh.py`、
+`test/test_ccbd_project_view.py`、
+`test/test_ccbd_runtime_refresh.py`、
+`test/test_herdr_runtime_contracts.py`
 
-- [ ] pane_id 改变时旧 pane 状态不沿用
-- [ ] snapshot 出现目标 pane 但无匹配记录时，不回退 root summary
-- [ ] 乱序/重复事件不改变当前投影
-- [ ] 重连后 `runtime_status.cache_key` 跟随 generation/pane_id 改变
-- [ ] Provider/job/lifecycle 字段不被 Herdr `done` 误判为业务完成
+- [x] pane_id 改变时旧 pane 状态不沿用
+- [x] snapshot 出现目标 pane 但无匹配记录时，不回退 root summary
+- [x] 乱序/重复事件不改变当前投影
+- [x] 重连后 `runtime_status.cache_key` 跟随 generation/pane_id 改变
+- [x] Provider/job/lifecycle 字段不被 Herdr `done` 误判为业务完成
 
 **Validation：**
 
 - `pytest test/test_ccbd_project_view.py test/test_ccbd_runtime_refresh.py`
 
+**Evidence:** `test/test_ccbd_project_view.py`、
+`test/test_ccbd_runtime_refresh.py`、
+`test/test_herdr_runtime_contracts.py`
