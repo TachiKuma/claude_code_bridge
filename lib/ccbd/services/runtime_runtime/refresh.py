@@ -118,6 +118,7 @@ def _attach_healthy_runtime(
     workspace_epoch: int | None,
     health: str,
     pane_state: str | None,
+    herdr_runtime_snapshot: dict[str, object] | None,
 ) -> object:
     return attach_runtime_fn(
         agent_name=agent_name,
@@ -137,7 +138,7 @@ def _attach_healthy_runtime(
         namespace_restore_token_present=facts.namespace_restore_token_present,
         herdr_auto_restore_mode=facts.herdr_auto_restore_mode,
         herdr_agent_state_ref=facts.herdr_agent_state_ref,
-        herdr_runtime_snapshot=facts.herdr_runtime_snapshot,
+        herdr_runtime_snapshot=herdr_runtime_snapshot,
         pane_id=facts.pane_id,
         active_pane_id=active_pane_id,
         pane_title_marker=facts.pane_title_marker,
@@ -222,11 +223,23 @@ def refresh_provider_binding(
     pane_state = facts.pane_state
     health = 'healthy'
     if _is_herdr_provider(spec.provider):
-        pane_state = _herdr_snapshot_pane_state(
-            facts.herdr_runtime_snapshot,
+        herdr_snapshot = facts.herdr_runtime_snapshot
+        herdr_pane_state = _herdr_snapshot_pane_state(
+            herdr_snapshot,
             pane_id=pane_id,
         )
-        health = _herdr_health_from_pane_state(pane_state)
+        if herdr_pane_state == 'unknown':
+            # 无 Herdr fact：保持兼容层、暴露 fallback reason，状态不伪装为 healthy
+            herdr_snapshot = {
+                'schema_version': 1,
+                'runtime_state': 'unknown',
+                'source': 'herdr_refresh',
+                'fallback_reason': 'herdr_snapshot_unavailable',
+            }
+        pane_state = herdr_pane_state
+        health = _herdr_health_from_pane_state(herdr_pane_state)
+    else:
+        herdr_snapshot = facts.herdr_runtime_snapshot
     return _attach_healthy_runtime(
         attach_runtime_fn=attach_runtime_fn,
         agent_name=agent_name,
@@ -242,6 +255,7 @@ def refresh_provider_binding(
         ),
         health=health,
         pane_state=pane_state,
+        herdr_runtime_snapshot=herdr_snapshot,
     )
 
 

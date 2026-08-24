@@ -38,6 +38,10 @@
 结构化表达；上游缺能力时 CCB 兼容层保持可用且 reason 可观测，schema/能力不匹配仍 fail-closed，
 证据来自握手 server_info 不再回退临时 capability 文件；12B/12C 的下放决策将消费该契约。
 
+已收口（12B）：readiness/liveness 以 Herdr `runtime_snapshot` 为事实源，区分
+alive/missing/unknown（unknown 不视为 healthy）；无 Herdr fact 时保持兼容层并暴露
+`fallback_reason=herdr_snapshot_unavailable`；通用 pane 崩溃不伪造 Provider session 已恢复。
+
 已记录的验证：
 
 - `python -m compileall ...` 通过。

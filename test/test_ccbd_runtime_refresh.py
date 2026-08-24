@@ -362,6 +362,11 @@ def test_refresh_provider_binding_marks_herdr_unknown_when_snapshot_unavailable(
     )
 
     assert refreshed is not None
-    assert refreshed.herdr_runtime_snapshot is None
+    assert refreshed.herdr_runtime_snapshot == {
+        'schema_version': 1,
+        'runtime_state': 'unknown',
+        'source': 'herdr_refresh',
+        'fallback_reason': 'herdr_snapshot_unavailable',
+    }
     assert refreshed.pane_state == 'unknown'
     assert refreshed.health == 'unknown'
