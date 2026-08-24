@@ -6,7 +6,7 @@
 
 **Blocked by：** 12A（agent_id_authority capability）、Windows live validation 环境
 
-**Status:** blocked-upstream
+**Status:** wontfix（源码验证：Herdr 无 agent_id 权威，见 ADR 0001 修订）
 
 **Evidence to inspect：** `lib/platforms/windows/herdr/runtime/contracts.py`、
 `lib/platforms/windows/herdr/runtime/client.py`、`.ccb/agents/*/runtime.json`、

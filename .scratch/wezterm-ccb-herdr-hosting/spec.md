@@ -42,8 +42,9 @@
 alive/missing/unknown（unknown 不视为 healthy）；无 Herdr fact 时保持兼容层并暴露
 `fallback_reason=herdr_snapshot_unavailable`；通用 pane 崩溃不伪造 Provider session 已恢复。
 
-上游阻塞节点（未收口）：12C（Herdr 原生 restart/backoff/cleanup 能力）、13A（Herdr
-`agent_id` 权威需实机验证）、13B（删除 CCB 主动补 agent 身份路径，阻塞于 13A）。
+收束为 wontfix（2026-08-24，源码验证）：12C（Herdr 原生 restart/backoff/cleanup 能力）、13A（Herdr
+`agent_id` 权威）、13B（删除 CCB 主动补 agent 身份路径）经 Herdr 源码验证判为 **`wontfix`（已被
+ADR 0001 修订取代）**，不再挂 blocked-upstream——详见下文与 `docs/adr/0001` 修订节。
 
 实机探针（2026-08-24）：已在实机连上运行中的 Herdr 0.8.2（protocol 20），直接查其原生 API
 （`herdr api schema --json` / `api snapshot` / `agent list`，绕过 CCB 硬编码兼容层）。证据表明这三个
@@ -55,6 +56,15 @@ CCB→Herdr（`pane.report_agent` push），Herdr 不铸造 agent_id；生命周
 `plans/architecture-optimization/topics/herdr-0.8.2-native-capability-probe.md` 及
 `live-validation/agent-id-authority.json`、`archi-hotspot-baseline.json`。
 
+源码验证（2026-08-24）：进一步读 Herdr 源码（`E:\GitHub开源项目\herdr-master`，271 Rust 文件）确认，
+这三个节点不仅是「当前版本缺能力」，而是**方向性误设**：Herdr 架构上是**观测式状态聚合器**——
+`Agent` 是种类枚举（`src/detect/mod.rs:43`）、无实例 id，respawn 时主动清身份
+（`clear_agent_runtime_identity_after_respawn`），并从 CCB 与 agent 自带 hook 等**对等来源接收**
+agent 状态（`handle_pane_report_agent`），仅有 shell 级 `respawn_shell_on_exit` 而无 agent 重启策略。
+故 **agent 身份与 pane 重启/backoff 恒属 CCB，不下放 Herdr**；12C/13A/13B 判为 `wontfix`。已据此
+更新 `docs/adr/0001` 修订节与 `CONTEXT.md`（新增 `observational state aggregator`、
+`agent identity authority` 词条）。
+
 已收口（13C 门禁脚手架，2026-08-24）：Phase 5 删除治理从散文约定收敛为**可重跑、fail-closed
 的删除门禁**——`scripts/phase5_deletion_gate.py` 逐项校验 characterization test 与 live validation
 证据（须 `passed=true` + 非空 `evidence`），任一缺失即整体 blocked 并退出非零；配套
@@ -65,7 +75,8 @@ rollback 条件）。门禁脚手架不删除任何业务代码；对当前仓�
 
 本轮批量截至 2026-08-24 关闭：01–13 主节点及全部子节点中，01–09、10、10A、10C、11、11A、11B
 为前期关闭；10B、11C、12A、12B 为本轮新增关闭；13C 门禁脚手架本轮落地（可重跑 fail-closed
-门禁，不删业务代码，对当前仓库如实报 blocked）；12C、13A、13B 为上游阻塞（已审计记录）。
+门禁，不删业务代码，对当前仓库如实报 blocked）；12C、13A、13B 经实机+源码验证判为 `wontfix`
+（已被 ADR 0001 修订取代，非上游阻塞）。至此本批次 01–13 全部收束。
 
 已记录的验证：
 

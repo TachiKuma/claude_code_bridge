@@ -5,7 +5,7 @@
 
 **Blocked by：** 13A（Herdr agent_id 权威确认）
 
-**Status:** blocked-by-13A
+**Status:** wontfix（源码验证：report_pane_agent 是对等权威来源、非历史补丁，删除有害，见 ADR 0001 修订）
 
 **Evidence to inspect：** `lib/platforms/windows/herdr/lifecycle_bridge.py`、
 `lib/platforms/windows/herdr/backend.py`、`lib/platforms/windows/herdr/runtime/client.py`、

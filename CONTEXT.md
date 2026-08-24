@@ -42,14 +42,17 @@ _Avoid_: model, provider name
 ### Host Runtime（运行时事实源 / 宿主运行时）
 
 即 **Herdr**。负责让终端、workspace、pane 和 agent 状态长期存在，并作为 **physical pane
-owner** 管理 pane 进程的启动、就绪、退出、重启、attach、布局、焦点。
+owner** 管理 pane 进程的启动、就绪、退出、attach、布局、焦点。
 
 提供 agent 运行时状态：`idle`、`working`、`blocked`、`done`、`unknown`。
 
 - 它是**运行时事实源**，**不是业务完成权威**。`done` 只表示「运行时完成」，不表示业务成功。
 - `unknown` 表示 Herdr 无法可靠分类，**不等于 `idle`**。
+- 它是**观测式状态聚合器**（见下），**不铸造 agent 身份**，也无 agent 级 restart/backoff 策略：
+  agent 退出后仅 `respawn_shell_on_exit` 重开 shell 保住 pane，并清除瞬态身份。
 
-关联：`Collaboration Control Plane`、`physical pane owner`、`runtime generation`。
+关联：`Collaboration Control Plane`、`physical pane owner`、`observational state aggregator`、
+`agent identity authority`、`runtime generation`。
 
 ### Collaboration Control Plane（协作控制面 / 业务完成权威）
 
@@ -81,9 +84,30 @@ owner** 管理 pane 进程的启动、就绪、退出、重启、attach、布局
 ### physical pane owner（物理 pane 所有者）
 
 指对终端 pane 拥有**真实进程/生命周期所有权**的一方，本项目中是 **Herdr**。CCB 只**声明策略**
-（哪个 slot 跑哪个 provider、重启策略等），不直接持有通用 pane 进程存活。
+（哪个 slot 跑哪个 provider 等），不直接持有通用 pane 进程存活。
 
-关联：`Host Runtime`、`managed 模式`。
+注：pane 存活所有权归 Herdr，但 **agent 身份与 agent 级重启/backoff 策略归 CCB**（见
+`agent identity authority`）——Herdr 无 agent restart 策略，仅有 shell 级 `respawn_shell_on_exit`。
+
+关联：`Host Runtime`、`agent identity authority`、`managed 模式`。
+
+### observational state aggregator（观测式状态聚合器）
+
+对 **Herdr** 角色的精确表述（经 Herdr 源码验证）：Herdr 通过**查进程**（`process_agent_hint`）与
+**屏幕模式匹配**（detection manifest，如 `live_prompt_box`）**观测**每个 pane 里跑的是哪种 agent、
+处于什么状态，并**聚合**来自多个**权威来源**的上报。它**不铸造 agent 身份**、不决定业务成败、
+无 agent 级 restart 策略。
+
+关联：`Host Runtime`、`agent identity authority`、`runtime fact source vs business completion authority`。
+
+### agent identity authority（agent 身份权威）
+
+判定「某 pane 里是哪个具体 agent 实例、归属哪个 project/slot/provider/generation」的一方，本项目中
+是 **CCB**（经源码验证）。Herdr 侧 `Agent` 仅是种类枚举、无实例 id 且 respawn 即清；CCB 通过
+`report_pane_agent` 把身份**报告**给 Herdr——这与 agent 自带的 hook 上报是**对等来源**，是 Herdr
+设计中受支持的正规路径，**非需删除的历史补丁**。
+
+关联：`physical pane owner`、`observational state aggregator`、`managed 模式`、`Runtime Binding`。
 
 ---
 

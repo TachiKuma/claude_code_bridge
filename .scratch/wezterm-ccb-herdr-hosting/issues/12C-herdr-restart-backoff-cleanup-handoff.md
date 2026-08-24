@@ -6,7 +6,7 @@ cleanup 的执行权交给 Herdr。CCB 只声明 manifest、接收结果、决�
 
 **Blocked by：** 12B（Herdr readiness/liveness adapter）、上游 Herdr 原生 restart/backoff/cleanup 能力
 
-**Status:** blocked-upstream
+**Status:** wontfix（源码验证：Herdr 无 agent restart/backoff 可下放，仅 shell respawn，见 ADR 0001 修订）
 
 **Evidence to inspect：** `lib/platforms/windows/herdr/runtime/ensure.py`、
 `lib/ccbd/services/project_namespace_runtime/destroy.py`、
