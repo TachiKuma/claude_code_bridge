@@ -43,12 +43,20 @@ alive/missing/unknown（unknown 不视为 healthy）；无 Herdr fact 时保持�
 `fallback_reason=herdr_snapshot_unavailable`；通用 pane 崩溃不伪造 Provider session 已恢复。
 
 上游阻塞节点（未收口）：12C（Herdr 原生 restart/backoff/cleanup 能力）、13A（Herdr
-`agent_id` 权威需实机验证）、13B（删除 CCB 主动补 agent 身份路径，阻塞于 13A）、
-13C（旧路径删除门禁与架构证据，阻塞于 13A/13B）。以上均需 Herdr 上游能力或 Windows
-live validation 环境，不在本会话可执行范围。
+`agent_id` 权威需实机验证）、13B（删除 CCB 主动补 agent 身份路径，阻塞于 13A）。以上均需
+Herdr 上游能力或 Windows live validation 环境，不在本会话可执行范围。
+
+已收口（13C 门禁脚手架，2026-08-24）：Phase 5 删除治理从散文约定收敛为**可重跑、fail-closed
+的删除门禁**——`scripts/phase5_deletion_gate.py` 逐项校验 characterization test 与 live validation
+证据（须 `passed=true` + 非空 `evidence`），任一缺失即整体 blocked 并退出非零；配套
+`test/test_phase5_deletion_gate.py`（6 项外部行为测试）与
+`plans/architecture-optimization/topics/phase5-deletion-gate.md`（验收清单 + 优化前后差异 +
+rollback 条件）。门禁脚手架不删除任何业务代码；对当前仓库如实报 blocked，13A/13B/12C 的删除与
+下放动作在实机证据落盘前持续被门禁挡住，符合预期。
 
 本轮批量截至 2026-08-24 关闭：01–13 主节点及全部子节点中，01–09、10、10A、10C、11、11A、11B
-为前期关闭；10B、11C、12A、12B 为本轮新增关闭；12C、13A、13B、13C 为上游阻塞（已审计记录）。
+为前期关闭；10B、11C、12A、12B 为本轮新增关闭；13C 门禁脚手架本轮落地（可重跑 fail-closed
+门禁，不删业务代码，对当前仓库如实报 blocked）；12C、13A、13B 为上游阻塞（已审计记录）。
 
 已记录的验证：
 
