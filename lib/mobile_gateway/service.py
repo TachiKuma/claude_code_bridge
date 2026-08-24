@@ -92,6 +92,13 @@ _PAIRING_CAPABILITIES = (
     'host_terminal',
 )
 _REDACTED_NAMESPACE_KEYS = ('socket_path', 'session_name')
+_REDACTED_AGENT_KEYS = (
+    'prompt',
+    'reply',
+    'api_key',
+    'oauth_token',
+    'transcript',
+)
 _DEFAULT_ROUTE_PROVIDER = 'lan'
 _PROJECT_HEALTH_CACHE_TTL_SECONDS = 5.0
 _PROJECT_HEALTH_CACHE_MAX_STALE_SECONDS = 30.0
@@ -2913,6 +2920,9 @@ def _redact_project_view_payload(payload: dict[str, object]) -> dict[str, object
         if isinstance(namespace, dict):
             for key in _REDACTED_NAMESPACE_KEYS:
                 namespace.pop(key, None)
+        for agent in _iterable(view.get('agents')):
+            for key in _REDACTED_AGENT_KEYS:
+                agent.pop(key, None)
     return redacted
 
 

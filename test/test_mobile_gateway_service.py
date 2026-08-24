@@ -1174,6 +1174,114 @@ def test_project_view_redacts_server_tmux_evidence() -> None:
     assert fake.calls == [('project_view', 1)]
 
 
+class _RuntimeStatusCcbdClient(_FakeCcbdClient):
+    def __init__(self, runtime_status: dict[str, object]) -> None:
+        super().__init__()
+        self.runtime_status = runtime_status
+
+    def project_view(self, *, schema_version: int = 1) -> dict[str, object]:
+        payload = super().project_view(schema_version=schema_version)
+        payload['view']['agents'][0]['runtime_status'] = self.runtime_status
+        return payload
+
+
+class _SecretAgentCcbdClient(_FakeCcbdClient):
+    def project_view(self, *, schema_version: int = 1) -> dict[str, object]:
+        payload = super().project_view(schema_version=schema_version)
+        payload['view']['agents'][0].update(
+            {
+                'prompt': 'sensitive prompt text',
+                'reply': 'sensitive reply text',
+                'api_key': 'sk-secret',
+                'oauth_token': 'oauth-token-secret',
+                'transcript': ['prompt', 'reply'],
+            }
+        )
+        return payload
+
+
+def test_project_view_forwards_runtime_status_without_recomputing() -> None:
+    runtime_status = {
+        'schema_version': 1,
+        'state': 'idle',
+        'runtime_state': 'done',
+        'source': 'herdr_runtime',
+        'unseen_done': True,
+        'job_status': 'running',
+        'job_id': 'job-1',
+        'frontend_status': {'kind': 'wezterm', 'state': 'wezterm_tab_attached'},
+    }
+    fake = _RuntimeStatusCcbdClient(runtime_status)
+
+    payload = _service(fake).project_view_payload('proj-demo')
+
+    agent = payload['view']['agents'][0]
+    assert agent['runtime_status'] == runtime_status
+    assert agent['runtime_status']['runtime_state'] == 'done'
+    assert agent['runtime_status']['unseen_done'] is True
+    assert agent['runtime_status']['job_status'] == 'running'
+    assert fake.calls == [('project_view', 1)]
+
+
+def test_project_view_preserves_unknown_runtime_status_not_idle() -> None:
+    runtime_status = {
+        'schema_version': 1,
+        'state': 'unknown',
+        'runtime_state': 'unknown',
+        'source': 'herdr_runtime',
+        'unseen_done': False,
+        'job_status': None,
+        'job_id': None,
+        'frontend_status': {
+            'kind': 'wezterm',
+            'state': 'unknown',
+            'reason': 'missing_frontend_binding',
+        },
+    }
+
+    payload = _service(_RuntimeStatusCcbdClient(runtime_status)).project_view_payload('proj-demo')
+
+    status = payload['view']['agents'][0]['runtime_status']
+    assert status['state'] == 'unknown'
+    assert status['runtime_state'] == 'unknown'
+    assert status['frontend_status']['state'] == 'unknown'
+
+
+@pytest.mark.parametrize(
+    'frontend_state',
+    ['wezterm_tab_attached', 'detached_fallback', 'frontend_not_ready'],
+)
+def test_project_view_preserves_frontend_tri_state(frontend_state: str) -> None:
+    runtime_status = {
+        'schema_version': 1,
+        'state': 'working',
+        'runtime_state': 'working',
+        'source': 'herdr_runtime',
+        'unseen_done': False,
+        'frontend_status': {'kind': 'wezterm', 'state': frontend_state},
+    }
+
+    payload = _service(_RuntimeStatusCcbdClient(runtime_status)).project_view_payload('proj-demo')
+
+    assert (
+        payload['view']['agents'][0]['runtime_status']['frontend_status']['state']
+        == frontend_state
+    )
+
+
+def test_project_view_redacts_agent_secrets() -> None:
+    payload = _service(_SecretAgentCcbdClient()).project_view_payload('proj-demo')
+
+    agent = payload['view']['agents'][0]
+    assert 'prompt' not in agent
+    assert 'reply' not in agent
+    assert 'api_key' not in agent
+    assert 'oauth_token' not in agent
+    assert 'transcript' not in agent
+    assert 'sk-secret' not in json.dumps(payload)
+    assert 'sensitive prompt text' not in json.dumps(payload)
+
+
 def test_project_view_preserves_correlated_execution_phase_fields() -> None:
     class _PhaseCcbdClient(_FakeCcbdClient):
         def project_view(self, *, schema_version: int = 1) -> dict[str, object]:

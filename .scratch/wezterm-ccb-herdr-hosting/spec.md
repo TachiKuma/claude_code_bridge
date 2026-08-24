@@ -29,6 +29,11 @@
   gate、tmux_runtime 主动补 agent 身份等收口仍需逐项 characterization test 与 Windows live validation。
 - 尚未执行无预启动 WezTerm GUI/有 mux/多项目 attach/mobile gateway 的 Windows live validation。
 
+已收口（11C）：mobile gateway 透传 `project_view.runtime_status`（不重算），`frontend_status`
+三态稳定表达，`done`/`unknown` 语义保留，agent 级防御性裁剪
+`prompt/reply/api_key/oauth_token/transcript`；契约与脱敏测试已并入 gateway/ccbd project_view
+验证集。
+
 已记录的验证：
 
 - `python -m compileall ...` 通过。
