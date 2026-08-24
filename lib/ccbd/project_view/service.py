@@ -16,7 +16,6 @@ from platforms.windows.herdr.ccbd_surface_projection import (
     build_herdr_runtime_surface_projection,
     build_herdr_surface_projection,
 )
-from platforms.windows.herdr.runtime.events import map_herdr_state_to_ccb
 from ccbd.models import MountState
 from ccbd.reload_drain_status import reload_drain_revision, reload_drain_status_payload
 from ccbd.project_focus.tmux import backend_for_namespace, refresh_sidebar_panes
@@ -60,6 +59,11 @@ from .activity import (
     provider_prompt_idle_after_request,
     provider_prompt_input_stuck,
     resolve_agent_activity,
+)
+from .runtime_status import (
+    RuntimeStatusInput,
+    build_runtime_status,
+    namespace_frontend_status,
 )
 from .provider_activity import provider_activity_evidence, record_provider_activity_failure
 from .sequence import ProjectViewSequenceCache
@@ -1034,112 +1038,19 @@ def _merged_runtime_status(
     provider_control=None,
     provider_runtime_status,
 ) -> dict[str, object] | None:
-    if not _namespace_is_herdr(namespace):
-        return None
-    raw_state = _herdr_runtime_state_fact(runtime)
-    source = 'herdr_runtime' if raw_state is not None else 'missing_herdr_runtime_state'
-    runtime_state = raw_state or 'unknown'
-    frontend = _namespace_frontend_status(namespace)
-    pane_id = str(getattr(runtime, 'pane_id', '') or '').strip() or None
-    generation = getattr(runtime, 'runtime_generation', None) or getattr(runtime, 'binding_generation', None)
-    record: dict[str, object] = {
-        'schema_version': 1,
-        'state': map_herdr_state_to_ccb(runtime_state),
-        'runtime_state': runtime_state,
-        'source': source,
-        'unseen_done': runtime_state == 'done',
-        'job_status': getattr(getattr(job, 'status', None), 'value', None) if job is not None else None,
-        'job_id': getattr(job, 'job_id', None) if job is not None else None,
-        'chain_waiting_state': callback_wait.state.value if callback_wait is not None else None,
-        'chain_waiting_child_job_id': callback_wait.child_job_id if callback_wait is not None else None,
-        'chain_waiting_child_agent': _callback_child_agent(callback_wait),
-        'chain_updated_at': callback_wait.updated_at if callback_wait is not None else None,
-        'reload_drain': dict(reload_drain) if reload_drain is not None else None,
-        'dispatch_blocked_by_reload_drain': reload_drain is not None,
-        'provider_control': dict(provider_control) if provider_control is not None else None,
-        'provider_runtime_state': getattr(provider_runtime_status, 'state', None),
-        'provider_runtime_source': getattr(provider_runtime_status, 'source', None),
-        'pane_id': pane_id,
-        'runtime_generation': generation,
-        'cache_key': {
-            'project_id': deps.project_id,
-            'agent_name': agent_name,
-            'runtime_generation': generation,
-            'pane_id': pane_id,
-        },
-    }
-    if frontend is not None:
-        record['frontend_state'] = frontend.get('state')
-        record['frontend_status'] = frontend
-    return record
-
-
-def _namespace_is_herdr(namespace) -> bool:
-    if namespace is None:
-        return False
-    family = resolved_namespace_backend_family(
-        getattr(namespace, 'backend_impl', None),
-        getattr(namespace, 'namespace_backend_family', None),
+    return build_runtime_status(
+        RuntimeStatusInput(
+            project_id=deps.project_id,
+            agent_name=agent_name,
+            namespace=namespace,
+            runtime=runtime,
+            job=job,
+            callback_wait=callback_wait,
+            reload_drain=reload_drain,
+            provider_control=provider_control,
+            provider_runtime_status=provider_runtime_status,
+        )
     )
-    return family == 'herdr-native'
-
-
-def _herdr_runtime_state_fact(runtime) -> str | None:
-    if runtime is None:
-        return None
-    for attr in ('herdr_runtime_state', 'herdr_state'):
-        value = str(getattr(runtime, attr, '') or '').strip().lower()
-        if value:
-            return value
-    snapshot_state = _herdr_runtime_state_from_snapshot(
-        getattr(runtime, 'herdr_runtime_snapshot', None),
-        pane_id=getattr(runtime, 'pane_id', None),
-    )
-    if snapshot_state is not None:
-        return snapshot_state
-    for container in (
-        getattr(runtime, 'pane_ref', None),
-        getattr(runtime, 'provider_runtime_backend_ref', None),
-    ):
-        if not isinstance(container, dict):
-            continue
-        for key in ('herdr_runtime_state', 'runtime_state', 'state'):
-            value = str(container.get(key) or '').strip().lower()
-            if value:
-                return value
-    return None
-
-
-def _herdr_runtime_state_from_snapshot(snapshot, *, pane_id: object | None) -> str | None:
-    if not isinstance(snapshot, dict):
-        return None
-    target_pane_id = str(pane_id or '').strip()
-    panes = snapshot.get('panes')
-    if isinstance(panes, list):
-        if target_pane_id:
-            for pane in panes:
-                if not isinstance(pane, dict):
-                    continue
-                current_pane_id = str(pane.get('pane_id') or '').strip()
-                if current_pane_id != target_pane_id:
-                    continue
-                for key in ('runtime_state', 'state'):
-                    value = str(pane.get(key) or '').strip().lower()
-                    if value:
-                        return value
-            return None
-        for pane in panes:
-            if not isinstance(pane, dict):
-                continue
-            for key in ('runtime_state', 'state'):
-                value = str(pane.get(key) or '').strip().lower()
-                if value:
-                    return value
-    for key in ('runtime_state', 'state'):
-        value = str(snapshot.get(key) or '').strip().lower()
-        if value:
-            return value
-    return None
 
 
 def _execution_provider_state(
@@ -1585,7 +1496,7 @@ def _namespace_view(*, config, sidebar_view_result, namespace, focus: dict[str, 
     projection = _namespace_herdr_surface_projection(namespace)
     if projection is not None:
         record['herdr_surface_projection'] = projection
-    frontend_status = _namespace_frontend_status(namespace)
+    frontend_status = namespace_frontend_status(namespace)
     if frontend_status is not None:
         record['frontend_status'] = frontend_status
     return record
@@ -1619,41 +1530,6 @@ def _namespace_herdr_surface_projection(namespace) -> dict[str, object] | None:
         'namespace_ref': namespace_ref() if callable(namespace_ref) else None,
     }
     return build_herdr_surface_projection(evidence)
-
-
-def _namespace_frontend_status(namespace) -> dict[str, object] | None:
-    if namespace is None:
-        return None
-    family = resolved_namespace_backend_family(
-        getattr(namespace, 'backend_impl', None),
-        getattr(namespace, 'namespace_backend_family', None),
-    )
-    if family != 'herdr-native':
-        return None
-    frontend = getattr(namespace, 'frontend', None)
-    if not isinstance(frontend, dict):
-        return {
-            'kind': 'wezterm',
-            'state': 'unknown',
-            'reason': 'missing_frontend_binding',
-        }
-    status = str(frontend.get('status') or '').strip()
-    if status == 'wezterm_tab_attached':
-        state = 'wezterm_tab_attached'
-    elif status == 'detached_fallback':
-        state = 'detached_fallback'
-    elif status == 'frontend_not_ready':
-        state = 'frontend_not_ready'
-    else:
-        state = 'unknown'
-    record: dict[str, object] = {
-        'kind': str(frontend.get('kind') or 'wezterm'),
-        'state': state,
-    }
-    for key in ('mux_available', 'launch_mode', 'fallback', 'fallback_reason', 'reason', 'spawn_target', 'window_id'):
-        if key in frontend:
-            record[key] = frontend[key]
-    return record
 
 
 def _current_sidebar_view(deps: ProjectViewDependencies):

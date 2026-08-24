@@ -6,18 +6,20 @@ control 和 frontend 三态；输出字段保持兼容。
 
 **Blocked by：** 11（当前合并读模型基础）
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Evidence to inspect：** `lib/ccbd/project_view/service.py`、
 `lib/platforms/windows/herdr/ccbd_surface_projection.py`、`test/test_ccbd_project_view.py`
 
-- [ ] 新增小模块或内部 DTO，集中描述 `runtime_status` 字段和来源
-- [ ] `project_view` 主构建函数只调用组装器，不直接拼所有来源字段
-- [ ] 保持 `working/blocked/idle/done/unknown` 映射行为不变
-- [ ] 保持 callback、reload drain、provider control、frontend 字段兼容
-- [ ] 回归测试证明输出快照等价
+- [x] 新增小模块或内部 DTO，集中描述 `runtime_status` 字段和来源
+- [x] `project_view` 主构建函数只调用组装器，不直接拼所有来源字段
+- [x] 保持 `working/blocked/idle/done/unknown` 映射行为不变
+- [x] 保持 callback、reload drain、provider control、frontend 字段兼容
+- [x] 回归测试证明输出快照等价
 
 **Validation：**
 
 - `pytest test/test_ccbd_project_view.py`
 
+**Evidence:** `lib/ccbd/project_view/runtime_status.py`, `lib/ccbd/project_view/service.py`,
+`test/test_ccbd_project_view.py`
