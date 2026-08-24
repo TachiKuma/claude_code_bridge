@@ -41,3 +41,12 @@ read-only capability probe，也不再写临时 capability report。
 `startup-report.json` 仍记录 `pane_agent_report`，而 `.ccb/agents/*/runtime.json` 里尚未出现稳定
 `agent_id`。因此 `tmux_runtime` 中 CCB 主动补 Herdr Agent 身份的补丁仍然不能删除，当前节点继续
 保持阻塞状态。
+
+**Split after architecture/code comparison（2026-08-24）：** 当前目录已经移除了正常启动路径的临时
+capability report 依赖，但 `lib/platforms/windows/herdr/backend.py`、`runtime/capabilities.py` 与
+`project_namespace_runtime/backend.py` 仍保留兼容 gate；`report_pane_agent` 仍是当前生命周期路径。
+Phase 5 删除必须逐项独立验收，拆为：
+
+- `13A-agent-id-authority-contract.md`：确认 Herdr 原生 `agent_id` 已稳定写入 binding/runtime.json。
+- `13B-delete-ccb-pane-agent-report-patch.md`：在 13A 通过后删除 CCB 主动补 Herdr Agent 身份路径。
+- `13C-architecture-and-live-validation-gate.md`：把 Windows live validation 与 `archi .` 证据变成删除门禁。

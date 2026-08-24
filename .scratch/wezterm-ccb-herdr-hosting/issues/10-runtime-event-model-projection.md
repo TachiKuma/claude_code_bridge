@@ -23,9 +23,18 @@ snapshot polling 循环、断线重连后的自动重读 snapshot 尚未接入�
 返回本次快照导致变化的 `pane_id` 序列，可由后续循环调度器直接调用；本轮仍未接入持续轮询线程
 或订阅循环。
 
+**Split after architecture/code comparison（2026-08-24）：** 当前目录
+`E:\GitHub开源项目\TachiKuma\claude_code_bridge` 已有 `contracts.py`、`events.py`、`client.runtime_snapshot()`
+与 `poll_runtime_snapshot()`；优化前目录 `E:\claude_code_bridge` 没有 `contracts.py/events.py/manifest.py`
+这条模型化路径。父节点不再继续扩大实现范围，剩余工作拆到：
+
+- `10A-runtime-snapshot-poller-loop.md`：把已有 polling 函数接入可运行调度循环。
+- `10B-runtime-event-subscription-adapter.md`：接入上游事件订阅；无能力时显式回退 polling。
+- `10C-runtime-reconnect-resnapshot.md`：断线重连后先重读 snapshot，再消费增量事件。
+
 - [x] 新增 `HerdrRuntimeEvent` 模型与事件 projector 基础
-- [ ] 接入真正运行时事件订阅；无上游事件时 snapshot polling 兜底
+- [ ] 接入真正运行时事件订阅；无上游事件时 snapshot polling 兜底（由 10A/10B 承接）
 - [x] projector 以 binding snapshot 初始化当前状态，再消费增量事件
-- [ ] 断线重连后重读 snapshot，并按 generation+seq 丢弃旧事件
+- [ ] 断线重连后重读 snapshot，并按 generation+seq 丢弃旧事件（由 10C 承接）
 - [x] 乱序、重复事件不污染当前状态
 - [x] `pane_id` 变化被视为新运行时所有权，旧状态不沿用

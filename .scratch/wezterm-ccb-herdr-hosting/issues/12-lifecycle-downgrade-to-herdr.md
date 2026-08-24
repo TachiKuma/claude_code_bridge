@@ -21,8 +21,17 @@
 补充：`refresh_provider_binding` 现在会读取 Herdr `runtime_snapshot` 的 pane 归属，至少不再把目标 pane
 缺失的情况盲目视为 healthy；缺 pane 时会降为 `pane-missing`。
 
-- [ ] pane readiness/liveness/通用 restart/backoff/workspace 清理由 Herdr 负责
-- [ ] CCB 不再通过 shell/PowerShell/lifecycle 文件间接管理通用 pane 进程存活
+**Split after architecture/code comparison（2026-08-24）：** 当前实现仍是 CCB 兼容层收敛 runtime：
+`ensure_runtime(manifest)`、`refresh_provider_binding()` 和 `project_namespace_runtime` 仍承担大量通用
+pane/workspace 生命周期判断。优化后目录具备 Herdr runtime contract 入口，优化前目录缺少这些模型。
+真正下放必须按 Herdr 上游能力分三步推进：
+
+- `12A-herdr-native-capability-contract.md`：先把上游 `runtime.ensure/event/agent_id` 能力探测和 fail-closed 分支固化。
+- `12B-herdr-readiness-liveness-adapter.md`：把 readiness/liveness 从 CCB shell/pane 事实迁到 Herdr snapshot/事件事实。
+- `12C-herdr-restart-backoff-cleanup-handoff.md`：把 restart/backoff/workspace cleanup 的通用决策权交给 Herdr。
+
+- [ ] pane readiness/liveness/通用 restart/backoff/workspace 清理由 Herdr 负责（由 12B/12C 承接）
+- [ ] CCB 不再通过 shell/PowerShell/lifecycle 文件间接管理通用 pane 进程存活（由 12B/12C 承接）
 - [x] Provider session restore 仍由 CCB 的 Provider-specific contract 保护
 - [x] 通用 pane 崩溃重启不会伪造 Provider session 已恢复
-- [ ] 如上游支持，则将 Phase 2 兼容层替换为原生 runtime.ensure/event 调用
+- [ ] 如上游支持，则将 Phase 2 兼容层替换为原生 runtime.ensure/event 调用（由 12A/12C 承接）

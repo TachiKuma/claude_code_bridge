@@ -32,10 +32,19 @@ unknown，避免旧 pane 状态在重连/迁移后回流。
 补充：`runtime_status` 现在也带上 `reload_drain` 与 `provider_control`，把生命周期阻断和恢复控制
 边界一起收进同一读模型里。
 
-- [ ] 完整合并运行时/Provider/pane/job/lifecycle/前台三态为单一读模型
+**Split after architecture/code comparison（2026-08-24）：** 当前 `project_view` 已能输出 Herdr 运行时
+状态、前台三态、callback、reload drain 和 provider control，但合并逻辑仍集中在
+`lib/ccbd/project_view/service.py` 的大构建路径中；优化后 archify 图仍把它归入泛化的
+`runtime-core`，没有形成独立读模型边界。父节点只保留读模型目标，剩余工作拆到：
+
+- `11A-runtime-status-read-model-dto.md`：抽出稳定的 runtime_status 组装边界，保持行为等价。
+- `11B-pane-ownership-transition-read-model.md`：用 pane 重启/迁移/重新 attach/乱序/重复/重连场景补齐端到端投影。
+- `11C-mobile-gateway-runtime-status-contract.md`：验证 Agents 面板/mobile gateway 对同一读模型的消费和脱敏。
+
+- [ ] 完整合并运行时/Provider/pane/job/lifecycle/前台三态为单一读模型（由 11A 承接）
 - [x] 状态映射：`working→working`、`blocked→waiting_for_user`、`idle→idle`、
       `done→idle+unseen_done=true`、`unknown→unknown`（不降级为 idle）
 - [x] Herdr `done` 不直接关闭 job；`unknown` 不投影为 idle
 - [x] `runtime_status` 缓存按 project id/agent name/runtime generation/pane id 复合键失效
 - [x] 面板同时显示运行时状态与 job/ask 状态，不混成一个权威
-- [ ] pane 重启/迁移/重新 attach/事件乱序/重复/断线重连都不泄漏旧状态
+- [ ] pane 重启/迁移/重新 attach/事件乱序/重复/断线重连都不泄漏旧状态（由 11B/11C 承接）
