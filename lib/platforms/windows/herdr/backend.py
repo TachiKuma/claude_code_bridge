@@ -77,6 +77,15 @@ class HerdrBackend(TerminalBackend):
                 self._client.invalidate_handshake()
             raise
 
+    def runtime_events(self) -> tuple[Mapping[str, object], ...]:
+        self._ensure_handshake()
+        try:
+            return self._client.runtime_events()
+        except MuxCommandErrorV2 as exc:
+            if exc.category == "transient-unavailable":
+                self._client.invalidate_handshake()
+            raise
+
     def namespace_alive(self, namespace: MuxNamespaceRefV2) -> bool:
         namespace_ref = self._namespace_ref_from_mapping(namespace, operation="namespace_alive")
         self._capability_gate.require_supported("namespace_alive")

@@ -21,9 +21,224 @@ from platforms.windows.herdr.runtime.contracts import (
 from platforms.windows.herdr.runtime.ensure import ensure_runtime
 from platforms.windows.herdr.runtime.events import (
     HerdrRuntimeEventProjector,
+    create_runtime_event_subscription,
     map_herdr_state_to_ccb,
+    parse_runtime_event,
     poll_runtime_snapshot,
 )
+from terminal_runtime.mux_backend_contract import MuxCommandErrorV2
+
+
+def _runtime_subscription_binding() -> HerdrRuntimeBinding:
+    return HerdrRuntimeBinding(
+        project_id="proj-1",
+        server_id="server-1",
+        server_version="0.8.2",
+        api_schema="Herdr API",
+        session_name="ccb-project-1",
+        workspace_id="w1",
+        runtime_generation=12,
+        ready=True,
+        capabilities={},
+        panes=(
+            HerdrRuntimeBoundPane(
+                slot="codex",
+                pane_id="w1:p1",
+                agent_id="codex",
+                provider_kind="codex",
+                state="idle",
+                state_seq=1,
+            ),
+        ),
+    )
+
+
+class _SubscriptionBackend:
+    def __init__(
+        self,
+        *,
+        events_supported: bool = True,
+        events: list[dict[str, object]] | None = None,
+        fail_events: bool = False,
+    ) -> None:
+        self.events_supported = events_supported
+        self.events = list(events or [])
+        self.fail_events = fail_events
+        self.calls: list[str] = []
+
+    def runtime_capabilities(self) -> dict[str, str]:
+        return {"runtime_events": "supported" if self.events_supported else "unsupported"}
+
+    def runtime_snapshot(self) -> dict[str, object]:
+        self.calls.append("snapshot")
+        return {
+            "panes": [
+                {
+                    "pane_id": "w1:p1",
+                    "workspace_id": "w1",
+                    "session_name": "ccb-project-1",
+                    "state": "working",
+                    "state_seq": 5,
+                }
+            ]
+        }
+
+    def runtime_events(self) -> list[dict[str, object]]:
+        self.calls.append("events")
+        if self.fail_events:
+            raise MuxCommandErrorV2(
+                category="transient-unavailable",
+                backend_impl="herdr",
+                operation="runtime_events",
+                detail="socket disconnected",
+            )
+        return self.events
+
+
+def test_runtime_event_subscription_seeds_snapshot_before_draining_events() -> None:
+    binding = _runtime_subscription_binding()
+    projector = HerdrRuntimeEventProjector(binding)
+    backend = _SubscriptionBackend(
+        events_supported=True,
+        events=[
+            {
+                "event_id": "evt-1",
+                "server_id": "server-1",
+                "session_name": "ccb-project-1",
+                "workspace_id": "w1",
+                "pane_id": "w1:p1",
+                "agent_id": "codex",
+                "provider_kind": "codex",
+                "runtime_generation": 12,
+                "seq": 7,
+                "state": "blocked",
+                "occurred_at": "2026-08-20T12:00:00Z",
+            },
+            {
+                "event_id": "evt-1-dup",
+                "server_id": "server-1",
+                "session_name": "ccb-project-1",
+                "workspace_id": "w1",
+                "pane_id": "w1:p1",
+                "agent_id": "codex",
+                "provider_kind": "codex",
+                "runtime_generation": 12,
+                "seq": 7,
+                "state": "blocked",
+                "occurred_at": "2026-08-20T12:00:00Z",
+            },
+        ],
+    )
+    subscription = create_runtime_event_subscription(
+        backend=backend,
+        binding=binding,
+        projector=projector,
+    )
+
+    changed = subscription.poll()
+
+    assert backend.calls == ["snapshot", "events"]
+    assert changed == ("w1:p1",)
+    assert subscription.source.kind == "event"
+    status = projector.status_for_pane("w1:p1")
+    assert status is not None
+    assert status.runtime_state == "blocked"
+    assert status.state == "waiting_for_user"
+    assert status.seq == 7
+    assert status.source == "event"
+
+
+def test_runtime_event_subscription_falls_back_to_polling_when_events_unsupported() -> None:
+    binding = _runtime_subscription_binding()
+    projector = HerdrRuntimeEventProjector(binding)
+    backend = _SubscriptionBackend(events_supported=False)
+    subscription = create_runtime_event_subscription(
+        backend=backend,
+        binding=binding,
+        projector=projector,
+    )
+
+    changed = subscription.poll()
+
+    assert backend.calls == ["snapshot"]
+    assert changed == ("w1:p1",)
+    assert subscription.source.kind == "snapshot_polling"
+    assert subscription.source.fallback_reason == "runtime_events_unsupported"
+    status = projector.status_for_pane("w1:p1")
+    assert status is not None
+    assert status.runtime_state == "working"
+
+
+def test_runtime_event_subscription_switches_to_polling_after_disconnect() -> None:
+    binding = _runtime_subscription_binding()
+    projector = HerdrRuntimeEventProjector(binding)
+    backend = _SubscriptionBackend(events_supported=True, fail_events=True)
+    subscription = create_runtime_event_subscription(
+        backend=backend,
+        binding=binding,
+        projector=projector,
+    )
+
+    changed = subscription.poll()
+
+    assert backend.calls == ["snapshot", "events", "snapshot"]
+    assert changed == ("w1:p1",)
+    assert subscription.source.kind == "snapshot_polling"
+    assert subscription.source.fallback_reason is not None
+    assert subscription.source.fallback_reason.startswith("subscription_failed:")
+    status = projector.status_for_pane("w1:p1")
+    assert status is not None
+    assert status.runtime_state == "working"
+
+
+def test_parse_runtime_event_rejects_malformed_and_never_copies_raw_transcript() -> None:
+    parsed = parse_runtime_event(
+        {
+            "event_id": "evt-1",
+            "server_id": "server-1",
+            "session_name": "ccb-project-1",
+            "workspace_id": "w1",
+            "pane_id": "w1:p1",
+            "agent_id": "codex",
+            "provider_kind": "codex",
+            "runtime_generation": 12,
+            "seq": 7,
+            "state": "working",
+            "occurred_at": "2026-08-20T12:00:00Z",
+            "stdout": "sk-secret",
+            "transcript": ["prompt", "reply"],
+        }
+    )
+
+    assert parsed is not None
+    record = parsed.to_record()
+    assert "stdout" not in record
+    assert "transcript" not in record
+
+    assert parse_runtime_event(None) is None
+    assert parse_runtime_event({"pane_id": "w1:p1", "seq": 1}) is None
+    assert (
+        parse_runtime_event(
+            {
+                "pane_id": "w1:p1",
+                "seq": -1,
+                "runtime_generation": 12,
+                "state": "idle",
+            }
+        )
+        is None
+    )
+    assert (
+        parse_runtime_event(
+            {
+                "pane_id": "w1:p1",
+                "seq": 1,
+                "runtime_generation": 12,
+                "state": "surprising",
+            }
+        )
+        is None
+    )
 
 
 def test_herdr_runtime_manifest_round_trips_without_raw_secret_values() -> None:

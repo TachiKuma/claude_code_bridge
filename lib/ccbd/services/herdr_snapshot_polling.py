@@ -16,6 +16,7 @@ from platforms.windows.herdr.runtime.contracts import (
 )
 from platforms.windows.herdr.runtime.events import (
     HerdrRuntimeEventProjector,
+    create_runtime_event_subscription,
     poll_runtime_snapshot,
 )
 
@@ -27,6 +28,16 @@ class HerdrSnapshotPollingResult:
     updated_agents: tuple[str, ...] = ()
     skipped_reason: str | None = None
     failure_reason: str | None = None
+    source: str | None = None
+    fallback_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class _HerdrRuntimeContext:
+    namespace: object
+    runtimes: tuple[AgentRuntime, ...]
+    binding: HerdrRuntimeBinding
+    backend: object
 
 
 class _SnapshotCaptureBackend:
@@ -45,28 +56,20 @@ class _SnapshotCaptureBackend:
 
 
 def poll_herdr_runtime_snapshots(*, registry, namespace_controller) -> HerdrSnapshotPollingResult:
-    if registry is None or namespace_controller is None:
-        return HerdrSnapshotPollingResult(polled=False, skipped_reason='missing_dependencies')
-    namespace = namespace_controller.load()
-    if not _namespace_is_herdr(namespace):
-        return HerdrSnapshotPollingResult(polled=False, skipped_reason='non_herdr_namespace')
-    runtimes = _herdr_bound_runtimes(registry, namespace)
-    if not runtimes:
-        return HerdrSnapshotPollingResult(polled=False, skipped_reason='no_bound_runtimes')
-    binding = _binding_for_runtimes(registry, namespace, runtimes)
-    if binding is None:
-        return HerdrSnapshotPollingResult(polled=False, skipped_reason='no_binding')
-    backend = backend_for_namespace(namespace_controller._backend_factory, namespace)
+    context, skipped_reason = _resolve_herdr_runtime_context(registry, namespace_controller)
+    if context is None:
+        return HerdrSnapshotPollingResult(polled=False, skipped_reason=skipped_reason)
+    backend = context.backend
     if not callable(getattr(backend, 'runtime_snapshot', None)):
         return HerdrSnapshotPollingResult(polled=False, skipped_reason='snapshot_unsupported')
 
-    projector = HerdrRuntimeEventProjector(binding)
+    projector = HerdrRuntimeEventProjector(context.binding)
     capture = _SnapshotCaptureBackend(backend)
     try:
-        changed_pane_ids = poll_runtime_snapshot(projector, binding, capture)
+        changed_pane_ids = poll_runtime_snapshot(projector, context.binding, capture)
     except Exception as exc:
         failure = f'herdr_snapshot_polling: {type(exc).__name__}: {exc}'
-        updated = _record_polling_failure(registry, runtimes, failure_reason=failure)
+        updated = _record_polling_failure(registry, context.runtimes, failure_reason=failure)
         return HerdrSnapshotPollingResult(
             polled=True,
             updated_agents=updated,
@@ -76,10 +79,10 @@ def poll_herdr_runtime_snapshots(*, registry, namespace_controller) -> HerdrSnap
     snapshot = capture.snapshot
     if snapshot is None:
         return HerdrSnapshotPollingResult(polled=True)
-    owned_snapshot = _snapshot_for_binding(snapshot, binding=binding)
+    owned_snapshot = _snapshot_for_binding(snapshot, binding=context.binding)
     updated = _persist_snapshot_changes(
         registry,
-        runtimes,
+        context.runtimes,
         snapshot=owned_snapshot,
         projector=projector,
     )
@@ -88,6 +91,97 @@ def poll_herdr_runtime_snapshots(*, registry, namespace_controller) -> HerdrSnap
         changed_pane_ids=tuple(changed_pane_ids),
         updated_agents=updated,
     )
+
+
+def poll_herdr_runtime_events(*, registry, namespace_controller) -> HerdrSnapshotPollingResult:
+    """订阅入口：snapshot 先种子，再消费增量事件；能力缺失/断开时显式回退 polling。"""
+    context, skipped_reason = _resolve_herdr_runtime_context(registry, namespace_controller)
+    if context is None:
+        return HerdrSnapshotPollingResult(polled=False, skipped_reason=skipped_reason)
+    backend = context.backend
+    if not callable(getattr(backend, 'runtime_snapshot', None)):
+        return HerdrSnapshotPollingResult(polled=False, skipped_reason='snapshot_unsupported')
+
+    projector = HerdrRuntimeEventProjector(context.binding)
+    try:
+        subscription = create_runtime_event_subscription(
+            backend=backend,
+            binding=context.binding,
+            projector=projector,
+        )
+        changed_pane_ids = subscription.poll()
+    except Exception as exc:
+        failure = f'herdr_runtime_events: {type(exc).__name__}: {exc}'
+        updated = _record_polling_failure(registry, context.runtimes, failure_reason=failure)
+        return HerdrSnapshotPollingResult(
+            polled=True,
+            updated_agents=updated,
+            failure_reason=failure,
+        )
+
+    owned_snapshot = _projected_runtime_snapshot(projector, context.runtimes)
+    owned_snapshot['source'] = subscription.source.kind
+    if subscription.source.fallback_reason is not None:
+        owned_snapshot['fallback_reason'] = subscription.source.fallback_reason
+    updated = _persist_snapshot_changes(
+        registry,
+        context.runtimes,
+        snapshot=owned_snapshot,
+        projector=projector,
+    )
+    return HerdrSnapshotPollingResult(
+        polled=True,
+        changed_pane_ids=tuple(changed_pane_ids),
+        updated_agents=updated,
+        source=subscription.source.kind,
+        fallback_reason=subscription.source.fallback_reason,
+    )
+
+
+def _resolve_herdr_runtime_context(
+    registry,
+    namespace_controller,
+) -> tuple[_HerdrRuntimeContext | None, str | None]:
+    if registry is None or namespace_controller is None:
+        return None, 'missing_dependencies'
+    namespace = namespace_controller.load()
+    if not _namespace_is_herdr(namespace):
+        return None, 'non_herdr_namespace'
+    runtimes = _herdr_bound_runtimes(registry, namespace)
+    if not runtimes:
+        return None, 'no_bound_runtimes'
+    binding = _binding_for_runtimes(registry, namespace, runtimes)
+    if binding is None:
+        return None, 'no_binding'
+    backend = backend_for_namespace(namespace_controller._backend_factory, namespace)
+    return (
+        _HerdrRuntimeContext(
+            namespace=namespace,
+            runtimes=runtimes,
+            binding=binding,
+            backend=backend,
+        ),
+        None,
+    )
+
+
+def _projected_runtime_snapshot(
+    projector: HerdrRuntimeEventProjector,
+    runtimes: tuple[AgentRuntime, ...],
+) -> dict[str, object]:
+    statuses: list[dict[str, object]] = []
+    for runtime in runtimes:
+        pane_id = _runtime_pane_id(runtime)
+        status = projector.status_for_pane(pane_id) if pane_id else None
+        if status is not None:
+            statuses.append(status.to_record())
+    snapshot: dict[str, object] = {
+        'schema_version': 1,
+        'panes': statuses,
+    }
+    if statuses:
+        snapshot['runtime_state'] = statuses[0]['runtime_state']
+    return snapshot
 
 
 def _namespace_is_herdr(namespace) -> bool:
@@ -370,10 +464,11 @@ def _text(*values: object) -> str:
 
 
 def _is_herdr_polling_failure(value: object) -> bool:
-    return str(value or '').startswith('herdr_snapshot_polling:')
+    return str(value or '').startswith(('herdr_snapshot_polling:', 'herdr_runtime_events:'))
 
 
 __all__ = [
     'HerdrSnapshotPollingResult',
+    'poll_herdr_runtime_events',
     'poll_herdr_runtime_snapshots',
 ]

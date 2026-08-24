@@ -12,7 +12,7 @@ from ccbd.system import process_exists
 from ccbd.reload_drain_auto_retry import tick_reload_drain_auto_retry
 from ccbd.services.dispatcher_runtime.frontdesk_direct_handoff import recover_frontdesk_direct_handoffs
 from ccbd.services.dispatcher_runtime.detailer_replan_handoff import recover_detailer_replan_handoffs
-from ccbd.services.herdr_snapshot_polling import poll_herdr_runtime_snapshots
+from ccbd.services.herdr_snapshot_polling import poll_herdr_runtime_events
 from ccbd.services.lifecycle import build_lifecycle, current_socket_inode
 from ccbd.startup_fence import StartupFenceError, validate_expected_startup_lifecycle
 from ccbd.startup_policy import CONTROL_PLANE_RPC_TIMEOUT_S
@@ -1350,7 +1350,7 @@ def _heartbeat_failures(app) -> tuple[str, ...]:
     for step_name, action in (
         ('health_monitor', app.health_monitor.check_all),
         ('runtime_supervision', app.runtime_supervision.reconcile_once),
-        ('herdr_snapshot_polling', lambda: poll_herdr_runtime_snapshots(
+        ('herdr_runtime_events', lambda: poll_herdr_runtime_events(
             registry=app.registry,
             namespace_controller=getattr(app, 'project_namespace', None),
         )),

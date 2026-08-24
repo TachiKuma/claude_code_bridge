@@ -318,6 +318,40 @@ def test_herdr_socket_client_handshake_refreshes_when_generation_changes() -> No
     assert operations == ["server_info", "server_info"]
 
 
+def test_herdr_socket_client_runtime_events_returns_event_batch() -> None:
+    client = HerdrSocketClient(
+        request_fn=lambda operation, payload: (
+            {
+                "result": {
+                    "events": [
+                        {"pane_id": "w1:p1", "seq": 2, "state": "working"},
+                    ]
+                }
+            }
+            if operation == "runtime_events"
+            else {"status": "unsupported", "detail": "unexpected operation"}
+        ),
+        socket_ref="herdr://local",
+    )
+
+    events = client.runtime_events()
+
+    assert events == ({"pane_id": "w1:p1", "seq": 2, "state": "working"},)
+
+
+def test_herdr_socket_client_runtime_events_requires_events_result() -> None:
+    client = HerdrSocketClient(
+        request_fn=lambda operation, payload: {"result": {}},
+        socket_ref="herdr://local",
+    )
+
+    with pytest.raises(MuxCommandErrorV2) as exc_info:
+        client.runtime_events()
+
+    assert exc_info.value.category == "command-failed"
+    assert exc_info.value.operation == "runtime_events"
+
+
 def test_herdr_cli_request_adapter_default_run_hides_windows_control_wrapper(monkeypatch) -> None:
     captured: dict[str, object] = {}
 

@@ -784,6 +784,20 @@ class HerdrSocketClient:
         snapshot = response.get("snapshot")
         return dict(snapshot) if isinstance(snapshot, Mapping) else {}
 
+    def runtime_events(self) -> tuple[Mapping[str, object], ...]:
+        response = self._request("runtime_events", {}, require_result=True)
+        events = response.get("events")
+        if not isinstance(events, list):
+            raise MuxCommandErrorV2(
+                category="command-failed",
+                backend_impl="herdr",
+                operation="runtime_events",
+                detail="Herdr runtime_events response is missing the events list",
+                ipc_ref=self._socket_ref,
+                evidence={"socket_ref": self._socket_ref},
+            )
+        return tuple(item for item in events if isinstance(item, Mapping))
+
     def _request(
         self,
         operation: str,

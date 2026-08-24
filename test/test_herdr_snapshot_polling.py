@@ -13,7 +13,10 @@ from agents.models import (
     RuntimeMode,
     WorkspaceMode,
 )
-from ccbd.services.herdr_snapshot_polling import poll_herdr_runtime_snapshots
+from ccbd.services.herdr_snapshot_polling import (
+    poll_herdr_runtime_events,
+    poll_herdr_runtime_snapshots,
+)
 from ccbd.services.project_namespace_runtime.models import ProjectNamespace
 from ccbd.services.project_namespace_state import ProjectNamespaceState
 from ccbd.services.registry import AgentRegistry
@@ -54,6 +57,28 @@ class _FailingSnapshotBackend:
 
     def runtime_snapshot(self) -> dict[str, object]:
         raise RuntimeError('socket unavailable')
+
+
+class _EventsBackend(_SnapshotBackend):
+    backend_impl = 'herdr'
+
+    def __init__(
+        self,
+        snapshot: dict[str, object],
+        *,
+        events: list[dict[str, object]] | None = None,
+        capability: str = 'supported',
+    ) -> None:
+        super().__init__(snapshot)
+        self.events = list(events or [])
+        self.capability = capability
+
+    def runtime_capabilities(self) -> dict[str, str]:
+        return {'runtime_events': self.capability}
+
+    def runtime_events(self) -> list[dict[str, object]]:
+        self.calls += 1
+        return self.events
 
 
 def _spec(name: str, provider: str) -> AgentSpec:
@@ -240,3 +265,79 @@ def test_herdr_snapshot_polling_records_unknown_on_snapshot_failure(tmp_path: Pa
     assert runtime.pane_state == 'unknown'
     assert runtime.health == 'unknown'
     assert runtime.last_failure_reason == result.failure_reason
+
+
+def test_herdr_runtime_events_polling_persists_event_derived_status_with_source(tmp_path: Path) -> None:
+    layout, _config_value, registry = _registry(tmp_path)
+    project_id = compute_project_id(layout.project_root)
+    registry.upsert(_runtime('agent1', project_id=project_id, pane_id='pane-1'))
+    backend = _EventsBackend(
+        {
+            'panes': [
+                {'pane_id': 'pane-1', 'workspace_id': 'workspace-1', 'state': 'idle', 'seq': 1},
+            ]
+        },
+        events=[
+            {
+                'event_id': 'evt-1',
+                'server_id': 'herdr://ccb-herdr',
+                'session_name': 'ccb-herdr',
+                'workspace_id': 'workspace-1',
+                'pane_id': 'pane-1',
+                'agent_id': 'agent1',
+                'provider_kind': 'codex',
+                'runtime_generation': 5,
+                'seq': 4,
+                'state': 'blocked',
+                'occurred_at': '2026-08-24T12:00:01Z',
+            }
+        ],
+    )
+    controller = _NamespaceController(_namespace(project_id), backend)
+
+    result = poll_herdr_runtime_events(
+        registry=registry,
+        namespace_controller=controller,
+    )
+
+    runtime = registry.get('agent1')
+    assert result.polled is True
+    assert result.source == 'event'
+    assert result.fallback_reason is None
+    assert result.changed_pane_ids == ('pane-1',)
+    assert runtime is not None
+    assert runtime.herdr_runtime_snapshot is not None
+    assert runtime.herdr_runtime_snapshot['source'] == 'event'
+    assert runtime.herdr_runtime_snapshot['panes'][0]['runtime_state'] == 'blocked'
+    assert runtime.herdr_runtime_snapshot['panes'][0]['seq'] == 4
+
+
+def test_herdr_runtime_events_polling_falls_back_to_snapshot_polling_with_reason(
+    tmp_path: Path,
+) -> None:
+    layout, _config_value, registry = _registry(tmp_path)
+    project_id = compute_project_id(layout.project_root)
+    registry.upsert(_runtime('agent1', project_id=project_id, pane_id='pane-1'))
+    backend = _EventsBackend(
+        {
+            'panes': [
+                {'pane_id': 'pane-1', 'workspace_id': 'workspace-1', 'state': 'blocked', 'seq': 3},
+            ]
+        },
+        capability='unsupported',
+    )
+    controller = _NamespaceController(_namespace(project_id), backend)
+
+    result = poll_herdr_runtime_events(
+        registry=registry,
+        namespace_controller=controller,
+    )
+
+    runtime = registry.get('agent1')
+    assert result.polled is True
+    assert result.source == 'snapshot_polling'
+    assert result.fallback_reason == 'runtime_events_unsupported'
+    assert runtime is not None
+    assert runtime.herdr_runtime_snapshot is not None
+    assert runtime.herdr_runtime_snapshot['source'] == 'snapshot_polling'
+    assert runtime.herdr_runtime_snapshot['fallback_reason'] == 'runtime_events_unsupported'

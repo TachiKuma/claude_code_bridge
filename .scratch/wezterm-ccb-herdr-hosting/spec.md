@@ -20,8 +20,9 @@
 
 仍未完全关闭的范围：
 
-- 运行时事件目前是 CCB 侧模型与 projector 基础；真正的上游事件订阅、snapshot polling 循环、断线
-  重连后自动重读 snapshot 仍需后续实现。
+- 运行时事件目前是 CCB 侧模型与 projector 基础；snapshot polling 循环与断线重连后自动重读
+  snapshot 已接入（10A/10C）；事件订阅适配器已落地（10B）：能力缺失或订阅失败时显式回退
+  snapshot polling 并把 `source`/`fallback_reason` 写入持久化快照，真正上游事件源仍待 Herdr 提供。
 - 通用 pane readiness/liveness/restart/backoff/workspace cleanup 尚未真正下放给 Herdr；当前仍是
   CCB 兼容层承接，需等待或接入 Herdr 上游原生 `runtime.ensure/event/agent_id` 能力。
 - 旧路径删除只完成了正常启动路径的 capability 文件治理；宽 CLI 白名单、backend capability 组合

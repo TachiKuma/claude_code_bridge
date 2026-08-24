@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
+from terminal_runtime.mux_backend_contract import MuxCommandErrorV2
+
 from .contracts import HerdrRuntimeBinding, HerdrRuntimeBoundPane, HerdrRuntimeEvent
 
 
@@ -131,6 +133,142 @@ class HerdrRuntimeEventProjector:
         return tuple(changed)
 
 
+@dataclass(frozen=True)
+class HerdrRuntimeEventSource:
+    kind: str
+    fallback_reason: str | None = None
+
+
+class HerdrRuntimeEventSubscription:
+    """最小事件订阅适配器：snapshot 先种子，再消费增量事件。
+
+    上游能力缺失或订阅断开时显式回退到 snapshot polling，并把回退原因暴露给调用方。
+    """
+
+    def __init__(
+        self,
+        *,
+        backend: object,
+        binding: HerdrRuntimeBinding,
+        projector: HerdrRuntimeEventProjector,
+        events_supported: bool,
+    ) -> None:
+        self._backend = backend
+        self._binding = binding
+        self._projector = projector
+        self._seeded = False
+        self._source = HerdrRuntimeEventSource(
+            kind="event" if events_supported else "snapshot_polling",
+            fallback_reason=None if events_supported else "runtime_events_unsupported",
+        )
+
+    @property
+    def source(self) -> HerdrRuntimeEventSource:
+        return self._source
+
+    def seed_snapshot(self) -> tuple[str, ...]:
+        changed = poll_runtime_snapshot(self._projector, self._binding, self._backend)
+        self._seeded = True
+        return changed
+
+    def poll(self) -> tuple[str, ...]:
+        changed: list[str] = []
+        if not self._seeded:
+            changed.extend(self.seed_snapshot())
+            if self._source.kind != "event":
+                return tuple(dict.fromkeys(changed))
+        if self._source.kind == "event":
+            changed.extend(self._drain_events())
+        else:
+            changed.extend(poll_runtime_snapshot(self._projector, self._binding, self._backend))
+        return tuple(dict.fromkeys(changed))
+
+    def _drain_events(self) -> tuple[str, ...]:
+        events_fn = getattr(self._backend, "runtime_events", None)
+        if not callable(events_fn):
+            return self._fallback_to_polling("subscription_unavailable")
+        try:
+            raw_events = events_fn()
+        except MuxCommandErrorV2 as exc:
+            return self._fallback_to_polling(
+                f"subscription_failed:{exc.category or type(exc).__name__}"
+            )
+        except Exception as exc:
+            return self._fallback_to_polling(f"subscription_failed:{type(exc).__name__}")
+        if not isinstance(raw_events, (list, tuple)):
+            return self._fallback_to_polling("subscription_failed:invalid_event_batch")
+        changed: list[str] = []
+        for raw in raw_events:
+            event = parse_runtime_event(raw)
+            if event is None:
+                continue
+            if self._projector.apply_event(event):
+                changed.append(event.pane_id)
+        return tuple(dict.fromkeys(changed))
+
+    def _fallback_to_polling(self, reason: str) -> tuple[str, ...]:
+        self._source = HerdrRuntimeEventSource(
+            kind="snapshot_polling",
+            fallback_reason=reason,
+        )
+        return poll_runtime_snapshot(self._projector, self._binding, self._backend)
+
+
+def create_runtime_event_subscription(
+    *,
+    backend: object,
+    binding: HerdrRuntimeBinding,
+    projector: HerdrRuntimeEventProjector,
+) -> HerdrRuntimeEventSubscription:
+    events_supported = _events_supported_by_backend(backend)
+    return HerdrRuntimeEventSubscription(
+        backend=backend,
+        binding=binding,
+        projector=projector,
+        events_supported=events_supported,
+    )
+
+
+def parse_runtime_event(payload: object) -> HerdrRuntimeEvent | None:
+    """把上游事件记录解析为 HerdrRuntimeEvent，只复制白名单字段。"""
+    if not isinstance(payload, Mapping):
+        return None
+    raw_state = str(payload.get("state") or "").strip().lower()
+    if raw_state not in {"idle", "working", "blocked", "done", "unknown"}:
+        return None
+    seq = _non_negative_int(payload.get("seq"))
+    generation = _positive_int(payload.get("runtime_generation"))
+    pane_id = _text(payload.get("pane_id"))
+    if seq is None or generation is None or not pane_id:
+        return None
+    server_id = _text(payload.get("server_id"))
+    session_name = _text(payload.get("session_name"))
+    workspace_id = _text(payload.get("workspace_id"))
+    agent_id = _text(payload.get("agent_id"))
+    provider_kind = _text(payload.get("provider_kind"))
+    if not (server_id and session_name and workspace_id and agent_id and provider_kind):
+        return None
+    try:
+        return HerdrRuntimeEvent(
+            event_type=_text(payload.get("event_type")) or "agent_state_changed",
+            event_id=_text(payload.get("event_id")) or f"{pane_id}:{seq}",
+            server_id=server_id,
+            session_name=session_name,
+            workspace_id=workspace_id,
+            pane_id=pane_id,
+            agent_id=agent_id,
+            provider_kind=provider_kind,
+            runtime_generation=generation,
+            seq=seq,
+            state=raw_state,
+            occurred_at=_text(payload.get("occurred_at"))
+            or _text(payload.get("timestamp"))
+            or "unknown",
+        )
+    except ValueError:
+        return None
+
+
 def poll_runtime_snapshot(
     projector: HerdrRuntimeEventProjector,
     binding: HerdrRuntimeBinding,
@@ -253,6 +391,40 @@ def _snapshot_seq(snapshot_pane: Mapping[str, object], *, fallback: int) -> int:
     return fallback
 
 
+def _events_supported_by_backend(backend: object) -> bool:
+    capabilities_fn = getattr(backend, "runtime_capabilities", None)
+    status = "unsupported"
+    if callable(capabilities_fn):
+        capabilities = capabilities_fn()
+        if isinstance(capabilities, Mapping):
+            status = str(capabilities.get("runtime_events") or "unsupported").strip()
+    if status not in {"supported", "partial", "workaround"}:
+        return False
+    return callable(getattr(backend, "runtime_events", None)) and callable(
+        getattr(backend, "runtime_snapshot", None)
+    )
+
+
+def _non_negative_int(value: object) -> int | None:
+    try:
+        result = int(value or -1)
+    except (TypeError, ValueError):
+        return None
+    return result if result >= 0 else None
+
+
+def _positive_int(value: object) -> int | None:
+    try:
+        result = int(value or 0)
+    except (TypeError, ValueError):
+        return None
+    return result if result > 0 else None
+
+
+def _text(value: object) -> str:
+    return str(value or "").strip()
+
+
 def _herdr_state(state: object) -> str:
     value = str(state or "").strip().lower()
     if value in {"idle", "working", "blocked", "done", "unknown"}:
@@ -263,7 +435,11 @@ def _herdr_state(state: object) -> str:
 __all__ = [
     "HerdrRuntimeEventProjector",
     "HerdrRuntimePaneStatus",
+    "HerdrRuntimeEventSource",
+    "HerdrRuntimeEventSubscription",
+    "create_runtime_event_subscription",
     "map_herdr_state_to_ccb",
+    "parse_runtime_event",
     "poll_runtime_snapshot",
     "runtime_status_from_binding",
 ]
