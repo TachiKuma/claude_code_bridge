@@ -21,3 +21,6 @@
 
 - `pytest test/test_herdr_runtime_contracts.py test/test_v2_project_namespace_state.py`
 
+**Audit（2026-08-24）：** 13A 仍阻塞（Herdr `agent_id` 权威未在实机验证），本节点不执行
+删除；保持 blocked-by-13A。
+

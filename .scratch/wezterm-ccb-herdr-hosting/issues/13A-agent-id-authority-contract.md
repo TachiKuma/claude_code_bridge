@@ -22,3 +22,7 @@
 
 - `pytest test/test_herdr_runtime_contracts.py`
 
+**Audit（2026-08-24）：** 12A 已收口（capability 可表达 `agent_id_authority`），但本节点
+的验收依赖 Herdr 在真实环境中稳定返回 `agent_id` 并写入 binding/runtime.json，以及 Windows
+live validation；当前会话无该实机环境，保持 blocked-upstream。
+

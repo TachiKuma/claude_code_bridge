@@ -22,3 +22,7 @@ Windows live validation、以及最新架构图或 `archi .` 结果。该节点�
 
 - `pytest test/test_herdr_runtime_contracts.py test/test_ccbd_project_view.py test/test_mobile_gateway_service.py`
 
+**Audit（2026-08-24）：** 删除门禁依赖 13A（Herdr `agent_id` 权威）与 Windows live validation
+环境；按 issue 自身门禁规则，门禁未通过时父工单保持 blocked，本节点暂不落地删除验收清单
+的执行，仅记录状态。
+

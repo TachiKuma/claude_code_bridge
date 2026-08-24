@@ -22,3 +22,7 @@ cleanup 的执行权交给 Herdr。CCB 只声明 manifest、接收结果、决�
 
 - `pytest test/test_ccbd_stop_flow_runtime.py test/test_v2_project_namespace_state.py`
 
+**Audit（2026-08-24）：** 12B 已收口（readiness/liveness 已下放 Herdr runtime fact），本节点
+剩余阻塞仅为「上游 Herdr 原生 restart/backoff/cleanup 能力」与 Windows live validation 环境，
+不在本会话可执行范围；保持 blocked-upstream，不伪实现。
+

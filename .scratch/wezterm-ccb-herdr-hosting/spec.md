@@ -23,8 +23,8 @@
 - 运行时事件目前是 CCB 侧模型与 projector 基础；snapshot polling 循环与断线重连后自动重读
   snapshot 已接入（10A/10C）；事件订阅适配器已落地（10B）：能力缺失或订阅失败时显式回退
   snapshot polling 并把 `source`/`fallback_reason` 写入持久化快照，真正上游事件源仍待 Herdr 提供。
-- 通用 pane readiness/liveness/restart/backoff/workspace cleanup 尚未真正下放给 Herdr；当前仍是
-  CCB 兼容层承接，需等待或接入 Herdr 上游原生 `runtime.ensure/event/agent_id` 能力。
+- 通用 pane readiness/liveness 已下放 Herdr runtime fact（12B）；restart/backoff/workspace
+  cleanup 仍未下放，需等待或接入 Herdr 上游原生 `runtime.ensure/event/agent_id` 能力（12C）。
 - 旧路径删除只完成了正常启动路径的 capability 文件治理；宽 CLI 白名单、backend capability 组合
   gate、tmux_runtime 主动补 agent 身份等收口仍需逐项 characterization test 与 Windows live validation。
 - 尚未执行无预启动 WezTerm GUI/有 mux/多项目 attach/mobile gateway 的 Windows live validation。
@@ -41,6 +41,14 @@
 已收口（12B）：readiness/liveness 以 Herdr `runtime_snapshot` 为事实源，区分
 alive/missing/unknown（unknown 不视为 healthy）；无 Herdr fact 时保持兼容层并暴露
 `fallback_reason=herdr_snapshot_unavailable`；通用 pane 崩溃不伪造 Provider session 已恢复。
+
+上游阻塞节点（未收口）：12C（Herdr 原生 restart/backoff/cleanup 能力）、13A（Herdr
+`agent_id` 权威需实机验证）、13B（删除 CCB 主动补 agent 身份路径，阻塞于 13A）、
+13C（旧路径删除门禁与架构证据，阻塞于 13A/13B）。以上均需 Herdr 上游能力或 Windows
+live validation 环境，不在本会话可执行范围。
+
+本轮批量截至 2026-08-24 关闭：01–13 主节点及全部子节点中，01–09、10、10A、10C、11、11A、11B
+为前期关闭；10B、11C、12A、12B 为本轮新增关闭；12C、13A、13B、13C 为上游阻塞（已审计记录）。
 
 已记录的验证：
 
