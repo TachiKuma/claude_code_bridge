@@ -1,0 +1,241 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "NativeWin CCB Herdr 运行时架构",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/TachiKuma/claude_code_bridge",
+      "revision": "1fb3c6b5f9e1a8e85ee43d04ed8bcbf40592c5cd"
+    },
+    "views": [
+      {
+        "id": "entry-and-client",
+        "label": "入口与客户端",
+        "focus": ["user", "ccb", "cli", "start-flow"],
+        "note": "从命令行入口到启动调度的主路径。"
+      },
+      {
+        "id": "daemon-core",
+        "label": "守护进程核心",
+        "focus": ["ccbd-main", "ccbd-app", "service-graph", "runtime-core"],
+        "note": "ccbd 负责装配服务图并常驻处理控制面请求。"
+      },
+      {
+        "id": "runtime-ops",
+        "label": "运行时运维",
+        "focus": ["runtime-core", "external-runtime"],
+        "note": "监督、恢复、调度与外部执行环境的交互。"
+      }
+    ],
+    "viewBox": [1660, 560]
+  },
+  "components": [
+    {
+      "id": "user",
+      "type": "external",
+      "label": "用户",
+      "sublabel": "终端 / TUI",
+      "sources": [
+        { "path": "ccb.py", "line": 167, "label": "main" },
+        { "path": "lib/cli/entrypoint_runtime.py", "line": 238, "label": "run_cli_entrypoint" }
+      ],
+      "pos": [40, 80],
+      "size": [140, 68]
+    },
+    {
+      "id": "ccb",
+      "type": "frontend",
+      "label": "ccb",
+      "sublabel": "统一命令入口",
+      "sources": [
+        { "path": "ccb.py", "line": 65, "label": "Herdr 校验" },
+        { "path": "ccb.py", "line": 167, "label": "main" }
+      ],
+      "pos": [220, 80],
+      "size": [150, 68]
+    },
+    {
+      "id": "cli",
+      "type": "backend",
+      "label": "CLI 路由",
+      "sublabel": "命令分发与适配",
+      "sources": [
+        { "path": "lib/cli/entrypoint_runtime.py", "line": 238, "label": "run_cli_entrypoint" },
+        { "path": "lib/cli/phase2.py", "line": 66, "label": "phase2 入口" }
+      ],
+      "pos": [410, 80],
+      "size": [170, 72]
+    },
+    {
+      "id": "start-flow",
+      "type": "backend",
+      "label": "启动流程",
+      "sublabel": "start_agents",
+      "sources": [
+        { "path": "lib/cli/services/start_runtime.py", "line": 28, "label": "start_agents" }
+      ],
+      "pos": [610, 80],
+      "size": [150, 68]
+    },
+    {
+      "id": "ccbd-main",
+      "type": "backend",
+      "label": "ccbd main",
+      "sublabel": "daemon 进程入口",
+      "sources": [
+        { "path": "lib/ccbd/main.py", "line": 31, "label": "main" }
+      ],
+      "pos": [790, 80],
+      "size": [156, 68]
+    },
+    {
+      "id": "ccbd-app",
+      "type": "backend",
+      "label": "CcbdApp",
+      "sublabel": "bootstrap / socket server",
+      "sources": [
+        { "path": "lib/ccbd/app.py", "line": 31, "label": "CcbdApp" },
+        { "path": "lib/ccbd/app_runtime/bootstrap.py", "line": 63, "label": "initialize_app" },
+        { "path": "lib/ccbd/app_runtime/lifecycle.py", "line": 292, "label": "serve_forever" }
+      ],
+      "pos": [980, 80],
+      "size": [190, 72]
+    },
+    {
+      "id": "service-graph",
+      "type": "backend",
+      "label": "Service Graph",
+      "sublabel": "运行时装配",
+      "sources": [
+        { "path": "lib/ccbd/app_runtime/service_graph.py", "line": 74, "label": "build_ccbd_service_graph" },
+        { "path": "lib/ccbd/app_runtime/service_graph.py", "line": 215, "label": "publish_ccbd_service_graph" }
+      ],
+      "pos": [1200, 80],
+      "size": [176, 72]
+    },
+    {
+      "id": "runtime-core",
+      "type": "backend",
+      "label": "运行时核心",
+      "sublabel": "supervisor / dispatcher / health",
+      "sources": [
+        { "path": "lib/ccbd/app_runtime/service_graph.py", "line": 85, "label": "RuntimeSupervisor" },
+        { "path": "lib/ccbd/app_runtime/service_graph.py", "line": 138, "label": "JobDispatcher" },
+        { "path": "lib/ccbd/app_runtime/service_graph.py", "line": 177, "label": "HealthMonitor" }
+      ],
+      "pos": [1178, 280],
+      "size": [220, 80]
+    },
+    {
+      "id": "external-runtime",
+      "type": "external",
+      "label": "外部运行环境",
+      "sublabel": "tmux / Herdr / 代理后端",
+      "pos": [1460, 280],
+      "size": [180, 80]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "前台命令层",
+      "wraps": ["user", "ccb", "cli", "start-flow"],
+      "pad": 18
+    },
+    {
+      "kind": "region",
+      "label": "守护进程层",
+      "wraps": ["ccbd-main", "ccbd-app", "service-graph", "runtime-core", "external-runtime"],
+      "pad": 18
+    }
+  ],
+  "connections": [
+    {
+      "id": "user-to-ccb",
+      "from": "user",
+      "to": "ccb",
+      "label": "执行 ccb 命令",
+      "variant": "emphasis",
+      "labelAt": [195, 164]
+    },
+    {
+      "id": "ccb-to-cli",
+      "from": "ccb",
+      "to": "cli"
+    },
+    {
+      "id": "cli-to-start-flow",
+      "from": "cli",
+      "to": "start-flow",
+      "label": "start / phase2",
+      "labelAt": [560, 166]
+    },
+    {
+      "id": "start-flow-to-ccbd-main",
+      "from": "start-flow",
+      "to": "ccbd-main",
+      "label": "ensure_daemon_started",
+      "labelAt": [740, 166]
+    },
+    {
+      "id": "ccbd-main-to-app",
+      "from": "ccbd-main",
+      "to": "ccbd-app"
+    },
+    {
+      "id": "app-to-service-graph",
+      "from": "ccbd-app",
+      "to": "service-graph",
+      "label": "初始化 / 发布",
+      "labelAt": [1112, 166]
+    },
+    {
+      "id": "graph-to-runtime-core",
+      "from": "service-graph",
+      "to": "runtime-core"
+    },
+    {
+      "id": "core-to-external",
+      "from": "runtime-core",
+      "to": "external-runtime",
+      "label": "tmux / provider",
+      "variant": "emphasis",
+      "labelAt": [1406, 374]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "入口层",
+      "items": [
+        "ccb.py 负责平台校验、源运行时保护和 CLI 进入点",
+        "CLI 路由只把命令分派到 start、phase2、update 等处理器"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "守护层",
+      "items": [
+        "ccbd.main 构造 CcbdApp，initialize_app 完成路径、存储和服务图装配",
+        "serve_forever 让 socket server 常驻，并把 heartbeat 挂到主循环"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "运行时核心",
+      "items": [
+        "RuntimeSupervisor 处理恢复与命名空间",
+        "JobDispatcher 负责作业调度，HealthMonitor 负责心跳和健康判定"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "持久化与外部依赖",
+      "items": [
+        "启动时会初始化 lifecycle、report、namespace 等状态存储",
+        "外部运行环境承载 tmux 工作区、Herdr 以及代理后端"
+      ]
+    }
+  ]
+}

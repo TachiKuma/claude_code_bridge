@@ -1,0 +1,400 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "NativeWin CCB Herdr 运行时架构",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/TachiKuma/claude_code_bridge",
+      "revision": "1fb3c6b5f9e1a8e85ee43d04ed8bcbf40592c5cd"
+    },
+    "views": [
+      {
+        "id": "entry-and-client",
+        "label": "入口与客户端",
+        "focus": ["user", "ccb", "cli", "start-flow"],
+        "note": "从命令行入口到启动调度的主路径。"
+      },
+      {
+        "id": "daemon-core",
+        "label": "守护进程核心",
+        "focus": ["ccbd-main", "ccbd-app", "service-graph", "socket-server", "daemon-supervisor"],
+        "note": "ccbd 负责发布服务图并常驻处理控制面请求。"
+      },
+      {
+        "id": "runtime-ops",
+        "label": "运行时运维",
+        "focus": ["dispatcher", "runtime-service", "project-namespace", "health-monitor", "state-store"],
+        "note": "作业调度、命名空间、健康监控与心跳修复。"
+      }
+    ]
+  },
+  "layout": {
+    "mode": "grid",
+    "origin": [48, 92],
+    "cols": 4,
+    "gapX": 86,
+    "gapY": 62,
+    "cellW": 228,
+    "cellH": 104
+  },
+  "components": [
+    {
+      "id": "user",
+      "type": "external",
+      "label": "用户",
+      "sublabel": "终端 / TUI",
+      "sources": [
+        { "path": "ccb.py", "line": 1, "label": "入口脚本" },
+        { "path": "lib/cli/entrypoint_runtime.py", "line": 238, "label": "分发入口" }
+      ],
+      "row": 0,
+      "col": 0,
+      "size": [156, 68]
+    },
+    {
+      "id": "ccb",
+      "type": "frontend",
+      "label": "ccb",
+      "sublabel": "统一命令入口",
+      "sources": [
+        { "path": "ccb.py", "line": 167, "label": "main" },
+        { "path": "ccb.py", "line": 65, "label": "Herdr 校验" }
+      ],
+      "row": 0,
+      "col": 1,
+      "size": [164, 68]
+    },
+    {
+      "id": "cli",
+      "type": "backend",
+      "label": "CLI 路由",
+      "sublabel": "命令分发与适配",
+      "sources": [
+        { "path": "lib/cli/entrypoint_runtime.py", "line": 238, "label": "run_cli_entrypoint" },
+        { "path": "lib/cli/services/start_runtime.py", "line": 28, "label": "start_agents" }
+      ],
+      "row": 0,
+      "col": 2,
+      "size": [184, 72]
+    },
+    {
+      "id": "start-flow",
+      "type": "backend",
+      "label": "启动流程",
+      "sublabel": "start_agents / start_flow",
+      "sources": [
+        { "path": "lib/cli/services/start_runtime.py", "line": 28, "label": "start_agents" },
+        { "path": "lib/cli/phase2.py", "line": 66, "label": "phase2 入口" }
+      ],
+      "row": 0,
+      "col": 3,
+      "size": [198, 72]
+    },
+    {
+      "id": "ccbd-main",
+      "type": "backend",
+      "label": "ccbd main",
+      "sublabel": "daemon 进程入口",
+      "sources": [
+        { "path": "lib/ccbd/main.py", "line": 31, "label": "main" }
+      ],
+      "row": 1,
+      "col": 1,
+      "size": [164, 68]
+    },
+    {
+      "id": "ccbd-app",
+      "type": "backend",
+      "label": "CcbdApp",
+      "sublabel": "运行时外壳",
+      "sources": [
+        { "path": "lib/ccbd/app.py", "line": 31, "label": "CcbdApp" },
+        { "path": "lib/ccbd/app_runtime/bootstrap.py", "line": 63, "label": "initialize_app" }
+      ],
+      "row": 1,
+      "col": 2,
+      "size": [176, 72]
+    },
+    {
+      "id": "service-graph",
+      "type": "backend",
+      "label": "Service Graph",
+      "sublabel": "运行时装配",
+      "sources": [
+        { "path": "lib/ccbd/app_runtime/service_graph.py", "line": 74, "label": "build_ccbd_service_graph" },
+        { "path": "lib/ccbd/app_runtime/service_graph.py", "line": 215, "label": "publish_ccbd_service_graph" }
+      ],
+      "row": 1,
+      "col": 3,
+      "size": [184, 72]
+    },
+    {
+      "id": "socket-server",
+      "type": "messagebus",
+      "label": "Socket Server",
+      "sublabel": "控制面监听",
+      "sources": [
+        { "path": "lib/ccbd/app_runtime/lifecycle.py", "line": 292, "label": "serve_forever" },
+        { "path": "lib/ccbd/socket_server_runtime/server.py", "line": 25, "label": "CcbdSocketServer" }
+      ],
+      "row": 2,
+      "col": 1,
+      "size": [180, 72]
+    },
+    {
+      "id": "daemon-supervisor",
+      "type": "backend",
+      "label": "Runtime Supervisor",
+      "sublabel": "恢复 / 续航 / 监督",
+      "sources": [
+        { "path": "lib/ccbd/supervisor.py", "line": 21, "label": "RuntimeSupervisor" },
+        { "path": "lib/ccbd/supervisor_runtime/lifecycle.py", "line": 15, "label": "start_supervisor" }
+      ],
+      "row": 2,
+      "col": 2,
+      "size": [198, 72]
+    },
+    {
+      "id": "dispatcher",
+      "type": "backend",
+      "label": "Job Dispatcher",
+      "sublabel": "提交 / 取消 / 恢复",
+      "sources": [
+        { "path": "lib/ccbd/app_runtime/service_graph.py", "line": 138, "label": "JobDispatcher" }
+      ],
+      "row": 2,
+      "col": 3,
+      "size": [180, 72]
+    },
+    {
+      "id": "runtime-service",
+      "type": "backend",
+      "label": "Runtime Service",
+      "sublabel": "执行状态与绑定",
+      "sources": [
+        { "path": "lib/ccbd/app_runtime/service_graph.py", "line": 77, "label": "RuntimeService" }
+      ],
+      "row": 3,
+      "col": 0,
+      "size": [180, 72]
+    },
+    {
+      "id": "project-namespace",
+      "type": "backend",
+      "label": "Project Namespace",
+      "sublabel": "tmux / 工作区拓扑",
+      "sources": [
+        { "path": "lib/ccbd/supervisor_runtime/lifecycle.py", "line": 55, "label": "ensure_project_namespace" }
+      ],
+      "row": 3,
+      "col": 1,
+      "size": [196, 72]
+    },
+    {
+      "id": "health-monitor",
+      "type": "backend",
+      "label": "Health Monitor",
+      "sublabel": "心跳与恢复判定",
+      "sources": [
+        { "path": "lib/ccbd/app_runtime/service_graph.py", "line": 177, "label": "HealthMonitor" },
+        { "path": "lib/ccbd/app_runtime/lifecycle.py", "line": 192, "label": "heartbeat" }
+      ],
+      "row": 3,
+      "col": 2,
+      "size": [184, 72]
+    },
+    {
+      "id": "state-store",
+      "type": "database",
+      "label": "State Stores",
+      "sublabel": "lifecycle / report / namespace",
+      "sources": [
+        { "path": "lib/ccbd/app_runtime/bootstrap.py", "line": 94, "label": "store 初始化" }
+      ],
+      "row": 3,
+      "col": 3,
+      "size": [198, 72]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "前台命令层",
+      "wraps": ["user", "ccb", "cli", "start-flow"],
+      "pad": 18
+    },
+    {
+      "kind": "region",
+      "label": "守护进程层",
+      "wraps": ["ccbd-main", "ccbd-app", "service-graph", "socket-server", "daemon-supervisor", "dispatcher", "runtime-service", "project-namespace", "health-monitor", "state-store"],
+      "pad": 18
+    }
+  ],
+  "connections": [
+    {
+      "id": "user-to-ccb",
+      "from": "user",
+      "to": "ccb",
+      "label": "执行 ccb 命令",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ccb-to-cli",
+      "from": "ccb",
+      "to": "cli",
+      "label": "run_cli_entrypoint"
+    },
+    {
+      "id": "cli-to-start-flow",
+      "from": "cli",
+      "to": "start-flow",
+      "label": "start / phase2 / update"
+    },
+    {
+      "id": "start-flow-to-ccbd-main",
+      "from": "start-flow",
+      "to": "ccbd-main",
+      "label": "ensure_daemon_started"
+    },
+    {
+      "id": "ccbd-main-to-app",
+      "from": "ccbd-main",
+      "to": "ccbd-app",
+      "label": "构造 CcbdApp"
+    },
+    {
+      "id": "app-to-service-graph",
+      "from": "ccbd-app",
+      "to": "service-graph",
+      "label": "initialize_app / publish"
+    },
+    {
+      "id": "app-to-socket-server",
+      "from": "ccbd-app",
+      "to": "socket-server",
+      "label": "serve_forever"
+    },
+    {
+      "id": "service-graph-to-supervisor",
+      "from": "service-graph",
+      "to": "daemon-supervisor",
+      "label": "RuntimeSupervisor"
+    },
+    {
+      "id": "service-graph-to-dispatcher",
+      "from": "service-graph",
+      "to": "dispatcher",
+      "label": "JobDispatcher"
+    },
+    {
+      "id": "service-graph-to-runtime-service",
+      "from": "service-graph",
+      "to": "runtime-service",
+      "label": "RuntimeService"
+    },
+    {
+      "id": "service-graph-to-project-namespace",
+      "from": "service-graph",
+      "to": "project-namespace",
+      "label": "ProjectNamespaceController"
+    },
+    {
+      "id": "service-graph-to-health-monitor",
+      "from": "service-graph",
+      "to": "health-monitor",
+      "label": "HealthMonitor"
+    },
+    {
+      "id": "project-namespace-to-state-store",
+      "from": "project-namespace",
+      "to": "state-store",
+      "label": "namespace state"
+    },
+    {
+      "id": "dispatcher-to-runtime-service",
+      "from": "dispatcher",
+      "to": "runtime-service",
+      "label": "调度执行"
+    },
+    {
+      "id": "dispatcher-to-state-store",
+      "from": "dispatcher",
+      "to": "state-store",
+      "label": "写入作业状态",
+      "variant": "dashed"
+    },
+    {
+      "id": "socket-server-to-dispatcher",
+      "from": "socket-server",
+      "to": "dispatcher",
+      "label": "控制面请求"
+    },
+    {
+      "id": "socket-server-to-health-monitor",
+      "from": "socket-server",
+      "to": "health-monitor",
+      "label": "heartbeat / probe",
+      "variant": "dashed"
+    },
+    {
+      "id": "health-monitor-to-state-store",
+      "from": "health-monitor",
+      "to": "state-store",
+      "label": "生命周期 / 报告"
+    },
+    {
+      "id": "daemon-supervisor-to-project-namespace",
+      "from": "daemon-supervisor",
+      "to": "project-namespace",
+      "label": "恢复命名空间"
+    },
+    {
+      "id": "daemon-supervisor-to-dispatcher",
+      "from": "daemon-supervisor",
+      "to": "dispatcher",
+      "label": "恢复运行中作业",
+      "variant": "emphasis"
+    },
+    {
+      "id": "daemon-supervisor-to-runtime-service",
+      "from": "daemon-supervisor",
+      "to": "runtime-service",
+      "label": "恢复 / 接管 runtime"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "用户路径",
+      "items": [
+        "ccb.py 先做平台与环境门禁，再进入 CLI 分发",
+        "start / phase2 命令会先确保 ccbd 守护进程就绪"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "守护进程职责",
+      "items": [
+        "initialize_app 构造路径、存储、执行服务与 socket server",
+        "build_ccbd_service_graph 把运行时能力组装成单一服务图"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "常驻运行",
+      "items": [
+        "serve_forever 以 socket server 为主循环",
+        "heartbeat 驱动维护、健康监控与 lease 刷新"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "恢复与监督",
+      "items": [
+        "RuntimeSupervisor 负责命名空间和作业恢复",
+        "RuntimeSupervisionLoop 连接重新挂载、重流转和持续监督"
+      ]
+    }
+  ]
+}
