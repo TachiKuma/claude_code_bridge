@@ -34,6 +34,10 @@
 `prompt/reply/api_key/oauth_token/transcript`；契约与脱敏测试已并入 gateway/ccbd project_view
 验证集。
 
+已收口（12A）：Herdr 原生能力契约（`runtime.ensure`/`runtime.events`/`agent_id_authority`）已
+结构化表达；上游缺能力时 CCB 兼容层保持可用且 reason 可观测，schema/能力不匹配仍 fail-closed，
+证据来自握手 server_info 不再回退临时 capability 文件；12B/12C 的下放决策将消费该契约。
+
 已记录的验证：
 
 - `python -m compileall ...` 通过。

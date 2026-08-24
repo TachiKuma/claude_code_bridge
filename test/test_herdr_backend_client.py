@@ -484,6 +484,84 @@ def test_herdr_capability_gate_from_server_info_rejects_missing_runtime_capabili
     assert "runtime capabilities are missing" in exc_info.value.detail
 
 
+def test_herdr_capability_gate_keeps_compat_layer_with_observable_unsupported_reason() -> None:
+    gate = HerdrCapabilityGate.from_server_info(
+        {
+            "version": "0.8.2",
+            "api_schema": "Herdr API",
+            "platform": "windows",
+            "arch": "x64",
+            "runtime_capabilities": {
+                "runtime_ensure": "supported",
+                "runtime_events": "unsupported",
+                "agent_id_authority": "supported",
+            },
+        },
+        capability_report_ref="server-info",
+    )
+
+    assert gate.capabilities is not None
+    assert gate.require_supported("send_text")["backend_impl"] == "herdr"
+    assert gate.runtime_capability_status("runtime_events") == "unsupported"
+    assert gate.runtime_capability_status("runtime_ensure") == "supported"
+    assert gate.native_capabilities == {
+        "runtime_ensure": "supported",
+        "runtime_events": "unsupported",
+        "agent_id_authority": "supported",
+    }
+
+
+def test_herdr_capability_gate_normalizes_unknown_native_status_to_unsupported() -> None:
+    gate = HerdrCapabilityGate.from_server_info(
+        {
+            "version": "0.8.2",
+            "api_schema": "Herdr API",
+            "platform": "windows",
+            "arch": "x64",
+            "runtime_capabilities": {
+                "runtime_ensure": "supported",
+                "runtime_events": "surprising-new-status",
+                "agent_id_authority": "supported",
+            },
+        },
+        capability_report_ref="server-info",
+    )
+
+    assert gate.runtime_capability_status("runtime_events") == "unsupported"
+    assert gate.require_supported("send_text")["backend_impl"] == "herdr"
+
+
+def test_herdr_backend_runtime_capabilities_come_from_server_info_not_capability_file() -> None:
+    gate = HerdrCapabilityGate.from_server_info(
+        {
+            "version": "0.8.2",
+            "api_schema": "Herdr API",
+            "platform": "windows",
+            "arch": "x64",
+            "runtime_capabilities": {
+                "runtime_ensure": "supported",
+                "runtime_events": "unsupported",
+                "agent_id_authority": "supported",
+            },
+        },
+        capability_report_ref="server-info",
+    )
+    backend = HerdrBackend(
+        client=HerdrSocketClient(
+            request_fn=_fake_herdr_request(),
+            socket_ref="herdr://local",
+        ),
+        capability_gate=gate,
+    )
+
+    assert gate.capability_report_ref == "server-info"
+    assert backend.runtime_capabilities() == {
+        "runtime_ensure": "supported",
+        "runtime_events": "unsupported",
+        "agent_id_authority": "supported",
+    }
+
+
 def test_herdr_socket_client_rejects_scalar_result_as_structured_error() -> None:
     client = HerdrSocketClient(
         request_fn=lambda operation, payload: {"result": "ok"},

@@ -181,8 +181,8 @@ class HerdrCapabilityGate:
         native_capabilities = _runtime_capability_statuses(runtime_capabilities)
         capabilities = make_capabilities(
             backend_impl="herdr",
-            command_status=_native_runtime_compat_statuses(native_capabilities),
-            semantic_status=_native_runtime_compat_statuses(native_capabilities),
+            command_status=_herdr_compat_mux_statuses(),
+            semantic_status=_herdr_compat_mux_statuses(),
             windows_beta_gaps=[],
             blocking_gaps=[],
             source_ref=capability_report_ref,
@@ -303,13 +303,15 @@ def _runtime_capability_statuses(raw: Mapping[str, object]) -> dict[str, str]:
     return result
 
 
-def _native_runtime_compat_statuses(native_capabilities: Mapping[str, str]) -> dict[str, str]:
+def _herdr_compat_mux_statuses() -> dict[str, str]:
+    # 握手路径只验证 schema/原生能力契约；核心 mux 兼容能力由 CCB 兼容层继续承担，
+    # 原生能力是否可用由 native_capabilities 单独暴露（reason 可观测），不连带阻断基础操作。
     return {
         "session_attach": "supported",
-        "pane_spawn": native_capabilities.get("runtime_ensure", "unsupported"),
-        "send_input": native_capabilities.get("runtime_events", "unsupported"),
-        "read_output": native_capabilities.get("runtime_events", "unsupported"),
-        "kill_pane": native_capabilities.get("agent_id_authority", "unsupported"),
+        "pane_spawn": "supported",
+        "send_input": "supported",
+        "read_output": "supported",
+        "kill_pane": "supported",
     }
 
 
