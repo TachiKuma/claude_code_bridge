@@ -224,17 +224,21 @@ def create_auto_layout(
 
 
 def _herdr_backend_factory() -> HerdrBackend:
-    capabilities = _herdr_selection_capability_report()
     request_adapter = _herdr_request_adapter()
-    return HerdrBackend(
-        client=HerdrSocketClient(
-            request_fn=request_adapter,
-            socket_ref=request_adapter.socket_ref,
-            allow_session_scoped_ipc_refs=bool(
-                getattr(request_adapter, "allow_session_scoped_ipc_refs", False)
-            ),
+    client = HerdrSocketClient(
+        request_fn=request_adapter,
+        socket_ref=request_adapter.socket_ref,
+        allow_session_scoped_ipc_refs=bool(
+            getattr(request_adapter, "allow_session_scoped_ipc_refs", False)
         ),
-        capability_gate=_herdr_capability_gate(capabilities),
+    )
+    capability_gate = _herdr_backend_capability_gate(
+        client,
+        capability_report=_herdr_selection_capability_report(),
+    )
+    return HerdrBackend(
+        client=client,
+        capability_gate=capability_gate,
     )
 
 
@@ -253,17 +257,21 @@ def _herdr_socket_runtime_env_configured() -> bool:
 
 
 def _herdr_backend_for_persisted_session_factory() -> HerdrBackend:
-    capabilities = _herdr_persisted_session_capability_report()
     request_adapter = _herdr_request_adapter()
-    return HerdrBackend(
-        client=HerdrSocketClient(
-            request_fn=request_adapter,
-            socket_ref=request_adapter.socket_ref,
-            allow_session_scoped_ipc_refs=bool(
-                getattr(request_adapter, "allow_session_scoped_ipc_refs", False)
-            ),
+    client = HerdrSocketClient(
+        request_fn=request_adapter,
+        socket_ref=request_adapter.socket_ref,
+        allow_session_scoped_ipc_refs=bool(
+            getattr(request_adapter, "allow_session_scoped_ipc_refs", False)
         ),
-        capability_gate=_herdr_capability_gate(capabilities),
+    )
+    capability_gate = _herdr_backend_capability_gate(
+        client,
+        capability_report=_herdr_capability_report(),
+    )
+    return HerdrBackend(
+        client=client,
+        capability_gate=capability_gate,
     )
 
 
@@ -287,7 +295,7 @@ def get_backend_for_namespace_teardown(namespace_ref: Mapping[str, object]) -> H
                 getattr(request_adapter, "allow_session_scoped_ipc_refs", False)
             ),
         ),
-        capability_gate=_herdr_capability_gate(_herdr_teardown_capability_report()),
+        capability_gate=_herdr_teardown_capability_gate(),
     )
     setattr(backend, "_ccb_project_namespace_ref", dict(namespace_ref))
     return backend
@@ -346,11 +354,7 @@ def _intersect_herdr_capability_reports(
             merged[key] = {}
             continue
         merged[key] = {
-            str(name): (
-                "supported"
-                if status == "supported" and live_status.get(name) == "supported"
-                else str(live_status.get(name) or "unsupported")
-            )
+            str(name): _merge_herdr_capability_status(status, live_status.get(name))
             for name, status in persisted_status.items()
         }
     merged["blocking_gaps"] = sorted(
@@ -378,6 +382,20 @@ def _intersect_herdr_capability_reports(
 
 def _list_items(value: object) -> list[object]:
     return list(value) if isinstance(value, list) else []
+
+
+def _merge_herdr_capability_status(left: object, right: object) -> str:
+    left_status = str(left or "unsupported").strip()
+    right_status = str(right or "unsupported").strip()
+    if left_status == "unsupported" or right_status == "unsupported":
+        return "unsupported"
+    if left_status == "partial" or right_status == "partial":
+        return "partial"
+    if left_status == "workaround" or right_status == "workaround":
+        return "workaround"
+    if left_status == "supported" and right_status == "supported":
+        return "supported"
+    return "unsupported"
 
 
 def _herdr_teardown_capability_report() -> dict[str, object]:
@@ -434,6 +452,57 @@ def _herdr_capability_gate(capabilities: dict[str, object] | None) -> HerdrCapab
         capabilities=cast(MuxCapabilitiesV2, capabilities),
         capability_report_ref=_herdr_capability_report_ref(),
     )
+
+
+def _herdr_backend_capability_gate(
+    client: HerdrSocketClient,
+    *,
+    capability_report: dict[str, object] | None,
+) -> HerdrCapabilityGate:
+    try:
+        server_info = client.server_info()
+    except Exception as exc:
+        return HerdrCapabilityGate(
+            capabilities=None,
+            failure_reason="herdr-unavailable",
+            diagnostic=f"Herdr server_info probe failed: {exc}",
+            capability_report_ref=None,
+        )
+    native_gate = HerdrCapabilityGate.from_server_info(server_info, capability_report_ref=None)
+    if capability_report is None:
+        return native_gate
+    if capability_report.get("blocked") is True:
+        return HerdrCapabilityGate(
+            capabilities=None,
+            failure_reason=str(capability_report.get("failure_reason") or "unsupported-capability"),
+            diagnostic=str(capability_report.get("diagnostic") or "Herdr capability evidence is unavailable"),
+            capability_report_ref=str(capability_report.get("source_ref") or "") or None,
+            native_capabilities=native_gate.native_capabilities,
+        )
+    if not herdr_capability_report_supported(capability_report):
+        return HerdrCapabilityGate(
+            capabilities=None,
+            failure_reason="unsupported-capability",
+            diagnostic="Herdr capability evidence is malformed",
+            capability_report_ref=str(capability_report.get("source_ref") or "") or None,
+            native_capabilities=native_gate.native_capabilities,
+        )
+    combined_capabilities = _intersect_herdr_capability_reports(
+        dict(capability_report),
+        native_gate.capabilities or {},
+    )
+    return HerdrCapabilityGate(
+        capabilities=cast(MuxCapabilitiesV2, combined_capabilities),
+        failure_reason=None,
+        diagnostic=None,
+        capability_report_ref=str(capability_report.get("source_ref") or "") or None,
+        native_capabilities=native_gate.native_capabilities,
+    )
+
+
+def _herdr_teardown_capability_gate() -> HerdrCapabilityGate:
+    capabilities = _herdr_teardown_capability_report()
+    return _herdr_capability_gate(capabilities)
 
 
 def _herdr_platform_gate() -> dict[str, object] | None:

@@ -16,6 +16,11 @@ _CORE_REQUIRED_CAPABILITIES = {
     "read_output",
     "kill_pane",
 }
+_HERDR_NATIVE_RUNTIME_CAPABILITIES = {
+    "runtime_ensure",
+    "runtime_events",
+    "agent_id_authority",
+}
 _OPERATION_REQUIRED_CAPABILITIES = {
     "capabilities": ("session_attach",),
     "prepare_server": ("session_attach",),
@@ -54,6 +59,7 @@ _OPERATION_REQUIRED_CAPABILITIES = {
 _KNOWN_CAPABILITIES = _CORE_REQUIRED_CAPABILITIES | {
     name for names in _OPERATION_REQUIRED_CAPABILITIES.values() for name in names
 }
+_KNOWN_CAPABILITIES |= _HERDR_NATIVE_RUNTIME_CAPABILITIES
 _SUPPORTED_STATUS = {"supported", "partial", "unsupported", "workaround"}
 _CONTINUE_RECOMMENDATIONS = {"continue", "continue-with-gaps"}
 _PASS_VERDICTS = {"pass", "partial"}
@@ -67,6 +73,7 @@ class HerdrCapabilityGate:
     failure_reason: str | None = None
     diagnostic: str | None = None
     capability_report_ref: str | None = None
+    native_capabilities: dict[str, str] | None = None
 
     @classmethod
     def from_spike_evidence(
@@ -135,11 +142,60 @@ class HerdrCapabilityGate:
                 capability_report_ref,
                 "Herdr capability projection lacks required supported namespace capabilities",
             )
+        native_capabilities = _native_capability_statuses(projection)
         return cls(
             capabilities=capabilities,
             failure_reason=None,
             diagnostic=None,
             capability_report_ref=capability_report_ref,
+            native_capabilities=native_capabilities,
+        )
+
+    @classmethod
+    def from_server_info(
+        cls,
+        server_info: Mapping[str, object] | None,
+        *,
+        capability_report_ref: str | None = None,
+    ) -> "HerdrCapabilityGate":
+        if not server_info:
+            return cls._blocked(
+                capability_report_ref,
+                "Herdr server_info is unavailable",
+            )
+        version = str(server_info.get("version") or "").strip()
+        api_schema = str(server_info.get("api_schema") or "").strip()
+        platform = str(server_info.get("platform") or "").strip()
+        arch = str(server_info.get("arch") or "").strip()
+        runtime_capabilities = server_info.get("runtime_capabilities")
+        if api_schema != "Herdr API" or not version or platform != "windows" or arch != "x64":
+            return cls._blocked(
+                capability_report_ref,
+                "Herdr server_info does not match the expected Herdr contract",
+            )
+        if not isinstance(runtime_capabilities, Mapping):
+            return cls._blocked(
+                capability_report_ref,
+                "Herdr server_info runtime capabilities are missing",
+            )
+        native_capabilities = _runtime_capability_statuses(runtime_capabilities)
+        capabilities = make_capabilities(
+            backend_impl="herdr",
+            command_status=_native_runtime_compat_statuses(native_capabilities),
+            semantic_status=_native_runtime_compat_statuses(native_capabilities),
+            windows_beta_gaps=[],
+            blocking_gaps=[],
+            source_ref=capability_report_ref,
+        )
+        capabilities["adapter_recommendation"] = "continue"  # type: ignore[typeddict-unknown-key]
+        capabilities["verdict"] = "pass"  # type: ignore[typeddict-unknown-key]
+        capabilities["failure_class"] = "none"  # type: ignore[typeddict-unknown-key]
+        return cls(
+            capabilities=capabilities,
+            failure_reason=None,
+            diagnostic=None,
+            capability_report_ref=capability_report_ref,
+            native_capabilities=native_capabilities,
         )
 
     @classmethod
@@ -153,6 +209,7 @@ class HerdrCapabilityGate:
             failure_reason="unsupported-capability",
             diagnostic=diagnostic,
             capability_report_ref=capability_report_ref,
+            native_capabilities=None,
         )
 
     def require_supported(self, operation: str) -> MuxCapabilitiesV2:
@@ -182,6 +239,14 @@ class HerdrCapabilityGate:
             },
         )
 
+    def runtime_capability_status(self, name: str) -> str:
+        normalized = str(name or "").strip()
+        if not normalized:
+            return "unsupported"
+        if self.native_capabilities is None:
+            return "unsupported"
+        return str(self.native_capabilities.get(normalized) or "unsupported")
+
 
 def _status_mapping(raw: object) -> dict[str, str] | None:
     if not isinstance(raw, Mapping):
@@ -210,6 +275,42 @@ def _string_list(raw: object) -> list[str] | None:
         if item:
             result.append(item)
     return result
+
+
+def _native_capability_statuses(projection: Mapping[str, object]) -> dict[str, str]:
+    raw = projection.get("native_runtime_status")
+    if not isinstance(raw, Mapping):
+        return {
+            name: "unsupported"
+            for name in sorted(_HERDR_NATIVE_RUNTIME_CAPABILITIES)
+        }
+    result: dict[str, str] = {}
+    for name in sorted(_HERDR_NATIVE_RUNTIME_CAPABILITIES):
+        status = str(raw.get(name) or "unsupported").strip()
+        if status not in _SUPPORTED_STATUS:
+            status = "unsupported"
+        result[name] = status
+    return result
+
+
+def _runtime_capability_statuses(raw: Mapping[str, object]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for name in sorted(_HERDR_NATIVE_RUNTIME_CAPABILITIES):
+        status = str(raw.get(name) or "unsupported").strip()
+        if status not in _SUPPORTED_STATUS:
+            status = "unsupported"
+        result[name] = status
+    return result
+
+
+def _native_runtime_compat_statuses(native_capabilities: Mapping[str, str]) -> dict[str, str]:
+    return {
+        "session_attach": "supported",
+        "pane_spawn": native_capabilities.get("runtime_ensure", "unsupported"),
+        "send_input": native_capabilities.get("runtime_events", "unsupported"),
+        "read_output": native_capabilities.get("runtime_events", "unsupported"),
+        "kill_pane": native_capabilities.get("agent_id_authority", "unsupported"),
+    }
 
 
 def herdr_capability_report_supported(capabilities: Mapping[str, object]) -> bool:

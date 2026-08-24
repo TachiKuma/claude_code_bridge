@@ -70,9 +70,9 @@ def _session_recovery_block(session) -> tuple[str, str] | None:
     return health, detail
 
 
-def _resolve_pane(session, *, recover: bool) -> _PaneResolution:
+def _resolve_pane(session, *, recover: bool, provider: str | None = None) -> _PaneResolution:
     pane_id = str(getattr(session, 'pane_id', '') or '').strip()
-    if not recover:
+    if not recover or _is_herdr_provider(provider):
         return _PaneResolution(pane_id or None)
     ok, pane_or_err = ensure_provider_pane(session)
     if not ok:
@@ -196,7 +196,7 @@ def refresh_provider_binding(
         )
 
     inject_project_slot_recovery_hints(session, replacement_context)
-    pane_resolution = _resolve_pane(session, recover=recover)
+    pane_resolution = _resolve_pane(session, recover=recover, provider=spec.provider)
     if recover and pane_resolution.blocked_health is not None:
         return _patch_recovery_blocked_runtime(
             patch_runtime_state_fn=patch_runtime_state_fn,
@@ -221,13 +221,12 @@ def refresh_provider_binding(
     )
     pane_state = facts.pane_state
     health = 'healthy'
-    if str(spec.provider or '').strip().lower() == 'herdr':
+    if _is_herdr_provider(spec.provider):
         pane_state = _herdr_snapshot_pane_state(
             facts.herdr_runtime_snapshot,
             pane_id=pane_id,
-        ) or pane_state
-        if pane_state is not None:
-            health = health_from_pane_state(pane_state)
+        )
+        health = _herdr_health_from_pane_state(pane_state)
     return _attach_healthy_runtime(
         attach_runtime_fn=attach_runtime_fn,
         agent_name=agent_name,
@@ -258,15 +257,19 @@ def _session_ccb_session_id(session) -> str | None:
     return None
 
 
-def _herdr_snapshot_pane_state(snapshot, *, pane_id: str | None) -> str | None:
+def _is_herdr_provider(provider: object) -> bool:
+    return str(provider or '').strip().lower() == 'herdr'
+
+
+def _herdr_snapshot_pane_state(snapshot, *, pane_id: str | None) -> str:
     if not isinstance(snapshot, dict):
-        return None
+        return 'unknown'
     panes = snapshot.get('panes')
     if not isinstance(panes, list):
-        return None
+        return 'unknown'
     target_pane_id = str(pane_id or '').strip()
     if not target_pane_id:
-        return 'alive' if any(isinstance(pane, dict) for pane in panes) else None
+        return 'unknown'
     for pane in panes:
         if not isinstance(pane, dict):
             continue
@@ -274,3 +277,9 @@ def _herdr_snapshot_pane_state(snapshot, *, pane_id: str | None) -> str | None:
         if current_pane_id == target_pane_id:
             return 'alive'
     return 'missing'
+
+
+def _herdr_health_from_pane_state(pane_state: str) -> str:
+    if pane_state == 'unknown':
+        return 'unknown'
+    return health_from_pane_state(pane_state)

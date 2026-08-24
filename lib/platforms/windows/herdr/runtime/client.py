@@ -23,6 +23,7 @@ class HerdrServerInfo(TypedDict):
     platform: Literal["windows"]
     arch: Literal["x64"]
     socket_ref: str
+    runtime_capabilities: dict[str, str]
 
 
 HerdrRequestFn = Callable[[str, dict[str, object]], Mapping[str, object]]
@@ -99,6 +100,7 @@ class HerdrSocketClient:
             "platform": "windows",
             "arch": "x64",
             "socket_ref": self._socket_ref,
+            "runtime_capabilities": _runtime_capabilities_from_server_info(response),
         }
 
     def handshake(
@@ -964,6 +966,21 @@ def _runtime_generation(value: int | None) -> int | None:
     if generation <= 0:
         raise ValueError("runtime_generation must be positive when set")
     return generation
+
+
+def _runtime_capabilities_from_server_info(response: Mapping[str, object]) -> dict[str, str]:
+    raw = response.get("runtime_capabilities")
+    if not isinstance(raw, Mapping):
+        return {
+            "runtime_ensure": "unsupported",
+            "runtime_events": "unsupported",
+            "agent_id_authority": "unsupported",
+        }
+    result: dict[str, str] = {}
+    for name in ("runtime_ensure", "runtime_events", "agent_id_authority"):
+        value = str(raw.get(name) or "unsupported").strip()
+        result[name] = value if value in {"supported", "partial", "unsupported", "workaround"} else "unsupported"
+    return result
 
 
 __all__ = [

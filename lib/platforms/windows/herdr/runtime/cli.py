@@ -125,6 +125,11 @@ class HerdrCliRequestAdapter:
             "api_schema": str(schema.get("title") or ""),
             "platform": _runtime_platform(),
             "arch": _runtime_arch(),
+            "runtime_capabilities": {
+                "runtime_ensure": "supported",
+                "runtime_events": "supported",
+                "agent_id_authority": "supported",
+            },
         }
 
     def _create_session(self, payload: Mapping[str, object]) -> Mapping[str, object]:

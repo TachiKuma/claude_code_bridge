@@ -40,6 +40,9 @@ class HerdrBackend(TerminalBackend):
     def capabilities(self) -> MuxCapabilitiesV2:
         return self._capability_gate.require_supported("capabilities")
 
+    def runtime_capabilities(self) -> dict[str, str]:
+        return dict(self._capability_gate.native_capabilities or {})
+
     def prepare_server(self) -> None:
         self._capability_gate.require_supported("prepare_server")
         self._ensure_handshake()

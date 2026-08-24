@@ -387,6 +387,69 @@ def test_herdr_socket_client_server_info_gate_rejects_wrong_version_platform_or_
     assert exc_info.value.evidence["expected_arch"] == "x64"
 
 
+def test_herdr_capability_gate_from_server_info_supports_native_runtime_contract() -> None:
+    gate = HerdrCapabilityGate.from_server_info(
+        {
+            "version": "0.8.2",
+            "api_schema": "Herdr API",
+            "platform": "windows",
+            "arch": "x64",
+            "runtime_capabilities": {
+                "runtime_ensure": "supported",
+                "runtime_events": "supported",
+                "agent_id_authority": "supported",
+            },
+        },
+        capability_report_ref="server-info",
+    )
+
+    assert gate.runtime_capability_status("runtime_ensure") == "supported"
+    assert gate.runtime_capability_status("runtime_events") == "supported"
+    assert gate.runtime_capability_status("agent_id_authority") == "supported"
+    assert gate.require_supported("send_text")["backend_impl"] == "herdr"
+
+
+def test_herdr_capability_gate_from_server_info_fails_closed_on_schema_mismatch() -> None:
+    gate = HerdrCapabilityGate.from_server_info(
+        {
+            "version": "0.8.2",
+            "api_schema": "Unexpected API",
+            "platform": "windows",
+            "arch": "x64",
+            "runtime_capabilities": {
+                "runtime_ensure": "supported",
+                "runtime_events": "supported",
+                "agent_id_authority": "supported",
+            },
+        },
+        capability_report_ref="server-info",
+    )
+
+    with pytest.raises(MuxCommandErrorV2) as exc_info:
+        gate.require_supported("capabilities")
+
+    assert exc_info.value.category == "unsupported"
+    assert exc_info.value.evidence["failure_reason"] == "unsupported-capability"
+
+
+def test_herdr_capability_gate_from_server_info_rejects_missing_runtime_capabilities() -> None:
+    gate = HerdrCapabilityGate.from_server_info(
+        {
+            "version": "0.8.2",
+            "api_schema": "Herdr API",
+            "platform": "windows",
+            "arch": "x64",
+        },
+        capability_report_ref="server-info",
+    )
+
+    with pytest.raises(MuxCommandErrorV2) as exc_info:
+        gate.require_supported("capabilities")
+
+    assert exc_info.value.category == "unsupported"
+    assert "runtime capabilities are missing" in exc_info.value.detail
+
+
 def test_herdr_socket_client_rejects_scalar_result_as_structured_error() -> None:
     client = HerdrSocketClient(
         request_fn=lambda operation, payload: {"result": "ok"},
@@ -4709,6 +4772,11 @@ def _fake_herdr_request(
             "api_schema": "Herdr API",
             "platform": "windows",
             "arch": "x64",
+            "runtime_capabilities": {
+                "runtime_ensure": "supported",
+                "runtime_events": "supported",
+                "agent_id_authority": "supported",
+            },
         },
         "namespace": {
             "namespace_id": "workspace-1",
