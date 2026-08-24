@@ -109,6 +109,16 @@ owner** 管理 pane 进程的启动、就绪、退出、attach、布局、焦点
 
 关联：`physical pane owner`、`observational state aggregator`、`managed 模式`、`Runtime Binding`。
 
+### 观测聚合协作模型（Observational-Aggregation Cooperation）
+
+WezTerm / Herdr / CCB 三者配合方式的目标模型，锚点 **「CCB 权威 · Herdr 观测 · WezTerm 呈现」**：
+CCB 是身份与业务完成权威、独立上报状态（`source=ccb`）；Herdr 是观测式状态聚合器，从对等来源
+接收状态、以原生 events 对外发布；WezTerm 是呈现层与 attach 落点，非与 Herdr 竞争的 mux。它是
+ADR 0001「三层权威边界」在**配合方式**层的落地，纠正了原 v2「下放给 Herdr」的方向性误设。
+
+关联 ADR：`docs/adr/0002-观测聚合协作模型.md`。
+关联：`observational state aggregator`、`agent identity authority`、`Frontend Surface`。
+
 ---
 
 ## 运行时锚点与身份
