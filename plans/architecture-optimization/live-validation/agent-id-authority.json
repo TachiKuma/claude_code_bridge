@@ -1,0 +1,56 @@
+{
+  "scenario": "13A-herdr-agent-id-authority",
+  "probed_at": "2026-08-24",
+  "herdr_version": "0.8.2",
+  "herdr_protocol": 20,
+  "herdr_exe": "C:\\Users\\alex\\AppData\\Local\\Programs\\Herdr\\herdr.exe",
+  "passed": false,
+  "reason": "herdr_api_has_no_agent_id_authority",
+  "evidence": "直接查询运行中的 Herdr 0.8.2 原生 API(herdr api schema --json / herdr api snapshot / herdr agent list),而非经 CCB 兼容层。结论:(1) 全 API schema 中 agent_id 出现 0 次;AgentInfo 身份字段为 pane_id + agent(kind) + name,Herdr 不铸造也不回传稳定 agent_id。(2) agent 归属权威方向为 CCB->Herdr:pane.report_agent 把身份 push 进 Herdr,配套 pane.clear_agent_authority;不存在 Herdr->CCB 的 agent_id 回写。(3) runtime.ensure / agent_id_authority 在 schema 中均 0 次,CCB cli.py:131 将 agent_id_authority 硬编码为 supported 与真实 API 不符。因此 13A 最低要求(Herdr 稳定回写 agent_id)在 Herdr 0.8.2 下无法达成,属上游 API 缺能力,非缺实机环境。",
+  "probe_commands": [
+    "herdr status server",
+    "herdr api schema --json",
+    "herdr api snapshot",
+    "herdr agent list",
+    "herdr agent get w1:p1",
+    "herdr agent explain w1:p1"
+  ],
+  "schema_keyword_counts": {
+    "agent_id": 0,
+    "runtime": 0,
+    "ensure": 0,
+    "agent_id_authority": 0,
+    "restart": 0,
+    "backoff": 0
+  },
+  "agent_info_identity_fields": [
+    "agent",
+    "name",
+    "pane_id",
+    "terminal_id",
+    "agent_session"
+  ],
+  "live_agents_observed": {
+    "note": "用户手动在 Herdr 中启动 claude 与 codex CLI 后复测,两个 agent 均被识别(agent_status=idle)",
+    "agents": [
+      {
+        "agent": "claude",
+        "pane_id": "w1:p1",
+        "terminal_id": "term_659cb4e7eaee51",
+        "agent_id_present": false
+      },
+      {
+        "agent": "codex",
+        "pane_id": "w1:p2",
+        "terminal_id": "term_659cb4e7eb5172",
+        "agent_id_present": false
+      }
+    ],
+    "addressing": "agent get <target> 的 target 必须是 pane_id;agent get claude 报 agent_not_found,证明 agent 只能以 pane_id 寻址,不存在独立 agent_id",
+    "detection_mechanism": "agent explain 显示 Herdr 靠终端屏幕模式匹配识别(manifest 规则 live_prompt_box,evidence 为提示符换行),非 agent 上报身份令牌,故无稳定 agent_id"
+  },
+  "blocks_nodes": [
+    "13A",
+    "13B"
+  ]
+}

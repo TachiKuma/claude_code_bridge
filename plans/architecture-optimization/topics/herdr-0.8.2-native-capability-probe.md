@@ -28,6 +28,17 @@ protocol 20，socket `C:\Users\Administrator\AppData\Roaming\herdr\herdr.sock`�
 不是 agent_id 权威、`pane.report_agent` 又是它认可的**唯一 agent 归属 API**，13B「删除 CCB 主动补
 身份路径」不仅不达标，删除还会**直接破坏 agent 状态归属**。
 
+**实机 live-agent 复测（2026-08-24，补充）：** 用户手动在 Herdr 中启动 claude 与 codex CLI 后复测
+`herdr agent list` / `agent get` / `agent explain`，坐实上述结论：
+
+- 两个活 agent（`claude`@`w1:p1`、`codex`@`w1:p2`，`agent_status=idle`）完整字段中**仍无
+  `agent_id`/`id`**，身份=`agent`(kind)+`pane_id`+`terminal_id`。
+- **可寻址身份就是 `pane_id`**：`herdr agent get w1:p1` 成功，`herdr agent get claude` 报
+  `agent_not_found`——agent 无法以名字/kind 寻址，只能以 `pane_id` 寻址。
+- **检测机制是屏幕启发式**：`herdr agent explain w1:p1` 显示 Herdr 靠终端屏幕模式匹配识别
+  （manifest 规则 `live_prompt_box`，evidence=`"❯\n"`），而非 agent 上报的身份令牌——这从根本上
+  解释了为何没有稳定 `agent_id`。反过来印证 CCB 现有架构（CCB 报告身份、Herdr 观测）本就正确。
+
 ### 2. 无原生 restart/backoff，仅手动 close（阻塞 12C）
 
 - 枚举全部 216 个 API method 常量：`restart` / `backoff` / `runtime.ensure` 均 **0 次**。
