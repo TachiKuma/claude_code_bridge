@@ -421,6 +421,79 @@ def test_herdr_runtime_event_projector_refreshes_from_snapshot_and_drops_missing
     assert projector.status_for_pane("w1:p2") is None
 
 
+def test_herdr_runtime_event_projector_refreshes_generation_without_reusing_old_events() -> None:
+    binding = HerdrRuntimeBinding(
+        project_id="proj-1",
+        server_id="server-1",
+        server_version="0.8.2",
+        api_schema="Herdr API",
+        session_name="ccb-project-1",
+        workspace_id="w1",
+        runtime_generation=12,
+        ready=True,
+        capabilities={},
+        panes=(
+            HerdrRuntimeBoundPane(
+                slot="codex",
+                pane_id="w1:p1",
+                agent_id="codex",
+                provider_kind="codex",
+                state="working",
+                state_seq=5,
+            ),
+        ),
+    )
+    projector = HerdrRuntimeEventProjector(binding)
+
+    projector.refresh(
+        HerdrRuntimeBinding(
+            project_id="proj-1",
+            server_id="server-1",
+            server_version="0.8.2",
+            api_schema="Herdr API",
+            session_name="ccb-project-1",
+            workspace_id="w1",
+            runtime_generation=13,
+            ready=True,
+            capabilities={},
+            panes=(
+                HerdrRuntimeBoundPane(
+                    slot="codex",
+                    pane_id="w1:p1",
+                    agent_id="codex",
+                    provider_kind="codex",
+                    state="idle",
+                    state_seq=1,
+                ),
+            ),
+        ),
+        snapshot={
+            "panes": [
+                {"pane_id": "w1:p1", "workspace_id": "w1", "state": "idle", "state_seq": 1},
+            ]
+        },
+    )
+
+    old_event = HerdrRuntimeEvent(
+        event_type="agent_state_changed",
+        event_id="evt-old",
+        server_id="server-1",
+        session_name="ccb-project-1",
+        workspace_id="w1",
+        pane_id="w1:p1",
+        agent_id="codex",
+        provider_kind="codex",
+        runtime_generation=12,
+        seq=6,
+        state="blocked",
+        occurred_at="2026-08-20T12:00:00Z",
+    )
+
+    assert projector.apply_event(old_event) is False
+    assert projector.status_for_pane("w1:p1").to_record()["runtime_state"] == "idle"  # type: ignore[union-attr]
+    assert projector.status_for_pane("w1:p1").to_record()["seq"] == 1  # type: ignore[union-attr]
+
+
 def test_poll_runtime_snapshot_refreshes_projector_from_backend_snapshot() -> None:
     binding = HerdrRuntimeBinding(
         project_id="proj-1",

@@ -2278,6 +2278,59 @@ def test_herdr_backend_exposes_runtime_snapshot() -> None:
     assert snapshot["panes"][0]["pane_id"] == "w1:p1"
 
 
+def test_herdr_backend_invalidates_handshake_before_retrying_snapshot_after_disconnect() -> None:
+    operations: list[str] = []
+
+    def request(operation: str, payload: dict[str, object]) -> dict[str, object]:
+        operations.append(operation)
+        if operation == "server_info":
+            return {
+                "version": "0.7.5-preview",
+                "api_schema": "Herdr API",
+                "platform": "windows",
+                "arch": "x64",
+                "runtime_capabilities": {
+                    "runtime_ensure": "supported",
+                    "runtime_events": "supported",
+                    "agent_id_authority": "supported",
+                },
+            }
+        if operation == "runtime_snapshot" and operations.count("runtime_snapshot") == 1:
+            raise MuxCommandErrorV2(
+                category="transient-unavailable",
+                backend_impl="herdr",
+                operation="runtime_snapshot",
+                detail="socket disconnected",
+                ipc_ref="herdr://local",
+            )
+        if operation == "runtime_snapshot":
+            return {
+                "snapshot": {
+                    "workspaces": [{"workspace_id": "w1"}],
+                    "panes": [{"pane_id": "w1:p1", "workspace_id": "w1"}],
+                }
+            }
+        raise AssertionError(operation)
+
+    backend = HerdrBackend(
+        client=HerdrSocketClient(request_fn=request, socket_ref="herdr://local"),
+        capability_gate=_supported_gate(),
+    )
+
+    with pytest.raises(MuxCommandErrorV2):
+        backend.runtime_snapshot()
+
+    snapshot = backend.runtime_snapshot()
+
+    assert snapshot["panes"][0]["pane_id"] == "w1:p1"
+    assert operations == [
+        "server_info",
+        "runtime_snapshot",
+        "server_info",
+        "runtime_snapshot",
+    ]
+
+
 def test_herdr_cli_request_adapter_falls_back_to_api_snapshot_when_list_output_is_not_json() -> None:
     commands: list[list[str]] = []
 
