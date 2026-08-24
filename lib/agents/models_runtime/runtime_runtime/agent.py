@@ -110,6 +110,7 @@ class AgentRuntime:
             'namespace_restore_token_present': namespace_restore_token_present_value,
             'herdr_auto_restore_mode': self.herdr_auto_restore_mode,
             'herdr_agent_state_ref': self.herdr_agent_state_ref,
+            'herdr_runtime_snapshot': self.herdr_runtime_snapshot,
             'pane_id': self.pane_id,
             'active_pane_id': self.active_pane_id,
             'pane_title_marker': self.pane_title_marker,

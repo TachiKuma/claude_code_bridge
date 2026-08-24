@@ -111,6 +111,8 @@ class HerdrRuntimeEventProjector:
             snapshot_pane = _snapshot_pane_for_id(panes, pane.pane_id)
             if snapshot_pane is None:
                 continue
+            if not _snapshot_pane_matches_binding(binding, snapshot_pane):
+                continue
             statuses[pane.pane_id] = _status_from_snapshot_pane(binding, pane, snapshot_pane)
         return statuses
 
@@ -222,6 +224,20 @@ def _snapshot_pane_for_id(panes: list[object], pane_id: str) -> Mapping[str, obj
         if current == target:
             return pane
     return None
+
+
+def _snapshot_pane_matches_binding(
+    binding: HerdrRuntimeBinding,
+    snapshot_pane: Mapping[str, object],
+) -> bool:
+    for key, expected in (
+        ("workspace_id", binding.workspace_id),
+        ("session_name", binding.session_name),
+    ):
+        value = str(snapshot_pane.get(key) or "").strip()
+        if value and value != expected:
+            return False
+    return True
 
 
 def _snapshot_seq(snapshot_pane: Mapping[str, object], *, fallback: int) -> int:

@@ -463,6 +463,49 @@ def test_poll_runtime_snapshot_refreshes_projector_from_backend_snapshot() -> No
     assert status.seq == 9
 
 
+def test_poll_runtime_snapshot_ignores_foreign_workspace_snapshot() -> None:
+    binding = HerdrRuntimeBinding(
+        project_id="proj-1",
+        server_id="server-1",
+        server_version="0.8.2",
+        api_schema="Herdr API",
+        session_name="ccb-project-1",
+        workspace_id="w1",
+        runtime_generation=13,
+        ready=True,
+        capabilities={},
+        panes=(
+            HerdrRuntimeBoundPane(
+                slot="codex",
+                pane_id="shared:pane",
+                agent_id="codex",
+                provider_kind="codex",
+                state="idle",
+                state_seq=1,
+            ),
+        ),
+    )
+    projector = HerdrRuntimeEventProjector(binding)
+
+    class _Backend:
+        def runtime_snapshot(self) -> dict[str, object]:
+            return {
+                "panes": [
+                    {
+                        "pane_id": "shared:pane",
+                        "workspace_id": "other-workspace",
+                        "state": "blocked",
+                        "seq": 9,
+                    },
+                ]
+            }
+
+    changed_pane_ids = poll_runtime_snapshot(projector, binding, _Backend())
+
+    assert changed_pane_ids == ("shared:pane",)
+    assert projector.status_for_pane("shared:pane") is None
+
+
 def test_herdr_state_mapping_preserves_done_and_unknown_semantics() -> None:
     assert map_herdr_state_to_ccb("working") == "working"
     assert map_herdr_state_to_ccb("blocked") == "waiting_for_user"

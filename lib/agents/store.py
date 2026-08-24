@@ -150,6 +150,11 @@ def _agent_runtime_from_record(record: dict) -> AgentRuntime:
         namespace_restore_token_present=bool(record.get('namespace_restore_token_present', False)),
         herdr_auto_restore_mode=record.get('herdr_auto_restore_mode'),
         herdr_agent_state_ref=record.get('herdr_agent_state_ref'),
+        herdr_runtime_snapshot=(
+            dict(record['herdr_runtime_snapshot'])
+            if isinstance(record.get('herdr_runtime_snapshot'), dict)
+            else None
+        ),
         pane_id=record.get('pane_id'),
         active_pane_id=record.get('active_pane_id'),
         pane_title_marker=record.get('pane_title_marker'),
