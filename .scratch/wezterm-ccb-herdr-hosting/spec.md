@@ -43,8 +43,17 @@ alive/missing/unknown（unknown 不视为 healthy）；无 Herdr fact 时保持�
 `fallback_reason=herdr_snapshot_unavailable`；通用 pane 崩溃不伪造 Provider session 已恢复。
 
 上游阻塞节点（未收口）：12C（Herdr 原生 restart/backoff/cleanup 能力）、13A（Herdr
-`agent_id` 权威需实机验证）、13B（删除 CCB 主动补 agent 身份路径，阻塞于 13A）。以上均需
-Herdr 上游能力或 Windows live validation 环境，不在本会话可执行范围。
+`agent_id` 权威需实机验证）、13B（删除 CCB 主动补 agent 身份路径，阻塞于 13A）。
+
+实机探针（2026-08-24）：已在实机连上运行中的 Herdr 0.8.2（protocol 20），直接查其原生 API
+（`herdr api schema --json` / `api snapshot` / `agent list`，绕过 CCB 硬编码兼容层）。证据表明这三个
+节点的阻塞根因**不是缺实机环境，而是 Herdr 0.8.2 API 本身缺能力**：全 schema 中 `agent_id`、
+`runtime.ensure`、`restart`、`backoff` 均 0 次；agent 身份=`pane_id`+`agent`+`name`，权威方向为
+CCB→Herdr（`pane.report_agent` push），Herdr 不铸造 agent_id；生命周期仅有手动
+`workspace.close`/`pane.close`/`worktree.remove`。故 12C/13A/13B 最低要求在 Herdr 0.8.2 下无法达成，
+删除门禁据负证据持续 fail-closed。详见
+`plans/architecture-optimization/topics/herdr-0.8.2-native-capability-probe.md` 及
+`live-validation/agent-id-authority.json`、`archi-hotspot-baseline.json`。
 
 已收口（13C 门禁脚手架，2026-08-24）：Phase 5 删除治理从散文约定收敛为**可重跑、fail-closed
 的删除门禁**——`scripts/phase5_deletion_gate.py` 逐项校验 characterization test 与 live validation

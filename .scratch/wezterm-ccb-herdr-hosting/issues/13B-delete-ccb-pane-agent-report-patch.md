@@ -24,3 +24,8 @@
 **Audit（2026-08-24）：** 13A 仍阻塞（Herdr `agent_id` 权威未在实机验证），本节点不执行
 删除；保持 blocked-by-13A。
 
+**Live probe（2026-08-24）：** 实机查 Herdr 0.8.2 原生 API 证实 `pane.report_agent` 是 Herdr 认可的
+**唯一 agent 归属 API**（CCB→Herdr push 身份），Herdr 无 `agent_id` 回写。故删除 CCB 主动补身份
+路径不仅不达标，删除还会**直接破坏 agent 状态归属**。保持 blocked-by-13A；见
+`topics/herdr-0.8.2-native-capability-probe.md`。
+

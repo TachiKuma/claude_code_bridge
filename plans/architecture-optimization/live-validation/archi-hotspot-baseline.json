@@ -1,0 +1,27 @@
+{
+  "scenario": "12C-13C-herdr-native-restart-backoff-cleanup",
+  "probed_at": "2026-08-24",
+  "herdr_version": "0.8.2",
+  "herdr_protocol": 20,
+  "passed": false,
+  "reason": "herdr_api_has_no_native_restart_backoff",
+  "evidence": "枚举 Herdr 0.8.2 原生 API 全部 216 个 method 常量:restart/backoff/ensure 均 0 次;不存在 Herdr 拥有的 restart/backoff 策略引擎。workspace/pane 清理仅有手动关闭原语 workspace.close / pane.close / tab.close / worktree.remove / server.stop,无法作为 CCB 可下放的原生 restart/backoff/cleanup 生命周期能力。因此 12C 最低要求(把通用 pane restart/backoff 与 workspace cleanup 执行权下放 Herdr)在 Herdr 0.8.2 下无法达成。archi hotspot 基线未随删除动作重跑,因为删除项(13B)阻塞于 13A,业务代码未删除。",
+  "native_lifecycle_methods_present": [
+    "agent.start",
+    "workspace.create",
+    "workspace.close",
+    "pane.close",
+    "tab.close",
+    "worktree.remove",
+    "server.stop",
+    "events.subscribe",
+    "events.wait"
+  ],
+  "native_lifecycle_methods_absent": [
+    "runtime.ensure",
+    "pane.restart",
+    "restart_backoff_policy",
+    "agent_id_authority"
+  ],
+  "blocks_nodes": ["12C", "13C"]
+}

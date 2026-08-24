@@ -26,3 +26,12 @@
 的验收依赖 Herdr 在真实环境中稳定返回 `agent_id` 并写入 binding/runtime.json，以及 Windows
 live validation；当前会话无该实机环境，保持 blocked-upstream。
 
+**Live probe（2026-08-24）：** 已在实机连上运行中的 Herdr 0.8.2（protocol 20），直接查其原生 API
+（`herdr api schema --json` / `api snapshot` / `agent list`）。结论：全 schema 中 `agent_id` 出现
+**0 次**；`AgentInfo` 身份=`pane_id`+`agent`+`name`，Herdr 不铸造也不回传稳定 `agent_id`；agent 归属
+权威方向是 **CCB→Herdr**（`pane.report_agent` push，`pane.clear_agent_authority` 清除）。因此 13A
+最低要求在 Herdr 0.8.2 下**无法达成**，属上游 API 缺能力（非缺环境）。证据：
+`plans/architecture-optimization/live-validation/agent-id-authority.json`（`passed:false`）与
+`plans/architecture-optimization/topics/herdr-0.8.2-native-capability-probe.md`。deletion gate 据此
+持续 fail-closed，保持 blocked-upstream。
+

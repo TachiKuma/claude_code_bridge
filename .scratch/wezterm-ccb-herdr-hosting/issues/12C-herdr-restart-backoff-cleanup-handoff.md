@@ -26,3 +26,9 @@ cleanup 的执行权交给 Herdr。CCB 只声明 manifest、接收结果、决�
 剩余阻塞仅为「上游 Herdr 原生 restart/backoff/cleanup 能力」与 Windows live validation 环境，
 不在本会话可执行范围；保持 blocked-upstream，不伪实现。
 
+**Live probe（2026-08-24）：** 实机枚举 Herdr 0.8.2 全部 216 个 API method：`restart`/`backoff`/
+`runtime.ensure` 均 **0 次**，仅有手动 `workspace.close`/`pane.close`/`worktree.remove`/`server.stop`
+清理原语，无可下放的原生 restart/backoff 策略。故 12C 最低要求**无法达成**，属上游 API 缺能力。
+证据：`plans/architecture-optimization/live-validation/archi-hotspot-baseline.json`（`passed:false`）与
+`topics/herdr-0.8.2-native-capability-probe.md`。保持 blocked-upstream。
+
