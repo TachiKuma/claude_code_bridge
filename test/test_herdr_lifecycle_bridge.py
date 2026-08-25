@@ -110,6 +110,24 @@ def test_bridge_skips_missing_pane_or_non_herdr_namespace() -> None:
     assert reporter.calls == []
 
 
+def test_bridge_skips_missing_provider_or_unknown_state_without_consuming_seq() -> None:
+    reporter = _Reporter()
+    bridge = HerdrAgentLifecycleBridge(
+        backend_factory=lambda: reporter,
+        namespace_ref_fn=lambda: {
+            "backend_impl": "herdr",
+            "session_name": "ccb-demo",
+        },
+    )
+
+    assert bridge.sync(provider="", state=AgentState.BUSY, pane_id="w1:p2") is False
+    assert bridge.sync(provider="codex", state="surprising", pane_id="w1:p2") is False
+
+    assert reporter.calls == []
+    assert reporter.attach_calls == []
+    assert bridge.seq == 0
+
+
 def test_sync_runtime_forwards_ccb_state_to_herdr_bridge() -> None:
     reporter = _Reporter()
     bridge = HerdrAgentLifecycleBridge(
