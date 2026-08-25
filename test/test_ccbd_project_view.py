@@ -808,6 +808,45 @@ def test_project_view_herdr_runtime_status_merges_callback_metadata() -> None:
     assert status['provider_runtime_source'] == 'pane'
 
 
+def test_project_view_provider_control_exposes_redacted_herdr_hook_risk(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-herdr-hook-risk'
+    project_root.mkdir()
+    layout = PathLayout(project_root)
+    home = layout.agent_provider_state_dir('agent1', 'codex') / 'home'
+    home.mkdir(parents=True, exist_ok=True)
+    (home / '.ccb-herdr-hook-diagnostics.json').write_text(
+        json.dumps(
+            {
+                'schema_version': 1,
+                'status': 'risk_detected',
+                'reason': 'herdr_native_agent_hook_competes_with_ccb_authority',
+                'authority': 'source=ccb',
+                'seq_policy': 'ccb_monotonic_seq_not_hook_time_ns',
+                'removed_hook_count': 1,
+                'removed_hooks': [{'command_preview': 'pwsh herdr-agent-state.ps1'}],
+            }
+        ),
+        encoding='utf-8',
+    )
+
+    record = project_view_service._provider_control_record(
+        spec=_spec('agent1', 'codex'),
+        runtime=None,
+        session_status=None,
+        project_root=project_root,
+        agent_name='agent1',
+    )
+
+    assert record['herdr_hook_risk'] == {
+        'status': 'risk_detected',
+        'reason': 'herdr_native_agent_hook_competes_with_ccb_authority',
+        'authority': 'source=ccb',
+        'seq_policy': 'ccb_monotonic_seq_not_hook_time_ns',
+        'removed_hook_count': 1,
+    }
+    assert 'herdr-agent-state' not in json.dumps(record)
+
+
 def test_project_view_herdr_namespace_skips_tmux_project_view_facts() -> None:
     namespace = ProjectNamespaceState(
         project_id='proj-herdr',

@@ -47,6 +47,7 @@ from provider_pane_status.claude_session import (
     read_claude_session_status,
 )
 from provider_control import provider_restart_pending_agents, read_provider_runtime_snapshot
+from provider_core.herdr_hook_guard import HERDR_HOOK_DIAGNOSTICS_FILENAME
 from provider_model_shortcuts import supported_provider_model_shortcuts
 from provider_thinking_shortcuts import provider_thinking_levels
 from storage.paths import PathLayout
@@ -1258,7 +1259,7 @@ def _provider_control_record(
         )
         else None
     )
-    return {
+    record = {
         'schema_version': 1,
         'provider': provider,
         'configured_model': configured_model,
@@ -1285,6 +1286,50 @@ def _provider_control_record(
         # presented as a live switch until the native runtime confirms one.
         'mutation_mode': 'restart_required' if model_shortcut else 'unsupported',
     }
+    hook_risk = _herdr_hook_risk_record(
+        project_root=project_root,
+        provider=provider,
+        agent_name=agent_name,
+    )
+    if hook_risk is not None:
+        record['herdr_hook_risk'] = hook_risk
+    return record
+
+
+def _herdr_hook_risk_record(
+    *,
+    project_root: Path,
+    provider: str,
+    agent_name: str,
+) -> dict[str, object] | None:
+    try:
+        diagnostics_path = (
+            PathLayout(project_root).agent_provider_state_dir(agent_name, provider)
+            / 'home'
+            / HERDR_HOOK_DIAGNOSTICS_FILENAME
+        )
+        payload = json.loads(diagnostics_path.read_text(encoding='utf-8'))
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    status = str(payload.get('status') or '').strip()
+    if not status or status == 'clear':
+        return None
+    return {
+        'status': status,
+        'reason': str(payload.get('reason') or '').strip() or None,
+        'authority': str(payload.get('authority') or '').strip() or None,
+        'seq_policy': str(payload.get('seq_policy') or '').strip() or None,
+        'removed_hook_count': _safe_nonnegative_int(payload.get('removed_hook_count')),
+    }
+
+
+def _safe_nonnegative_int(value: object) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _claude_transcript_path(runtime: object | None) -> Path | None:

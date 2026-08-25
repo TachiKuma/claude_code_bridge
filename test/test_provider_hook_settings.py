@@ -991,6 +991,62 @@ def test_prepare_provider_workspace_preserves_omx_native_codex_hooks(
     assert state[f'{hooks_path}:user_prompt_submit:0:0']['trusted_hash'] == expected_hash
 
 
+def test_prepare_provider_workspace_filters_herdr_codex_hooks_with_diagnostics(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project_root = tmp_path / 'repo'
+    workspace = project_root / 'workspace'
+    system_home = tmp_path / 'system-home'
+    system_codex = system_home / '.codex'
+    system_codex.mkdir(parents=True, exist_ok=True)
+    (system_codex / 'AGENTS.md').write_text('system codex memory\n', encoding='utf-8')
+    (system_codex / 'config.toml').write_text('model = "gpt-test"\n', encoding='utf-8')
+    (system_codex / 'hooks.json').write_text(
+        json.dumps(
+            {
+                'hooks': {
+                    'UserPromptSubmit': [
+                        {'hooks': [{'type': 'command', 'command': 'pwsh herdr-agent-state.ps1'}]},
+                        {'hooks': [{'type': 'command', 'command': 'echo allowed-generic-marker'}]},
+                    ],
+                }
+            },
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+    project_root.mkdir(parents=True, exist_ok=True)
+    _write_project_memory(project_root, 'shared ccb memory\n')
+    monkeypatch.setenv('CODEX_HOME', str(system_codex))
+    monkeypatch.setenv('CCB_CODEX_INHERITED_COMMAND_HOOK_MARKERS', 'herdr-agent-state;allowed-generic-marker')
+    layout = PathLayout(project_root)
+    runtime_dir = layout.agent_provider_runtime_dir('agent1', 'codex')
+
+    prepare_provider_workspace(
+        layout=layout,
+        spec=_spec('agent1', provider='codex'),
+        workspace_path=workspace,
+        completion_dir=runtime_dir / 'completion',
+        agent_name='agent1',
+        refresh_profile=True,
+    )
+
+    codex_home = project_root / '.ccb' / 'agents' / 'agent1' / 'provider-state' / 'codex' / 'home'
+    hooks_payload = json.loads((codex_home / 'hooks.json').read_text(encoding='utf-8'))
+    all_commands = [
+        str(hook.get('command') or '')
+        for commands in hooks_payload['hooks'].values()
+        for group in commands
+        for hook in group.get('hooks', [])
+    ]
+    diagnostics = json.loads((codex_home / '.ccb-herdr-hook-diagnostics.json').read_text(encoding='utf-8'))
+    assert 'pwsh herdr-agent-state.ps1' not in all_commands
+    assert 'echo allowed-generic-marker' in all_commands
+    assert diagnostics['status'] == 'risk_detected'
+    assert diagnostics['removed_hook_count'] == 1
+
+
 def test_prepare_provider_workspace_preserves_configured_codex_command_hooks(
     tmp_path: Path,
     monkeypatch,

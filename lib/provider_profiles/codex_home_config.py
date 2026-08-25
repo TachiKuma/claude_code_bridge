@@ -30,6 +30,10 @@ from provider_core.inherited_skills import (
     required_control_skill_names,
     route_inherited_skill_entries,
 )
+from provider_core.herdr_hook_guard import (
+    filter_herdr_agent_hooks,
+    write_herdr_hook_diagnostics,
+)
 from provider_core.projected_assets import (
     copy_projected_tree_to_cache,
     projected_path_is_owned,
@@ -1793,13 +1797,15 @@ def _install_codex_inherited_hooks(
     source_home: Path | None = None,
 ) -> None:
     hooks_path = Path(target_home).expanduser() / 'hooks.json'
-    event_groups = _allowed_inherited_codex_hooks(source_home)
+    raw_event_groups = _allowed_inherited_codex_hooks(source_home)
+    event_groups, diagnostics = filter_herdr_agent_hooks(raw_event_groups)
     hooks_payload = {'hooks': event_groups}
     hooks_path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_text(
         hooks_path,
         json.dumps(hooks_payload, ensure_ascii=False, indent=2) + '\n',
     )
+    write_herdr_hook_diagnostics(target_home, diagnostics)
     _merge_codex_hook_state(
         target_config,
         hooks_path=hooks_path,

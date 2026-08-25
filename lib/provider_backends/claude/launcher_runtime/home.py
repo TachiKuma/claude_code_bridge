@@ -27,6 +27,10 @@ from provider_core.inherited_skills import (
     required_control_skill_names,
     route_inherited_skill_entries,
 )
+from provider_core.herdr_hook_guard import (
+    filter_herdr_agent_hooks,
+    write_herdr_hook_diagnostics,
+)
 from provider_core.projected_assets import (
     remove_projected_path,
     route_projected_tree,
@@ -523,6 +527,7 @@ def _materialize_home_hook_assets(source_home: Path, target_layout: ClaudeHomeLa
     hooks_payload = source_settings.get('hooks')
     if not isinstance(hooks_payload, dict):
         return
+    hooks_payload = filter_herdr_agent_hooks(hooks_payload)[0]
     for dirname in _CLAUDE_HOME_HOOK_ASSET_DIRS:
         if _payload_mentions_home_asset(hooks_payload, dirname):
             _sync_tree(source_home / dirname, target_layout.home_root / dirname)
@@ -557,6 +562,12 @@ def _materialize_settings(
     )
     if merged is None:
         return
+    hooks_payload = merged.get('hooks')
+    if isinstance(hooks_payload, dict):
+        merged['hooks'], diagnostics = filter_herdr_agent_hooks(hooks_payload)
+    else:
+        diagnostics = filter_herdr_agent_hooks({})[1]
+    write_herdr_hook_diagnostics(target_layout.home_root, diagnostics)
     _rewrite_tilde_paths(merged, source_home=source_home)
     atomic_write_text(
         target_layout.settings_path,

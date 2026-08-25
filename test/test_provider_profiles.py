@@ -3868,6 +3868,60 @@ def test_materialize_claude_home_config_merges_source_and_managed_hooks(tmp_path
     assert payload['hooks']['PostToolUse'][0]['hooks'][0]['command'] == 'echo managed-post'
 
 
+def test_materialize_claude_home_config_filters_herdr_agent_hooks_with_diagnostics(tmp_path: Path) -> None:
+    source_home = tmp_path / 'system-home'
+    target_home = tmp_path / 'managed-home'
+    source_settings = source_home / '.claude' / 'settings.json'
+    source_settings.parent.mkdir(parents=True, exist_ok=True)
+    source_settings.write_text(
+        json.dumps(
+            {
+                'hooks': {
+                    'Stop': [
+                        {'hooks': [{'type': 'command', 'command': 'pwsh herdr-agent-state.ps1'}]},
+                        {'hooks': [{'type': 'command', 'command': 'echo source-stop'}]},
+                    ],
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+    target_settings = target_home / '.claude' / 'settings.json'
+    target_settings.parent.mkdir(parents=True, exist_ok=True)
+    target_settings.write_text(
+        json.dumps(
+            {
+                'hooks': {
+                    'Stop': [
+                        {'hooks': [{'type': 'command', 'command': 'herdr agent-state --json'}]},
+                        {'hooks': [{'type': 'command', 'command': 'echo managed-stop'}]},
+                    ],
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+
+    layout = materialize_claude_home_config(target_home, source_home=source_home)
+
+    payload = json.loads(layout.settings_path.read_text(encoding='utf-8'))
+    commands = [
+        hook['command']
+        for group in payload['hooks']['Stop']
+        for hook in group.get('hooks', [])
+        if isinstance(hook, dict)
+    ]
+    diagnostics = json.loads((target_home / '.ccb-herdr-hook-diagnostics.json').read_text(encoding='utf-8'))
+    assert commands == ['echo source-stop', 'echo managed-stop']
+    assert diagnostics['status'] == 'risk_detected'
+    assert diagnostics['removed_hook_count'] == 2
+    assert diagnostics['authority'] == 'source=ccb'
+
+
 def test_materialize_claude_home_config_refreshes_ccb_only_permissions_for_auto_permission(tmp_path: Path) -> None:
     source_home = tmp_path / 'system-home'
     target_home = tmp_path / 'managed-home'
@@ -5777,6 +5831,58 @@ def test_materialize_gemini_home_config_preserves_runtime_hooks(tmp_path: Path) 
     assert payload['env']['GEMINI_API_KEY'] == 'system-gemini-key'
     assert payload['theme'] == 'Atom One'
     assert payload['hooks']['AfterAgent'][0]['hooks'][0]['command'] == 'echo hook'
+
+
+def test_materialize_gemini_home_config_filters_herdr_agent_hooks_with_diagnostics(tmp_path: Path) -> None:
+    source_home = tmp_path / 'system-home'
+    target_home = tmp_path / 'managed-home'
+    source_settings = source_home / '.gemini' / 'settings.json'
+    source_settings.parent.mkdir(parents=True, exist_ok=True)
+    source_settings.write_text(
+        json.dumps(
+            {
+                'hooks': {
+                    'AfterAgent': [
+                        {'matcher': '*', 'hooks': [{'type': 'command', 'command': 'echo source hook'}]},
+                    ]
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+    target_settings = target_home / '.gemini' / 'settings.json'
+    target_settings.parent.mkdir(parents=True, exist_ok=True)
+    target_settings.write_text(
+        json.dumps(
+            {
+                'hooks': {
+                    'AfterAgent': [
+                        {'matcher': '*', 'hooks': [{'type': 'command', 'command': 'herdr-agent-state.sh'}]},
+                        {'matcher': '*', 'hooks': [{'type': 'command', 'command': 'echo managed hook'}]},
+                    ]
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+
+    layout = materialize_gemini_home_config(target_home, source_home=source_home)
+
+    payload = json.loads(layout.settings_path.read_text(encoding='utf-8'))
+    commands = [
+        hook['command']
+        for group in payload['hooks']['AfterAgent']
+        for hook in group.get('hooks', [])
+        if isinstance(hook, dict)
+    ]
+    diagnostics = json.loads((target_home / '.ccb-herdr-hook-diagnostics.json').read_text(encoding='utf-8'))
+    assert commands == ['echo managed hook']
+    assert diagnostics['status'] == 'risk_detected'
+    assert diagnostics['removed_hook_count'] == 1
 
 
 def test_materialize_gemini_home_config_merges_trusted_folders(tmp_path: Path) -> None:

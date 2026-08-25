@@ -18,6 +18,10 @@ from provider_core.one_way_inheritance import (
     ensure_private_inheritance_directory,
 )
 from provider_core.inherited_skills import materialize_required_control_skills
+from provider_core.herdr_hook_guard import (
+    filter_herdr_agent_hooks,
+    write_herdr_hook_diagnostics,
+)
 from provider_core.projected_assets import seed_projected_tree
 from provider_core.source_home import current_provider_source_home
 from provider_profiles import provider_api_env_keys
@@ -292,6 +296,12 @@ def _materialize_settings(
     merged = _merge_settings_payload(projected, existing=existing)
     if merged is None:
         return
+    hooks_payload = merged.get('hooks')
+    if isinstance(hooks_payload, dict):
+        merged['hooks'], diagnostics = filter_herdr_agent_hooks(hooks_payload)
+    else:
+        diagnostics = filter_herdr_agent_hooks({})[1]
+    write_herdr_hook_diagnostics(layout.home_root, diagnostics)
     if (
         _selected_auth_type(merged) is None
         and _selected_auth_type(existing) is not None
