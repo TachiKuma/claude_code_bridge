@@ -66,17 +66,17 @@ class _EventsBackend(_SnapshotBackend):
         self,
         snapshot: dict[str, object],
         *,
-        events: list[dict[str, object]] | None = None,
+        events: object = None,
         capability: str = 'supported',
     ) -> None:
         super().__init__(snapshot)
-        self.events = list(events or [])
+        self.events = [] if events is None else events
         self.capability = capability
 
     def runtime_capabilities(self) -> dict[str, str]:
         return {'runtime_events': self.capability}
 
-    def runtime_events(self) -> list[dict[str, object]]:
+    def runtime_events(self) -> object:
         self.calls += 1
         return self.events
 
@@ -341,3 +341,35 @@ def test_herdr_runtime_events_polling_falls_back_to_snapshot_polling_with_reason
     assert runtime.herdr_runtime_snapshot is not None
     assert runtime.herdr_runtime_snapshot['source'] == 'snapshot_polling'
     assert runtime.herdr_runtime_snapshot['fallback_reason'] == 'runtime_events_unsupported'
+
+
+def test_herdr_runtime_events_polling_falls_back_when_event_batch_is_invalid(
+    tmp_path: Path,
+) -> None:
+    layout, _config_value, registry = _registry(tmp_path)
+    project_id = compute_project_id(layout.project_root)
+    registry.upsert(_runtime('agent1', project_id=project_id, pane_id='pane-1'))
+    backend = _EventsBackend(
+        {
+            'panes': [
+                {'pane_id': 'pane-1', 'workspace_id': 'workspace-1', 'state': 'working', 'seq': 8},
+            ]
+        },
+        events={'not': 'a list'},
+    )
+    controller = _NamespaceController(_namespace(project_id), backend)
+
+    result = poll_herdr_runtime_events(
+        registry=registry,
+        namespace_controller=controller,
+    )
+
+    runtime = registry.get('agent1')
+    assert result.polled is True
+    assert result.source == 'snapshot_polling'
+    assert result.fallback_reason == 'subscription_failed:invalid_event_batch'
+    assert runtime is not None
+    assert runtime.herdr_runtime_snapshot is not None
+    assert runtime.herdr_runtime_snapshot['source'] == 'snapshot_polling'
+    assert runtime.herdr_runtime_snapshot['fallback_reason'] == 'subscription_failed:invalid_event_batch'
+    assert runtime.herdr_runtime_snapshot['panes'][0]['runtime_state'] == 'working'
