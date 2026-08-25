@@ -1,8 +1,8 @@
-# 12C：restart/backoff/workspace cleanup 下放收口
+# 12C：restart/backoff/workspace cleanup 下放误设收口
 
 **What to build：** 在 12B 的 readiness/liveness fact 稳定后，把通用 pane restart/backoff 和 workspace
-cleanup 的执行权交给 Herdr。CCB 只声明 manifest、接收结果、决定 Provider 是否允许恢复、是否 job
-失败/重试。
+cleanup 的执行权交给 Herdr。该方向已被 ADR 0002 取代：Herdr 无 agent restart/backoff 策略，CCB
+继续拥有该职责。
 
 **Blocked by：** 12B（Herdr readiness/liveness adapter）、上游 Herdr 原生 restart/backoff/cleanup 能力
 
@@ -12,7 +12,7 @@ cleanup 的执行权交给 Herdr。CCB 只声明 manifest、接收结果、决�
 `lib/ccbd/services/project_namespace_runtime/destroy.py`、
 `lib/ccbd/stop_flow_runtime/service.py`、`test/test_ccbd_stop_flow_runtime.py`
 
-- [ ] restart/backoff 策略来自 manifest 或 Herdr runtime.ensure 结果
+- [ ] restart/backoff 策略来自 manifest 或 Herdr ensure 结果
 - [ ] CCB 不再直接 respawn 通用 pane，只处理 Provider 恢复许可
 - [ ] workspace cleanup 由 Herdr 返回结构化 evidence
 - [ ] kill/stop/reload 保持幂等，旧 workspace 不累积
@@ -23,12 +23,11 @@ cleanup 的执行权交给 Herdr。CCB 只声明 manifest、接收结果、决�
 - `pytest test/test_ccbd_stop_flow_runtime.py test/test_v2_project_namespace_state.py`
 
 **Audit（2026-08-24）：** 12B 已收口（readiness/liveness 已下放 Herdr runtime fact），本节点
-剩余阻塞仅为「上游 Herdr 原生 restart/backoff/cleanup 能力」与 Windows live validation 环境，
-不在本会话可执行范围；保持 blocked-upstream，不伪实现。
+剩余原设想已由 ADR 0002 判为方向性误设，不再作为 open blocker；本节点保留为负证据记录，不伪实现。
 
 **Live probe（2026-08-24）：** 实机枚举 Herdr 0.8.2 全部 216 个 API method：`restart`/`backoff`/
 `runtime.ensure` 均 **0 次**，仅有手动 `workspace.close`/`pane.close`/`worktree.remove`/`server.stop`
 清理原语，无可下放的原生 restart/backoff 策略。故 12C 最低要求**无法达成**，属上游 API 缺能力。
 证据：`plans/architecture-optimization/live-validation/archi-hotspot-baseline.json`（`passed:false`）与
-`topics/herdr-0.8.2-native-capability-probe.md`。保持 blocked-upstream。
+`topics/herdr-0.8.2-native-capability-probe.md`。ADR 0002 已将该方向收束为 `wontfix`。
 

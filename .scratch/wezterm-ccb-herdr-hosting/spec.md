@@ -5,6 +5,7 @@
 - 关联方案：`plans/architecture-optimization/herdr-runtime-hosting-optimization-plan.v2.zh-CN.md`
 - 关联基线：`plans/architecture-optimization/herdr-runtime-hosting-optimization-plan.zh-CN.md`
 - 关联决策：`docs/adr/0001-三层运行时权威边界.md`
+- 取代修订：`docs/adr/0002-观测聚合协作模型.md`（收束 Herdr 下放误设，确立 CCB 权威 · Herdr 观测 · WezTerm 呈现）
 - 关联术语：仓库根 `CONTEXT.md`
 - 语言约束：本 spec 及其派生工单/代码注释一律简体中文（见 `AGENTS.md`）
 
@@ -16,15 +17,16 @@
 
 本轮已经完成 CCB 侧的前台启动 runner seam、Runtime Binding `frontend` 段、WezTerm mux 探活与可观测
 回退、`project_view` 前台三态、no-window 兜底、import-time Herdr gate 移除、runtime manifest、
-`ensure_runtime(manifest)` 兼容层，以及 Herdr runtime event/model/projector 与读模型映射基础。
+`ensure_runtime(manifest)` CCB 运行时收敛职责，以及 Herdr runtime event/model/projector 与读模型映射基础。
 
 仍未完全关闭的范围：
 
 - 运行时事件目前是 CCB 侧模型与 projector 基础；snapshot polling 循环与断线重连后自动重读
   snapshot 已接入（10A/10C）；事件订阅适配器已落地（10B）：能力缺失或订阅失败时显式回退
-  snapshot polling 并把 `source`/`fallback_reason` 写入持久化快照，真正上游事件源仍待 Herdr 提供。
+  snapshot polling 并把 `source`/`fallback_reason` 写入持久化快照。ADR 0002 已修正该段历史前提：
+  Herdr 原生 `events.subscribe`/`events.wait` 已存在，目标模型是 events 为主、polling 兜底。
 - 通用 pane readiness/liveness 已下放 Herdr runtime fact（12B）；restart/backoff/workspace
-  cleanup 仍未下放，需等待或接入 Herdr 上游原生 `runtime.ensure/event/agent_id` 能力（12C）。
+  cleanup 不再作为等待 Herdr 下放的 open blocker；ADR 0002 已判定 agent 身份与 restart/backoff 策略恒属 CCB。
 - 旧路径删除只完成了正常启动路径的 capability 文件治理；宽 CLI 白名单、backend capability 组合
   gate、tmux_runtime 主动补 agent 身份等收口仍需逐项 characterization test 与 Windows live validation。
 - 尚未执行无预启动 WezTerm GUI/有 mux/多项目 attach/mobile gateway 的 Windows live validation。
@@ -34,17 +36,18 @@
 `prompt/reply/api_key/oauth_token/transcript`；契约与脱敏测试已并入 gateway/ccbd project_view
 验证集。
 
-已收口（12A）：Herdr 原生能力契约（`runtime.ensure`/`runtime.events`/`agent_id_authority`）已
-结构化表达；上游缺能力时 CCB 兼容层保持可用且 reason 可观测，schema/能力不匹配仍 fail-closed，
-证据来自握手 server_info 不再回退临时 capability 文件；12B/12C 的下放决策将消费该契约。
+已收口（12A）：Herdr 原生能力契约（runtime events、source/seq 观测事实、缺能力原因）已
+结构化表达；上游缺能力时 CCB 运行时收敛职责保持可用且 reason 可观测，schema/能力不匹配仍
+fail-closed，证据来自握手 server_info 不再回退临时 capability 文件；ADR 0002 已取代
+`runtime.ensure`/`agent_id_authority` 下放方向。
 
 已收口（12B）：readiness/liveness 以 Herdr `runtime_snapshot` 为事实源，区分
-alive/missing/unknown（unknown 不视为 healthy）；无 Herdr fact 时保持兼容层并暴露
+alive/missing/unknown（unknown 不视为 healthy）；无 Herdr fact 时保持 CCB 收敛路径并暴露
 `fallback_reason=herdr_snapshot_unavailable`；通用 pane 崩溃不伪造 Provider session 已恢复。
 
 收束为 wontfix（2026-08-24，源码验证）：12C（Herdr 原生 restart/backoff/cleanup 能力）、13A（Herdr
 `agent_id` 权威）、13B（删除 CCB 主动补 agent 身份路径）经 Herdr 源码验证判为 **`wontfix`（已被
-ADR 0001 修订取代）**，不再挂 blocked-upstream——详见下文与 `docs/adr/0001` 修订节。
+ADR 0001 修订与 ADR 0002 取代）**，不再作为 open blocker——详见下文与两份 ADR。
 
 实机探针（2026-08-24）：已在实机连上运行中的 Herdr 0.8.2（protocol 20），直接查其原生 API
 （`herdr api schema --json` / `api snapshot` / `agent list`，绕过 CCB 硬编码兼容层）。证据表明这三个
@@ -52,7 +55,7 @@ ADR 0001 修订取代）**，不再挂 blocked-upstream——详见下文与 `do
 `runtime.ensure`、`restart`、`backoff` 均 0 次；agent 身份=`pane_id`+`agent`+`name`，权威方向为
 CCB→Herdr（`pane.report_agent` push），Herdr 不铸造 agent_id；生命周期仅有手动
 `workspace.close`/`pane.close`/`worktree.remove`。故 12C/13A/13B 最低要求在 Herdr 0.8.2 下无法达成，
-删除门禁据负证据持续 fail-closed。详见
+并已按 ADR 0002 转为方向性 `wontfix`，删除门禁据负证据持续 fail-closed。详见
 `plans/architecture-optimization/topics/herdr-0.8.2-native-capability-probe.md` 及
 `live-validation/agent-id-authority.json`、`archi-hotspot-baseline.json`。
 
@@ -159,7 +162,8 @@ rollback 条件）。门禁脚手架不删除任何业务代码；对当前仓�
     validation 兜底。
 24. 作为维护者，我希望 `runtime_status` 缓存按 project id / agent name / runtime generation /
     pane id 复合键失效，避免跨实例串状态。
-25. 作为维护者，我希望 CCB 只声明运行时拓扑（manifest），由 Herdr 或兼容层收敛实际 runtime。
+25. 作为维护者，我希望 CCB 只声明运行时拓扑（manifest），并由 CCB 的 `ensure_runtime(manifest)`
+    长期职责收敛实际 runtime。
 26. 作为维护者，我希望运行时握手收敛为一次性对象，而不是每个操作都重复 `server_info()`。
 27. 作为维护者，我希望前台三态在 `project_view` 中可被下游（面板、mobile gateway）一致消费。
 28. 作为维护者，我希望 WezTermBackend（WezTerm 作为 mux 后端）明确 out-of-scope，避免范围
@@ -209,16 +213,17 @@ rollback 条件）。门禁脚手架不删除任何业务代码；对当前仓�
 - `ccb --help` / `version` / 配置检查等 introspection 命令**完全不触碰** Herdr；需要运行时的命令在
   operation-time 调用适配器，并返回结构化错误。
 
-**声明式 manifest 与兼容层（Phase 2）**
+**声明式 manifest 与 CCB 收敛职责（Phase 2）**
 
-- CCB start path 生成 manifest；先由 CCB 内 `ensure_runtime(manifest, restore_token)` 兼容层收敛，
-  内部仍可调用既有 create/ensure/pane 操作；上游 Herdr 原生 `runtime.ensure` 成熟后再切换。
-- bootstrap 降级为兼容层：只负责解析 Herdr 可执行文件与启动初始 server；capability 证据来自
+- CCB start path 生成 manifest；由 CCB 内 `ensure_runtime(manifest, restore_token)` 长期职责收敛，
+  内部仍可调用既有 create/ensure/pane 操作；不再等待 Herdr 原生 ensure 接管该职责。
+- bootstrap 降级为内部实现细节：只负责解析 Herdr 可执行文件与启动初始 server；capability 证据来自
   握手/ binding，不再写临时 capability 文件。
 
 **事件投影与读模型（Phase 3）**
 
-- 增加运行时事件订阅；无上游事件时先用 snapshot polling 兼容实现，对外保持事件语义。
+- 增加运行时事件订阅；Herdr 原生 events 为主通道，snapshot polling 作为能力缺失或订阅失败时的兜底，
+  对外保持事件语义并暴露回退原因。
 - `project_view` 的 runtime_status resolver 合并：Herdr 运行时状态、Provider hook 状态、
   pane/status-line 状态、CCB job/callback 元数据、lifecycle guard，以及**前台三态**（已 attach
   WezTerm tab / 已回退 detached / 前台未就绪）。

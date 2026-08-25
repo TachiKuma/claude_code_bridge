@@ -21,11 +21,11 @@
 
 - `pytest test/test_herdr_runtime_contracts.py test/test_v2_project_namespace_state.py`
 
-**Audit（2026-08-24）：** 13A 仍阻塞（Herdr `agent_id` 权威未在实机验证），本节点不执行
-删除；保持 blocked-by-13A。
+**Audit（2026-08-24）：** 13A 经实机与源码验证判为 `wontfix`。本节点不执行删除；ADR 0002 已确认
+`report_pane_agent` 是 CCB→Herdr 的正规权威上报路径，不是旧补丁。
 
 **Live probe（2026-08-24）：** 实机查 Herdr 0.8.2 原生 API 证实 `pane.report_agent` 是 Herdr 认可的
 **唯一 agent 归属 API**（CCB→Herdr push 身份），Herdr 无 `agent_id` 回写。故删除 CCB 主动补身份
-路径不仅不达标，删除还会**直接破坏 agent 状态归属**。保持 blocked-by-13A；见
+路径不仅不达标，删除还会**直接破坏 agent 状态归属**。本方向已收束为 `wontfix`；见
 `topics/herdr-0.8.2-native-capability-probe.md`。
 

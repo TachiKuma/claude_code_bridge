@@ -22,9 +22,8 @@
 
 - `pytest test/test_herdr_runtime_contracts.py`
 
-**Audit（2026-08-24）：** 12A 已收口（capability 可表达 `agent_id_authority`），但本节点
-的验收依赖 Herdr 在真实环境中稳定返回 `agent_id` 并写入 binding/runtime.json，以及 Windows
-live validation；当前会话无该实机环境，保持 blocked-upstream。
+**Audit（2026-08-24）：** 12A 已收口（capability 可表达 `agent_id_authority`），随后实机与源码验证
+证明 Herdr 不铸造稳定 `agent_id`。ADR 0002 已将本方向收束为 `wontfix`，不再作为 open blocker。
 
 **Live probe（2026-08-24）：** 已在实机连上运行中的 Herdr 0.8.2（protocol 20），直接查其原生 API
 （`herdr api schema --json` / `api snapshot` / `agent list`）。结论：全 schema 中 `agent_id` 出现
@@ -33,5 +32,5 @@ live validation；当前会话无该实机环境，保持 blocked-upstream。
 最低要求在 Herdr 0.8.2 下**无法达成**，属上游 API 缺能力（非缺环境）。证据：
 `plans/architecture-optimization/live-validation/agent-id-authority.json`（`passed:false`）与
 `plans/architecture-optimization/topics/herdr-0.8.2-native-capability-probe.md`。deletion gate 据此
-持续 fail-closed，保持 blocked-upstream。
+持续 fail-closed；ADR 0002 已将该方向收束为 `wontfix`。
 
