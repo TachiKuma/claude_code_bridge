@@ -3,6 +3,8 @@ __pycache__/
 target/
 .venv/
 .pytest_cache/
+.codegraph/
+graphify-out/
 .architec/
 docs/
 !docs/
