@@ -135,15 +135,18 @@ def ensure_herdr_bootstrap_env(
         warnings.append(
             f'Using Herdr session {session!r}; pass --herdr-session to override.'
         )
+    probe = _probe_herdr_read_capabilities(exe, session)
+    capability_report_path = _write_capability_report(_build_capability_report(probe))
     os.environ['CCB_HERDR_EXE'] = exe
     os.environ['CCB_HERDR_SESSION'] = session
     os.environ['CCB_HERDR_SOCKET_REF'] = socket_ref
-    os.environ.pop('CCB_HERDR_CAPABILITY_REPORT', None)
+    os.environ['CCB_HERDR_CAPABILITY_REPORT'] = capability_report_path
     return {
         'ok': True,
         'herdr_exe': exe,
         'herdr_session': session,
         'socket_ref': socket_ref,
+        'capability_report': capability_report_path,
         'warnings': warnings,
     }
 

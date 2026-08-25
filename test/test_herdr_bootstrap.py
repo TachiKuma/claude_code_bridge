@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sys
 from types import SimpleNamespace
@@ -164,15 +165,20 @@ def _bootstrap_success_mocks(monkeypatch, *, status=None):
 
 def test_bootstrap_sets_env_and_succeeds(monkeypatch) -> None:
     _bootstrap_success_mocks(monkeypatch)
+    monkeypatch.setattr(
+        'platforms.windows.herdr.bootstrap._write_capability_report',
+        lambda report: '/tmp/cap.json',
+    )
     result = ensure_herdr_bootstrap_env()
     assert result['ok'] is True
     assert result['herdr_exe'] == '/x/herdr.exe'
     assert result['herdr_session'] == 'sess-live'
     assert result['socket_ref'] == 'herdr://sess-live'
+    assert result['capability_report'] == '/tmp/cap.json'
     assert os.environ['CCB_HERDR_EXE'] == '/x/herdr.exe'
     assert os.environ['CCB_HERDR_SESSION'] == 'sess-live'
     assert os.environ['CCB_HERDR_SOCKET_REF'] == 'herdr://sess-live'
-    assert 'CCB_HERDR_CAPABILITY_REPORT' not in os.environ
+    assert os.environ['CCB_HERDR_CAPABILITY_REPORT'] == '/tmp/cap.json'
 
 
 def test_bootstrap_prefers_explicit_session(monkeypatch) -> None:
@@ -186,6 +192,7 @@ def test_bootstrap_prefers_explicit_session(monkeypatch) -> None:
 
 def test_bootstrap_ignores_read_probes_and_still_succeeds(monkeypatch) -> None:
     _bootstrap_success_mocks(monkeypatch)
+    reports: list[dict[str, object]] = []
     monkeypatch.setattr(
         'platforms.windows.herdr.bootstrap._probe_herdr_read_capabilities',
         lambda exe, session=None: {
@@ -194,10 +201,16 @@ def test_bootstrap_ignores_read_probes_and_still_succeeds(monkeypatch) -> None:
             'pane_list': True,
         },
     )
+    monkeypatch.setattr(
+        'platforms.windows.herdr.bootstrap._write_capability_report',
+        lambda report: reports.append(report) or '/tmp/cap.json',
+    )
     result = ensure_herdr_bootstrap_env()
     assert result['ok'] is True
     assert result['socket_ref'] == 'herdr://sess-live'
-    assert 'CCB_HERDR_CAPABILITY_REPORT' not in os.environ
+    assert os.environ['CCB_HERDR_CAPABILITY_REPORT'] == '/tmp/cap.json'
+    assert reports[0]['command_status']['workspace_list'] == 'unsupported'
+    assert reports[0]['command_status']['workspace_create'] == 'supported'
 
 
 # --- P0: auto-start server when nothing is running ------------------------
@@ -295,6 +308,24 @@ def test_build_capability_report_covers_known_capabilities() -> None:
     assert report['blocking_gaps'] == []
     assert report['command_status']['session_attach'] == 'supported'
     assert report['command_status']['kill_pane'] == 'supported'
+
+
+def test_bootstrap_writes_capability_report_for_runtime_gate(monkeypatch, tmp_path) -> None:
+    _bootstrap_success_mocks(monkeypatch)
+    path = tmp_path / 'cap.json'
+    monkeypatch.setattr(
+        'platforms.windows.herdr.bootstrap._write_capability_report',
+        lambda report: (path.write_text(json.dumps(report), encoding='utf-8'), str(path))[1],
+    )
+
+    result = ensure_herdr_bootstrap_env()
+    report = json.loads(path.read_text(encoding='utf-8'))
+
+    assert result['capability_report'] == str(path)
+    assert os.environ['CCB_HERDR_CAPABILITY_REPORT'] == str(path)
+    assert report['command_status']['workspace_create'] == 'supported'
+    assert report['command_status']['workspace_metadata'] == 'supported'
+    assert report['command_status']['pane_metadata'] == 'supported'
 
 
 # --- handle_herdr_open daemon conflict ------------------------------------

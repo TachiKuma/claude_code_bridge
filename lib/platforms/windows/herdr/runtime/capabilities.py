@@ -312,6 +312,15 @@ def _herdr_compat_mux_statuses() -> dict[str, str]:
         "send_input": "supported",
         "read_output": "supported",
         "kill_pane": "supported",
+        "workspace_create": "supported",
+        "workspace_list": "supported",
+        "workspace_focus": "supported",
+        "workspace_close": "supported",
+        "workspace_metadata": "supported",
+        "pane_metadata": "supported",
+        "pane_list": "supported",
+        "pane_split": "supported",
+        "pane_run": "supported",
     }
 
 

@@ -441,6 +441,7 @@ def test_herdr_capability_gate_from_server_info_supports_native_runtime_contract
     assert gate.runtime_capability_status("runtime_events") == "supported"
     assert gate.runtime_capability_status("agent_id_authority") == "supported"
     assert gate.require_supported("send_text")["backend_impl"] == "herdr"
+    assert gate.require_supported("create_session")["backend_impl"] == "herdr"
 
 
 def test_herdr_capability_gate_from_server_info_fails_closed_on_schema_mismatch() -> None:
@@ -2096,6 +2097,7 @@ def test_terminal_api_get_backend_uses_socket_runtime_env_without_capability_fil
 
     assert isinstance(backend, HerdrBackend)
     assert backend._client.socket_ref == "herdr://ccb-demo"
+    backend._capability_gate.require_supported("create_session")
 
 
 def test_terminal_api_get_backend_auto_preserves_non_windows_tmux(monkeypatch) -> None:
