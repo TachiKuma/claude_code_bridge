@@ -475,6 +475,7 @@ def test_project_view_herdr_runtime_status_maps_done_without_closing_job() -> No
     )
 
     assert status['state'] == 'idle'
+    assert status['agent_status'] == 'done'
     assert status['runtime_state'] == 'done'
     assert status['unseen_done'] is True
     assert status['job_status'] == 'running'
@@ -517,8 +518,58 @@ def test_project_view_herdr_runtime_status_keeps_unknown_unknown() -> None:
     )
 
     assert status['state'] == 'unknown'
+    assert status['agent_status'] == 'unknown'
     assert status['runtime_state'] == 'unknown'
     assert status['unseen_done'] is False
+
+
+def test_project_view_herdr_agent_status_exposes_source_without_business_authority() -> None:
+    project_id = 'proj-herdr'
+    namespace = ProjectNamespaceState(
+        project_id=project_id,
+        namespace_epoch=5,
+        tmux_socket_path='',
+        tmux_session_name='ccb-herdr',
+        namespace_backend_family='herdr-native',
+        backend_impl='herdr',
+        namespace_id='workspace-1',
+        namespace_session_name='ccb-herdr',
+        namespace_ipc_kind='herdr_socket',
+        namespace_ipc_ref='herdr://ccb-herdr',
+        layout_version=3,
+        workspace_window_name='workspace',
+        ui_attachable=True,
+    )
+    runtime = _runtime('agent1', project_id=project_id)
+    runtime.herdr_runtime_snapshot = {
+        'source': 'event',
+        'fallback_reason': None,
+        'panes': [
+            {
+                'pane_id': '%1',
+                'workspace_id': 'workspace-1',
+                'runtime_state': 'blocked',
+                'seq': 9,
+            },
+        ],
+    }
+
+    status = project_view_service._merged_runtime_status(
+        deps=SimpleNamespace(project_id=project_id),
+        namespace=namespace,
+        agent_name='agent1',
+        runtime=runtime,
+        job=SimpleNamespace(status=JobStatus.RUNNING, job_id='job-still-open'),
+        provider_runtime_status=None,
+    )
+
+    assert status['state'] == 'waiting_for_user'
+    assert status['agent_status'] == 'blocked'
+    assert status['agent_status_source'] == 'event'
+    assert status['agent_status_seq'] == 9
+    assert status['agent_status_fallback_reason'] is None
+    assert status['job_status'] == 'running'
+    assert status['job_id'] == 'job-still-open'
 
 
 def test_project_view_herdr_runtime_status_reads_snapshot_when_state_fields_are_missing() -> None:
@@ -556,6 +607,7 @@ def test_project_view_herdr_runtime_status_reads_snapshot_when_state_fields_are_
     )
 
     assert status['state'] == 'waiting_for_user'
+    assert status['agent_status'] == 'blocked'
     assert status['runtime_state'] == 'blocked'
     assert status['source'] == 'herdr_runtime'
 

@@ -24,7 +24,8 @@ class RuntimeStatusInput:
 def build_runtime_status(input: RuntimeStatusInput) -> dict[str, object] | None:
     if not namespace_is_herdr(input.namespace):
         return None
-    raw_state = herdr_runtime_state_fact(input.runtime)
+    fact = herdr_agent_status_fact(input.runtime)
+    raw_state = fact['agent_status']
     source = 'herdr_runtime' if raw_state is not None else 'missing_herdr_runtime_state'
     runtime_state = raw_state or 'unknown'
     frontend = namespace_frontend_status(input.namespace)
@@ -37,6 +38,10 @@ def build_runtime_status(input: RuntimeStatusInput) -> dict[str, object] | None:
     record: dict[str, object] = {
         'schema_version': 1,
         'state': map_herdr_state_to_ccb(runtime_state),
+        'agent_status': runtime_state,
+        'agent_status_source': fact.get('source') or source,
+        'agent_status_seq': fact.get('seq'),
+        'agent_status_fallback_reason': fact.get('fallback_reason'),
         'runtime_state': runtime_state,
         'source': source,
         'unseen_done': runtime_state == 'done',
@@ -128,18 +133,30 @@ def namespace_frontend_status(namespace) -> dict[str, object] | None:
 
 
 def herdr_runtime_state_fact(runtime) -> str | None:
+    return herdr_agent_status_fact(runtime)['agent_status']
+
+
+def herdr_agent_status_fact(runtime) -> dict[str, object | None]:
+    fact: dict[str, object | None] = {
+        'agent_status': None,
+        'source': None,
+        'seq': None,
+        'fallback_reason': None,
+    }
     if runtime is None:
-        return None
+        return fact
     for attr in ('herdr_runtime_state', 'herdr_state'):
         value = str(getattr(runtime, attr, '') or '').strip().lower()
         if value:
-            return value
-    snapshot_state = _herdr_runtime_state_from_snapshot(
+            fact['agent_status'] = value
+            fact['source'] = 'runtime_attribute'
+            return fact
+    snapshot_fact = _herdr_agent_status_from_snapshot(
         getattr(runtime, 'herdr_runtime_snapshot', None),
         pane_id=getattr(runtime, 'pane_id', None),
     )
-    if snapshot_state is not None:
-        return snapshot_state
+    if snapshot_fact['agent_status'] is not None:
+        return snapshot_fact
     for container in (
         getattr(runtime, 'pane_ref', None),
         getattr(runtime, 'provider_runtime_backend_ref', None),
@@ -149,13 +166,30 @@ def herdr_runtime_state_fact(runtime) -> str | None:
         for key in ('herdr_runtime_state', 'runtime_state', 'state'):
             value = str(container.get(key) or '').strip().lower()
             if value:
-                return value
-    return None
+                fact['agent_status'] = value
+                fact['source'] = str(container.get('source') or 'pane_ref').strip() or 'pane_ref'
+                fact['seq'] = _optional_non_negative_int(container.get('seq'))
+                fact['fallback_reason'] = _optional_text(container.get('fallback_reason'))
+                return fact
+    return fact
 
 
 def _herdr_runtime_state_from_snapshot(snapshot, *, pane_id: object | None) -> str | None:
+    value = _herdr_agent_status_from_snapshot(snapshot, pane_id=pane_id)['agent_status']
+    return str(value) if value is not None else None
+
+
+def _herdr_agent_status_from_snapshot(snapshot, *, pane_id: object | None) -> dict[str, object | None]:
+    fact: dict[str, object | None] = {
+        'agent_status': None,
+        'source': None,
+        'seq': None,
+        'fallback_reason': None,
+    }
     if not isinstance(snapshot, dict):
-        return None
+        return fact
+    snapshot_source = _optional_text(snapshot.get('source')) or 'snapshot'
+    fallback_reason = _optional_text(snapshot.get('fallback_reason'))
     target_pane_id = str(pane_id or '').strip()
     panes = snapshot.get('panes')
     if isinstance(panes, list):
@@ -169,20 +203,47 @@ def _herdr_runtime_state_from_snapshot(snapshot, *, pane_id: object | None) -> s
                 for key in ('runtime_state', 'state'):
                     value = str(pane.get(key) or '').strip().lower()
                     if value:
-                        return value
-            return None
+                        fact['agent_status'] = value
+                        fact['source'] = _optional_text(pane.get('source')) or snapshot_source
+                        fact['seq'] = _optional_non_negative_int(pane.get('seq'))
+                        fact['fallback_reason'] = _optional_text(pane.get('fallback_reason')) or fallback_reason
+                        return fact
+            return fact
         for pane in panes:
             if not isinstance(pane, dict):
                 continue
             for key in ('runtime_state', 'state'):
                 value = str(pane.get(key) or '').strip().lower()
                 if value:
-                    return value
+                    fact['agent_status'] = value
+                    fact['source'] = _optional_text(pane.get('source')) or snapshot_source
+                    fact['seq'] = _optional_non_negative_int(pane.get('seq'))
+                    fact['fallback_reason'] = _optional_text(pane.get('fallback_reason')) or fallback_reason
+                    return fact
     for key in ('runtime_state', 'state'):
         value = str(snapshot.get(key) or '').strip().lower()
         if value:
-            return value
-    return None
+            fact['agent_status'] = value
+            fact['source'] = snapshot_source
+            fact['seq'] = _optional_non_negative_int(snapshot.get('seq'))
+            fact['fallback_reason'] = fallback_reason
+            return fact
+    return fact
+
+
+def _optional_text(value: object) -> str | None:
+    text = str(value or '').strip()
+    return text or None
+
+
+def _optional_non_negative_int(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed >= 0 else None
 
 
 def _callback_child_agent(callback_wait) -> str | None:
@@ -203,6 +264,7 @@ def _callback_child_agent(callback_wait) -> str | None:
 __all__ = [
     'RuntimeStatusInput',
     'build_runtime_status',
+    'herdr_agent_status_fact',
     'herdr_runtime_state_fact',
     'namespace_frontend_status',
     'namespace_is_herdr',
