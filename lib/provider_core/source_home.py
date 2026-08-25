@@ -56,33 +56,40 @@ def _env_path(name: str) -> Path | None:
 
 def _account_home_root(*, managed_process: bool) -> Path | None:
     if pwd is None:
-        native_profile = _native_windows_profile_root()
-        if native_profile is not None:
-            return native_profile
+        env_home = _env_path('HOME')
         profile = _env_path('USERPROFILE')
-        if (
-            profile is not None
-            and not managed_process
-            and not _looks_like_ccb_provider_home(profile)
-        ):
-            return profile
         drive = str(os.environ.get('HOMEDRIVE') or '').strip()
         relative = str(os.environ.get('HOMEPATH') or '').strip()
+        drive_home: Path | None = None
         if drive and relative:
             try:
-                return Path(f'{drive}{relative}').expanduser()
+                drive_home = Path(f'{drive}{relative}').expanduser()
             except Exception:
-                pass
-        return profile if profile is not None and not managed_process else None
+                drive_home = None
+
+        if managed_process:
+            for candidate in (drive_home, profile, _native_windows_profile_root()):
+                if (
+                    candidate is not None
+                    and candidate != env_home
+                    and not _looks_like_ccb_provider_home(candidate)
+                ):
+                    return candidate
+            return None
+
+        if profile is not None and not _looks_like_ccb_provider_home(profile):
+            return profile
+        native_profile = _native_windows_profile_root()
+        if native_profile is not None and not _looks_like_ccb_provider_home(native_profile):
+            return native_profile
+        if drive_home is not None and not _looks_like_ccb_provider_home(drive_home):
+            return drive_home
+        return None
     try:
         raw = pwd.getpwuid(os.getuid()).pw_dir
     except Exception:
         profile = _env_path('USERPROFILE')
-        if (
-            profile is not None
-            and not managed_process
-            and not _looks_like_ccb_provider_home(profile)
-        ):
+        if profile is not None and not _looks_like_ccb_provider_home(profile):
             return profile
         return None
     try:

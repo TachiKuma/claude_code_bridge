@@ -88,12 +88,21 @@ def _symlink_target(path: Path) -> Path | None:
 
 def _normalize(path: Path) -> Path | None:
     try:
-        return Path(path).resolve(strict=False)
+        return _without_windows_extended_prefix(Path(path).resolve(strict=False))
     except Exception:
         try:
-            return Path(path).absolute()
+            return _without_windows_extended_prefix(Path(path).absolute())
         except Exception:
             return None
+
+
+def _without_windows_extended_prefix(path: Path) -> Path:
+    raw = str(path)
+    if raw.startswith('\\\\?\\UNC\\'):
+        return Path('\\\\' + raw[8:])
+    if raw.startswith('\\\\?\\'):
+        return Path(raw[4:])
+    return path
 
 
 def _is_within(path: Path, root: Path) -> bool:

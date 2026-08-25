@@ -18,11 +18,11 @@ def build_hook_command(
         '--provider',
         str(provider),
         '--completion-dir',
-        str(Path(completion_dir).expanduser()),
+        _shell_path(completion_dir),
         '--agent-name',
         str(agent_name),
         '--workspace',
-        str(Path(workspace_path).expanduser()),
+        _shell_path(workspace_path),
     ]
     return ' '.join(shlex.quote(str(part)) for part in parts)
 
@@ -46,9 +46,9 @@ def build_activity_hook_command(
         '--agent-name',
         str(agent_name),
         '--runtime-dir',
-        str(Path(runtime_dir).expanduser()),
+        _shell_path(runtime_dir),
         '--workspace',
-        str(Path(workspace_path).expanduser()),
+        _shell_path(workspace_path),
     ]
     return ' '.join(shlex.quote(str(part)) for part in parts)
 
@@ -56,8 +56,12 @@ def build_activity_hook_command(
 def _script_command_prefix(script_path: Path, python_executable: str) -> list[str]:
     script = Path(script_path).expanduser()
     if script.suffix.lower() == '.py':
-        return [str(python_executable), str(script)]
-    return [str(script)]
+        return [_shell_path(python_executable), _shell_path(script)]
+    return [_shell_path(script)]
+
+
+def _shell_path(path: object) -> str:
+    return Path(path).expanduser().as_posix()
 
 
 __all__ = ['build_activity_hook_command', 'build_hook_command']

@@ -165,10 +165,10 @@ def _materialize_source_test_command_shims(project_root: Path) -> None:
     bin_dir = Path(project_root) / '.ccb' / 'bin'
     bin_dir.mkdir(parents=True, exist_ok=True)
     shims = {
-        'ccb': f'exec {shlex.quote(str(wrapper))} "$@"\n',
-        'ask': f'exec {shlex.quote(str(wrapper))} ask "$@"\n',
+        'ccb': f'exec {shlex.quote(wrapper.as_posix())} "$@"\n',
+        'ask': f'exec {shlex.quote(wrapper.as_posix())} ask "$@"\n',
         'codex-reconnect': (
-            f'exec {shlex.quote(str(source_root / "bin" / "codex-reconnect"))} "$@"\n'
+            f'exec {shlex.quote((source_root / "bin" / "codex-reconnect").as_posix())} "$@"\n'
         ),
     }
     for name, command in shims.items():

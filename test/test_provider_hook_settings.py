@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
 from pathlib import Path
 import shlex
 from types import SimpleNamespace
@@ -23,6 +24,10 @@ from provider_hooks.settings import (
     migrate_legacy_project_ccb_hooks,
 )
 from storage.paths import PathLayout
+
+
+def _shell_path(path: Path) -> str:
+    return path.as_posix()
 
 
 def _spec(name: str, provider: str = "claude", *, provider_profile: ProviderProfileSpec | None = None) -> AgentSpec:
@@ -61,14 +66,19 @@ def test_source_test_runtime_materializes_matching_ccb_ask_and_reconnect_shims(
     assert ccb_shim.is_file()
     assert ask_shim.is_file()
     assert reconnect_shim.is_file()
-    assert ccb_shim.read_text(encoding='utf-8').endswith('ccb_test "$@"\n')
-    assert ask_shim.read_text(encoding='utf-8').endswith('ccb_test ask "$@"\n')
-    assert reconnect_shim.read_text(encoding='utf-8').endswith(
-        'bin/codex-reconnect "$@"\n'
-    )
-    assert ccb_shim.stat().st_mode & 0o111
-    assert ask_shim.stat().st_mode & 0o111
-    assert reconnect_shim.stat().st_mode & 0o111
+    ccb_command = ccb_shim.read_text(encoding='utf-8').splitlines()[-1]
+    ask_command = ask_shim.read_text(encoding='utf-8').splitlines()[-1]
+    reconnect_command = reconnect_shim.read_text(encoding='utf-8').splitlines()[-1]
+    assert shlex.split(ccb_command)[1].replace('\\', '/').endswith('/ccb_test')
+    assert shlex.split(ccb_command)[2] == '$@'
+    assert shlex.split(ask_command)[1].replace('\\', '/').endswith('/ccb_test')
+    assert shlex.split(ask_command)[2:] == ['ask', '$@']
+    assert shlex.split(reconnect_command)[1].replace('\\', '/').endswith('/bin/codex-reconnect')
+    assert shlex.split(reconnect_command)[2] == '$@'
+    if os.name != 'nt':
+        assert ccb_shim.stat().st_mode & 0o111
+        assert ask_shim.stat().st_mode & 0o111
+        assert reconnect_shim.stat().st_mode & 0o111
 
 
 def test_release_runtime_does_not_materialize_source_test_command_shims(
@@ -98,7 +108,7 @@ def test_build_hook_command_includes_completion_dir_and_workspace(tmp_path: Path
     assert '--agent-name agent1' in command
     assert '--completion-dir' in command
     assert '--workspace' in command
-    assert shlex.split(command)[0] == str(script_path)
+    assert shlex.split(command)[0] == _shell_path(script_path)
     assert '/usr/bin/python3' not in shlex.split(command)
 
 
@@ -113,7 +123,7 @@ def test_build_hook_command_uses_python_for_python_script(tmp_path: Path) -> Non
         workspace_path=tmp_path / 'workspace',
     )
 
-    assert shlex.split(command)[:2] == ['/usr/bin/python3', str(script_path)]
+    assert shlex.split(command)[:2] == ['/usr/bin/python3', _shell_path(script_path)]
 
 
 def test_migrate_legacy_project_ccb_hooks_removes_only_python_wrapped_launchers(
@@ -221,7 +231,8 @@ def test_prepare_workspace_provider_hooks_migrates_project_and_workspace_before_
         for group in managed_payload['hooks']['Stop']
         for hook in group['hooks']
     ]
-    assert any(command.startswith(str(Path(__file__).resolve().parents[1] / 'bin')) for command in managed_commands)
+    expected_bin = _shell_path(Path(__file__).resolve().parents[1] / 'bin')
+    assert any(shlex.split(command)[0].startswith(expected_bin) for command in managed_commands)
     assert all(not command.startswith('/usr/bin/python3 ') for command in managed_commands)
 
 
@@ -542,8 +553,8 @@ def test_prepare_provider_workspace_materializes_claude_activity_hooks(tmp_path:
         assert not shlex.split(activity_commands[0])[0].endswith('.py')
         assert '--provider claude' in activity_commands[0]
         assert '--agent-name agent1' in activity_commands[0]
-        assert f'--runtime-dir {runtime_dir}' in activity_commands[0]
-        assert f'--workspace {workspace}' in activity_commands[0]
+        assert f'--runtime-dir {_shell_path(runtime_dir)}' in activity_commands[0]
+        assert f'--workspace {_shell_path(workspace)}' in activity_commands[0]
         assert layout.project_id in activity_commands[0]
     stop_commands = [
         hook['command']
@@ -881,19 +892,19 @@ def test_prepare_provider_workspace_preserves_allowed_codex_hindsight_hooks(
         for hook in group['hooks']
     ]
     assert not any('ccb-provider-activity-hook' in command for command in user_prompt_commands)
-    assert any('.hindsight/codex/scripts/recall.py' in command for command in user_prompt_commands)
+    assert any('.hindsight/codex/scripts/recall.py' in command.replace('\\', '/') for command in user_prompt_commands)
     assert not any('unmanaged-root-hook' in command for commands in hooks_payload['hooks'].values() for group in commands for command in [group['hooks'][0]['command']])
     session_start_handlers = [
         hook
         for group in hooks_payload['hooks']['SessionStart']
         for hook in group['hooks']
-        if '.hindsight/codex/scripts/session_start.py' in str(hook.get('command') or '')
+        if '.hindsight/codex/scripts/session_start.py' in str(hook.get('command') or '').replace('\\', '/')
     ]
     stop_handlers = [
         hook
         for group in hooks_payload['hooks']['Stop']
         for hook in group['hooks']
-        if '.hindsight/codex/scripts/retain.py' in str(hook.get('command') or '')
+        if '.hindsight/codex/scripts/retain.py' in str(hook.get('command') or '').replace('\\', '/')
     ]
     assert session_start_handlers[0]['timeout'] == 5
     assert stop_handlers[0]['timeout'] == 30
@@ -1614,6 +1625,8 @@ def test_prepare_provider_workspace_uses_account_home_when_current_home_is_manag
     monkeypatch.setenv('HOME', str(managed_current_home))
     if source_home_module.pwd is not None:
         monkeypatch.setattr(source_home_module.pwd, 'getpwuid', lambda _uid: SimpleNamespace(pw_dir=str(system_home)))
+    else:
+        monkeypatch.setenv('USERPROFILE', str(system_home))
 
     prepare_provider_workspace(
         layout=PathLayout(project_root),

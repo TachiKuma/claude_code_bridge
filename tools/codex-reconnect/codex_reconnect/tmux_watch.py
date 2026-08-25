@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 import random
@@ -46,6 +45,16 @@ ANSI_CSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 EMPTY_PROMPT_CURSOR_X = 2
 CONTINUE_TEXT = "continue"
 INPUT_SETTLE_SECONDS = 0.5
+
+try:
+    import fcntl
+except ModuleNotFoundError:  # pragma: no cover - Windows fallback
+    fcntl = None
+
+try:
+    import msvcrt
+except ModuleNotFoundError:  # pragma: no cover - POSIX fallback
+    msvcrt = None
 
 
 class TmuxWatchError(RuntimeError):
@@ -1654,16 +1663,46 @@ class state_lock:
         if self.path.is_symlink():
             raise TmuxWatchError("watch state lock must not be a symlink")
         self.descriptor = os.open(
-            self.path, os.O_CREAT | os.O_RDWR | os.O_CLOEXEC, 0o600
+            self.path, os.O_CREAT | os.O_RDWR | getattr(os, "O_CLOEXEC", 0), 0o600
         )
-        fcntl.flock(self.descriptor, fcntl.LOCK_EX)
+        _lock_fd(self.descriptor)
         return self
 
     def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
         if self.descriptor >= 0:
-            fcntl.flock(self.descriptor, fcntl.LOCK_UN)
+            _unlock_fd(self.descriptor)
             os.close(self.descriptor)
             self.descriptor = -1
+
+
+def _lock_fd(fd: int) -> None:
+    if fcntl is not None:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        return
+    if msvcrt is None:
+        raise TmuxWatchError("watch state locking is unavailable on this platform")
+    _ensure_lock_byte(fd)
+    os.lseek(fd, 0, os.SEEK_SET)
+    msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+
+
+def _unlock_fd(fd: int) -> None:
+    if fcntl is not None:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return
+    if msvcrt is None:
+        return
+    os.lseek(fd, 0, os.SEEK_SET)
+    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+
+
+def _ensure_lock_byte(fd: int) -> None:
+    try:
+        if os.fstat(fd).st_size >= 1:
+            return
+        os.write(fd, b"\0")
+    finally:
+        os.lseek(fd, 0, os.SEEK_SET)
 
 
 def watcher_main(

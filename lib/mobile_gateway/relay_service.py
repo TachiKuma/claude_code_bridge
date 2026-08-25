@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import fcntl
+import errno
 import hashlib
 import ipaddress
 import json
@@ -42,6 +42,16 @@ _PUBLIC_ERROR_MESSAGES = {
     'relay_rejected': 'relay request rejected',
     'relay_unavailable': 'relay unavailable',
 }
+
+try:
+    import fcntl
+except ModuleNotFoundError:  # pragma: no cover - Windows fallback
+    fcntl = None
+
+try:
+    import msvcrt
+except ModuleNotFoundError:  # pragma: no cover - POSIX fallback
+    msvcrt = None
 
 
 @dataclass
@@ -365,7 +375,7 @@ class _RelayInstanceLock:
         fd = os.open(self._path, os.O_CREAT | os.O_RDWR, 0o600)
         try:
             os.fchmod(fd, 0o600)
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            _lock_fd(fd, blocking=False)
         except BlockingIOError as exc:
             os.close(fd)
             raise RuntimeError('another relay service instance owns the admission database') from exc
@@ -380,9 +390,57 @@ class _RelayInstanceLock:
         if fd is None:
             return
         try:
-            fcntl.flock(fd, fcntl.LOCK_UN)
+            _unlock_fd(fd)
         finally:
             os.close(fd)
+
+
+def _lock_fd(fd: int, *, blocking: bool) -> None:
+    if fcntl is not None:
+        flags = fcntl.LOCK_EX if blocking else fcntl.LOCK_EX | fcntl.LOCK_NB
+        fcntl.flock(fd, flags)
+        return
+    if msvcrt is None:
+        raise RuntimeError('file locking is unavailable on this platform')
+    _ensure_lock_byte(fd)
+    os.lseek(fd, 0, os.SEEK_SET)
+    mode = msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK
+    try:
+        msvcrt.locking(fd, mode, 1)
+    except OSError as exc:
+        if not blocking and exc.errno in _WINDOWS_LOCK_BUSY_ERRNOS:
+            raise BlockingIOError(exc.errno, exc.strerror) from exc
+        raise
+
+
+def _unlock_fd(fd: int) -> None:
+    if fcntl is not None:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return
+    if msvcrt is None:
+        return
+    os.lseek(fd, 0, os.SEEK_SET)
+    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+
+
+def _ensure_lock_byte(fd: int) -> None:
+    try:
+        if os.fstat(fd).st_size >= 1:
+            return
+        os.write(fd, b'\0')
+    finally:
+        os.lseek(fd, 0, os.SEEK_SET)
+
+
+_WINDOWS_LOCK_BUSY_ERRNOS = frozenset(
+    errno_code
+    for errno_code in (
+        errno.EACCES,
+        errno.EDEADLK,
+        getattr(errno, 'EDEADLOCK', errno.EDEADLK),
+    )
+    if errno_code is not None
+)
 
 
 class ProductionRelayService:
