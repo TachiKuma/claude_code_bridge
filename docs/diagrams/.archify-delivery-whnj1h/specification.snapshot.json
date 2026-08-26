@@ -1,0 +1,311 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "CCB 配置模块流程图",
+    "quality_profile": "showcase",
+    "output": "docs/diagrams/ccb-config-module.architecture.html",
+    "viewBox": [1220, 960],
+    "views": [
+      {
+        "id": "config-ui-path",
+        "label": "Config UI 写入路径",
+        "focus": ["config_ui", "ui_settings", "project_config", "config_parser", "save_apply", "restart_intent"],
+        "note": "Config UI 读取并写回 .ccb/ccb.config；[config_ui] 只配置本地编辑器。"
+      },
+      {
+        "id": "claude-api-path",
+        "label": "Claude API 路径",
+        "focus": ["project_config", "config_parser", "agent_spec", "profile_record", "claude_env"],
+        "note": "key/url 快捷项或 provider_profile.env 最终进入 Claude 的 ANTHROPIC_* 环境。"
+      },
+      {
+        "id": "ready-path",
+        "label": "启动与真就绪",
+        "focus": ["restart_intent", "launch_plan", "claude_env", "herdr_pane", "ready_gate"],
+        "note": "保存 provider 启动项后，旧进程不热改；下一次 start/replace 后进入 Ready Gate。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "config_ui",
+      "type": "frontend",
+      "label": "Config UI",
+      "sublabel": "本地浏览器编辑器",
+      "tag": "127.0.0.1",
+      "pos": [60, 120],
+      "size": [150, 70]
+    },
+    {
+      "id": "ui_settings",
+      "type": "security",
+      "label": "UI 运行设置",
+      "sublabel": "port / token",
+      "tag": "[config_ui]",
+      "pos": [60, 300],
+      "size": [150, 70]
+    },
+    {
+      "id": "project_config",
+      "type": "database",
+      "label": ".ccb/ccb.config",
+      "sublabel": "Project Config",
+      "tag": "单一事实源",
+      "pos": [280, 120],
+      "size": [170, 70]
+    },
+    {
+      "id": "config_parser",
+      "type": "backend",
+      "label": "解析与校验",
+      "sublabel": "compact / rich / hybrid",
+      "tag": "load_project_config",
+      "pos": [520, 120],
+      "size": [170, 70]
+    },
+    {
+      "id": "save_apply",
+      "type": "frontend",
+      "label": "预览校验保存",
+      "sublabel": "atomic write",
+      "tag": "apply candidate",
+      "pos": [760, 120],
+      "size": [170, 70]
+    },
+    {
+      "id": "restart_intent",
+      "type": "database",
+      "label": "restart intent",
+      "sublabel": "启动项变更",
+      "tag": "不热改旧进程",
+      "pos": [1000, 120],
+      "size": [170, 70]
+    },
+    {
+      "id": "agent_spec",
+      "type": "backend",
+      "label": "AgentSpec",
+      "sublabel": "env / key / url",
+      "tag": "agent overlay",
+      "pos": [520, 360],
+      "size": [170, 70]
+    },
+    {
+      "id": "mux_backend",
+      "type": "backend",
+      "label": "mux 后端偏好",
+      "sublabel": "runtime.mux.backend",
+      "tag": "Herdr",
+      "pos": [760, 360],
+      "size": [170, 70]
+    },
+    {
+      "id": "launch_plan",
+      "type": "backend",
+      "label": "Launch Plan",
+      "sublabel": "workspace + runtime_dir",
+      "tag": "可缓存",
+      "pos": [1000, 360],
+      "size": [170, 70]
+    },
+    {
+      "id": "profile_record",
+      "type": "backend",
+      "label": "Provider Profile",
+      "sublabel": "key/url -> env",
+      "tag": "provider-profile.json",
+      "pos": [520, 600],
+      "size": [170, 70]
+    },
+    {
+      "id": "claude_env",
+      "type": "backend",
+      "label": "Claude env 合成",
+      "sublabel": "ANTHROPIC_*",
+      "tag": "start_cmd",
+      "pos": [760, 600],
+      "size": [170, 70]
+    },
+    {
+      "id": "herdr_pane",
+      "type": "backend",
+      "label": "Herdr pane",
+      "sublabel": "承载并观测进程",
+      "tag": "运行时事实源",
+      "pos": [1000, 600],
+      "size": [170, 70]
+    },
+    {
+      "id": "ready_gate",
+      "type": "security",
+      "label": "Ready Gate",
+      "sublabel": "绑定 + ping",
+      "tag": "Agent Ready",
+      "pos": [1000, 780],
+      "size": [170, 70]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Config UI：只编辑项目配置",
+      "wraps": ["config_ui", "ui_settings", "save_apply"],
+      "pad": 18
+    },
+    {
+      "kind": "region",
+      "label": "CCB：配置与业务完成权威",
+      "wraps": ["project_config", "config_parser", "agent_spec", "mux_backend", "launch_plan", "restart_intent"],
+      "pad": 18
+    },
+    {
+      "kind": "region",
+      "label": "Provider / Herdr：启动物化与运行时事实",
+      "wraps": ["profile_record", "claude_env", "herdr_pane", "ready_gate"],
+      "pad": 18
+    }
+  ],
+  "connections": [
+    {
+      "id": "ui-reads-config",
+      "from": "config_ui",
+      "to": "project_config",
+      "label": "读写配置",
+      "variant": "emphasis"
+    },
+    {
+      "id": "config-ui-settings",
+      "from": "project_config",
+      "to": "ui_settings",
+      "label": "config_ui 表",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "right",
+      "labelDy": 46
+    },
+    {
+      "id": "config-parse",
+      "from": "project_config",
+      "to": "config_parser",
+      "variant": "emphasis",
+      "labelDy": 58
+    },
+    {
+      "id": "parser-editor",
+      "from": "config_parser",
+      "to": "save_apply",
+      "variant": "default",
+      "labelDy": 58
+    },
+    {
+      "id": "save-records-intent",
+      "from": "save_apply",
+      "to": "restart_intent",
+      "label": "启动项变更",
+      "variant": "security"
+    },
+    {
+      "id": "parse-agent-spec",
+      "from": "config_parser",
+      "to": "agent_spec",
+      "variant": "default",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 28
+    },
+    {
+      "id": "parse-mux",
+      "from": "config_parser",
+      "to": "mux_backend",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "via": [[605, 280], [845, 280]],
+      "labelDy": 20
+    },
+    {
+      "id": "intent-to-plan",
+      "from": "restart_intent",
+      "to": "launch_plan",
+      "label": "下次 start",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDx": 48,
+      "labelDy": 24
+    },
+    {
+      "id": "agent-to-profile",
+      "from": "agent_spec",
+      "to": "profile_record",
+      "label": "materialize",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 28
+    },
+    {
+      "id": "profile-to-env",
+      "from": "profile_record",
+      "to": "claude_env",
+      "label": "profile.env",
+      "variant": "emphasis"
+    },
+    {
+      "id": "env-to-pane",
+      "from": "claude_env",
+      "to": "herdr_pane",
+      "label": "start_cmd",
+      "variant": "emphasis"
+    },
+    {
+      "id": "mux-to-pane",
+      "from": "mux_backend",
+      "to": "herdr_pane",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "via": [[845, 510], [1085, 510]]
+    },
+    {
+      "id": "pane-to-ready",
+      "from": "herdr_pane",
+      "to": "ready_gate",
+      "label": "运行时事实",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 28
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "配置边界",
+      "items": [
+        ".ccb/ccb.config 是 Project Config；Config UI 是本地编辑器",
+        "[config_ui] 只影响本地 UI 服务，不影响 provider CLI",
+        "runtime.mux.backend 影响后端选择，不承载 API key/base URL"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Claude API 路径",
+      "items": [
+        "[agents.<name>] key/url 会映射到 ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL",
+        "[agents.<name>.provider_profile.env] 可直接声明 ANTHROPIC_*",
+        "[agents.<name>.env] 的非 API 环境变量也会传入 Claude 进程"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "生效时机",
+      "items": [
+        "API、model、startup_args、env 等属于 restart-bound 配置",
+        "Config UI 保存后不会热改已经运行的 Claude 进程",
+        "下一次 start 或 replace-agent 才会重新物化 profile、home 与 start_cmd"
+      ]
+    }
+  ]
+}

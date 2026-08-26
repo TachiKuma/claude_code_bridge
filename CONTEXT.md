@@ -25,6 +25,15 @@ _Avoid_: stale home, config cache bug
 The remote account or API endpoint identity a provider session is bound to.
 _Avoid_: model, provider name
 
+**Restart-Bound Provider Config**:
+Provider launch configuration whose changes apply only when CCB creates or replaces the affected provider runtime.
+_Avoid_: hot config, live env edit
+
+**Live Provider Config Drift**:
+A visible desired/live mismatch where Project Config has changed but the currently running provider runtime still reflects
+an older launch configuration.
+_Avoid_: config save failed, Herdr stale state
+
 ---
 
 ## 三层职责
@@ -122,6 +131,50 @@ ADR 0001「三层权威边界」在**配合方式**层的落地，纠正了原 v
 ---
 
 ## 运行时锚点与身份
+
+### All-Agent Ready Time（全量 agent 真就绪时间）
+
+一次启动中，从用户发起 CCB 启动意图到所有目标 agent 都达到可接收任务的运行时就绪状态之间的总耗时。
+它不等同于 daemon 已 mounted、pane 已创建、前台已 attach，或第一个 agent 已就绪。
+
+关联：`Host Runtime`、`Collaboration Control Plane`、`Runtime Binding`、`runtime fact source vs business completion authority`。
+
+### Agent Ready（agent 真就绪）
+
+单个 agent 已具备接收 CCB 任务的运行时状态：运行时绑定已写入且可校验，provider 入口已进入可接收任务状态，
+并且至少一次健康检查或 ping 已成功。它不等同于 pane 存在、进程存在、终端前台可见或 provider 横幅已出现。
+
+关联：`All-Agent Ready Time`、`Runtime Binding`、`Host Runtime`、`Collaboration Control Plane`。
+
+### Launch Plan（启动计划）
+
+CCB 为单个 agent 启动运行时所需的可验证输入集合，包括 provider 入口、工作目录、环境约束、session
+锚点和运行时绑定预期。它不是 provider 进程本身，也不是业务任务。
+
+关联：`Agent Ready`、`Runtime Binding`、`Managed Provider Home`、`Provider Authority`、
+`Restart-Bound Provider Config`。
+
+### Restart-Bound Provider Config（重启绑定的 provider 配置）
+
+需要在 provider 运行时创建或替换时才生效的配置，包括 provider authority、启动参数、模型选择、
+provider 专属环境约束和 managed home 输入。保存这类配置不等同于 live provider 已采用新配置。
+
+关联：`Project Config`、`Provider Authority`、`Managed Provider Home`、`Launch Plan`、
+`Live Provider Config Drift`。
+
+### Live Provider Config Drift（live provider 配置漂移）
+
+Project Config 已表达新的期望配置，但当前运行中的 provider runtime 仍使用旧的 provider 启动配置。
+它是用户可见的 desired/live 差异，必须暴露为待重启或待替换状态，而不能被描述为已经生效。
+
+关联：`Restart-Bound Provider Config`、`Provider Profile Drift`、`Agent Ready`、`Ready Gate`。
+
+### Ready Gate（就绪门槛）
+
+判定 agent 是否达到 `Agent Ready` 的检查边界。它消费运行时事实和 CCB 绑定事实，但不把运行时事实
+升级为业务完成判定。
+
+关联：`Agent Ready`、`All-Agent Ready Time`、`runtime fact source vs business completion authority`。
 
 ### runtime generation（运行时代次）
 
