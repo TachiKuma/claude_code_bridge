@@ -345,7 +345,7 @@ def _status_from_snapshot_pane(
         runtime_generation=binding.runtime_generation,
         runtime_state=runtime_state,
         state=map_herdr_state_to_ccb(runtime_state),
-        source="snapshot",
+        source=_text(snapshot_pane.get("source")) or "snapshot",
         seq=seq,
         unseen_done=runtime_state == "done",
     )

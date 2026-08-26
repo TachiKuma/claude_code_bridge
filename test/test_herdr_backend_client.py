@@ -2392,6 +2392,123 @@ def test_herdr_backend_exposes_runtime_snapshot() -> None:
     assert snapshot["panes"][0]["pane_id"] == "w1:p1"
 
 
+def test_herdr_cli_request_adapter_enriches_runtime_snapshot_with_agent_explain_state() -> None:
+    commands: list[list[str]] = []
+
+    def run_fn(command, **kwargs):
+        commands.append(list(command))
+        joined = " ".join(command)
+        if "api snapshot" in joined:
+            return _completed(
+                json.dumps(
+                    {
+                        "result": {
+                            "snapshot": {
+                                "panes": [
+                                    {
+                                        "pane_id": "w1:p1",
+                                        "workspace_id": "w1",
+                                        "agent": "codex",
+                                        "agent_status": "idle",
+                                        "state_change_seq": 20,
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                )
+            )
+        if "agent explain w1:p1" in joined:
+            return _completed(
+                "\n".join(
+                    [
+                        "agent: codex",
+                        "state: working",
+                        "manifest: remote:codex.toml 2026.08.09.1",
+                        "rule: osc_title_working",
+                        'evidence: "spinner"',
+                    ]
+                )
+            )
+        raise AssertionError(joined)
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        which_fn=lambda name: "herdr",
+    )
+
+    snapshot = adapter("runtime_snapshot", {})
+
+    pane = snapshot["panes"][0]
+    assert pane["pane_id"] == "w1:p1"
+    assert pane["agent_status"] == "idle"
+    assert pane["runtime_state"] == "working"
+    assert pane["source"] == "agent_explain"
+    assert pane["seq"] == 20
+    assert any("agent explain w1:p1" in " ".join(command) for command in commands)
+
+
+def test_herdr_backend_exposes_raw_adapter_runtime_snapshot() -> None:
+    def request(operation: str, payload: dict[str, object]) -> dict[str, object]:
+        if operation == "server_info":
+            return {
+                "version": "0.7.5-preview",
+                "api_schema": "Herdr API",
+                "platform": "windows",
+                "arch": "x64",
+            }
+        if operation == "runtime_snapshot":
+            return {
+                "workspaces": [{"workspace_id": "w1"}],
+                "panes": [
+                    {
+                        "pane_id": "w1:p1",
+                        "workspace_id": "w1",
+                        "agent_status": "idle",
+                    }
+                ],
+            }
+        raise AssertionError(operation)
+
+    backend = HerdrBackend(
+        client=HerdrSocketClient(request_fn=request, socket_ref="herdr://local"),
+        capability_gate=_supported_gate(),
+    )
+
+    snapshot = backend.runtime_snapshot()
+
+    assert snapshot["workspaces"][0]["workspace_id"] == "w1"
+    assert snapshot["panes"][0]["pane_id"] == "w1:p1"
+    assert snapshot["panes"][0]["agent_status"] == "idle"
+
+
+def test_herdr_cli_request_adapter_reports_runtime_events_unsupported_until_cli_surface_exists() -> None:
+    def run_fn(command, **kwargs):
+        joined = " ".join(command)
+        if "status --json" in joined:
+            return _completed(
+                '{"client":{"version":"0.8.2"},"server":{"capabilities":{"detached_server_daemon":true}}}'
+            )
+        if "--version" in joined:
+            return _completed("herdr 0.8.2\n")
+        if "api schema --json" in joined:
+            return _completed('{"title":"Herdr API"}')
+        raise AssertionError(joined)
+
+    adapter = HerdrCliRequestAdapter(
+        session_name="ccb-demo",
+        herdr_executable="herdr",
+        run_fn=run_fn,
+        which_fn=lambda name: "herdr",
+    )
+
+    info = adapter("server_info", {})
+
+    assert info["runtime_capabilities"]["runtime_events"] == "unsupported"
+
+
 def test_herdr_backend_invalidates_handshake_before_retrying_snapshot_after_disconnect() -> None:
     operations: list[str] = []
 
@@ -3803,6 +3920,27 @@ def test_get_backend_for_namespace_teardown_reattaches_without_selection_gate(mo
         operation="destroy_namespace",
     )
     assert validated["namespace_id"] == "w-anchor"
+
+
+def test_get_backend_for_namespace_teardown_binds_persisted_session(monkeypatch) -> None:
+    monkeypatch.setenv("CCB_HERDR_SESSION", "ccb-other")
+    monkeypatch.setenv("CCB_HERDR_SOCKET_REF", "herdr://ccb-other")
+    monkeypatch.delenv("CCB_HERDR_CAPABILITY_REPORT", raising=False)
+
+    backend = terminal_api.get_backend_for_namespace_teardown(
+        {
+            "backend_family": "herdr-native",
+            "backend_impl": "herdr",
+            "namespace_id": "w-anchor",
+            "session_name": "ccb-persisted",
+            "ipc_kind": "herdr_socket",
+            "ipc_ref": "herdr://ccb-persisted",
+            "restore_token": "restore-token",
+        }
+    )
+
+    assert backend._client.session_name == "ccb-persisted"
+    assert backend._client.socket_ref == "herdr://ccb-persisted"
 
 
 def test_herdr_cli_resolves_common_windows_install_when_not_on_path(monkeypatch) -> None:

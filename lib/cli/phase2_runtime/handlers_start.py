@@ -142,13 +142,14 @@ def _submit_herdr_runtime_manifest(
         return None
     if not _should_submit_herdr_runtime():
         return None
-    if _herdr_runtime_env_usable() and not require_ready:
+    target_herdr_session = str(herdr_session or getattr(manifest, 'session_name', '') or '').strip() or None
+    if _herdr_runtime_env_usable(target_herdr_session) and not require_ready:
         return None
     result = ensure_runtime(
         manifest,
         restore_token=None,
         herdr_exe=herdr_exe,
-        herdr_session=herdr_session,
+        herdr_session=target_herdr_session,
     )
     if result.ok:
         for warning in result.warnings:
@@ -222,11 +223,15 @@ def _should_submit_herdr_runtime() -> bool:
     return _is_herdr_relevant_platform()
 
 
-def _herdr_runtime_env_usable() -> bool:
-    return bool(
-        os.environ.get('CCB_HERDR_SOCKET_REF', '').strip()
-        and os.environ.get('CCB_HERDR_SESSION', '').strip()
-    )
+def _herdr_runtime_env_usable(expected_session: str | None = None) -> bool:
+    socket_ref = os.environ.get('CCB_HERDR_SOCKET_REF', '').strip()
+    session = os.environ.get('CCB_HERDR_SESSION', '').strip()
+    if not socket_ref or not session:
+        return False
+    clean_expected = str(expected_session or '').strip()
+    if not clean_expected:
+        return True
+    return session == clean_expected and socket_ref == f'herdr://{clean_expected}'
 
 
 def _is_herdr_relevant_platform() -> bool:

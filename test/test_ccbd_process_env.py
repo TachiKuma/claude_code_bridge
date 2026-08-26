@@ -200,6 +200,30 @@ def test_background_spawn_resolves_venv_base_interpreter_and_site_packages(
     assert extra['VIRTUAL_ENV'] == str(venv)
 
 
+def test_background_spawn_uses_inherited_venv_root_when_running_on_base_interpreter(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _mock_process_background_os(monkeypatch, name='nt')
+    venv = tmp_path / 'venv'
+    (venv / 'Scripts').mkdir(parents=True)
+    site_packages = venv / 'Lib' / 'site-packages'
+    site_packages.mkdir(parents=True)
+    base_exe = tmp_path / 'base' / 'python.exe'
+    base_exe.parent.mkdir(parents=True)
+    base_exe.write_bytes(b'')
+    (venv / 'pyvenv.cfg').write_text(
+        f'home = {base_exe.parent}\nversion = 3.14\n', encoding='utf-8'
+    )
+    monkeypatch.setattr(process_background.sys, 'executable', str(base_exe))
+    monkeypatch.setenv('VIRTUAL_ENV', str(venv))
+
+    interpreter, extra = process_background.background_spawn()
+
+    assert interpreter == str(base_exe)
+    assert extra['PYTHONPATH'] == str(site_packages)
+    assert extra['VIRTUAL_ENV'] == str(venv)
+
+
 def test_venv_base_interpreter_none_without_pyvenv_cfg(tmp_path: Path, monkeypatch) -> None:
     _mock_process_background_os(monkeypatch, name='nt')
     fake_exe = tmp_path / 'Scripts' / 'python.exe'

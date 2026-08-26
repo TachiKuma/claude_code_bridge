@@ -41,10 +41,10 @@ def venv_base_interpreter() -> str | None:
     executable = Path(sys.executable)
     if executable.name.lower() not in {'python.exe', 'pythonw.exe'}:
         return None
-    venv_root = executable.parent.parent
-    cfg = venv_root / 'pyvenv.cfg'
-    if not cfg.is_file():
+    venv_root = active_venv_root()
+    if venv_root is None:
         return None
+    cfg = venv_root / 'pyvenv.cfg'
     home = ''
     try:
         for line in cfg.read_text(encoding='utf-8').splitlines():
@@ -60,6 +60,22 @@ def venv_base_interpreter() -> str | None:
     return str(candidate) if candidate.is_file() else None
 
 
+def active_venv_root() -> Path | None:
+    """返回当前 Windows venv 根目录，包含 keeper 继承环境。"""
+    executable = Path(sys.executable)
+    direct = executable.parent.parent
+    if (direct / 'pyvenv.cfg').is_file():
+        return direct
+    if executable.parent.name.lower() in {'scripts', 'bin'}:
+        return None
+    inherited = os.environ.get('VIRTUAL_ENV', '').strip()
+    if inherited:
+        candidate = Path(inherited)
+        if (candidate / 'pyvenv.cfg').is_file():
+            return candidate
+    return None
+
+
 def background_spawn() -> tuple[str, dict[str, str]]:
     """Return ``(interpreter, extra_env)`` for spawning a CCB background daemon.
 
@@ -73,12 +89,12 @@ def background_spawn() -> tuple[str, dict[str, str]]:
     if os.name != 'nt':
         return sys.executable, {}
     interpreter = venv_base_interpreter() or sys.executable
-    venv_root = Path(sys.executable).parent.parent
+    venv_root = active_venv_root()
     extra: dict[str, str] = {}
-    site_packages = venv_root / 'Lib' / 'site-packages'
-    if site_packages.is_dir():
-        extra['PYTHONPATH'] = str(site_packages)
-    if (venv_root / 'pyvenv.cfg').is_file():
+    if venv_root is not None:
+        site_packages = venv_root / 'Lib' / 'site-packages'
+        if site_packages.is_dir():
+            extra['PYTHONPATH'] = str(site_packages)
         extra['VIRTUAL_ENV'] = str(venv_root)
     return interpreter, extra
 
@@ -90,6 +106,7 @@ def _subprocess_flag(name: str, fallback: int) -> int:
 __all__ = [
     'background_process_kwargs',
     'no_window_process_kwargs',
+    'active_venv_root',
     'venv_base_interpreter',
     'background_spawn',
 ]

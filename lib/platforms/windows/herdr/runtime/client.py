@@ -782,7 +782,11 @@ class HerdrSocketClient:
     def runtime_snapshot(self) -> Mapping[str, object]:
         response = self._request("runtime_snapshot", {}, require_result=True)
         snapshot = response.get("snapshot")
-        return dict(snapshot) if isinstance(snapshot, Mapping) else {}
+        if isinstance(snapshot, Mapping):
+            return dict(snapshot)
+        if any(isinstance(response.get(key), list) for key in ("workspaces", "panes", "agents", "layouts", "tabs")):
+            return dict(response)
+        return {}
 
     def runtime_events(self) -> tuple[Mapping[str, object], ...]:
         response = self._request("runtime_events", {}, require_result=True)

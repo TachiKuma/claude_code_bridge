@@ -18,6 +18,7 @@ _LOGICAL_WINDOW_TOKEN = "ccb_window"
 _LOGICAL_WINDOW_ALIAS_TOKEN = "ccb_logical_window"
 _NAMESPACE_TOKEN = "ccb_namespace_id"
 _ROOT_PANE_TOKEN = "ccb_root_pane"
+_HERDR_AGENT_STATES = frozenset({"idle", "working", "blocked", "done", "unknown"})
 
 
 class HerdrCliRequestAdapter:
@@ -127,7 +128,7 @@ class HerdrCliRequestAdapter:
             "arch": _runtime_arch(),
             "runtime_capabilities": {
                 "runtime_ensure": "supported",
-                "runtime_events": "supported",
+                "runtime_events": "unsupported",
                 "agent_id_authority": "supported",
             },
         }
@@ -952,7 +953,59 @@ class HerdrCliRequestAdapter:
         session_name = _session_name_from_payload(payload, fallback_session_name=self._session_name)
         result = self._json_command("runtime_snapshot", ["api", "snapshot"], session_name=session_name)
         snapshot = _mapping(result.get("snapshot"))
-        return dict(snapshot)
+        return self._runtime_snapshot_with_explained_agent_states(snapshot, session_name=session_name)
+
+    def _runtime_snapshot_with_explained_agent_states(
+        self,
+        snapshot: Mapping[str, object],
+        *,
+        session_name: str,
+    ) -> Mapping[str, object]:
+        panes = snapshot.get("panes")
+        if not isinstance(panes, list):
+            return dict(snapshot)
+        changed = False
+        enriched_panes: list[object] = []
+        for pane in panes:
+            if not isinstance(pane, Mapping):
+                enriched_panes.append(pane)
+                continue
+            enriched = dict(pane)
+            explained_state = self._explain_agent_state(enriched, session_name=session_name)
+            projected_state = _projected_runtime_state(enriched)
+            if _should_apply_explained_agent_state(projected_state, explained_state):
+                enriched["runtime_state"] = explained_state
+                enriched["source"] = "agent_explain"
+                seq = _agent_status_seq(enriched)
+                if seq is not None:
+                    enriched["seq"] = seq
+            changed = changed or enriched != pane
+            enriched_panes.append(enriched)
+        if not changed:
+            return dict(snapshot)
+        return {**dict(snapshot), "panes": enriched_panes}
+
+    def _explain_agent_state(
+        self,
+        pane: Mapping[str, object],
+        *,
+        session_name: str,
+    ) -> str | None:
+        if not _pane_has_agent_signal(pane):
+            return None
+        pane_id = str(pane.get("pane_id") or "").strip()
+        if not pane_id:
+            return None
+        try:
+            result = self._command(
+                "agent_explain",
+                ["agent", "explain", pane_id],
+                expect_json=False,
+                session_name=session_name,
+            )
+        except MuxCommandErrorV2:
+            return None
+        return _parse_agent_explain_state(result.stdout)
 
     def _workspaces(self, *, session_name: str | None = None) -> list[Mapping[str, object]]:
         try:
@@ -1505,6 +1558,57 @@ def _split_restore_token(token: str) -> tuple[str, str]:
 
 def _response_detail(response: Mapping[str, object]) -> str:
     return str(response.get("detail") or response.get("message") or "").strip()
+
+
+def _pane_has_agent_signal(pane: Mapping[str, object]) -> bool:
+    for key in ("agent", "agent_status", "display_agent"):
+        if str(pane.get(key) or "").strip():
+            return True
+    tokens = pane.get("tokens")
+    if isinstance(tokens, Mapping):
+        return any(str(tokens.get(key) or "").strip() for key in ("ccb_role", "ccb_slot"))
+    return False
+
+
+def _parse_agent_explain_state(output: object) -> str | None:
+    for line in str(output or "").splitlines():
+        key, separator, value = line.partition(":")
+        if separator and key.strip().lower() == "state":
+            state = value.strip().lower()
+            return state if state in _HERDR_AGENT_STATES else None
+    return None
+
+
+def _projected_runtime_state(pane: Mapping[str, object]) -> str | None:
+    for key in ("runtime_state", "state"):
+        value = str(pane.get(key) or "").strip().lower()
+        if value in _HERDR_AGENT_STATES:
+            return value
+    return None
+
+
+def _should_apply_explained_agent_state(
+    projected_state: str | None,
+    explained_state: str | None,
+) -> bool:
+    if explained_state is None or explained_state == "unknown":
+        return False
+    if projected_state == "done" and explained_state == "idle":
+        return False
+    return True
+
+
+def _agent_status_seq(pane: Mapping[str, object]) -> int | None:
+    for key in ("seq", "state_seq", "state_change_seq"):
+        try:
+            value = pane.get(key)
+            if value is not None:
+                seq = int(value)
+                if seq >= 0:
+                    return seq
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 def _command_text(raw: object) -> str:

@@ -373,3 +373,43 @@ def test_herdr_runtime_events_polling_falls_back_when_event_batch_is_invalid(
     assert runtime.herdr_runtime_snapshot['source'] == 'snapshot_polling'
     assert runtime.herdr_runtime_snapshot['fallback_reason'] == 'subscription_failed:invalid_event_batch'
     assert runtime.herdr_runtime_snapshot['panes'][0]['runtime_state'] == 'working'
+
+
+def test_herdr_runtime_events_polling_preserves_agent_explain_snapshot_source(
+    tmp_path: Path,
+) -> None:
+    layout, _config_value, registry = _registry(tmp_path)
+    project_id = compute_project_id(layout.project_root)
+    registry.upsert(_runtime('agent1', project_id=project_id, pane_id='pane-1'))
+    backend = _EventsBackend(
+        {
+            'panes': [
+                {
+                    'pane_id': 'pane-1',
+                    'workspace_id': 'workspace-1',
+                    'agent_status': 'idle',
+                    'runtime_state': 'working',
+                    'source': 'agent_explain',
+                    'seq': 20,
+                },
+            ]
+        },
+        capability='unsupported',
+    )
+    controller = _NamespaceController(_namespace(project_id), backend)
+
+    result = poll_herdr_runtime_events(
+        registry=registry,
+        namespace_controller=controller,
+    )
+
+    runtime = registry.get('agent1')
+    assert result.polled is True
+    assert result.source == 'snapshot_polling'
+    assert result.fallback_reason == 'runtime_events_unsupported'
+    assert runtime is not None
+    assert runtime.herdr_runtime_snapshot is not None
+    pane = runtime.herdr_runtime_snapshot['panes'][0]
+    assert pane['runtime_state'] == 'working'
+    assert pane['source'] == 'agent_explain'
+    assert pane['seq'] == 20

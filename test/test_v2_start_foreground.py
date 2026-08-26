@@ -17,6 +17,15 @@ from project.resolver import bootstrap_project
 @pytest.fixture(autouse=True)
 def _clear_tmux_config_env(monkeypatch) -> None:
     monkeypatch.delenv('CCB_TMUX_CONFIG', raising=False)
+    monkeypatch.delenv('CCB_HERDR_EXE', raising=False)
+    for name in (
+        'WEZTERM_EXECUTABLE',
+        'WEZTERM_EXECUTABLE_DIR',
+        'WEZTERM_PANE',
+        'WEZTERM_UNIX_SOCKET',
+        'TERM_PROGRAM',
+    ):
+        monkeypatch.delenv(name, raising=False)
 
 
 def _context(project_root: Path):
@@ -393,6 +402,225 @@ def test_launch_herdr_ui_uses_injected_runner_without_real_processes(monkeypatch
         ],
     ]
     assert popen_calls == []
+
+
+def test_launch_herdr_ui_uses_wezterm_executable_env_without_path(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run_calls: list[list[str]] = []
+    popen_calls: list[list[str]] = []
+    wezterm_exe = tmp_path / 'WezTerm' / 'wezterm.exe'
+    wezterm_exe.parent.mkdir()
+    wezterm_exe.write_text('', encoding='utf-8')
+
+    def _fake_run(args, **kwargs):
+        del kwargs
+        run_calls.append(list(args))
+        return subprocess.CompletedProcess(args, 0)
+
+    def _fake_popen(args, **kwargs):
+        del kwargs
+        popen_calls.append(list(args))
+        raise AssertionError('WEZTERM_EXECUTABLE 可用时不应进入 Herdr 裸 fallback')
+
+    runner = start_foreground_service.HerdrFrontendCommandRunner(
+        which_fn=lambda name: 'C:/Herdr/herdr.exe' if name == 'herdr' else None,
+        run_fn=_fake_run,
+        popen_fn=_fake_popen,
+        getcwd_fn=lambda: 'C:/repo',
+    )
+    monkeypatch.delenv('CCB_HERDR_EXE', raising=False)
+    monkeypatch.setenv('WEZTERM_EXECUTABLE', str(wezterm_exe))
+
+    frontend = start_foreground_service._launch_herdr_ui(
+        {'session_name': 'ccb-proj-abc'},
+        runner=runner,
+    )
+
+    assert frontend['status'] == 'wezterm_tab_attached'
+    assert run_calls == [
+        [str(wezterm_exe), 'cli', 'list'],
+        [
+            str(wezterm_exe),
+            'cli',
+            'spawn',
+            '--cwd',
+            'C:/repo',
+            '--',
+            'C:/Herdr/herdr.exe',
+            'session',
+            'attach',
+            'ccb-proj-abc',
+        ],
+    ]
+    assert popen_calls == []
+
+
+def test_launch_herdr_ui_uses_wezterm_gui_env_cli_sibling_without_path(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run_calls: list[list[str]] = []
+    popen_calls: list[list[str]] = []
+    wezterm_dir = tmp_path / 'WezTerm'
+    wezterm_dir.mkdir()
+    wezterm_gui = wezterm_dir / 'wezterm-gui.exe'
+    wezterm_cli = wezterm_dir / 'wezterm.exe'
+    wezterm_gui.write_text('', encoding='utf-8')
+    wezterm_cli.write_text('', encoding='utf-8')
+
+    def _fake_run(args, **kwargs):
+        del kwargs
+        run_calls.append(list(args))
+        return subprocess.CompletedProcess(args, 0)
+
+    def _fake_popen(args, **kwargs):
+        del kwargs
+        popen_calls.append(list(args))
+        raise AssertionError('WEZTERM_EXECUTABLE 可派生 CLI 时不应进入 Herdr 裸 fallback')
+
+    runner = start_foreground_service.HerdrFrontendCommandRunner(
+        which_fn=lambda name: 'C:/Herdr/herdr.exe' if name == 'herdr' else None,
+        run_fn=_fake_run,
+        popen_fn=_fake_popen,
+        getcwd_fn=lambda: 'C:/repo',
+    )
+    monkeypatch.delenv('CCB_HERDR_EXE', raising=False)
+    monkeypatch.setenv('WEZTERM_EXECUTABLE', str(wezterm_gui))
+
+    frontend = start_foreground_service._launch_herdr_ui(
+        {'session_name': 'ccb-proj-abc'},
+        runner=runner,
+    )
+
+    assert frontend['status'] == 'wezterm_tab_attached'
+    assert run_calls[0] == [str(wezterm_cli), 'cli', 'list']
+    assert run_calls[1][0] == str(wezterm_cli)
+    assert popen_calls == []
+
+
+def test_launch_herdr_ui_uses_wezterm_executable_dir_env_without_path(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run_calls: list[list[str]] = []
+    popen_calls: list[list[str]] = []
+    wezterm_dir = tmp_path / 'WezTerm'
+    wezterm_dir.mkdir()
+    wezterm_cli = wezterm_dir / 'wezterm.exe'
+    wezterm_cli.write_text('', encoding='utf-8')
+
+    def _fake_run(args, **kwargs):
+        del kwargs
+        run_calls.append(list(args))
+        return subprocess.CompletedProcess(args, 0)
+
+    def _fake_popen(args, **kwargs):
+        del kwargs
+        popen_calls.append(list(args))
+        raise AssertionError('WEZTERM_EXECUTABLE_DIR 可用时不应进入 Herdr 裸 fallback')
+
+    runner = start_foreground_service.HerdrFrontendCommandRunner(
+        which_fn=lambda name: 'C:/Herdr/herdr.exe' if name == 'herdr' else None,
+        run_fn=_fake_run,
+        popen_fn=_fake_popen,
+        getcwd_fn=lambda: 'C:/repo',
+    )
+    monkeypatch.delenv('CCB_HERDR_EXE', raising=False)
+    monkeypatch.delenv('WEZTERM_EXECUTABLE', raising=False)
+    monkeypatch.setenv('WEZTERM_EXECUTABLE_DIR', str(wezterm_dir))
+
+    frontend = start_foreground_service._launch_herdr_ui(
+        {'session_name': 'ccb-proj-abc'},
+        runner=runner,
+    )
+
+    assert frontend['status'] == 'wezterm_tab_attached'
+    assert run_calls[0] == [str(wezterm_cli), 'cli', 'list']
+    assert run_calls[1][0] == str(wezterm_cli)
+    assert popen_calls == []
+
+
+def test_launch_herdr_ui_uses_current_wezterm_env_default_install_without_path(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run_calls: list[list[str]] = []
+    popen_calls: list[list[str]] = []
+    local_app_data = tmp_path / 'AppData' / 'Local'
+    wezterm_cli = local_app_data / 'Programs' / 'WezTerm' / 'wezterm.exe'
+    wezterm_cli.parent.mkdir(parents=True)
+    wezterm_cli.write_text('', encoding='utf-8')
+
+    def _fake_run(args, **kwargs):
+        del kwargs
+        run_calls.append(list(args))
+        return subprocess.CompletedProcess(args, 0)
+
+    def _fake_popen(args, **kwargs):
+        del kwargs
+        popen_calls.append(list(args))
+        raise AssertionError('当前 WezTerm 环境可找到默认安装目录时不应进入 Herdr 裸 fallback')
+
+    runner = start_foreground_service.HerdrFrontendCommandRunner(
+        which_fn=lambda name: 'C:/Herdr/herdr.exe' if name == 'herdr' else None,
+        run_fn=_fake_run,
+        popen_fn=_fake_popen,
+        getcwd_fn=lambda: 'C:/repo',
+    )
+    monkeypatch.delenv('CCB_HERDR_EXE', raising=False)
+    monkeypatch.delenv('WEZTERM_EXECUTABLE', raising=False)
+    monkeypatch.setenv('WEZTERM_PANE', '1')
+    monkeypatch.setenv('LOCALAPPDATA', str(local_app_data))
+
+    frontend = start_foreground_service._launch_herdr_ui(
+        {'session_name': 'ccb-proj-abc'},
+        runner=runner,
+    )
+
+    assert frontend['status'] == 'wezterm_tab_attached'
+    assert run_calls[0] == [str(wezterm_cli), 'cli', 'list']
+    assert run_calls[1][0] == str(wezterm_cli)
+    assert popen_calls == []
+
+
+def test_launch_herdr_ui_fallback_uses_visible_windows_console(monkeypatch) -> None:
+    popen_calls: list[tuple[list[str], dict[str, object]]] = []
+
+    class _FakeProcess:
+        pid = 1234
+
+    def _fake_run(args, **kwargs):
+        raise AssertionError('wezterm 不可用时不应运行 wezterm 命令')
+
+    def _fake_popen(args, **kwargs):
+        popen_calls.append((list(args), dict(kwargs)))
+        return _FakeProcess()
+
+    monkeypatch.setattr(start_foreground_service.sys, 'platform', 'win32')
+    monkeypatch.setattr(start_foreground_service.subprocess, 'CREATE_NEW_CONSOLE', 0x00000010, raising=False)
+
+    runner = start_foreground_service.HerdrFrontendCommandRunner(
+        which_fn=lambda name: 'C:/Herdr/herdr.exe' if name == 'herdr' else None,
+        run_fn=_fake_run,
+        popen_fn=_fake_popen,
+        getcwd_fn=lambda: 'C:/repo',
+    )
+
+    frontend = start_foreground_service._launch_herdr_ui(
+        {'session_name': 'ccb-proj-abc'},
+        runner=runner,
+    )
+
+    assert frontend['status'] == 'detached_fallback'
+    assert frontend['fallback_reason'] == 'wezterm_cli_unavailable'
+    assert popen_calls == [
+        (
+            ['C:/Herdr/herdr.exe', 'session', 'attach', 'ccb-proj-abc'],
+            {'creationflags': 0x00000010},
+        )
+    ]
 
 
 def test_launch_herdr_ui_falls_back_when_wezterm_mux_is_missing(monkeypatch) -> None:

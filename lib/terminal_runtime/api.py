@@ -285,8 +285,19 @@ def get_backend_for_namespace_teardown(namespace_ref: Mapping[str, object]) -> H
     backend-selection gate: re-attach directly from the persisted
     ``namespace_ref`` with a teardown-only capability gate instead.
     """
-    request_adapter = _herdr_request_adapter()
-    socket_ref = str(namespace_ref.get("ipc_ref") or "").strip() or request_adapter.socket_ref
+    session_name = (
+        str(namespace_ref.get("session_name") or "").strip()
+        or os.environ.get("CCB_HERDR_SESSION", "").strip()
+        or "ccb-herdr"
+    )
+    namespace_socket_ref = str(namespace_ref.get("ipc_ref") or "").strip()
+    request_adapter = HerdrCliRequestAdapter(
+        session_name=session_name,
+        herdr_executable=os.environ.get("CCB_HERDR_EXE", "").strip() or None,
+        socket_ref=namespace_socket_ref or None,
+        run_fn=_run,
+    )
+    socket_ref = namespace_socket_ref or request_adapter.socket_ref
     backend = HerdrBackend(
         client=HerdrSocketClient(
             request_fn=request_adapter,

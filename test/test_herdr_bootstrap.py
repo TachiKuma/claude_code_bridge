@@ -1002,7 +1002,7 @@ def test_start_submits_manifest_when_backend_herdr(monkeypatch) -> None:
 
     assert result.ok is True
     assert writes == [manifest]
-    assert ensures == [{'manifest': manifest, 'restore_token': None, 'herdr_exe': None, 'herdr_session': None}]
+    assert ensures == [{'manifest': manifest, 'restore_token': None, 'herdr_exe': None, 'herdr_session': 'ccb-proj-1'}]
 
 
 def test_start_writes_manifest_but_skips_submit_when_backend_not_herdr(monkeypatch) -> None:
@@ -1031,6 +1031,36 @@ def test_start_skips_submit_when_runtime_env_already_usable(monkeypatch) -> None
     assert result is None
     assert writes == [manifest]
     assert ensures == []
+
+
+def test_start_resubmits_when_runtime_env_points_to_other_herdr_session(monkeypatch) -> None:
+    from cli.phase2_runtime.handlers_start import _submit_herdr_runtime_manifest
+
+    manifest, writes, ensures = _patch_manifest_submit(monkeypatch)
+    monkeypatch.setenv('CCB_RUNTIME_MUX_BACKEND', 'herdr')
+    monkeypatch.setenv('CCB_HERDR_SESSION', 'ccb-other')
+    monkeypatch.setenv('CCB_HERDR_SOCKET_REF', 'herdr://ccb-other')
+
+    result = _submit_herdr_runtime_manifest(SimpleNamespace(paths=SimpleNamespace()), SimpleNamespace())
+
+    assert result.ok is True
+    assert writes == [manifest]
+    assert ensures == [{'manifest': manifest, 'restore_token': None, 'herdr_exe': None, 'herdr_session': 'ccb-proj-1'}]
+
+
+def test_start_resubmits_when_runtime_env_has_stale_herdr_socket_ref(monkeypatch) -> None:
+    from cli.phase2_runtime.handlers_start import _submit_herdr_runtime_manifest
+
+    manifest, writes, ensures = _patch_manifest_submit(monkeypatch)
+    monkeypatch.setenv('CCB_RUNTIME_MUX_BACKEND', 'herdr')
+    monkeypatch.setenv('CCB_HERDR_SESSION', 'ccb-proj-1')
+    monkeypatch.setenv('CCB_HERDR_SOCKET_REF', 'herdr://ccb-old')
+
+    result = _submit_herdr_runtime_manifest(SimpleNamespace(paths=SimpleNamespace()), SimpleNamespace())
+
+    assert result.ok is True
+    assert writes == [manifest]
+    assert ensures == [{'manifest': manifest, 'restore_token': None, 'herdr_exe': None, 'herdr_session': 'ccb-proj-1'}]
 
 
 def test_start_manifest_submit_failure_is_non_fatal(monkeypatch) -> None:

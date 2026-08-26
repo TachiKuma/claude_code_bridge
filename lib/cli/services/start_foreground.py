@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+from pathlib import Path
 import shutil
 import subprocess
 import sys
@@ -266,7 +267,7 @@ def _launch_herdr_ui(
     if not herdr_exe:
         return _herdr_frontend_fact(status='frontend_not_ready', reason='herdr_executable_unavailable')
 
-    wezterm_cli = runner.which('wezterm')
+    wezterm_cli = _resolve_wezterm_cli(runner)
     if wezterm_cli:
         cwd = runner.getcwd()
         mux_available, mux_reason = _wezterm_mux_available(wezterm_cli, runner=runner)
@@ -309,6 +310,81 @@ def _launch_herdr_ui(
     )
 
 
+def _resolve_wezterm_cli(runner: HerdrFrontendCommandRunner) -> str | None:
+    path_match = runner.which('wezterm') or runner.which('wezterm.exe')
+    if path_match:
+        return path_match
+    for candidate in _wezterm_cli_candidates_from_env(os.environ):
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
+def _wezterm_cli_candidates_from_env(env: Mapping[str, str]) -> tuple[Path, ...]:
+    candidates: list[Path] = []
+    executable = _clean_env_path(env.get('WEZTERM_EXECUTABLE'))
+    if executable:
+        path = Path(executable)
+        if path.name.lower() in {'wezterm-gui', 'wezterm-gui.exe'}:
+            sibling_name = 'wezterm.exe' if path.name.lower().endswith('.exe') else 'wezterm'
+            candidates.append(path.with_name(sibling_name))
+        candidates.append(path)
+        if path.suffix == '' or str(path).endswith(('/', '\\')):
+            candidates.append(path / 'wezterm.exe')
+            candidates.append(path / 'wezterm')
+
+    executable_dir = _clean_env_path(env.get('WEZTERM_EXECUTABLE_DIR'))
+    if executable_dir:
+        path = Path(executable_dir)
+        candidates.append(path / 'wezterm.exe')
+        candidates.append(path / 'wezterm')
+
+    if _is_current_wezterm_env(env):
+        candidates.extend(_default_wezterm_cli_candidates(env))
+
+    seen: set[str] = set()
+    unique: list[Path] = []
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(candidate)
+    return tuple(unique)
+
+
+def _clean_env_path(value: object) -> str | None:
+    text = str(value or '').strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in {'"', "'"}:
+        text = text[1:-1].strip()
+    return text or None
+
+
+def _is_current_wezterm_env(env: Mapping[str, str]) -> bool:
+    term_program = str(env.get('TERM_PROGRAM') or '').strip().lower()
+    return bool(
+        env.get('WEZTERM_PANE')
+        or env.get('WEZTERM_EXECUTABLE')
+        or env.get('WEZTERM_EXECUTABLE_DIR')
+        or env.get('WEZTERM_UNIX_SOCKET')
+        or term_program == 'wezterm'
+    )
+
+
+def _default_wezterm_cli_candidates(env: Mapping[str, str]) -> tuple[Path, ...]:
+    candidates: list[Path] = []
+    local_app_data = _clean_env_path(env.get('LOCALAPPDATA'))
+    program_files = _clean_env_path(env.get('ProgramFiles'))
+    program_files_x86 = _clean_env_path(env.get('ProgramFiles(x86)'))
+    if local_app_data:
+        candidates.append(Path(local_app_data) / 'Programs' / 'WezTerm' / 'wezterm.exe')
+    if program_files:
+        candidates.append(Path(program_files) / 'WezTerm' / 'wezterm.exe')
+    if program_files_x86:
+        candidates.append(Path(program_files_x86) / 'WezTerm' / 'wezterm.exe')
+    return tuple(candidates)
+
+
 @dataclass(frozen=True)
 class _WezTermSpawnResult:
     returncode: int
@@ -326,7 +402,7 @@ def _wezterm_mux_available(
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=_WEZTERM_CLI_TIMEOUT_S,
-            **_subprocess_kwargs_herdr_ui(),
+            **_subprocess_kwargs_herdr_ui_control(),
         )
     except (OSError, subprocess.SubprocessError):
         return False, 'wezterm_mux_probe_failed'
@@ -348,7 +424,7 @@ def _run_wezterm_spawn(
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=_WEZTERM_CLI_TIMEOUT_S,
-            **_subprocess_kwargs_herdr_ui(),
+            **_subprocess_kwargs_herdr_ui_control(),
         )
     except (OSError, subprocess.SubprocessError):
         return _WezTermSpawnResult(returncode=1)
@@ -366,9 +442,7 @@ def _launch_detached_herdr_ui(
     try:
         runner.popen(
             [herdr_exe, 'session', 'attach', session_name],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            **_subprocess_kwargs_herdr_ui(),
+            **_subprocess_kwargs_herdr_ui_fallback(),
         )
     except (OSError, subprocess.SubprocessError):
         return _herdr_frontend_fact(
@@ -756,10 +830,17 @@ def _tmux_select_window(tmux_socket_path: str, target: str, *, env: dict[str, st
     return probe.returncode == 0
 
 
-def _subprocess_kwargs_herdr_ui() -> dict[str, object]:
-    """Hide only the control wrapper; WezTerm/Herdr attach remains intentional UI."""
+def _subprocess_kwargs_herdr_ui_control() -> dict[str, object]:
+    """仅隐藏控制面 wrapper，避免短生命周期 CLI 命令闪窗。"""
     if sys.platform == 'win32':
         return {'creationflags': getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000)}
+    return {}
+
+
+def _subprocess_kwargs_herdr_ui_fallback() -> dict[str, object]:
+    """裸 Herdr TUI fallback 在 Windows 上必须拥有可见控制台。"""
+    if sys.platform == 'win32':
+        return {'creationflags': getattr(subprocess, 'CREATE_NEW_CONSOLE', 0x00000010)}
     return {}
 
 
