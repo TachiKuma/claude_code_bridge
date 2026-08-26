@@ -3868,7 +3868,7 @@ def test_materialize_claude_home_config_merges_source_and_managed_hooks(tmp_path
     assert payload['hooks']['PostToolUse'][0]['hooks'][0]['command'] == 'echo managed-post'
 
 
-def test_materialize_claude_home_config_filters_herdr_agent_hooks_with_diagnostics(tmp_path: Path) -> None:
+def test_materialize_claude_home_config_preserves_herdr_agent_hooks_with_clear_diagnostics(tmp_path: Path) -> None:
     source_home = tmp_path / 'system-home'
     target_home = tmp_path / 'managed-home'
     source_settings = source_home / '.claude' / 'settings.json'
@@ -3916,10 +3916,15 @@ def test_materialize_claude_home_config_filters_herdr_agent_hooks_with_diagnosti
         if isinstance(hook, dict)
     ]
     diagnostics = json.loads((target_home / '.ccb-herdr-hook-diagnostics.json').read_text(encoding='utf-8'))
-    assert commands == ['echo source-stop', 'echo managed-stop']
-    assert diagnostics['status'] == 'risk_detected'
-    assert diagnostics['removed_hook_count'] == 2
-    assert diagnostics['authority'] == 'source=ccb'
+    assert commands == [
+        'pwsh herdr-agent-state.ps1',
+        'echo source-stop',
+        'herdr agent-state --json',
+        'echo managed-stop',
+    ]
+    assert diagnostics['status'] == 'clear'
+    assert diagnostics['removed_hook_count'] == 0
+    assert diagnostics['authority'] == 'herdr_runtime_observation'
 
 
 def test_materialize_claude_home_config_refreshes_ccb_only_permissions_for_auto_permission(tmp_path: Path) -> None:
@@ -5833,7 +5838,7 @@ def test_materialize_gemini_home_config_preserves_runtime_hooks(tmp_path: Path) 
     assert payload['hooks']['AfterAgent'][0]['hooks'][0]['command'] == 'echo hook'
 
 
-def test_materialize_gemini_home_config_filters_herdr_agent_hooks_with_diagnostics(tmp_path: Path) -> None:
+def test_materialize_gemini_home_config_preserves_herdr_agent_hooks_with_clear_diagnostics(tmp_path: Path) -> None:
     source_home = tmp_path / 'system-home'
     target_home = tmp_path / 'managed-home'
     source_settings = source_home / '.gemini' / 'settings.json'
@@ -5880,9 +5885,9 @@ def test_materialize_gemini_home_config_filters_herdr_agent_hooks_with_diagnosti
         if isinstance(hook, dict)
     ]
     diagnostics = json.loads((target_home / '.ccb-herdr-hook-diagnostics.json').read_text(encoding='utf-8'))
-    assert commands == ['echo managed hook']
-    assert diagnostics['status'] == 'risk_detected'
-    assert diagnostics['removed_hook_count'] == 1
+    assert commands == ['herdr-agent-state.sh', 'echo managed hook']
+    assert diagnostics['status'] == 'clear'
+    assert diagnostics['removed_hook_count'] == 0
 
 
 def test_materialize_gemini_home_config_merges_trusted_folders(tmp_path: Path) -> None:

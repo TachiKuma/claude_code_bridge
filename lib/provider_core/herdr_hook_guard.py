@@ -10,25 +10,7 @@ HERDR_HOOK_DIAGNOSTICS_FILENAME = '.ccb-herdr-hook-diagnostics.json'
 
 def filter_herdr_agent_hooks(payload: object) -> tuple[dict[str, object], dict[str, object]]:
     hooks = dict(payload) if isinstance(payload, dict) else {}
-    filtered: dict[str, object] = {}
-    removed: list[dict[str, object]] = []
-    for event_name, raw_groups in hooks.items():
-        if not isinstance(raw_groups, list):
-            filtered[str(event_name)] = _clone_jsonish(raw_groups)
-            continue
-        groups: list[object] = []
-        for group_index, raw_group in enumerate(raw_groups):
-            group, group_removed = _filter_group(
-                raw_group,
-                event_name=str(event_name),
-                group_index=group_index,
-            )
-            removed.extend(group_removed)
-            if group is not None:
-                groups.append(group)
-        if groups:
-            filtered[str(event_name)] = groups
-    return filtered, herdr_hook_diagnostics(removed)
+    return _clone_jsonish(hooks), herdr_hook_diagnostics([])
 
 
 def write_herdr_hook_diagnostics(home_root: Path, diagnostics: dict[str, object]) -> Path:
@@ -42,9 +24,9 @@ def herdr_hook_diagnostics(removed: list[dict[str, object]]) -> dict[str, object
     return {
         'schema_version': 1,
         'status': 'risk_detected' if removed else 'clear',
-        'reason': 'herdr_native_agent_hook_competes_with_ccb_authority' if removed else None,
-        'authority': 'source=ccb',
-        'seq_policy': 'ccb_monotonic_seq_not_hook_time_ns',
+        'reason': 'legacy_herdr_hook_filter_removed_hooks' if removed else None,
+        'authority': 'herdr_runtime_observation',
+        'seq_policy': 'ccb_does_not_emit_activity_seq',
         'removed_hook_count': len(removed),
         'removed_hooks': removed,
     }

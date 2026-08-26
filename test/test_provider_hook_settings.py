@@ -1002,7 +1002,7 @@ def test_prepare_provider_workspace_preserves_omx_native_codex_hooks(
     assert state[f'{hooks_path}:user_prompt_submit:0:0']['trusted_hash'] == expected_hash
 
 
-def test_prepare_provider_workspace_filters_herdr_codex_hooks_with_diagnostics(
+def test_prepare_provider_workspace_preserves_herdr_codex_hooks_with_clear_diagnostics(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -1052,10 +1052,10 @@ def test_prepare_provider_workspace_filters_herdr_codex_hooks_with_diagnostics(
         for hook in group.get('hooks', [])
     ]
     diagnostics = json.loads((codex_home / '.ccb-herdr-hook-diagnostics.json').read_text(encoding='utf-8'))
-    assert 'pwsh herdr-agent-state.ps1' not in all_commands
+    assert 'pwsh herdr-agent-state.ps1' in all_commands
     assert 'echo allowed-generic-marker' in all_commands
-    assert diagnostics['status'] == 'risk_detected'
-    assert diagnostics['removed_hook_count'] == 1
+    assert diagnostics['status'] == 'clear'
+    assert diagnostics['removed_hook_count'] == 0
 
 
 def test_prepare_provider_workspace_preserves_configured_codex_command_hooks(

@@ -10,6 +10,7 @@ from platforms.windows.herdr.lifecycle_bridge import HerdrAgentLifecycleBridge
 class _Reporter:
     def __init__(self) -> None:
         self.calls: list[tuple[dict[str, object], dict[str, object]]] = []
+        self.session_calls: list[tuple[dict[str, object], dict[str, object]]] = []
         self.attach_calls: list[tuple[dict[str, object], str | None]] = []
 
     def attach_persisted_session(
@@ -29,8 +30,15 @@ class _Reporter:
     ) -> None:
         self.calls.append((dict(pane), dict(kwargs)))
 
+    def report_pane_agent_session(
+        self,
+        pane: dict[str, object],
+        **kwargs: object,
+    ) -> None:
+        self.session_calls.append((dict(pane), dict(kwargs)))
 
-def test_bridge_maps_ccb_states_and_increments_seq() -> None:
+
+def test_bridge_reports_session_once_without_activity_state() -> None:
     reporter = _Reporter()
     bridge = HerdrAgentLifecycleBridge(
         backend_factory=lambda: reporter,
@@ -45,54 +53,18 @@ def test_bridge_maps_ccb_states_and_increments_seq() -> None:
         state=AgentState.BUSY,
         pane_id="w1:p2",
         session_id="ccb-session",
-    ) is True
+    ) is False
     assert bridge.sync(
         provider="codex",
         state=AgentState.IDLE,
         pane_id="w1:p2",
         session_id="ccb-session",
-    ) is True
+    ) is False
 
-    assert reporter.calls == [
-        (
-            {
-                "backend_impl": "herdr",
-                "pane_id": "w1:p2",
-                "session_name": "ccb-demo",
-            },
-            {
-                "provider_kind": "codex",
-                "state": "working",
-                "seq": 1,
-                "session_id": "ccb-session",
-                "session_path": None,
-            },
-        ),
-        (
-            {
-                "backend_impl": "herdr",
-                "pane_id": "w1:p2",
-                "session_name": "ccb-demo",
-            },
-            {
-                "provider_kind": "codex",
-                "state": "idle",
-                "seq": 2,
-                "session_id": "ccb-session",
-                "session_path": None,
-            },
-        ),
-    ]
-    assert reporter.attach_calls == [
-        (
-            {
-                "backend_impl": "herdr",
-                "session_name": "ccb-demo",
-            },
-            "w1:p2",
-        )
-    ] * 2
-    assert bridge.seq == 2
+    assert reporter.calls == []
+    assert reporter.session_calls == []
+    assert reporter.attach_calls == []
+    assert bridge.seq == 0
 
 
 def test_bridge_skips_missing_pane_or_non_herdr_namespace() -> None:
@@ -108,9 +80,10 @@ def test_bridge_skips_missing_pane_or_non_herdr_namespace() -> None:
     assert bridge.sync(provider="codex", state=AgentState.BUSY, pane_id="") is False
     assert bridge.sync(provider="codex", state=AgentState.BUSY, pane_id="w1:p2") is False
     assert reporter.calls == []
+    assert reporter.session_calls == []
 
 
-def test_bridge_skips_missing_provider_or_unknown_state_without_consuming_seq() -> None:
+def test_bridge_requires_provider_and_session_but_ignores_activity_state() -> None:
     reporter = _Reporter()
     bridge = HerdrAgentLifecycleBridge(
         backend_factory=lambda: reporter,
@@ -121,14 +94,21 @@ def test_bridge_skips_missing_provider_or_unknown_state_without_consuming_seq() 
     )
 
     assert bridge.sync(provider="", state=AgentState.BUSY, pane_id="w1:p2") is False
-    assert bridge.sync(provider="codex", state="surprising", pane_id="w1:p2") is False
+    assert bridge.sync(provider="codex", state=AgentState.BUSY, pane_id="w1:p2") is False
+    assert bridge.sync(
+        provider="codex",
+        state="surprising",
+        pane_id="w1:p2",
+        session_id="session-2",
+    ) is False
 
     assert reporter.calls == []
+    assert reporter.session_calls == []
     assert reporter.attach_calls == []
     assert bridge.seq == 0
 
 
-def test_sync_runtime_forwards_ccb_state_to_herdr_bridge() -> None:
+def test_sync_runtime_does_not_forward_ccb_activity_state_to_herdr() -> None:
     reporter = _Reporter()
     bridge = HerdrAgentLifecycleBridge(
         backend_factory=lambda: reporter,
@@ -175,19 +155,5 @@ def test_sync_runtime_forwards_ccb_state_to_herdr_bridge() -> None:
 
     sync_runtime(dispatcher, "archi", state=AgentState.BUSY)
 
-    assert reporter.calls == [
-        (
-            {
-                "backend_impl": "herdr",
-                "pane_id": "wJ:p2",
-                "session_name": "ccb-demo",
-            },
-            {
-                "provider_kind": "codex",
-                "state": "working",
-                "seq": 1,
-                "session_id": "ccb-session",
-                "session_path": "D:/demo/.ccb/session",
-            },
-        )
-    ]
+    assert reporter.calls == []
+    assert reporter.session_calls == []

@@ -112,7 +112,7 @@ def test_start_foreground_herdr_attach_uses_builder_without_tmux_binary(monkeypa
         'Popen',
         lambda *_, **__: (_ for _ in ()).throw(AssertionError('tmux subprocess should not run')),
     )
-    monkeypatch.setattr(start_foreground_service, '_launch_herdr_ui', lambda _namespace_ref: None)
+    monkeypatch.setattr(start_foreground_service, '_launch_herdr_ui', lambda _namespace_ref, **_: None)
     monkeypatch.setattr(start_foreground_service, '_build_herdr_attach_backend', _build_herdr_attach_backend)
 
     summary = attach_started_project_namespace(context)  # type: ignore[arg-type]
@@ -208,7 +208,7 @@ def test_start_foreground_herdr_attach_real_builder_accepts_matching_backend_ref
         'Popen',
         lambda *_, **__: (_ for _ in ()).throw(AssertionError('tmux subprocess should not run')),
     )
-    monkeypatch.setattr(start_foreground_service, '_launch_herdr_ui', lambda _namespace_ref: None)
+    monkeypatch.setattr(start_foreground_service, '_launch_herdr_ui', lambda _namespace_ref, **_: None)
     monkeypatch.setattr(
         'terminal_runtime.api.get_backend',
         lambda terminal_type=None: backend_calls.append(terminal_type) or _MatchingHerdrBackend(),
@@ -271,7 +271,7 @@ def test_start_foreground_herdr_attach_uses_backend_normalized_ipc_ref(monkeypat
 
     monkeypatch.setattr(start_foreground_service, '_foreground_attach_client', lambda _context: _FakeClient())
     monkeypatch.setattr(start_foreground_service, '_attach_env', lambda: {})
-    monkeypatch.setattr(start_foreground_service, '_launch_herdr_ui', lambda _namespace_ref: None)
+    monkeypatch.setattr(start_foreground_service, '_launch_herdr_ui', lambda _namespace_ref, **_: None)
     monkeypatch.setattr(
         'terminal_runtime.api.get_backend',
         lambda terminal_type=None: _NormalizingHerdrBackend(),
@@ -542,46 +542,57 @@ def test_launch_herdr_ui_uses_wezterm_executable_dir_env_without_path(
     assert popen_calls == []
 
 
-def test_launch_herdr_ui_uses_current_wezterm_env_default_install_without_path(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
+def test_launch_herdr_ui_replaces_current_wezterm_pane_without_spawning(monkeypatch) -> None:
     run_calls: list[list[str]] = []
     popen_calls: list[list[str]] = []
-    local_app_data = tmp_path / 'AppData' / 'Local'
-    wezterm_cli = local_app_data / 'Programs' / 'WezTerm' / 'wezterm.exe'
-    wezterm_cli.parent.mkdir(parents=True)
-    wezterm_cli.write_text('', encoding='utf-8')
+    exec_calls: list[tuple[str, list[str], dict[str, str]]] = []
+    frontend_records: list[dict[str, object]] = []
 
     def _fake_run(args, **kwargs):
         del kwargs
         run_calls.append(list(args))
-        return subprocess.CompletedProcess(args, 0)
+        raise AssertionError('当前 WezTerm pane 应直接交接给 Herdr UI')
 
     def _fake_popen(args, **kwargs):
         del kwargs
         popen_calls.append(list(args))
-        raise AssertionError('当前 WezTerm 环境可找到默认安装目录时不应进入 Herdr 裸 fallback')
+        raise AssertionError('当前 WezTerm pane 应避免裸进程 fallback')
+
+    def _fake_execvpe(executable, command, env):
+        exec_calls.append((executable, list(command), dict(env)))
+        raise SystemExit(0)
 
     runner = start_foreground_service.HerdrFrontendCommandRunner(
         which_fn=lambda name: 'C:/Herdr/herdr.exe' if name == 'herdr' else None,
         run_fn=_fake_run,
         popen_fn=_fake_popen,
+        execvpe_fn=_fake_execvpe,
         getcwd_fn=lambda: 'C:/repo',
     )
     monkeypatch.delenv('CCB_HERDR_EXE', raising=False)
-    monkeypatch.delenv('WEZTERM_EXECUTABLE', raising=False)
     monkeypatch.setenv('WEZTERM_PANE', '1')
-    monkeypatch.setenv('LOCALAPPDATA', str(local_app_data))
 
-    frontend = start_foreground_service._launch_herdr_ui(
-        {'session_name': 'ccb-proj-abc'},
-        runner=runner,
-    )
+    with pytest.raises(SystemExit):
+        start_foreground_service._launch_herdr_ui(
+            {'session_name': 'ccb-proj-abc'},
+            runner=runner,
+            before_current_pane_exec=frontend_records.append,
+        )
 
-    assert frontend['status'] == 'wezterm_tab_attached'
-    assert run_calls[0] == [str(wezterm_cli), 'cli', 'list']
-    assert run_calls[1][0] == str(wezterm_cli)
+    assert frontend_records == [
+        {
+            'kind': 'wezterm',
+            'status': 'wezterm_tab_attached',
+            'mux_available': True,
+            'launch_mode': 'current_pane_exec',
+            'fallback': False,
+        }
+    ]
+    assert len(exec_calls) == 1
+    assert exec_calls[0][0] == 'C:/Herdr/herdr.exe'
+    assert exec_calls[0][1] == ['C:/Herdr/herdr.exe', 'session', 'attach', 'ccb-proj-abc']
+    assert exec_calls[0][2]['WEZTERM_PANE'] == '1'
+    assert run_calls == []
     assert popen_calls == []
 
 

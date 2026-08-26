@@ -32,6 +32,7 @@ class HerdrFrontendCommandRunner:
     which_fn: Callable[[str], str | None] | None = None
     run_fn: Callable[..., subprocess.CompletedProcess] | None = None
     popen_fn: Callable[..., subprocess.Popen] | None = None
+    execvpe_fn: Callable[[str, list[str], Mapping[str, str]], object] | None = None
     getcwd_fn: Callable[[], str] | None = None
 
     def which(self, name: str) -> str | None:
@@ -42,6 +43,9 @@ class HerdrFrontendCommandRunner:
 
     def popen(self, command: list[str], **kwargs) -> subprocess.Popen:
         return (self.popen_fn or subprocess.Popen)(command, **kwargs)
+
+    def execvpe(self, executable: str, command: list[str], env: Mapping[str, str]) -> object:
+        return (self.execvpe_fn or os.execvpe)(executable, command, dict(env))
 
     def getcwd(self) -> str:
         return (self.getcwd_fn or os.getcwd)()
@@ -228,8 +232,19 @@ def _attach_herdr_project_namespace(context: CliContext, payload: dict[str, obje
     # no visible UI.  Spawning WezTerm first gives the user an immediate
     # visual session while the backend-side ``workspace focus`` completes
     # during attach.
-    frontend = _launch_herdr_ui(namespace_ref)
-    _record_herdr_frontend(context, frontend)
+    frontend_recorded = False
+
+    def _record_before_current_pane_exec(frontend: dict[str, object]) -> None:
+        nonlocal frontend_recorded
+        _record_herdr_frontend(context, frontend)
+        frontend_recorded = True
+
+    frontend = _launch_herdr_ui(
+        namespace_ref,
+        before_current_pane_exec=_record_before_current_pane_exec,
+    )
+    if not frontend_recorded or _frontend_fact_needs_post_record(frontend):
+        _record_herdr_frontend(context, frontend)
     try:
         attach(namespace_ref, window_name=_clean_optional_payload_text(payload.get('namespace_workspace_window_name')))
     except Exception as exc:
@@ -246,16 +261,9 @@ def _launch_herdr_ui(
     namespace_ref: dict[str, object],
     *,
     runner: HerdrFrontendCommandRunner | None = None,
+    before_current_pane_exec: Callable[[dict[str, object]], None] | None = None,
 ) -> dict[str, object]:
-    """Spawn WezTerm (or a standalone herdr process) to display the Herdr UI.
-
-    Mirrors the ccb8.ps1 one-click WezTerm launch: resolves herdr + wezterm
-    paths, derives the session name from the namespace ref, and spawns
-    ``wezterm cli spawn -- <herdr> session attach <session>``.  Falls back
-    to a detached ``herdr session attach`` if WezTerm CLI or its GUI mux is
-    unavailable.  The returned frontend fact is diagnostic state only; it does
-    not imply business completion.
-    """
+    """显示 Herdr UI；在当前 WezTerm pane 内启动时优先交接当前 pane。"""
     session_name = str(namespace_ref.get('session_name') or '').strip()
     if not session_name:
         return _herdr_frontend_fact(status='frontend_not_ready', reason='missing_session_name')
@@ -266,6 +274,14 @@ def _launch_herdr_ui(
         herdr_exe = runner.which('herdr') or ''
     if not herdr_exe:
         return _herdr_frontend_fact(status='frontend_not_ready', reason='herdr_executable_unavailable')
+
+    if _is_current_wezterm_pane_env(os.environ):
+        return _replace_current_wezterm_pane_with_herdr_ui(
+            herdr_exe,
+            session_name,
+            runner=runner,
+            before_exec=before_current_pane_exec,
+        )
 
     wezterm_cli = _resolve_wezterm_cli(runner)
     if wezterm_cli:
@@ -371,6 +387,10 @@ def _is_current_wezterm_env(env: Mapping[str, str]) -> bool:
     )
 
 
+def _is_current_wezterm_pane_env(env: Mapping[str, str]) -> bool:
+    return bool(str(env.get('WEZTERM_PANE') or '').strip())
+
+
 def _default_wezterm_cli_candidates(env: Mapping[str, str]) -> tuple[Path, ...]:
     candidates: list[Path] = []
     local_app_data = _clean_env_path(env.get('LOCALAPPDATA'))
@@ -431,6 +451,41 @@ def _run_wezterm_spawn(
     return _WezTermSpawnResult(returncode=int(result.returncode))
 
 
+def _replace_current_wezterm_pane_with_herdr_ui(
+    herdr_exe: str,
+    session_name: str,
+    *,
+    runner: HerdrFrontendCommandRunner,
+    before_exec: Callable[[dict[str, object]], None] | None = None,
+) -> dict[str, object]:
+    frontend = _herdr_frontend_fact(
+        status='wezterm_tab_attached',
+        mux_available=True,
+        launch_mode='current_pane_exec',
+        fallback=False,
+    )
+    if before_exec is not None:
+        before_exec(frontend)
+    command = [herdr_exe, 'session', 'attach', session_name]
+    try:
+        runner.execvpe(herdr_exe, command, os.environ)
+    except (OSError, subprocess.SubprocessError):
+        return _herdr_frontend_fact(
+            status='frontend_not_ready',
+            mux_available=True,
+            launch_mode='current_pane_exec',
+            fallback=False,
+            reason='current_pane_exec_failed',
+        )
+    return _herdr_frontend_fact(
+        status='frontend_not_ready',
+        mux_available=True,
+        launch_mode='current_pane_exec',
+        fallback=False,
+        reason='current_pane_exec_returned',
+    )
+
+
 def _launch_detached_herdr_ui(
     herdr_exe: str,
     session_name: str,
@@ -485,7 +540,17 @@ def _herdr_frontend_fact(
     return fact
 
 
-def _record_herdr_frontend(context: CliContext, frontend: dict[str, object]) -> None:
+def _frontend_fact_needs_post_record(frontend: object) -> bool:
+    if not isinstance(frontend, Mapping):
+        return True
+    return not (
+        frontend.get('status') == 'wezterm_tab_attached'
+        and frontend.get('launch_mode') == 'current_pane_exec'
+        and frontend.get('fallback') is False
+    )
+
+
+def _record_herdr_frontend(context: CliContext, frontend: dict[str, object] | None) -> None:
     try:
         store = ProjectNamespaceStateStore(context.paths)
         state = store.load()

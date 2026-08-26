@@ -95,7 +95,7 @@ def test_integration_gate_polling_fallback_keeps_reason_and_unknown_semantics() 
     assert status['agent_status_seq'] == 3
 
 
-def test_integration_gate_ccb_authority_seq_and_hook_filter_do_not_compete() -> None:
+def test_integration_gate_ccb_activity_state_and_herdr_hooks_do_not_compete() -> None:
     reporter = _Reporter()
     bridge = HerdrAgentLifecycleBridge(
         backend_factory=lambda: reporter,
@@ -105,8 +105,8 @@ def test_integration_gate_ccb_authority_seq_and_hook_filter_do_not_compete() -> 
         },
     )
 
-    assert bridge.sync(provider='codex', state=AgentState.BUSY, pane_id='pane-1') is True
-    assert bridge.sync(provider='codex', state=AgentState.IDLE, pane_id='pane-1') is True
+    assert bridge.sync(provider='codex', state=AgentState.BUSY, pane_id='pane-1') is False
+    assert bridge.sync(provider='codex', state=AgentState.IDLE, pane_id='pane-1') is False
     filtered, diagnostics = filter_herdr_agent_hooks(
         {
             'Stop': [
@@ -116,12 +116,11 @@ def test_integration_gate_ccb_authority_seq_and_hook_filter_do_not_compete() -> 
         }
     )
 
-    assert [call[1]['seq'] for call in reporter.calls] == [1, 2]
-    assert reporter.calls[0][1]['provider_kind'] == 'codex'
-    assert reporter.calls[0][1]['state'] == 'working'
-    assert filtered['Stop'][0]['hooks'][0]['command'] == 'echo managed-stop'  # type: ignore[index]
-    assert diagnostics['status'] == 'risk_detected'
-    assert diagnostics['seq_policy'] == 'ccb_monotonic_seq_not_hook_time_ns'
+    assert reporter.calls == []
+    assert filtered['Stop'][0]['hooks'][0]['command'] == 'pwsh herdr-agent-state.ps1'  # type: ignore[index]
+    assert filtered['Stop'][1]['hooks'][0]['command'] == 'echo managed-stop'  # type: ignore[index]
+    assert diagnostics['status'] == 'clear'
+    assert diagnostics['seq_policy'] == 'ccb_does_not_emit_activity_seq'
 
 
 def test_integration_gate_docs_keep_wezterm_herdr_and_ensure_runtime_boundaries() -> None:

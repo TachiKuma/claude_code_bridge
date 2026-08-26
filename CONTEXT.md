@@ -113,15 +113,26 @@ owner** 管理 pane 进程的启动、就绪、退出、attach、布局、焦点
 
 判定「某 pane 里是哪个具体 agent 实例、归属哪个 project/slot/provider/generation」的一方，本项目中
 是 **CCB**（经源码验证）。Herdr 侧 `Agent` 仅是种类枚举、无实例 id 且 respawn 即清；CCB 通过
-`report_pane_agent` 把身份**报告**给 Herdr——这与 agent 自带的 hook 上报是**对等来源**，是 Herdr
-设计中受支持的正规路径，**非需删除的历史补丁**。
+`set_pane_identity` 或等价 metadata token 把身份**报告**给 Herdr。`report_pane_agent` 会进入 Herdr
+hook authority 路径并携带工作状态，后续只可作为一次性兼容兜底，不应作为 CCB 持续同步身份或状态的
+首选路径。
 
 关联：`physical pane owner`、`observational state aggregator`、`managed 模式`、`Runtime Binding`。
+
+### agent activity state（agent 工作状态）
+
+描述 agent 当前运行时活动的状态事实，如 `idle`、`working`、`blocked`、`done`、`unknown`。
+它属于 Host Runtime 的观测事实，不等于 CCB 的业务完成判定，也不等于 `agent identity authority`。
+CCB 可以声明 pane 的 project/slot/provider/generation 归属，但不应把自身的业务队列状态覆盖成
+Herdr UI Agents 面板中的工作状态。CCB 管理的 provider home 应保留 Herdr 原生状态 hook，
+除非用户或安全策略显式禁用；这些 hook 是 Herdr 观测链的一部分，不是 CCB 业务完成判定来源。
+
+关联：`Host Runtime`、`observational state aggregator`、`runtime fact source vs business completion authority`。
 
 ### 观测聚合协作模型（Observational-Aggregation Cooperation）
 
 WezTerm / Herdr / CCB 三者配合方式的目标模型，锚点 **「CCB 权威 · Herdr 观测 · WezTerm 呈现」**：
-CCB 是身份与业务完成权威、独立上报状态（`source=ccb`）；Herdr 是观测式状态聚合器，从对等来源
+CCB 是身份与业务完成权威、独立上报身份与绑定事实（`source=ccb`）；Herdr 是观测式状态聚合器，从对等来源
 接收状态、以原生 events 对外发布；WezTerm 是呈现层与 attach 落点，非与 Herdr 竞争的 mux。它是
 ADR 0001「三层权威边界」在**配合方式**层的落地，纠正了原 v2「下放给 Herdr」的方向性误设。
 
@@ -187,7 +198,9 @@ Project Config 已表达新的期望配置，但当前运行中的 provider runt
 
 CCB 持久化的、指向某次 Herdr 运行时实例的唯一锚点（`.ccb/runtime/herdr-binding.json`）。
 用于重连、teardown、`project_view` 投影与事件去重。可含可选 `frontend` 段记录前台事实
-（如 WezTerm mux 是否可用、workspace 寻址目标）。
+（如 WezTerm mux 是否可用、workspace 寻址目标），并作为前台 attach 幂等的首选锚点：
+再次启动同一项目时，先用该记录结合 Herdr/WezTerm 轻量探测确认既有 UI 是否仍可用，而不是只看
+窗口标题或 tab 数。
 
 关联：`runtime generation`、`Frontend Surface`。
 
@@ -214,7 +227,7 @@ WezTerm 的一等寻址原语，用于按名称定位一组窗口/tab。相比�
 ### attach（附着）
 
 把可见前台连接到某个既存运行时 session 的动作。在 Native Windows 上通过 WezTerm 承载
-（`wezterm cli spawn -- herdr session attach <session>`）。attach 是用户体感的唯一入口，其
-成败必须可观测，不得静默失败。
+并应优先交接当前 WezTerm 前台；从 WezTerm 内发起 CCB 启动时，命令启动 tab 不应与 Herdr UI
+tab 同时残留。attach 是用户体感的唯一入口，其成败必须可观测，不得静默失败。
 
 关联：`Frontend Surface`、`Host Runtime`。
