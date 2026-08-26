@@ -16,9 +16,10 @@ class StartFlowSummary:
     actions_taken: tuple[str, ...] = ()
     agent_results: tuple[CcbdStartupAgentResult, ...] = ()
     timings_ms: dict[str, float] = field(default_factory=dict)
+    ready_gate: object | None = None
 
     def to_record(self) -> dict[str, object]:
-        return {
+        record: dict[str, object] = {
             'project_root': self.project_root,
             'project_id': self.project_id,
             'started': list(self.started),
@@ -37,6 +38,9 @@ class StartFlowSummary:
             'agent_results': [item.to_record() for item in self.agent_results],
             'timings_ms': dict(self.timings_ms),
         }
+        if self.ready_gate is not None:
+            record['ready_gate'] = self.ready_gate.to_record()
+        return record
 
 
 __all__ = ['StartFlowSummary']

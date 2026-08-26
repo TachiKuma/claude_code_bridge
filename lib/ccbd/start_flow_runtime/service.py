@@ -5,6 +5,13 @@ import time
 
 from ccbd.launch_plan import LaunchPlanCache, PrecomputeResult, precompute_launch_plans, precompute_with_cache
 from ccbd.models import CcbdStartupAgentResult
+from ccbd.ready_gate import (
+    ConcurrencyLimiter,
+    HealthProbeOutcome,
+    ReadyGateEvaluator,
+    resolve_max_concurrency,
+    run_bounded_concurrent,
+)
 
 from .binding import launch_binding_hint, relabel_project_namespace_pane
 from .service_agents import prepare_agents
@@ -369,6 +376,16 @@ def run_start_flow(
         timings_ms['agent_runtime_commit'] - agent_duration_sum_ms,
     )
 
+    # T03: Ready Gate 严格化 + 受限并发探针（可选，默认关闭，向后兼容）
+    ready_gate_result = _run_ready_gate(
+        deps,
+        targets=targets,
+        agent_results=tuple(agent_results),
+        launch_plan_result=launch_plan_result,
+        timings_ms=timings_ms,
+        actions_taken=actions_taken,
+    )
+
     stage_started_ns = time.monotonic_ns()
     cleanup_summaries = cleanup_tmux_orphans_if_needed(
         deps,
@@ -392,11 +409,100 @@ def run_start_flow(
         actions_taken=tuple(actions_taken),
         agent_results=tuple(agent_results),
         timings_ms=timings_ms,
+        ready_gate=ready_gate_result,
     )
 
 
 def _elapsed_ms(started_ns: int) -> float:
     return (time.monotonic_ns() - started_ns) / 1_000_000
+
+
+def _run_ready_gate(
+    deps,
+    *,
+    targets: tuple[str, ...],
+    agent_results: tuple[CcbdStartupAgentResult, ...],
+    launch_plan_result,
+    timings_ms: dict[str, float],
+    actions_taken: list[str],
+):
+    """可选 Ready Gate 评估（受限并发探针 + 严格三条件判定）。
+
+    仅当 deps.ready_gate_evaluator_cls 注入时启用；否则返回 None，
+    保持既有行为。预计算（launch_plan_result）在启动前已完成，
+    不受并发上限限制。
+    """
+    evaluator_cls = getattr(deps, 'ready_gate_evaluator_cls', None)
+    if evaluator_cls is None:
+        return None
+
+    from ccbd.ready_gate.evaluator import default_ping_fn, default_provider_ready_fn
+
+    stage_started_ns = time.monotonic_ns()
+    max_workers = resolve_max_concurrency(env=deps.concurrency_env)
+    limiter = ConcurrencyLimiter(max_workers)
+    health_fn = getattr(deps, 'health_check_fn', None)
+    ping_fn = getattr(deps, 'ping_fn', None)
+
+    provider_ready_fn = default_provider_ready_fn(health_fn)
+    default_ping = default_ping_fn(ping_fn)
+
+    results_by_name = {_text(getattr(r, 'agent_name', '')): r for r in agent_results}
+    probe_lookup: dict[str, HealthProbeOutcome] = {}
+    bounded_run = None
+    if max_workers >= 1 and targets:
+        def _probe(agent_name: str) -> HealthProbeOutcome:
+            result = results_by_name.get(agent_name)
+            if result is None:
+                return HealthProbeOutcome(health_ok=False, ping_ok=False, health_label='no_startup_result', probe_ms=0.0)
+            started = time.monotonic_ns()
+            try:
+                outcome = provider_ready_fn(result)
+                ping_ok = default_ping(result)
+            except Exception:
+                outcome = HealthProbeOutcome(health_ok=False, ping_ok=False, health_label='probe_error', probe_ms=0.0)
+                ping_ok = False
+            probe_ms = _elapsed_ms(started)
+            return HealthProbeOutcome(
+                health_ok=outcome.health_ok,
+                ping_ok=ping_ok,
+                health_label=outcome.health_label,
+                probe_ms=probe_ms,
+            )
+
+        bounded_run = run_bounded_concurrent(
+            items=targets,
+            worker_fn=_probe,
+            limiter=limiter,
+        )
+        probe_lookup = dict(bounded_run.results)
+
+    evaluator = evaluator_cls(
+        max_concurrency=max_workers,
+    )
+    gate_result = evaluator.evaluate(
+        startup_results=agent_results,
+        launch_plan_result=launch_plan_result,
+        target_order=targets,
+        probe_outcomes=probe_lookup,
+    )
+
+    if gate_result.concurrency is not None:
+        object.__setattr__(
+            gate_result.concurrency,
+            'measured_peak_in_flight',
+            limiter.measured_peak if bounded_run is not None else 0,
+        )
+    timings_ms['ready_gate_evaluate'] = _elapsed_ms(stage_started_ns)
+    timings_ms['ready_gate_total_ms'] = gate_result.total_ready_ms or 0.0
+    actions_taken.append(f'ready_gate_all_ready:{str(gate_result.all_ready).lower()}')
+    for agent_name in sorted(gate_result.failures):
+        actions_taken.append(f'ready_gate_failed:{agent_name}:{gate_result.failures[agent_name]}')
+    return gate_result
+
+
+def _text(value: object) -> str:
+    return str(value or '').strip()
 
 
 def _namespace_is_herdr(

@@ -32,6 +32,11 @@ class StartFlowDeps:
     inspect_project_namespace_pane_fn: object
     same_tmux_socket_path_fn: object
     apply_ccb_pane_identity_fn: object
+    # T03: Ready Gate —— 均为可选，默认 None => gate 关闭，行为向后兼容
+    ready_gate_evaluator_cls: object = None
+    health_check_fn: object = None
+    ping_fn: object = None
+    concurrency_env: object = None
 
 
 __all__ = ['StartFlowDeps']
