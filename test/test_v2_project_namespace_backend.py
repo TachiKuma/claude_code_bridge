@@ -475,6 +475,45 @@ def test_herdr_backend_ignores_stale_tmux_namespace_state(tmp_path: Path) -> Non
     assert alive_call[1]['backend_impl'] == 'herdr'  # type: ignore[index]
 
 
+def test_herdr_backend_normalizes_persisted_namespace_ref_before_liveness() -> None:
+    class _StrictHerdrNamespaceBackend(_FakeHerdrNamespaceBackend):
+        def namespace_alive(self, namespace: dict[str, object]) -> bool:
+            self.calls.append(('namespace_alive', namespace))
+            if namespace.get('ipc_ref') != 'herdr://w-stale':
+                raise MuxCommandErrorV2(
+                    category='invalid-request',
+                    backend_impl='herdr',
+                    operation='session_alive',
+                    detail='invalid Herdr namespace ref',
+                )
+            return True
+
+    backend = _StrictHerdrNamespaceBackend()
+    remember_namespace_state_ref(
+        backend,
+        SimpleNamespace(
+            tmux_session_name='ccb-proj',
+            namespace_backend_family='herdr-native',
+            backend_impl='herdr',
+            namespace_ref=lambda: {
+                'backend_family': 'herdr-native',
+                'backend_impl': 'herdr',
+                'namespace_id': 'w-stale',
+                'session_name': 'ccb-proj',
+                'ipc_kind': 'herdr_socket',
+                'ipc_ref': 'herdr://local',
+                'restore_token': 'ccb-proj::w-stale',
+            },
+        ),
+    )
+
+    assert session_alive(backend, 'ccb-proj') is True
+    assert ('namespace_ref', {'session_name': 'ccb-proj', 'namespace_id': 'w-stale'}) in backend.calls
+    alive_call = backend.calls[-1]
+    assert alive_call[0] == 'namespace_alive'
+    assert alive_call[1]['ipc_ref'] == 'herdr://w-stale'  # type: ignore[index]
+
+
 def test_v2_mux_backend_helper_capability_gap_fails_closed(tmp_path: Path) -> None:
     backend = _FakeHerdrNamespaceBackend(pane_spawn_status='unsupported')
     create_session(backend, session_name='ccb-herdr', project_root=tmp_path, window_name='cmd')

@@ -225,6 +225,67 @@ def test_start_foreground_herdr_attach_real_builder_accepts_matching_backend_ref
     ]
 
 
+def test_start_foreground_herdr_attach_uses_backend_normalized_ipc_ref(monkeypatch) -> None:
+    context = SimpleNamespace(project=SimpleNamespace(project_id='proj-herdr'))
+    payload = {
+        'namespace_backend_family': 'herdr-native',
+        'namespace_backend_impl': 'herdr',
+        'namespace_id': 'workspace-1',
+        'namespace_session_name': 'ccb-herdr',
+        'namespace_ipc_kind': 'herdr_socket',
+        'namespace_ipc_ref': 'herdr://local',
+        'namespace_restore_token_present': True,
+        'namespace_workspace_window_name': 'main',
+        'namespace_ui_attachable': True,
+    }
+    attach_calls: list[tuple[dict[str, object], str | None]] = []
+
+    class _FakeClient:
+        def ping(self, target: str) -> dict[str, object]:
+            assert target == 'ccbd'
+            return payload
+
+    class _NormalizingHerdrBackend:
+        def namespace_ref(self, session_name: str, namespace_id: str) -> dict[str, object]:
+            return {
+                'backend_family': 'herdr-native',
+                'backend_impl': 'herdr',
+                'namespace_id': namespace_id,
+                'session_name': session_name,
+                'ipc_kind': 'herdr_socket',
+                'ipc_ref': 'herdr://ccb-herdr',
+                'restore_token': None,
+            }
+
+        def attach_namespace(self, namespace_ref: dict[str, object], *, window_name: str | None = None) -> None:
+            attach_calls.append((dict(namespace_ref), window_name))
+
+    monkeypatch.setattr(start_foreground_service, '_foreground_attach_client', lambda _context: _FakeClient())
+    monkeypatch.setattr(start_foreground_service, '_attach_env', lambda: {})
+    monkeypatch.setattr(start_foreground_service, '_launch_herdr_ui', lambda _namespace_ref: None)
+    monkeypatch.setattr(
+        'terminal_runtime.api.get_backend',
+        lambda terminal_type=None: _NormalizingHerdrBackend(),
+    )
+
+    attach_started_project_namespace(context)  # type: ignore[arg-type]
+
+    assert attach_calls == [
+        (
+            {
+                'backend_family': 'herdr-native',
+                'backend_impl': 'herdr',
+                'namespace_id': 'workspace-1',
+                'session_name': 'ccb-herdr',
+                'ipc_kind': 'herdr_socket',
+                'ipc_ref': 'herdr://ccb-herdr',
+                'restore_token': None,
+            },
+            'main',
+        )
+    ]
+
+
 def test_launch_herdr_ui_hides_windows_control_wrapper(monkeypatch) -> None:
     run_calls: list[tuple[list[str], dict[str, object]]] = []
 

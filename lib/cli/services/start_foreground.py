@@ -558,6 +558,8 @@ def _build_herdr_attach_backend(*, namespace_ref: dict[str, object], backend_sel
             f'(backend_impl={backend_selection.get("backend_impl")}, ipc_kind={namespace_ref.get("ipc_kind")}, '
             f'ipc_ref_present={bool(namespace_ref.get("ipc_ref"))}, fields={",".join(mismatched_fields)})'
         )
+    namespace_ref.clear()
+    namespace_ref.update(dict(resolved_ref))
     return backend
 
 

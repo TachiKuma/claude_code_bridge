@@ -98,6 +98,7 @@ def remember_namespace_state_ref(backend, state) -> None:
     namespace_ref = getattr(state, 'namespace_ref', None)
     if callable(namespace_ref):
         ref = namespace_ref()
+        ref = _normalized_mux_namespace_ref(backend, ref)
         if not _namespace_state_matches_backend(backend, state, ref):
             return
         _remember_mux_namespace_ref(
@@ -124,6 +125,30 @@ def _namespace_state_matches_backend(backend, state, namespace: object | None = 
             return state_impl in {'', backend_impl} and state_family != 'herdr-native'
         return ref_impl in {'', backend_impl} and ref_family != 'herdr-native'
     return state_impl not in {'herdr'} and ref_impl not in {'herdr'}
+
+
+def _normalized_mux_namespace_ref(backend, namespace: object) -> object:
+    if not isinstance(namespace, dict):
+        return namespace
+    if str(namespace.get('backend_impl') or '').strip() != 'herdr':
+        return namespace
+    namespace_builder = getattr(backend, 'namespace_ref', None)
+    if not callable(namespace_builder):
+        return namespace
+    session_name = str(namespace.get('session_name') or '').strip()
+    namespace_id = str(namespace.get('namespace_id') or '').strip()
+    if not session_name or not namespace_id:
+        return namespace
+    try:
+        normalized = namespace_builder(session_name, namespace_id)
+    except Exception:
+        return namespace
+    if not isinstance(normalized, dict):
+        return namespace
+    if namespace.get('restore_token') is not None and normalized.get('restore_token') is None:
+        normalized = dict(normalized)
+        normalized['restore_token'] = namespace.get('restore_token')
+    return normalized
 
 
 def namespace_state_fields(backend, *, session_name: str, tmux_socket_path: str) -> dict[str, object | None]:
