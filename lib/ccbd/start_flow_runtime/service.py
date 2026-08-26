@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import time
 
+from ccbd.launch_plan import PrecomputeResult, precompute_launch_plans
 from ccbd.models import CcbdStartupAgentResult
 
 from .binding import launch_binding_hint, relabel_project_namespace_pane
@@ -75,6 +76,22 @@ def run_start_flow(
         readiness_recorder.set_agent_scopes(targets, tuple(sorted(config.agents)))
     actions_taken: list[str] = []
     agent_results: list[object] = []
+
+    # T01: Launch Plan 预计算管线 —— 只读解析，不触发任何写入/启动
+    stage_started_ns = time.monotonic_ns()
+    launch_plan_result = precompute_launch_plans(
+        targets=targets,
+        config=config,
+        project_root=project_root,
+        project_id=project_id,
+        session_anchor=namespace_session_name or tmux_session_name,
+    )
+    timings_ms['launch_plan_precompute'] = _elapsed_ms(stage_started_ns)
+    actions_taken.append(f'precomputed_launch_plans:{len(targets)}_agents')
+    for agent_name, agent_plan in launch_plan_result.plans.items():
+        if agent_plan.status == 'failed':
+            actions_taken.append(f'launch_plan_failed:{agent_name}:{agent_plan.error}')
+
     stage_started_ns = time.monotonic_ns()
     tmux_backend, root_pane_id = tmux_namespace_runtime(
         deps,
