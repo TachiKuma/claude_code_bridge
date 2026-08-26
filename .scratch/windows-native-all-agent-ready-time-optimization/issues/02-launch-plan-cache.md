@@ -6,18 +6,18 @@
 
 **Blocked by:** T01（需要 LaunchPlan 指纹作为缓存 key）。
 
-**Status:** pending
+**Status:** done（commit 见提交记录）
 
-- [ ] 定义缓存存储结构：`.ccb/launch-plan-cache/` 目录，每个缓存条目包含 agent_name、输入指纹、LaunchPlan 序列化、receipt hash、写入时间戳。
-- [ ] 缓存 key 设计：基于 T01 `LaunchPlan.fingerprint()` + project_id + agent_name 的稳定复合键，不包含 timestamp、seq 等运行时状态。
-- [ ] 缓存查询流程：读取缓存 → 比较指纹 → 指纹匹配时标记 "cache_hit" → skip provider home/settings 写入 → 直接进入 ready gate。
-- [ ] 缓存写入流程：预计算完成后写入缓存，写入原子性（避免部分写入）。
-- [ ] 局部失效：agent 配置变化时指纹改变 → 只重建该 agent 的缓存条目 → 其他 agent 缓存保留。
-- [ ] 缓存命中时不重复写 provider home / settings：只要 hash / receipt 一致，就跳过写入。
-- [ ] 缓存失效策略：输入指纹改变、项目 config 重新加载、用户显式 `ccb restart` / `ccb reload` 时清除指定 agent 的缓存。
-- [ ] 缓存不跨项目共享（每个项目独立的 `.ccb/launch-plan-cache/`）。
-- [ ] 缓存命中时跳过写入动作的记录应纳入启动度量：cache_hit count、写入跳过量、节省时间。
-- [ ] 缓存命中路径的并发安全：同一 agent 的多个 start 请求不应同时修改缓存。
+- [x] 定义缓存存储结构：`.ccb/launch-plan-cache/` 目录，每个缓存条目包含 agent_name、输入指纹、LaunchPlan 序列化、receipt hash、写入时间戳。
+- [x] 缓存 key 设计：基于 T01 `LaunchPlan.fingerprint()` + project_id + agent_name 的稳定复合键，不包含 timestamp、seq 等运行时状态。
+- [x] 缓存查询流程：读取缓存 → 比较指纹 → 指纹匹配时标记 "cache_hit" → skip provider home/settings 写入 → 直接进入 ready gate。
+- [x] 缓存写入流程：预计算完成后写入缓存，写入原子性（避免部分写入）。
+- [x] 局部失效：agent 配置变化时指纹改变 → 只重建该 agent 的缓存条目 → 其他 agent 缓存保留。
+- [x] 缓存命中时不重复写 provider home / settings：只要 hash / receipt 一致，就跳过写入。
+- [x] 缓存失效策略：输入指纹改变、项目 config 重新加载、用户显式 `ccb restart` / `ccb reload` 时清除指定 agent 的缓存。
+- [x] 缓存不跨项目共享（每个项目独立的 `.ccb/launch-plan-cache/`）。
+- [x] 缓存命中时跳过写入动作的记录应纳入启动度量：cache_hit count、写入跳过量、节省时间。
+- [x] 缓存命中路径的并发安全：同一 agent 的多个 start 请求不应同时修改缓存。
 
 **Validation:**
 

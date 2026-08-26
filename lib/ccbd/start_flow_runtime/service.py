@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import time
 
-from ccbd.launch_plan import PrecomputeResult, precompute_launch_plans
+from ccbd.launch_plan import LaunchPlanCache, PrecomputeResult, precompute_launch_plans, precompute_with_cache
 from ccbd.models import CcbdStartupAgentResult
 
 from .binding import launch_binding_hint, relabel_project_namespace_pane
@@ -77,20 +77,29 @@ def run_start_flow(
     actions_taken: list[str] = []
     agent_results: list[object] = []
 
-    # T01: Launch Plan 预计算管线 —— 只读解析，不触发任何写入/启动
+    # T01/T02: Launch Plan 预计算管线 + 项目级缓存 —— 只读解析，不触发任何写入/启动
     stage_started_ns = time.monotonic_ns()
-    launch_plan_result = precompute_launch_plans(
+    launch_plan_cache = LaunchPlanCache(project_root, project_id)
+    launch_plan_result = precompute_with_cache(
         targets=targets,
         config=config,
         project_root=project_root,
         project_id=project_id,
         session_anchor=namespace_session_name or tmux_session_name,
+        cache=launch_plan_cache,
     )
     timings_ms['launch_plan_precompute'] = _elapsed_ms(stage_started_ns)
+    launch_plan_cache_metrics = launch_plan_cache.metrics.snapshot()
+    if launch_plan_cache_metrics['cache_hit_count']:
+        actions_taken.append(
+            f'launch_plan_cache_hits:{launch_plan_cache_metrics["cache_hit_count"]}'
+        )
     actions_taken.append(f'precomputed_launch_plans:{len(targets)}_agents')
     for agent_name, agent_plan in launch_plan_result.plans.items():
         if agent_plan.status == 'failed':
             actions_taken.append(f'launch_plan_failed:{agent_name}:{agent_plan.error}')
+        elif agent_plan.status == 'skipped':
+            actions_taken.append(f'launch_plan_skipped:{agent_name}')
 
     stage_started_ns = time.monotonic_ns()
     tmux_backend, root_pane_id = tmux_namespace_runtime(
