@@ -1019,6 +1019,42 @@ model = "sonnet"
     assert intent.affected_agents == ('agent2',)
 
 
+def test_config_ui_save_comment_change_does_not_require_restart(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-comment-save'
+    config_path = project_root / '.ccb' / 'ccb.config'
+    config_path.parent.mkdir(parents=True)
+    original = '''version = 2
+
+[windows]
+main = "agent1:codex"
+
+[agents.agent1]
+model = "gpt-5.5"
+'''
+    updated = original + '# operator note\n'
+    config_path.write_text(original, encoding='utf-8')
+    layout = PathLayout(project_root)
+
+    status, applied = config_ui_module._apply_candidate(
+        {
+            'text': updated,
+            'expected_digest': hashlib.sha256(config_path.read_bytes()).hexdigest(),
+            'mode': 'save',
+        },
+        config_path=config_path,
+        project_root=project_root,
+        path_layout=layout,
+        reload_action=lambda _dry_run: {},
+        mutation_lock=threading.Lock(),
+    )
+
+    assert int(status) == 200
+    assert applied['changed'] is True
+    assert applied['restart_required'] is False
+    assert applied['affected_agents'] == []
+    assert load_config_restart_intent(layout) is None
+
+
 def test_config_ui_schedules_api_restart_when_daemon_dry_run_is_unavailable(
     tmp_path: Path,
 ) -> None:
@@ -1064,14 +1100,21 @@ url = "https://old.example.test"
     assert load_config_restart_intent(PathLayout(project_root)) is not None
 
 
-def test_config_ui_safe_apply_clears_matching_save_only_restart_intent(
+def test_config_ui_hot_reload_keeps_matching_restart_intent_when_restart_is_required(
     tmp_path: Path,
 ) -> None:
     project_root = tmp_path / 'repo-safe-apply-after-save'
     config_path = project_root / '.ccb' / 'ccb.config'
     config_path.parent.mkdir(parents=True)
-    original = 'version = 2\n\n[windows]\nmain = "agent1:codex"\n'
-    updated = original.replace('agent1:codex', 'agent1:codex, agent2:claude')
+    original = '''version = 2
+
+[windows]
+main = "agent1:codex"
+
+[agents.agent1]
+model = "gpt-5.5"
+'''
+    updated = original.replace('model = "gpt-5.5"', 'model = "gpt-5.6-sol"')
     config_path.write_text(original, encoding='utf-8')
     layout = PathLayout(project_root)
     original_digest = hashlib.sha256(config_path.read_bytes()).hexdigest()
@@ -1099,10 +1142,11 @@ def test_config_ui_safe_apply_clears_matching_save_only_restart_intent(
         if dry_run:
             return {
                 'status': 'ok',
-                'plan_class': 'add_agent',
+                'plan_class': 'replace_agent',
                 'future_safe_to_apply': True,
+                'operations': [{'op': 'replace_agent', 'agent': 'agent1'}],
             }
-        return {'status': 'published', 'plan_class': 'add_agent'}
+        return {'status': 'published', 'plan_class': 'replace_agent'}
 
     status, applied = config_ui_module._apply_candidate(
         {
@@ -1118,9 +1162,9 @@ def test_config_ui_safe_apply_clears_matching_save_only_restart_intent(
     )
 
     assert int(status) == 200
-    assert applied['status'] == 'reloaded'
-    assert reload_calls == [True, False]
-    assert load_config_restart_intent(layout) is None
+    assert applied['status'] == 'restart_required'
+    assert reload_calls == [True]
+    assert load_config_restart_intent(layout) is not None
 
 
 def test_config_ui_rejects_invalid_candidate_without_writing(tmp_path: Path) -> None:

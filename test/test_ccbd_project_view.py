@@ -880,11 +880,17 @@ def test_project_view_provider_control_exposes_restart_required_drift(
         'provider': 'codex',
         'model': 'gpt-5.6-sol',
         'thinking': 'xhigh',
+        'startup_args': ('-m', 'gpt-5.6-sol', '-c', 'model_reasoning_effort="xhigh"'),
+        'env_keys': (),
+        'api': {'key_present': False, 'url_present': False},
     }
     assert record['live_config'] == {
         'provider': 'codex',
         'model': 'gpt-5.5',
         'thinking': 'medium',
+        'startup_args': None,
+        'env_keys': (),
+        'api': {},
         'session_id': 'session-live',
         'source': 'provider_native/codex',
         'revision': '10:20',

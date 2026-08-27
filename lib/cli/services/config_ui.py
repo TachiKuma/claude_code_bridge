@@ -1461,21 +1461,22 @@ def _apply_candidate(
             'validation': validation,
         }
         if mode == 'save':
+            affected_agents = tuple(restart_change_agents)
             intent = (
                 record_config_restart_intent(
                     project_root,
                     target_config_digest=str(saved['digest']),
-                    affected_agents=restart_change_agents or validation.get('restart_bound_agents') or (),
+                    affected_agents=affected_agents,
                     reason='active_config_saved',
                     layout=path_layout,
                 )
-                if changed
+                if changed and affected_agents
                 else None
             )
             result.update(
-                restart_required=changed,
-                affected_agents=list(restart_change_agents or validation.get('restart_bound_agents') or ()) if changed else [],
-                restart_intent=intent.to_record() if changed else None,
+                restart_required=bool(changed and affected_agents),
+                affected_agents=list(affected_agents) if changed else [],
+                restart_intent=intent.to_record() if intent is not None else None,
             )
             return HTTPStatus.OK, result
 

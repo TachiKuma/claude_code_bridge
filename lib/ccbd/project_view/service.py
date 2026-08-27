@@ -49,6 +49,7 @@ from provider_pane_status.claude_session import (
 from provider_control import provider_restart_pending_agents, read_provider_runtime_snapshot
 from provider_core.herdr_hook_guard import HERDR_HOOK_DIAGNOSTICS_FILENAME
 from provider_model_shortcuts import supported_provider_model_shortcuts
+from provider_profiles import load_resolved_provider_profile
 from provider_thinking_shortcuts import provider_thinking_levels
 from storage.paths import PathLayout
 
@@ -1273,10 +1274,33 @@ def _provider_control_record(
         'provider': provider,
         'model': active_model,
         'thinking': active_thinking,
+        'startup_args': None,
+        'env_keys': (),
+        'api': {},
         'session_id': snapshot.session_id,
         'source': snapshot.source,
         'revision': snapshot.source_revision,
     }
+    desired_config.update(
+        {
+            'startup_args': tuple(str(value) for value in tuple(getattr(spec, 'startup_args', ()) or ())),
+            'env_keys': tuple(sorted(str(key) for key in dict(getattr(spec, 'env', {}) or {}))),
+            'api': _redacted_api_config(getattr(spec, 'api', None)),
+        }
+    )
+    live_profile = _live_provider_profile(project_root=project_root, agent_name=agent_name, provider=provider)
+    if live_profile is not None:
+        live_config['env_keys'] = tuple(sorted(str(key) for key in dict(getattr(live_profile, 'env', {}) or {})))
+        live_config['api'] = {
+            'key_present': any(
+                _looks_like_api_key(key) and str(value).strip()
+                for key, value in dict(getattr(live_profile, 'env', {}) or {}).items()
+            ),
+            'url_present': any(
+                _looks_like_api_url(key) and str(value).strip()
+                for key, value in dict(getattr(live_profile, 'env', {}) or {}).items()
+            ),
+        }
     drift_detected = bool(
         restart_pending
         or pending_model is not None
@@ -1572,6 +1596,32 @@ def _namespace_view(*, config, sidebar_view_result, namespace, focus: dict[str, 
     if frontend_status is not None:
         record['frontend_status'] = frontend_status
     return record
+
+
+def _live_provider_profile(*, project_root: Path, agent_name: str, provider: str):
+    try:
+        layout = PathLayout(project_root)
+        runtime_dir = layout.agent_provider_runtime_dir(agent_name, provider)
+        return load_resolved_provider_profile(runtime_dir)
+    except Exception:
+        return None
+
+
+def _redacted_api_config(api) -> dict[str, bool]:
+    return {
+        'key_present': bool(str(getattr(api, 'key', '') or '').strip()),
+        'url_present': bool(str(getattr(api, 'url', '') or '').strip()),
+    }
+
+
+def _looks_like_api_key(value: object) -> bool:
+    text = str(value or '').strip().upper()
+    return text.endswith('API_KEY') or text.endswith('AUTH_TOKEN')
+
+
+def _looks_like_api_url(value: object) -> bool:
+    text = str(value or '').strip().upper()
+    return text.endswith('BASE_URL') or text.endswith('API_URL')
 
 
 def _redacted_namespace_view_projection(namespace) -> dict[str, object]:

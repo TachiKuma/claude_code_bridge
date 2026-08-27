@@ -39,7 +39,7 @@
 - 新增测试：替换时未 affected agent 保持不变
 - 新增测试：deferred 不冒充 agent-ready，通过 ready gate 后才切换
 
-**Evidence:** Affected agent 定位基于 `agents.launch_config_fingerprint` 的稳定 restart-bound 配置签名；Config UI 保存只写 desired 配置并记录 `config-restart-intent.json`，不会热改 live provider；provider settings 与 Config UI 均只记录实际 affected agent；`project_view` / `provider_control` 暴露 `desired_config`、`live_config`、`drift_detected`、`restart_required`，deferred restart intent 不会被投影为 Agent Ready。
+**证据：** Affected agent 定位基于 `agents.launch_config_fingerprint` 的稳定 restart-bound 配置签名；Config UI 保存只写 desired 配置并记录 `config-restart-intent.json`，不会热改 live provider；provider settings 与 Config UI 均只记录实际 affected agent；`project_view` / `provider_control` 暴露 `desired_config`、`live_config`、`drift_detected`、`restart_required`，deferred restart intent 不会被投影为 Agent Ready。
 
 **验证记录（2026-08-27）：**
 
