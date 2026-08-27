@@ -126,15 +126,18 @@ def config_restart_required_for_inspection(context, inspection) -> bool:
     if intent is None or not _intent_targets_active_config(context.paths, intent):
         return False
     lease = getattr(inspection, 'lease', None)
-    if lease is None:
-        return False
-    current_instance = _optional_text(getattr(lease, 'daemon_instance_id', None))
-    if intent.source_daemon_instance_id is not None:
-        return current_instance == intent.source_daemon_instance_id
-    current_generation = int(getattr(lease, 'generation', 0) or 0)
-    if intent.source_generation is not None:
-        return current_generation == intent.source_generation
-    return False
+    return _intent_still_targets_lease(intent, lease)
+
+
+def config_restart_required_agents(project_root: Path, *, layout=None) -> tuple[str, ...]:
+    effective_layout = _layout(project_root, layout=layout)
+    intent = load_config_restart_intent(effective_layout)
+    if intent is None or not _intent_targets_active_config(effective_layout, intent):
+        return ()
+    lease = _best_effort_mounted_lease(effective_layout)
+    if not _intent_still_targets_lease(intent, lease):
+        return ()
+    return intent.affected_agents
 
 
 def clear_applied_config_restart_intent(context) -> bool:
@@ -204,6 +207,18 @@ def _best_effort_mounted_lease(layout):
     return lease
 
 
+def _intent_still_targets_lease(intent: ConfigRestartIntent, lease) -> bool:
+    if lease is None:
+        return False
+    current_instance = _optional_text(getattr(lease, 'daemon_instance_id', None))
+    if intent.source_daemon_instance_id is not None:
+        return current_instance == intent.source_daemon_instance_id
+    current_generation = int(getattr(lease, 'generation', 0) or 0)
+    if intent.source_generation is not None:
+        return current_generation == intent.source_generation
+    return False
+
+
 def _intent_targets_active_config(layout, intent: ConfigRestartIntent) -> bool:
     try:
         digest = _active_config_digest(layout.project_root)
@@ -265,6 +280,7 @@ def _normalized_agents(values: Iterable[object]) -> tuple[str, ...]:
 __all__ = [
     'ConfigRestartIntent',
     'clear_applied_config_restart_intent',
+    'config_restart_required_agents',
     'config_restart_required_for_inspection',
     'discard_config_restart_intent_for_digest',
     'load_config_restart_intent',

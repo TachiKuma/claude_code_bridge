@@ -271,3 +271,34 @@ def test_probe_outcome_used_directly() -> None:
     assert detail.probe is probe
     assert detail.ping_succeeded is True
     assert detail.state is AgentReadyState.AGENT_READY
+
+
+def test_restart_required_agent_waits_until_fresh_runtime_passes_ready_gate() -> None:
+    """restart-required 不等同于 agent-ready。"""
+    result = _result('agent1')
+    evaluator = ReadyGateEvaluator(
+        binding_check_fn=default_binding_check,
+        provider_ready_fn=lambda _r: _ready_probe(),
+        ping_fn=lambda _r: True,
+    )
+
+    restart_required = evaluator.evaluate(
+        startup_results=[result],
+        target_order=['agent1'],
+        restart_required_agents=('agent1',),
+    )
+    fresh_runtime = evaluator.evaluate(
+        startup_results=[result],
+        target_order=['agent1'],
+    )
+
+    pending = restart_required.per_agent['agent1']
+    assert pending.state is AgentReadyState.AGENT_WAITING
+    assert pending.binding_verified is True
+    assert pending.provider_ready is False
+    assert pending.ping_succeeded is False
+    assert pending.failure_reason == 'restart_required'
+    assert restart_required.all_ready is False
+    assert restart_required.to_record()['agent_ready'] == []
+    assert fresh_runtime.per_agent['agent1'].state is AgentReadyState.AGENT_READY
+    assert fresh_runtime.all_ready is True

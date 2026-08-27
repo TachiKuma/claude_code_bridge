@@ -106,6 +106,7 @@ class ReadyGateEvaluator:
         launch_plan_result: PrecomputeResult | None = None,
         target_order: Sequence[str] = (),
         probe_outcomes: Mapping[str, HealthProbeOutcome] | None = None,
+        restart_required_agents: Sequence[str] = (),
     ) -> AllReadyResult:
         """评估所有目标 agent 的 ready 状态，产出 AllReadyResult。"""
         binding_check = self.binding_check_fn or default_binding_check
@@ -119,6 +120,11 @@ class ReadyGateEvaluator:
         }
         plan_by_name = dict(launch_plan_result.plans) if launch_plan_result is not None else {}
         probe_by_name = dict(probe_outcomes or {})
+        restart_required = {
+            _text(agent_name)
+            for agent_name in restart_required_agents
+            if _text(agent_name)
+        }
 
         ordered = list(target_order) or sorted(
             set(results_by_name) | set(plan_by_name)
@@ -140,6 +146,7 @@ class ReadyGateEvaluator:
                 provider_ready=provider_ready,
                 ping=ping,
                 probe=probe_by_name.get(agent_name),
+                restart_required=agent_name in restart_required,
             )
             per_agent[agent_name] = detail
             if detail.state is AgentReadyState.AGENT_FAILED and detail.failure_reason:
@@ -192,6 +199,7 @@ class ReadyGateEvaluator:
         provider_ready: ProviderReadyFn,
         ping: PingFn,
         probe: HealthProbeOutcome | None,
+        restart_required: bool = False,
     ) -> AgentReadyDetail:
         # plan 状态优先
         if plan_status is not None and plan_status == 'skipped':
@@ -255,6 +263,18 @@ class ReadyGateEvaluator:
             )
 
         binding_ok, evidence = binding_check(result)
+        if restart_required:
+            return AgentReadyDetail(
+                agent_name=agent_name,
+                state=AgentReadyState.AGENT_WAITING,
+                binding_verified=binding_ok,
+                provider_ready=False,
+                ping_succeeded=False,
+                failure_reason='restart_required',
+                binding_evidence=evidence,
+                probe=probe,
+            )
+
         outcome = probe if probe is not None else provider_ready(result)
         health_ok = outcome.health_ok
         ping_ok = outcome.ping_ok if probe is not None else ping(result)

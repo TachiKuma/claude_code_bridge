@@ -22,6 +22,7 @@ from ccbd.start_runtime.layout import session_root_pane as session_root_pane_imp
 from ccbd.start_runtime.restore import build_restore_state as build_restore_state_impl
 from ccbd.system import utc_now
 from ccbd.services.project_namespace_pane import inspect_project_namespace_pane, same_tmux_socket_path
+from cli.services.config_restart_intent import config_restart_required_agents
 from cli.services.runtime_launch import ensure_agent_runtime
 from cli.services.tmux_cleanup_history import TmuxCleanupHistoryStore
 from cli.services.tmux_project_cleanup import ProjectTmuxCleanupSummary, cleanup_project_tmux_orphans_by_socket
@@ -61,6 +62,7 @@ def _deps() -> StartFlowDeps:
         inspect_project_namespace_pane_fn=inspect_project_namespace_pane,
         same_tmux_socket_path_fn=same_tmux_socket_path,
         apply_ccb_pane_identity_fn=apply_ccb_pane_identity,
+        config_restart_required_agents_fn=config_restart_required_agents,
     )
 
 

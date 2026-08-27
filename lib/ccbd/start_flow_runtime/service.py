@@ -379,6 +379,7 @@ def run_start_flow(
     # T03: Ready Gate 严格化 + 受限并发探针（可选，默认关闭，向后兼容）
     ready_gate_result = _run_ready_gate(
         deps,
+        project_root=project_root,
         targets=targets,
         agent_results=tuple(agent_results),
         launch_plan_result=launch_plan_result,
@@ -420,6 +421,7 @@ def _elapsed_ms(started_ns: int) -> float:
 def _run_ready_gate(
     deps,
     *,
+    project_root: Path,
     targets: tuple[str, ...],
     agent_results: tuple[CcbdStartupAgentResult, ...],
     launch_plan_result,
@@ -443,14 +445,22 @@ def _run_ready_gate(
     limiter = ConcurrencyLimiter(max_workers)
     health_fn = getattr(deps, 'health_check_fn', None)
     ping_fn = getattr(deps, 'ping_fn', None)
+    restart_required_agents_fn = getattr(deps, 'config_restart_required_agents_fn', None)
 
     provider_ready_fn = default_provider_ready_fn(health_fn)
     default_ping = default_ping_fn(ping_fn)
+    restart_required_agents = (
+        tuple(restart_required_agents_fn(project_root))
+        if callable(restart_required_agents_fn)
+        else ()
+    )
 
+    restart_required_set = set(restart_required_agents)
     results_by_name = {_text(getattr(r, 'agent_name', '')): r for r in agent_results}
     probe_lookup: dict[str, HealthProbeOutcome] = {}
     bounded_run = None
-    if max_workers >= 1 and targets:
+    probe_targets = tuple(agent_name for agent_name in targets if agent_name not in restart_required_set)
+    if max_workers >= 1 and probe_targets:
         def _probe(agent_name: str) -> HealthProbeOutcome:
             result = results_by_name.get(agent_name)
             if result is None:
@@ -471,7 +481,7 @@ def _run_ready_gate(
             )
 
         bounded_run = run_bounded_concurrent(
-            items=targets,
+            items=probe_targets,
             worker_fn=_probe,
             limiter=limiter,
         )
@@ -485,6 +495,7 @@ def _run_ready_gate(
         launch_plan_result=launch_plan_result,
         target_order=targets,
         probe_outcomes=probe_lookup,
+        restart_required_agents=restart_required_agents,
     )
 
     if gate_result.concurrency is not None:
@@ -496,6 +507,8 @@ def _run_ready_gate(
     timings_ms['ready_gate_evaluate'] = _elapsed_ms(stage_started_ns)
     timings_ms['ready_gate_total_ms'] = gate_result.total_ready_ms or 0.0
     actions_taken.append(f'ready_gate_all_ready:{str(gate_result.all_ready).lower()}')
+    for agent_name in sorted(restart_required_set.intersection(targets)):
+        actions_taken.append(f'ready_gate_restart_required:{agent_name}')
     for agent_name in sorted(gate_result.failures):
         actions_taken.append(f'ready_gate_failed:{agent_name}:{gate_result.failures[agent_name]}')
     return gate_result

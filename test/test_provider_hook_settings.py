@@ -1058,6 +1058,56 @@ def test_prepare_provider_workspace_preserves_herdr_codex_hooks_with_clear_diagn
     assert diagnostics['removed_hook_count'] == 0
 
 
+def test_prepare_provider_workspace_preserves_herdr_claude_hooks_with_clear_diagnostics(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project_root = tmp_path / 'repo'
+    workspace = project_root / 'workspace'
+    system_home = tmp_path / 'system-home'
+    system_settings = system_home / '.claude' / 'settings.json'
+    system_settings.parent.mkdir(parents=True, exist_ok=True)
+    system_settings.write_text(
+        json.dumps(
+            {
+                'hooks': {
+                    'Stop': [
+                        {'hooks': [{'type': 'command', 'command': 'pwsh herdr-agent-state.ps1'}]},
+                    ],
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+    monkeypatch.setenv('HOME', str(system_home))
+
+    prepare_provider_workspace(
+        layout=PathLayout(project_root),
+        spec=_spec('agent1', provider='claude'),
+        workspace_path=workspace,
+        completion_dir=project_root / '.ccb' / 'agents' / 'agent1' / 'provider-runtime' / 'claude' / 'completion',
+        agent_name='agent1',
+        refresh_profile=True,
+    )
+
+    home_root = project_root / '.ccb' / 'agents' / 'agent1' / 'provider-state' / 'claude' / 'home'
+    payload = json.loads((home_root / '.claude' / 'settings.json').read_text(encoding='utf-8'))
+    commands = [
+        hook['command']
+        for group in payload['hooks']['Stop']
+        for hook in group.get('hooks', [])
+        if isinstance(hook, dict)
+    ]
+    diagnostics = json.loads((home_root / '.ccb-herdr-hook-diagnostics.json').read_text(encoding='utf-8'))
+    assert 'pwsh herdr-agent-state.ps1' in commands
+    assert any('ccb-provider-finish-hook' in command for command in commands)
+    assert any('ccb-provider-activity-hook' in command for command in commands)
+    assert diagnostics['status'] == 'clear'
+    assert diagnostics['removed_hook_count'] == 0
+
+
 def test_prepare_provider_workspace_preserves_configured_codex_command_hooks(
     tmp_path: Path,
     monkeypatch,

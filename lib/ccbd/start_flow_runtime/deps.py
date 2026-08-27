@@ -37,6 +37,7 @@ class StartFlowDeps:
     health_check_fn: object = None
     ping_fn: object = None
     concurrency_env: object = None
+    config_restart_required_agents_fn: object = None
 
 
 __all__ = ['StartFlowDeps']

@@ -17,8 +17,9 @@ from urllib.request import Request, urlopen
 import pytest
 
 import cli.services.config_ui as config_ui_module
+from agents.config_identity import project_config_identity_payload
+from agents.models import AgentRuntime, AgentState
 from cli.models import ParsedConfigUiCommand
-from cli.services.config_restart_intent import load_config_restart_intent
 from cli.services.config_ui import (
     config_ui_asset_path,
     config_ui_provider_capabilities,
@@ -26,7 +27,16 @@ from cli.services.config_ui import (
     prepare_config_ui,
 )
 from cli.services.config_ui_settings import resolve_config_ui_settings
-from agents.config_loader import ConfigValidationError
+from cli.services.config_restart_intent import (
+    clear_applied_config_restart_intent,
+    config_restart_required_agents,
+    load_config_restart_intent,
+)
+from agents.config_loader import ConfigValidationError, load_project_config
+from ccbd.ready_gate.evaluator import ReadyGateEvaluator, default_binding_check
+from ccbd.ready_gate.models import HealthProbeOutcome
+import ccbd.project_view.service as project_view_service
+from ccbd.services.mount import MountManager
 from ccbd.services.project_namespace_state import ProjectNamespaceState, ProjectNamespaceStateStore
 from storage.paths import PathLayout
 
@@ -1098,6 +1108,145 @@ url = "https://old.example.test"
     assert applied['reload_warning'] == 'daemon unavailable'
     assert config_path.read_text(encoding='utf-8') == updated
     assert load_config_restart_intent(PathLayout(project_root)) is not None
+
+
+def test_config_ui_restart_required_flows_into_ready_gate_and_clears_after_restart(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / 'repo-restart-flow'
+    config_path = project_root / '.ccb' / 'ccb.config'
+    config_path.parent.mkdir(parents=True)
+    original = '''version = 2
+
+[windows]
+main = "agent1:codex"
+
+[agents.agent1]
+model = "gpt-5.5"
+'''
+    updated = original.replace('gpt-5.5', 'gpt-5.6-sol')
+    config_path.write_text(original, encoding='utf-8')
+    layout = PathLayout(project_root)
+    original_digest = hashlib.sha256(config_path.read_bytes()).hexdigest()
+    _mark_mounted(
+        layout,
+        generation=1,
+        daemon_instance_id='daemon-old',
+        config_signature=_config_signature(project_root),
+    )
+
+    status, saved = config_ui_module._apply_candidate(
+        {
+            'text': updated,
+            'expected_digest': original_digest,
+            'mode': 'save',
+        },
+        config_path=config_path,
+        project_root=project_root,
+        path_layout=layout,
+        reload_action=lambda _dry_run: {},
+        mutation_lock=threading.Lock(),
+    )
+
+    assert int(status) == 200
+    assert saved['restart_required'] is True
+    assert saved['affected_agents'] == ['agent1']
+    intent = load_config_restart_intent(layout)
+    assert intent is not None
+    assert intent.affected_agents == ('agent1',)
+    assert config_restart_required_agents(project_root, layout=layout) == ('agent1',)
+    spec = load_project_config(project_root).config.agents['agent1']
+    status_record = project_view_service._provider_control_record(
+        spec=spec,
+        runtime=_agent_runtime(project_root, layout),
+        session_status=None,
+        project_root=project_root,
+        agent_name='agent1',
+        restart_pending=True,
+    )
+    assert status_record['restart_required'] is True
+    assert status_record['pending_model'] == 'gpt-5.6-sol'
+
+    evaluator = ReadyGateEvaluator(
+        binding_check_fn=default_binding_check,
+        provider_ready_fn=lambda _r: HealthProbeOutcome(health_ok=True, ping_ok=True, health_label='healthy'),
+        ping_fn=lambda _r: True,
+    )
+    pending = evaluator.evaluate(
+        startup_results=[_start_result('agent1')],
+        target_order=['agent1'],
+        restart_required_agents=('agent1',),
+    )
+    assert pending.per_agent['agent1'].state.value == 'agent_waiting'
+    assert pending.per_agent['agent1'].failure_reason == 'restart_required'
+
+    _mark_mounted(
+        layout,
+        generation=2,
+        daemon_instance_id='daemon-new',
+        config_signature=_config_signature(project_root),
+    )
+    assert config_restart_required_agents(project_root, layout=layout) == ()
+    assert clear_applied_config_restart_intent(SimpleNamespace(paths=layout)) is True
+
+
+def _start_result(agent_name: str):
+    from ccbd.models import CcbdStartupAgentResult
+
+    return CcbdStartupAgentResult(
+        agent_name=agent_name,
+        provider='codex',
+        action='attached',
+        health='healthy',
+        workspace_path='D:/repo',
+        runtime_ref='tmux:%1',
+        session_ref='session-1',
+        binding_source='provider-session',
+        duration_ms=1.0,
+    )
+
+
+def _agent_runtime(project_root: Path, layout: PathLayout) -> AgentRuntime:
+    return AgentRuntime(
+        agent_name='agent1',
+        state=AgentState.IDLE,
+        pid=1001,
+        started_at='2026-08-27T00:00:00Z',
+        last_seen_at='2026-08-27T00:00:00Z',
+        runtime_ref='tmux:%1',
+        session_ref='session-1',
+        workspace_path=str(project_root),
+        project_id=layout.project_id,
+        backend_type='tmux',
+        queue_depth=0,
+        socket_path=None,
+        health='healthy',
+        provider='codex',
+        session_id='session-1',
+    )
+
+
+def _mark_mounted(
+    layout: PathLayout,
+    *,
+    generation: int,
+    daemon_instance_id: str,
+    config_signature: str,
+) -> None:
+    MountManager(layout).mark_mounted(
+        project_id=layout.project_id,
+        pid=1000 + generation,
+        socket_path=layout.ccbd_socket_path,
+        generation=generation,
+        config_signature=config_signature,
+        daemon_instance_id=daemon_instance_id,
+    )
+
+
+def _config_signature(project_root: Path) -> str:
+    return str(
+        project_config_identity_payload(load_project_config(project_root).config)['config_signature']
+    )
 
 
 def test_config_ui_hot_reload_keeps_matching_restart_intent_when_restart_is_required(

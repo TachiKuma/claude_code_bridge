@@ -9,6 +9,7 @@ from agents.config_loader import load_project_config
 from ccbd.services.mount import MountManager
 from cli.services.config_restart_intent import (
     clear_applied_config_restart_intent,
+    config_restart_required_agents,
     config_restart_required_for_inspection,
     load_config_restart_intent,
     record_config_restart_intent,
@@ -82,12 +83,14 @@ def test_config_restart_intent_is_bound_to_source_daemon_and_clears_after_fresh_
     old_lease = MountManager(layout).load_state()
     old_inspection = SimpleNamespace(lease=old_lease)
     assert config_restart_required_for_inspection(context, old_inspection) is True
+    assert config_restart_required_agents(project_root, layout=layout) == ('agent1',)
     assert clear_applied_config_restart_intent(context) is False
 
     _mark_mounted(layout, generation=8, daemon_instance_id='daemon-new')
     new_lease = MountManager(layout).load_state()
     new_inspection = SimpleNamespace(lease=new_lease)
     assert config_restart_required_for_inspection(context, new_inspection) is False
+    assert config_restart_required_agents(project_root, layout=layout) == ()
     assert clear_applied_config_restart_intent(context) is True
     assert load_config_restart_intent(layout) is None
 

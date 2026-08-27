@@ -67,6 +67,39 @@ def test_bridge_reports_session_once_without_activity_state() -> None:
     assert bridge.seq == 0
 
 
+def test_bridge_repeated_activity_sync_never_reports_to_herdr() -> None:
+    reporter = _Reporter()
+    bridge = HerdrAgentLifecycleBridge(
+        backend_factory=lambda: reporter,
+        namespace_ref_fn=lambda: {
+            "backend_impl": "herdr",
+            "session_name": "ccb-demo",
+        },
+        seq_start=41,
+    )
+
+    for state in (
+        AgentState.BUSY,
+        AgentState.IDLE,
+        AgentState.BUSY,
+        AgentState.IDLE,
+        "busy",
+        "idle",
+    ):
+        assert bridge.sync(
+            provider="codex",
+            state=state,
+            pane_id="w1:p2",
+            session_id="ccb-session",
+            session_path="D:/demo/.ccb/session.jsonl",
+        ) is False
+
+    assert reporter.calls == []
+    assert reporter.session_calls == []
+    assert reporter.attach_calls == []
+    assert bridge.seq == 41
+
+
 def test_bridge_skips_missing_pane_or_non_herdr_namespace() -> None:
     reporter = _Reporter()
     bridge = HerdrAgentLifecycleBridge(
