@@ -164,9 +164,55 @@ def _source_runtime_allowed(root: Path, cwd: Path, argv: list[str]) -> tuple[boo
     )
 
 
+def _extract_foreground_tabs(argv: list[str]) -> tuple[list[str], int | None]:
+    """提取 ``--foreground-tabs 1|2`` / ``--foreground-tabs=1|2`` 并设置 ``CCB_FOREGROUND_TABS``。
+
+    返回 (cleaned_argv, value)，其中 cleaned_argv 不含该开关。
+    非法值通过 ``sys.exit(2)`` 终止。
+    """
+    result_value: int | None = None
+    cleaned: list[str] = []
+    skip_next = False
+    for i, token in enumerate(argv):
+        if skip_next:
+            skip_next = False
+            continue
+        if token == '--foreground-tabs':
+            if i + 1 >= len(argv):
+                print('Error: --foreground-tabs requires a value (1 or 2)', file=sys.stderr)
+                sys.exit(2)
+            raw = argv[i + 1]
+            try:
+                val = int(raw)
+            except (ValueError, TypeError):
+                print(f'Error: --foreground-tabs requires 1 or 2, got {raw!r}', file=sys.stderr)
+                sys.exit(2)
+            if val not in (1, 2):
+                print(f'Error: --foreground-tabs requires 1 or 2, got {val}', file=sys.stderr)
+                sys.exit(2)
+            result_value = val
+            skip_next = True
+        elif token.startswith('--foreground-tabs='):
+            raw = token.split('=', 1)[1]
+            try:
+                val = int(raw)
+            except (ValueError, TypeError):
+                print(f'Error: --foreground-tabs requires 1 or 2, got {raw!r}', file=sys.stderr)
+                sys.exit(2)
+            if val not in (1, 2):
+                print(f'Error: --foreground-tabs requires 1 or 2, got {val}', file=sys.stderr)
+                sys.exit(2)
+            result_value = val
+        else:
+            cleaned.append(token)
+    if result_value is not None:
+        os.environ['CCB_FOREGROUND_TABS'] = str(result_value)
+    return cleaned, result_value
+
+
 def main():
     mark_ccb_main(time.perf_counter_ns())
-    argv = sys.argv[1:]
+    argv, _foreground_tabs = _extract_foreground_tabs(sys.argv[1:])
     allowed, reason = _source_runtime_allowed(script_dir, Path.cwd(), argv)
     if not allowed:
         print(reason, file=sys.stderr)

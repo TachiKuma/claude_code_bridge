@@ -27,6 +27,25 @@ _ATTACH_TARGET_READY_POLL_INTERVAL_S = 0.05
 _MIN_ATTACH_RPC_TIMEOUT_S = 0.1
 _WEZTERM_CLI_TIMEOUT_S = 5.0
 
+# ── execvpe 环境净化白名单 ─────────────────────────────────────────
+# os.execvpe 将 os.environ 传给 herdr 进程时，只保留白名单变量，
+# 移除 CCB 内部变量、tmux 残留、Python 环境变量等可能干扰 Herdr TUI
+# 初始化的变量。
+_KEEP_ENV_KEYS: frozenset[str] = frozenset({
+    # Windows 系统基础
+    'PATH', 'SystemRoot', 'ComSpec', 'PATHEXT',
+    'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'TEMP', 'TMP',
+    # 终端标识
+    'TERM', 'TERM_PROGRAM', 'COLORTERM',
+    # WezTerm 运行时必要
+    'WEZTERM_PANE', 'WEZTERM_UNIX_SOCKET', 'WEZTERM_EXECUTABLE',
+    'WEZTERM_EXECUTABLE_DIR',
+    # Herdr 启动必需
+    'CCB_HERDR_EXE',
+    # 编码与语言
+    'LANG', 'LC_ALL', 'LC_CTYPE',
+})
+
 
 @dataclass(frozen=True)
 class HerdrFrontendCommandRunner:
@@ -304,6 +323,46 @@ def _launch_herdr_ui(
 
     wezterm_cli = _resolve_wezterm_cli(runner)
     wezterm_env = _wezterm_cli_env_for_socket(_wezterm_socket_from_env(os.environ))
+    origin_pane_id = _clean_optional_payload_text(os.environ.get('WEZTERM_PANE'))
+    requested_tabs = _foreground_tabs_override()
+
+    # 诊断开关值为 2 时：强制跳过当前 pane 交接，直接走 spawn 路径
+    if requested_tabs == 2:
+        return _launch_herdr_ui_via_spawn(
+            herdr_exe, session_name,
+            namespace_ref=namespace_ref,
+            existing_frontend=existing_frontend,
+            backend=backend,
+            wezterm_cli=wezterm_cli, wezterm_env=wezterm_env,
+            runner=runner, previous_frontend_probe=previous_frontend_probe,
+            requested_tabs=requested_tabs, origin_pane_id=origin_pane_id,
+        )
+
+    # 诊断开关值为 1 时：强制 current pane exec，不在 WezTerm pane 中则报错
+    if requested_tabs == 1:
+        if not _is_current_wezterm_pane(wezterm_cli, runner=runner, env=os.environ):
+            return _herdr_frontend_fact(
+                status='frontend_not_ready',
+                launch_mode='current_pane_exec',
+                reason='foreground_tabs_1_requires_current_wezterm_pane',
+                requested_tabs=requested_tabs,
+                origin_pane_id=origin_pane_id,
+            )
+        frontend = _replace_current_wezterm_pane_with_herdr_ui(
+            herdr_exe,
+            session_name,
+            wezterm_cli=wezterm_cli,
+            runner=runner,
+            before_exec=before_current_pane_exec,
+        )
+        if requested_tabs is not None:
+            frontend['requested_tabs'] = requested_tabs
+        if origin_pane_id:
+            frontend['origin_pane_id'] = origin_pane_id
+            frontend['target_pane_id'] = origin_pane_id
+        return frontend
+
+    # 默认行为（诊断开关未设置）
     if _is_current_wezterm_pane(wezterm_cli, runner=runner, env=os.environ):
         frontend = _replace_current_wezterm_pane_with_herdr_ui(
             herdr_exe,
@@ -314,6 +373,36 @@ def _launch_herdr_ui(
         )
         return frontend
 
+    return _launch_herdr_ui_via_spawn(
+        herdr_exe, session_name,
+        namespace_ref=namespace_ref,
+        existing_frontend=existing_frontend,
+        backend=backend,
+        wezterm_cli=wezterm_cli, wezterm_env=wezterm_env,
+        runner=runner, previous_frontend_probe=previous_frontend_probe,
+        requested_tabs=requested_tabs, origin_pane_id=origin_pane_id,
+    )
+
+
+def _launch_herdr_ui_via_spawn(
+    herdr_exe: str,
+    session_name: str,
+    *,
+    namespace_ref: dict[str, object],
+    existing_frontend: dict[str, object] | None = None,
+    backend=None,
+    wezterm_cli: str | None,
+    wezterm_env: dict[str, str] | None,
+    runner: HerdrFrontendCommandRunner,
+    previous_frontend_probe: dict[str, object] | None,
+    requested_tabs: int | None = None,
+    origin_pane_id: str | None = None,
+) -> dict[str, object]:
+    """通过 WezTerm spawn 或 detached fallback 启动 Herdr UI。
+
+    从 ``_launch_herdr_ui`` 提取出来的共用分支，既用于默认行为也用于
+    诊断开关值为 2 时的强制 spawn 路径。
+    """
     previous_probe: dict[str, object] | None = previous_frontend_probe
     if existing_frontend is not None:
         previous_probe = _probe_existing_herdr_frontend(
@@ -355,6 +444,9 @@ def _launch_herdr_ui(
                     fallback=False,
                     pane_id=spawn.pane_id,
                     wezterm_socket=_wezterm_socket_from_env(os.environ),
+                    requested_tabs=requested_tabs,
+                    origin_pane_id=origin_pane_id,
+                    target_pane_id=spawn.pane_id,
                 )
                 if spawn.pane_id:
                     spawn_pane = _find_wezterm_pane(wezterm_cli, pane_id=spawn.pane_id, runner=runner, env=wezterm_env)
@@ -368,6 +460,9 @@ def _launch_herdr_ui(
                             window_id=_clean_optional_payload_text(spawn_pane.get('window_id')),
                             workspace=_clean_optional_payload_text(spawn_pane.get('workspace')),
                             wezterm_socket=_wezterm_socket_from_env(os.environ),
+                            requested_tabs=requested_tabs,
+                            origin_pane_id=origin_pane_id,
+                            target_pane_id=spawn.pane_id,
                         )
                 return _with_previous_frontend_probe(spawn_frontend, previous_probe)
             return _with_previous_frontend_probe(_launch_detached_herdr_ui(
@@ -556,6 +651,30 @@ def _run_wezterm_spawn(
     )
 
 
+def _clean_herdr_exec_env(base_env: Mapping[str, str] | None = None) -> dict[str, str]:
+    """构造传递给 ``herdr session attach`` 的净化环境。
+
+    只保留白名单变量（``_KEEP_ENV_KEYS``），移除 CCB 内部变量、tmux
+    残留、Python 环境变量等可能干扰 Herdr TUI 初始化的变量。
+    """
+    source = base_env if base_env is not None else os.environ
+    return {key: value for key, value in source.items() if key in _KEEP_ENV_KEYS}
+
+
+def _foreground_tabs_override(env: Mapping[str, str] | None = None) -> int | None:
+    """从 ``CCB_FOREGROUND_TABS`` 读取诊断开关值，返回 ``int | None``。
+
+    - ``None``：未设置，保留默认策略
+    - ``1``：强制当前 pane exec 路径
+    - ``2``：强制 spawn 路径
+    """
+    source = env if env is not None else os.environ
+    raw = str(source.get('CCB_FOREGROUND_TABS') or '').strip()
+    if raw in {'1', '2'}:
+        return int(raw)
+    return None
+
+
 def _replace_current_wezterm_pane_with_herdr_ui(
     herdr_exe: str,
     session_name: str,
@@ -579,7 +698,7 @@ def _replace_current_wezterm_pane_with_herdr_ui(
         before_exec(frontend)
     command = [herdr_exe, 'session', 'attach', session_name]
     try:
-        runner.execvpe(herdr_exe, command, os.environ)
+        runner.execvpe(herdr_exe, command, _clean_herdr_exec_env())
     except (OSError, subprocess.SubprocessError):
         return _herdr_frontend_fact(
             status='frontend_not_ready',
@@ -649,6 +768,9 @@ def _herdr_frontend_fact(
     workspace: str | None = None,
     wezterm_socket: str | None = None,
     probe_status: str | None = None,
+    requested_tabs: int | None = None,
+    origin_pane_id: str | None = None,
+    target_pane_id: str | None = None,
 ) -> dict[str, object]:
     fact: dict[str, object] = {'kind': 'wezterm', 'status': status}
     if mux_available is not None:
@@ -671,6 +793,12 @@ def _herdr_frontend_fact(
         fact['wezterm_socket'] = wezterm_socket
     if probe_status:
         fact['probe_status'] = probe_status
+    if requested_tabs is not None:
+        fact['requested_tabs'] = int(requested_tabs)
+    if origin_pane_id:
+        fact['origin_pane_id'] = origin_pane_id
+    if target_pane_id:
+        fact['target_pane_id'] = target_pane_id
     return fact
 
 
