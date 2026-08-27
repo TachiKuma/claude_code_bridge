@@ -337,7 +337,11 @@ def test_herdr_runtime_binding_round_trips_frontend_fact_with_redaction() -> Non
             "kind": "wezterm",
             "status": "detached_fallback",
             "mux_available": False,
+            "pane_id": "42",
+            "workspace": "ccb-proj-1",
             "fallback_reason": "wezterm_mux_unavailable",
+            "probe_status": "unreachable",
+            "previous_frontend_probe_reason": "herdr_namespace_unreachable",
             "command": "wezterm cli spawn -- secret",
         },
     )
@@ -351,6 +355,10 @@ def test_herdr_runtime_binding_round_trips_frontend_fact_with_redaction() -> Non
         "status": "detached_fallback",
         "mux_available": False,
         "fallback_reason": "wezterm_mux_unavailable",
+        "pane_id": "42",
+        "workspace": "ccb-proj-1",
+        "probe_status": "unreachable",
+        "previous_frontend_probe_reason": "herdr_namespace_unreachable",
     }
     assert restored.frontend == record["frontend"]
 

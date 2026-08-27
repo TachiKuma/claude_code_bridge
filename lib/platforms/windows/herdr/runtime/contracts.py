@@ -432,12 +432,17 @@ def _redacted_frontend(value: object) -> dict[str, object] | None:
         "kind",
         "status",
         "mux_available",
+        "pane_id",
         "window_id",
+        "workspace",
         "spawn_target",
         "launch_mode",
         "fallback",
         "fallback_reason",
         "reason",
+        "probe_status",
+        "previous_frontend_probe_status",
+        "previous_frontend_probe_reason",
     }
     result: dict[str, object] = {}
     for key in allowed:

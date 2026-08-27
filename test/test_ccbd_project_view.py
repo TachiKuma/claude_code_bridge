@@ -365,9 +365,13 @@ def test_project_view_namespace_view_redacts_herdr_restore_token() -> None:
             'kind': 'wezterm',
             'status': 'detached_fallback',
             'mux_available': False,
+            'pane_id': '42',
+            'workspace': 'ccb-proj-herdr',
             'launch_mode': 'detached_fallback',
             'fallback': True,
             'fallback_reason': 'wezterm_mux_unavailable',
+            'previous_frontend_probe_status': 'unreachable',
+            'previous_frontend_probe_reason': 'herdr_namespace_unreachable',
         },
         layout_version=3,
         workspace_window_name='workspace',
@@ -402,9 +406,13 @@ def test_project_view_namespace_view_redacts_herdr_restore_token() -> None:
         'kind': 'wezterm',
         'state': 'detached_fallback',
         'mux_available': False,
+        'pane_id': '42',
+        'workspace': 'ccb-proj-herdr',
         'launch_mode': 'detached_fallback',
         'fallback': True,
         'fallback_reason': 'wezterm_mux_unavailable',
+        'previous_frontend_probe_status': 'unreachable',
+        'previous_frontend_probe_reason': 'herdr_namespace_unreachable',
     }
     assert 'namespace_restore_token' not in view
     assert 'ccb-herdr::workspace-1' not in str(view)

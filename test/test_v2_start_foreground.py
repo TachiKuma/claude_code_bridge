@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 from types import SimpleNamespace
@@ -159,6 +160,84 @@ def test_start_foreground_herdr_attach_uses_builder_without_tmux_binary(monkeypa
     assert 'restore-token' not in str(builder_calls)
 
 
+def test_start_foreground_reads_existing_frontend_binding_for_herdr_reuse(monkeypatch) -> None:
+    context = SimpleNamespace(
+        project=SimpleNamespace(project_id='proj-herdr'),
+        paths=SimpleNamespace(ccbd_socket_path='socket', ccbd_tmux_socket_path='socket'),
+    )
+    payload = {
+        'namespace_backend_family': 'herdr-native',
+        'namespace_backend_impl': 'herdr',
+        'namespace_id': 'workspace-1',
+        'namespace_session_name': 'ccb-herdr',
+        'namespace_ipc_kind': 'herdr_socket',
+        'namespace_ipc_ref': 'herdr://workspace-1',
+        'namespace_restore_token_present': True,
+        'namespace_workspace_window_name': 'main',
+        'namespace_ui_attachable': True,
+    }
+    captured: dict[str, object] = {}
+    attach_calls: list[dict[str, object]] = []
+
+    class _FakeClient:
+        def ping(self, target: str) -> dict[str, object]:
+            assert target == 'ccbd'
+            return payload
+
+    class _FakeBackend:
+        def namespace_alive(self, namespace_ref):
+            assert namespace_ref['session_name'] == 'ccb-herdr'
+            return True
+
+        def attach_namespace(self, namespace_ref, *, window_name=None):
+            attach_calls.append({'namespace_ref': dict(namespace_ref), 'window_name': window_name})
+
+    monkeypatch.setattr(start_foreground_service, '_foreground_attach_client', lambda _context: _FakeClient())
+    monkeypatch.setattr(start_foreground_service, '_attach_env', lambda: {})
+    monkeypatch.setattr(
+        start_foreground_service,
+        '_load_herdr_frontend',
+        lambda _context: start_foreground_service._HerdrFrontendLoad(
+            frontend={
+                'kind': 'wezterm',
+                'status': 'wezterm_tab_attached',
+                'mux_available': True,
+                'pane_id': '42',
+                'workspace': 'ccb-proj-abc',
+            }
+        ),
+    )
+    monkeypatch.setattr(start_foreground_service, '_build_herdr_attach_backend', lambda **kwargs: _FakeBackend())
+    def _launch(namespace_ref, **kwargs):
+        del namespace_ref
+        captured['args'] = kwargs
+        return {
+            'kind': 'wezterm',
+            'status': 'wezterm_tab_attached',
+            'mux_available': True,
+            'launch_mode': 'existing_frontend_reuse',
+            'fallback': False,
+            'pane_id': '42',
+            'window_id': '7',
+            'workspace': 'ccb-proj-abc',
+            'probe_status': 'reachable',
+        }
+    monkeypatch.setattr(start_foreground_service, '_launch_herdr_ui', _launch)
+
+    summary = start_foreground_service._attach_herdr_project_namespace(context, payload)  # type: ignore[arg-type]
+
+    assert summary.backend_impl == 'herdr'
+    assert captured['args']['existing_frontend'] == {
+        'kind': 'wezterm',
+        'status': 'wezterm_tab_attached',
+        'mux_available': True,
+        'pane_id': '42',
+        'workspace': 'ccb-proj-abc',
+    }
+    assert captured['args']['backend'] is not None
+    assert attach_calls[0]['window_name'] == 'main'
+
+
 def test_start_foreground_herdr_attach_real_builder_accepts_matching_backend_ref(monkeypatch) -> None:
     context = SimpleNamespace(project=SimpleNamespace(project_id='proj-herdr'))
     payload = {
@@ -300,6 +379,22 @@ def test_launch_herdr_ui_hides_windows_control_wrapper(monkeypatch) -> None:
 
     def _fake_run(args, **kwargs):
         run_calls.append((list(args), dict(kwargs)))
+        if list(args)[1:3] == ['cli', 'spawn']:
+            return subprocess.CompletedProcess(args, 0, stdout='77\n')
+        if list(args)[1:] == ['cli', 'list', '--format', 'json']:
+            return subprocess.CompletedProcess(
+                args,
+                0,
+                stdout=json.dumps(
+                    [
+                        {
+                            'pane_id': 77,
+                            'window_id': 9,
+                            'workspace': 'ccb-proj-abc',
+                        }
+                    ]
+                ),
+            )
         return subprocess.CompletedProcess(args, 0)
 
     monkeypatch.setattr(start_foreground_service.sys, 'platform', 'win32')
@@ -321,6 +416,9 @@ def test_launch_herdr_ui_hides_windows_control_wrapper(monkeypatch) -> None:
         'mux_available': True,
         'launch_mode': 'wezterm_spawn',
         'fallback': False,
+        'pane_id': '77',
+        'window_id': '9',
+        'workspace': 'ccb-proj-abc',
     }
     assert run_calls == [
         (
@@ -348,8 +446,20 @@ def test_launch_herdr_ui_hides_windows_control_wrapper(monkeypatch) -> None:
             ],
             {
                 'check': False,
-                'stdout': start_foreground_service.subprocess.DEVNULL,
+                'stdout': start_foreground_service.subprocess.PIPE,
                 'stderr': start_foreground_service.subprocess.DEVNULL,
+                'text': True,
+                'timeout': start_foreground_service._WEZTERM_CLI_TIMEOUT_S,
+                'creationflags': 0x08000000,
+            },
+        ),
+        (
+            ['C:/WezTerm/wezterm.exe', 'cli', 'list', '--format', 'json'],
+            {
+                'check': False,
+                'stdout': start_foreground_service.subprocess.PIPE,
+                'stderr': start_foreground_service.subprocess.DEVNULL,
+                'text': True,
                 'timeout': start_foreground_service._WEZTERM_CLI_TIMEOUT_S,
                 'creationflags': 0x08000000,
             },
@@ -550,7 +660,22 @@ def test_launch_herdr_ui_replaces_current_wezterm_pane_without_spawning(monkeypa
 
     def _fake_run(args, **kwargs):
         del kwargs
-        run_calls.append(list(args))
+        call = list(args)
+        run_calls.append(call)
+        if call == ['C:/WezTerm/wezterm.exe', 'cli', 'list', '--format', 'json']:
+            return subprocess.CompletedProcess(
+                args,
+                0,
+                stdout=json.dumps(
+                    [
+                        {
+                            'pane_id': 1,
+                            'window_id': 7,
+                            'workspace': 'ccb-proj-abc',
+                        }
+                    ]
+                ),
+            )
         raise AssertionError('当前 WezTerm pane 应直接交接给 Herdr UI')
 
     def _fake_popen(args, **kwargs):
@@ -563,7 +688,10 @@ def test_launch_herdr_ui_replaces_current_wezterm_pane_without_spawning(monkeypa
         raise SystemExit(0)
 
     runner = start_foreground_service.HerdrFrontendCommandRunner(
-        which_fn=lambda name: 'C:/Herdr/herdr.exe' if name == 'herdr' else None,
+        which_fn=lambda name: {
+            'herdr': 'C:/Herdr/herdr.exe',
+            'wezterm': 'C:/WezTerm/wezterm.exe',
+        }.get(name),
         run_fn=_fake_run,
         popen_fn=_fake_popen,
         execvpe_fn=_fake_execvpe,
@@ -586,14 +714,301 @@ def test_launch_herdr_ui_replaces_current_wezterm_pane_without_spawning(monkeypa
             'mux_available': True,
             'launch_mode': 'current_pane_exec',
             'fallback': False,
+            'pane_id': '1',
+            'window_id': '7',
+            'workspace': 'ccb-proj-abc',
         }
     ]
     assert len(exec_calls) == 1
     assert exec_calls[0][0] == 'C:/Herdr/herdr.exe'
     assert exec_calls[0][1] == ['C:/Herdr/herdr.exe', 'session', 'attach', 'ccb-proj-abc']
     assert exec_calls[0][2]['WEZTERM_PANE'] == '1'
-    assert run_calls == []
+    assert run_calls == [['C:/WezTerm/wezterm.exe', 'cli', 'list', '--format', 'json']]
     assert popen_calls == []
+
+
+def test_launch_herdr_ui_detects_current_wezterm_pane_with_cli_probe(monkeypatch) -> None:
+    run_calls: list[list[str]] = []
+    exec_calls: list[tuple[str, list[str], dict[str, str]]] = []
+
+    def _fake_run(args, **kwargs):
+        del kwargs
+        call = list(args)
+        run_calls.append(call)
+        if call == ['C:/WezTerm/wezterm.exe', 'cli', 'get-pane-direction', 'Next']:
+            return subprocess.CompletedProcess(args, 0, stdout='')
+        if call == ['C:/WezTerm/wezterm.exe', 'cli', 'list', '--format', 'json']:
+            return subprocess.CompletedProcess(
+                args,
+                0,
+                stdout=json.dumps(
+                    [
+                        {
+                            'pane_id': 42,
+                            'window_id': 9,
+                            'workspace': 'ccb-proj-abc',
+                            'is_active': True,
+                        }
+                    ]
+                ),
+            )
+        raise AssertionError(f'当前 WezTerm pane 不应创建新 UI: {call!r}')
+
+    def _fake_execvpe(executable, command, env):
+        exec_calls.append((executable, list(command), dict(env)))
+        raise SystemExit(0)
+
+    runner = start_foreground_service.HerdrFrontendCommandRunner(
+        which_fn=lambda name: {
+            'herdr': 'C:/Herdr/herdr.exe',
+            'wezterm': 'C:/WezTerm/wezterm.exe',
+        }.get(name),
+        run_fn=_fake_run,
+        popen_fn=lambda *_, **__: (_ for _ in ()).throw(AssertionError('不应进入裸 fallback')),
+        execvpe_fn=_fake_execvpe,
+        getcwd_fn=lambda: 'C:/repo',
+    )
+    monkeypatch.setenv('TERM_PROGRAM', 'WezTerm')
+
+    with pytest.raises(SystemExit):
+        start_foreground_service._launch_herdr_ui(
+            {'session_name': 'ccb-proj-abc'},
+            runner=runner,
+        )
+
+    assert run_calls == [
+        ['C:/WezTerm/wezterm.exe', 'cli', 'get-pane-direction', 'Next'],
+        ['C:/WezTerm/wezterm.exe', 'cli', 'list', '--format', 'json'],
+    ]
+    assert exec_calls[0][1] == ['C:/Herdr/herdr.exe', 'session', 'attach', 'ccb-proj-abc']
+
+
+def test_attach_herdr_project_namespace_aborts_when_current_pane_handoff_fails(monkeypatch) -> None:
+    context = SimpleNamespace(
+        project=SimpleNamespace(project_id='proj-herdr'),
+        paths=SimpleNamespace(ccbd_socket_path='socket', ccbd_tmux_socket_path='socket'),
+    )
+    payload = {
+        'namespace_backend_family': 'herdr-native',
+        'namespace_backend_impl': 'herdr',
+        'namespace_id': 'workspace-1',
+        'namespace_session_name': 'ccb-herdr',
+        'namespace_ipc_kind': 'herdr_socket',
+        'namespace_ipc_ref': 'herdr://workspace-1',
+        'namespace_restore_token_present': True,
+        'namespace_workspace_window_name': 'main',
+        'namespace_ui_attachable': True,
+    }
+
+    class _Backend:
+        def attach_namespace(self, namespace_ref, *, window_name=None):
+            raise AssertionError('当前 pane 交接失败后不应继续 attach_namespace')
+
+    monkeypatch.setattr(
+        start_foreground_service,
+        '_load_herdr_frontend',
+        lambda _context: start_foreground_service._HerdrFrontendLoad(),
+    )
+    monkeypatch.setattr(start_foreground_service, '_build_herdr_attach_backend', lambda **_: _Backend())
+    monkeypatch.setattr(
+        start_foreground_service,
+        '_launch_herdr_ui',
+        lambda *_, **__: {
+            'kind': 'wezterm',
+            'status': 'frontend_not_ready',
+            'mux_available': True,
+            'launch_mode': 'current_pane_exec',
+            'fallback': False,
+            'reason': 'current_pane_exec_failed',
+        },
+    )
+
+    with pytest.raises(ForegroundAttachError, match='current_pane_exec_failed'):
+        start_foreground_service._attach_herdr_project_namespace(context, payload)  # type: ignore[arg-type]
+
+
+def test_launch_herdr_ui_records_frontend_binding_load_failure_when_rebuilding(monkeypatch) -> None:
+    run_calls: list[list[str]] = []
+
+    def _fake_run(args, **kwargs):
+        del kwargs
+        call = list(args)
+        run_calls.append(call)
+        if call == ['C:/WezTerm/wezterm.exe', 'cli', 'list']:
+            return subprocess.CompletedProcess(args, 0)
+        if call == ['C:/WezTerm/wezterm.exe', 'cli', 'list', '--format', 'json']:
+            return subprocess.CompletedProcess(args, 0, stdout='[]')
+        if call[1:3] == ['cli', 'spawn']:
+            return subprocess.CompletedProcess(args, 0, stdout='77\n')
+        raise AssertionError(f'unexpected wezterm call: {call!r}')
+
+    runner = start_foreground_service.HerdrFrontendCommandRunner(
+        which_fn=lambda name: {
+            'herdr': 'C:/Herdr/herdr.exe',
+            'wezterm': 'C:/WezTerm/wezterm.exe',
+        }.get(name),
+        run_fn=_fake_run,
+        popen_fn=lambda *_, **__: (_ for _ in ()).throw(AssertionError('不应进入裸 fallback')),
+        getcwd_fn=lambda: 'C:/repo',
+    )
+
+    frontend = start_foreground_service._launch_herdr_ui(
+        {'session_name': 'ccb-proj-abc'},
+        previous_frontend_probe={
+            'probe_status': 'unreachable',
+            'reason': 'frontend_binding_load_failed',
+        },
+        runner=runner,
+    )
+
+    assert frontend['status'] == 'wezterm_tab_attached'
+    assert frontend['launch_mode'] == 'wezterm_spawn'
+    assert frontend['previous_frontend_probe_status'] == 'unreachable'
+    assert frontend['previous_frontend_probe_reason'] == 'frontend_binding_load_failed'
+
+
+def test_launch_herdr_ui_reuses_reachable_frontend_binding_without_spawning(monkeypatch) -> None:
+    run_calls: list[list[str]] = []
+    popen_calls: list[list[str]] = []
+    exec_calls: list[list[str]] = []
+
+    class _Backend:
+        def namespace_alive(self, namespace_ref):
+            assert namespace_ref['session_name'] == 'ccb-proj-abc'
+            return True
+
+    def _fake_run(args, **kwargs):
+        del kwargs
+        call = list(args)
+        run_calls.append(call)
+        if call == ['C:/WezTerm/wezterm.exe', 'cli', 'list', '--format', 'json']:
+            return subprocess.CompletedProcess(
+                args,
+                0,
+                stdout=json.dumps(
+                    [
+                        {
+                            'pane_id': 42,
+                            'window_id': 7,
+                            'workspace': 'ccb-proj-abc',
+                        }
+                    ]
+                ),
+            )
+        if call == ['C:/WezTerm/wezterm.exe', 'cli', 'activate-pane', '--pane-id', '42']:
+            return subprocess.CompletedProcess(args, 0)
+        raise AssertionError(f'不应创建新的 WezTerm UI: {call!r}')
+
+    runner = start_foreground_service.HerdrFrontendCommandRunner(
+        which_fn=lambda name: {
+            'herdr': 'C:/Herdr/herdr.exe',
+            'wezterm': 'C:/WezTerm/wezterm.exe',
+        }.get(name),
+        run_fn=_fake_run,
+        popen_fn=lambda args, **kwargs: popen_calls.append(list(args)),
+        execvpe_fn=lambda executable, command, env: exec_calls.append(list(command)),
+        getcwd_fn=lambda: 'C:/repo',
+    )
+
+    frontend = start_foreground_service._launch_herdr_ui(
+        {
+            'session_name': 'ccb-proj-abc',
+            'namespace_id': 'workspace-1',
+            'ipc_kind': 'herdr_socket',
+            'ipc_ref': 'herdr://workspace-1',
+        },
+        existing_frontend={
+            'kind': 'wezterm',
+            'status': 'wezterm_tab_attached',
+            'mux_available': True,
+            'pane_id': '42',
+            'workspace': 'ccb-proj-abc',
+        },
+        backend=_Backend(),
+        runner=runner,
+    )
+
+    assert frontend == {
+        'kind': 'wezterm',
+        'status': 'wezterm_tab_attached',
+        'mux_available': True,
+        'launch_mode': 'existing_frontend_reuse',
+        'fallback': False,
+        'pane_id': '42',
+        'window_id': '7',
+        'workspace': 'ccb-proj-abc',
+        'probe_status': 'reachable',
+    }
+    assert run_calls == [
+        ['C:/WezTerm/wezterm.exe', 'cli', 'list', '--format', 'json'],
+        ['C:/WezTerm/wezterm.exe', 'cli', 'activate-pane', '--pane-id', '42'],
+    ]
+    assert popen_calls == []
+    assert exec_calls == []
+
+
+def test_launch_herdr_ui_rebuilds_unreachable_frontend_binding_and_records_reason(monkeypatch) -> None:
+    run_calls: list[list[str]] = []
+
+    class _Backend:
+        def namespace_alive(self, namespace_ref):
+            assert namespace_ref['session_name'] == 'ccb-proj-abc'
+            return False
+
+    def _fake_run(args, **kwargs):
+        del kwargs
+        call = list(args)
+        run_calls.append(call)
+        if call == ['C:/WezTerm/wezterm.exe', 'cli', 'list']:
+            return subprocess.CompletedProcess(args, 0)
+        if call == ['C:/WezTerm/wezterm.exe', 'cli', 'list', '--format', 'json']:
+            return subprocess.CompletedProcess(args, 0, stdout='[]')
+        if call[1:3] == ['cli', 'spawn']:
+            return subprocess.CompletedProcess(args, 0, stdout='77\n')
+        raise AssertionError(f'unexpected wezterm call: {call!r}')
+
+    runner = start_foreground_service.HerdrFrontendCommandRunner(
+        which_fn=lambda name: {
+            'herdr': 'C:/Herdr/herdr.exe',
+            'wezterm': 'C:/WezTerm/wezterm.exe',
+        }.get(name),
+        run_fn=_fake_run,
+        popen_fn=lambda *_, **__: (_ for _ in ()).throw(AssertionError('不应进入裸 fallback')),
+        getcwd_fn=lambda: 'C:/repo',
+    )
+
+    frontend = start_foreground_service._launch_herdr_ui(
+        {'session_name': 'ccb-proj-abc'},
+        existing_frontend={
+            'kind': 'wezterm',
+            'status': 'wezterm_tab_attached',
+            'pane_id': '42',
+        },
+        backend=_Backend(),
+        runner=runner,
+    )
+
+    assert frontend['status'] == 'wezterm_tab_attached'
+    assert frontend['launch_mode'] == 'wezterm_spawn'
+    assert frontend['pane_id'] == '77'
+    assert frontend['previous_frontend_probe_status'] == 'unreachable'
+    assert frontend['previous_frontend_probe_reason'] == 'herdr_namespace_unreachable'
+    assert run_calls == [
+        ['C:/WezTerm/wezterm.exe', 'cli', 'list'],
+        [
+            'C:/WezTerm/wezterm.exe',
+            'cli',
+            'spawn',
+            '--cwd',
+            'C:/repo',
+            '--',
+            'C:/Herdr/herdr.exe',
+            'session',
+            'attach',
+            'ccb-proj-abc',
+        ],
+        ['C:/WezTerm/wezterm.exe', 'cli', 'list', '--format', 'json'],
+    ]
 
 
 def test_launch_herdr_ui_fallback_uses_visible_windows_console(monkeypatch) -> None:

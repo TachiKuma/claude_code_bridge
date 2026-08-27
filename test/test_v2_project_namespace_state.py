@@ -109,6 +109,10 @@ def test_project_namespace_state_round_trips_herdr_namespace_without_public_rest
             'launch_mode': 'detached_fallback',
             'fallback': True,
             'fallback_reason': 'wezterm_mux_unavailable',
+            'pane_id': '42',
+            'workspace': 'ccb-proj-herdr',
+            'probe_status': 'unreachable',
+            'previous_frontend_probe_reason': 'herdr_namespace_unreachable',
             'command': 'must-not-persist',
         },
         layout_version=3,
@@ -137,6 +141,10 @@ def test_project_namespace_state_round_trips_herdr_namespace_without_public_rest
         'launch_mode': 'detached_fallback',
         'fallback': True,
         'fallback_reason': 'wezterm_mux_unavailable',
+        'pane_id': '42',
+        'workspace': 'ccb-proj-herdr',
+        'probe_status': 'unreachable',
+        'previous_frontend_probe_reason': 'herdr_namespace_unreachable',
     }
     assert 'namespace_restore_token' not in summary
     assert 'ccb-herdr::workspace-1' not in str(summary)

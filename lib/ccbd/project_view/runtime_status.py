@@ -125,7 +125,12 @@ def namespace_frontend_status(namespace) -> dict[str, object] | None:
         'fallback_reason',
         'reason',
         'spawn_target',
+        'pane_id',
         'window_id',
+        'workspace',
+        'probe_status',
+        'previous_frontend_probe_status',
+        'previous_frontend_probe_reason',
     ):
         if key in frontend:
             record[key] = frontend[key]
