@@ -10,6 +10,10 @@ class CcbProviderControl {
     this.pendingModel,
     this.pendingThinking,
     this.restartPending = false,
+    this.desiredConfig = const {},
+    this.liveConfig = const {},
+    this.driftDetected = false,
+    this.restartRequired = false,
     this.sessionId,
     this.runtimeSource,
     this.runtimeRevision,
@@ -27,6 +31,10 @@ class CcbProviderControl {
   final String? pendingModel;
   final String? pendingThinking;
   final bool restartPending;
+  final Map<String, Object?> desiredConfig;
+  final Map<String, Object?> liveConfig;
+  final bool driftDetected;
+  final bool restartRequired;
   final String? sessionId;
   final String? runtimeSource;
   final String? runtimeRevision;
@@ -38,7 +46,11 @@ class CcbProviderControl {
   String? get displayModel => activeModel ?? configuredModel;
   String? get displayThinking => activeThinking ?? configuredThinking;
   bool get hasPendingChange =>
-      restartPending || pendingModel != null || pendingThinking != null;
+      restartPending ||
+      restartRequired ||
+      driftDetected ||
+      pendingModel != null ||
+      pendingThinking != null;
 
   factory CcbProviderControl.fromJson(Map<String, Object?> json) {
     return CcbProviderControl(
@@ -50,6 +62,10 @@ class CcbProviderControl {
       pendingModel: _optionalText(json['pending_model']),
       pendingThinking: _optionalText(json['pending_thinking']),
       restartPending: json['restart_pending'] == true,
+      desiredConfig: _map(json['desired_config']),
+      liveConfig: _map(json['live_config']),
+      driftDetected: json['drift_detected'] == true,
+      restartRequired: json['restart_required'] == true,
       sessionId: _optionalText(json['session_id']),
       runtimeSource: _optionalText(json['runtime_source']),
       runtimeRevision: _optionalText(json['runtime_revision']),

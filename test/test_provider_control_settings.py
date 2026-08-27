@@ -60,6 +60,40 @@ def test_provider_settings_preserves_document_and_records_restart_intent(tmp_pat
     assert 'backup_path' not in result.to_record()
 
 
+def test_provider_settings_marks_only_target_agent_restart_pending(tmp_path: Path) -> None:
+    config = tmp_path / '.ccb' / 'ccb.config'
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        '''version = 2
+entry_window = "main"
+
+[windows]
+main = "agent1:codex, agent2:codex"
+
+[agents.agent1]
+model = "gpt-5.5"
+
+[agents.agent2]
+model = "gpt-5.5"
+''',
+        encoding='utf-8',
+    )
+
+    ProviderSettingsStore().apply(
+        project_root=tmp_path,
+        agent='agent2',
+        model='gpt-5.6-sol',
+        thinking=None,
+        expected_revision=str(project_config_revision(tmp_path)),
+        allowed_models={'gpt-5.5', 'gpt-5.6-sol'},
+        allowed_thinking=set(),
+    )
+
+    assert provider_restart_pending_agents(tmp_path) == frozenset({'agent2'})
+    spec = load_project_config(tmp_path).config.agents['agent1']
+    assert spec.model == 'gpt-5.5'
+
+
 def test_provider_settings_rolls_back_when_restart_intent_cannot_be_recorded(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -847,6 +847,54 @@ def test_project_view_provider_control_exposes_redacted_herdr_hook_risk(tmp_path
     assert 'herdr-agent-state' not in json.dumps(record)
 
 
+def test_project_view_provider_control_exposes_restart_required_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    snapshot = SimpleNamespace(
+        provider='codex',
+        session_id='session-live',
+        active_model='gpt-5.5',
+        active_thinking='medium',
+        usage=None,
+        source='provider_native/codex',
+        source_revision='10:20',
+    )
+    monkeypatch.setattr(
+        project_view_service,
+        'read_provider_runtime_snapshot',
+        lambda *args, **kwargs: snapshot,
+    )
+
+    spec = replace(_spec('agent1', 'codex'), model='gpt-5.6-sol', thinking='xhigh')
+    record = project_view_service._provider_control_record(
+        spec=spec,
+        runtime=_runtime('agent1', project_id='proj-drift'),
+        session_status=None,
+        project_root=tmp_path,
+        agent_name='agent1',
+        restart_pending=True,
+    )
+
+    assert record['desired_config'] == {
+        'provider': 'codex',
+        'model': 'gpt-5.6-sol',
+        'thinking': 'xhigh',
+    }
+    assert record['live_config'] == {
+        'provider': 'codex',
+        'model': 'gpt-5.5',
+        'thinking': 'medium',
+        'session_id': 'session-live',
+        'source': 'provider_native/codex',
+        'revision': '10:20',
+    }
+    assert record['pending_model'] == 'gpt-5.6-sol'
+    assert record['pending_thinking'] == 'xhigh'
+    assert record['drift_detected'] is True
+    assert record['restart_required'] is True
+
+
 def test_project_view_herdr_namespace_skips_tmux_project_view_facts() -> None:
     namespace = ProjectNamespaceState(
         project_id='proj-herdr',

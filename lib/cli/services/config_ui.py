@@ -28,6 +28,7 @@ from agents.config_loader import (
 )
 from agents.config_loader_runtime.defaults_runtime.rendering_runtime.service import render_config_document_text
 from agents.config_loader_runtime.io_runtime import parse_config_document_text
+from agents.launch_config_fingerprint import restart_bound_config_changed_agents
 from agents.models import ProviderProfileSpec, parse_layout_spec
 from cli.context import CliContext
 from cli.models import ParsedConfigUiCommand, ParsedReloadCommand
@@ -1172,21 +1173,11 @@ def _restart_bound_agent_names(config) -> tuple[str, ...]:
 
 
 def _restart_bound_changed_agents(current_config, candidate_config) -> tuple[str, ...]:
-    if candidate_config is None:
-        return ()
-    names: list[str] = []
-    current_agents = dict(getattr(current_config, 'agents', {}) or {})
-    candidate_agents = dict(getattr(candidate_config, 'agents', {}) or {})
-    for agent_name in sorted(set(current_agents) & set(candidate_agents)):
-        current_record = dict(current_agents[agent_name].to_record())
-        candidate_record = dict(candidate_agents[agent_name].to_record())
-        for record in (current_record, candidate_record):
-            record.pop('schema_version', None)
-            record.pop('record_type', None)
-            record.pop('dispatch_disabled', None)
-        if current_record != candidate_record:
-            names.append(str(agent_name))
-    return tuple(names)
+    return restart_bound_config_changed_agents(
+        current_config,
+        candidate_config,
+        paths=None,
+    )
 
 
 def _validate_document(
@@ -1413,18 +1404,16 @@ def _apply_candidate(
         project_root=project_root,
         path_layout=path_layout,
     )
-    candidate_config = None
-    if mode == 'hot_reload':
-        candidate_config = _validate_document(
-            parse_config_document_text(
-                text,
-                path=config_path,
-                project_root=project_root,
-            ),
-            config_path=config_path,
+    candidate_config = _validate_document(
+        parse_config_document_text(
+            text,
+            path=config_path,
             project_root=project_root,
-            path_layout=path_layout,
-        )
+        ),
+        config_path=config_path,
+        project_root=project_root,
+        path_layout=path_layout,
+    )
 
     with mutation_lock:
         current = _config_payload(config_path)
@@ -1436,7 +1425,7 @@ def _apply_candidate(
             }
         changed = str(current.get('text') or '') != text
         restart_change_agents: tuple[str, ...] = ()
-        if mode == 'hot_reload' and bool(current.get('exists')):
+        if bool(current.get('exists')):
             current_config = _validate_document(
                 parse_config_document_text(
                     str(current.get('text') or ''),
@@ -1476,7 +1465,7 @@ def _apply_candidate(
                 record_config_restart_intent(
                     project_root,
                     target_config_digest=str(saved['digest']),
-                    affected_agents=validation.get('restart_bound_agents') or (),
+                    affected_agents=restart_change_agents or validation.get('restart_bound_agents') or (),
                     reason='active_config_saved',
                     layout=path_layout,
                 )
@@ -1485,6 +1474,7 @@ def _apply_candidate(
             )
             result.update(
                 restart_required=changed,
+                affected_agents=list(restart_change_agents or validation.get('restart_bound_agents') or ()) if changed else [],
                 restart_intent=intent.to_record() if changed else None,
             )
             return HTTPStatus.OK, result

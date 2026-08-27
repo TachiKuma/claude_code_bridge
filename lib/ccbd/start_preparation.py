@@ -6,6 +6,10 @@ from pathlib import Path
 from types import SimpleNamespace
 import time
 
+from agents.launch_config_fingerprint import (
+    changed_signature_paths,
+    provider_launch_config_signature,
+)
 from agents.policy import resolve_agent_launch_policy
 from agents.store import AgentRestoreStore, AgentSpecStore
 from cli.services.provider_hooks import prepare_provider_workspace, provider_workspace_path_for_prepare
@@ -292,7 +296,7 @@ def _provider_profile_reject_details(*, paths, spec, agent_name: str) -> tuple[s
         desired_home=desired['home'],
         desired_codex_home_authority=desired['codex_home_authority'],
     )
-    details.extend(_changed_signature_paths('provider_profile', desired, actual))
+    details.extend(changed_signature_paths('provider_profile', desired, actual))
     return tuple(dict.fromkeys(details))
 
 
@@ -306,7 +310,7 @@ def _load_previous_agent_spec(spec_store: AgentSpecStore, agent_name: str):
 def _provider_launch_config_reject_reason(*, previous_spec, current_spec) -> str | None:
     if previous_spec is None:
         return None
-    if _provider_launch_config_signature(previous_spec) == _provider_launch_config_signature(current_spec):
+    if provider_launch_config_signature(previous_spec) == provider_launch_config_signature(current_spec):
         return None
     return 'provider_launch_config_changed'
 
@@ -314,27 +318,9 @@ def _provider_launch_config_reject_reason(*, previous_spec, current_spec) -> str
 def _provider_launch_config_reject_details(*, previous_spec, current_spec) -> tuple[str, ...]:
     if previous_spec is None:
         return ()
-    previous = _provider_launch_config_signature(previous_spec)
-    current = _provider_launch_config_signature(current_spec)
-    return tuple(_changed_signature_paths('launch_config', current, previous))
-
-
-def _provider_launch_config_signature(spec) -> dict[str, object]:
-    return {
-        'provider': str(getattr(spec, 'provider', '') or '').strip().lower(),
-        'provider_command_template': str(getattr(spec, 'provider_command_template', '') or ''),
-        'runtime_mode': _enum_value(getattr(spec, 'runtime_mode', None)),
-        'permission_default': _enum_value(getattr(spec, 'permission_default', None)),
-        'model': str(getattr(spec, 'model', '') or ''),
-        'thinking': str(getattr(spec, 'thinking', '') or ''),
-        'startup_args': tuple(str(value) for value in tuple(getattr(spec, 'startup_args', ()) or ())),
-        'env': {str(key): str(value) for key, value in dict(getattr(spec, 'env', {}) or {}).items()},
-    }
-
-
-def _enum_value(value) -> str:
-    enum_value = getattr(value, 'value', value)
-    return str(enum_value or '')
+    previous = provider_launch_config_signature(previous_spec)
+    current = provider_launch_config_signature(current_spec)
+    return tuple(changed_signature_paths('launch_config', current, previous))
 
 
 def _provider_profile_signature(spec, *, paths) -> dict[str, object]:
@@ -465,7 +451,7 @@ def _changed_signature_paths(prefix: str, desired: object, actual: object) -> tu
             if key not in desired or key not in actual:
                 changed.append(child_prefix)
                 continue
-            changed.extend(_changed_signature_paths(child_prefix, desired[key], actual[key]))
+            changed.extend(changed_signature_paths(child_prefix, desired[key], actual[key]))
         return tuple(changed)
     return () if desired == actual else (prefix,)
 

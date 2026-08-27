@@ -977,6 +977,48 @@ url = "https://old.example.test"
     assert not thread.is_alive()
 
 
+def test_config_ui_save_records_only_restart_bound_changed_agents(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-minimal-restart-save'
+    config_path = project_root / '.ccb' / 'ccb.config'
+    config_path.parent.mkdir(parents=True)
+    original = '''version = 2
+
+[windows]
+main = "agent1:codex, agent2:claude"
+
+[agents.agent1]
+model = "gpt-5.5"
+
+[agents.agent2]
+model = "sonnet"
+'''
+    updated = original.replace('model = "sonnet"', 'model = "opus"')
+    config_path.write_text(original, encoding='utf-8')
+    layout = PathLayout(project_root)
+    original_digest = hashlib.sha256(config_path.read_bytes()).hexdigest()
+
+    status, applied = config_ui_module._apply_candidate(
+        {
+            'text': updated,
+            'expected_digest': original_digest,
+            'mode': 'save',
+        },
+        config_path=config_path,
+        project_root=project_root,
+        path_layout=layout,
+        reload_action=lambda _dry_run: {},
+        mutation_lock=threading.Lock(),
+    )
+
+    assert int(status) == 200
+    assert applied['status'] == 'saved'
+    assert applied['restart_required'] is True
+    assert applied['affected_agents'] == ['agent2']
+    intent = load_config_restart_intent(layout)
+    assert intent is not None
+    assert intent.affected_agents == ('agent2',)
+
+
 def test_config_ui_schedules_api_restart_when_daemon_dry_run_is_unavailable(
     tmp_path: Path,
 ) -> None:

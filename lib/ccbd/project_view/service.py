@@ -945,6 +945,14 @@ def _agent_view(
         activity=activity,
         generated_at=generated_at,
     )
+    provider_control = _provider_control_record(
+        spec=spec,
+        runtime=runtime,
+        session_status=provider_session_status,
+        project_root=deps.project_root,
+        agent_name=agent_name,
+        restart_pending=provider_restart_pending,
+    )
     record = {
         'name': agent_name,
         'display_name': _agent_display_name(agent_name),
@@ -966,14 +974,11 @@ def _agent_view(
         'workspace_path': getattr(runtime, 'workspace_path', None) if runtime is not None else None,
         'reload_drain': dict(reload_drain) if reload_drain is not None else None,
         'dispatch_blocked_by_reload_drain': reload_drain is not None,
-        'provider_control': _provider_control_record(
-            spec=spec,
-            runtime=runtime,
-            session_status=provider_session_status,
-            project_root=deps.project_root,
-            agent_name=agent_name,
-            restart_pending=provider_restart_pending,
-        ),
+        'provider_control': provider_control,
+        'desired_config': provider_control.get('desired_config'),
+        'live_config': provider_control.get('live_config'),
+        'drift_detected': bool(provider_control.get('drift_detected')),
+        'restart_required': bool(provider_control.get('restart_required')),
     }
     if provider_runtime is not None:
         record['provider_runtime'] = provider_runtime
@@ -1259,6 +1264,24 @@ def _provider_control_record(
         )
         else None
     )
+    desired_config = {
+        'provider': provider,
+        'model': configured_model,
+        'thinking': configured_thinking,
+    }
+    live_config = {
+        'provider': provider,
+        'model': active_model,
+        'thinking': active_thinking,
+        'session_id': snapshot.session_id,
+        'source': snapshot.source,
+        'revision': snapshot.source_revision,
+    }
+    drift_detected = bool(
+        restart_pending
+        or pending_model is not None
+        or pending_thinking is not None
+    )
     record = {
         'schema_version': 1,
         'provider': provider,
@@ -1269,6 +1292,10 @@ def _provider_control_record(
         'pending_model': pending_model,
         'pending_thinking': pending_thinking,
         'restart_pending': bool(restart_pending),
+        'desired_config': desired_config,
+        'live_config': live_config,
+        'drift_detected': drift_detected,
+        'restart_required': drift_detected,
         'session_id': snapshot.session_id,
         'runtime_source': snapshot.source,
         'runtime_revision': snapshot.source_revision,
