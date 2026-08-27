@@ -4,7 +4,7 @@
 
 **Blocked by:** T02（需要缓存和指纹定位机制来判定 affected agent）。
 
-**Status:** done（commit `528aa3c6`）
+**Status:** done（commit `528aa3c6`，审查修正 `979adfec`）
 
 - [x] Affected agent 定位机制：
   - 当 provider 配置变化时，计算新旧 LaunchPlan 指纹 → 对比缓存指纹 → 指纹不匹配的 agent 标记为 affected。
@@ -48,5 +48,8 @@
 - `pytest -q "test/test_ccbd_start_preparation.py"`：通过。
 - `pytest -q "test/test_ccbd_project_view.py" -k "provider_control or config_drift or restart_required or runtime_status"`：通过。
 - `pytest -q "test/test_config_restart_intent.py"`：通过。
+- `pytest -q "test/test_config_ui.py" -k "save_records_only_restart_bound_changed_agents or save_comment_change_does_not_require_restart or saves_api_change_without_hot_reload_and_schedules_restart or hot_reload_keeps_matching_restart_intent_when_restart_is_required"`：通过。
+- `pytest -q "test/test_ccbd_project_view.py" -k "provider_control_exposes_restart_required_drift or provider_control_exposes_redacted_herdr_hook_risk or herdr_runtime_status_merges_callback_metadata"`：通过。
+- `pytest -q "test/test_provider_control_settings.py" "test/test_config_restart_intent.py" "test/test_ccbd_start_preparation.py"`：通过。
 - `python -m compileall "lib/agents/launch_config_fingerprint.py" "lib/ccbd/start_preparation.py" "lib/cli/services/config_ui.py" "lib/ccbd/project_view/service.py"`：通过。
 - `pytest -q "test/test_config_ui.py"`：当前本机环境缺少 `cryptography`，`prepare_config_ui` 导入 `mobile_gateway.relay_admission` 时失败；其余 37 项通过、1 项跳过。
