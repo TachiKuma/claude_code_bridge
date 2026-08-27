@@ -654,14 +654,15 @@ def test_launch_herdr_ui_uses_wezterm_executable_dir_env_without_path(
 
 def test_launch_herdr_ui_replaces_current_wezterm_pane_without_spawning(monkeypatch) -> None:
     run_calls: list[list[str]] = []
+    run_envs: list[dict[str, str] | None] = []
     popen_calls: list[list[str]] = []
     exec_calls: list[tuple[str, list[str], dict[str, str]]] = []
     frontend_records: list[dict[str, object]] = []
 
     def _fake_run(args, **kwargs):
-        del kwargs
         call = list(args)
         run_calls.append(call)
+        run_envs.append(kwargs.get('env'))
         if call == ['C:/WezTerm/wezterm.exe', 'cli', 'list', '--format', 'json']:
             return subprocess.CompletedProcess(
                 args,
@@ -699,6 +700,7 @@ def test_launch_herdr_ui_replaces_current_wezterm_pane_without_spawning(monkeypa
     )
     monkeypatch.delenv('CCB_HERDR_EXE', raising=False)
     monkeypatch.setenv('WEZTERM_PANE', '1')
+    monkeypatch.setenv('WEZTERM_UNIX_SOCKET', 'C:/Users/Administrator/.local/share/wezterm/gui-sock-14220')
 
     with pytest.raises(SystemExit):
         start_foreground_service._launch_herdr_ui(
@@ -717,24 +719,29 @@ def test_launch_herdr_ui_replaces_current_wezterm_pane_without_spawning(monkeypa
             'pane_id': '1',
             'window_id': '7',
             'workspace': 'ccb-proj-abc',
+            'wezterm_socket': 'C:/Users/Administrator/.local/share/wezterm/gui-sock-14220',
         }
     ]
     assert len(exec_calls) == 1
     assert exec_calls[0][0] == 'C:/Herdr/herdr.exe'
     assert exec_calls[0][1] == ['C:/Herdr/herdr.exe', 'session', 'attach', 'ccb-proj-abc']
     assert exec_calls[0][2]['WEZTERM_PANE'] == '1'
+    assert exec_calls[0][2]['WEZTERM_UNIX_SOCKET'] == 'C:/Users/Administrator/.local/share/wezterm/gui-sock-14220'
     assert run_calls == [['C:/WezTerm/wezterm.exe', 'cli', 'list', '--format', 'json']]
+    assert run_envs[0] is not None
+    assert run_envs[0]['WEZTERM_UNIX_SOCKET'] == 'C:/Users/Administrator/.local/share/wezterm/gui-sock-14220'
     assert popen_calls == []
 
 
 def test_launch_herdr_ui_detects_current_wezterm_pane_with_cli_probe(monkeypatch) -> None:
     run_calls: list[list[str]] = []
+    run_envs: list[dict[str, str] | None] = []
     exec_calls: list[tuple[str, list[str], dict[str, str]]] = []
 
     def _fake_run(args, **kwargs):
-        del kwargs
         call = list(args)
         run_calls.append(call)
+        run_envs.append(kwargs.get('env'))
         if call == ['C:/WezTerm/wezterm.exe', 'cli', 'get-pane-direction', 'Next']:
             return subprocess.CompletedProcess(args, 0, stdout='')
         if call == ['C:/WezTerm/wezterm.exe', 'cli', 'list', '--format', 'json']:
@@ -769,6 +776,7 @@ def test_launch_herdr_ui_detects_current_wezterm_pane_with_cli_probe(monkeypatch
         getcwd_fn=lambda: 'C:/repo',
     )
     monkeypatch.setenv('TERM_PROGRAM', 'WezTerm')
+    monkeypatch.setenv('WEZTERM_UNIX_SOCKET', 'C:/Users/Administrator/.local/share/wezterm/gui-sock-14220')
 
     with pytest.raises(SystemExit):
         start_foreground_service._launch_herdr_ui(
@@ -780,7 +788,12 @@ def test_launch_herdr_ui_detects_current_wezterm_pane_with_cli_probe(monkeypatch
         ['C:/WezTerm/wezterm.exe', 'cli', 'get-pane-direction', 'Next'],
         ['C:/WezTerm/wezterm.exe', 'cli', 'list', '--format', 'json'],
     ]
+    assert [env['WEZTERM_UNIX_SOCKET'] for env in run_envs if env is not None] == [
+        'C:/Users/Administrator/.local/share/wezterm/gui-sock-14220',
+        'C:/Users/Administrator/.local/share/wezterm/gui-sock-14220',
+    ]
     assert exec_calls[0][1] == ['C:/Herdr/herdr.exe', 'session', 'attach', 'ccb-proj-abc']
+    assert exec_calls[0][2]['WEZTERM_UNIX_SOCKET'] == 'C:/Users/Administrator/.local/share/wezterm/gui-sock-14220'
 
 
 def test_attach_herdr_project_namespace_aborts_when_current_pane_handoff_fails(monkeypatch) -> None:
@@ -869,6 +882,7 @@ def test_launch_herdr_ui_records_frontend_binding_load_failure_when_rebuilding(m
 
 def test_launch_herdr_ui_reuses_reachable_frontend_binding_without_spawning(monkeypatch) -> None:
     run_calls: list[list[str]] = []
+    run_envs: list[dict[str, str] | None] = []
     popen_calls: list[list[str]] = []
     exec_calls: list[list[str]] = []
 
@@ -878,9 +892,9 @@ def test_launch_herdr_ui_reuses_reachable_frontend_binding_without_spawning(monk
             return True
 
     def _fake_run(args, **kwargs):
-        del kwargs
         call = list(args)
         run_calls.append(call)
+        run_envs.append(kwargs.get('env'))
         if call == ['C:/WezTerm/wezterm.exe', 'cli', 'list', '--format', 'json']:
             return subprocess.CompletedProcess(
                 args,
@@ -923,6 +937,7 @@ def test_launch_herdr_ui_reuses_reachable_frontend_binding_without_spawning(monk
             'mux_available': True,
             'pane_id': '42',
             'workspace': 'ccb-proj-abc',
+            'wezterm_socket': 'C:/Users/Administrator/.local/share/wezterm/gui-sock-14220',
         },
         backend=_Backend(),
         runner=runner,
@@ -937,11 +952,16 @@ def test_launch_herdr_ui_reuses_reachable_frontend_binding_without_spawning(monk
         'pane_id': '42',
         'window_id': '7',
         'workspace': 'ccb-proj-abc',
+        'wezterm_socket': 'C:/Users/Administrator/.local/share/wezterm/gui-sock-14220',
         'probe_status': 'reachable',
     }
     assert run_calls == [
         ['C:/WezTerm/wezterm.exe', 'cli', 'list', '--format', 'json'],
         ['C:/WezTerm/wezterm.exe', 'cli', 'activate-pane', '--pane-id', '42'],
+    ]
+    assert [env['WEZTERM_UNIX_SOCKET'] for env in run_envs if env is not None] == [
+        'C:/Users/Administrator/.local/share/wezterm/gui-sock-14220',
+        'C:/Users/Administrator/.local/share/wezterm/gui-sock-14220',
     ]
     assert popen_calls == []
     assert exec_calls == []
@@ -1009,6 +1029,56 @@ def test_launch_herdr_ui_rebuilds_unreachable_frontend_binding_and_records_reaso
         ],
         ['C:/WezTerm/wezterm.exe', 'cli', 'list', '--format', 'json'],
     ]
+
+
+def test_launch_herdr_ui_rebuilds_legacy_wezterm_binding_without_socket(monkeypatch) -> None:
+    run_calls: list[list[str]] = []
+
+    class _Backend:
+        def namespace_alive(self, namespace_ref):
+            assert namespace_ref['session_name'] == 'ccb-proj-abc'
+            return True
+
+    def _fake_run(args, **kwargs):
+        del kwargs
+        call = list(args)
+        run_calls.append(call)
+        if call == ['C:/WezTerm/wezterm.exe', 'cli', 'list']:
+            return subprocess.CompletedProcess(args, 0)
+        if call == ['C:/WezTerm/wezterm.exe', 'cli', 'list', '--format', 'json']:
+            return subprocess.CompletedProcess(args, 0, stdout='[]')
+        if call[1:3] == ['cli', 'spawn']:
+            return subprocess.CompletedProcess(args, 0, stdout='77\n')
+        raise AssertionError(f'unexpected wezterm call: {call!r}')
+
+    runner = start_foreground_service.HerdrFrontendCommandRunner(
+        which_fn=lambda name: {
+            'herdr': 'C:/Herdr/herdr.exe',
+            'wezterm': 'C:/WezTerm/wezterm.exe',
+        }.get(name),
+        run_fn=_fake_run,
+        popen_fn=lambda *_, **__: (_ for _ in ()).throw(AssertionError('不应进入裸 fallback')),
+        getcwd_fn=lambda: 'C:/repo',
+    )
+
+    frontend = start_foreground_service._launch_herdr_ui(
+        {'session_name': 'ccb-proj-abc'},
+        existing_frontend={
+            'kind': 'wezterm',
+            'status': 'wezterm_tab_attached',
+            'pane_id': '42',
+            'workspace': 'ccb-proj-abc',
+        },
+        backend=_Backend(),
+        runner=runner,
+    )
+
+    assert frontend['status'] == 'wezterm_tab_attached'
+    assert frontend['launch_mode'] == 'wezterm_spawn'
+    assert frontend['pane_id'] == '77'
+    assert frontend['previous_frontend_probe_status'] == 'unreachable'
+    assert frontend['previous_frontend_probe_reason'] == 'missing_frontend_wezterm_socket'
+    assert ['C:/WezTerm/wezterm.exe', 'cli', 'activate-pane', '--pane-id', '42'] not in run_calls
 
 
 def test_launch_herdr_ui_fallback_uses_visible_windows_console(monkeypatch) -> None:

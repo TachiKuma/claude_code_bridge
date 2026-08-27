@@ -435,6 +435,7 @@ def _redacted_frontend(value: object) -> dict[str, object] | None:
         "pane_id",
         "window_id",
         "workspace",
+        "wezterm_socket",
         "spawn_target",
         "launch_mode",
         "fallback",

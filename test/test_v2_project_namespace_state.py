@@ -111,6 +111,7 @@ def test_project_namespace_state_round_trips_herdr_namespace_without_public_rest
             'fallback_reason': 'wezterm_mux_unavailable',
             'pane_id': '42',
             'workspace': 'ccb-proj-herdr',
+            'wezterm_socket': 'C:/Users/Administrator/.local/share/wezterm/gui-sock-14220',
             'probe_status': 'unreachable',
             'previous_frontend_probe_reason': 'herdr_namespace_unreachable',
             'command': 'must-not-persist',
@@ -143,6 +144,7 @@ def test_project_namespace_state_round_trips_herdr_namespace_without_public_rest
         'fallback_reason': 'wezterm_mux_unavailable',
         'pane_id': '42',
         'workspace': 'ccb-proj-herdr',
+        'wezterm_socket': 'C:/Users/Administrator/.local/share/wezterm/gui-sock-14220',
         'probe_status': 'unreachable',
         'previous_frontend_probe_reason': 'herdr_namespace_unreachable',
     }

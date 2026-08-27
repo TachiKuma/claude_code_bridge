@@ -339,6 +339,7 @@ def test_herdr_runtime_binding_round_trips_frontend_fact_with_redaction() -> Non
             "mux_available": False,
             "pane_id": "42",
             "workspace": "ccb-proj-1",
+            "wezterm_socket": "C:/Users/Administrator/.local/share/wezterm/gui-sock-14220",
             "fallback_reason": "wezterm_mux_unavailable",
             "probe_status": "unreachable",
             "previous_frontend_probe_reason": "herdr_namespace_unreachable",
@@ -357,6 +358,7 @@ def test_herdr_runtime_binding_round_trips_frontend_fact_with_redaction() -> Non
         "fallback_reason": "wezterm_mux_unavailable",
         "pane_id": "42",
         "workspace": "ccb-proj-1",
+        "wezterm_socket": "C:/Users/Administrator/.local/share/wezterm/gui-sock-14220",
         "probe_status": "unreachable",
         "previous_frontend_probe_reason": "herdr_namespace_unreachable",
     }

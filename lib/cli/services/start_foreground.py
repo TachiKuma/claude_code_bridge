@@ -303,6 +303,7 @@ def _launch_herdr_ui(
         return _herdr_frontend_fact(status='frontend_not_ready', reason='herdr_executable_unavailable')
 
     wezterm_cli = _resolve_wezterm_cli(runner)
+    wezterm_env = _wezterm_cli_env_for_socket(_wezterm_socket_from_env(os.environ))
     if _is_current_wezterm_pane(wezterm_cli, runner=runner, env=os.environ):
         frontend = _replace_current_wezterm_pane_with_herdr_ui(
             herdr_exe,
@@ -330,12 +331,13 @@ def _launch_herdr_ui(
                 pane_id=_clean_optional_payload_text(existing_frontend.get('pane_id')),
                 window_id=_clean_optional_payload_text(previous_probe.get('window_id')),
                 workspace=_clean_optional_payload_text(previous_probe.get('workspace')),
+                wezterm_socket=_clean_optional_payload_text(previous_probe.get('wezterm_socket')),
                 probe_status='reachable',
             )
 
     if wezterm_cli:
         cwd = runner.getcwd()
-        mux_available, mux_reason = _wezterm_mux_available(wezterm_cli, runner=runner)
+        mux_available, mux_reason = _wezterm_mux_available(wezterm_cli, runner=runner, env=wezterm_env)
         if mux_available:
             spawn = _run_wezterm_spawn(
                 wezterm_cli,
@@ -343,6 +345,7 @@ def _launch_herdr_ui(
                 herdr_exe=herdr_exe,
                 session_name=session_name,
                 runner=runner,
+                env=wezterm_env,
             )
             if spawn.returncode == 0:
                 spawn_frontend = _herdr_frontend_fact(
@@ -351,9 +354,10 @@ def _launch_herdr_ui(
                     launch_mode='wezterm_spawn',
                     fallback=False,
                     pane_id=spawn.pane_id,
+                    wezterm_socket=_wezterm_socket_from_env(os.environ),
                 )
                 if spawn.pane_id:
-                    spawn_pane = _find_wezterm_pane(wezterm_cli, pane_id=spawn.pane_id, runner=runner)
+                    spawn_pane = _find_wezterm_pane(wezterm_cli, pane_id=spawn.pane_id, runner=runner, env=wezterm_env)
                     if spawn_pane is not None:
                         spawn_frontend = _herdr_frontend_fact(
                             status='wezterm_tab_attached',
@@ -363,6 +367,7 @@ def _launch_herdr_ui(
                             pane_id=spawn.pane_id,
                             window_id=_clean_optional_payload_text(spawn_pane.get('window_id')),
                             workspace=_clean_optional_payload_text(spawn_pane.get('workspace')),
+                            wezterm_socket=_wezterm_socket_from_env(os.environ),
                         )
                 return _with_previous_frontend_probe(spawn_frontend, previous_probe)
             return _with_previous_frontend_probe(_launch_detached_herdr_ui(
@@ -472,7 +477,7 @@ def _is_current_wezterm_pane(
             stderr=subprocess.DEVNULL,
             text=True,
             timeout=_WEZTERM_CLI_TIMEOUT_S,
-            **_subprocess_kwargs_herdr_ui_control(),
+            **_subprocess_kwargs_herdr_ui_control(env=env),
         )
     except (OSError, subprocess.SubprocessError):
         return False
@@ -508,6 +513,7 @@ def _wezterm_mux_available(
     wezterm_cli: str,
     *,
     runner: HerdrFrontendCommandRunner,
+    env: Mapping[str, str] | None = None,
 ) -> tuple[bool, str | None]:
     try:
         result = runner.run(
@@ -516,7 +522,7 @@ def _wezterm_mux_available(
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=_WEZTERM_CLI_TIMEOUT_S,
-            **_subprocess_kwargs_herdr_ui_control(),
+            **_subprocess_kwargs_herdr_ui_control(env=env),
         )
     except (OSError, subprocess.SubprocessError):
         return False, 'wezterm_mux_probe_failed'
@@ -530,6 +536,7 @@ def _run_wezterm_spawn(
     herdr_exe: str,
     session_name: str,
     runner: HerdrFrontendCommandRunner,
+    env: Mapping[str, str] | None = None,
 ) -> _WezTermSpawnResult:
     try:
         result = runner.run(
@@ -539,7 +546,7 @@ def _run_wezterm_spawn(
             stderr=subprocess.DEVNULL,
             text=True,
             timeout=_WEZTERM_CLI_TIMEOUT_S,
-            **_subprocess_kwargs_herdr_ui_control(),
+            **_subprocess_kwargs_herdr_ui_control(env=env),
         )
     except (OSError, subprocess.SubprocessError):
         return _WezTermSpawnResult(returncode=1)
@@ -566,6 +573,7 @@ def _replace_current_wezterm_pane_with_herdr_ui(
         pane_id=pane_fact.get('pane_id'),
         window_id=pane_fact.get('window_id'),
         workspace=pane_fact.get('workspace'),
+        wezterm_socket=pane_fact.get('wezterm_socket'),
     )
     if before_exec is not None:
         before_exec(frontend)
@@ -582,6 +590,7 @@ def _replace_current_wezterm_pane_with_herdr_ui(
             pane_id=pane_fact.get('pane_id'),
             window_id=pane_fact.get('window_id'),
             workspace=pane_fact.get('workspace'),
+            wezterm_socket=pane_fact.get('wezterm_socket'),
         )
     return _herdr_frontend_fact(
         status='frontend_not_ready',
@@ -592,6 +601,7 @@ def _replace_current_wezterm_pane_with_herdr_ui(
         pane_id=pane_fact.get('pane_id'),
         window_id=pane_fact.get('window_id'),
         workspace=pane_fact.get('workspace'),
+        wezterm_socket=pane_fact.get('wezterm_socket'),
     )
 
 
@@ -637,6 +647,7 @@ def _herdr_frontend_fact(
     pane_id: str | None = None,
     window_id: str | None = None,
     workspace: str | None = None,
+    wezterm_socket: str | None = None,
     probe_status: str | None = None,
 ) -> dict[str, object]:
     fact: dict[str, object] = {'kind': 'wezterm', 'status': status}
@@ -656,6 +667,8 @@ def _herdr_frontend_fact(
         fact['window_id'] = window_id
     if workspace:
         fact['workspace'] = workspace
+    if wezterm_socket:
+        fact['wezterm_socket'] = wezterm_socket
     if probe_status:
         fact['probe_status'] = probe_status
     return fact
@@ -722,20 +735,25 @@ def _probe_existing_herdr_frontend(
     wezterm_cli = _resolve_wezterm_cli(runner)
     if not wezterm_cli:
         return {'probe_status': 'unreachable', 'reason': 'wezterm_cli_unavailable'}
-    pane = _find_wezterm_pane(wezterm_cli, pane_id=pane_id, runner=runner)
+    wezterm_socket = _clean_optional_payload_text(existing_frontend.get('wezterm_socket'))
+    if not wezterm_socket:
+        return {'probe_status': 'unreachable', 'reason': 'missing_frontend_wezterm_socket'}
+    wezterm_env = _wezterm_cli_env_for_socket(wezterm_socket)
+    pane = _find_wezterm_pane(wezterm_cli, pane_id=pane_id, runner=runner, env=wezterm_env)
     if pane is None:
         return {'probe_status': 'unreachable', 'reason': 'wezterm_pane_unreachable'}
     expected_workspace = _clean_optional_payload_text(existing_frontend.get('workspace'))
     workspace = _clean_optional_payload_text(pane.get('workspace'))
     if expected_workspace and workspace and workspace != expected_workspace:
         return {'probe_status': 'unreachable', 'reason': 'wezterm_workspace_mismatch'}
-    if not _activate_wezterm_pane(wezterm_cli, pane_id=pane_id, runner=runner):
+    if not _activate_wezterm_pane(wezterm_cli, pane_id=pane_id, runner=runner, env=wezterm_env):
         return {'probe_status': 'unreachable', 'reason': 'wezterm_pane_activate_failed'}
     return {
         'probe_status': 'reachable',
         'pane_id': pane_id,
         'window_id': _clean_optional_payload_text(pane.get('window_id')),
         'workspace': workspace or expected_workspace,
+        'wezterm_socket': wezterm_socket,
     }
 
 
@@ -744,8 +762,9 @@ def _find_wezterm_pane(
     *,
     pane_id: str,
     runner: HerdrFrontendCommandRunner,
+    env: Mapping[str, str] | None = None,
 ) -> dict[str, object] | None:
-    panes = _list_wezterm_panes(wezterm_cli, runner=runner)
+    panes = _list_wezterm_panes(wezterm_cli, runner=runner, env=env)
     if panes is None:
         return None
     for pane in panes:
@@ -758,6 +777,7 @@ def _list_wezterm_panes(
     wezterm_cli: str,
     *,
     runner: HerdrFrontendCommandRunner,
+    env: Mapping[str, str] | None = None,
 ) -> list[dict[str, object]] | None:
     try:
         result = runner.run(
@@ -767,7 +787,7 @@ def _list_wezterm_panes(
             stderr=subprocess.DEVNULL,
             text=True,
             timeout=_WEZTERM_CLI_TIMEOUT_S,
-            **_subprocess_kwargs_herdr_ui_control(),
+            **_subprocess_kwargs_herdr_ui_control(env=env),
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -792,6 +812,7 @@ def _activate_wezterm_pane(
     *,
     pane_id: str,
     runner: HerdrFrontendCommandRunner,
+    env: Mapping[str, str] | None = None,
 ) -> bool:
     try:
         result = runner.run(
@@ -800,7 +821,7 @@ def _activate_wezterm_pane(
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=_WEZTERM_CLI_TIMEOUT_S,
-            **_subprocess_kwargs_herdr_ui_control(),
+            **_subprocess_kwargs_herdr_ui_control(env=env),
         )
     except (OSError, subprocess.SubprocessError):
         return False
@@ -814,18 +835,22 @@ def _current_wezterm_pane_fact(
     env: Mapping[str, str],
 ) -> dict[str, str | None]:
     pane_id = _clean_optional_payload_text(env.get('WEZTERM_PANE'))
+    wezterm_socket = _wezterm_socket_from_env(env)
+    wezterm_env = _wezterm_cli_env_for_socket(wezterm_socket)
     if not wezterm_cli:
-        return {'pane_id': pane_id, 'window_id': None, 'workspace': None}
-    pane = _find_wezterm_pane(wezterm_cli, pane_id=pane_id, runner=runner) if pane_id else _find_active_wezterm_pane(
+        return {'pane_id': pane_id, 'window_id': None, 'workspace': None, 'wezterm_socket': wezterm_socket}
+    pane = _find_wezterm_pane(wezterm_cli, pane_id=pane_id, runner=runner, env=wezterm_env) if pane_id else _find_active_wezterm_pane(
         wezterm_cli,
         runner=runner,
+        env=wezterm_env,
     )
     if pane is None:
-        return {'pane_id': pane_id, 'window_id': None, 'workspace': None}
+        return {'pane_id': pane_id, 'window_id': None, 'workspace': None, 'wezterm_socket': wezterm_socket}
     return {
         'pane_id': _clean_optional_payload_text(pane.get('pane_id')) or pane_id,
         'window_id': _clean_optional_payload_text(pane.get('window_id')),
         'workspace': _clean_optional_payload_text(pane.get('workspace')),
+        'wezterm_socket': wezterm_socket,
     }
 
 
@@ -833,8 +858,9 @@ def _find_active_wezterm_pane(
     wezterm_cli: str,
     *,
     runner: HerdrFrontendCommandRunner,
+    env: Mapping[str, str] | None = None,
 ) -> dict[str, object] | None:
-    panes = _list_wezterm_panes(wezterm_cli, runner=runner)
+    panes = _list_wezterm_panes(wezterm_cli, runner=runner, env=env)
     if panes is None:
         return None
     for pane in panes:
@@ -855,6 +881,18 @@ def _with_previous_frontend_probe(
     if reason:
         result['previous_frontend_probe_reason'] = reason
     return result
+
+
+def _wezterm_socket_from_env(env: Mapping[str, str]) -> str | None:
+    return _clean_optional_payload_text(env.get('WEZTERM_UNIX_SOCKET'))
+
+
+def _wezterm_cli_env_for_socket(wezterm_socket: str | None) -> dict[str, str] | None:
+    if not wezterm_socket:
+        return None
+    env = dict(os.environ)
+    env['WEZTERM_UNIX_SOCKET'] = wezterm_socket
+    return env
 
 
 def _herdr_attach_target_ready(payload: dict[str, object]) -> tuple[bool, str]:
@@ -1191,11 +1229,14 @@ def _tmux_select_window(tmux_socket_path: str, target: str, *, env: dict[str, st
     return probe.returncode == 0
 
 
-def _subprocess_kwargs_herdr_ui_control() -> dict[str, object]:
+def _subprocess_kwargs_herdr_ui_control(*, env: Mapping[str, str] | None = None) -> dict[str, object]:
     """仅隐藏控制面 wrapper，避免短生命周期 CLI 命令闪窗。"""
+    kwargs: dict[str, object] = {}
+    if env is not None:
+        kwargs['env'] = dict(env)
     if sys.platform == 'win32':
-        return {'creationflags': getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000)}
-    return {}
+        kwargs['creationflags'] = getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000)
+    return kwargs
 
 
 def _subprocess_kwargs_herdr_ui_fallback() -> dict[str, object]:
