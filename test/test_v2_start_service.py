@@ -11,6 +11,7 @@ from agents.models import AgentSpec, PermissionMode, QueuePolicy, RestoreMode, R
 from agents.store import AgentSpecStore
 from ccbd.lifecycle_report_store import CcbdStartupReportStore
 from ccbd.models import CcbdStartupReport
+from ccbd.socket_client import CcbdClientError
 from cli.context import CliContextBuilder
 from cli.models import ParsedStartCommand
 from cli.services.start import _refresh_running_sidebar_helpers, start_agents
@@ -246,6 +247,93 @@ def test_start_agents_uses_startup_transaction_timeout_for_start_rpc(tmp_path: P
 
     assert events == [('with_timeout', 12.5), ('start', 12.5)]
     assert summary.started == ('demo',)
+
+
+def test_start_runtime_retries_transient_start_rpc_connection_reset(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-start-rpc-connection-reset'
+    (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
+    (project_root / '.ccb' / 'ccb.config').write_text('demo:codex\n', encoding='utf-8')
+    bootstrap_project(project_root)
+    command = ParsedStartCommand(project=None, agent_names=('demo',), restore=False, auto_permission=False)
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+    events: list[tuple[str, float | None]] = []
+    seen_startup_run_ids: list[str] = []
+
+    class _StartClient:
+        def __init__(self, timeout_s: float | None) -> None:
+            self.timeout_s = timeout_s
+
+        def start(self, **kwargs):
+            events.append(('start', self.timeout_s))
+            seen_startup_run_ids.append(str(kwargs['startup_run_id']))
+            if len(events) == 2:
+                raise CcbdClientError('[WinError 10054] 远程主机强迫关闭了一个现有的连接。')
+            return {
+                'project_root': str(project_root),
+                'project_id': context.project.project_id,
+                'started': ['demo'],
+                'socket_path': str(context.paths.ccbd_socket_path),
+                'cleanup_summaries': [],
+                'startup_run_id': kwargs['startup_run_id'],
+            }
+
+    class _BaseClient:
+        def with_timeout(self, timeout_s: float | None):
+            events.append(('with_timeout', timeout_s))
+            return _StartClient(timeout_s)
+
+    summary = start_agents_runtime(
+        context,
+        command,
+        ensure_daemon_started_fn=lambda context: SimpleNamespace(client=_BaseClient(), started=True),
+        cleanup_summary_cls=ProjectTmuxCleanupSummary,
+        start_rpc_timeout_s=12.5,
+    )
+
+    assert events == [
+        ('with_timeout', 12.5),
+        ('start', 12.5),
+        ('with_timeout', 12.5),
+        ('start', 12.5),
+    ]
+    assert len(set(seen_startup_run_ids)) == 1
+    assert summary.started == ('demo',)
+    assert summary.daemon_started is True
+
+
+def test_start_runtime_does_not_retry_non_transport_start_rpc_failure(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-start-rpc-business-failure'
+    (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
+    (project_root / '.ccb' / 'ccb.config').write_text('demo:codex\n', encoding='utf-8')
+    bootstrap_project(project_root)
+    command = ParsedStartCommand(project=None, agent_names=('demo',), restore=False, auto_permission=False)
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+    events: list[tuple[str, float | None]] = []
+
+    class _StartClient:
+        def __init__(self, timeout_s: float | None) -> None:
+            self.timeout_s = timeout_s
+
+        def start(self, **kwargs):
+            del kwargs
+            events.append(('start', self.timeout_s))
+            raise CcbdClientError('ccbd bootstrap accepts ping only')
+
+    class _BaseClient:
+        def with_timeout(self, timeout_s: float | None):
+            events.append(('with_timeout', timeout_s))
+            return _StartClient(timeout_s)
+
+    with pytest.raises(CcbdClientError, match='bootstrap accepts ping only'):
+        start_agents_runtime(
+            context,
+            command,
+            ensure_daemon_started_fn=lambda context: SimpleNamespace(client=_BaseClient(), started=True),
+            cleanup_summary_cls=ProjectTmuxCleanupSummary,
+            start_rpc_timeout_s=12.5,
+        )
+
+    assert events == [('with_timeout', 12.5), ('start', 12.5)]
 
 
 def test_start_runtime_keeps_legacy_report_store_injection_without_using_it(tmp_path: Path) -> None:

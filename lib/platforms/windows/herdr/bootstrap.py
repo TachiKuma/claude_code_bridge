@@ -275,8 +275,9 @@ def _resolve_running_server(
     candidates: list[str | None] = []
     if preferred_session:
         candidates.append(preferred_session)
-    candidates.extend(_discover_running_ccb_sessions(exe))
-    candidates.append(None)
+    else:
+        candidates.extend(_discover_running_ccb_sessions(exe))
+        candidates.append(None)
     seen: set[str | None] = set()
     for session in candidates:
         if session in seen:

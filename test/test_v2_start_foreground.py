@@ -2074,6 +2074,108 @@ def test_launch_herdr_ui_forces_spawn_when_foreground_tabs_is_two(monkeypatch) -
     assert any('spawn' in str(call) for call in run_calls)
 
 
+def test_launch_herdr_ui_foreground_tabs_two_skips_existing_frontend_reuse(monkeypatch) -> None:
+    """CCB_FOREGROUND_TABS=2 时，即使旧 frontend 可达也必须新建 spawn。"""
+    run_calls: list[list[str]] = []
+
+    class _Backend:
+        def namespace_alive(self, namespace_ref):
+            del namespace_ref
+            raise AssertionError('不应探测旧 frontend')
+
+    def _fake_run(args, **kwargs):
+        del kwargs
+        call = list(args)
+        run_calls.append(call)
+        if call[1:3] == ['cli', 'spawn']:
+            return subprocess.CompletedProcess(args, 0, stdout='77\n')
+        if call[1:5] == ['cli', 'list', '--format', 'json']:
+            return subprocess.CompletedProcess(args, 0, stdout='[]')
+        return subprocess.CompletedProcess(args, 0)
+
+    runner = start_foreground_service.HerdrFrontendCommandRunner(
+        which_fn=lambda name: {
+            'herdr': 'C:/Herdr/herdr.exe',
+            'wezterm': 'C:/WezTerm/wezterm.exe',
+        }.get(name),
+        run_fn=_fake_run,
+        popen_fn=lambda *_, **__: (_ for _ in ()).throw(AssertionError('不应进入 detached fallback')),
+        getcwd_fn=lambda: 'C:/repo',
+    )
+
+    monkeypatch.setenv('CCB_FOREGROUND_TABS', '2')
+
+    frontend = start_foreground_service._launch_herdr_ui(
+        {'session_name': 'ccb-proj-abc'},
+        existing_frontend={
+            'kind': 'wezterm',
+            'status': 'wezterm_tab_attached',
+            'pane_id': '42',
+            'workspace': 'default',
+            'wezterm_socket': 'C:/Users/Administrator/.local/share/wezterm/gui-sock-old',
+        },
+        backend=_Backend(),
+        runner=runner,
+    )
+
+    assert frontend['status'] == 'wezterm_tab_attached'
+    assert frontend['launch_mode'] == 'wezterm_spawn'
+    assert frontend['previous_frontend_probe_status'] == 'skipped'
+    assert frontend['previous_frontend_probe_reason'] == 'foreground_tabs_2_forces_spawn'
+    assert any(call[1:3] == ['cli', 'spawn'] for call in run_calls)
+
+
+def test_launch_herdr_ui_spawn_uses_live_sibling_socket_after_stale_env(monkeypatch, tmp_path) -> None:
+    """旧 WEZTERM_UNIX_SOCKET 不存在时，spawn 尝试同目录可用 gui-sock。"""
+    run_calls: list[list[str]] = []
+    run_envs: list[dict[str, str] | None] = []
+    stale_socket = tmp_path / 'gui-sock-stale'
+    live_socket = tmp_path / 'gui-sock-live'
+    live_socket.touch()
+
+    def _fake_run(args, **kwargs):
+        call = list(args)
+        run_calls.append(call)
+        env = kwargs.get('env')
+        run_envs.append(env)
+        assert env is not None
+        assert env.get('WEZTERM_UNIX_SOCKET') == str(live_socket)
+        if call[1:3] == ['cli', 'spawn']:
+            return subprocess.CompletedProcess(args, 0, stdout='77\n')
+        if call[1:5] == ['cli', 'list', '--format', 'json']:
+            return subprocess.CompletedProcess(
+                args,
+                0,
+                stdout=json.dumps([{'pane_id': 77, 'window_id': 7, 'workspace': 'default'}]),
+            )
+        return subprocess.CompletedProcess(args, 0)
+
+    runner = start_foreground_service.HerdrFrontendCommandRunner(
+        which_fn=lambda name: {
+            'herdr': 'C:/Herdr/herdr.exe',
+            'wezterm': 'C:/WezTerm/wezterm.exe',
+        }.get(name),
+        run_fn=_fake_run,
+        popen_fn=lambda *_, **__: (_ for _ in ()).throw(AssertionError('不应进入 detached fallback')),
+        getcwd_fn=lambda: 'C:/repo',
+    )
+
+    monkeypatch.setenv('CCB_FOREGROUND_TABS', '2')
+    monkeypatch.setenv('WEZTERM_UNIX_SOCKET', str(stale_socket))
+
+    frontend = start_foreground_service._launch_herdr_ui(
+        {'session_name': 'ccb-proj-abc'},
+        runner=runner,
+    )
+
+    assert frontend['status'] == 'wezterm_tab_attached'
+    assert frontend['launch_mode'] == 'wezterm_spawn'
+    assert frontend['pane_id'] == '77'
+    assert frontend['wezterm_socket'] == str(live_socket)
+    assert any(call[1:3] == ['cli', 'spawn'] for call in run_calls)
+    assert {env['WEZTERM_UNIX_SOCKET'] for env in run_envs if env is not None} == {str(live_socket)}
+
+
 def test_launch_herdr_ui_records_requested_tabs_in_frontend_fact(monkeypatch) -> None:
     """diagnostic开关的 frontend fact 包含 requested_tabs 字段。"""
     run_calls: list[list[str]] = []

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 import time
 
+from ccbd.socket_client import CcbdClientError
 from ccbd.startup_identity import new_startup_run_id
 
 
@@ -70,7 +71,11 @@ def start_agents(
     if readiness_trace is not None:
         start_kwargs['readiness_trace'] = readiness_trace
     stage_started_ns = time.monotonic_ns()
-    payload = _start_rpc_client(handle.client, timeout_s=start_rpc_timeout_s).start(**start_kwargs)
+    payload = _start_rpc_payload(
+        handle.client,
+        start_kwargs=start_kwargs,
+        timeout_s=start_rpc_timeout_s,
+    )
     start_rpc_ms = _elapsed_ms(stage_started_ns)
     response_run_id = str(payload.get('startup_run_id') or '').strip()
     if response_run_id and response_run_id != startup_run_id:
@@ -107,6 +112,31 @@ def _start_rpc_client(client, *, timeout_s: float | None):
     if not callable(with_timeout):
         return client
     return with_timeout(timeout_s)
+
+
+def _start_rpc_payload(client, *, start_kwargs: dict[str, object], timeout_s: float | None) -> dict:
+    start_client = _start_rpc_client(client, timeout_s=timeout_s)
+    try:
+        return start_client.start(**start_kwargs)
+    except CcbdClientError as exc:
+        if not _is_transient_start_rpc_disconnect(exc):
+            raise
+    time.sleep(0.05)
+    return _start_rpc_client(client, timeout_s=timeout_s).start(**start_kwargs)
+
+
+def _is_transient_start_rpc_disconnect(exc: CcbdClientError) -> bool:
+    text = str(exc).casefold()
+    return any(
+        marker in text
+        for marker in (
+            'winerror 10054',
+            'connection reset',
+            'forcibly closed',
+            'empty response from ccbd',
+            'ccbd auth handshake was rejected',
+        )
+    )
 
 
 def _summary_from_start_payload(context, payload: dict, *, daemon_started: bool, cleanup_summary_cls) -> StartSummary:

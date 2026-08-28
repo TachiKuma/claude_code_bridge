@@ -350,6 +350,9 @@ def _redacted_frontend(value: object) -> dict[str, object] | None:
         'probe_status',
         'previous_frontend_probe_status',
         'previous_frontend_probe_reason',
+        'requested_tabs',
+        'origin_pane_id',
+        'target_pane_id',
     }
     result: dict[str, object] = {}
     for key in allowed:

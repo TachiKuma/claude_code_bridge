@@ -805,6 +805,76 @@ def test_bootstrap_uses_running_session_when_global_stopped(monkeypatch) -> None
     assert queried == ['ccb-avaprintdesigner-575a971f']
 
 
+def test_bootstrap_auto_start_honors_requested_session_over_discovered_session(monkeypatch) -> None:
+    """请求特定项目 session 时，不得复用另一个已运行的 CCB session。"""
+    monkeypatch.delenv('CCB_HERDR_EXE', raising=False)
+    monkeypatch.delenv('CCB_HERDR_SESSION', raising=False)
+    monkeypatch.delenv('CCB_HERDR_CAPABILITY_REPORT', raising=False)
+    monkeypatch.setattr(
+        'platforms.windows.herdr.bootstrap.resolve_herdr_executable',
+        lambda explicit=None: '/x/herdr.exe',
+    )
+    monkeypatch.setattr(
+        'platforms.windows.herdr.bootstrap._discover_running_ccb_sessions',
+        lambda exe: ['ccb-source-project'],
+    )
+    queried: list[str | None] = []
+    started: list[str] = []
+
+    def _fake_status(exe, session=None):
+        del exe
+        queried.append(session)
+        if session == 'ccb-target-project' and started:
+            return {
+                'status': 'running',
+                'running': True,
+                'compatible': True,
+                'protocol': 19,
+                'session': session,
+            }
+        if session == 'ccb-source-project':
+            return {
+                'status': 'running',
+                'running': True,
+                'compatible': True,
+                'protocol': 19,
+                'session': session,
+            }
+        return {'status': 'not_running', 'running': False, 'compatible': None}
+
+    monkeypatch.setattr(
+        'platforms.windows.herdr.bootstrap.query_herdr_server_status',
+        _fake_status,
+    )
+    monkeypatch.setattr(
+        'platforms.windows.herdr.bootstrap._start_herdr_server',
+        lambda exe, session: started.append(session) or {'ok': True, 'herdr_session': session},
+    )
+    monkeypatch.setattr(
+        'platforms.windows.herdr.bootstrap._probe_herdr_read_capabilities',
+        lambda exe, session=None: {
+            'session_attach': True,
+            'workspace_list': True,
+            'pane_list': True,
+        },
+    )
+    monkeypatch.setattr(
+        'platforms.windows.herdr.bootstrap._write_capability_report',
+        lambda report: '/tmp/cap.json',
+    )
+
+    result = ensure_herdr_bootstrap_env(
+        herdr_session='ccb-target-project',
+        auto_start_server=True,
+        start_session='ccb-target-project',
+    )
+
+    assert result['ok'] is True
+    assert result['herdr_session'] == 'ccb-target-project'
+    assert started == ['ccb-target-project']
+    assert queried == ['ccb-target-project', 'ccb-target-project']
+
+
 def test_bootstrap_still_rejects_when_only_global_stopped(monkeypatch) -> None:
     """When nothing (session-scoped or global) is running, the bootstrap keeps
     rejecting with the actionable "server is not running" reason."""

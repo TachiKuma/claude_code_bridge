@@ -322,7 +322,7 @@ def _launch_herdr_ui(
         return _herdr_frontend_fact(status='frontend_not_ready', reason='herdr_executable_unavailable')
 
     wezterm_cli = _resolve_wezterm_cli(runner)
-    wezterm_env = _wezterm_cli_env_for_socket(_wezterm_socket_from_env(os.environ))
+    wezterm_envs = _wezterm_cli_env_candidates(_wezterm_socket_from_env(os.environ), env=os.environ)
     origin_pane_id = _clean_optional_payload_text(os.environ.get('WEZTERM_PANE'))
     requested_tabs = _foreground_tabs_override()
 
@@ -333,7 +333,7 @@ def _launch_herdr_ui(
             namespace_ref=namespace_ref,
             existing_frontend=existing_frontend,
             backend=backend,
-            wezterm_cli=wezterm_cli, wezterm_env=wezterm_env,
+            wezterm_cli=wezterm_cli, wezterm_envs=wezterm_envs,
             runner=runner, previous_frontend_probe=previous_frontend_probe,
             requested_tabs=requested_tabs, origin_pane_id=origin_pane_id,
         )
@@ -378,7 +378,7 @@ def _launch_herdr_ui(
         namespace_ref=namespace_ref,
         existing_frontend=existing_frontend,
         backend=backend,
-        wezterm_cli=wezterm_cli, wezterm_env=wezterm_env,
+        wezterm_cli=wezterm_cli, wezterm_envs=wezterm_envs,
         runner=runner, previous_frontend_probe=previous_frontend_probe,
         requested_tabs=requested_tabs, origin_pane_id=origin_pane_id,
     )
@@ -392,7 +392,7 @@ def _launch_herdr_ui_via_spawn(
     existing_frontend: dict[str, object] | None = None,
     backend=None,
     wezterm_cli: str | None,
-    wezterm_env: dict[str, str] | None,
+    wezterm_envs: tuple[dict[str, str] | None, ...],
     runner: HerdrFrontendCommandRunner,
     previous_frontend_probe: dict[str, object] | None,
     requested_tabs: int | None = None,
@@ -404,7 +404,12 @@ def _launch_herdr_ui_via_spawn(
     诊断开关值为 2 时的强制 spawn 路径。
     """
     previous_probe: dict[str, object] | None = previous_frontend_probe
-    if existing_frontend is not None:
+    if existing_frontend is not None and requested_tabs == 2:
+        previous_probe = {
+            'probe_status': 'skipped',
+            'reason': 'foreground_tabs_2_forces_spawn',
+        }
+    elif existing_frontend is not None:
         previous_probe = _probe_existing_herdr_frontend(
             namespace_ref,
             existing_frontend=existing_frontend,
@@ -426,8 +431,24 @@ def _launch_herdr_ui_via_spawn(
 
     if wezterm_cli:
         cwd = runner.getcwd()
-        mux_available, mux_reason = _wezterm_mux_available(wezterm_cli, runner=runner, env=wezterm_env)
-        if mux_available:
+        if not wezterm_envs:
+            return _with_previous_frontend_probe(_launch_detached_herdr_ui(
+                herdr_exe,
+                session_name,
+                mux_available=False,
+                fallback_reason='wezterm_socket_unavailable',
+                runner=runner,
+            ), previous_probe)
+
+        last_mux_reason: str | None = None
+        spawn_failed = False
+        saw_mux_available = False
+        for wezterm_env in wezterm_envs:
+            mux_available, mux_reason = _wezterm_mux_available(wezterm_cli, runner=runner, env=wezterm_env)
+            if not mux_available:
+                last_mux_reason = mux_reason or 'wezterm_mux_unavailable'
+                continue
+            saw_mux_available = True
             spawn = _run_wezterm_spawn(
                 wezterm_cli,
                 cwd=cwd,
@@ -437,13 +458,14 @@ def _launch_herdr_ui_via_spawn(
                 env=wezterm_env,
             )
             if spawn.returncode == 0:
+                spawn_socket = _wezterm_socket_from_env(wezterm_env or {})
                 spawn_frontend = _herdr_frontend_fact(
                     status='wezterm_tab_attached',
                     mux_available=True,
                     launch_mode='wezterm_spawn',
                     fallback=False,
                     pane_id=spawn.pane_id,
-                    wezterm_socket=_wezterm_socket_from_env(os.environ),
+                    wezterm_socket=spawn_socket,
                     requested_tabs=requested_tabs,
                     origin_pane_id=origin_pane_id,
                     target_pane_id=spawn.pane_id,
@@ -459,24 +481,18 @@ def _launch_herdr_ui_via_spawn(
                             pane_id=spawn.pane_id,
                             window_id=_clean_optional_payload_text(spawn_pane.get('window_id')),
                             workspace=_clean_optional_payload_text(spawn_pane.get('workspace')),
-                            wezterm_socket=_wezterm_socket_from_env(os.environ),
+                            wezterm_socket=spawn_socket,
                             requested_tabs=requested_tabs,
                             origin_pane_id=origin_pane_id,
                             target_pane_id=spawn.pane_id,
                         )
                 return _with_previous_frontend_probe(spawn_frontend, previous_probe)
-            return _with_previous_frontend_probe(_launch_detached_herdr_ui(
-                herdr_exe,
-                session_name,
-                mux_available=True,
-                fallback_reason='wezterm_spawn_failed',
-                runner=runner,
-            ), previous_probe)
+            spawn_failed = True
         return _with_previous_frontend_probe(_launch_detached_herdr_ui(
             herdr_exe,
             session_name,
-            mux_available=False,
-            fallback_reason=mux_reason or 'wezterm_mux_unavailable',
+            mux_available=saw_mux_available,
+            fallback_reason='wezterm_spawn_failed' if spawn_failed else (last_mux_reason or 'wezterm_mux_unavailable'),
             runner=runner,
         ), previous_probe)
 
@@ -1015,12 +1031,69 @@ def _wezterm_socket_from_env(env: Mapping[str, str]) -> str | None:
     return _clean_optional_payload_text(env.get('WEZTERM_UNIX_SOCKET'))
 
 
-def _wezterm_cli_env_for_socket(wezterm_socket: str | None) -> dict[str, str] | None:
+def _wezterm_cli_env_for_socket(
+    wezterm_socket: str | None,
+    *,
+    base_env: Mapping[str, str] | None = None,
+) -> dict[str, str] | None:
     if not wezterm_socket:
         return None
-    env = dict(os.environ)
+    env = dict(base_env if base_env is not None else os.environ)
     env['WEZTERM_UNIX_SOCKET'] = wezterm_socket
     return env
+
+
+def _wezterm_cli_env_candidates(
+    wezterm_socket: str | None,
+    *,
+    env: Mapping[str, str],
+) -> tuple[dict[str, str] | None, ...]:
+    sockets = _wezterm_socket_candidates(wezterm_socket)
+    if sockets:
+        return tuple(_wezterm_cli_env_for_socket(socket, base_env=env) for socket in sockets)
+    if wezterm_socket:
+        return ()
+    return (None,)
+
+
+def _wezterm_socket_candidates(wezterm_socket: str | None) -> tuple[str, ...]:
+    primary = _clean_optional_payload_text(wezterm_socket)
+    if not primary:
+        return ()
+    candidates: list[str] = []
+    seen: set[str] = set()
+
+    def add(value: object) -> None:
+        text = _clean_optional_payload_text(value)
+        if not text or text in seen:
+            return
+        seen.add(text)
+        candidates.append(text)
+
+    primary_path = _wezterm_socket_path(primary)
+    if primary_path is None or primary_path.exists():
+        add(primary)
+    if primary_path is not None:
+        parent = primary_path.parent
+        if parent.exists():
+            siblings = sorted(
+                parent.glob('gui-sock-*'),
+                key=lambda path: path.stat().st_mtime if path.exists() else 0.0,
+                reverse=True,
+            )
+            for sibling in siblings:
+                add(str(sibling))
+    return tuple(candidates)
+
+
+def _wezterm_socket_path(wezterm_socket: str) -> Path | None:
+    try:
+        path = Path(wezterm_socket)
+    except (OSError, ValueError):
+        return None
+    if not path.is_absolute():
+        return None
+    return path
 
 
 def _herdr_attach_target_ready(payload: dict[str, object]) -> tuple[bool, str]:
