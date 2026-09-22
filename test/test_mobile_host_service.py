@@ -5,6 +5,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import socket
 import subprocess
+import sys
 import threading
 import time
 from types import SimpleNamespace
@@ -991,6 +992,105 @@ def test_detect_loopback_port_owner_uses_lsof_when_ss_is_missing(monkeypatch: py
 
     assert owner == PortOwner(pid=444, command='python gateway.py')
 
+
+
+class _ThreadExceptionRecorder:
+    """Collect exceptions that escape a subprocess reader thread.
+
+    Such exceptions bypass the caller entirely: ``subprocess.run`` returns
+    normally with ``stdout=None``, so only ``threading.excepthook`` sees them.
+    """
+
+    def __init__(self) -> None:
+        self.errors: list[str] = []
+        self._previous = None
+
+    def __enter__(self) -> list[str]:
+        self._previous = threading.excepthook
+        threading.excepthook = self._hook
+        return self.errors
+
+    def __exit__(self, *_exc_info: object) -> None:
+        threading.excepthook = self._previous
+
+    def _hook(self, args) -> None:
+        self.errors.append(f'{args.exc_type.__name__}: {args.exc_value}')
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason='windows command-line probe path')
+def test_process_cmdline_decodes_non_ascii_command_line(tmp_path: Path) -> None:
+    """A non-ASCII command line must survive the probe instead of vanishing.
+
+    Regression: subprocess decoded child output inside its reader thread using the
+    locale encoding (cp936 on a Chinese Windows). A UTF-8 command line such as
+    ``E:\\GitHub开源项目\\...`` raised UnicodeDecodeError in that thread, so the
+    caller silently received ``''`` while a thread warning leaked to the console.
+    """
+    script = tmp_path / '中文服务.py'
+    script.write_text('import time\ntime.sleep(30)\n', encoding='utf-8')
+    process = subprocess.Popen([sys.executable, str(script)])
+    try:
+        with _ThreadExceptionRecorder() as errors:
+            command_line = mobile_host._process_cmdline(process.pid)
+    finally:
+        process.terminate()
+        process.wait(timeout=10)
+
+    assert errors == [], f'reader thread raised: {errors}'
+    assert script.name in command_line, f'command line lost the path: {command_line!r}'
+
+
+def test_mobile_host_log_tail_reads_log_written_by_spawned_child(tmp_path: Path) -> None:
+    """The service log must read back whatever the spawned child actually wrote.
+
+    Regression: ``_spawn_mobile_host_service`` did not pin the child stdio encoding,
+    so the child wrote the log in the locale encoding while ``_mobile_host_log_tail``
+    always decoded as UTF-8, surfacing as mojibake in the ``ccb update mobile``
+    failure detail.
+    """
+    log_path = tmp_path / 'service.log'
+    native_line = '正在启动移动网关 监听 8787 端口'
+    handle = log_path.open('ab')
+    try:
+        subprocess.run(
+            [sys.executable, '-c', f'import sys; sys.stdout.write({native_line!r})'],
+            stdout=handle,
+            stderr=handle,
+            timeout=30,
+            check=True,
+        )
+    finally:
+        handle.close()
+
+    tail = mobile_host._mobile_host_log_tail(log_path)
+
+    assert '\ufffd' not in tail, f'log tail is mojibake: {tail!r}'
+    assert native_line in tail, f'log tail lost the text: {tail!r}'
+
+
+def test_spawn_mobile_host_service_pins_child_stdio_encoding(tmp_path: Path) -> None:
+    """The spawned service must write its log in the encoding the tail reads."""
+    state_dir = tmp_path / 'mobile'
+    paths = mobile_host_service_paths(state_dir)
+    captured: dict[str, object] = {}
+
+    def _spawn(command, **kwargs):
+        captured['env'] = dict(kwargs.get('env') or {})
+        return _FakeProcess(4242)
+
+    mobile_host._spawn_mobile_host_service(
+        script_root=tmp_path / 'source',
+        paths=paths,
+        listen='127.0.0.1:8787',
+        public_url=None,
+        route_provider='tailnet',
+        generation=1,
+        host_id=None,
+        spawn_fn=_spawn,
+    )
+
+    env = captured['env']
+    assert env.get('PYTHONUTF8') == '1', f'child stdio encoding is not pinned: {env!r}'
 
 def test_detect_loopback_port_owner_uses_windows_netstat(
     monkeypatch: pytest.MonkeyPatch,

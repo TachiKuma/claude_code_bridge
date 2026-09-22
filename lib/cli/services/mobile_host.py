@@ -4,6 +4,7 @@ import argparse
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 import json
+import locale
 import os
 from pathlib import Path
 import signal
@@ -566,22 +567,47 @@ def detect_loopback_port_owner(listen: str) -> PortOwner | None:
     return None
 
 
-def _detect_loopback_port_owner_netstat(*, host: str, port: int) -> PortOwner | None:
-    if os.name != 'nt':
-        return None
+# Windows consoles and the PowerShell CIM probe do not agree with the interpreter's
+# locale: their UTF-8 output raised UnicodeDecodeError inside subprocess's reader
+# thread, which silently handed callers an empty result. Decode defensively instead.
+SUBPROCESS_TEXT_ENCODING = 'utf-8'
+SUBPROCESS_TEXT_ERRORS = 'replace'
+
+
+def _run_text_command(
+    command: Iterable[str],
+    *,
+    timeout: float,
+) -> str | None:
+    """Run a probe command and return its output as text, or None on any failure.
+
+    Decoding is pinned rather than left to the locale so a non-ASCII payload can
+    never make subprocess's reader thread raise and drop the output.
+    """
     try:
         result = subprocess.run(
-            ['netstat', '-ano', '-p', 'tcp'],
+            list(command),
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,
-            timeout=1.0,
+            encoding=SUBPROCESS_TEXT_ENCODING,
+            errors=SUBPROCESS_TEXT_ERRORS,
+            timeout=timeout,
         )
     except Exception:
         return None
     if result.returncode != 0:
         return None
-    for line in (result.stdout or '').splitlines():
+    return result.stdout or ''
+
+
+def _detect_loopback_port_owner_netstat(*, host: str, port: int) -> PortOwner | None:
+    if os.name != 'nt':
+        return None
+    output = _run_text_command(['netstat', '-ano', '-p', 'tcp'], timeout=1.0)
+    if output is None:
+        return None
+    for line in output.splitlines():
         fields = line.split()
         if len(fields) < 5 or fields[0].upper() != 'TCP':
             continue
@@ -602,19 +628,10 @@ def _detect_loopback_port_owner_netstat(*, host: str, port: int) -> PortOwner | 
 def _detect_loopback_port_owner_ss(*, host: str, port: int) -> PortOwner | None:
     if shutil.which('ss') is None:
         return None
-    try:
-        result = subprocess.run(
-            ['ss', '-ltnp', f'sport = :{port}'],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            timeout=1.0,
-        )
-    except Exception:
+    output = _run_text_command(['ss', '-ltnp', f'sport = :{port}'], timeout=1.0)
+    if output is None:
         return None
-    if result.returncode != 0:
-        return None
-    for line in (result.stdout or '').splitlines():
+    for line in output.splitlines():
         if f':{port}' not in line:
             continue
         fields = line.split()
@@ -633,19 +650,13 @@ def _detect_loopback_port_owner_ss(*, host: str, port: int) -> PortOwner | None:
 def _detect_loopback_port_owner_lsof(*, host: str, port: int) -> PortOwner | None:
     if shutil.which('lsof') is None:
         return None
-    try:
-        result = subprocess.run(
-            ['lsof', '-nP', f'-iTCP:{port}', '-sTCP:LISTEN'],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            timeout=1.0,
-        )
-    except Exception:
+    output = _run_text_command(
+        ['lsof', '-nP', f'-iTCP:{port}', '-sTCP:LISTEN'],
+        timeout=1.0,
+    )
+    if output is None:
         return None
-    if result.returncode != 0:
-        return None
-    for line in (result.stdout or '').splitlines()[1:]:
+    for line in output.splitlines()[1:]:
         if f':{port}' not in line or 'TCP ' not in line:
             continue
         tcp_name = line.split('TCP ', 1)[1]
@@ -707,6 +718,9 @@ def _spawn_mobile_host_service(
     env['CCB_MOBILE_HOST_STATE_HOME'] = str(paths.state_dir)
     env['CCB_SKIP_STARTUP_UPDATE_CHECK'] = '1'
     env['CCB_SOURCE_RUNTIME_OK'] = '1'
+    # The service writes this log through inheriting stdio, which would otherwise
+    # use the locale encoding (cp936) while _mobile_host_log_tail reads UTF-8.
+    env['PYTHONUTF8'] = '1'
     log = paths.log_path.open('ab')
     try:
         spawner = spawn_fn or subprocess.Popen
@@ -798,9 +812,25 @@ def _wait_for_mobile_host_state_ready(
     )
 
 
+def _decode_log_bytes(raw: bytes) -> str:
+    """Decode a service log that may predate the UTF-8 stdio pin."""
+    try:
+        return raw.decode('utf-8')
+    except UnicodeDecodeError:
+        pass
+    # Logs written before the child stdio encoding was pinned used the locale
+    # encoding (cp936 on a Chinese Windows), so fall back rather than mojibake them.
+    for encoding in (locale.getpreferredencoding(False), 'latin-1'):
+        try:
+            return raw.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return raw.decode('utf-8', errors='replace')
+
+
 def _mobile_host_log_tail(path: Path, *, max_chars: int = 1200) -> str:
     try:
-        text = Path(path).read_text(encoding='utf-8', errors='replace')
+        text = _decode_log_bytes(Path(path).read_bytes())
     except OSError:
         return ''
     text = text.strip()
@@ -889,28 +919,17 @@ def _process_cmdline(pid: int) -> str:
     if pid <= 0:
         return ''
     if os.name == 'nt':
-        try:
-            command = [
-                'powershell',
-                '-NoProfile',
-                '-Command',
-                (
-                    'Get-CimInstance Win32_Process -Filter '
-                    f'"ProcessId = {pid}" | Select-Object -ExpandProperty CommandLine'
-                ),
-            ]
-            result = subprocess.run(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                text=True,
-                timeout=1.0,
-            )
-        except Exception:
-            return ''
-        if result.returncode != 0:
-            return ''
-        return (result.stdout or '').strip()
+        command = [
+            'powershell',
+            '-NoProfile',
+            '-Command',
+            (
+                'Get-CimInstance Win32_Process -Filter '
+                f'"ProcessId = {pid}" | Select-Object -ExpandProperty CommandLine'
+            ),
+        ]
+        output = _run_text_command(command, timeout=1.0)
+        return (output or '').strip()
     proc_cmdline = Path('/proc') / str(pid) / 'cmdline'
     try:
         text = proc_cmdline.read_bytes().replace(b'\x00', b' ').decode('utf-8', errors='replace').strip()
@@ -918,17 +937,8 @@ def _process_cmdline(pid: int) -> str:
             return text
     except Exception:
         pass
-    try:
-        result = subprocess.run(
-            ['ps', '-p', str(pid), '-o', 'command='],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            timeout=1.0,
-        )
-    except Exception:
-        return ''
-    return (result.stdout or '').strip()
+    output = _run_text_command(['ps', '-p', str(pid), '-o', 'command='], timeout=1.0)
+    return (output or '').strip()
 
 
 def _mobile_host_process_uses_script_root(
