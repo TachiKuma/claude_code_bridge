@@ -875,11 +875,33 @@ def _managed_mobile_host_process(
             and str(state.get('command_kind') or '') == 'ccb_mobile_host_serve'
             and _state_matches_mobile_host_state_dir(state, state_dir=state_dir)
         )
+    if not cmdline.strip():
+        # An empty command line means the probe failed, not that the process is
+        # foreign. Fall back to the service record, which is the only authority on
+        # what this installation started; the caller still has to match the listen
+        # address, the route and the pairing before anything is taken over.
+        return _state_records_managed_gateway(state, pid=pid, state_dir=state_dir)
     return _legacy_mobile_gateway_process(
         cmdline,
         script_root=script_root,
         listen=listen,
     )
+
+
+def _state_records_managed_gateway(
+    state: dict[str, object] | None,
+    *,
+    pid: int,
+    state_dir: Path,
+) -> bool:
+    """Whether the service record describes this exact pid as its own gateway."""
+    if state is None:
+        return False
+    if _state_pid(state) != int(pid):
+        return False
+    if str(state.get('command_kind') or '') != 'ccb_mobile_host_serve':
+        return False
+    return _state_matches_mobile_host_state_dir(state, state_dir=state_dir)
 
 
 def _legacy_mobile_gateway_process(
@@ -915,21 +937,21 @@ def _legacy_mobile_gateway_process(
     return False
 
 
+# Windows probes must not depend on spawning a helper process. Measured on the
+# field host: one PowerShell spawn costs ~0.54s idle and ~1.02s while other CCB
+# processes run their own probes, so a 1s budget intermittently expired and the
+# caller read that failure as 'this process has no command line'.
+PROCESS_CMDLINE_PROBE_TIMEOUT_S = 5.0
+
+
 def _process_cmdline(pid: int) -> str:
     if pid <= 0:
         return ''
     if os.name == 'nt':
-        command = [
-            'powershell',
-            '-NoProfile',
-            '-Command',
-            (
-                'Get-CimInstance Win32_Process -Filter '
-                f'"ProcessId = {pid}" | Select-Object -ExpandProperty CommandLine'
-            ),
-        ]
-        output = _run_text_command(command, timeout=1.0)
-        return (output or '').strip()
+        native = _process_cmdline_windows_native(pid)
+        if native:
+            return native
+        return _process_cmdline_windows_powershell(pid)
     proc_cmdline = Path('/proc') / str(pid) / 'cmdline'
     try:
         text = proc_cmdline.read_bytes().replace(b'\x00', b' ').decode('utf-8', errors='replace').strip()
@@ -938,6 +960,76 @@ def _process_cmdline(pid: int) -> str:
     except Exception:
         pass
     output = _run_text_command(['ps', '-p', str(pid), '-o', 'command='], timeout=1.0)
+    return (output or '').strip()
+
+
+def _process_cmdline_windows_native(pid: int) -> str:
+    """Read a command line straight from the kernel, without spawning anything.
+
+    A helper process puts the probe's reliability at the mercy of machine load,
+    which is exactly when the probe matters. This reads the same information
+    through NtQueryInformationProcess in microseconds and returns an empty string
+    for a process this user may not inspect.
+    """
+    try:
+        import ctypes
+        from ctypes import wintypes
+    except Exception:
+        return ''
+
+    class _UnicodeString(ctypes.Structure):
+        _fields_ = [
+            ('Length', wintypes.USHORT),
+            ('MaximumLength', wintypes.USHORT),
+            ('Buffer', ctypes.c_void_p),
+        ]
+
+    process_query_limited_information = 0x1000
+    process_command_line_information = 60
+    try:
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        ntdll = ctypes.WinDLL('ntdll')
+        handle = kernel32.OpenProcess(
+            process_query_limited_information, False, int(pid)
+        )
+        if not handle:
+            return ''
+        try:
+            buffer = ctypes.create_string_buffer(65536)
+            returned = wintypes.ULONG(0)
+            status = ntdll.NtQueryInformationProcess(
+                handle,
+                process_command_line_information,
+                buffer,
+                ctypes.sizeof(buffer),
+                ctypes.byref(returned),
+            )
+            if status != 0:
+                return ''
+            head = _UnicodeString.from_buffer_copy(buffer.raw[: ctypes.sizeof(_UnicodeString)])
+            if not head.Buffer or not head.Length:
+                return ''
+            offset = head.Buffer - ctypes.addressof(buffer)
+            chunk = buffer.raw[offset : offset + head.Length]
+        finally:
+            kernel32.CloseHandle(handle)
+    except Exception:
+        return ''
+    return chunk.decode('utf-16-le', errors='replace').strip()
+
+
+def _process_cmdline_windows_powershell(pid: int) -> str:
+    """Fallback probe for a host where the native read is unavailable."""
+    command = [
+        'powershell',
+        '-NoProfile',
+        '-Command',
+        (
+            'Get-CimInstance Win32_Process -Filter '
+            f'"ProcessId = {pid}" | Select-Object -ExpandProperty CommandLine'
+        ),
+    ]
+    output = _run_text_command(command, timeout=PROCESS_CMDLINE_PROBE_TIMEOUT_S)
     return (output or '').strip()
 
 

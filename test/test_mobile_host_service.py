@@ -736,6 +736,159 @@ def test_mobile_host_service_refuses_external_port_owner(tmp_path: Path) -> None
     assert 'pid=333' in str(excinfo.value)
 
 
+def test_mobile_host_service_takes_over_state_recorded_gateway_without_a_command_line(
+    tmp_path: Path,
+) -> None:
+    """A failed probe must not turn CCB's own gateway into a foreign process.
+
+    Field failure: service.json recorded a live managed gateway (pid, generation,
+    listen, state_dir, command_kind) but the command-line probe timed out. With an
+    empty command line the gateway was reported as 'owned by a non-CCB process',
+    so the update refused to restart the gateway this installation had started.
+    """
+    state_dir = tmp_path / 'mobile'
+    paths = mobile_host_service_paths(state_dir)
+    write_mobile_host_service_state(
+        paths.state_path,
+        {
+            'schema_version': 1,
+            'record_type': MOBILE_HOST_SERVICE_RECORD_TYPE,
+            'pid': 17100,
+            'generation': 6,
+            'host_id': 'relay-host',
+            'listen': '127.0.0.1:8787',
+            'local_gateway_url': 'http://127.0.0.1:8787',
+            'gateway_url': 'https://relay.example.test',
+            'route_provider': 'relay',
+            'state_dir': str(state_dir),
+            'command_kind': 'ccb_mobile_host_serve',
+        },
+    )
+    alive = {17100}
+    terminated: list[int] = []
+    spawned: list[object] = []
+
+    def _terminate(pid: int, **_kwargs) -> bool:
+        terminated.append(pid)
+        alive.discard(pid)
+        return True
+
+    def _spawn(command, **_kwargs):
+        spawned.append(1)
+        generation = int(command[command.index('--generation') + 1])
+        _write_spawned_child_state(state_dir, generation=generation)
+        return _FakeProcess(222)
+
+    result = start_or_replace_mobile_host_service(
+        script_root=tmp_path / 'source',
+        listen='127.0.0.1:8787',
+        public_url=None,
+        route_provider='relay',
+        state_dir=state_dir,
+        rotate_pairing=True,
+        process_exists_fn=lambda pid: pid in alive,
+        process_cmdline_fn=lambda _pid: '',
+        terminate_pid_tree_fn=_terminate,
+        # The gateway holds the port only while it is alive, so the port frees up
+        # the moment the managed process is terminated.
+        port_owner_fn=lambda _listen: (
+            PortOwner(pid=17100, command='') if 17100 in alive else None
+        ),
+        spawn_fn=_spawn,
+        health_check_fn=lambda _url: True,
+    )
+
+    assert result.replaced_pid == 17100
+    assert terminated == [17100]
+    assert spawned == [1]
+    assert result.generation == 7
+
+
+def test_mobile_host_service_refuses_a_live_pid_that_does_not_match_the_record(
+    tmp_path: Path,
+) -> None:
+    """State may only vouch for the exact pid it recorded, never for a stranger.
+
+    A stale record plus pid reuse would otherwise let a failed probe authorise
+    taking over an unrelated process that merely happens to hold the port.
+    """
+    state_dir = tmp_path / 'mobile'
+    paths = mobile_host_service_paths(state_dir)
+    write_mobile_host_service_state(
+        paths.state_path,
+        {
+            'schema_version': 1,
+            'record_type': MOBILE_HOST_SERVICE_RECORD_TYPE,
+            'pid': 17100,
+            'generation': 6,
+            'listen': '127.0.0.1:8787',
+            'local_gateway_url': 'http://127.0.0.1:8787',
+            'gateway_url': 'https://relay.example.test',
+            'route_provider': 'relay',
+            'state_dir': str(state_dir),
+            'command_kind': 'ccb_mobile_host_serve',
+        },
+    )
+    # The recorded gateway is still running, but the port now answers to a
+    # different pid whose command line the probe could not read.
+    alive = {17100, 999}
+    killed: list[int] = []
+
+    def _terminate(pid: int, **_kwargs) -> bool:
+        killed.append(pid)
+        alive.discard(pid)
+        return True
+
+    with pytest.raises(MobileHostServiceError, match='non-CCB process') as excinfo:
+        start_or_replace_mobile_host_service(
+            script_root=tmp_path / 'source',
+            listen='127.0.0.1:8787',
+            public_url=None,
+            route_provider='relay',
+            state_dir=state_dir,
+            process_exists_fn=lambda pid: pid in alive,
+            process_cmdline_fn=lambda _pid: '',
+            terminate_pid_tree_fn=_terminate,
+            port_owner_fn=lambda _listen: PortOwner(pid=999, command=''),
+            spawn_fn=lambda *_args, **_kwargs: _FakeProcess(222),
+            health_check_fn=lambda _url: True,
+        )
+
+    # The recorded gateway was still replaceable, but the port holder was not:
+    # state may not vouch for a pid it never recorded.
+    assert killed == [17100]
+    assert 'pid=999' in str(excinfo.value)
+
+
+def test_mobile_host_service_still_refuses_a_foreign_port_owner_without_a_command_line(
+    tmp_path: Path,
+) -> None:
+    """A failed probe must not blanket-approve whatever happens to hold the port.
+
+    Accepting an empty command line is only safe when the service state proves the
+    listener is this installation's gateway.
+    """
+    killed: list[int] = []
+
+    with pytest.raises(MobileHostServiceError, match='non-CCB process') as excinfo:
+        start_or_replace_mobile_host_service(
+            script_root=tmp_path / 'source',
+            listen='127.0.0.1:8787',
+            public_url='https://desktop.tailnet.ts.net:8787',
+            route_provider='tailnet',
+            state_dir=tmp_path / 'mobile',
+            process_exists_fn=lambda _pid: False,
+            process_cmdline_fn=lambda _pid: '',
+            terminate_pid_tree_fn=lambda pid, **_kwargs: killed.append(pid) or True,
+            port_owner_fn=lambda _listen: PortOwner(pid=333, command=''),
+            spawn_fn=lambda *_args, **_kwargs: _FakeProcess(222),
+            health_check_fn=lambda _url: True,
+        )
+
+    assert killed == []
+    assert 'pid=333' in str(excinfo.value)
+
+
 def test_mobile_host_service_replaces_legacy_foreground_gateway(tmp_path: Path) -> None:
     source_root = tmp_path / 'source'
     state_dir = tmp_path / 'mobile'
@@ -1038,6 +1191,39 @@ def test_process_cmdline_decodes_non_ascii_command_line(tmp_path: Path) -> None:
 
     assert errors == [], f'reader thread raised: {errors}'
     assert script.name in command_line, f'command line lost the path: {command_line!r}'
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason='windows command-line probe path')
+def test_process_cmdline_survives_a_probe_subprocess_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A slow probe must never read as "this process has no command line".
+
+    Field failure: the Windows probe spawned PowerShell under a 1s budget. Under
+    load the spawn alone costs about 1s, so the timeout fired and the probe
+    returned an empty command line. Empty is indistinguishable from 'unknown
+    process', so a live managed gateway was refused as a non-CCB port owner and
+    the update could not restart its own gateway.
+    """
+    script = tmp_path / 'probe_target.py'
+    script.write_text('import time\ntime.sleep(30)\n', encoding='utf-8')
+    process = subprocess.Popen([sys.executable, str(script)])
+
+    def _probe_timeout(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired('powershell', 1.0)
+
+    monkeypatch.setattr(mobile_host.subprocess, 'run', _probe_timeout)
+    try:
+        command_line = mobile_host._process_cmdline(process.pid)
+    finally:
+        process.kill()
+        process.wait(timeout=10)
+
+    assert script.name in command_line, (
+        'the probe depended on a spawnable subprocess and lost the command line: '
+        f'{command_line!r}'
+    )
 
 
 def test_mobile_host_log_tail_reads_log_written_by_spawned_child(tmp_path: Path) -> None:
