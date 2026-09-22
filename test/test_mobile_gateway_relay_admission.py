@@ -11,6 +11,7 @@ import pytest
 
 from cli.parser import CliParser
 from cli.render import render_relay_operator
+from cli.services.relay_host_activation import _invitation
 from cli.services.relay_operator import relay_operator_command
 from mobile_gateway.relay_admission import (
     RelayAdmissionError,
@@ -166,6 +167,8 @@ def test_relay_host_pop_session_capability_and_revocation(tmp_path) -> None:
 
 
 def test_relay_operator_cli_json_and_human_outputs_redact_except_issue(tmp_path) -> None:
+    if os.name == 'nt':
+        pytest.skip('relay admission secrets need POSIX owner-only mode bits')
     db_path = tmp_path / 'relay.sqlite3'
     secrets_path = _write_secret_file(tmp_path / 'relay-secrets.json', _admission_secrets())
     context = SimpleNamespace(paths=SimpleNamespace(ccbd_mobile_dir=tmp_path / 'mobile'))
@@ -207,6 +210,23 @@ def test_relay_operator_cli_json_and_human_outputs_redact_except_issue(tmp_path)
     assert raw_invitation not in '\n'.join(list_lines)
     assert raw_invitation not in json.dumps(list_payload, sort_keys=True)
     _assert_secret_not_persisted(db_path, raw_invitation)
+
+
+def test_relay_invitation_file_mode_is_enforced_only_on_posix(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    invitation_path = tmp_path / 'ccb-relay-invitation.key'
+    invitation_path.write_text('ccb-relay-inv-v2.inviteid.secret\n', encoding='utf-8')
+    invitation_path.chmod(0o644)
+    command = SimpleNamespace(invitation=None, invitation_file=str(invitation_path))
+
+    monkeypatch.setattr(os, 'name', 'posix')
+    with pytest.raises(ValueError, match='owner-only'):
+        _invitation(command)
+
+    # Windows exposes no POSIX owner-only mode bits, so the gate must not fire.
+    monkeypatch.setattr(os, 'name', 'nt')
+    assert _invitation(command) == 'ccb-relay-inv-v2.inviteid.secret'
 
 
 def test_relay_host_activate_parser_and_render_surface_only_public_metadata() -> None:
@@ -295,6 +315,8 @@ def test_relay_admission_db_wal_and_shm_are_owner_only(tmp_path) -> None:
 
         store.list_invitations()
 
+        if os.name == 'nt':
+            pytest.skip('Windows chmod does not expose POSIX owner-only mode bits')
         for path in storage_paths:
             assert stat_mode(path) == 0o600
     finally:

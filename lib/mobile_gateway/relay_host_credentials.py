@@ -219,9 +219,10 @@ def activate_relay_host(
         relay_mode=mode,
     )
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.parent.chmod(0o700)
     atomic_write_json(target, credentials.to_json())
-    target.chmod(0o600)
+    if os.name != 'nt':
+        target.parent.chmod(0o700)
+        target.chmod(0o600)
     return credentials
 
 
@@ -231,7 +232,9 @@ def load_relay_host_credentials(path: Path) -> RelayHostCredentials:
         mode = target.stat().st_mode & 0o777
     except OSError as exc:
         raise RelayHostCredentialsError(f'relay host credentials are unavailable: {target}') from exc
-    if mode & 0o077:
+    # Windows has no POSIX owner-only mode bits; enforce the check only where
+    # it is expressible, like cli/services/relay_host_activation.py.
+    if os.name == 'posix' and (mode & 0o077):
         raise RelayHostCredentialsError('relay host credentials must be owner-only')
     try:
         payload = json.loads(target.read_text(encoding='utf-8'))

@@ -51,8 +51,9 @@ def _invitation(command) -> str:
     path_text = str(getattr(command, 'invitation_file', '') or '').strip()
     if path_text:
         path = Path(path_text).expanduser()
-        mode = path.stat().st_mode & 0o777
-        if mode & 0o077:
+        # Windows has no POSIX owner-only mode bits; enforce the check only
+        # where it is expressible, like config_ui.token_file.
+        if os.name == 'posix' and (path.stat().st_mode & 0o077):
             raise ValueError('relay invitation file must be owner-only')
         invitation = path.read_text(encoding='utf-8').strip()
         if invitation:

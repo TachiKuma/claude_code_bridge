@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import base64
 import json
+import os
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -18,7 +20,39 @@ from mobile_gateway.relay import (
     RelayHandshakeTranscript,
     RelayHostRegistration,
 )
-from mobile_gateway.relay_host_credentials import RelayHostCredentials
+from mobile_gateway.relay_host_credentials import (
+    RelayHostCredentials,
+    RelayHostCredentialsError,
+    load_relay_host_credentials,
+)
+
+
+def test_relay_host_credentials_mode_is_enforced_only_on_posix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    credentials = RelayHostCredentials(
+        relay_origin='wss://relay.seemlab.top',
+        host_id='host-activated',
+        invitation_id='invite-used-once',
+        host_signing_private_key_b64=_private_key_b64(
+            ed25519.Ed25519PrivateKey.generate()
+        ),
+        host_crypto_private_key_b64=_private_key_b64(
+            x25519.X25519PrivateKey.generate()
+        ),
+        activated_at='2026-07-22T00:00:00+00:00',
+    )
+    credential_path = tmp_path / 'relay-host-credentials.json'
+    credential_path.write_text(json.dumps(credentials.to_json()), encoding='utf-8')
+    credential_path.chmod(0o644)
+
+    # Windows exposes no POSIX owner-only mode bits, so the gate must not fire.
+    monkeypatch.setattr(os, 'name', 'nt')
+    assert load_relay_host_credentials(credential_path) == credentials
+
+    monkeypatch.setattr(os, 'name', 'posix')
+    with pytest.raises(RelayHostCredentialsError, match='owner-only'):
+        load_relay_host_credentials(credential_path)
 
 
 def test_mobile_serve_relay_requires_activated_production_outbound_credentials(

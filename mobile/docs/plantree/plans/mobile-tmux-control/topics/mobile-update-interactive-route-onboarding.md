@@ -162,7 +162,9 @@ credential format.
 
 ## Security And Evidence Boundary
 
-- Invitation files and Relay host credentials must be owner-only.
+- Invitation files and Relay host credentials must be owner-only where the
+  filesystem expresses POSIX mode bits; Windows has no equivalent mode, so the
+  check is skipped there instead of refusing an otherwise valid file.
 - Existing host credentials are reusable; pairing codes and Relay phone
   bootstraps remain independently rotatable and single-use.
 - Prompts may show paths but must never print invitation contents.
